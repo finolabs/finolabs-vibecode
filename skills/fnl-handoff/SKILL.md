@@ -57,7 +57,7 @@ Use every heading; write "none" where one is empty, so the agent knows it was co
 - [Commit format: atomic commits, subject line, trailers]
 
 ## Budget
-[N minutes. If the task cannot finish in time, stop, commit nothing broken, and report where it stands. Retry a failing step at most once, then report the failure.]
+[N minutes, from the `fnl-delegate` budget table. If the task cannot finish in time, stop, commit nothing broken, and report where it stands. Retry a failing step at most once, then report the failure.]
 
 ## Report
 Base and new commit SHAs, the test output, uncommitted files, open points.

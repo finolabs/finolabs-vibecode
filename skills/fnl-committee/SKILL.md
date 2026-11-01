@@ -28,7 +28,7 @@ Load the `fnl-delegate` skill and the host config for the invocation commands. R
   This is analysis only. Do NOT edit, create, or delete any files. Do NOT write code.
   ```
 
-- **Patient budget.** High-reasoning models can think for 15–30 minutes. Give each member a 30–45 minute cap and judge liveness from artifacts at the check deadline; send no hurry-up messages.
+- **Patient budget.** High-reasoning models can think for 15–30 minutes. Give each member the committee budget and its hard cap from `fnl-delegate` "Budget and liveness", and judge liveness from artifacts at the check deadline; send no hurry-up messages.
 
 ## Workflow
 

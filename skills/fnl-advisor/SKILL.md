@@ -39,6 +39,6 @@ This is analysis only. Do NOT edit, create, or delete any files. Do NOT write co
 
 ## Run and synthesize
 
-Dispatch with a budget (15–30 minutes) and record it in the ledger with `--kind advise`. Read the answer, check its claims against the code where they matter, then give the user the advisor's verdict and your own recommendation, saying where you agree and where you differ.
+Dispatch with a budget and hard cap from `fnl-delegate` "Budget and liveness" and record it in the ledger with `--kind advise`. Read the answer, check its claims against the code where they matter, then give the user the advisor's verdict and your own recommendation, saying where you agree and where you differ.
 
 For ongoing input, keep the advisor's context and send follow-ups to it; start fresh when the topic shifts.
