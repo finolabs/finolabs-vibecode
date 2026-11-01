@@ -17,7 +17,7 @@ The section skeleton and its question bank are in [references/contract-template.
 
 A file or command that cannot be checked here is listed as **unverified** in one line, with a request that the user paste its contents if it exists. Missing permissions are not a reason to stop: the interview needs only the user's answers.
 
-Done when the message lists the files found, their sizes, any duplication and what is unverified, and it ends with the first round of questions, each with a concrete recommended answer. When the hosts are unverified, the round includes which hosts the user runs ("Recommended: Claude Code first, the others later.").
+Done when the message lists the files found, their sizes, any duplication and what is unverified, and it ends with the first round of questions, each with a concrete recommended answer. When the hosts are unverified, the round includes which hosts the user runs ("Recommended: Claude Code first, the others later."), and questions that depend on the answer (file locations, host sections, delegation between hosts) wait for the next round.
 
 ## 2. Grill
 
