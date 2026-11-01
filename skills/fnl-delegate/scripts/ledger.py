@@ -4,7 +4,7 @@
 Each dispatch writes a `start` line and later a `finish` line to a JSONL file
 (default ~/.claude/orchestration/ledger.jsonl, override with ORCHESTRATION_LEDGER).
 `summary` joins them to measure routing: first-pass acceptance, timeouts,
-fallbacks and duration per agent, kind and grade.
+fallbacks and duration per agent, model, kind and grade.
 """
 
 import argparse
@@ -107,20 +107,20 @@ def cmd_summary(args):
         f = finishes.get(dispatch_id)
         if f is None:
             continue
-        groups[(s["agent"], s["kind"], s["grade"])].append((s, f))
+        groups[(s["agent"], s["model"], s["kind"], s["grade"])].append((s, f))
     if not groups:
         print("ledger: no finished dispatches match")
         return
-    header = f"{'agent':<16}{'kind':<10}{'grade':<10}{'n':>4}{'1st-pass':>10}{'accepted':>10}{'timeout':>9}{'fallback':>10}{'median min':>12}"
+    header = f"{'agent':<16}{'model':<24}{'kind':<10}{'grade':<10}{'n':>4}{'1st-pass':>10}{'accepted':>10}{'timeout':>9}{'fallback':>10}{'median min':>12}"
     print(header)
-    for (agent, kind, grade), rows in sorted(groups.items()):
+    for (agent, model, kind, grade), rows in sorted(groups.items()):
         n = len(rows)
         accepted = [f for _, f in rows if f["outcome"] == "accepted"]
         first_pass = [f for f in accepted if f["rework_rounds"] == 0]
         timed_out = [f for _, f in rows if f["outcome"] in ("timeout", "stalled")]
         fallback = [s for s, _ in rows if s["reason"].startswith("fallback")]
         median = statistics.median(minutes(s, f) for s, f in rows)
-        print(f"{agent:<16}{kind:<10}{grade:<10}{n:>4}{len(first_pass) / n:>10.0%}{len(accepted) / n:>10.0%}"
+        print(f"{agent:<16}{model:<24}{kind:<10}{grade:<10}{n:>4}{len(first_pass) / n:>10.0%}{len(accepted) / n:>10.0%}"
               f"{len(timed_out):>9}{len(fallback):>10}{median:>12.0f}")
 
 
@@ -150,7 +150,7 @@ def main():
     o = sub.add_parser("open", help="list dispatches with no finish line")
     o.set_defaults(func=cmd_open)
 
-    m = sub.add_parser("summary", help="acceptance and timing per agent, kind and grade")
+    m = sub.add_parser("summary", help="acceptance and timing per agent, model, kind and grade")
     m.add_argument("--since", help="YYYY-MM-DD")
     m.add_argument("--project")
     m.set_defaults(func=cmd_summary)
