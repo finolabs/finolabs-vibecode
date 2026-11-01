@@ -23,6 +23,7 @@ Follow `fnl-verification` ("Accepting someone else's work"):
 1. Read the diff on the named branch and base (and check `git status`) to confirm the commits sit where the brief named, nothing that belongs in them is left uncommitted, and the whole diff stays in scope.
 2. Run only the targeted test commands yourself and read their full output, counts, and skips according to `fnl-verification`.
 3. Compare the diff and the test output with each acceptance criterion.
+4. When a criterion claims review or security coverage, confirm the named instrument actually ran (`/code-review`, `/security-review`, `codex review`, `security-audit`): its output exists and binds to the SHA you verify. A review that did not run is `PENDING`, whatever the report says.
 
 ## Output format
 

@@ -12,9 +12,19 @@ description: Gate work on an independent code review. Use when a user story or i
 - Major features and work produced by delegated agents always get one.
 - A no-runtime-impact text edit needs its checks, not a reviewer per edit.
 
+## Instruments
+
+This gate decides when, by whom, and what happens to each finding; an instrument does the reading. The reviewer uses its own host's native review and adds companions:
+
+- **Claude Code**: `/code-review` on the diff at a chosen effort, `/security-review` for pending changes that hit a security trigger, `claude ultrareview` for a cloud multi-agent pass before merging large work (the code goes to a cloud run, so the owner approves it). Posting comments or applying fixes needs an explicit ask.
+- **Codex**: `codex review --base <branch>` (or `--uncommitted`, `--commit <sha>`), or `/review` in a session.
+- **Antigravity**: no native AI review; `/diff` and the review pane are for the human. Route the review to Claude Code or Codex.
+- **Companions**: `code-review` from [mattpocock/skills](https://github.com/mattpocock/skills) for standards and spec, and `security-audit` from [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) for audits (`fnl-security-review-gate` says when).
+
+When an instrument is missing, the reviewer applies the packet and findings rules below directly and names the missing instrument in its report.
+
 ## Who reviews
 
-- **Pairs with** a reviewer's instrument such as `code-review` from [mattpocock/skills](https://github.com/mattpocock/skills) (standards and spec, in parallel). That skill does the review; this gate decides when, by whom, and what happens to each finding.
 - **Independent**: a fresh context, never the run or session that wrote the code, and never self-approval. Prefer a different model family at the strong end (see the routing table in `fnl-delegate`).
 - One qualified reviewer may cover code and security together when scoped policy permits; name the coverage explicitly.
 - A reviewer may delegate heavy reading, but verifies each finding it reports.

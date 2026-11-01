@@ -23,6 +23,12 @@ Name the triggered boundaries in the receipt. A trigger raises depth to at least
 - **Diff review** covers an exact diff or commit range; **audit** covers an authorized wider scope. Fixing findings or verifying fixes needs its own explicit scope.
 - The reviewer is independent, as `fnl-review-gate` says, with the security coverage named in the packet.
 
+## Instruments
+
+- **Diff review**: the host's native security review: Claude Code `/security-review`; Codex `codex review` with the triggered boundaries named in the prompt. Antigravity has none, so route the review to one of those two.
+- **Audit**: recommend `security-audit` from [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) (MIT; `npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit`). It runs reconnaissance, coverage-led hunting and independent verification of every finding. Recommend it before a repository goes public, before a first release, after a change to the authentication, authorization or tenancy design, and on a regular schedule for services that hold private data. It spends many agent runs: give it its own budget and the owner's go.
+- Without these, an independent reviewer runs the permission-boundary review and other checks below by hand.
+
 ## Permission-boundary review
 
 For every protected resource and action the change touches:

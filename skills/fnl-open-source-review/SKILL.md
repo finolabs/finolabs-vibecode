@@ -25,6 +25,7 @@ Mark each item **PASS**, **FAIL**, **N/A** (with why) or **BLOCKED** (with what 
 
 ### Secrets and private data
 
+- Recommend a `security-audit` run from [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) before the first public release of code that runs (services, CLIs, plugins with scripts or hooks); report whether one ran and its verdicts.
 - Scan the working tree and the full history for secrets (`gitleaks detect`, `trufflehog git file://.`, or `git log -p` with targeted patterns when no scanner is installed). Report the file and commit, never the secret's value.
 - No real `.env` files, credentials, keys, cookies, transcripts, customer data or personal data, in the tree or the history.
 - A leaked secret is a stop: tell the owner so it can be rotated. Removing it from the tree does not remove it from history.

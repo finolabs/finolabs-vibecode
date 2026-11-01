@@ -25,6 +25,7 @@ If the packet is missing the diff binding or acceptance criteria, state what is 
 1. Read the diff or commit range and the surrounding touched code and callers.
 2. Apply `fnl-review-gate` to evaluate correctness, regressions, consumer impact, and test coverage, and verify each finding against the code.
 3. Check the diff against the triggers in `fnl-security-review-gate`; when any trigger matches, apply `fnl-security-review-gate` and name the triggered boundaries.
+4. Use your host's native review instruments and installed companions as `fnl-review-gate` "Instruments" lists them (on Claude Code, `/code-review` and, for triggered boundaries, `/security-review`). When a change opens a new trust boundary, recommend a `security-audit` run in your verdict. Name any instrument that was missing.
 
 ## Output format
 
