@@ -1,0 +1,54 @@
+name: Skill behavior
+description: A skill did not fire, fired when it should not, or led the agent to the wrong action.
+labels: [skill]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues are public. Do not post credentials, tokens, personal data, private repository content or unredacted transcripts, including in screenshots. Use synthetic names in examples.
+  - type: input
+    id: skill
+    attributes:
+      label: Skill
+      placeholder: "fnl-review-gate"
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Plugin version, host agent and model
+      placeholder: "finos-vibe-code 0.1.0, Claude Code 2.1.x, Sonnet"
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What went wrong
+      options:
+        - did not fire
+        - fired when it should not
+        - wrong or unclear instruction
+        - conflicts with another skill
+    validations:
+      required: true
+  - type: textarea
+    id: prompt
+    attributes:
+      label: Prompt and observed behavior
+      description: A minimal, shareable prompt and what the agent did.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What the agent should have done, and which rule in the skill says so.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before posting
+      options:
+        - label: I removed credentials, personal data and private content from everything above.
+          required: true

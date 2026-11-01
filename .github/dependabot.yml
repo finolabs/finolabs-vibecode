@@ -1,0 +1,10 @@
+version: 2
+updates:
+  # Actions are pinned to commit SHAs, so nothing updates them unless Dependabot does.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
