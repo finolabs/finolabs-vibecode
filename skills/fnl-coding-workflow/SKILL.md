@@ -62,7 +62,7 @@ Done when the depth and its reason are in the receipt.
 
 - Delegation to other agents follows the `fnl-orchestration` skill. Budget root and children before spawning: MIN has no implementation children; otherwise at most two lightweight children, one nesting level and one heavy job at a time, unless a stricter cap applies.
 - Commits follow `fnl-commit-messages`; versions, tags and changelogs follow `fnl-versioning`.
-- Proof follows `fnl-verification`: targeted tests for the changed code and its traced consumers, read before any claim.
+- Proof follows `fnl-verification`.
 - Pull requests need a clean code review and, when triggered, a security review before merge (`fnl-review-gate`, `fnl-security-review-gate`).
 - Long sessions, handovers and titles follow `fnl-session-hygiene`.
 

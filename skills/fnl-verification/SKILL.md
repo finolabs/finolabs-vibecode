@@ -28,7 +28,13 @@ Report each check as **PASS**, **FAIL**, **PENDING**, **SKIP**, **WAIVED** (with
 
 ## Accepting someone else's work
 
-Before accepting a delegated run or a session's report: confirm the commits and branch, read the whole diff for scope, secrets and stray output, rerun the brief's targeted tests and read their output. Never mark a task done on a report alone.
+Before accepting a delegated run or a session's report, check all three:
+
+- the commits sit on the branch and base the brief named, and nothing that belongs in them is left uncommitted;
+- the whole diff is in scope, with no unrelated edits, secrets, env files or stray generated output;
+- the brief's targeted tests, rerun by you, pass, and you have read their output.
+
+A task is marked done only on this evidence.
 
 ## Claims
 

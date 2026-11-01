@@ -19,10 +19,9 @@ description: Shape commits and their messages. Use when staging changes, writing
 - Follow a convention the repository already uses (for example Conventional Commits) over this default.
 - End with the attribution trailer the host asks for, exactly as given, and only that one.
 
-## Delegated and interrupted work
+## Interrupted work
 
-- Task sessions and delegated agents commit their own work, one commit per task or tight group, and report base and new SHAs.
-- When committing a stopped run's work on its behalf, say so in the subject or body (`WIP: …` with the run's task label) so the next writer sees the state.
+When committing a stopped run's work on its behalf, mark it in the subject (`WIP: <task label> …`) so the next writer sees the state.
 
 ## Authority
 

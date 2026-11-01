@@ -46,7 +46,7 @@ These are preferences. A user who names an agent or model wins; otherwise follow
 | second opinion, stuck, planning | `fnl-orchestration-advisor` or `fnl-orchestration-committee` | |
 
 - **Medium tie-break**: Antigravity runs headless and stops `blocked` or `needs_permission` whenever a command falls outside its allow-rules, and only the user can grant one. Give medium work to Antigravity when the brief is edit-only or its commands fit the allow-rules, and to Codex when the work needs wider shell access or the user is away.
-- **Reviews** go to a fresh context on the stronger agent, never to Antigravity and never to the run that wrote the code.
+- **Reviews** go to the stronger agent in a fresh context; Antigravity takes no reviews. `fnl-review-gate` defines reviewer independence.
 - **Token budget**: when the coordinator's own budget is the scarce one, prefer delegating implementation and keep the coordinator on briefing and acceptance.
 - **User away**: questions that would go to the user go to an advisor or a semantic evaluator instead; record each decision and who settled it. Decisions that need the user's authority (merge, production, credentials, new spending) still wait.
 
@@ -86,13 +86,7 @@ A lock whose owner process is gone is stale: confirm with `ps` before removing i
 
 ## Accept
 
-A task is done only when you have checked it yourself:
-
-- the commits sit on the right branch on top of the base the brief named, and nothing is left uncommitted that should not be;
-- you have read the diff: every change is in scope, with no unrelated edits, secrets, env files or stray generated output;
-- you have rerun the brief's targeted tests and read their output.
-
-Then decide: **accepted**; **rework**, a follow-up to the same agent run naming each defect (count the round); or **rejected**, rerouted with a new brief. The verdict is yours, whatever the agent's report says.
+A task is done only when you have checked it yourself, as `fnl-verification` "Accepting someone else's work" lays out. Then decide: **accepted**; **rework**, a follow-up to the same agent run naming each defect (count the round); or **rejected**, rerouted with a new brief. The verdict is yours, whatever the agent's report says.
 
 ## Handover after an interrupted run
 

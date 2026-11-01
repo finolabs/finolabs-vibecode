@@ -26,8 +26,4 @@ Name this session as project + current activity at entry, on a stale resume, and
 
 - One writer per scope, with an explicit handover between writers.
 - Prefer a suitable existing checkout or worktree; stricter isolation rules win.
-- Keep durable notes, briefs and logs in a durable folder (see `fnl-orchestration` "Where files go"), never in a temporary directory or scratchpad.
-
-## Status words
-
-Report work as drafted, verified, integrated, delivered or parked, and use the word that matches the evidence (`fnl-verification`).
+- Keep notes, briefs and logs in the durable folder `fnl-orchestration` "Where files go" names; temporary directories and scratchpads are wiped on restart.
