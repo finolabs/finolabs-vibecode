@@ -29,6 +29,15 @@ Every skill carries the `fnl-` prefix.
 | `/fnl-ask` | Not sure which skill fits: describe the situation and get the next command, including companion skills from other packs. Typed by the user. |
 | `fnl-open-source-review` | Before a repository goes public: license, secrets in tree and history, internal leaks, clean payload, community files, identity, data flow, plugin checks. |
 
+### Agents
+
+Read-only subagents in `agents/` that apply the skills above in a fresh context:
+
+| Agent | Use it when |
+| --- | --- |
+| `fnl-reviewer` | Independent code and security review of a diff or commit range under `fnl-review-gate` and `fnl-security-review-gate`. |
+| `fnl-verifier` | Independent check of a completion claim against the diff and targeted test output under `fnl-verification`. |
+
 ## Install
 
 Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh); choose one way per agent, because both together list every skill twice. The repository is its own marketplace for each host.
@@ -90,6 +99,7 @@ The route judge is optional. Routing is complete without one; a judge such as Ty
 .codex-plugin/plugin.json         Codex manifest, version kept equal
 .antigravity-plugin/plugin.json   Antigravity manifest, version kept equal
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
+agents/fnl-*.md                   read-only reviewer and verifier subagents
 agents/openai.yaml                Codex skill-list display metadata
 skills/fnl-*/SKILL.md             one self-contained skill per folder, references/ and scripts/ beside it
 assets/                           icon (light and dark, SVG and 512 px PNG) and its NOTICE
