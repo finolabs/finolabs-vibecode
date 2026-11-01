@@ -41,6 +41,21 @@ jobs:
           print("\n".join(bad) or "all skills ok")
           sys.exit(bool(bad))
           PY
+      - name: Copies of shared skill files match
+        run: |
+          python3 - <<'PY'
+          import filecmp, sys
+          groups = [["skills/fnl-setup/references/interview.md", "skills/fnl-setup-instructions/references/interview.md"]]
+          bad = [g for g in groups if not all(filecmp.cmp(g[0], p, shallow=False) for p in g[1:])]
+          print(bad or "shared copies match")
+          sys.exit(bool(bad))
+          PY
+      - name: Skills stay self-contained
+        run: |
+          if grep -rnE "folders? above this skill|\.\./\.\./" skills; then
+            echo "A skill reaches outside its own folder; single-skill installs would break."
+            exit 1
+          fi
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22

@@ -7,7 +7,9 @@ disable-model-invocation: true
 
 # Delegation status
 
-Read-only. The ledger script lives in the `fnl-delegate` skill of this plugin: `scripts/ledger.py` under the sibling folder `fnl-delegate` (one folder above this skill's base directory). It reads `ORCHESTRATION_LEDGER`, else `~/.claude/orchestration/ledger.jsonl`.
+Read-only. Requires the `fnl-delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add fioenix/finolabs-vibecode --skill fnl-delegate`, or install the whole plugin) and stop.
+
+The ledger script is `scripts/ledger.py` in the `fnl-delegate` skill's folder, a sibling of this skill's base directory. It reads `ORCHESTRATION_LEDGER`, else `~/.claude/orchestration/ledger.jsonl`.
 
 **Arguments:** $ARGUMENTS
 

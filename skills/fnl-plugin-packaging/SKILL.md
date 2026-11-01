@@ -17,7 +17,7 @@ One repository, one `skills/` folder, one manifest per host. This skill holds th
 
 - Skills live in `skills/<name>/SKILL.md`; the folder name equals the `name` field. A shared name prefix keeps a pack's skills together and avoids collisions with other packs.
 - Each host's manifest sits in its own folder. A root `plugin.json` is read by both Codex (its preferred location) and Antigravity (its native manifest, with a closed schema), so one file cannot satisfy both.
-- Disclose reference material into `references/` and executables into `scripts/` beside the skill that uses them. Keep machine-specific facts in user configuration, never in the package.
+- Keep every skill folder self-contained: single-skill installers (skills.sh) copy one folder and nothing around it. Disclose reference material into `references/` and executables into `scripts/` beside the skill that uses them; a file two skills need gets a copy in each, with a CI check that the copies match. A skill that cannot work without another names it as a dependency and says how to install it. Keep machine-specific facts in user configuration, never in the package.
 - Ship only what the host loads: no build output, caches, OS files, local notes or eval results.
 
 Done when every host's validator finds the expected number of skills.
@@ -46,6 +46,7 @@ Done when every host's validator finds the expected number of skills.
 
 - Make the repository its own marketplace on hosts that use catalogs, so `owner/repo` installs work before any directory listing.
 - An aggregate marketplace in another repository pins each plugin by commit SHA (`source` of type `github` with `sha`), not by branch.
+- Offer single-skill installs beside the plugin: skills.sh (`npx skills add owner/repo --skill <name>`) finds `skills/<name>/SKILL.md` on its own. Tell users to pick one path per agent, since both list every skill twice.
 - Write the install commands for every host in the README, verified against each host's `--help`.
 
 ## 6. Checks before a release

@@ -1,6 +1,6 @@
 # Interview rules
 
-Shared by the setup skills. The goal is a shared understanding with the user, reached in as few rounds as the decisions allow.
+Shared by the setup skills. Each skill keeps an identical copy so it works when installed alone; edit them together (CI checks they match). The goal is a shared understanding with the user, reached in as few rounds as the decisions allow.
 
 ## Map the decisions
 

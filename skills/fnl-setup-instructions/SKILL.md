@@ -23,7 +23,7 @@ Done when the message lists the files found, their sizes, any duplication and wh
 
 Interview the user section by section through the template. Prefer what the existing files already say: ask only about gaps, conflicts and stale lines, and skip optional sections the user does not need.
 
-Interview by the plugin's shared rules in `references/interview.md` (two folders above this skill's base directory): map the decisions, look up facts yourself, ask every ready decision in one numbered round with a recommended answer, and finish with a read-back and a yes.
+Interview by the rules in [references/interview.md](references/interview.md): map the decisions, look up facts yourself, ask every ready decision in one numbered round with a recommended answer, and finish with a read-back and a yes.
 
 Done when every required section has confirmed rules and every optional section is confirmed or skipped.
 

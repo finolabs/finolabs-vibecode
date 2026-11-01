@@ -7,10 +7,9 @@ upstream="${1:?path to a mattpocock/skills checkout}"
 build() {
   local dest="$1" with_grilling="$2"
   rm -rf "$dest"
-  mkdir -p "$dest/.claude-plugin" "$dest/skills" "$dest/references"
+  mkdir -p "$dest/.claude-plugin" "$dest/skills"
   printf '{\n  "name": "finolabs-vibecode",\n  "version": "0.0.0-parity"\n}\n' > "$dest/.claude-plugin/plugin.json"
   cp -R "$root/skills/fnl-setup-instructions" "$dest/skills/"
-  cp "$root/references/interview.md" "$dest/references/"
   if [ "$with_grilling" = yes ]; then
     cp -R "$upstream/skills/productivity/grilling" "$dest/skills/grilling"
   fi
