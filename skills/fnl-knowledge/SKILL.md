@@ -13,9 +13,9 @@ Three places hold what agents learn. Each has one job; the skill is choosing the
 | **Knowledge base** | decisions with their reasons, lessons, project state, runbooks, research notes | every agent and every human the user shares it with |
 | **Repository** | facts about the code: architecture, conventions, commands | everyone who clones it |
 
-Use **one** knowledge base, beside native memory and never instead of it. Prefer Orrery; use an Obsidian vault where Orrery does not fit. Two knowledge bases side by side drift apart, so a user moving from one to the other migrates (Orrery imports a Markdown vault) and retires the old one from agent use.
+Use **one** knowledge base, beside native memory and never instead of it. Prefer Orrery where the user has it; it is not released yet, so everyone else uses an Obsidian vault. Two knowledge bases side by side drift apart, so a user moving from one to the other migrates (Orrery imports a Markdown vault) and retires the old one from agent use.
 
-- **[Orrery](https://github.com/fioenix/orrery)** (FINOLABS, over MCP; pre-alpha, repository not public yet): a governed knowledge base many agents share, with spaces and permissions, notes with revisions, recall over memories, supersession, and an audit trail.
+- **Orrery** (FINOLABS, over MCP; pre-release, not yet published): a governed knowledge base many agents share, with spaces and permissions, notes with revisions, recall over memories, supersession, and an audit trail.
 - **[Obsidian](https://obsidian.md)**: a local Markdown vault people read and edit by hand. Agents reach it through the Obsidian CLI; the `obsidian-cli` and `obsidian-markdown` skills from [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) (MIT) teach the commands and formats.
 
 Native memory locations per host are in [references/hosts.md](references/hosts.md).
