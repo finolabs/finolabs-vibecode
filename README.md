@@ -41,7 +41,7 @@ Read-only subagents in `agents/` that apply the skills above in a fresh context.
 | `fnl-reviewer` | Is the change good? | A pull request or story is ready: it reads every changed file, then the callers, dependencies, contracts and tests the change affects, under `fnl-review-gate`. |
 | `fnl-security-reviewer` | Is the change safe? | The change crosses a sensitive boundary: it reads the changed files, then every trust path that reaches them, under `fnl-security-review-gate`. |
 
-Both reviewers cover two rings, the change and its impact set, rather than the whole repository, and report what they traced. Accepting delegated work takes the verifier; closing a story or merging takes the verifier first, then the reviewer, plus the security reviewer in parallel when the security gate triggers.
+Both reviewers cover two rings, the change and its impact set, rather than the whole repository, and report what they traced. Accepting delegated work takes the verifier. Every pull request merges only after the reviewer and the security reviewer have each posted an approving review comment for its current head commit; a push after a review means a new review. Closing a story takes the verifier first, then the reviewers.
 
 ## Install
 
