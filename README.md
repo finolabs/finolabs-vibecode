@@ -12,7 +12,7 @@ Every skill carries the `fnl-` prefix.
 | --- | --- |
 | `fnl-coding-router` | Starting or resuming any coding work: Spec Kit first, fallback router, depth (MIN, NORMAL, DEEP), the Spec Kit depth gate, the stop-before-a-third-fix checkpoint. |
 | `fnl-session-hygiene` | Context passes about 60%, a phase changes, a title is stale, work moves to another session or writer. |
-| `fnl-delegate` | Delegating to Codex, Antigravity or Claude Code sessions: grade, route, quota fallback, at most 5 parallel runs, time budgets, liveness from artifacts, heavy-job lock, verify-before-accept, handover, dispatch ledger. |
+| `fnl-delegate` | Coordinating Claude Code, Codex and Antigravity from whichever one you run in: grade, route by agent and model through a dated capability map, an optional route judge, quota fallback, at most 5 parallel runs, time budgets, liveness from artifacts, heavy-job lock, verify-before-accept, handover, dispatch ledger. |
 | `fnl-handoff` | Writing a self-contained brief and dispatching one task. |
 | `fnl-advisor` | One second opinion from a stronger, contrasting model. |
 | `fnl-committee` | Stuck or looping: two contrasting agents find the root cause and a plan. |
@@ -25,12 +25,13 @@ Every skill carries the `fnl-` prefix.
 | `fnl-plugin-packaging` | Packaging skills as a plugin for Claude Code, Codex and Antigravity from one repository: layout, manifests, icon, marketplaces, checks. |
 | `/fnl-setup` | First run on a machine or repository: host config, local file placement, the agent-skills block in `CLAUDE.md` or `AGENTS.md`. Typed by the user. |
 | `/fnl-setup-instructions` | Interview the user and write their user-scoped instructions for Claude Code, Codex and Antigravity from one shared source. Typed by the user. |
+| `/fnl-status` | Open delegated runs and first-pass acceptance per agent and model, from the dispatch ledger. Typed by the user. |
 | `/fnl-ask` | Not sure which skill fits: describe the situation and get the next command, including companion skills from other packs. Typed by the user. |
 | `fnl-open-source-review` | Before a repository goes public: license, secrets in tree and history, internal leaks, clean payload, community files, identity, data flow, plugin checks. |
 
 ## Install
 
-Every install path ships the same `skills/` folder. The repository is its own marketplace for each host.
+Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh); choose one way per agent, because both together list every skill twice. The repository is its own marketplace for each host.
 
 ### Claude Code
 
@@ -57,6 +58,16 @@ codex plugin add finolabs-vibecode@finolabs-vibecode
 agy plugin install https://github.com/fioenix/finolabs-vibecode
 ```
 
+### Single skills, any agent
+
+```bash
+npx skills add fioenix/finolabs-vibecode
+```
+
+The installer lists the skills to choose from; `--skill <name>` takes one directly and `-a <agent>` picks the agent. It copies editable files into your project (`-g` for every project): update them with `npx skills update`. The plugin path also carries the agents, the session hook and the Antigravity rule, which single-skill installs leave out.
+
+Each skill works alone, with one exception: `fnl-handoff`, `fnl-advisor`, `fnl-committee`, `fnl-coordinator-sessions` and `fnl-status` need `fnl-delegate` beside them. Other skills mention their neighbours by name and work without them. A sensible first pick: `fnl-coding-router`, `fnl-verification`, `fnl-review-gate`, `fnl-commit-messages`, plus `fnl-setup` to configure them.
+
 ### First check
 
 Ask your agent: "Route this change through the coding router and tell me the depth you chose." It should load `fnl-coding-router`.
@@ -67,7 +78,9 @@ These skills set the gates and the routing; they do not try to replace good phas
 
 ## Host configuration
 
-The orchestration skills keep machine facts (agent commands, paths, allow-rules, lock path, parallel limit) outside the plugin, in a host config file: `ORCHESTRATION_HOST_CONFIG`, else `~/.claude/orchestration/host.md`. Start from `skills/fnl-delegate/references/host-template.md`. The dispatch ledger defaults to `~/.claude/orchestration/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it).
+The orchestration skills keep machine facts (agent commands, allowed models, which delegates each coordinator can reach, the route judge, allow-rules, lock path, parallel limit) outside the plugin, in a host config file: `ORCHESTRATION_HOST_CONFIG`, else `~/.claude/orchestration/host.md`. Start from `skills/fnl-delegate/references/host-template.md`. The dispatch ledger defaults to `~/.claude/orchestration/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it). When Codex or Antigravity also coordinates, put both files where every coordinator's sandbox can read and write them.
+
+The route judge is optional. Routing is complete without one; a judge such as TypeSafe's Jev, called through its own `typesafe-ai` skill, settles only the calls the rules leave open, and the plugin holds no key for it.
 
 ## Layout
 
@@ -78,7 +91,7 @@ The orchestration skills keep machine facts (agent commands, paths, allow-rules,
 .antigravity-plugin/plugin.json   Antigravity manifest, version kept equal
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 agents/openai.yaml                Codex skill-list display metadata
-skills/fnl-*/SKILL.md             one skill per folder, references/ and scripts/ beside it
+skills/fnl-*/SKILL.md             one self-contained skill per folder, references/ and scripts/ beside it
 assets/                           icon (light and dark, SVG and 512 px PNG) and its NOTICE
 evals/                            trigger suite for `claude plugin eval`
 LICENSE                           MIT
