@@ -2,7 +2,7 @@
 
 One engineering practice for AI coding agents, packaged as a single plugin with a focused skill set. It tells an agent how to route a change, how deep to go, how to delegate to other agents and accept their work, how to commit, version and release, and which review and verification gates a change must pass.
 
-Version: `0.1.0-dev` (phase 0; see `fnl-versioning`). Targets: Claude Code and Codex, from one `skills/` folder.
+Version: `0.1.0-dev` (phase 0; see `fnl-versioning`). Targets: Claude Code, Codex and Antigravity, from one `skills/` folder.
 
 ## Skills
 
@@ -47,6 +47,12 @@ codex plugin marketplace add fioenix/finos-vibe-code
 codex plugin add finos-vibe-code@finos-vibe-code
 ```
 
+### Antigravity
+
+```bash
+agy plugin install https://github.com/fioenix/finos-vibe-code
+```
+
 ### First check
 
 Ask your agent: "Route this change through the coding workflow and tell me the depth you chose." It should load `fnl-coding-workflow`.
@@ -61,6 +67,7 @@ The orchestration skills keep machine facts (agent commands, paths, allow-rules,
 .claude-plugin/plugin.json        Claude Code manifest (the version's single source of truth)
 .claude-plugin/marketplace.json   Claude Code marketplace listing this repository
 .codex-plugin/plugin.json         Codex manifest, version kept equal
+.antigravity-plugin/plugin.json   Antigravity manifest, version kept equal
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 agents/openai.yaml                Codex skill-list display metadata
 skills/fnl-*/SKILL.md             one skill per folder, references/ and scripts/ beside it
@@ -82,6 +89,10 @@ MIT. See [LICENSE](LICENSE).
 
 ```bash
 claude plugin validate . --profile directory
+```
+
+```bash
+agy plugin validate . --strict
 ```
 
 ```bash

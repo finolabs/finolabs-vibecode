@@ -1,0 +1,29 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "finos-vibe-code",
+  "displayName": "Finos Vibe Code",
+  "description": "Engineering practice for coding agents: workflow routing, agent orchestration, versioning, commits, review and security gates, verification.",
+  "version": "0.1.0-dev",
+  "logo": "assets/icon.svg",
+  "author": {
+    "name": "Fioenix",
+    "url": "https://github.com/fioenix"
+  },
+  "homepage": "https://github.com/fioenix/finos-vibe-code",
+  "repository": "https://github.com/fioenix/finos-vibe-code",
+  "license": "MIT",
+  "keywords": [
+    "coding-workflow",
+    "orchestration",
+    "code-review",
+    "security-review",
+    "versioning",
+    "verification",
+    "agent-skills"
+  ],
+  "suggestedPrompts": [
+    "Route this change through the coding workflow and tell me the depth you chose.",
+    "Grade these three tasks and dispatch the independent ones to agents.",
+    "Prepare the version bump and changelog for the next release."
+  ]
+}

@@ -4,7 +4,7 @@ Agent context for contributing to this repository. User-facing documentation is 
 
 ## What this repository is
 
-One plugin with a skill set that gives AI coding agents a single engineering practice: coding workflow routing, agent orchestration, session hygiene, versioning, commit messages, code and security review gates, verification, and open source readiness. It ships to Claude Code (`.claude-plugin/plugin.json`) and Codex (`.codex-plugin/plugin.json`) from one `skills/` folder.
+One plugin with a skill set that gives AI coding agents a single engineering practice: coding workflow routing, agent orchestration, session hygiene, versioning, commit messages, code and security review gates, verification, and open source readiness. It ships to Claude Code (`.claude-plugin/plugin.json`), Codex (`.codex-plugin/plugin.json`) and Antigravity (`.antigravity-plugin/plugin.json`) from one `skills/` folder. Keep each host's manifest in its own folder: a root `plugin.json` would be read by both Codex and Antigravity, whose schemas conflict.
 
 ## Conventions
 
@@ -16,7 +16,7 @@ One plugin with a skill set that gives AI coding agents a single engineering pra
 
 ## Versions
 
-`.claude-plugin/plugin.json` is the single source of truth for the version; `.codex-plugin/plugin.json` must match it. Follow `skills/fnl-versioning/SKILL.md` for bumps, the changelog and tags. Record every change to the public surface under `Unreleased` in `CHANGELOG.md`.
+`.claude-plugin/plugin.json` is the single source of truth for the version; `.codex-plugin/plugin.json` and `.antigravity-plugin/plugin.json` must match it. Follow `skills/fnl-versioning/SKILL.md` for bumps, the changelog and tags. Record every change to the public surface under `Unreleased` in `CHANGELOG.md`.
 
 ## Checks before committing
 

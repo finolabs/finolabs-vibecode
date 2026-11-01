@@ -8,7 +8,7 @@ Target version: `0.1.0`.
 
 ### Added
 
-- Claude Code and Codex manifests sharing one `skills/` folder, version `0.1.0-dev`.
+- Claude Code, Codex and Antigravity manifests sharing one `skills/` folder, version `0.1.0-dev`.
 - `fnl-coding-workflow`: Spec Kit first routing, fallback router, MIN/NORMAL/DEEP depth, the Spec Kit depth gate, the repeated-fix checkpoint, and activity selection with a semantic evaluator as a reference.
 - `fnl-session-hygiene`: compaction at about 60% context, handover content, titles, one writer per scope.
 - `fnl-orchestration`, `fnl-orchestration-handoff`, `fnl-orchestration-advisor`, `fnl-orchestration-committee`: grading and routing across Codex, Antigravity and Claude Code, quota fallback, at most 5 parallel dispatches, hard time caps and liveness from artifacts, heavy-job lock, verify-before-accept, handover after interrupted runs, file placement, and the dispatch ledger script; a host config template.

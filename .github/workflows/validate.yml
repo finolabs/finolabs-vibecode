@@ -24,10 +24,10 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, sys
-          a = json.load(open(".claude-plugin/plugin.json"))["version"]
-          b = json.load(open(".codex-plugin/plugin.json"))["version"]
-          print("claude", a, "codex", b)
-          sys.exit(a != b)
+          paths = [".claude-plugin/plugin.json", ".codex-plugin/plugin.json", ".antigravity-plugin/plugin.json"]
+          versions = {p: json.load(open(p))["version"] for p in paths}
+          print(versions)
+          sys.exit(len(set(versions.values())) != 1)
           PY
       - name: Skill folder names match their name field
         run: |
