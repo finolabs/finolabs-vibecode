@@ -6,6 +6,29 @@ This pack owns the decisions between tools: routing, depth, delegation, gates an
 
 Version: `0.1.0-dev` (phase 0; see `fnl-versioning`). Targets: Claude Code, Codex and Antigravity, from one `skills/` folder.
 
+The quickest install: give your coding agent this repository's link and ask it to install the plugin. The next section tells it how.
+
+## For AI agents: install and set up
+
+You were given this repository's link to install it for the user. Follow these steps in order.
+
+1. **Find your host**: Claude Code, Codex, Antigravity, or another agent that reads Agent Skills.
+2. **Confirm with the user before installing.** The install changes their agent configuration for every project. Offer the whole plugin, the default, which carries the skills, agents and session reminder. Offer single skills as the alternative (see [Single skills, any agent](#single-skills-any-agent)). Install only one of the two for an agent, since both together list every skill twice.
+3. **Install from a shell** with your host's commands:
+
+   | Host | Commands |
+   | --- | --- |
+   | Claude Code | `claude plugin marketplace add fioenix/finolabs-vibecode`, then `claude plugin install finolabs-vibecode@finolabs-vibecode` |
+   | Codex | `codex plugin marketplace add fioenix/finolabs-vibecode`, then `codex plugin add finolabs-vibecode@finolabs-vibecode` |
+   | Antigravity | `agy plugin install https://github.com/fioenix/finolabs-vibecode` |
+   | Other agents | `npx skills add fioenix/finolabs-vibecode -a <agent>` |
+
+4. **Verify** that `claude plugin list`, `codex plugin list` or `agy plugin list` shows `finolabs-vibecode`. Report the command output to the user, and report any failure as it is.
+5. **Hand over setup.** Plugins load when a session starts. Tell the user to open a new session and type the setup skill: `/finolabs-vibecode:fnl-setup` on Claude Code, `$fnl-setup` on Codex, `/fnl-setup` on Antigravity. Only the user can start setup, because it interviews them before it writes host config and instructions. `/fnl-setup-instructions` does the same for their user-scoped instructions, and is optional.
+6. **Offer the companions, and install them only if the user agrees:** [Matt Pocock's skills](https://github.com/mattpocock/skills) and [Cloudflare's `security-audit`](https://github.com/cloudflare/security-audit-skill) (see [Works well with](#works-well-with)). Every skill works without them.
+
+Done when the plugin is listed by your host and the user knows to run setup in a new session.
+
 ## Skills
 
 Every skill carries the `fnl-` prefix.
@@ -55,7 +78,7 @@ Every install path ships the same `skills/` folder. Install the whole plugin on 
 /plugin install finolabs-vibecode@finolabs-vibecode
 ```
 
-Skills are namespaced, for example `/finolabs-vibecode:fnl-handoff`. To try a local checkout for one session: `claude --plugin-dir /path/to/finolabs-vibecode`.
+From a shell, or from an agent: `claude plugin marketplace add fioenix/finolabs-vibecode`, then `claude plugin install finolabs-vibecode@finolabs-vibecode`. Skills are namespaced, for example `/finolabs-vibecode:fnl-handoff`. To try a local checkout for one session: `claude --plugin-dir /path/to/finolabs-vibecode`.
 
 ### Codex
 

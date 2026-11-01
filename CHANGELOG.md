@@ -8,6 +8,7 @@ Target version: `0.1.0`.
 
 ### Added
 
+- README section for AI agents given the repository link: confirm with the user, install per host from a shell, verify, then hand setup to the user in a new session.
 - Session-start reminder for Claude Code (SessionStart hook) and Antigravity (always-on rule) directing agents to `fnl-coding-router` and `fnl-delegate`.
 - Claude Code, Codex and Antigravity manifests sharing one `skills/` folder, version `0.1.0-dev`.
 - `fnl-coding-router`: Spec Kit first routing, fallback router, MIN/NORMAL/DEEP depth, the Spec Kit depth gate, the repeated-fix checkpoint, and activity selection with a semantic evaluator as a reference.
