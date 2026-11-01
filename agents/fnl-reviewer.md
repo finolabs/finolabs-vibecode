@@ -1,6 +1,6 @@
 ---
 name: fnl-reviewer
-description: Independent read-only code and security reviewer for a diff or commit range. Use when a user story or increment is committed, before a pull request merges, when re-reviewing fixes, or whenever `fnl-review-gate` or `fnl-security-review-gate` requires a fresh-context review.
+description: Reviews a diff or commit range for defects nobody has named yet (bugs, regressions, missed consumers, security holes), in a fresh context on code it did not write. Use when a user story or increment is committed, before a pull request merges, when re-reviewing fixes, or whenever `fnl-review-gate` or `fnl-security-review-gate` requires a fresh-context review.
 model: inherit
 disallowedTools: [Write, Edit, NotebookEdit]
 ---

@@ -2,6 +2,8 @@
 
 One engineering practice for AI coding agents, packaged as a single plugin with a focused skill set. It tells an agent how to route a change, how deep to go, how to delegate to other agents and accept their work, how to commit, version and release, and which review and verification gates a change must pass.
 
+This pack owns the decisions between tools: routing, depth, delegation, gates and conventions. For the work itself it points to trusted skills and native commands from known publishers (Matt Pocock's skills, Cloudflare's security audit, Spec Kit, each host's own review commands) instead of rewriting them, and every such pointer carries a fallback that keeps the skill working when the companion is not installed.
+
 Version: `0.1.0-dev` (phase 0; see `fnl-versioning`). Targets: Claude Code, Codex and Antigravity, from one `skills/` folder.
 
 ## Skills
@@ -31,12 +33,14 @@ Every skill carries the `fnl-` prefix.
 
 ### Agents
 
-Read-only subagents in `agents/` that apply the skills above in a fresh context:
+Read-only subagents in `agents/` that apply the skills above in a fresh context. They answer different questions:
 
-| Agent | Use it when |
-| --- | --- |
-| `fnl-reviewer` | Independent code and security review of a diff or commit range under `fnl-review-gate` and `fnl-security-review-gate`. |
-| `fnl-verifier` | Independent check of a completion claim against the diff and targeted test output under `fnl-verification`. |
+| Agent | Question | Use it when |
+| --- | --- | --- |
+| `fnl-verifier` | Is the report true? | An agent or session says a task is done: it reruns the targeted tests, checks each acceptance criterion and that the commits are where the report says. It judges facts, not design. |
+| `fnl-reviewer` | Is the change good? | A story or pull request is ready: it reads the code for defects nobody has named yet (bugs, regressions, missed consumers, security holes) under `fnl-review-gate` and `fnl-security-review-gate`. |
+
+Accepting delegated work takes the verifier; closing a story or merging takes both, verifier first.
 
 ## Install
 
@@ -108,8 +112,7 @@ The route judge is optional. Routing is complete without one; a judge such as Ty
 agents/fnl-*.md                   read-only reviewer and verifier subagents
 agents/openai.yaml                Codex skill-list display metadata
 skills/fnl-*/SKILL.md             one self-contained skill per folder, references/ and scripts/ beside it
-hooks/                            Claude Code hooks (session-start reminder)
-rules/                            Antigravity always-on rules (session-start reminder)
+rules/AGENTS.md                   session-start reminder: an always-on rule on Antigravity, injected by the hook in .claude-plugin/hooks.json on Claude Code
 assets/                           icon (light and dark, SVG and 512 px PNG) and its NOTICE
 evals/                            trigger suite for `claude plugin eval`
 LICENSE                           MIT

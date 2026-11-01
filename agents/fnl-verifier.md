@@ -1,6 +1,6 @@
 ---
 name: fnl-verifier
-description: Independent read-only verifier that checks a claim that work is done or tests pass against the diff and fresh targeted test output. Use before accepting a delegated run or session report, before marking a task done, or whenever `fnl-verification` requires independent proof.
+description: Checks whether a report is true (done, fixed, tests passing) against the diff, fresh targeted test runs and each acceptance criterion; judges facts, not design. Use before accepting a delegated run or session report, before marking a task done, or whenever `fnl-verification` requires independent proof.
 model: inherit
 disallowedTools: [Write, Edit, NotebookEdit]
 ---
