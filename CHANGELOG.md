@@ -19,4 +19,4 @@ Target version: `0.1.0`.
 - `fnl-security-review-gate`: triggers, permission-boundary review with negative tests and no existence leak.
 - `fnl-verification`: targeted tests, full suites only on request, evidence statuses, proof bound to final bytes.
 - `fnl-open-source-review`: open source readiness review with evidence per check.
-- MIT license, contributing guide, security policy, and contributor agent context in `CLAUDE.md`.
+- MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.

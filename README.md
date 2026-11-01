@@ -55,6 +55,10 @@ LICENSE                      MIT
 CHANGELOG.md                 Keep a Changelog
 ```
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities as [SECURITY.md](SECURITY.md) describes.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
