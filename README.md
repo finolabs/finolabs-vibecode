@@ -92,6 +92,8 @@ The route judge is optional. Routing is complete without one; a judge such as Ty
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 agents/openai.yaml                Codex skill-list display metadata
 skills/fnl-*/SKILL.md             one self-contained skill per folder, references/ and scripts/ beside it
+hooks/                            Claude Code hooks (session-start reminder)
+rules/                            Antigravity always-on rules (session-start reminder)
 assets/                           icon (light and dark, SVG and 512 px PNG) and its NOTICE
 evals/                            trigger suite for `claude plugin eval`
 LICENSE                           MIT
