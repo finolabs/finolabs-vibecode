@@ -6,13 +6,14 @@ disable-model-invocation: true
 
 # Ask: which skill next?
 
-The user describes their situation. Place them on the map below, read the target skill's `SKILL.md` before describing it (so the description is current), then **recommend and stop**: name the skill and what to type, in one or two sentences, and invoke nothing.
+The user describes their situation. Place them on the map below, read the target skill's `SKILL.md` before describing it (so the description is current), then **recommend and stop**: name the skill and what to type, in one or two sentences, and invoke nothing. Leave the how-to to the target skill; it explains itself when it runs.
 
 ## The map
 
 | Situation | Skill | Companion skills (Matt Pocock's pack) |
 | --- | --- | --- |
 | First time in this repository or on this machine | `/fnl-setup` | `/setup-matt-pocock-skills` if that pack is installed |
+| Writing or revising your own instructions for every agent and repository | `/fnl-setup-instructions` | |
 | Starting, resuming or redirecting coding work | `fnl-coding-workflow` | |
 | Requirements unclear | `fnl-coding-workflow` (clarification step) | `/grill-me`, or `/grill-with-docs` to keep a glossary and ADRs |
 | A design question only code can answer | `fnl-coding-workflow` | `prototype` |
