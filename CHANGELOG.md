@@ -19,6 +19,9 @@ Target version: `0.1.0`.
 - `fnl-security-review-gate`: triggers, permission-boundary review with negative tests and no existence leak.
 - `fnl-verification`: targeted tests, full suites only on request, evidence statuses, proof bound to final bytes.
 - `fnl-open-source-review`: open source readiness review with evidence per check.
+- `fnl-plugin-packaging`: one repository for Claude Code, Codex and Antigravity, with each host's native tools as the authority for field schemas.
+- `/fnl-setup` and `/fnl-ask` (user-invoked): first-run setup, and a router that also points to companion skills from mattpocock/skills.
+- "Pairs with" pointers to companion skills in the coding workflow, review gate, verification, commit and session hygiene skills.
 - Icon in light and dark (SVG and 512 px PNG), listing metadata for the Claude plugin directory and Codex, and marketplace catalogs so the repository installs as its own marketplace on both hosts.
 - Trigger eval suite for `claude plugin eval`: one case per skill and two negative cases.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
