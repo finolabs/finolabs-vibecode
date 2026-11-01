@@ -4,7 +4,9 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
-Target version: `0.1.0`.
+## [0.1.0] - 2026-11-02
+
+First public release.
 
 ### Added
 
@@ -38,3 +40,6 @@ Target version: `0.1.0`.
 - Trigger eval suite for `claude plugin eval`: one case per skill and two negative cases.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
+
+[Unreleased]: https://github.com/fioenix/finolabs-vibecode/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/fioenix/finolabs-vibecode/releases/tag/v0.1.0
