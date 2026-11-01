@@ -8,9 +8,9 @@ description: Gate work on an independent code review. Use when a user story or i
 ## When the gate applies
 
 - **After each user story** or increment: review it, dispose every finding, fix and verify, then review the next story. The next story's implementation starts only after the previous gate is closed.
-- **Before merge**: a pull request needs a clean code review, and a security review when `fnl-security-review-gate` triggers, bound to the final bytes.
+- **Before merge**: every pull request, whatever its size, passes both a code review and a security review, each posted on the pull request, as "Pull requests" below says.
 - Major features and work produced by delegated agents always get one.
-- A no-runtime-impact text edit needs its checks, not a reviewer per edit.
+- Inside a pull request's work, a no-runtime-impact text edit needs its checks, not a reviewer per edit; the pull request still gets both reviews.
 
 ## Instruments
 
@@ -66,6 +66,28 @@ The report states the coverage: the impact set as "symbol → consumers checked"
 4. Every fix that changes runtime behavior gets a **regression test** that fails without the fix.
 5. Verify the fix (`fnl-verification`) and recheck the interactions it touches.
 6. Send fixes back for **re-review** until no blocking finding remains.
+
+## Pull requests
+
+A pull request merges only when it carries two review comments for its current head commit, each with the verdict `APPROVE`:
+
+- a **code review** by `fnl-reviewer`;
+- a **security review** by `fnl-security-reviewer`. When no security trigger matches, the security reviewer still reviews and says so, listing the trust paths it checked.
+
+Rules:
+
+1. Each reviewer posts its whole report as one comment (`gh pr comment <number> --body-file <report>` on GitHub, or the host's equivalent). The comment's first line is a marker the merge check reads:
+
+   ```
+   <!-- fnl-review kind=code|security head=<full head SHA> verdict=APPROVE|REWORK -->
+   ```
+
+2. A push after a review makes that comment stale: the reviewers review the new head (the change since the last review, plus the impact set it reaches) and post again.
+3. A `REWORK` verdict closes only through fixes and a new `APPROVE` comment, or through the dispositions in "Findings" recorded in a reply.
+4. **Merge check**: before merging, read the pull request's head SHA and comments (`gh pr view <number> --json headRefOid,comments`) and confirm one `APPROVE` marker of each kind for that SHA. A missing or stale comment blocks the merge.
+5. Without the plugin's agents, two independent reviewers as "Who reviews" defines run the same reviews and post the same markers.
+
+Posting review comments on a repository's pull requests is part of this gate wherever the repository adopts it in its agent context file (`fnl-setup` writes that line); that adoption is the standing authority to post them. It grants no authority to merge, which stays with the owner.
 
 ## Approval
 

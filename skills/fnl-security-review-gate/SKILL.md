@@ -7,7 +7,7 @@ description: Security review for changes that cross a sensitive boundary. Use wh
 
 ## Triggers
 
-A change needs security scrutiny when it touches any of:
+Every pull request gets a security review (`fnl-review-gate` "Pull requests"). Inside a pull request's work, a change needs security scrutiny of its own when it touches any of:
 
 - authentication, sessions, tokens or credentials handling;
 - authorization: permissions, roles, grants, tenancy, sharing, scopes;
