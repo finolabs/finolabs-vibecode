@@ -1,8 +1,8 @@
 ---
 type: tool_used
 tool: Skill
-input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fnl-orchestration-committee"'
+input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fnl-committee"'
 min: 1
 ---
 
-The `fnl-orchestration-committee` skill is invoked.
+The `fnl-committee` skill is invoked.

@@ -14,14 +14,14 @@ The user describes their situation. Place them on the map below, read the target
 | --- | --- | --- |
 | First time in this repository or on this machine | `/fnl-setup` | `/setup-matt-pocock-skills` if that pack is installed |
 | Writing or revising your own instructions for every agent and repository | `/fnl-setup-instructions` | |
-| Starting, resuming or redirecting coding work | `fnl-coding-workflow` | |
-| Requirements unclear | `fnl-coding-workflow` (clarification step) | `/grill-me`, or `/grill-with-docs` to keep a glossary and ADRs |
-| A design question only code can answer | `fnl-coding-workflow` | `prototype` |
-| Ready to implement one seam | `fnl-coding-workflow` (depth, gates) | `tdd` for the red-green loop |
-| Bug, failing CI, unexplained behavior | `fnl-coding-workflow` (debug path and checkpoint) | `diagnosing-bugs` |
-| Handing work to Codex, Antigravity or another session | `fnl-orchestration`, then `/fnl-orchestration-handoff` | `/handoff` for a portable handoff document |
-| Want a second opinion | `/fnl-orchestration-advisor` | |
-| Stuck or looping on fixes | `/fnl-orchestration-committee` | |
+| Starting, resuming or redirecting coding work | `fnl-coding-router` | |
+| Requirements unclear | `fnl-coding-router` (clarification step) | `/grill-me`, or `/grill-with-docs` to keep a glossary and ADRs |
+| A design question only code can answer | `fnl-coding-router` | `prototype` |
+| Ready to implement one seam | `fnl-coding-router` (depth, gates) | `tdd` for the red-green loop |
+| Bug, failing CI, unexplained behavior | `fnl-coding-router` (debug path and checkpoint) | `diagnosing-bugs` |
+| Handing work to Codex, Antigravity or another session | `fnl-delegate`, then `/fnl-handoff` | `/handoff` for a portable handoff document |
+| Want a second opinion | `/fnl-advisor` | |
+| Stuck or looping on fixes | `/fnl-committee` | |
 | Coordinating a spec across desktop app sessions | `fnl-coordinator-sessions` | |
 | Long session, phase change, compaction | `fnl-session-hygiene` | `/ask-matt` covers its phase-boundary choices |
 | A story is done, or before merge | `fnl-review-gate` | `code-review` as the reviewer's instrument |

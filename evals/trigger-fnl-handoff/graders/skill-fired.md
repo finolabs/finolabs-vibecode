@@ -1,8 +1,8 @@
 ---
 type: tool_used
 tool: Skill
-input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fnl-orchestration-handoff"'
+input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fnl-handoff"'
 min: 1
 ---
 
-The `fnl-orchestration-handoff` skill is invoked.
+The `fnl-handoff` skill is invoked.

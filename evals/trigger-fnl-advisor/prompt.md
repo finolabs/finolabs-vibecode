@@ -1,5 +1,5 @@
 ---
-name: trigger-fnl-orchestration-advisor
+name: trigger-fnl-advisor
 tags: [trigger]
 runs: 3
 max_turns: 5

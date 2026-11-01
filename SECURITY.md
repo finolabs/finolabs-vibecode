@@ -12,4 +12,4 @@ Include the affected skill or script, the version, the steps or prompt that repr
 
 ## Scope
 
-In scope: instructions in a skill that could lead an agent to leak secrets or private data, bypass a permission or approval step, or run untrusted code, and defects in the bundled scripts (for example `skills/fnl-orchestration/scripts/ledger.py`).
+In scope: instructions in a skill that could lead an agent to leak secrets or private data, bypass a permission or approval step, or run untrusted code, and defects in the bundled scripts (for example `skills/fnl-delegate/scripts/ledger.py`).

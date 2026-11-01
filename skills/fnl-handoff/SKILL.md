@@ -1,11 +1,11 @@
 ---
-name: fnl-orchestration-handoff
+name: fnl-handoff
 description: Write a self-contained brief and dispatch one task to Codex, Antigravity or a Claude Code session under a hard time budget. Use when handing a task or half-finished work to another agent, restarting a stalled or timed-out run, or sending review findings back for a fix.
 user-invocable: true
 argument-hint: "[--agent codex|antigravity|claude-session] [--worktree] <task>"
 ---
 
-# Orchestration handoff
+# Handoff
 
 The receiving agent starts with **zero context**: the brief is everything it knows. Write it so the agent could finish the task with no question back to you.
 
@@ -13,11 +13,11 @@ The receiving agent starts with **zero context**: the brief is everything it kno
 
 ## Prerequisites
 
-Load the `fnl-orchestration` skill and the host config it names. Grade and route the task there unless the arguments name an agent.
+Load the `fnl-delegate` skill and the host config it names. Grade and route the task there unless the arguments name an agent.
 
 ## Arguments
 
-1. **Agent**: `--agent` or an agent named in the text; otherwise the `fnl-orchestration` routing table.
+1. **Agent**: `--agent` or an agent named in the text; otherwise the `fnl-delegate` routing table.
 2. **Isolation**: `--worktree`, or any parallel dispatch → a new git worktree on a short branch named after the task, cut from the integration branch tip.
 3. **Task**: everything else.
 
@@ -69,9 +69,9 @@ For Antigravity, write an edit-only brief when its commands fall outside the all
 
 ## Dispatch
 
-1. Save the brief where `fnl-orchestration` "Where files go" puts it, named after the task: a local handoff brief in `.orchestration/briefs/`, a brief worth keeping as project documentation in the project's documentation folder.
-2. Record the dispatch: `ledger.py start ...` (see `fnl-orchestration`), keeping the id.
+1. Save the brief where `fnl-delegate` "Where files go" puts it, named after the task: a local handoff brief in `.orchestration/briefs/`, a brief worth keeping as project documentation in the project's documentation folder.
+2. Record the dispatch: `ledger.py start ...` (see `fnl-delegate`), keeping the id.
 3. Launch the agent with the host config's command, under the hard cap, in the background, with its log and final output in the briefs folder.
 4. Tell the user in one line: agent, model, worktree, budget, check deadline, ledger id.
 
-The completion notice brings you back. At the check deadline, judge liveness from artifacts as `fnl-orchestration` describes, then accept and record the outcome there.
+The completion notice brings you back. At the check deadline, judge liveness from artifacts as `fnl-delegate` describes, then accept and record the outcome there.

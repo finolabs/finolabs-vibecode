@@ -4,13 +4,13 @@ Agent context for contributing to this repository. User-facing documentation is 
 
 ## What this repository is
 
-One plugin with a skill set that gives AI coding agents a single engineering practice: coding workflow routing, agent orchestration, session hygiene, versioning, commit messages, code and security review gates, verification, and open source readiness. It ships to Claude Code (`.claude-plugin/plugin.json`), Codex (`.codex-plugin/plugin.json`) and Antigravity (`.antigravity-plugin/plugin.json`) from one `skills/` folder. Keep each host's manifest in its own folder: a root `plugin.json` would be read by both Codex and Antigravity, whose schemas conflict.
+One plugin with a skill set that gives AI coding agents a single engineering practice: routing of coding work, agent delegation, session hygiene, versioning, commit messages, code and security review gates, verification, and open source readiness. It ships to Claude Code (`.claude-plugin/plugin.json`), Codex (`.codex-plugin/plugin.json`) and Antigravity (`.antigravity-plugin/plugin.json`) from one `skills/` folder. Keep each host's manifest in its own folder: a root `plugin.json` would be read by both Codex and Antigravity, whose schemas conflict.
 
 ## Conventions
 
 - Every skill lives in `skills/fnl-<name>/SKILL.md`; the folder name equals the `name` field, and every name starts with `fnl-`. Skills refer to each other by their `fnl-` names.
 - Each skill stays focused, with a trigger-rich `description` that leads with what the skill does and lists the distinct cases that should fire it. Disclose reference material into `references/` and executable helpers into `scripts/`.
-- Host-specific facts (paths, commands, shims, allow-rules) belong in the host config described by `fnl-orchestration`, never in skill bodies.
+- Host-specific facts (paths, commands, shims, allow-rules) belong in the host config described by `fnl-delegate`, never in skill bodies.
 - Content is generic: no organization, customer or personal names, and no machine paths. Examples use synthetic names.
 - All content is English.
 

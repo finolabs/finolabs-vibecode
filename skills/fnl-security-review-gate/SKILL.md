@@ -16,7 +16,7 @@ A change needs security scrutiny when it touches any of:
 - payments or other irreversible effects;
 - network, file system or process boundaries opened to outside callers.
 
-Name the triggered boundaries in the receipt. A trigger raises depth to at least NORMAL (`fnl-coding-workflow`).
+Name the triggered boundaries in the receipt. A trigger raises depth to at least NORMAL (`fnl-coding-router`).
 
 ## Scope of the review
 

@@ -1,11 +1,11 @@
 ---
-name: fnl-orchestration-advisor
+name: fnl-advisor
 description: Get a second opinion from another model (Codex, or a fresh Claude context) without handing over the work. Use when the user asks for an advisor, a second opinion or what another model thinks, or before committing to a risky design or fix.
 user-invocable: true
 argument-hint: "[--agent codex|claude] <question>"
 ---
 
-# Orchestration advisor
+# Advisor
 
 One agent reads the situation and gives a judgement. You stay the decider; the advisor does not drive the work.
 
@@ -17,7 +17,7 @@ One agent reads the situation and gives a judgement. You stay the decider; the a
 2. Otherwise prefer contrast: a different model family from your own, at the strong end. From a Claude coordinator that is Codex in a read-only sandbox; when Codex is out of quota, a Claude subagent with fresh context.
 3. Antigravity takes no reviews or correctness judgements, so it is not an advisor.
 
-Load the `fnl-orchestration` skill and the host config for the invocation commands.
+Load the `fnl-delegate` skill and the host config for the invocation commands.
 
 ## The briefing
 

@@ -1,9 +1,9 @@
 ---
-name: fnl-orchestration
+name: fnl-delegate
 description: Coordinate other coding agents (Codex CLI, Antigravity through agybird, Claude Code sessions). Use whenever work is delegated to another agent or split across agents: deciding which agent or model gets each task, dispatching independent tasks in parallel, an agent's quota runs out, or a delegated run stalls, times out or is interrupted.
 ---
 
-# Orchestration
+# Delegate
 
 You are the **coordinator**. Agents implement; you grade, route, brief, watch, verify and accept. An agent's report is a claim; the diff and the test output are the evidence.
 
@@ -15,7 +15,7 @@ Run this loop for every delegated task. Each step ends on its criterion.
 
 1. **Grade** the task: kind and difficulty (below). Done when both are named.
 2. **Route** it to an agent and model (below). Done when you can state the choice and its reason in one line.
-3. **Brief** it with the `fnl-orchestration-handoff` template, saved as "Where files go" says. Done when an agent with zero context could finish the task from the brief alone.
+3. **Brief** it with the `fnl-handoff` template, saved as "Where files go" says. Done when an agent with zero context could finish the task from the brief alone.
 4. **Dispatch** it with a hard time cap and record it in the ledger. Done when the process is running and the ledger has its `start` line.
 5. **Watch** liveness at the check deadline from artifacts. Done when the run has ended or been stopped.
 6. **Accept** after verifying the diff and the tests yourself. Done when the work is accepted, sent back for rework, or rejected.
@@ -43,7 +43,7 @@ These are preferences. A user who names an agent or model wins; otherwise follow
 | medium implementation | Codex or Antigravity | the other one |
 | easy implementation | Antigravity | Codex |
 | code or security review | the stronger agent: Codex, or a Claude Code session for very hard work | the other of those two |
-| second opinion, stuck, planning | `fnl-orchestration-advisor` or `fnl-orchestration-committee` | |
+| second opinion, stuck, planning | `fnl-advisor` or `fnl-committee` | |
 
 - **Medium tie-break**: Antigravity runs headless and stops `blocked` or `needs_permission` whenever a command falls outside its allow-rules, and only the user can grant one. Give medium work to Antigravity when the brief is edit-only or its commands fit the allow-rules, and to Codex when the work needs wider shell access or the user is away.
 - **Reviews** go to the stronger agent in a fresh context; Antigravity takes no reviews. `fnl-review-gate` defines reviewer independence.
@@ -99,7 +99,7 @@ When a run times out, fails or stops with uncommitted work, before any other age
 
 ## Where files go
 
-Sort every file the orchestration produces by who will read it:
+Sort every file that delegation produces by who will read it:
 
 - **Shared**: documentation, design notes and briefs with lasting value for the project's community or as future usage docs. Put them in the project's normal documentation folders (`docs/`, `specs/` or whatever the project uses) and commit them under the project's rules for public content.
 - **Local**: logs, working notes, handoff briefs, captured state from interrupted runs; anything that only serves development on this machine. Put them in the hidden folder `.orchestration/` at the main checkout's root (`git rev-parse --path-format=absolute --git-common-dir`, then its parent): `briefs/` for briefs and notes, `logs/` for logs and final outputs. Keep it out of git with a local `.orchestration/` line in `.git/info/exclude`; the shared `.gitignore` changes only with the user's approval. The host config may name another durable local folder. Temporary directories and session scratchpads are wiped on restart, so never keep briefs there.
@@ -123,8 +123,8 @@ Task labels are short names; the ledger holds no task data, secrets or personal 
 
 ## Related skills
 
-- `fnl-orchestration-handoff`: write the brief and dispatch one task.
-- `fnl-orchestration-advisor`: one second opinion, no edits.
-- `fnl-orchestration-committee`: two contrasting agents for root cause or planning when stuck.
+- `fnl-handoff`: write the brief and dispatch one task.
+- `fnl-advisor`: one second opinion, no edits.
+- `fnl-committee`: two contrasting agents for root cause or planning when stuck.
 - `fnl-coordinator-sessions`: a spec run as coordinator plus task sessions in the desktop app.
 - `agybird`: owns every Antigravity invocation detail.

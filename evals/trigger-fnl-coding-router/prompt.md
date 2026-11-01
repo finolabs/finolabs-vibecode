@@ -1,5 +1,5 @@
 ---
-name: trigger-fnl-coding-workflow
+name: trigger-fnl-coding-router
 tags: [trigger]
 runs: 3
 max_turns: 5

@@ -10,14 +10,15 @@
     {
       "name": "finos-vibe-code",
       "source": "./",
-      "description": "One engineering practice for AI coding agents: coding workflow routing, agent orchestration, versioning, commit messages, review gates, security review, verification and open source readiness.",
+      "description": "One engineering practice for AI coding agents: coding-work routing, agent delegation, versioning, commit messages, review gates, security review, verification and open source readiness.",
       "homepage": "https://github.com/fioenix/finos-vibe-code",
       "repository": "https://github.com/fioenix/finos-vibe-code",
       "license": "MIT",
       "category": "development",
       "keywords": [
-        "coding-workflow",
-        "orchestration",
+        "coding-router",
+        "delegation",
+    "orchestration",
         "code-review",
         "security-review",
         "versioning",

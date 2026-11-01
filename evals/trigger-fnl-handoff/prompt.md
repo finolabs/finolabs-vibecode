@@ -1,5 +1,5 @@
 ---
-name: trigger-fnl-orchestration-handoff
+name: trigger-fnl-handoff
 tags: [trigger]
 runs: 3
 max_turns: 5

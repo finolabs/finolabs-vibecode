@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Append-only dispatch ledger for the orchestration skills.
+"""Append-only dispatch ledger for the delegation skills.
 
 Each dispatch writes a `start` line and later a `finish` line to a JSONL file
 (default ~/.claude/orchestration/ledger.jsonl, override with ORCHESTRATION_LEDGER).

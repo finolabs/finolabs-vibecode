@@ -8,7 +8,7 @@
   "privacyPolicyUrl": "https://github.com/fioenix/finos-vibe-code/blob/main/PRIVACY.md",
   "termsOfServiceUrl": "https://github.com/fioenix/finos-vibe-code/blob/main/TERMS.md",
   "version": "0.1.0-dev",
-  "description": "One engineering practice for AI coding agents: coding workflow routing, agent orchestration, versioning, commit messages, review gates, security review, verification and open source readiness.",
+  "description": "One engineering practice for AI coding agents: coding-work routing, agent delegation, versioning, commit messages, review gates, security review, verification and open source readiness.",
   "author": {
     "name": "Fioenix",
     "url": "https://github.com/fioenix"
@@ -17,7 +17,8 @@
   "repository": "https://github.com/fioenix/finos-vibe-code",
   "license": "MIT",
   "keywords": [
-    "coding-workflow",
+    "coding-router",
+    "delegation",
     "orchestration",
     "code-review",
     "security-review",

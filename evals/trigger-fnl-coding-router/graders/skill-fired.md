@@ -1,8 +1,8 @@
 ---
 type: tool_used
 tool: Skill
-input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fnl-coding-workflow"'
+input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fnl-coding-router"'
 min: 1
 ---
 
-The `fnl-coding-workflow` skill is invoked.
+The `fnl-coding-router` skill is invoked.

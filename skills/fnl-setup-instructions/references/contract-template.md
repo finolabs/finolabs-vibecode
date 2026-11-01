@@ -27,15 +27,15 @@ Sections marked *optional* are skipped when the user has no need. Each section l
 ## 4. How work is done (required)
 
 - Surgical changes in the existing style; no unsolicited refactors or features.
-- Coding entry: "Before substantive coding, load `fnl-coding-workflow`." It covers routing, depth, review, verification and delegation.
+- Coding entry: "Before substantive coding, load `fnl-coding-router`." It covers routing, depth, review, verification and delegation.
 - Status words for reports: drafted, verified, integrated, delivered, parked.
 - Test scope (recommended: targeted tests for changed code and its consumers; full suites only on request, as `fnl-verification` says).
 - Commits and versions: point to `fnl-commit-messages` and `fnl-versioning`; add only the user's own deviations.
 
 ## 5. Delegation (optional)
 
-- Which other agents the user has (Codex, Antigravity, Claude Code sessions) and that `fnl-orchestration` governs routing, budgets and acceptance.
-- Machine facts live in the orchestration host config written by `/fnl-setup`, not here.
+- Which other agents the user has (Codex, Antigravity, Claude Code sessions) and that `fnl-delegate` governs routing, budgets and acceptance.
+- Machine facts live in the delegation host config written by `/fnl-setup`, not here.
 
 ## 6. Knowledge base and memory (optional)
 

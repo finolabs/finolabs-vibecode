@@ -9,9 +9,9 @@ Target version: `0.1.0`.
 ### Added
 
 - Claude Code, Codex and Antigravity manifests sharing one `skills/` folder, version `0.1.0-dev`.
-- `fnl-coding-workflow`: Spec Kit first routing, fallback router, MIN/NORMAL/DEEP depth, the Spec Kit depth gate, the repeated-fix checkpoint, and activity selection with a semantic evaluator as a reference.
+- `fnl-coding-router`: Spec Kit first routing, fallback router, MIN/NORMAL/DEEP depth, the Spec Kit depth gate, the repeated-fix checkpoint, and activity selection with a semantic evaluator as a reference.
 - `fnl-session-hygiene`: compaction at about 60% context, handover content, titles, one writer per scope.
-- `fnl-orchestration`, `fnl-orchestration-handoff`, `fnl-orchestration-advisor`, `fnl-orchestration-committee`: grading and routing across Codex, Antigravity and Claude Code, quota fallback, at most 5 parallel dispatches, hard time caps and liveness from artifacts, heavy-job lock, verify-before-accept, handover after interrupted runs, file placement, and the dispatch ledger script; a host config template.
+- `fnl-delegate`, `fnl-handoff`, `fnl-advisor`, `fnl-committee`: grading and routing across Codex, Antigravity and Claude Code, quota fallback, at most 5 parallel dispatches, hard time caps and liveness from artifacts, heavy-job lock, verify-before-accept, handover after interrupted runs, file placement, and the dispatch ledger script; a host config template.
 - `fnl-coordinator-sessions`: coordinator plus one app session per task, standby sessions, review gate per user story.
 - `fnl-versioning`: SemVer, phase 0, cadence, single source of truth, immutable tags, Keep a Changelog, release authority.
 - `fnl-commit-messages`: atomic commits, imperative subjects, exclusions, attribution trailer, PR descriptions.
@@ -23,7 +23,7 @@ Target version: `0.1.0`.
 - `/fnl-setup`, `/fnl-setup-instructions` and `/fnl-ask` (user-invoked): a first-run setup interview, an interview that writes the user's working contract for every host, and a router that also points to companion skills from mattpocock/skills.
 - Quality eval cases with LLM graders for the packaging, setup and ask skills.
 - Acknowledgements of the projects and documentation this pack learned from.
-- "Pairs with" pointers to companion skills in the coding workflow, review gate, verification, commit and session hygiene skills.
+- "Pairs with" pointers to companion skills in the coding router, review gate, verification, commit and session hygiene skills.
 - Icon in light and dark (SVG and 512 px PNG), listing metadata for the Claude plugin directory and Codex, and marketplace catalogs so the repository installs as its own marketplace on both hosts.
 - Trigger eval suite for `claude plugin eval`: one case per skill and two negative cases.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.

@@ -1,5 +1,5 @@
 ---
-name: trigger-fnl-orchestration
+name: trigger-fnl-delegate
 tags: [trigger]
 runs: 3
 max_turns: 5

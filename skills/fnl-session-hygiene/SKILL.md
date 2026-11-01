@@ -28,4 +28,4 @@ Name this session as project + current activity at entry, on a stale resume, and
 
 - One writer per scope, with an explicit handover between writers.
 - Prefer a suitable existing checkout or worktree; stricter isolation rules win.
-- Keep notes, briefs and logs in the durable folder `fnl-orchestration` "Where files go" names; temporary directories and scratchpads are wiped on restart.
+- Keep notes, briefs and logs in the durable folder `fnl-delegate` "Where files go" names; temporary directories and scratchpads are wiped on restart.

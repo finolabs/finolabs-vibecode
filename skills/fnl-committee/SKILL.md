@@ -1,11 +1,11 @@
 ---
-name: fnl-orchestration-committee
+name: fnl-committee
 description: Convene two contrasting agents (Codex and Claude) for root-cause analysis and a plan. Use when stuck, looping on failed fixes, a bug survives several attempts, or a hard planning or design problem needs fresh eyes.
 user-invocable: true
 argument-hint: "<problem>"
 ---
 
-# Orchestration committee
+# Committee
 
 Two agents from different model families, fresh context, planning in parallel. Contrast is the point.
 
@@ -16,9 +16,9 @@ Two agents from different model families, fresh context, planning in parallel. C
 - **Codex** in a read-only sandbox, at its highest reasoning setting.
 - **Claude** with fresh context: a subagent, or a Claude Code session when the analysis needs longer than one turn.
 
-Members the user names win. Antigravity takes no correctness judgements, so it sits on no committee. When one member's agent is out of quota, say so and run a single advisor instead (`fnl-orchestration-advisor`).
+Members the user names win. Antigravity takes no correctness judgements, so it sits on no committee. When one member's agent is out of quota, say so and run a single advisor instead (`fnl-advisor`).
 
-Load the `fnl-orchestration` skill and the host config for the invocation commands.
+Load the `fnl-delegate` skill and the host config for the invocation commands.
 
 ## Rules
 
@@ -38,4 +38,4 @@ Load the `fnl-orchestration` skill and the host config for the invocation comman
 4. Where they disagree, pass each member the other's argument and ask it to rebut or concede. At most two rounds.
 5. Converge on one root cause and plan, or name the open disagreement and the evidence that would settle it.
 
-Give the user the consensus, where the members diverged and how it resolved. The plan then goes through `fnl-orchestration` like any other work.
+Give the user the consensus, where the members diverged and how it resolved. The plan then goes through `fnl-delegate` like any other work.

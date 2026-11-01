@@ -10,12 +10,12 @@ Every skill carries the `fnl-` prefix.
 
 | Skill | Use it when |
 | --- | --- |
-| `fnl-coding-workflow` | Starting or resuming any coding work: Spec Kit first, fallback router, depth (MIN, NORMAL, DEEP), the Spec Kit depth gate, the stop-before-a-third-fix checkpoint. |
+| `fnl-coding-router` | Starting or resuming any coding work: Spec Kit first, fallback router, depth (MIN, NORMAL, DEEP), the Spec Kit depth gate, the stop-before-a-third-fix checkpoint. |
 | `fnl-session-hygiene` | Context passes about 60%, a phase changes, a title is stale, work moves to another session or writer. |
-| `fnl-orchestration` | Delegating to Codex, Antigravity or Claude Code sessions: grade, route, quota fallback, at most 5 parallel runs, time budgets, liveness from artifacts, heavy-job lock, verify-before-accept, handover, dispatch ledger. |
-| `fnl-orchestration-handoff` | Writing a self-contained brief and dispatching one task. |
-| `fnl-orchestration-advisor` | One second opinion from a stronger, contrasting model. |
-| `fnl-orchestration-committee` | Stuck or looping: two contrasting agents find the root cause and a plan. |
+| `fnl-delegate` | Delegating to Codex, Antigravity or Claude Code sessions: grade, route, quota fallback, at most 5 parallel runs, time budgets, liveness from artifacts, heavy-job lock, verify-before-accept, handover, dispatch ledger. |
+| `fnl-handoff` | Writing a self-contained brief and dispatching one task. |
+| `fnl-advisor` | One second opinion from a stronger, contrasting model. |
+| `fnl-committee` | Stuck or looping: two contrasting agents find the root cause and a plan. |
 | `fnl-coordinator-sessions` | Running a spec as a coordinator plus one app session per task, with standby sessions and review gates. |
 | `fnl-versioning` | Version bumps, tags, changelog and release notes (SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog). |
 | `fnl-commit-messages` | Atomic commits, imperative subjects, no secrets or build output, host attribution trailer, PR descriptions. |
@@ -39,7 +39,7 @@ Every install path ships the same `skills/` folder. The repository is its own ma
 /plugin install finos-vibe-code@finos-vibe-code
 ```
 
-Skills are namespaced, for example `/finos-vibe-code:fnl-orchestration-handoff`. To try a local checkout for one session: `claude --plugin-dir /path/to/finos-vibe-code`.
+Skills are namespaced, for example `/finos-vibe-code:fnl-handoff`. To try a local checkout for one session: `claude --plugin-dir /path/to/finos-vibe-code`.
 
 ### Codex
 
@@ -59,15 +59,15 @@ agy plugin install https://github.com/fioenix/finos-vibe-code
 
 ### First check
 
-Ask your agent: "Route this change through the coding workflow and tell me the depth you chose." It should load `fnl-coding-workflow`.
+Ask your agent: "Route this change through the coding router and tell me the depth you chose." It should load `fnl-coding-router`.
 
 ## Works well with
 
-These skills set the gates and the routing; they do not try to replace good phase tools. They pair with [Matt Pocock's skills](https://github.com/mattpocock/skills) (MIT): `tdd` and `diagnosing-bugs` inside the coding workflow, `code-review` as the reviewer's instrument in the review gate, `grilling` and `prototype` for clarification, `pr` for pull request bodies, `/handoff` for portable handovers. Install that pack with its own instructions; `/fnl-ask` points to its skills when they fit. The two packs are independent projects.
+These skills set the gates and the routing; they do not try to replace good phase tools. They pair with [Matt Pocock's skills](https://github.com/mattpocock/skills) (MIT): `tdd` and `diagnosing-bugs` inside the work `fnl-coding-router` routes, `code-review` as the reviewer's instrument in the review gate, `grilling` and `prototype` for clarification, `pr` for pull request bodies, `/handoff` for portable handovers. Install that pack with its own instructions; `/fnl-ask` points to its skills when they fit. The two packs are independent projects.
 
 ## Host configuration
 
-The orchestration skills keep machine facts (agent commands, paths, allow-rules, lock path, parallel limit) outside the plugin, in a host config file: `ORCHESTRATION_HOST_CONFIG`, else `~/.claude/orchestration/host.md`. Start from `skills/fnl-orchestration/references/host-template.md`. The dispatch ledger defaults to `~/.claude/orchestration/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it).
+The orchestration skills keep machine facts (agent commands, paths, allow-rules, lock path, parallel limit) outside the plugin, in a host config file: `ORCHESTRATION_HOST_CONFIG`, else `~/.claude/orchestration/host.md`. Start from `skills/fnl-delegate/references/host-template.md`. The dispatch ledger defaults to `~/.claude/orchestration/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it).
 
 ## Layout
 
@@ -118,9 +118,9 @@ The eval suite checks that each skill fires on a representative prompt and that 
 This pack stands on other people's work. Thank you to:
 
 - **Matt Pocock** and [mattpocock/skills](https://github.com/mattpocock/skills) ([overview](https://www.aihero.dev/skills)), MIT. Its `/setup-matt-pocock-skills` and `/ask-matt` skills inspired `/fnl-setup` and `/fnl-ask`; its user-invoked and model-invoked split, its grilling interview and its `writing-for-agents` guidance shaped how these skills are written. No text is copied, and the two packs are independent projects.
-- [Spec Kit](https://github.com/github/spec-kit) by GitHub, which `fnl-coding-workflow` routes through first.
+- [Spec Kit](https://github.com/github/spec-kit) by GitHub, which `fnl-coding-router` routes through first.
 - [Superpowers](https://github.com/obra/superpowers) by Jesse Vincent, whose process skills (brainstorming, systematic debugging, test-driven development, verification before completion, code review requests) fill the fallback router.
-- [Paseo](https://github.com/getpaseo/paseo), whose advisor, committee and handoff skills were the reference design for the orchestration skills.
+- [Paseo](https://github.com/getpaseo/paseo), whose advisor, committee and handoff skills were the reference design for the delegation skills.
 - Anthropic's [skills repository](https://github.com/anthropics/skills) and its `skill-creator`, and the [Agent Skills](https://agentskills.io) format that lets one `skills/` folder serve several hosts.
 - The packaging documentation of [Claude Code](https://code.claude.com/docs/en/plugins/manifest-reference.md), [Codex](https://developers.openai.com/codex/plugins/build) and [Antigravity](https://antigravity.google/docs/build-plugins).
 - [TypeSafe](https://docs.typesafe.ai), whose cookbooks informed the activity-selection reference.

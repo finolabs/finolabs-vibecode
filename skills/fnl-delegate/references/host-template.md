@@ -1,6 +1,6 @@
-# Orchestration host config: <machine name>
+# Delegation host config: <machine name>
 
-Machine-specific facts for the `fnl-orchestration` skills. The skills hold what is true on any host; this file holds paths, commands and permission rules for one machine. Keep it outside the plugin (default `~/.claude/orchestration/host.md`, or the path in `ORCHESTRATION_HOST_CONFIG`) so plugin updates never overwrite it. Changing an allow-rule or a shared setting listed here needs the owner's approval.
+Machine-specific facts for the `fnl-delegate` skills. The skills hold what is true on any host; this file holds paths, commands and permission rules for one machine. Keep it outside the plugin (default `~/.claude/orchestration/host.md`, or the path in `ORCHESTRATION_HOST_CONFIG`) so plugin updates never overwrite it. Changing an allow-rule or a shared setting listed here needs the owner's approval.
 
 ## Limits
 
@@ -12,7 +12,7 @@ Machine-specific facts for the `fnl-orchestration` skills. The skills hold what 
 
 ## Briefs folder
 
-Durable, never `/tmp` or a session scratchpad. Default: `.orchestration/` at the main checkout's root, as `fnl-orchestration` "Where files go" says. Per-project exceptions: <project → folder>.
+Durable, never `/tmp` or a session scratchpad. Default: `.orchestration/` at the main checkout's root, as `fnl-delegate` "Where files go" says. Per-project exceptions: <project → folder>.
 
 Brief preamble that lets a delegated agent skip its own workflow entry read: "<preamble text>".
 

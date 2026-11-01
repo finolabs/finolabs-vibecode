@@ -1,9 +1,9 @@
 ---
-name: fnl-coding-workflow
+name: fnl-coding-router
 description: Route coding work before the first substantive change. Use when starting, resuming or redirecting an implementation, bug fix, refactor or feature: choosing Spec Kit or the fallback process, picking depth (MIN, NORMAL, DEEP), deciding between speckit-tasks and direct implementation, or when fixes keep failing on the same invariant.
 ---
 
-# Coding workflow
+# Coding router
 
 The entry point for coding work. It picks the workflow, the depth and the gates; the other skills in this plugin own the details it points to.
 
@@ -62,7 +62,7 @@ Done when the depth and its reason are in the receipt.
 
 ## 4. Work, then gate
 
-- Delegation to other agents follows the `fnl-orchestration` skill. Budget root and children before spawning: MIN has no implementation children; otherwise at most two lightweight children, one nesting level and one heavy job at a time, unless a stricter cap applies.
+- Delegation to other agents follows the `fnl-delegate` skill. Budget root and children before spawning: MIN has no implementation children; otherwise at most two lightweight children, one nesting level and one heavy job at a time, unless a stricter cap applies.
 - Commits follow `fnl-commit-messages`; versions, tags and changelogs follow `fnl-versioning`.
 - Proof follows `fnl-verification`.
 - Pull requests need a clean code review and, when triggered, a security review before merge (`fnl-review-gate`, `fnl-security-review-gate`).

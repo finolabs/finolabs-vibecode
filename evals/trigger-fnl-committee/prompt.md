@@ -1,5 +1,5 @@
 ---
-name: trigger-fnl-orchestration-committee
+name: trigger-fnl-committee
 tags: [trigger]
 runs: 3
 max_turns: 5

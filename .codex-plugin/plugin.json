@@ -1,7 +1,7 @@
 {
   "name": "finos-vibe-code",
   "version": "0.1.0-dev",
-  "description": "One engineering practice for AI coding agents: coding workflow routing, agent orchestration, versioning, commit messages, review gates, security review, verification and open source readiness.",
+  "description": "One engineering practice for AI coding agents: coding-work routing, agent delegation, versioning, commit messages, review gates, security review, verification and open source readiness.",
   "author": {
     "name": "Fioenix",
     "url": "https://github.com/fioenix"
@@ -10,7 +10,8 @@
   "repository": "https://github.com/fioenix/finos-vibe-code",
   "license": "MIT",
   "keywords": [
-    "coding-workflow",
+    "coding-router",
+    "delegation",
     "orchestration",
     "code-review",
     "security-review",
@@ -27,7 +28,7 @@
     "category": "Coding",
     "capabilities": [],
     "defaultPrompt": [
-      "Route this change through the coding workflow and tell me the depth you chose.",
+      "Route this change through the coding router and tell me the depth you chose.",
       "Grade these three tasks and dispatch the independent ones to agents.",
       "Prepare the version bump and changelog for the next release."
     ],
