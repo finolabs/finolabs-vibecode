@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "finos-vibe-code",
+  "owner": {
+    "name": "Fioenix",
+    "url": "https://github.com/fioenix"
+  },
+  "description": "Distribution channel for the finos-vibe-code plugin.",
+  "plugins": [
+    {
+      "name": "finos-vibe-code",
+      "source": "./",
+      "description": "One engineering practice for AI coding agents: coding workflow routing, agent orchestration, versioning, commit messages, review gates, security review, verification and open source readiness.",
+      "homepage": "https://github.com/fioenix/finos-vibe-code",
+      "repository": "https://github.com/fioenix/finos-vibe-code",
+      "license": "MIT",
+      "category": "development",
+      "keywords": [
+        "coding-workflow",
+        "orchestration",
+        "code-review",
+        "security-review",
+        "versioning",
+        "verification",
+        "agent-skills"
+      ]
+    }
+  ]
+}
