@@ -1,13 +1,13 @@
 # Delegation host config: <machine name>
 
-Machine-specific facts for the `fnl-delegate` skills. The skills hold what is true on any host; this file holds paths, commands and permission rules for one machine. Keep it outside the plugin (default `~/.claude/orchestration/host.md`, or the path in `ORCHESTRATION_HOST_CONFIG`) so plugin updates never overwrite it. When more than one agent coordinates, keep this file and the ledger (`ORCHESTRATION_LEDGER`) where every coordinator's sandbox can read and write them. Changing an allow-rule or a shared setting listed here needs the owner's approval.
+Machine-specific facts for the `fnl-delegate` skills. The skills hold what is true on any host; this file holds paths, commands and permission rules for one machine. Keep it outside the plugin (default `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`, or the path in `ORCHESTRATION_HOST_CONFIG`) so plugin updates never overwrite it. When more than one agent coordinates, keep this file and the ledger (`ORCHESTRATION_LEDGER`) where every coordinator's sandbox can read and write them. Changing an allow-rule or a shared setting listed here needs the owner's approval.
 
 ## Limits
 
 - Parallel dispatches: at most <N> at one time (5 or fewer).
 - Machine role: <daily workstation | CI box>. Heavy jobs at one time: <1>.
 - Heavy jobs: <container-backed suites, scale measurements, end-to-end suites>.
-- Heavy-job lock: `<absolute path, e.g. ~/.claude/orchestration/heavy.lock>`.
+- Heavy-job lock: `<absolute path, e.g. ~/.local/state/finolabs-vibecode/heavy.lock>`.
 - Fixture size for local tests and measurements: <e.g. about 1,000 items unless the owner asks for more>.
 
 ## Briefs folder

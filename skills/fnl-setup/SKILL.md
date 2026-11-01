@@ -14,7 +14,7 @@ Report only what you observe:
 
 - **Installed hosts**: `claude plugin list`, `codex plugin list`, `agy plugin list --json`. Note where `finolabs-vibecode` is installed and which agent CLIs exist (`codex`, `agy`, `claude`).
 - **Route judge**: whether a semantic evaluator skill such as `typesafe-ai` is installed (skill listing only; never look for its credentials).
-- **Host config**: the file at `$ORCHESTRATION_HOST_CONFIG`, else `~/.claude/orchestration/host.md`. Present, missing, or still holding template placeholders.
+- **Host config**: the file at `$ORCHESTRATION_HOST_CONFIG`, else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. Present, missing, or still holding template placeholders.
 - **Repository**: the git root; whether it uses Spec Kit (`.specify/` plus installed `speckit-*` skills); which of `CLAUDE.md` and `AGENTS.md` exist and whether one already has an `## Agent skills` section; whether `.orchestration/` is excluded in `.git/info/exclude`.
 - **Memory and knowledge base**: where the user keeps durable decisions that agents write to: the host's memory feature, or a notes vault or knowledge-base server their user-scoped instructions name, with the access those instructions approve.
 - **User-scoped instructions**: whether `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` and `~/.gemini/GEMINI.md` exist, and whether they already point coding work at `fnl-coding-router`.

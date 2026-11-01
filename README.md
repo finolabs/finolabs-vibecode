@@ -99,7 +99,7 @@ npx skills add https://github.com/cloudflare/security-audit-skill --skill securi
 
 ## Host configuration
 
-The orchestration skills keep machine facts (agent commands, allowed models, which delegates each coordinator can reach, the route judge, allow-rules, lock path, parallel limit) outside the plugin, in a host config file: `ORCHESTRATION_HOST_CONFIG`, else `~/.claude/orchestration/host.md`. Start from `skills/fnl-delegate/references/host-template.md`. The dispatch ledger defaults to `~/.claude/orchestration/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it). When Codex or Antigravity also coordinates, put both files where every coordinator's sandbox can read and write them.
+The orchestration skills keep machine facts (agent commands, allowed models, which delegates each coordinator can reach, the route judge, allow-rules, lock path, parallel limit) outside the plugin, in a host config file: `ORCHESTRATION_HOST_CONFIG`, else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. Start from `skills/fnl-delegate/references/host-template.md`. The dispatch ledger defaults to `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it). When Codex or Antigravity also coordinates, put both files where every coordinator's sandbox can read and write them.
 
 The route judge is optional. Routing is complete without one; a judge such as TypeSafe's Jev, called through its own `typesafe-ai` skill, settles only the calls the rules leave open, and the plugin holds no key for it.
 

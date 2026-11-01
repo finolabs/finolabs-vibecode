@@ -7,7 +7,7 @@ description: Coordinate other coding agents (Claude Code, Codex, Antigravity) fr
 
 You are the **coordinator**, whichever agent you run in: Claude Code, Codex or Antigravity. Agents implement; you grade, route, brief, watch, verify and accept. An agent's report is a claim; the diff and the test output are the evidence.
 
-Before the first dispatch in a session, read the **host config**: the file named by `ORCHESTRATION_HOST_CONFIG`, else `~/.claude/orchestration/host.md`. It holds this machine's commands, allowed models, which delegates this coordinator can reach, the route judge, the lock path, briefs folder and parallel limit. If it is missing, copy [references/host-template.md](references/host-template.md) and ask the user for the facts you cannot look up. Project rules (`AGENTS.md`, `CLAUDE.md`, a constitution) win over this skill wherever they conflict.
+Before the first dispatch in a session, read the **host config**: the file named by `ORCHESTRATION_HOST_CONFIG`, else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. It holds this machine's commands, allowed models, which delegates this coordinator can reach, the route judge, the lock path, briefs folder and parallel limit. If it is missing, copy [references/host-template.md](references/host-template.md) and ask the user for the facts you cannot look up. Project rules (`AGENTS.md`, `CLAUDE.md`, a constitution) win over this skill wherever they conflict.
 
 Three references carry the detail: [references/models.md](references/models.md) maps each agent's models to tiers and strengths, [references/agents.md](references/agents.md) gives each agent's dispatch contract, and [references/route-judgment.md](references/route-judgment.md) covers the optional route judge.
 
@@ -129,7 +129,7 @@ When unsure, treat a file as local; promoting it to shared later is a deliberate
 
 ## Ledger
 
-Record every dispatch with `scripts/ledger.py` in this skill's base directory. It appends to `~/.claude/orchestration/ledger.jsonl` (override with `ORCHESTRATION_LEDGER`). The ledger measures whether this routing works, so write each line at the moment it happens:
+Record every dispatch with `scripts/ledger.py` in this skill's base directory. It appends to `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode/ledger.jsonl` (override with `ORCHESTRATION_LEDGER`). The ledger measures whether this routing works, so write each line at the moment it happens:
 
 ```bash
 L="<this skill's base directory>/scripts/ledger.py"

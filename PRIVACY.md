@@ -8,7 +8,7 @@ The skills run inside a host agent such as Claude Code or Codex, which processes
 
 ## What the plugin stores on your machine
 
-- `~/.claude/orchestration/ledger.jsonl` (or the path in `ORCHESTRATION_LEDGER`): one line per delegated run with a short task label, the agent, the model, timings and the outcome. It holds no prompts, code, secrets or personal data. Delete the file to clear it.
+- `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode/ledger.jsonl` (or the path in `ORCHESTRATION_LEDGER`): one line per delegated run with a short task label, the agent, the model, timings and the outcome. It holds no prompts, code, secrets or personal data. Delete the file to clear it.
 - `.orchestration/` in your repository, when you follow `fnl-delegate` "Where files go": briefs, logs and handover notes that you or your agents write. The skill tells agents to keep this folder out of git.
 - The host config file you create from `skills/fnl-delegate/references/host-template.md`, at a path you choose.
 

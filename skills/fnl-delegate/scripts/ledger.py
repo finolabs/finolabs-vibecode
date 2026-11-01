@@ -2,7 +2,8 @@
 """Append-only dispatch ledger for the delegation skills.
 
 Each dispatch writes a `start` line and later a `finish` line to a JSONL file
-(default ~/.claude/orchestration/ledger.jsonl, override with ORCHESTRATION_LEDGER).
+(default $XDG_STATE_HOME/finolabs-vibecode/ledger.jsonl, with XDG_STATE_HOME
+defaulting to ~/.local/state; override with ORCHESTRATION_LEDGER).
 `summary` joins them to measure routing: first-pass acceptance, timeouts,
 fallbacks and duration per agent, model, kind and grade.
 """
@@ -31,7 +32,11 @@ TESTS = ["passed", "failed", "not-run"]
 
 
 def ledger_path():
-    return Path(os.environ.get("ORCHESTRATION_LEDGER", Path.home() / ".claude/orchestration/ledger.jsonl"))
+    override = os.environ.get("ORCHESTRATION_LEDGER")
+    if override:
+        return Path(override)
+    state = os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state"
+    return Path(state) / "finolabs-vibecode/ledger.jsonl"
 
 
 def now():
