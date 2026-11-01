@@ -5,7 +5,7 @@ description: Keep what agents learn in the right place: native agent memory for 
 
 # Knowledge
 
-Three places hold what agents learn. Each has one job; the skill is choosing the right one, reading all that apply, and writing to every place the user's instructions name.
+Three places hold what agents learn. Each has one job; the skill is choosing the right one, reading all that apply, and writing to the one store each fact belongs in.
 
 | Layer | Holds | Reach |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ Three places hold what agents learn. Each has one job; the skill is choosing the
 | **Knowledge base** | decisions with their reasons, lessons, project state, runbooks, research notes | every agent and every human the user shares it with |
 | **Repository** | facts about the code: architecture, conventions, commands | everyone who clones it |
 
-Recommended knowledge base, used beside native memory, never instead of it:
+Use **one** knowledge base, beside native memory and never instead of it. Prefer Orrery; use an Obsidian vault where Orrery does not fit. Two knowledge bases side by side drift apart, so a user moving from one to the other migrates (Orrery imports a Markdown vault) and retires the old one from agent use.
 
 - **[Orrery](https://github.com/fioenix/orrery)** (FINOLABS, over MCP; pre-alpha, repository not public yet): a governed knowledge base many agents share, with spaces and permissions, notes with revisions, recall over memories, supersession, and an audit trail.
 - **[Obsidian](https://obsidian.md)**: a local Markdown vault people read and edit by hand. Agents reach it through the Obsidian CLI; the `obsidian-cli` and `obsidian-markdown` skills from [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) (MIT) teach the commands and formats.
@@ -36,7 +36,7 @@ Before work that depends on earlier decisions, look in every layer that applies:
 ## Write
 
 1. **Read first**: find an existing entry on the topic and update it instead of adding a near-duplicate. Replace a wrong entry through the store's supersede or revision mechanism rather than deleting history.
-2. **Write to every place the user's instructions name.** When they keep a vault and a knowledge base side by side, write both; when one write fails, finish the other and report the failure. Never skip a side silently.
+2. **Write to the one knowledge base the user's instructions name**, plus a pointer in native memory when an agent needs it at startup. A failed write is reported, never dropped silently.
 3. **Shape**: one fact per entry, dated (DD/MM/YYYY or ISO), with its source and, for decisions and lessons, the reason and how to apply it. Link related entries.
 4. **Verify**: read the entry back through the same interface.
 
