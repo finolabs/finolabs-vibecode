@@ -23,16 +23,9 @@ Done when the findings are listed for the user.
 
 ## 2. Grill
 
-Settle sections A–D one at a time, starting with the first section whose findings are verified; a section that depends on an unverified item comes last, with the user asked to supply that fact.
+Settle sections A–D. Sections whose findings are verified are ready first; a section that depends on an unverified item waits until the user supplies that fact.
 
-Interview rules:
-
-- End each message with exactly one question, recommended answer first.
-- Ask about the decision, not the wording; derive the wording yourself.
-- Push back on vague answers ("be careful", "use best practices") until the choice is concrete enough for an agent to follow and someone to check.
-- Read back each section's decisions in one short list and get a yes before the next section.
-
-When the user has a grilling skill installed (for example `grilling` from mattpocock/skills), it may run the interview; these rules still define what each section must settle.
+Interview by the plugin's shared rules in `references/interview.md` (two folders above this skill's base directory): map the decisions, look up facts yourself, ask every ready decision in one numbered round with a recommended answer, and finish with a read-back and a yes.
 
 **A. Host config** (skip when complete). Offer to create it from `skills/fnl-delegate/references/host-template.md` in this plugin and fill: which agents are available and how this machine invokes them, the parallel limit (5 or fewer), the heavy-job lock path, and the durable folder for briefs and logs. Recommend the defaults the template names; leave unknown commands as questions in the file rather than guesses.
 

@@ -17,20 +17,13 @@ The section skeleton and its question bank are in [references/contract-template.
 
 A file or command that cannot be checked here is listed as **unverified** in one line, with a request that the user paste its contents if it exists. Missing permissions are not a reason to stop: the interview needs only the user's answers.
 
-Done when the message lists the files found, their sizes, any duplication and what is unverified, and its last line is a single question with a concrete recommended answer: which hosts the user runs when that is unverified ("Which agent hosts do you use? Recommended: Claude Code first, the others later."), otherwise the first question of section 1.
+Done when the message lists the files found, their sizes, any duplication and what is unverified, and it ends with the first round of questions, each with a concrete recommended answer. When the hosts are unverified, the round includes which hosts the user runs ("Recommended: Claude Code first, the others later.").
 
 ## 2. Grill
 
 Interview the user section by section through the template. Prefer what the existing files already say: ask only about gaps, conflicts and stale lines, and skip optional sections the user does not need.
 
-Interview rules:
-
-- End each message with exactly one question, recommended answer first.
-- Ask about the decision, not the wording; derive the wording yourself.
-- Push back on vague answers ("be careful", "use best practices") until the choice is concrete enough for an agent to follow and someone to check.
-- Read back each section's decisions in one short list and get a yes before the next section.
-
-When the user has a grilling skill installed (for example `grilling` from mattpocock/skills), it may run the interview; these rules still define what each section must settle.
+Interview by the plugin's shared rules in `references/interview.md` (two folders above this skill's base directory): map the decisions, look up facts yourself, ask every ready decision in one numbered round with a recommended answer, and finish with a read-back and a yes.
 
 Done when every required section has confirmed rules and every optional section is confirmed or skipped.
 
