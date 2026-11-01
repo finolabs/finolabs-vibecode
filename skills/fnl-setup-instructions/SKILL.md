@@ -15,26 +15,29 @@ The section skeleton and its question bank are in [references/contract-template.
 - Which hosts the user runs (`claude`, `codex`, `agy` on `PATH`) and which instruction files already exist for them (see `hosts.md`). Read the existing files: they are the user's current contract and the starting draft.
 - Whether the same text is copied into several files (a drift risk this skill will offer to remove).
 
-A file or command that cannot be checked here is listed as **unverified** in one line, with a request that the user paste its contents if it exists. The interview does not wait for it: begin with section 1.
+A file or command that cannot be checked here is listed as **unverified** in one line, with a request that the user paste its contents if it exists. Missing permissions are not a reason to stop: the interview needs only the user's answers.
 
-Done when the user has seen the list of files found, their sizes, any duplication, and what is unverified.
+Done when the message lists the files found, their sizes, any duplication and what is unverified, and its last line is a single question with a concrete recommended answer: which hosts the user runs when that is unverified ("Which agent hosts do you use? Recommended: Claude Code first, the others later."), otherwise the first question of section 1.
 
 ## 2. Grill
 
-Interview the user section by section through the template, one question at a time, recommended answer first. Use the `grilling` skill when it is installed; otherwise follow its spirit:
+Interview the user section by section through the template. Prefer what the existing files already say: ask only about gaps, conflicts and stale lines, and skip optional sections the user does not need.
 
+Interview rules:
+
+- End each message with exactly one question, recommended answer first.
 - Ask about the decision, not the wording; derive the wording yourself.
-- Push back on vague answers ("be careful", "use best practices") until there is a rule an agent can follow and someone can check.
-- Prefer what the existing files already say; ask only about gaps, conflicts and stale lines.
-- Skip optional sections the user does not need.
-- After each section, read back the rules it produced in one short list and get a yes before moving on.
+- Push back on vague answers ("be careful", "use best practices") until the choice is concrete enough for an agent to follow and someone to check.
+- Read back each section's decisions in one short list and get a yes before the next section.
+
+When the user has a grilling skill installed (for example `grilling` from mattpocock/skills), it may run the interview; these rules still define what each section must settle.
 
 Done when every required section has confirmed rules and every optional section is confirmed or skipped.
 
 ## 3. Draft
 
 - One **shared body** with the host-neutral sections, plus a short **host section** per host (session naming, compaction, tool quirks).
-- Point to skills by name for practice the plugin already covers: coding entry (`fnl-coding-workflow`), delegation (`fnl-orchestration`), commits (`fnl-commit-messages`), versions (`fnl-versioning`), proof (`fnl-verification`).
+- Point to skills by name for practice the plugin already covers: coding entry (`fnl-coding-router`), delegation (`fnl-delegate`), commits (`fnl-commit-messages`), versions (`fnl-versioning`), proof (`fnl-verification`).
 - Keep it short: every line loads on every turn of every session. Cut any line the agent would follow by default.
 - Content the user marks private (employer, customers, personal paths) stays in their own files only.
 
