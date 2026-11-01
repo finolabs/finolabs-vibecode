@@ -53,7 +53,7 @@ When the grade sits between two levels, or two routes still fit, the rules have 
 More routing rules:
 
 - **The route lands on your own host**: do the work yourself, or start a session or subagent of your own kind as `agents.md` says. Delegating to yourself through a headless CLI only adds overhead.
-- **Reviews** go to a different agent from the implementer where one is reachable, in a fresh context, at strong tier or above. `fnl-review-gate` defines reviewer independence.
+- **Reviews, advice and committee seats** go by capability, like implementation: strong tier or above, a different agent from the implementer, a different model family where one is reachable, in a fresh context. Any of the three agents qualifies. A review that must run commands an agent's allow-rules block (tests, builds) goes to an agent that can run them. `fnl-review-gate` defines reviewer independence.
 - **Antigravity headless** stops on any shell command outside its allow-rules, and only the user grants permissions. Give it edit-only briefs, or tasks whose commands fit the allow-rules; while the user is away, work that needs wider shell access goes to another agent.
 - **Token budget**: when the coordinator's own budget is the scarce one, delegate implementation and keep yourself on briefing and acceptance.
 - **User away**: questions that would go to the user go to an advisor or the route judge instead; record each decision and who settled it. Decisions that need the user's authority (merge, production, credentials, new spending) still wait.

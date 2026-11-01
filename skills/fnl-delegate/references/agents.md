@@ -27,7 +27,7 @@ When the `agybird` skill is installed, it may run the dispatch: it wraps the sam
 - **Headless**: `agy -p "$(cat "$B")" --model <model id> --mode accept-edits --output-format json --print-timeout <minutes>m`, run in the worktree. Always pass `--print-timeout`: its default differs between versions.
 - **Permissions**: reads and writes inside the workspace are allowed; every shell command outside the allow-rules is soft-denied. A soft-denied run can exit 0, so read `denied_actions` in the JSON. Pass a per-run settings file with `--settings` holding only the allow-rules this task needs, rather than widening the global rules; changing global rules needs the user's approval.
 - **Quota**: check `agy -p /usage --output-format json` before calling Antigravity out: pools are separate, so try another allowed model in a pool with quota left. An exhausted quota ends the run with exit 3 and an `AGY_ERROR` line on stderr.
-- **Reviews**: take reviews only on a Claude model served through Antigravity, and only when Claude Code and Codex are both unavailable.
+- **Reviews**: Argon and the Claude models it serves review at strong tier like any other agent. Antigravity has no native review command, so its reviewer reads the diff itself; a review that needs shell commands outside the allow-rules goes to Claude Code or Codex.
 
 JSON result → ledger outcome:
 
