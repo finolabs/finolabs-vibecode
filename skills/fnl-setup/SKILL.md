@@ -16,6 +16,7 @@ Report only what you observe:
 - **Route judge**: whether a semantic evaluator skill such as `typesafe-ai` is installed (skill listing only; never look for its credentials).
 - **Host config**: the file at `$ORCHESTRATION_HOST_CONFIG`, else `~/.claude/orchestration/host.md`. Present, missing, or still holding template placeholders.
 - **Repository**: the git root; whether it uses Spec Kit (`.specify/` plus installed `speckit-*` skills); which of `CLAUDE.md` and `AGENTS.md` exist and whether one already has an `## Agent skills` section; whether `.orchestration/` is excluded in `.git/info/exclude`.
+- **Memory and knowledge base**: where the user keeps durable decisions that agents write to: the host's memory feature, or a notes vault or knowledge-base server their user-scoped instructions name, with the access those instructions approve.
 - **User-scoped instructions**: whether `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` and `~/.gemini/GEMINI.md` exist, and whether they already point coding work at `fnl-coding-router`.
 
 A check that cannot run here (a command or path is unavailable) is listed as **unverified** in one line, and the interview goes on.
@@ -30,7 +31,7 @@ Interview by the rules in [references/interview.md](references/interview.md): ma
 
 **A. Host config** (skip when complete). Skip this section when the `fnl-delegate` skill is not installed. Offer to create the config from that skill's `references/host-template.md` and fill: which agents are available and how this machine invokes them, the allowed models per agent, which agents may coordinate and which delegates each can reach, the parallel limit (5 or fewer), the heavy-job lock path, and the durable folder for briefs and logs. When more than one agent coordinates, recommend a host config and ledger path every coordinator's sandbox can read and write.
 
-Ask whether to use a route judge for the routing calls the rules leave open (`skills/fnl-delegate/references/route-judgment.md`). Recommend "none" unless a judge skill is installed and the user already uses that service: a judge sends task summaries to a third party, and routing works without one at a higher quota cost. Record the answer and its date in the host config. Recommend the defaults the template names; leave unknown commands as questions in the file rather than guesses.
+Ask whether to use a route judge for the routing calls the rules leave open (the `fnl-delegate` skill's `references/route-judgment.md`). When a judge skill is installed, recommend yes: TypeSafe's Jev, through the `typesafe-ai` skill, is the reference judge, and it settles close calls with a calibrated answer where the fallback spends extra quota. Task summaries go to that service, so the user's yes is explicit. Without a judge skill, record "none": routing works without one. Record the answer and its date in the host config. Recommend the defaults the template names; leave unknown commands as questions in the file rather than guesses.
 
 **B. Local files**. Recommend adding `.orchestration/` to `.git/info/exclude` so briefs and logs stay out of git. The shared `.gitignore` changes only if the user asks.
 
@@ -46,7 +47,9 @@ This repository uses the finolabs-vibecode skills. Start coding work with `fnl-c
 
 ## 3. Confirm and write
 
-Show each draft and apply the user's edits. Then write only what was confirmed: the host config (outside the repository), the exclude line, and the agent-skills block (update an existing block in place). Install nothing and change no shared settings.
+Show each draft and apply the user's edits. Then write only what was confirmed: the host config (outside the repository), the exclude line, and the agent-skills block (update an existing block in place).
+
+When the findings show a memory or knowledge base, also record the settled decisions there (the route judge and the date of consent, which agents coordinate, the parallel limit, the host config path), through the access the user's instructions approve. Where those instructions name more than one store, write each one and report any write that failed. Install nothing and change no shared settings.
 
 ## 4. Report
 
