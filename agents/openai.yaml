@@ -1,0 +1,7 @@
+interface:
+  display_name: "Finos Vibe Code"
+  short_description: "One engineering practice for coding agents"
+  icon_small: "./assets/icon.svg"
+  icon_large: "./assets/icon.svg"
+  brand_color: "#9750C4"
+  default_prompt: "Route this change through the coding workflow and tell me the depth you chose."

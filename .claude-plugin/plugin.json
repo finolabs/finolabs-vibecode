@@ -2,6 +2,11 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "finos-vibe-code",
   "displayName": "Finos Vibe Code",
+  "icon": "./assets/icon.png",
+  "documentationUrl": "https://github.com/fioenix/finos-vibe-code#readme",
+  "supportUrl": "https://github.com/fioenix/finos-vibe-code/issues",
+  "privacyPolicyUrl": "https://github.com/fioenix/finos-vibe-code/blob/main/PRIVACY.md",
+  "termsOfServiceUrl": "https://github.com/fioenix/finos-vibe-code/blob/main/TERMS.md",
   "version": "0.1.0-dev",
   "description": "One engineering practice for AI coding agents: coding workflow routing, agent orchestration, versioning, commit messages, review gates, security review, verification and open source readiness.",
   "author": {

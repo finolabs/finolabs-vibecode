@@ -21,7 +21,7 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Finos Vibe Code",
-    "shortDescription": "Engineering practice for agents",
+    "shortDescription": "Engineering rules for agents",
     "developerName": "Fioenix",
     "longDescription": "A skill set that gives coding agents one engineering practice. Route each change through Spec Kit or a fallback router at the right depth. Coordinate Codex, Antigravity and Claude Code agents with self-contained briefs, time budgets and verify-before-accept. Version and tag releases by SemVer, and write atomic commits. Gate each user story on an independent code and security review, and verify with targeted tests whose output is read before anything is accepted. Before a repository goes public, review its open source readiness.",
     "category": "Coding",
@@ -30,6 +30,16 @@
       "Route this change through the coding workflow and tell me the depth you chose.",
       "Grade these three tasks and dispatch the independent ones to agents.",
       "Prepare the version bump and changelog for the next release."
-    ]
+    ],
+    "websiteURL": "https://github.com/fioenix/finos-vibe-code",
+    "supportURL": "https://github.com/fioenix/finos-vibe-code/issues",
+    "privacyPolicyURL": "https://github.com/fioenix/finos-vibe-code/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/fioenix/finos-vibe-code/blob/main/TERMS.md",
+    "brandColor": "#9750C4",
+    "brandColorDark": "#7FE2CE",
+    "composerIcon": "./assets/icon.svg",
+    "composerIconDark": "./assets/icon-dark.svg",
+    "logo": "./assets/icon.svg",
+    "logoDark": "./assets/icon-dark.svg"
   }
 }
