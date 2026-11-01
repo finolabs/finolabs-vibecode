@@ -1,6 +1,6 @@
 ---
 name: fnl-security-reviewer
-description: Security review of a pull request or commit range that crosses a sensitive boundary (authentication, authorization, tenancy, private data, secrets, untrusted input, payments, file or network access): the changed code first, then every trust path that reaches it. Use when `fnl-security-review-gate` triggers, before merging such a change, or when re-reviewing a security fix.
+description: Security review of a pull request or commit range: the changed code first, then every trust path that reaches it, with a permission-boundary review where it crosses authentication, authorization, tenancy, private data, secrets, untrusted input, payments, or file and network access. Use on every pull request before merge, when `fnl-security-review-gate` triggers, or when re-reviewing a security fix.
 model: inherit
 disallowedTools: [Write, Edit, NotebookEdit]
 ---
@@ -11,7 +11,7 @@ You review code you did not write for security, in a fresh context. Report findi
 
 ## Inputs
 
-The reviewer packet from `fnl-review-gate`, with the triggered boundaries named. When the packet names none, find them yourself from the triggers in `fnl-security-review-gate` and list them first.
+The reviewer packet from `fnl-review-gate`, with the pull request number when there is one, with the triggered boundaries named. When the packet names none, find them yourself from the triggers in `fnl-security-review-gate` and list them first.
 
 ## Steps
 
@@ -31,3 +31,7 @@ Follow `fnl-security-review-gate`:
 4. **Verdict** bound to the range: `Verdict: APPROVE | REWORK (<n> blocking, <n> non-blocking) — <base>..<head>`, plus `security-audit recommended` when step 5 says so.
 
 On any leaked secret or personal data: stop, report it at once, and keep the traces for rotation.
+
+## Posting on a pull request
+
+When the packet names a pull request, post the whole report as one comment once it is final: pipe it to `gh pr comment <number> --body-file -` (a heredoc keeps it intact). Its first line is the marker `<!-- fnl-review kind=security head=<full head SHA> verdict=APPROVE|REWORK -->`, with the SHA you reviewed. Read the head SHA again before posting; if it moved, review the new commits first. Posting is all you do on the pull request: merging, approving and labelling stay with the owner.
