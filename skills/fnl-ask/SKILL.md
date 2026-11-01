@@ -19,7 +19,8 @@ The user describes their situation. Place them on the map below, read the target
 | A design question only code can answer | `fnl-coding-router` | `prototype` |
 | Ready to implement one seam | `fnl-coding-router` (depth, gates) | `tdd` for the red-green loop |
 | Bug, failing CI, unexplained behavior | `fnl-coding-router` (debug path and checkpoint) | `diagnosing-bugs` |
-| Handing work to Codex, Antigravity or another session | `fnl-delegate`, then `/fnl-handoff` | `/handoff` for a portable handoff document |
+| Handing work to another agent (Claude Code, Codex, Antigravity) | `fnl-delegate`, then `/fnl-handoff` | `/handoff` for a portable handoff document |
+| Checking delegated runs, or how each agent and model performs | `/fnl-status` | |
 | Want a second opinion | `/fnl-advisor` | |
 | Stuck or looping on fixes | `/fnl-committee` | |
 | Coordinating a spec across desktop app sessions | `fnl-coordinator-sessions` | |

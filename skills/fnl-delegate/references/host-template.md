@@ -1,6 +1,6 @@
 # Delegation host config: <machine name>
 
-Machine-specific facts for the `fnl-delegate` skills. The skills hold what is true on any host; this file holds paths, commands and permission rules for one machine. Keep it outside the plugin (default `~/.claude/orchestration/host.md`, or the path in `ORCHESTRATION_HOST_CONFIG`) so plugin updates never overwrite it. Changing an allow-rule or a shared setting listed here needs the owner's approval.
+Machine-specific facts for the `fnl-delegate` skills. The skills hold what is true on any host; this file holds paths, commands and permission rules for one machine. Keep it outside the plugin (default `~/.claude/orchestration/host.md`, or the path in `ORCHESTRATION_HOST_CONFIG`) so plugin updates never overwrite it. When more than one agent coordinates, keep this file and the ledger (`ORCHESTRATION_LEDGER`) where every coordinator's sandbox can read and write them. Changing an allow-rule or a shared setting listed here needs the owner's approval.
 
 ## Limits
 
@@ -16,6 +16,28 @@ Durable, never `/tmp` or a session scratchpad. Default: `.orchestration/` at the
 
 Brief preamble that lets a delegated agent skip its own workflow entry read: "<preamble text>".
 
+## Coordinators and reach
+
+Which agent can coordinate on this machine, and which delegates each one can reach (`agents.md` "When an agent coordinates"). A delegate marked unreachable is skipped by routing.
+
+| Coordinator | Claude Code | Codex | Antigravity |
+| --- | --- | --- | --- |
+| Claude Code | — | <yes / no: reason> | <yes / no: reason> |
+| Codex | <yes / no> | — | <yes / no> |
+| Antigravity | <yes / no> | <yes / no> | — |
+
+## Route judgment
+
+- Judge: <none | the skill name, for example `typesafe-ai`>. The user approved sending task summaries to this service on <DD/MM/YYYY>.
+- Spend limit: <the judge skill's own guard, or a per-day cap>.
+
+## Claude Code
+
+- Headless command: <claude path> -p "$(cat "$B")" --model <full model id> --effort <level> --output-format json --allowedTools "<tools the brief needs>"
+- Allowed models: <full model ids>.
+- How task sessions start on this host: <desktop app session tools | `claude -p` headless>.
+- Session title convention: <project, feature, activity>.
+
 ## Codex
 
 Invocation with a hard cap and the extra directories the toolchain needs:
@@ -23,20 +45,16 @@ Invocation with a hard cap and the extra directories the toolchain needs:
 ```bash
 B="<brief file>"; O="<logs folder>"; W="<worktree>"; T="<task label>"
 <hard-cap wrapper, e.g. perl -e 'alarm 5400; exec @ARGV'> <codex path> exec \
-  -s workspace-write -C "$W" -o "$O/$T-last.txt" "$(cat "$B")" \
+  -m <model> -s workspace-write -C "$W" -o "$O/$T-last.txt" "$(cat "$B")" \
   < /dev/null > "$O/$T-codex.log" 2>&1; echo "$T=$?"
 ```
 
-- Reviews and advice: `-s read-only`.
+- Allowed models: <list>.
+- Reviews and advice: `-s read-only`, or `codex review`.
 - Machine quirks: <e.g. broken Node shim on PATH, missing `timeout`>.
 
-## Antigravity (agybird)
+## Antigravity
 
-- Runner command: <node binary> <agybird runner path> --category code --mode write --cwd "<worktree>" --new-session --model <slug> --timeout 30m
-- Allowed models: <list>. Quota is per model and per pool.
-- Allow-rules: <file path and the command prefixes allowed>. Everything else ends the run `needs_permission` or `blocked`.
-
-## Claude Code sessions
-
-- How task sessions start on this host: <desktop app session tools | `claude -p` headless>.
-- Session title convention: <project, feature, activity>.
+- Command: <agy path> -p "$(cat "$B")" --model <model id> --mode accept-edits --output-format json --print-timeout 30m, or the `agybird` runner when installed: <runner command>.
+- Allowed models and their pools: <list>.
+- Per-run settings file with allow-rules: <path>. Global allow-rules: <file path and the command prefixes allowed>. Everything else is soft-denied.

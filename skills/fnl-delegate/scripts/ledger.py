@@ -19,7 +19,9 @@ from pathlib import Path
 
 KINDS = ["implement", "review", "advise", "committee"]
 GRADES = ["easy", "medium", "hard", "very-hard"]
-AGENTS = ["codex", "antigravity", "claude-session", "claude-subagent"]
+AGENTS = ["claude", "codex", "antigravity", "subagent"]
+COORDINATORS = ["claude", "codex", "antigravity"]
+ROUTE_BY = ["table", "judge", "user"]
 REASONS = ["routing", "fallback-quota", "fallback-failure", "user-choice"]
 OUTCOMES = [
     "accepted", "rejected", "timeout", "stalled", "error",
@@ -66,8 +68,9 @@ def cmd_start(args):
     append({
         "event": "start", "id": dispatch_id, "ts": now(),
         "project": args.project, "task": args.task, "kind": args.kind,
-        "grade": args.grade, "agent": args.agent, "model": args.model,
-        "reason": args.reason, "budget_min": args.budget,
+        "grade": args.grade, "coordinator": args.coordinator, "agent": args.agent,
+        "model": args.model, "reason": args.reason, "route_by": args.route_by,
+        "budget_min": args.budget,
     })
     print(dispatch_id)
 
@@ -133,9 +136,11 @@ def main():
     s.add_argument("--task", required=True, help="short label, no task data or secrets")
     s.add_argument("--kind", required=True, choices=KINDS)
     s.add_argument("--grade", required=True, choices=GRADES)
+    s.add_argument("--coordinator", default="claude", choices=COORDINATORS)
     s.add_argument("--agent", required=True, choices=AGENTS)
     s.add_argument("--model", default="default")
     s.add_argument("--reason", default="routing", choices=REASONS)
+    s.add_argument("--route-by", default="table", choices=ROUTE_BY)
     s.add_argument("--budget", type=int, required=True, help="time budget in minutes")
     s.set_defaults(func=cmd_start)
 
