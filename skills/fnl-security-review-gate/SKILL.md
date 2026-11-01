@@ -22,6 +22,8 @@ Name the triggered boundaries in the receipt. A trigger raises depth to at least
 
 - **Diff review** covers an exact diff or commit range; **audit** covers an authorized wider scope. Fixing findings or verifying fixes needs its own explicit scope.
 - The reviewer is independent, as `fnl-review-gate` says, with the security coverage named in the packet.
+- A diff review uses the two rings of `fnl-review-gate` "Review scope", with the second ring traced along **trust paths**: every entry point that reaches the changed code (API routes, CLI commands, background jobs, tool calls and model prompts), the authentication and authorization checks on each path, and every store and output the changed code writes (databases, caches, search indexes, logs, exports).
+- Code and security review run as separate reviewers in parallel by default; one reviewer covers both only when scoped policy permits and the packet names both coverages.
 
 ## Instruments
 

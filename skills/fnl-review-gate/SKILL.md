@@ -25,7 +25,7 @@ When an instrument is missing, the reviewer applies the packet and findings rule
 
 ## Who reviews
 
-- **Independent**: a fresh context, never the run or session that wrote the code, and never self-approval. Prefer a different model family at the strong end (see the routing table in `fnl-delegate`).
+- **Independent**: a fresh context, never the run or session that wrote the code, and never self-approval. With the plugin installed, the `fnl-reviewer` and `fnl-security-reviewer` agents are ready-made fresh-context reviewers; a reviewer from another model family (`fnl-delegate`) adds contrast. Prefer a different model family at the strong end (see the routing table in `fnl-delegate`).
 - One qualified reviewer may cover code and security together when scoped policy permits; name the coverage explicitly.
 - A reviewer may delegate heavy reading, but verifies each finding it reports.
 
@@ -35,11 +35,28 @@ Self-contained, no whole-history fork:
 
 - acceptance criteria and the decisions the change rests on;
 - the exact binding: base and head SHAs or the commit range, and a fixed worktree when other writers are active;
-- known consumers of the changed code;
+- known consumers of the changed code, as a starting list the reviewer extends;
 - tests and configuration run, with their results and limits;
 - the requested coverage (correctness, security, performance) and the report format: each finding with file, line, severity and a concrete failure scenario.
 
 Give the reviewer a time budget and a check deadline (`fnl-delegate`).
+
+## Review scope
+
+A review covers two rings, in order: the change itself, then what the change can break. The rest of the repository stays out of scope.
+
+1. **The change**: every hunk of the diff read in its full context, meaning the whole function, class or block it sits in, and new files whole. Tests, configuration, migrations and build files in the diff count as change. Done when every changed file has been read; a file judged by its name has not been read.
+2. **The impact set**, traced from the changed symbols rather than guessed:
+   - consumers of each changed function, type, endpoint, event, command, configuration key, schema or column (name search, language-server references, route and handler tables);
+   - what the change now depends on: functions called with new arguments or new assumptions, new packages, environment;
+   - contracts: public APIs, serialized formats, database schema and migrations, permissions;
+   - the tests covering the changed code, and whether they still exercise the new behavior.
+
+   Follow one hop from each changed symbol. Go further only where the hop passes the change on (a changed return shape handed to the next caller, a widened permission reused elsewhere).
+
+Defects seen outside both rings are listed separately as **outside the change**, non-blocking. A diff over about 1,000 changed lines or 30 files is split by seam, one reviewer per seam, each with its own rings.
+
+The report states the coverage: the impact set as "symbol → consumers checked", and anything not traced with the reason. The gate reads it to know what the approval covers.
 
 ## Findings
 
