@@ -38,9 +38,10 @@ Read-only subagents in `agents/` that apply the skills above in a fresh context.
 | Agent | Question | Use it when |
 | --- | --- | --- |
 | `fnl-verifier` | Is the report true? | An agent or session says a task is done: it reruns the targeted tests, checks each acceptance criterion and that the commits are where the report says. It judges facts, not design. |
-| `fnl-reviewer` | Is the change good? | A story or pull request is ready: it reads the code for defects nobody has named yet (bugs, regressions, missed consumers, security holes) under `fnl-review-gate` and `fnl-security-review-gate`. |
+| `fnl-reviewer` | Is the change good? | A pull request or story is ready: it reads every changed file, then the callers, dependencies, contracts and tests the change affects, under `fnl-review-gate`. |
+| `fnl-security-reviewer` | Is the change safe? | The change crosses a sensitive boundary: it reads the changed files, then every trust path that reaches them, under `fnl-security-review-gate`. |
 
-Accepting delegated work takes the verifier; closing a story or merging takes both, verifier first.
+Both reviewers cover two rings, the change and its impact set, rather than the whole repository, and report what they traced. Accepting delegated work takes the verifier; closing a story or merging takes the verifier first, then the reviewer, plus the security reviewer in parallel when the security gate triggers.
 
 ## Install
 
@@ -109,7 +110,7 @@ The route judge is optional. Routing is complete without one; a judge such as Ty
 .codex-plugin/plugin.json         Codex manifest, version kept equal
 .antigravity-plugin/plugin.json   Antigravity manifest, version kept equal
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
-agents/fnl-*.md                   read-only reviewer and verifier subagents
+agents/fnl-*.md                   read-only reviewer, security reviewer and verifier subagents
 agents/openai.yaml                Codex skill-list display metadata
 skills/fnl-*/SKILL.md             one self-contained skill per folder, references/ and scripts/ beside it
 rules/AGENTS.md                   session-start reminder: an always-on rule on Antigravity, injected by the hook in .claude-plugin/hooks.json on Claude Code
