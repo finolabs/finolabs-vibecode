@@ -39,8 +39,9 @@ Sections marked *optional* are skipped when the user has no need. Each section l
 
 ## 6. Knowledge base and memory (optional)
 
-- Where durable notes live (a notes vault, a docs repository) and the only approved way to access them.
-- What gets written back, and where decisions and lessons go.
+- Where durable notes live (a knowledge base such as Orrery, an Obsidian vault, a docs repository) and the only approved way to access them.
+- Whether knowledge changes go to more than one store, and what happens when one write fails.
+- What gets written back, and where decisions and lessons go. `fnl-knowledge` covers the practice; the contract holds only the user's stores and access rules.
 
 ## 7. Evaluators and external services (optional)
 

@@ -14,6 +14,8 @@ Before assigning new work, inspect actual context usage where the surface expose
 - Delegated agents follow the same rule: start a fresh run with a short handover brief rather than resuming a run that has used much of its window.
 - Without usage telemetry, say so; never invent a percentage or interrupt active work.
 
+Before a compaction, a fresh session or the end of the work, write back what is worth keeping (decisions, lessons, project state) as `fnl-knowledge` says.
+
 ## Handover content
 
 For a portable handover document, the user can type `/handoff` from [mattpocock/skills](https://github.com/mattpocock/skills); its `/ask-matt` also explains when to continue, clear, hand off or compact.

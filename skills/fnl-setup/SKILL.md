@@ -49,7 +49,7 @@ This repository uses the finolabs-vibecode skills. Start coding work with `fnl-c
 
 Show each draft and apply the user's edits. Then write only what was confirmed: the host config (outside the repository), the exclude line, and the agent-skills block (update an existing block in place).
 
-When the findings show a memory or knowledge base, also record the settled decisions there (the route judge and the date of consent, which agents coordinate, the parallel limit, the host config path), through the access the user's instructions approve. Where those instructions name more than one store, write each one and report any write that failed. Install nothing and change no shared settings.
+When the findings show a memory or knowledge base, also record the settled decisions there as `fnl-knowledge` says (the route judge and the date of consent, which agents coordinate, the parallel limit, the host config path), through the access the user's instructions approve. Where those instructions name more than one store, write each one and report any write that failed. Install nothing and change no shared settings.
 
 ## 4. Report
 

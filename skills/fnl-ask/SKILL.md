@@ -24,6 +24,7 @@ The user describes their situation. Place them on the map below, read the target
 | Want a second opinion | `/fnl-advisor` | |
 | Stuck or looping on fixes | `/fnl-committee` | |
 | Coordinating a spec across desktop app sessions | `fnl-coordinator-sessions` | |
+| Remembering a decision or lesson, or finding what was decided before | `fnl-knowledge` | `obsidian-cli` from kepano/obsidian-skills for an Obsidian vault |
 | Long session, phase change, compaction | `fnl-session-hygiene` | `/ask-matt` covers its phase-boundary choices |
 | A story is done, or before merge | `fnl-review-gate` | `/code-review` (Claude Code), `codex review`, or `code-review` from Matt's pack |
 | Change touches auth, permissions, private data, untrusted input | `fnl-security-review-gate` | `/security-review` (Claude Code); `security-audit` from Cloudflare for a full audit |
@@ -38,5 +39,5 @@ The user describes their situation. Place them on the map below, read the target
 
 - A command with a leading `/` is user-invoked: tell the user to type it. Names without `/` load on their own when the task matches, or the user can type them.
 - In a Spec Kit repository, Spec Kit owns the process. Companion process skills (`to-spec`, `to-tickets`, `implement`, `implement-spec`) yield to it; companion phase tools (`grilling`, `tdd`, `diagnosing-bugs`, `prototype`, `code-review`) work inside its phases.
-- Companion skills come from [mattpocock/skills](https://github.com/mattpocock/skills) and [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) (both MIT); commands such as `/code-review` and `codex review` are built into their hosts. When one is not installed, say so and point to that repository's install instructions; install nothing yourself. The packs are independent: neither endorses the other.
+- Companion skills come from [mattpocock/skills](https://github.com/mattpocock/skills), [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) and [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) (all MIT); commands such as `/code-review` and `codex review` are built into their hosts. When one is not installed, say so and point to that repository's install instructions; install nothing yourself. The packs are independent: neither endorses the other.
 - When no row fits, say so and name the closest two, with the one question that would decide between them.
