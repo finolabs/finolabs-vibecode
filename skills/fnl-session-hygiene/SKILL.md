@@ -24,7 +24,7 @@ Every compaction, fresh session or writer change carries: goal and acceptance, d
 
 ## Titles
 
-Name this session as project + current activity at entry, on a stale resume, and after a material change of task or phase. Use the host's supported title mechanism and its conventions; rename only sessions you started. Keep titles accurate without churn.
+Name this session as project + current activity at entry, on a stale resume, and after a material change of task or phase. Use the host's supported title mechanism and its conventions; rename only sessions you started. Keep titles accurate without churn. Pin the active session and unpin retired ones only where the host supports it and the user allows it. Titles never carry private history, and session stores and app databases are never edited by hand.
 
 ## Writers and checkouts
 

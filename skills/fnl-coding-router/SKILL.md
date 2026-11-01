@@ -17,9 +17,11 @@ Done when the workflow below can be chosen without guessing.
 
 ## 2. Choose the workflow
 
-**Spec Kit first.** When the repository uses Spec Kit, its installed `speckit-*` skills own the development workflow: specify, clarify, plan, tasks, implement, converge. Check the setup and the skill files; a `.specify` folder is a signal, not proof of a working integration. Use the invocation the current agent exposes (Codex: `$speckit-<command>`). Resume from accepted artifacts and the current phase; never restart a completed phase to satisfy a generic skill trigger.
+Choose the workflow here before loading or invoking any generic process skill, including one that another skill asks for.
 
-Spec Kit replaces the overlapping generic process skills (brainstorming, writing-plans, executing-plans, subagent-driven-development, finishing-a-development-branch). Domain skills, debugging, testing, verification, review and security work still apply inside the active phase, each limited to its own responsibility.
+**Spec Kit first.** When the repository uses Spec Kit, its installed `speckit-*` skills own the development workflow: specify, clarify, plan, tasks, implement, converge. Check the setup and the skill files; a `.specify` folder is a signal, not proof of a working integration. Use the invocation the current agent exposes (Codex: `$speckit-<command>`). Resume from accepted artifacts and the current phase; never restart a completed phase to satisfy a generic skill trigger. Use clarify, checklist and analyze for real ambiguity or where the installed workflow or repository requires them; use convergence only where the installed version supports it, after implementation. Evidence of a requirement or design change can send work back to its owning phase; a generic skill trigger cannot. References: [Spec Kit](https://github.com/github/spec-kit).
+
+Spec Kit replaces the overlapping generic process skills (brainstorming, writing-plans, executing-plans, subagent-driven-development, finishing-a-development-branch). Domain skills, debugging, testing, verification, review and security work still apply inside the active phase, each limited to its own responsibility; any nested instruction that duplicates Spec Kit planning, artifacts or execution yields to this rule.
 
 A Spec Kit repository with a missing or broken required skill has an integration gap: report it and pause that step. Installing, migrating or substituting another workflow needs explicit authority.
 
@@ -62,10 +64,10 @@ Done when the depth and its reason are in the receipt.
 
 ## 4. Work, then gate
 
-- Delegation to other agents follows the `fnl-delegate` skill. Budget root and children before spawning: MIN has no implementation children; otherwise at most two lightweight children, one nesting level and one heavy job at a time, unless a stricter cap applies.
+- Delegation to other agents follows the `fnl-delegate` skill. Within one task, budget root and children before spawning: MIN has no implementation children; otherwise at most two lightweight children, one nesting level and one heavy job at a time, unless a stricter cap applies. Independent tasks run in parallel up to `fnl-delegate`'s limit (5 runs), each under these per-task caps.
 - Commits follow `fnl-commit-messages`; versions, tags and changelogs follow `fnl-versioning`.
 - Proof follows `fnl-verification`.
-- Pull requests need a clean code review and, when triggered, a security review before merge (`fnl-review-gate`, `fnl-security-review-gate`).
+- Every pull request needs a posted code review and a posted security review before merge (`fnl-review-gate` "Pull requests").
 - Long sessions, handovers and titles follow `fnl-session-hygiene`.
 
 ## Checkpoint: stop repeated local fixes

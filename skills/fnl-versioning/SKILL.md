@@ -9,7 +9,7 @@ One standard for every repository: applications, libraries, CLIs, services, plug
 
 ## Version numbers
 
-- [SemVer 2.0.0](https://semver.org/) for every released artifact.
+- [SemVer 2.0.0](https://semver.org/) for every released artifact; no date-based or arbitrary numbers unless the ecosystem requires them.
 - **Phase 0, `0.y.z`**, until the owner declares the first public stable release: MINOR for breaking or incompatible changes; PATCH for every compatible change (features, additions, fixes, wording).
 - **Stable, `≥1.0.0`**: MAJOR for breaking changes; MINOR for backward-compatible features or additions; PATCH for backward-compatible fixes, clarifications and wording.
 - `1.0.0` and every later MAJOR need an explicit owner decision. Feature completeness, a template default or a skill's instruction never implies one.
@@ -18,7 +18,7 @@ One standard for every repository: applications, libraries, CLIs, services, plug
 
 ## Cadence
 
-- One bump per release, never per commit, PR, task or amendment. Unreleased changes accumulate into one pending bump.
+- One bump per release, never per commit, PR, task or amendment. Unreleased changes accumulate into one pending bump, and its release notes (or a Sync Impact Report for a governance document) list every change in it.
 - A product release is a tag. A governance document is released when it merges to the default branch.
 - Between releases, builds report the next expected version with `-dev` (`0.4.0-dev`); build metadata such as `+<short-sha>` may follow and never affects precedence.
 - Pre-releases use `-alpha.N`, `-beta.N`, `-rc.N`, N from 1. A release candidate is the final bytes except the version string; any other change makes a new candidate.
@@ -30,7 +30,7 @@ One standard for every repository: applications, libraries, CLIs, services, plug
 
 ## Tags
 
-- Format `vX.Y.Z`, pre-release `vX.Y.Z-rc.1`. A repository releasing several components prefixes the component path: `<path>/vX.Y.Z`.
+- Format `vX.Y.Z`, pre-release `vX.Y.Z-rc.1`. A repository releasing several components prefixes the component path: `<path>/vX.Y.Z`, one tag per released component.
 - Annotated tags with the message `Release vX.Y.Z` and a short summary; signed where signing is configured.
 - Tag only a commit on the default branch, or on a maintenance branch `release/X.Y` for older lines, after required CI and release gates pass on that exact commit.
 - Published tags are **immutable**: never move, delete or reuse one. A bad release is superseded by a new version and marked (release note, Go `retract`, npm `deprecate`).

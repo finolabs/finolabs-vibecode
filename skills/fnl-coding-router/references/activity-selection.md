@@ -20,11 +20,11 @@ Goal and acceptance, workflow and phase, relevant artifact identities, revisions
 - A narrow **yes/no judgment** checks absolute fit or evidence sufficiency when relative preference could mislead. One per independently useful condition.
 - **Score** only for a genuinely graded criterion with an explicit rubric.
 
-Batch independent questions over the same state. Keep raw answers, full distributions and the actual model binding. No fixed number of calls.
+Batch independent questions over the same state. The evaluator selects or verifies; the host supplies arguments and plans execution. Keep raw answers, full distributions and the actual model binding. No fixed number of calls.
 
 ## 4. Validate before dispatch
 
-Check the response against the evaluator schema, allowed IDs, a valid distribution, the model and state freshness. Recheck handler, prerequisites, authority and scope. A top-ranked choice alone is not acceptance; without a validated decision policy the result stays advisory. A diffuse choice may mean several activities are acceptable. No universal confidence cutoff and no favorable reroll.
+Check the response against the evaluator schema, allowed IDs, a valid distribution, the model and state freshness. Recheck handler, prerequisites, authority and scope. A top-ranked choice alone is not acceptance; without a validated decision policy the result stays advisory. Read probabilities under the evaluator's current semantics: a yes/no judgment's probability is not a separate confidence score. A diffuse choice may mean several activities are acceptable: choose among equally suitable authorized activities by observed fit and an existing deterministic policy, or gather evidence. No universal confidence cutoff, averaged-away blocking signal or favorable reroll. Evidence of a requirement or design change may justify returning to its owning phase; a generic skill trigger cannot.
 
 | Outcome | Host disposition |
 | --- | --- |
@@ -33,4 +33,8 @@ Check the response against the evaluator schema, allowed IDs, a valid distributi
 | `NEED_EVIDENCE` | Name the missing fact; fetch it or ask a targeted question; pause only the dependent decision. |
 | Evaluator unavailable or inconclusive | Disclose it; apply a documented owner-approved fallback policy if one settles the choice, else leave it pending and continue independent work. Never claim the evaluator ran without a validated response. |
 
-Record the state binding, eligible and excluded IDs with reasons, the response, distribution and model when called, the disposition and the next stop condition. The evaluator cannot consent, prove facts, accept code or waive gates.
+Candidate examples, not a pipeline: a requirement gap maps to specify or clarify; a design gap to plan; decomposition to tasks; a reproducible unexplained failure to bounded debugging; ready approved tasks to implement. Analysis, convergence, verification and review need their own prerequisites. Without Spec Kit, map the same responsibilities to the fallback handlers.
+
+Record the state binding, eligible and excluded IDs with reasons, the response, distribution and model when called (as the adapter observed them; an agent's own "the evaluator ran" is not evidence), the disposition and the next stop condition. Permission to read a private source is not permission to send it to an evaluator. The evaluator cannot consent, prove facts, accept code or waive gates.
+
+Judge the practice by representative cases: unnecessary calls, missed useful opportunities, latency and cost, data sent. Call count alone is not a success metric.

@@ -91,4 +91,4 @@ Posting review comments on a repository's pull requests is part of this gate whe
 
 ## Approval
 
-Approval binds to the reviewed bytes: a later change to affected code reopens the gate for that change. Missing required proof stays open; an equivalent check is allowed only with its reason and evidence. Finishing a review grants no push, merge, deploy or publish authority.
+Approval binds to the reviewed bytes: a later change to affected code reopens the gate for that change. Missing required proof stays open; an equivalent check is allowed only with its reason and evidence. Finishing a review, or finishing a development branch, grants no push, merge, deploy or publish authority.
