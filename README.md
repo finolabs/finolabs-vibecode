@@ -26,20 +26,30 @@ Every skill carries the `fnl-` prefix.
 
 ## Install
 
-The plugin is not published yet. To try it from a local checkout for one session:
+Every install path ships the same `skills/` folder. The repository is its own marketplace for each host.
 
-```bash
-claude --plugin-dir /path/to/finos-vibe-code
-```
-
-Once it is listed in the `finolabs-plugins` marketplace:
+### Claude Code
 
 ```text
-/plugin marketplace add <owner>/finolabs-plugins
-/plugin install finos-vibe-code@finolabs-plugins
+/plugin marketplace add fioenix/finos-vibe-code
+/plugin install finos-vibe-code@finos-vibe-code
 ```
 
-Codex reads `.codex-plugin/plugin.json`, which points at the same `skills/` folder.
+Skills are namespaced, for example `/finos-vibe-code:fnl-orchestration-handoff`. To try a local checkout for one session: `claude --plugin-dir /path/to/finos-vibe-code`.
+
+### Codex
+
+```bash
+codex plugin marketplace add fioenix/finos-vibe-code
+```
+
+```bash
+codex plugin add finos-vibe-code@finos-vibe-code
+```
+
+### First check
+
+Ask your agent: "Route this change through the coding workflow and tell me the depth you chose." It should load `fnl-coding-workflow`.
 
 ## Host configuration
 
@@ -48,10 +58,15 @@ The orchestration skills keep machine facts (agent commands, paths, allow-rules,
 ## Layout
 
 ```text
-.claude-plugin/plugin.json   Claude Code manifest (the version's single source of truth)
-.codex-plugin/plugin.json    Codex manifest, version kept equal
-skills/fnl-*/SKILL.md        one skill per folder, references/ and scripts/ beside it
-LICENSE                      MIT
+.claude-plugin/plugin.json        Claude Code manifest (the version's single source of truth)
+.claude-plugin/marketplace.json   Claude Code marketplace listing this repository
+.codex-plugin/plugin.json         Codex manifest, version kept equal
+.agents/plugins/marketplace.json  Codex marketplace listing this repository
+agents/openai.yaml                Codex skill-list display metadata
+skills/fnl-*/SKILL.md             one skill per folder, references/ and scripts/ beside it
+assets/                           icon (light and dark, SVG and 512 px PNG) and its NOTICE
+evals/                            trigger suite for `claude plugin eval`
+LICENSE                           MIT
 CHANGELOG.md                 Keep a Changelog
 ```
 
@@ -66,7 +81,11 @@ MIT. See [LICENSE](LICENSE).
 ## Validate
 
 ```bash
-claude plugin validate .
+claude plugin validate . --profile directory
 ```
 
-The repository root `CLAUDE.md` is context for agents working on this repository; the validator warns that a plugin does not load it, which is intended.
+```bash
+claude plugin eval . --tag trigger --ablation none
+```
+
+The eval suite checks that each skill fires on a representative prompt and that unrelated prompts load none. The repository root `CLAUDE.md` is context for agents working on this repository; the validator warns that a plugin does not load it, which is intended.
