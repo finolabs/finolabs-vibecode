@@ -18,7 +18,7 @@ Common to every headless dispatch: run it in the background from the task's work
 - **Read-only work**: `-s read-only`. For a code review, `codex review --base <branch>` (or `--uncommitted`) runs Codex's own review flow.
 - **End of run**: the exit status and the last-message file. Approvals cannot be granted in a headless run: an action that needs one fails.
 - **Quota**: a usage-limit message in the log, or a `turn.failed`/`error` event, with no work done → `quota`.
-- **Rework**: a new `codex exec` in the same worktree with a short follow-up brief naming each defect; prefer it over resuming a long run.
+- **Rework**: a new `codex exec` in the same worktree with a short follow-up brief that names each defect and points at the original brief; prefer it over resuming a long run.
 
 ## Antigravity
 
@@ -38,6 +38,16 @@ JSON result → ledger outcome:
 | `finished_reason` `print_timeout` | `timeout` | run the handover |
 | exit 3 with a quota `AGY_ERROR` | `quota` | another pool, then the quota fallback |
 | other errors | `error` | reroute |
+
+Through the `agybird` runner, read its envelope `status` instead:
+
+| `status` | Outcome | Next |
+| --- | --- | --- |
+| `success` | verify, then `accepted` / rework / `rejected` | a `plan`-mode answer asking for approval is unfinished work |
+| `partial` | `timeout` if the timeout notice fired, else verify | run the handover |
+| `needs_permission` | `needs-permission` | put the request to the user; never grant on their behalf |
+| `blocked` | `blocked` | reroute, or rewrite the brief edit-only |
+| `error` | `quota` if `/usage` shows that model's pool at 0%, else `error` | another allowed model, then the quota fallback |
 
 ## When an agent coordinates
 

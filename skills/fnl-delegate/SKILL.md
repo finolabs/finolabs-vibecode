@@ -54,13 +54,13 @@ More routing rules:
 
 - **The route lands on your own host**: do the work yourself, or start a session or subagent of your own kind as `agents.md` says. Delegating to yourself through a headless CLI only adds overhead.
 - **Reviews** go to a different agent from the implementer where one is reachable, in a fresh context, at strong tier or above. `fnl-review-gate` defines reviewer independence.
-- **Antigravity headless** stops on any shell command outside its allow-rules. Give it edit-only briefs, or tasks whose commands fit the allow-rules.
+- **Antigravity headless** stops on any shell command outside its allow-rules, and only the user grants permissions. Give it edit-only briefs, or tasks whose commands fit the allow-rules; while the user is away, work that needs wider shell access goes to another agent.
 - **Token budget**: when the coordinator's own budget is the scarce one, delegate implementation and keep yourself on briefing and acceptance.
 - **User away**: questions that would go to the user go to an advisor or the route judge instead; record each decision and who settled it. Decisions that need the user's authority (merge, production, credentials, new spending) still wait.
 
 ### Quota fallback
 
-When a model's quota runs out, move to the next route the rules give: another model of the same tier on the same agent, then the same tier on the next agent in the capability order. Antigravity pools are separate, so one empty pool leaves its other models usable. Moving up a tier spends more quota: ask first. Moving down a tier is allowed only for easy and medium work; for hard work, wait for the reset or ask. When every reachable agent is out, report the reset times and wait. Record a fallback as `--reason fallback-quota`.
+When a model's quota runs out, move to the next route the rules give: another model of the same tier on the same agent, then the same tier on the next agent in the capability order. Antigravity pools are separate, so one empty pool leaves its other models usable. Moving to a weaker agent at the same tier, split the task smaller. Moving up a tier spends more quota: ask first. Moving down a tier is allowed only for easy and medium work; for hard work, wait for the reset or ask. When every reachable agent is out, report the reset times and wait. Record a fallback as `--reason fallback-quota`.
 
 ## Parallel dispatch
 
@@ -141,7 +141,7 @@ python3 -I "$L" open                     # dispatches with no finish line
 python3 -I "$L" summary --since 2026-11-01
 ```
 
-Task labels are short names; the ledger holds no task data, secrets or personal data. `summary` reports, per agent, model, kind and grade, the first-pass acceptance rate, timeouts and stalls, fallbacks and median duration.
+`--agent claude-session` records a Claude Code app or interactive session, `claude` a headless `claude -p` run, `subagent` an in-session subagent. Task labels are short names; the ledger holds no task data, secrets or personal data. `summary` reports, per agent, model, kind and grade, the first-pass acceptance rate, timeouts and stalls, fallbacks and median duration.
 
 ## Related skills
 

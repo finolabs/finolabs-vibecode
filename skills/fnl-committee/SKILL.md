@@ -16,7 +16,7 @@ Two agents from different model families, fresh context, planning in parallel. C
 - **Codex** on its frontier model at a high reasoning setting, read-only.
 - **Claude** on its frontier model with fresh context, read-only.
 
-Whichever agent coordinates, the member from its own family runs as its own subagent or session; the other runs headless as `fnl-delegate` `references/agents.md` says. Members the user names win. Antigravity takes no correctness judgements, so it sits on no committee. When one member's agent is out of quota, say so and run a single advisor instead (`fnl-advisor`).
+Whichever agent coordinates, the member from its own family runs as its own subagent, or as a session when the analysis needs longer than one turn; the other runs headless as `fnl-delegate` `references/agents.md` says. Members the user names win. Antigravity takes no correctness judgements, so it sits on no committee. When one member's agent is out of quota, say so and run a single advisor instead (`fnl-advisor`).
 
 Load the `fnl-delegate` skill and the host config for the invocation commands. Requires the `fnl-delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add fioenix/finolabs-vibecode --skill fnl-delegate`, or install the whole plugin) and stop.
 

@@ -19,7 +19,7 @@ from pathlib import Path
 
 KINDS = ["implement", "review", "advise", "committee"]
 GRADES = ["easy", "medium", "hard", "very-hard"]
-AGENTS = ["claude", "codex", "antigravity", "subagent"]
+AGENTS = ["claude", "claude-session", "codex", "antigravity", "subagent"]
 COORDINATORS = ["claude", "codex", "antigravity"]
 ROUTE_BY = ["table", "judge", "user"]
 REASONS = ["routing", "fallback-quota", "fallback-failure", "user-choice"]

@@ -25,7 +25,7 @@ When an instrument is missing, the reviewer applies the packet and findings rule
 
 ## Who reviews
 
-- **Independent**: a fresh context, never the run or session that wrote the code, and never self-approval. With the plugin installed, the `fnl-reviewer` and `fnl-security-reviewer` agents are ready-made fresh-context reviewers; a reviewer from another model family (`fnl-delegate`) adds contrast. Prefer a different model family at the strong end (see the routing table in `fnl-delegate`).
+- **Independent**: a fresh context, never the run or session that wrote the code, and never self-approval. With the plugin installed, the `fnl-reviewer` and `fnl-security-reviewer` agents are ready-made fresh-context reviewers; a reviewer from another model family (`fnl-delegate`) adds contrast. Prefer a different model family at strong tier or above (`fnl-delegate` routing).
 - One qualified reviewer may cover code and security together when scoped policy permits; name the coverage explicitly.
 - A reviewer may delegate heavy reading, but verifies each finding it reports.
 
