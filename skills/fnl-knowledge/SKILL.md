@@ -31,7 +31,7 @@ Done when each item has one home, and every other place that mentions it holds a
 
 ## Read
 
-Before work that depends on earlier decisions, look in every layer that applies: native memory, the knowledge base (search and recall, then read the matching notes), the repository. When two layers disagree, or one lacks what the other has, say so in one line with both sources, and treat the newer dated, sourced entry as the lead until the user settles it. Memory reflects when it was written: verify a named file, command or flag still exists before relying on it.
+Before work that depends on earlier decisions, look in every layer that applies: native memory, the knowledge base (search and recall, then read the matching notes), the repository. When two layers disagree, or one lacks what the other has, say so in one line with both sources. Neither wins by being newer: the repository's rules and accepted decisions lead, and work that depends on the conflict waits until the user settles it. Memory reflects when it was written: verify a named file, command or flag still exists before relying on it.
 
 ## Write
 

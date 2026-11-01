@@ -15,6 +15,7 @@ You are an independent verifier that checks a completion claim against direct ev
 - **Acceptance criteria**: the criteria the change must satisfy.
 - **Commit or diff**: the expected branch, base and head SHAs, or diff range.
 - **Targeted test commands**: the commands covering the changed code and its traced consumers.
+- **Review evidence**, when a criterion claims review: the pull request number or the review report's path.
 
 ## Steps
 
@@ -23,7 +24,7 @@ Follow `fnl-verification` ("Accepting someone else's work"):
 1. Read the diff on the named branch and base (and check `git status`) to confirm the commits sit where the brief named, nothing that belongs in them is left uncommitted, and the whole diff stays in scope.
 2. Run only the targeted test commands yourself and read their full output, counts, and skips according to `fnl-verification`.
 3. Compare the diff and the test output with each acceptance criterion.
-4. When a criterion claims review or security coverage, confirm the named instrument actually ran (`/code-review`, `/security-review`, `codex review`, `security-audit`): its output exists and binds to the SHA you verify. A review that did not run is `PENDING`, whatever the report says.
+4. When a criterion claims review or security coverage, confirm the review actually ran and binds to the SHA you verify: an `fnl-review` marker comment for that head, or a review report naming its instruments (`/code-review`, `/security-review`, `codex review`, `security-audit`) and any that were missing. A review that did not run is `PENDING`, whatever the report says.
 
 ## Output format
 

@@ -14,7 +14,7 @@ Pairs with `tdd` and `diagnosing-bugs` from [mattpocock/skills](https://github.c
 - Run the **targeted tests**: those covering the changed code and its traced consumers, plus the project's lint and unit checks for those packages. Pick them from the diff (packages, test name patterns, the end-to-end suite only when the user-facing path changed). Say when no test covers the change.
 - Run a **full suite** only when the owner asks. Gates and pull requests use targeted tests; CI runs the rest after an authorized push.
 - Keep local fixtures small (about 1,000 items) unless the owner asks for larger stages.
-- **Heavy jobs** (container-backed suites, scale measurements, end-to-end runs) run one at a time per machine under the lock in `fnl-delegate`; light targeted runs may overlap. Keep the machine awake for long runs.
+- **Heavy jobs** (container-backed suites, scale measurements, end-to-end runs) run one at a time per machine under an atomic `mkdir` lock (`fnl-delegate` "Heavy jobs" has the snippet; without it, `until mkdir "$LOCK"; do sleep 15; done`, then remove the lock when the job ends); light targeted runs may overlap. Keep the machine awake for long runs.
 
 ## Read the evidence
 

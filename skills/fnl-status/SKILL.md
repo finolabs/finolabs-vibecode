@@ -1,6 +1,6 @@
 ---
 name: fnl-status
-description: Show the state of delegated work from the dispatch ledger: runs still open, and first-pass acceptance, timeouts and fallbacks per agent, model and grade.
+description: Show the state of delegated work from the dispatch ledger: runs still open, and first-pass acceptance, timeouts and fallbacks per agent, model and grade. Run only when the user asks for it.
 argument-hint: "[--since YYYY-MM-DD] [--project <name>]"
 disable-model-invocation: true
 ---
@@ -15,7 +15,7 @@ The ledger script is `scripts/ledger.py` in the `fnl-delegate` skill's folder, a
 
 ## Steps
 
-1. Run `python3 -I <ledger.py> open`. For each open dispatch older than its budget, check liveness from artifacts as `fnl-delegate` "Budget and liveness" says (process, log growth, new commits) and mark it **running**, **stalled** or **ended without a finish line**.
+1. Run `python3 -I <ledger.py> open`; it prints each open dispatch's age against its budget. For each one past its check deadline (half the budget), check liveness from artifacts as `fnl-delegate` "Budget and liveness" says (process, log growth, new commits) and mark it **running**, **stalled** or **ended without a finish line**.
 2. Run `python3 -I <ledger.py> summary` with the user's `--since` and `--project` arguments, defaulting to the last 14 days.
 3. Report in three parts:
    - **Open runs**: id, agent and model, task label, age against budget, liveness verdict.

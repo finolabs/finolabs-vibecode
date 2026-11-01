@@ -24,10 +24,10 @@ Every compaction, fresh session or writer change carries: goal and acceptance, d
 
 ## Titles
 
-Name this session as project + current activity at entry, on a stale resume, and after a material change of task or phase. Use the host's supported title mechanism and its conventions; rename only sessions you started. Keep titles accurate without churn. Pin the active session and unpin retired ones only where the host supports it and the user allows it. Titles never carry private history, and session stores and app databases are never edited by hand.
+Name this session as project + current activity at entry, on a stale resume, and after a material change of task or phase. Use the host's supported title mechanism and its conventions; rename only this session and sessions you started. Keep titles accurate without churn. Pin the active session and unpin retired ones only where the host supports it and the user allows it. Titles never carry private history, and session stores and app databases are never edited by hand.
 
 ## Writers and checkouts
 
 - One writer per scope, with an explicit handover between writers.
 - Prefer a suitable existing checkout or worktree; stricter isolation rules win.
-- Keep notes, briefs and logs in the durable folder `fnl-delegate` "Where files go" names; temporary directories and scratchpads are wiped on restart.
+- Keep notes, briefs and logs in a durable local folder (`.orchestration/` at the main checkout's root, kept out of git, unless the host config names another); temporary directories and scratchpads are wiped on restart.

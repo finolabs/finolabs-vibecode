@@ -99,9 +99,12 @@ def minutes(start, finish):
 
 def cmd_open(args):
     starts, finishes = load()
+    current = datetime.now(timezone.utc)
     for dispatch_id, s in starts.items():
         if dispatch_id not in finishes:
-            print(f"{dispatch_id}  {s['ts']}  {s['agent']}/{s['model']}  {s['project']}: {s['task']}")
+            age = (current - datetime.fromisoformat(s["ts"])).total_seconds() / 60
+            print(f"{dispatch_id}  {s['ts']}  age {age:.0f}/{s.get('budget_min', '?')} min  "
+                  f"{s['agent']}/{s['model']}  {s['project']}: {s['task']}")
 
 
 def cmd_summary(args):

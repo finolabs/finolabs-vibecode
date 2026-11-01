@@ -83,9 +83,9 @@ Rules:
    ```
 
 2. A push after a review makes that comment stale: the reviewers review the new head (the change since the last review, plus the impact set it reaches) and post again.
-3. A `REWORK` verdict closes only through fixes and a new `APPROVE` comment, or through the dispositions in "Findings" recorded in a reply.
+3. A `REWORK` verdict closes only through a new `APPROVE` comment: after fixes, or after the reviewer accepts the dispositions in "Findings" recorded in a reply.
 4. **Merge check**: before merging, read the pull request's head SHA and comments (`gh pr view <number> --json headRefOid,comments`) and confirm one `APPROVE` marker of each kind for that SHA. A missing or stale comment blocks the merge.
-5. Without the plugin's agents, two independent reviewers as "Who reviews" defines run the same reviews and post the same markers.
+5. Without the plugin's agents, two independent reviewers as "Who reviews" defines run the same reviews and post the same markers. Where scoped policy lets one reviewer cover both, it posts both markers, one comment each.
 
 Posting review comments on a repository's pull requests is part of this gate wherever the repository adopts it in its agent context file (`fnl-setup` writes that line); that adoption is the standing authority to post them. It grants no authority to merge, which stays with the owner.
 

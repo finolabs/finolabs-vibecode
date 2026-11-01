@@ -1,6 +1,6 @@
 ---
 name: fnl-ask
-description: Describe where you are in your work and get pointed to the right finolabs-vibecode skill, or a companion skill from another pack, and the command to type next.
+description: Describe where you are in your work and get pointed to the right finolabs-vibecode skill, or a companion skill from another pack, and the command to type next. Run only when the user asks for it.
 disable-model-invocation: true
 ---
 
@@ -19,10 +19,10 @@ The user describes their situation. Place them on the map below, read the target
 | A design question only code can answer | `fnl-coding-router` | `prototype` |
 | Ready to implement one seam | `fnl-coding-router` (depth, gates) | `tdd` for the red-green loop |
 | Bug, failing CI, unexplained behavior | `fnl-coding-router` (debug path and checkpoint) | `diagnosing-bugs` |
-| Handing work to another agent (Claude Code, Codex, Antigravity) | `fnl-delegate`, then `/fnl-handoff` | `/handoff` for a portable handoff document |
+| Handing work to another agent (Claude Code, Codex, Antigravity) | `fnl-delegate`, then `fnl-handoff` | `/handoff` for a portable handoff document |
 | Checking delegated runs, or how each agent and model performs | `/fnl-status` | |
-| Want a second opinion | `/fnl-advisor` | |
-| Stuck or looping on fixes | `/fnl-committee` | |
+| Want a second opinion | `fnl-advisor` | |
+| Stuck or looping on fixes | `fnl-committee` | |
 | Coordinating a spec across desktop app sessions | `fnl-coordinator-sessions` | |
 | Remembering a decision or lesson, or finding what was decided before | `fnl-knowledge` | `obsidian-cli` from kepano/obsidian-skills for an Obsidian vault |
 | Long session, phase change, compaction | `fnl-session-hygiene` | `/ask-matt` covers its phase-boundary choices |
@@ -33,7 +33,6 @@ The user describes their situation. Place them on the map below, read the target
 | Release, tag, changelog | `fnl-versioning` | |
 | Making a repository public | `fnl-open-source-review` | `security-audit` from Cloudflare |
 | Packaging skills as a plugin | `fnl-plugin-packaging` | |
-| After a session, improving the setup | | `/retro` |
 
 ## Rules
 

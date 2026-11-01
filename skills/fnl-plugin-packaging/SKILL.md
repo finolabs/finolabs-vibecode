@@ -33,7 +33,7 @@ Done when every host's validator finds the expected number of skills.
 
 - `name` and `description` are the portable core. The description carries the triggers: what the skill does, then each distinct case that should fire it.
 - Claude Code also reads keys such as `disable-model-invocation`, `user-invocable` and `argument-hint`; other hosts ignore them, but a claude.ai skill upload rejects them. Keep that in mind before offering a skill as a standalone upload.
-- A skill the human should start by hand (a setup or a router) sets `disable-model-invocation: true`, which removes its description from the agent's context. Another skill then tells the human to type it rather than calling it.
+- A skill the human should start by hand (a setup or a router) sets `disable-model-invocation: true`, which removes its description from the agent's context. Hosts that ignore the key still list it, so its description also says to run it only when the user asks for it. Another skill then tells the human to type it rather than calling it.
 
 ## 4. Icon
 
@@ -55,7 +55,7 @@ Run and read each one:
 
 - every host validator above, strict where available;
 - the trigger suite: one `claude plugin eval` case per model-invoked skill that must fire it, plus negative cases that must fire nothing (`--ablation none` keeps `Skill` graders scored);
-- after installing, `/skill-doctor` for each skill's listing cost and whether it is ever used;
+- after installing on Claude Code, `/skill-doctor` for each skill's listing cost, and from the second release on, whether it is ever used (an interactive check: where it cannot run, say so);
 - `fnl-open-source-review` for license, payload, leaks and community files.
 
 A validator pass shows the package loads; only the trigger suite and real use show the skills help.

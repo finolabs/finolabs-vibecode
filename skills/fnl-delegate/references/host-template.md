@@ -33,7 +33,7 @@ Which agent can coordinate on this machine, and which delegates each one can rea
 
 ## Claude Code
 
-- Headless command: <claude path> -p "$(cat "$B")" --model <full model id> --effort <level> --output-format json --allowedTools "<tools the brief needs>"
+- Headless command: <hard-cap wrapper> <claude path> -p "$(cat "$B")" --model <full model id> --effort <level> --output-format json --max-turns <n> --max-budget-usd <cap> --allowedTools "<tools the brief needs>" < /dev/null
 - Allowed models: <full model ids>.
 - How task sessions start on this host: <desktop app session tools | `claude -p` headless>.
 - Session title convention: <project, feature, activity>.
@@ -45,7 +45,7 @@ Invocation with a hard cap and the extra directories the toolchain needs:
 ```bash
 B="<brief file>"; O="<logs folder>"; W="<worktree>"; T="<task label>"
 <hard-cap wrapper, e.g. perl -e 'alarm 5400; exec @ARGV'> <codex path> exec \
-  -m <model> -s workspace-write -C "$W" -o "$O/$T-last.txt" "$(cat "$B")" \
+  -m <model> -c model_reasoning_effort=<level> -s workspace-write -C "$W" -o "$O/$T-last.txt" "$(cat "$B")" \
   < /dev/null > "$O/$T-codex.log" 2>&1; echo "$T=$?"
 ```
 

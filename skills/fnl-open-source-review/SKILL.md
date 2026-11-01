@@ -15,7 +15,7 @@ Done when the scope line is written in the report.
 
 ## 2. Run every check
 
-Mark each item **PASS**, **FAIL**, **N/A** (with why) or **BLOCKED** (with what is missing), and attach evidence: the command and its output, or the file and line. A tool that is not installed is BLOCKED, not PASS.
+Mark each item **PASS**, **FAIL**, **N/A** (with why) or **BLOCKED** (with what is missing), and attach evidence: the command and its output, or the file and line. A tool that is not installed is BLOCKED, not PASS, unless the check names a fallback; a fallback result names the method it used.
 
 ### License
 
@@ -55,7 +55,7 @@ Mark each item **PASS**, **FAIL**, **N/A** (with why) or **BLOCKED** (with what 
 ### Identity and versions
 
 - One name across repository, package, manifests, display names and install commands. URLs resolve and point at the same owner.
-- Versions agree across every manifest and the changelog; the single source of truth is named (`fnl-versioning`).
+- Versions agree across every manifest; the changelog's latest release matches them, or between releases its `Unreleased` section targets the `-dev` version; the single source of truth is named (`fnl-versioning`).
 
 ### Data flow and privacy
 
@@ -67,7 +67,7 @@ Mark each item **PASS**, **FAIL**, **N/A** (with why) or **BLOCKED** (with what 
 Only when the repository ships a plugin or skills:
 
 - The validators pass: `claude plugin validate .` (and `--profile directory` before a directory submission); the Codex manifest is checked against its current schema.
-- Each skill has a valid `name` and a trigger-rich `description`; a trigger check shows each skill fires on a representative prompt and stays quiet on an unrelated one.
+- Each skill has a valid `name` and a trigger-rich `description`; a trigger check shows each model-invoked skill fires on a representative prompt and stays quiet on an unrelated one.
 - Host-specific facts (paths, commands, allow-rules) live in configuration or references, not in skill bodies.
 - Listing assets that the target directory requires (icon, URLs) exist inside the package.
 

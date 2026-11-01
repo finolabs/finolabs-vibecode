@@ -2,14 +2,14 @@
 
 How each agent is dispatched as a delegate, what ends a run, and how its result maps to a ledger outcome. These hold whichever agent coordinates. Exact paths, wrappers and allow-rules for this machine live in the host config (see `SKILL.md`); recheck flags with each CLI's `--help`, since they change between versions.
 
-Common to every headless dispatch: run it in the background from the task's worktree, pass the brief from its file, close stdin (`< /dev/null`), wrap it in a hard-cap timer (`timeout`, or `perl -e 'alarm N; exec @ARGV'` where `timeout` is missing; exit 142 or 124 at the cap means `timeout`), and write the log and final message into the briefs folder.
+Common to every headless dispatch: run it in the background from the task's worktree, pass the brief from its file, close stdin (`< /dev/null`), wrap it in a hard-cap timer (`timeout`, or `perl -e 'alarm N; exec @ARGV'` where `timeout` is missing; exit 142 or 124 at the cap means `timeout`), and write the log and final message into the logs folder (`.orchestration/logs/`).
 
 ## Claude Code
 
 - **Headless**: `claude -p "$(cat "$B")" --model <full model id> --effort <level> --output-format json`, run in the worktree. Headless runs start in a mode that denies anything needing approval: grant what the brief needs with `--allowedTools` (or `--permission-mode acceptEdits` for edit-only work), and cap spend with `--max-budget-usd` and `--max-turns`.
 - **Read-only work** (review, advice): `--permission-mode plan`, or `--allowedTools` limited to read and search tools.
 - **End of run**: exit status plus the JSON `result`. Check `permission_denials` in the output: a run that hit denials may report success without doing the work.
-- **Desktop app sessions**: where the app's session tools exist, start a session in its own worktree with the brief as its first message and a title naming the task. The app refuses to start sessions on turns an automated event or another session began; before an unattended stretch, start the sessions you will need as standby and release each with a message carrying its base commit.
+- **Desktop app sessions**: where the app's session tools exist, start a session with the brief as its first message, in its own worktree when it runs beside other writers (serial spec task sessions share the implementation checkout, as `fnl-coordinator-sessions` says), and a title naming the task. The app refuses to start sessions on turns an automated event or another session began; before an unattended stretch, start the sessions you will need as standby and release each with a message carrying its base commit.
 - A Claude Code delegate owns its task end to end: it may delegate further itself, but it verifies and commits its own work and reports base and new commit SHAs.
 
 ## Codex
@@ -22,7 +22,7 @@ Common to every headless dispatch: run it in the background from the task's work
 
 ## Antigravity
 
-When the `agybird` skill is installed, it may run the dispatch: it wraps the same CLI with modes and quota checks. Without it, call `agy` directly:
+When the `agybird` skill ([fioenix/agybird](https://github.com/fioenix/agybird), MIT) is installed, it may run the dispatch: it wraps the same CLI with modes and quota checks. Without it, call `agy` directly:
 
 - **Headless**: `agy -p "$(cat "$B")" --model <model id> --mode accept-edits --output-format json --print-timeout <minutes>m`, run in the worktree. Always pass `--print-timeout`: its default differs between versions.
 - **Permissions**: reads and writes inside the workspace are allowed; every shell command outside the allow-rules is soft-denied. A soft-denied run can exit 0, so read `denied_actions` in the JSON. Pass a per-run settings file with `--settings` holding only the allow-rules this task needs, rather than widening the global rules; changing global rules needs the user's approval.

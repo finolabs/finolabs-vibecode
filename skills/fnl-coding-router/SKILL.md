@@ -34,6 +34,8 @@ A Spec Kit repository with a missing or broken required skill has an integration
 
 Otherwise run `speckit-tasks`, then `speckit-implement`. When fit stays ambiguous after these rules, judge it with two narrow questions over the plan or story summary, acceptance criteria and touched areas: "fits one implementation pass" and "hides a cross-cutting risk" (a semantic evaluator may answer them; see [references/activity-selection.md](references/activity-selection.md)). A direct path still meets every acceptance criterion and gate, runs targeted tests, and records the chosen path and its reason in the feature's `plan.md`. Specify, clarify and plan are never skipped.
 
+A request that is only a review, with no change to make, goes to `fnl-review-gate`, plus `fnl-security-review-gate` when its triggers hit, in any repository.
+
 **Fallback router**, only in repositories without Spec Kit. Fill only the missing artifacts and keep accepted decisions:
 
 | Gap | Next action |
@@ -45,6 +47,8 @@ Otherwise run `speckit-tasks`, then `speckit-implement`. When fit stays ambiguou
 | Missing or stale proof | The `fnl-verification` skill. |
 | Required review absent | The `fnl-review-gate` skill, plus `fnl-security-review-gate` when its triggers hit. |
 | Outcome evidenced | Report the actual disposition. |
+
+The process skills brainstorming, writing-plans, systematic-debugging and test-driven-development come from [obra/superpowers](https://github.com/obra/superpowers) (MIT); without them, do the same step by hand.
 
 Companion phase tools from other packs fit these rows, for example `grilling`, `prototype`, `tdd` and `diagnosing-bugs` from [mattpocock/skills](https://github.com/mattpocock/skills). They also work inside Spec Kit phases; that pack's process skills (`to-spec`, `to-tickets`, `implement`, `implement-spec`) yield to Spec Kit where it is in use.
 

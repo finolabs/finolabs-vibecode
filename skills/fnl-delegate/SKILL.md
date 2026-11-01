@@ -21,7 +21,7 @@ Run this loop for every delegated task. Each step ends on its criterion.
 4. **Dispatch** it with a hard time cap and record it in the ledger. Done when the process is running and the ledger has its `start` line.
 5. **Watch** liveness at the check deadline from artifacts. Done when the run has ended or been stopped.
 6. **Accept** after verifying the diff and the tests yourself. Done when the work is accepted, sent back for rework, or rejected.
-7. **Record** the outcome in the ledger. Done when the dispatch has its `finish` line.
+7. **Record** the outcome in the ledger. A dispatch sent back for rework stays open; it gets one `finish` line when it is finally accepted, rejected or stopped, with `--rework-rounds <n>`. Done when the dispatch has its `finish` line.
 
 ## Grade
 
@@ -29,7 +29,7 @@ Kind: `implement`, `review`, `advise` or `committee`.
 
 Difficulty:
 
-- **easy**: one file or seam, a known pattern, about 30 minutes of work.
+- **easy**: one file or seam, a known pattern, about 20 minutes of work.
 - **medium**: several files in one seam, new tests, consumers known.
 - **hard**: cross-cutting change, concurrency, security or permissions, migrations, subtle bugs, or a medium task that already failed once.
 - **very hard**: novel design, high ambiguity, many interacting parts, or work that keeps needing judgement drawn from the coordinator's own context.
@@ -60,11 +60,11 @@ More routing rules:
 
 ### Quota fallback
 
-When a model's quota runs out, move to the next route the rules give: another model of the same tier on the same agent, then the same tier on the next agent in the capability order. Antigravity pools are separate, so one empty pool leaves its other models usable. Moving to a weaker agent at the same tier, split the task smaller. Moving up a tier spends more quota: ask first. Moving down a tier is allowed only for easy and medium work; for hard work, wait for the reset or ask. When every reachable agent is out, report the reset times and wait. Record a fallback as `--reason fallback-quota`.
+When a model's quota runs out, move to the next route the rules give: another model of the same tier on the same agent, then the same tier on the next agent in the capability order. Antigravity pools are separate, so one empty pool leaves its other models usable. Moving to a weaker agent at the same tier, split the task smaller. Moving up a tier spends more quota: ask first. Moving down a tier is allowed only for easy and medium work; for hard work, wait for the reset or ask. When every reachable agent is out, report the reset times and wait. Record a fallback as `--reason fallback-quota`; a reroute after a failed run as `--reason fallback-failure`; a route the user named as `--reason user-choice --route-by user`.
 
 ## Capabilities and budget
 
-- Discover what the target actually offers (models, effort, tools, context, resume) from its CLI or a current catalog; respect pins and restrictions. A control the target lacks falls back to its default: say so. Record the requested and the effective configuration in the ledger. Unknown cost is not zero.
+- Discover what the target actually offers (models, effort, tools, context, resume) from its CLI or a current catalog; respect pins and restrictions. A control the target lacks falls back to its default: say so. Record the requested and the effective configuration in the `finish` line's `--note`. Unknown cost is not zero.
 - Before dispatching, budget the whole run: the root and its children, context, retries, evaluator calls, time, and a reserve for verification and review.
 - Wait through supported completion notices; leave no orphan runs and no busy polling. When a run falls short, tell a setup gap (missing tool, permission, quota) from a model failure before rerouting.
 
@@ -104,12 +104,12 @@ Heavy jobs (container-backed suites, scale measurements, end-to-end runs; the ho
 
 ```bash
 until mkdir "$LOCK" 2>/dev/null; do sleep 15; done
-echo "<dispatch-id> $(date)" > "$LOCK/owner"
+echo "$$ <dispatch-id> $(date)" > "$LOCK/owner"
 <heavy command>; status=$?
 rm -rf "$LOCK"; exit $status
 ```
 
-A lock whose owner process is gone is stale: confirm with `ps` before removing it. Test scope follows the `fnl-verification` skill.
+A lock whose owner process is gone is stale: confirm with `ps -p <pid>` (the first field of `owner`) before removing it. Test scope follows the `fnl-verification` skill.
 
 ## Accept
 
