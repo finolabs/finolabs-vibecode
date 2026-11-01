@@ -21,6 +21,7 @@ Target version: `0.1.0`.
 - `fnl-review-gate`: independent review, reviewer packet, finding dispositions, regression tests, re-review, approval bound to final bytes.
 - `fnl-security-review-gate`: triggers, permission-boundary review with negative tests and no existence leak.
 - `fnl-verification`: targeted tests, full suites only on request, evidence statuses, proof bound to final bytes.
+- `fnl-reviewer` and `fnl-verifier`: read-only subagents in `agents/` that apply `fnl-review-gate`, `fnl-security-review-gate` and `fnl-verification` in a fresh context.
 - `fnl-open-source-review`: open source readiness review with evidence per check.
 - `fnl-plugin-packaging`: one repository for Claude Code, Codex and Antigravity, with each host's native tools as the authority for field schemas.
 - `/fnl-setup`, `/fnl-setup-instructions` and `/fnl-ask` (user-invoked): a first-run setup interview, an interview that writes the user's working contract for every host, and a router that also points to companion skills from mattpocock/skills.
