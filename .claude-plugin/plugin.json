@@ -25,5 +25,6 @@
     "versioning",
     "verification",
     "agent-skills"
-  ]
+  ],
+  "hooks": "./.claude-plugin/hooks.json"
 }
