@@ -7,6 +7,8 @@ description: Verify before claiming or accepting work. Use when an agent or sess
 
 A report is a claim. The diff and the test output you read yourself are the evidence.
 
+Pairs with `tdd` and `diagnosing-bugs` from [mattpocock/skills](https://github.com/mattpocock/skills), which produce the red and green evidence this skill reads.
+
 ## Choose the tests
 
 - Run the **targeted tests**: those covering the changed code and its traced consumers, plus the project's lint and unit checks for those packages. Pick them from the diff (packages, test name patterns, the end-to-end suite only when the user-facing path changed). Say when no test covers the change.

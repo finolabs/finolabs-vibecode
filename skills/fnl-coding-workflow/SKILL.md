@@ -44,6 +44,8 @@ Otherwise run `speckit-tasks`, then `speckit-implement`. When fit stays ambiguou
 | Required review absent | The `fnl-review-gate` skill, plus `fnl-security-review-gate` when its triggers hit. |
 | Outcome evidenced | Report the actual disposition. |
 
+Companion phase tools from other packs fit these rows, for example `grilling`, `prototype`, `tdd` and `diagnosing-bugs` from [mattpocock/skills](https://github.com/mattpocock/skills). They also work inside Spec Kit phases; that pack's process skills (`to-spec`, `to-tickets`, `implement`, `implement-spec`) yield to Spec Kit where it is in use.
+
 When a semantic choice between eligible activities remains after these rules, follow [references/activity-selection.md](references/activity-selection.md).
 
 Done when you can name the workflow, the phase and the next activity.

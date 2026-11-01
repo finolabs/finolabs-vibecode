@@ -29,4 +29,6 @@ Committing locally is part of the task when the task calls for it. Pushing, forc
 
 ## Pull request descriptions
 
+When `pr` from [mattpocock/skills](https://github.com/mattpocock/skills) is installed, let it shape the body and keep the verification and review-status lines below.
+
 Summary of the change, how it was verified (commands and results), what was not verified, and the review status (`fnl-review-gate`). End with the attribution line the host asks for.

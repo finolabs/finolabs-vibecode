@@ -14,6 +14,7 @@ description: Gate work on an independent code review. Use when a user story or i
 
 ## Who reviews
 
+- **Pairs with** a reviewer's instrument such as `code-review` from [mattpocock/skills](https://github.com/mattpocock/skills) (standards and spec, in parallel). That skill does the review; this gate decides when, by whom, and what happens to each finding.
 - **Independent**: a fresh context, never the run or session that wrote the code, and never self-approval. Prefer a different model family at the strong end (see the routing table in `fnl-orchestration`).
 - One qualified reviewer may cover code and security together when scoped policy permits; name the coverage explicitly.
 - A reviewer may delegate heavy reading, but verifies each finding it reports.

@@ -16,6 +16,8 @@ Before assigning new work, inspect actual context usage where the surface expose
 
 ## Handover content
 
+For a portable handover document, the user can type `/handoff` from [mattpocock/skills](https://github.com/mattpocock/skills); its `/ask-matt` also explains when to continue, clear, hand off or compact.
+
 Every compaction, fresh session or writer change carries: goal and acceptance, decisions, work in progress, evidence and its limits, and the next action. Unresolved decisions are recorded before dependent work starts.
 
 ## Titles
