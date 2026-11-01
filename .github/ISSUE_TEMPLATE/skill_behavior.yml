@@ -17,7 +17,7 @@ body:
     id: versions
     attributes:
       label: Plugin version, host agent and model
-      placeholder: "finos-vibe-code 0.1.0, Claude Code 2.1.x, Sonnet"
+      placeholder: "finolabs-vibecode 0.1.0, Claude Code 2.1.x, Sonnet"
     validations:
       required: true
   - type: dropdown

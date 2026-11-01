@@ -1,4 +1,4 @@
-# finos-vibe-code
+# finolabs-vibecode
 
 One engineering practice for AI coding agents, packaged as a single plugin with a focused skill set. It tells an agent how to route a change, how deep to go, how to delegate to other agents and accept their work, how to commit, version and release, and which review and verification gates a change must pass.
 
@@ -35,26 +35,26 @@ Every install path ships the same `skills/` folder. The repository is its own ma
 ### Claude Code
 
 ```text
-/plugin marketplace add fioenix/finos-vibe-code
-/plugin install finos-vibe-code@finos-vibe-code
+/plugin marketplace add fioenix/finolabs-vibecode
+/plugin install finolabs-vibecode@finolabs-vibecode
 ```
 
-Skills are namespaced, for example `/finos-vibe-code:fnl-handoff`. To try a local checkout for one session: `claude --plugin-dir /path/to/finos-vibe-code`.
+Skills are namespaced, for example `/finolabs-vibecode:fnl-handoff`. To try a local checkout for one session: `claude --plugin-dir /path/to/finolabs-vibecode`.
 
 ### Codex
 
 ```bash
-codex plugin marketplace add fioenix/finos-vibe-code
+codex plugin marketplace add fioenix/finolabs-vibecode
 ```
 
 ```bash
-codex plugin add finos-vibe-code@finos-vibe-code
+codex plugin add finolabs-vibecode@finolabs-vibecode
 ```
 
 ### Antigravity
 
 ```bash
-agy plugin install https://github.com/fioenix/finos-vibe-code
+agy plugin install https://github.com/fioenix/finolabs-vibecode
 ```
 
 ### First check

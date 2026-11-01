@@ -1,5 +1,5 @@
 interface:
-  display_name: "Finos Vibe Code"
+  display_name: "Finolabs Vibecode"
   short_description: "One engineering practice for coding agents"
   icon_small: "./assets/icon.svg"
   icon_large: "./assets/icon.svg"

@@ -1,4 +1,4 @@
-# finos-vibe-code
+# finolabs-vibecode
 
 Agent context for contributing to this repository. User-facing documentation is in `README.md`.
 

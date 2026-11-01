@@ -1,10 +1,10 @@
 ---
 name: fnl-setup
-description: Set up finos-vibe-code for this machine and repository through a short interview: host config for delegation, local file placement, the agent-skills block in CLAUDE.md or AGENTS.md, and a pointer to user-scoped instructions.
+description: Set up finolabs-vibecode for this machine and repository through a short interview: host config for delegation, local file placement, the agent-skills block in CLAUDE.md or AGENTS.md, and a pointer to user-scoped instructions.
 disable-model-invocation: true
 ---
 
-# Set up finos-vibe-code
+# Set up finolabs-vibecode
 
 Prepare this machine and repository so the `fnl-` skills work as written. Explore, grill the user to settle each choice, confirm, then write.
 
@@ -12,7 +12,7 @@ Prepare this machine and repository so the `fnl-` skills work as written. Explor
 
 Report only what you observe:
 
-- **Installed hosts**: `claude plugin list`, `codex plugin list`, `agy plugin list --json`. Note where `finos-vibe-code` is installed and which agent CLIs exist (`codex`, `agy`, `claude`).
+- **Installed hosts**: `claude plugin list`, `codex plugin list`, `agy plugin list --json`. Note where `finolabs-vibecode` is installed and which agent CLIs exist (`codex`, `agy`, `claude`).
 - **Host config**: the file at `$ORCHESTRATION_HOST_CONFIG`, else `~/.claude/orchestration/host.md`. Present, missing, or still holding template placeholders.
 - **Repository**: the git root; whether it uses Spec Kit (`.specify/` plus installed `speckit-*` skills); which of `CLAUDE.md` and `AGENTS.md` exist and whether one already has an `## Agent skills` section; whether `.orchestration/` is excluded in `.git/info/exclude`.
 - **User-scoped instructions**: whether `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` and `~/.gemini/GEMINI.md` exist, and whether they already point coding work at `fnl-coding-router`.
@@ -43,7 +43,7 @@ When the user has a grilling skill installed (for example `grilling` from mattpo
 ```markdown
 ## Agent skills
 
-This repository uses the finos-vibe-code skills. Start coding work with `fnl-coding-router`; it routes to the other `fnl-` skills. <Spec Kit line, when present: Spec Kit owns the development workflow.> Type `/fnl-ask` when unsure which skill fits.
+This repository uses the finolabs-vibecode skills. Start coding work with `fnl-coding-router`; it routes to the other `fnl-` skills. <Spec Kit line, when present: Spec Kit owns the development workflow.> Type `/fnl-ask` when unsure which skill fits.
 ```
 
 **D. User-scoped instructions**. When the findings show no user-scoped instructions, or ones that restate coding rules the plugin now covers, recommend that the user type `/fnl-setup-instructions` after this setup. That skill interviews them and writes their working contract for every host; this one only points to it.

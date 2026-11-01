@@ -1,18 +1,18 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
-  "name": "finos-vibe-code",
+  "name": "finolabs-vibecode",
   "owner": {
     "name": "Fioenix",
     "url": "https://github.com/fioenix"
   },
-  "description": "Distribution channel for the finos-vibe-code plugin.",
+  "description": "Distribution channel for the finolabs-vibecode plugin.",
   "plugins": [
     {
-      "name": "finos-vibe-code",
+      "name": "finolabs-vibecode",
       "source": "./",
       "description": "One engineering practice for AI coding agents: coding-work routing, agent delegation, versioning, commit messages, review gates, security review, verification and open source readiness.",
-      "homepage": "https://github.com/fioenix/finos-vibe-code",
-      "repository": "https://github.com/fioenix/finos-vibe-code",
+      "homepage": "https://github.com/fioenix/finolabs-vibecode",
+      "repository": "https://github.com/fioenix/finolabs-vibecode",
       "license": "MIT",
       "category": "development",
       "keywords": [

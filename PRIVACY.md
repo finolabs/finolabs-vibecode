@@ -1,6 +1,6 @@
 # Privacy
 
-`finos-vibe-code` is a set of Agent Skills: Markdown instructions plus one small local Python script. It has no server, no analytics and no telemetry, and its maintainers receive nothing from your sessions.
+`finolabs-vibecode` is a set of Agent Skills: Markdown instructions plus one small local Python script. It has no server, no analytics and no telemetry, and its maintainers receive nothing from your sessions.
 
 ## Where your data goes
 

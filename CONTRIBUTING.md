@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping improve `finos-vibe-code`. The plugin is a set of skills written for AI coding agents, so a contribution is usually a change to a skill's wording, triggers or references.
+Thank you for helping improve `finolabs-vibecode`. The plugin is a set of skills written for AI coding agents, so a contribution is usually a change to a skill's wording, triggers or references.
 
 ## Before you start
 

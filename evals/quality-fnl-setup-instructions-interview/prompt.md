@@ -7,4 +7,4 @@ timeout_seconds: 300
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-/finos-vibe-code:fnl-setup-instructions
+/finolabs-vibecode:fnl-setup-instructions

@@ -1,6 +1,6 @@
 ---
 name: fnl-setup-instructions
-description: Interview the user and write their user-scoped agent instructions (global CLAUDE.md, Codex AGENTS.md, Antigravity GEMINI.md) from one shared source, pointing coding practice at the finos-vibe-code skills.
+description: Interview the user and write their user-scoped agent instructions (global CLAUDE.md, Codex AGENTS.md, Antigravity GEMINI.md) from one shared source, pointing coding practice at the finolabs-vibecode skills.
 disable-model-invocation: true
 ---
 

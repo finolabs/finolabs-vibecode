@@ -1,6 +1,6 @@
 ---
 name: fnl-ask
-description: Describe where you are in your work and get pointed to the right finos-vibe-code skill, or a companion skill from another pack, and the command to type next.
+description: Describe where you are in your work and get pointed to the right finolabs-vibecode skill, or a companion skill from another pack, and the command to type next.
 disable-model-invocation: true
 ---
 

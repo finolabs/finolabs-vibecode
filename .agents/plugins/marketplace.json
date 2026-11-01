@@ -1,11 +1,11 @@
 {
-  "name": "finos-vibe-code",
+  "name": "finolabs-vibecode",
   "interface": {
-    "displayName": "Finos Vibe Code"
+    "displayName": "Finolabs Vibecode"
   },
   "plugins": [
     {
-      "name": "finos-vibe-code",
+      "name": "finolabs-vibecode",
       "source": {
         "source": "local",
         "path": "./"
