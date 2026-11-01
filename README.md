@@ -14,6 +14,7 @@ Every skill carries the `fnl-` prefix.
 | --- | --- |
 | `fnl-coding-router` | Starting or resuming any coding work: Spec Kit first, fallback router, depth (MIN, NORMAL, DEEP), the Spec Kit depth gate, the stop-before-a-third-fix checkpoint. |
 | `fnl-session-hygiene` | Context passes about 60%, a phase changes, a title is stale, work moves to another session or writer. |
+| `fnl-knowledge` | Remembering and recalling decisions, lessons and project state: native agent memory for working preferences, a shared knowledge base (Orrery, or an Obsidian vault) beside it, the repository for code facts. |
 | `fnl-delegate` | Coordinating Claude Code, Codex and Antigravity from whichever one you run in: grade, route by agent and model through a dated capability map, an optional route judge, quota fallback, at most 5 parallel runs, time budgets, liveness from artifacts, heavy-job lock, verify-before-accept, handover, dispatch ledger. |
 | `fnl-handoff` | Writing a self-contained brief and dispatching one task. |
 | `fnl-advisor` | One second opinion from a stronger, contrasting model. |
@@ -153,6 +154,8 @@ The eval suite checks that each skill fires on a representative prompt and that 
 This pack stands on other people's work. Thank you to:
 
 - **Matt Pocock** and [mattpocock/skills](https://github.com/mattpocock/skills) ([overview](https://www.aihero.dev/skills)), MIT. Its `/setup-matt-pocock-skills` and `/ask-matt` skills inspired `/fnl-setup` and `/fnl-ask`; its user-invoked and model-invoked split, its grilling interview and its `writing-for-agents` guidance shaped how these skills are written. No text is copied, and the two packs are independent projects.
+- [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) by Steph Ango, MIT, which `fnl-knowledge` recommends for Obsidian vaults.
+- [Orrery](https://github.com/fioenix/orrery), the FINOLABS knowledge base for agents that `fnl-knowledge` recommends.
 - [Cloudflare's security-audit skill](https://github.com/cloudflare/security-audit-skill), MIT, which the security gates recommend for audits.
 - [Spec Kit](https://github.com/github/spec-kit) by GitHub, which `fnl-coding-router` routes through first.
 - [Superpowers](https://github.com/obra/superpowers) by Jesse Vincent, whose process skills (brainstorming, systematic debugging, test-driven development, verification before completion, code review requests) fill the fallback router.
