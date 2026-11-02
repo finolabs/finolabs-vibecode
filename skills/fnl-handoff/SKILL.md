@@ -27,7 +27,7 @@ Use every heading; write "none" where one is empty, so the agent knows it was co
 
 ```
 ## Task
-[Imperative description. Task IDs if the project tracks them.]
+[Imperative description. Task IDs if the project tracks them. When the result is prose, its language and tone.]
 
 ## Checkout
 [Absolute path, branch, base commit SHA. "You are the only writer here. Do not push."]
@@ -64,6 +64,10 @@ Base and new commit SHAs, the test output, uncommitted files, open points.
 ```
 
 **Preserve task semantics.** Investigate-only → "Do not edit files." Fix → "implement the fix." Refactor → "refactor, not rewrite." Carry the user's exact intent and scope.
+
+**Findings sent back.** While the run is still light, send the findings as a follow-up to the same run, one defect per item. Open a new run with a new brief, carrying what was tried, when the run has used about 60% of its context or two rework rounds have not cleared the defects (`fnl-session-hygiene` "Context pressure").
+
+**Prose output.** Write the brief in English and name the output language and tone in the Task. When the result is social content or a document for readers, and the user's instructions give an editing pass for that language, the coordinator runs the pass at acceptance; the agent does not. A plain reply to a user needs no pass.
 
 For Antigravity, write an edit-only brief when its commands fall outside both its allow-rules and what the user granted for this run (`fnl-delegate` "Route"), and paste the search results or excerpts it would otherwise fetch.
 
