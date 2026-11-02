@@ -5,4 +5,4 @@ match: not_contains
 flags: m
 ---
 
-Merge: YES
+^[`*_ ]*Merge: YES\b
