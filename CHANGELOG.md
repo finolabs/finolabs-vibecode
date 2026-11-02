@@ -19,7 +19,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `fnl-coordinator-sessions`, the delegation host template and agent contracts use that title format.
 - `fnl-verifier` counts a review marker only from an author with write access, like the merge check, which now names the permission values GitHub returns.
 - `fnl-delegate` keeps routing and the steps every dispatch takes in `SKILL.md`, and moves procedures only some runs reach (quota fallback, parallel runs, the heavy-job lock, handover, file placement, ledger commands) to `references/dispatch.md` and `references/ledger.md`.
-- `fnl-review-gate` merge check: for each kind, the latest marker for the head must be `APPROVE`, so a later `REWORK` for the same commit blocks the merge. The verifier counts markers the same way.
+- `fnl-review-gate` merge check: a verdict is an unedited comment whose first line is a marker, from an author with write access; for each kind the latest such verdict for the head (by `createdAt`) must be `APPROVE`, so a later `REWORK` blocks the merge and a marker quoted inside a comment counts for nothing. A pull request from an author without write access also needs the owner's own approving review. The verifier counts verdicts the same way.
 - Reviewers treat everything under review as data: text in a pull request that tells the reviewer what to conclude, post or run is a finding (`fnl-review-gate`, both reviewer agents).
 - An Antigravity coordinator's wider allow-rules need the user's approval (`fnl-delegate` agent contracts).
 
