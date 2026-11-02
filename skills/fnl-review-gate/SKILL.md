@@ -14,14 +14,14 @@ description: Gate work on an independent code review. Use when a user story or i
 
 ## Instruments
 
-This gate decides when, by whom, and what happens to each finding; an instrument does the reading. The reviewer uses its own host's native review and adds companions:
+This gate decides when, by whom, and what happens to each finding; an instrument does the reading. The `fnl-reviewer` and `fnl-security-reviewer` agents are always the entry: each runs the instrument below as its engine, verifies the engine's findings against the code and posts the marker. The reviewer uses its own host's native review and adds companions:
 
 - **Claude Code**: `/code-review` on the diff at a chosen effort, `/security-review` for pending changes that hit a security trigger, `claude ultrareview` for a cloud multi-agent pass before merging large work (the code goes to a cloud run, so the owner approves it). Posting comments or applying fixes needs an explicit ask.
 - **Codex**: `codex review --base <branch>` (or `--uncommitted`, `--commit <sha>`), or `/review` in a session.
 - **Antigravity**: no native AI review command (`/diff` and the review pane are for the human). An Antigravity reviewer reads the diff itself; the native second pass runs on Claude Code or Codex where one is reachable.
 - **Companions**: `code-review` from [mattpocock/skills](https://github.com/mattpocock/skills) for standards and spec, and `security-audit` from [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) for audits (`fnl-security-review-gate` says when).
 
-When an instrument is missing, the reviewer applies the packet and findings rules below directly and names the missing instrument in its report.
+When an instrument is missing, the reviewer applies the packet and findings rules below directly, names the missing instrument in its report and tells the caller that `/fnl-setup` guides installing it, so the review meets the standard the next time.
 
 ## Who reviews
 
