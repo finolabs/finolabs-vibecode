@@ -272,7 +272,9 @@ class MergeCheckTest(unittest.TestCase):
                 fake(payload)
                 with self.assertRaises(mc.Unknown):
                     mc.compare("acme/demo", "b" * 40, HEAD)
-            for payload in ({"files": []}, {"merge_base_commit": {"sha": "c" * 40}, "files": {}}):
+            for payload in ({"files": []}, {"merge_base_commit": None, "files": []},
+                            {"merge_base_commit": {"sha": "main"}, "files": []},
+                            {"merge_base_commit": {"sha": "c" * 40}, "files": {}}):
                 fake(payload)
                 with self.assertRaises(mc.Unknown):
                     mc.compare("acme/demo", "b" * 40, HEAD)

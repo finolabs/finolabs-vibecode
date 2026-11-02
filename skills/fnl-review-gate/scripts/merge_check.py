@@ -232,7 +232,7 @@ def compare(repo, base, head):
     if not isinstance(files, list) or len(files) >= COMPARE_CAP:
         raise Unknown("the compare API did not list every changed file")
     merge_base = (data.get("merge_base_commit") or {}).get("sha")
-    if not merge_base:
+    if not isinstance(merge_base, str) or not re.fullmatch(r"[0-9a-f]{40}", merge_base):
         raise Unknown("the compare API gave no merge base")
     return files, merge_base
 
