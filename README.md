@@ -40,7 +40,7 @@ Every skill carries the `fnl-` prefix. The user types four of them, `fnl-setup`,
 | --- | --- |
 | `fnl-coding-router` | Starting or resuming any coding work: Spec Kit first, fallback router, depth (MIN, NORMAL, DEEP), the Spec Kit depth gate, the stop-before-a-third-fix checkpoint. |
 | `fnl-session-hygiene` | A session's context passes about 60%, a phase changes, a title goes stale, or work moves to another session or writer. |
-| `fnl-knowledge` | Remembering and recalling decisions, lessons and project state: native agent memory for working preferences, a shared knowledge base (Orrery, or an Obsidian vault) beside it, the repository for code facts. |
+| `fnl-knowledge` | Remembering and recalling decisions, lessons and project state: a shared knowledge base (Orrery, or an Obsidian vault) for decisions, lessons and project state, and the repository for code facts. |
 | `fnl-delegate` | Coordinating Claude Code, Codex and Antigravity from whichever one you run in: grading, routing by agent and model through a dated capability map, an optional route judge, quota fallback, at most 5 parallel runs, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger. |
 | `fnl-handoff` | Writing a self-contained brief and dispatching one task. |
 | `fnl-advisor` | Getting one second opinion from a stronger model of another family. |

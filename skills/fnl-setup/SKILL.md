@@ -16,7 +16,7 @@ Report only what you observe:
 - **Route judge**: whether a semantic evaluator skill such as `typesafe-ai` is installed (skill listing only; never look for its credentials).
 - **Host config**: the file at `$ORCHESTRATION_HOST_CONFIG`, else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. Present, missing, or still holding template placeholders.
 - **Repository**: the git root; whether it uses Spec Kit (`.specify/` plus installed `speckit-*` skills); which of `CLAUDE.md` and `AGENTS.md` exist and whether one already has an `## Agent skills` section; whether `.orchestration/` is excluded in `.git/info/exclude`.
-- **Memory and knowledge base**: where the user keeps durable decisions that agents write to: the host's memory feature, or a notes vault or knowledge-base server their user-scoped instructions name, with the access those instructions approve.
+- **Knowledge base**: where the user keeps durable decisions that agents write to: a notes vault or knowledge-base server their user-scoped instructions name, with the access those instructions approve.
 - **User-scoped instructions**: whether `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` (or `$CODEX_HOME/AGENTS.md`) and `~/.gemini/GEMINI.md` (or `~/.gemini/AGENTS.md`) exist, and whether they already point coding work at `fnl-coding-router`.
 
 A check that cannot run here (a command or path is unavailable) is listed as **unverified** in one line, and the interview goes on.
@@ -51,7 +51,7 @@ Offer the optional lane line for repositories with one maintainer. The lane cove
 
 Show each draft and apply the user's edits. Then write only what was confirmed: the host config (outside the repository), the exclude line, and the agent-skills block (update an existing block in place).
 
-When the findings show a memory or knowledge base, also record the settled decisions there as `fnl-knowledge` says (the route judge and the date of consent, which agents coordinate, the parallel limit, the host config path), through the access the user's instructions approve. Write to the one knowledge base those instructions name, plus a pointer in native memory when an agent needs it at startup, and report any write that failed. Install nothing and change no shared settings.
+When the findings show a knowledge base, also record the settled decisions there as `fnl-knowledge` says (the route judge and the date of consent, which agents coordinate, the parallel limit, the host config path), through the access the user's instructions approve. Write to the one knowledge base those instructions name, and report any write that failed. Install nothing and change no shared settings.
 
 ## 4. Report
 
