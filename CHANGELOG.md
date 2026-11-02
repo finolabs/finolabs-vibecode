@@ -4,9 +4,18 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-02
+
 ### Added
 
+- `fnl-setup` offers an optional line that lets a pull request changing only documentation take one combined code and security review.
+- CI scans the tree and history for secrets (gitleaks, checksum-verified), and the tree for personal paths and addresses, and runs tests for the dispatch ledger script.
 - `fnl-open-source-review` checks repository settings: default branch and release tag protection, secret scanning and push protection, dependency alerts, private vulnerability reporting, merge and Actions settings, listing.
+
+### Changed
+
+- `fnl-review-gate` and the reviewer agents: a reviewer that cannot post returns the finished comment with its marker; the coordinator posts it only with the same authority, otherwise the owner does, and the merge waits. The merge check counts a marker only from an author with write access.
+- The README states that installs track `main` and that releases are the `vX.Y.Z` tags.
 
 ## [0.1.0] - 2026-11-02
 
@@ -45,5 +54,6 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/fioenix/finolabs-vibecode/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/fioenix/finolabs-vibecode/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/fioenix/finolabs-vibecode/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/fioenix/finolabs-vibecode/releases/tag/v0.1.0
