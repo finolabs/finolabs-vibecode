@@ -7,9 +7,13 @@ description: Run a spec as a coordinator session that starts one app session per
 
 The session a spec starts in is its **coordinator**. It works at the level of spec and plan; each task runs in its own app session. Agent choice, briefs, budgets and acceptance follow `fnl-delegate`; this skill adds the session model around them. Requires the `fnl-delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill fnl-delegate`, or install the whole plugin) and stop.
 
+## When to coordinate
+
+Coordinate a feature that has three or more user stories, or ten or more tasks in total. A smaller one runs in a single session, because each extra session costs context and quota.
+
 ## Ownership
 
-- **The coordinator owns** the Spec Kit artifacts (`spec.md`, `plan.md`, `tasks.md`, research and review records), task order, the review gate after each user story, and the PR. It writes no application code or tests, and commits the artifacts it changes.
+- **The coordinator owns** the Spec Kit artifacts (`spec.md`, `plan.md`, `tasks.md`, research and review records), task order, the review gate after each user story, and the PR. It writes no application code or tests, however small the edit, and commits the artifacts it changes.
 - **Only the coordinator edits `tasks.md`**, including the `[X]` marks. A task session runs `speckit-implement` limited to its assigned task IDs and leaves `tasks.md` untouched, even where the skill says to mark tasks done.
 - **One session per task.** Tasks of the current phase and story that edit the same files or must land in one commit go to one session together; grouping never crosses a story boundary.
 - **Sessions own tasks.** A task or review is always an app session the coordinator starts. A delegated job or subagent never stands in as its owner; a session may delegate to Codex or Antigravity internally, but it still verifies and commits.
@@ -19,7 +23,7 @@ The session a spec starts in is its **coordinator**. It works at the level of sp
 The app starts sessions only on a turn the user's own message began, never on one an automated event or another session began. So:
 
 1. On each user turn, start the sessions the next stretch of work needs.
-2. Before an unattended stretch, also start the sessions that follow as **standby**: the brief says to reply "Standing by" and wait.
+2. Before an unattended stretch, also start the sessions that follow as **standby**: the brief says to reply "Standing by" and wait. Prepare the next user story's sessions and one fix session, no further; the user sets the length of the stretch each time.
 3. On a later automated turn, release a standby session with a message giving its base commit and any change to its brief.
 4. Before opening a PR, keep or pre-start a standby fix session, so review findings that arrive on an automated turn have an owner.
 5. With no fitting standby session, propose the session as a card and wait for the user.
@@ -38,7 +42,7 @@ The app starts sessions only on a turn the user's own message began, never on on
 
 ## Review gate
 
-The next user story starts only after the story's code review, and a security review where triggered, are recorded and every blocking finding is fixed and verified. Reviews run in their own sessions; `fnl-review-gate` covers dispositions, regression tests and re-review.
+The next user story starts only after the story's code review, and a security review where triggered, are recorded and every blocking finding is fixed and verified. This holds even when two stories are independent: they run one after the other and never overlap, because the gate exists to stop work from building on a base nobody has confirmed. Reviews run in their own sessions; `fnl-review-gate` covers dispositions, regression tests and re-review.
 
 ## Titles and archiving
 
