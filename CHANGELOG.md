@@ -15,6 +15,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- `fnl-coding-router`'s Spec Kit depth gate lets a moderate user story go from an accepted plan straight to implementation, skipping `speckit-tasks`, also when it makes a small, contained contract change that a security review covers; security, privacy, permission, migration, dependency and irreversible boundaries still go through tasks. A direct path is accepted by `fnl-verification` against each acceptance criterion and the two posted reviews, and `fnl-review-gate`'s reviewer packet carries the story's acceptance criteria and `plan.md` when Spec Kit is in use. A behavior eval covers a moderate story with an additive response field.
 - Claude Code and Codex install the plugin from the FINOLABS catalog, `finolabs/plugins` (`finolabs-vibecode@finolabs`), which groups the FINOLABS plugins under one name; the repository's own marketplace stays for existing installs. The manifests name FINOLABS as author and developer. The agent install steps check for an existing install before adding the catalog.
 - The repository moved to `github.com/finolabs/finolabs-vibecode`; links, manifests and install commands use the new address, and GitHub redirects the old one.
 - `fnl-coordinator-sessions`, the delegation host template and agent contracts use that title format.
