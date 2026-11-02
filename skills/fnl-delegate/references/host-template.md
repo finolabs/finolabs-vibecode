@@ -36,7 +36,7 @@ Which agent can coordinate on this machine, and which delegates each one can rea
 - Headless command: <hard-cap wrapper> <claude path> -p "$(cat "$B")" --model <full model id> --effort <level> --output-format json --max-turns <n> --max-budget-usd <cap> --allowedTools "<tools the brief needs>" < /dev/null
 - Allowed models: <full model ids>.
 - How task sessions start on this host: <desktop app session tools | `claude -p` headless>.
-- Session title convention: <project, feature, activity>.
+- Session title convention: <`<project> <scope>: <activity>` as `fnl-session-hygiene` says, or this machine's own>.
 
 ## Codex
 
