@@ -29,6 +29,11 @@ OUTCOMES = [
     "blocked", "needs-permission", "quota", "cancelled",
 ]
 TESTS = ["passed", "failed", "not-run"]
+# Keys open and summary read from each kind of line.
+REQUIRED = {
+    "start": {"id", "ts", "project", "task", "kind", "grade", "agent", "model", "reason"},
+    "finish": {"id", "ts", "outcome", "rework_rounds"},
+}
 
 
 def ledger_path():
@@ -62,10 +67,11 @@ def load():
             rec = json.loads(line)
         except json.JSONDecodeError:
             rec = None
-        if not isinstance(rec, dict):
+        required = REQUIRED.get(rec.get("event")) if isinstance(rec, dict) else None
+        if not required or not required <= rec.keys():
             print(f"ledger: skipping malformed line {n}", file=sys.stderr)
             continue
-        target = starts if rec.get("event") == "start" else finishes
+        target = starts if rec["event"] == "start" else finishes
         target[rec.get("id")] = rec
     return starts, finishes
 

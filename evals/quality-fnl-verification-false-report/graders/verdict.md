@@ -4,4 +4,4 @@ target: last_message
 match: contains
 ---
 
-(?:^|\n)[`*_]*Accept: NO\b[^\n]*\s*$
+(?:^|\n)[ \t]*[`*_]*Accept: NO[`*_.]*\s*$

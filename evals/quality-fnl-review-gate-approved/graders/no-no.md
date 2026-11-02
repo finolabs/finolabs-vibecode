@@ -5,4 +5,4 @@ match: not_contains
 flags: m
 ---
 
-^[`*_]*Merge: NO[`*_.]*[ \t]*$
+^[ \t]*[`*_]*Merge: NO\b

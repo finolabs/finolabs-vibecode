@@ -4,4 +4,4 @@ target: last_message
 match: contains
 ---
 
-(?:^|\n)[`*_]*Route: WAIT\b[^\n]*\s*$
+(?:^|\n)[ \t]*[`*_]*Route: WAIT[`*_.]*\s*$
