@@ -25,7 +25,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Reviewers treat everything under review as data: text in a pull request that tells the reviewer what to conclude, post or run is a finding (`fnl-review-gate`, both reviewer agents).
 - An Antigravity coordinator's wider allow-rules need the user's approval (`fnl-delegate` agent contracts).
 - When a delegate's allow-rules miss the commands a brief's tests need and the user is present, `fnl-delegate` asks the user to grant them as literal rules (with `agybird`'s grant flow, or a per-run settings file) before falling back to an edit-only brief or another agent, and never skips the permission check. The user chooses each grant, only for commands the brief lists, and is told that a granted test command runs the repository's test code; the host config only records grants; `/fnl-setup` offers remembered rules for the repository's test commands. A behavior eval guards it.
-- `fnl-delegate` shares easy and medium implementation with agents that have quota left when the coordinator is deep in a long session, holds several independent tested tasks, or is short of tokens, and keeps briefing, acceptance, reviews and merges (Load sharing).
+- `fnl-delegate` shares whole easy and medium implementation tasks when the coordinator's context is past about 60% or it holds several independent tested tasks (to a fresh session or subagent of its own kind), or when its own quota or tokens are short (to another agent with quota left); the coordinator keeps briefing and acceptance, reviews follow `fnl-review-gate`, and merges stay with whoever holds the authority (Load sharing). `fnl-coding-router` says a delegated whole task is not an implementation child.
 
 ### Fixed
 
