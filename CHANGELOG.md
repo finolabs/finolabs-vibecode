@@ -6,6 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- `fnl-plugin-packaging` covers shared catalogs across hosts, Codex grouping and catalog renames, Antigravity installs from a repository URL, pinning versus tracking, and protection for listed repositories (`references/catalogs.md`).
 - `fnl-session-hygiene` sets a session title format, `<project> <scope>: <activity>`, with examples, when to rename, whose sessions to rename, and how each host names sessions (`references/titles.md`). A delegated run's logs are named `<ledger id>-<slug>` and its brief `<slug>.md`; Codex sessions are archived or deleted by id, never by title.
 - CI checks cross-references (`scripts/check-references.py`): skill and agent names, section references (backticked or linked), relative links, ledger subcommands with their own flags and allowed values, and host config flags against the agent contracts.
 - `fnl-delegate`'s capability map carries a review-by date, and `/fnl-status` warns when it has passed.
