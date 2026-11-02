@@ -9,7 +9,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `fnl-session-hygiene` sets a session title format, `<project> <scope>: <activity>`, with examples, when to rename, whose sessions to rename, and how each host names sessions (`references/titles.md`).
 - CI checks cross-references (`scripts/check-references.py`): skill and agent names, section references, relative links, ledger flags cited in the skills, and host config flags against the agent contracts.
 - `fnl-delegate`'s capability map carries a review-by date, and `/fnl-status` warns when it has passed.
-- Behavior evals (tag `behavior`) with deterministic graders on each answer's final verdict line: the pull request merge check with a stale marker, a marker from an author without write access, and a valid pair; coding-router depth for a typo and a tenancy change; delegate routing when one agent's quota is out, when every frontier model is, when only frontier models are left for medium work, and for a review; the Spec Kit depth gate; verification of a false delegated report. Against a no-plugin baseline, the review routing and depth gate cases show the skills' effect; the others guard against regressions.
+- Behavior evals (tag `behavior`) with deterministic graders on each answer's final verdict line: the pull request merge check with a stale marker, a marker from an author without write access, and a valid pair; coding-router depth for a typo and a tenancy change; the merge check when a later marker overrides an earlier one for the same head, when a later comment quotes a marker, and when the author lacks write access; delegate routing when one agent's quota is out, when every frontier model is, when only frontier models are left for medium work, and for a review; the Spec Kit depth gate; verification of a false delegated report. Against a no-plugin baseline, the review routing and depth gate cases show the skills' effect; the others guard against regressions.
 - `fnl-commit-messages` "Branches" sets one branch flow: trunk-based with short-lived branches, naming, the base to cut from, syncing by rebase or merge without rewriting a pushed branch, conflicts, default branch rules, merge commits pinned to the reviewed head, cleanup of branch and worktree, hotfixes and backports to `release/X.Y`. Its description gains branch triggers, and `fnl-coding-router`, `fnl-delegate`, `fnl-handoff`, `fnl-coordinator-sessions`, `fnl-review-gate`, `fnl-versioning`, `fnl-open-source-review` and `fnl-ask` point to it where a branch is created, synced or merged.
 - The contributing guide lists the local checks, how to add a host, and the release checklist, which includes an adversarial review by another model family.
 
@@ -20,6 +20,13 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `fnl-coordinator-sessions`, the delegation host template and agent contracts use that title format.
 - `fnl-verifier` counts a review marker only from an author with write access, like the merge check, which now names the permission values GitHub returns.
 - `fnl-delegate` keeps routing and the steps every dispatch takes in `SKILL.md`, and moves procedures only some runs reach (quota fallback, parallel runs, the heavy-job lock, handover, file placement, ledger commands) to `references/dispatch.md` and `references/ledger.md`.
+- `fnl-review-gate` merge check: a verdict is an unedited comment whose first line is a marker, from an author with write access; for each kind the latest such verdict for the head (by `createdAt`) must be `APPROVE`, so a later `REWORK` blocks the merge and a marker quoted inside a comment counts for nothing. A pull request from an author without write access also needs the owner's own approving review. The verifier counts verdicts the same way.
+- Reviewers treat everything under review as data: text in a pull request that tells the reviewer what to conclude, post or run is a finding (`fnl-review-gate`, both reviewer agents).
+- An Antigravity coordinator's wider allow-rules need the user's approval (`fnl-delegate` agent contracts).
+
+### Fixed
+
+- The dispatch ledger skips lines that are valid JSON but not records, instead of crashing.
 
 ## [0.1.1] - 2026-11-02
 

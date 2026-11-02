@@ -61,6 +61,8 @@ def load():
         try:
             rec = json.loads(line)
         except json.JSONDecodeError:
+            rec = None
+        if not isinstance(rec, dict):
             print(f"ledger: skipping malformed line {n}", file=sys.stderr)
             continue
         target = starts if rec.get("event") == "start" else finishes
