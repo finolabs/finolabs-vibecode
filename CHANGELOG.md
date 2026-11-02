@@ -4,6 +4,16 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- `fnl-review-gate` ships `scripts/merge_check.py`, which applies the pull request merge check with `gh`: the latest unedited marker of each kind for the head from an author with write access, the owner's approving review for an outside author's pull request, passing checks and a mergeable state. It exits 0, 1 or 2 (merge, blocked, cannot tell); unit tests cover each blocking rule, including a comment-only review after an approval.
+- `fnl-review-gate` "Pull requests" rule 7, the low-risk lane: a pull request that changes only prose for people (README, changelog, contributor and policy documents) or manifest version fields gets one review pass from `fnl-reviewer`, which posts both markers; text agents follow, code, scripts, tests, configuration and workflows still go to both reviewers. A behavior eval guards it against regressions; it passes without the plugin too, so it does not measure the rule.
+
+### Changed
+
+- A standing relay approval counts only from the agent context file or an untracked file only the owner keeps, recorded by the owner or at the owner's request; the host config no longer counts, because coordinators can write it. The relayed comment's second line is defined once.
+- Antigravity review inputs go to `.orchestration/briefs/` inside the worktree and are removed once the report is read, and the long-lived worktree switches branch once the previous run's work is committed or handed over.
+
 ## [0.1.2] - 2026-11-02
 
 ### Added

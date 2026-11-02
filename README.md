@@ -68,7 +68,7 @@ The read-only subagents in `agents/` apply the skills above in a fresh context. 
 | `fnl-reviewer` | Is the change good? | A pull request or story is ready: it reads every changed file, then the callers, dependencies, contracts and tests the change affects, under `fnl-review-gate`. |
 | `fnl-security-reviewer` | Is the change safe? | The change crosses a sensitive boundary: it reads the changed files, then every trust path that reaches them, under `fnl-security-review-gate`. |
 
-Both reviewers cover two rings, the change and its impact set, rather than the whole repository, and report what they traced. Delegated work is accepted only after the verifier checks it. A pull request merges only after the reviewer and the security reviewer have each posted an approving review comment for its current head commit; a push after a review needs a new review. A story closes only after the verifier and then both reviewers have passed it.
+Both reviewers cover two rings, the change and its impact set, rather than the whole repository, and report what they traced. Delegated work is accepted only after the verifier checks it. A pull request merges only after the reviewer and the security reviewer have each posted an approving review comment for its current head commit; a push after a review needs a new review. A pull request that changes only prose for people or version fields takes one pass by the reviewer, which posts both comments. `skills/fnl-review-gate/scripts/merge_check.py` checks all of this before a merge. A story closes only after the verifier and then both reviewers have passed it.
 
 ## Install
 
