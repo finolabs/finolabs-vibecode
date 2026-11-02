@@ -34,7 +34,7 @@ Done when the plugin is listed by your host and the user knows to run setup in a
 
 ## Skills
 
-Every skill carries the `fnl-` prefix. The ones marked with `/` are typed by the user; the others load when the situation calls for them.
+Every skill carries the `fnl-` prefix. The user types four of them, `fnl-setup`, `fnl-setup-instructions`, `fnl-status` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); the agent loads the others when the situation calls for them.
 
 | Skill | Use it when |
 | --- | --- |
@@ -52,10 +52,10 @@ Every skill carries the `fnl-` prefix. The ones marked with `/` are typed by the
 | `fnl-security-review-gate` | A change touches auth, permissions, private data, untrusted input or payments: a permission-boundary review, with negative tests proving that not even a record's existence leaks. |
 | `fnl-verification` | Choosing targeted tests, reading the evidence, accepting someone else's work, claiming done. |
 | `fnl-plugin-packaging` | Packaging skills as a plugin for Claude Code, Codex and Antigravity from one repository: layout, manifests, icon, marketplaces, checks. |
-| `/fnl-setup` | First run on a machine or repository: host config, local file placement, the agent-skills block in `CLAUDE.md` or `AGENTS.md`. |
-| `/fnl-setup-instructions` | Writing your user-scoped instructions: it interviews you and writes them for Claude Code, Codex and Antigravity from one shared source. |
-| `/fnl-status` | Checking open delegated runs and first-pass acceptance per agent and model, from the dispatch ledger. |
-| `/fnl-ask` | You are not sure which skill fits: describe the situation and get the next command, including companion skills from other packs. |
+| `fnl-setup` | First run on a machine or repository: host config, local file placement, the agent-skills block in `CLAUDE.md` or `AGENTS.md`. |
+| `fnl-setup-instructions` | Writing your user-scoped instructions: it interviews you and writes them for Claude Code, Codex and Antigravity from one shared source. |
+| `fnl-status` | Checking open delegated runs and first-pass acceptance per agent and model, from the dispatch ledger. |
+| `fnl-ask` | You are not sure which skill fits: describe the situation and get the next command, including companion skills from other packs. |
 | `fnl-open-source-review` | Before a repository goes public, and after: license, secrets in tree and history, internal leaks, clean payload, community files, repository settings, identity, data flow, plugin checks. |
 
 ### Agents
