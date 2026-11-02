@@ -1,6 +1,6 @@
 ---
 name: fnl-open-source-review
-description: Review a repository's readiness to be published as open source and report findings with evidence. Use before making a repository public, before a first public release, when publishing a plugin or skill package to a marketplace, or when asked whether a repository is safe or ready to open source.
+description: Review a repository's readiness to be published as open source and report findings with evidence. Use before making a repository public, before a first public release, when publishing a plugin or skill package to a marketplace, when asked whether a repository is safe or ready to open source, or when checking a public repository's settings (branch and tag protection, secret scanning, vulnerability reporting).
 ---
 
 # Open source review
@@ -51,6 +51,19 @@ Mark each item **PASS**, **FAIL**, **N/A** (with why) or **BLOCKED** (with what 
 - `CODE_OF_CONDUCT.md` (for example Contributor Covenant) with a working contact.
 - `SECURITY.md`: how to report a vulnerability privately, and the supported versions.
 - `CHANGELOG.md` (`fnl-versioning`), and issue and pull request templates where the forge supports them.
+
+### Repository settings
+
+Read them from the forge (on GitHub, `gh api repos/<owner>/<repo>` and its `rulesets`, `private-vulnerability-reporting` and `actions/permissions` endpoints); without access to the settings, mark the group BLOCKED. Before the repository goes public, settings that protect the public history and its reporters are in place:
+
+- **Default branch protected** by a ruleset or branch protection: changes arrive through pull requests, the CI checks that gate a merge are required, force pushes and deletion are blocked, and administrators follow the same rules (or the owner records why not).
+- **Release tags protected**: `v*` tags cannot be moved or deleted, matching the immutable tags in `fnl-versioning`.
+- **Secret scanning and push protection** on.
+- **Dependency alerts and security updates** on for every ecosystem the repository uses, including its CI actions.
+- **Private vulnerability reporting** on, whenever `SECURITY.md` points reporters to it.
+- **Merge settings**: one merge method that keeps the history the commit conventions expect (`fnl-commit-messages`), and head branches deleted after merge.
+- **Actions**: the workflow token is read-only by default and cannot approve pull requests; workflows from first-time contributors' forks wait for approval; third-party actions are pinned to commit SHAs.
+- **Listing**: description, homepage and topics set; features the project does not use (wiki, projects, discussions) turned off so nothing unmonitored collects reports.
 
 ### Identity and versions
 
