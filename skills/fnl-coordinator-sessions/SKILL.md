@@ -26,7 +26,7 @@ The app starts sessions only on a turn the user's own message began, never on on
 
 ## Checkouts and writers
 
-- **One implementing session at a time** in the feature's implementation checkout. Every brief names that checkout by absolute path and branch. The coordinator edits nothing while the session runs.
+- **One implementing session at a time** in the feature's implementation checkout. Every brief names that checkout by absolute path and branch; the branch follows `fnl-commit-messages` "Branches". The coordinator edits nothing while the session runs.
 - **Read-only work** (reviews, measurements, lookups) runs beside an implementing session only in a separate worktree at a fixed commit, so its results belong to one revision. The coordinator creates that worktree and puts its path and commit SHA in the brief.
 - **Task sessions commit their own work**: atomic commits per task or group. The report gives base and new commit SHAs, test output, uncommitted files and open points.
 - **Handover between writers** follows the handover steps in `fnl-delegate` before another session gets write access.
