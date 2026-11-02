@@ -53,10 +53,11 @@ import json, os, sys
 args = sys.argv[1:]
 if args[0] == 'pr':
     data = json.loads(@PR@)
-    data['baseRefOid'] = 'c' * 40
+    data['baseRefOid'] = 'd' * 40
     print(json.dumps(data))
-elif args[0] == 'api' and '--slurp' in args:
-    print(json.dumps([[{'filename': name, 'status': 'modified'} for name in os.environ['FAKE_FILES'].split(',')]]))
+elif args[0] == 'api' and '/compare/' in args[1]:
+    files = [{'filename': name, 'status': 'modified'} for name in os.environ['FAKE_FILES'].split(',')]
+    print(json.dumps({'merge_base_commit': {'sha': 'c' * 40}, 'files': files}))
 elif args[0] == 'api' and '/contents/' in args[-1]:
     print(json.dumps({'name': 'demo', 'version': '1' if 'c' * 40 in args[-1] else '2'}))
 elif args[0] == 'api':

@@ -222,9 +222,16 @@ def permission(repo, who):
     raise Unknown(f"permission lookup for {who} failed: {result.stderr.strip()[:200]}")
 
 
-def pr_files(repo, number):
-    pages = json.loads(gh("api", "--paginate", "--slurp", f"repos/{repo}/pulls/{number}/files"))
-    return [entry for page in pages for entry in page]
+COMPARE_CAP = 300  # GitHub's compare API lists at most this many files
+
+
+def compare(repo, base, head):
+    """Files changed from the merge base to `head`, bound to those SHAs, and the merge base."""
+    data = json.loads(gh("api", f"repos/{repo}/compare/{base}...{head}"))
+    files = data.get("files")
+    if not isinstance(files, list) or len(files) >= COMPARE_CAP:
+        raise Unknown("the compare API did not list every changed file")
+    return files, data["merge_base_commit"]["sha"]
 
 
 def file_at(repo, path, ref):
@@ -247,9 +254,10 @@ def main(argv=None):
 
         def lane_ok():
             if not lane_cache:
-                refs = {"base": pr["baseRefOid"], "head": pr["headRefOid"]}
+                files, merge_base = compare(args.repo, pr["baseRefOid"], pr["headRefOid"])
+                refs = {"base": merge_base, "head": pr["headRefOid"]}
                 read = lambda path, side: file_at(args.repo, path, refs[side])
-                lane_cache.append(lane_files(pr_files(args.repo, args.number), read))
+                lane_cache.append(lane_files(files, read))
             return lane_cache[0]
 
         if args.lane:
