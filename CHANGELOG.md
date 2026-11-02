@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-02
+
 ### Added
 
 - `fnl-review-gate` ships `scripts/merge_check.py <number> --repo <owner/name>`, which applies the pull request merge check with `gh`: the latest unedited marker of each kind for the head from an author with write access, the owner's approving review for an outside author's pull request, passing checks and a mergeable state. It exits 0, 1 or 2 (merge, blocked, cannot tell) and fails closed: a failed permission lookup, an uncomputed merge state, a full page of comments, no reported checks or a compare result without every file or a merge base never pass. It compares manifests as parsed JSON (only the top-level `"version"` may differ, duplicate keys refused), reads the lane's files from the compare API, bound to the head SHA and diffed from the merge base, treats only GitHub's 404 as no access and gives each `gh` call a timeout. Unit tests cover each blocking rule, including a comment-only review after an approval and a tie between verdicts, plus the lane and permission paths through the CLI.
@@ -21,7 +23,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - If a standing relay approval lives in your host config or another untracked file, move it, with its scope and date, into the agent context file (`CLAUDE.md` or `AGENTS.md`) through a reviewed pull request; until then the coordinator hands relayed reviews to you.
 - If your agent context file carries the 0.1.2 optional line letting documentation pull requests take one combined review, replace it with the line `/fnl-setup` now offers. The lane still covers the README and other root documents, but no longer a `docs/` folder; pull requests there go to both reviewers.
 
-These two steps would make this a minor release under `fnl-versioning`; the owner kept it a patch because the plugin is in early use with few installs outside the maintainer's, and both steps are stated here.
+These two steps would make this a minor release under `fnl-versioning`; the owner kept it a patch because the plugin is in early use with few installs outside the maintainer's, and both steps are stated here. The owner also waived the release checklist's adversarial review by another model family for this release: Gemini 4 Argon and Codex were out of quota.
 
 ## [0.1.2] - 2026-11-02
 
@@ -110,7 +112,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/finolabs/finolabs-vibecode/releases/tag/v0.1.0
