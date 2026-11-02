@@ -3,11 +3,11 @@
   "version": "0.1.2-dev",
   "description": "One engineering practice for AI coding agents: coding-work routing, agent delegation, versioning, commit messages, review gates, security review, verification and open source readiness.",
   "author": {
-    "name": "Fioenix",
-    "url": "https://github.com/fioenix"
+    "name": "FINOLABS",
+    "url": "https://github.com/finolabs"
   },
-  "homepage": "https://github.com/fioenix/finolabs-vibecode",
-  "repository": "https://github.com/fioenix/finolabs-vibecode",
+  "homepage": "https://github.com/finolabs/finolabs-vibecode",
+  "repository": "https://github.com/finolabs/finolabs-vibecode",
   "license": "MIT",
   "keywords": [
     "coding-router",
@@ -23,7 +23,7 @@
   "interface": {
     "displayName": "Finolabs Vibecode",
     "shortDescription": "Engineering rules for agents",
-    "developerName": "Fioenix",
+    "developerName": "FINOLABS",
     "longDescription": "A skill set that gives coding agents one engineering practice. Route each change through Spec Kit or a fallback router at the right depth. Coordinate Codex, Antigravity and Claude Code agents with self-contained briefs, time budgets and verify-before-accept. Version and tag releases by SemVer, and write atomic commits. Gate each user story on an independent code and security review, and verify with targeted tests whose output is read before anything is accepted. Before a repository goes public, review its open source readiness.",
     "category": "Coding",
     "capabilities": [],
@@ -32,10 +32,10 @@
       "Grade these three tasks and dispatch the independent ones to agents.",
       "Prepare the version bump and changelog for the next release."
     ],
-    "websiteURL": "https://github.com/fioenix/finolabs-vibecode",
-    "supportURL": "https://github.com/fioenix/finolabs-vibecode/issues",
-    "privacyPolicyURL": "https://github.com/fioenix/finolabs-vibecode/blob/main/PRIVACY.md",
-    "termsOfServiceURL": "https://github.com/fioenix/finolabs-vibecode/blob/main/TERMS.md",
+    "websiteURL": "https://github.com/finolabs/finolabs-vibecode",
+    "supportURL": "https://github.com/finolabs/finolabs-vibecode/issues",
+    "privacyPolicyURL": "https://github.com/finolabs/finolabs-vibecode/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/finolabs/finolabs-vibecode/blob/main/TERMS.md",
     "brandColor": "#9750C4",
     "brandColorDark": "#7FE2CE",
     "composerIcon": "./assets/icon.svg",

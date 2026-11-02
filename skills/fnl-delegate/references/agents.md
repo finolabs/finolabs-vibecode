@@ -22,7 +22,7 @@ Common to every headless dispatch: run it in the background from the task's work
 
 ## Antigravity
 
-When the `agybird` skill ([fioenix/agybird](https://github.com/fioenix/agybird), MIT) is installed, it may run the dispatch: it wraps the same CLI with modes and quota checks. Without it, call `agy` directly:
+When the `agybird` skill ([finolabs/agybird](https://github.com/finolabs/agybird), MIT) is installed, it may run the dispatch: it wraps the same CLI with modes and quota checks. Without it, call `agy` directly:
 
 - **Headless**: `agy -p "$(cat "$B")" --model <model id> --mode accept-edits --output-format json --print-timeout <minutes>m`, run in the worktree. Always pass `--print-timeout`: its default differs between versions.
 - **Permissions**: reads and writes inside the workspace are allowed; every shell command outside the allow-rules is soft-denied. A soft-denied run can exit 0, so read `denied_actions` in the JSON. Pass a per-run settings file with `--settings` holding only the allow-rules this task needs, rather than widening the global rules; changing global rules needs the user's approval. Only the user grants permissions, so give Antigravity edit-only briefs or tasks whose commands fit the allow-rules; while the user is away, work that needs wider shell access goes to another agent.

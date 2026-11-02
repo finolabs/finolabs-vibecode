@@ -3,18 +3,18 @@
   "name": "finolabs-vibecode",
   "displayName": "Finolabs Vibecode",
   "icon": "./assets/icon.png",
-  "documentationUrl": "https://github.com/fioenix/finolabs-vibecode#readme",
-  "supportUrl": "https://github.com/fioenix/finolabs-vibecode/issues",
-  "privacyPolicyUrl": "https://github.com/fioenix/finolabs-vibecode/blob/main/PRIVACY.md",
-  "termsOfServiceUrl": "https://github.com/fioenix/finolabs-vibecode/blob/main/TERMS.md",
+  "documentationUrl": "https://github.com/finolabs/finolabs-vibecode#readme",
+  "supportUrl": "https://github.com/finolabs/finolabs-vibecode/issues",
+  "privacyPolicyUrl": "https://github.com/finolabs/finolabs-vibecode/blob/main/PRIVACY.md",
+  "termsOfServiceUrl": "https://github.com/finolabs/finolabs-vibecode/blob/main/TERMS.md",
   "version": "0.1.2-dev",
   "description": "One engineering practice for AI coding agents: coding-work routing, agent delegation, versioning, commit messages, review gates, security review, verification and open source readiness.",
   "author": {
-    "name": "Fioenix",
-    "url": "https://github.com/fioenix"
+    "name": "FINOLABS",
+    "url": "https://github.com/finolabs"
   },
-  "homepage": "https://github.com/fioenix/finolabs-vibecode",
-  "repository": "https://github.com/fioenix/finolabs-vibecode",
+  "homepage": "https://github.com/finolabs/finolabs-vibecode",
+  "repository": "https://github.com/finolabs/finolabs-vibecode",
   "license": "MIT",
   "keywords": [
     "coding-router",

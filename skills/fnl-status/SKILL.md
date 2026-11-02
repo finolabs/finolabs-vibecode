@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Delegation status
 
-Read-only. Requires the `fnl-delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add fioenix/finolabs-vibecode --skill fnl-delegate`, or install the whole plugin) and stop.
+Read-only. Requires the `fnl-delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill fnl-delegate`, or install the whole plugin) and stop.
 
 The ledger script is `scripts/ledger.py` in the `fnl-delegate` skill's folder, a sibling of this skill's base directory. It reads `ORCHESTRATION_LEDGER`, else `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode/ledger.jsonl`.
 

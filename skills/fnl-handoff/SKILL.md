@@ -13,7 +13,7 @@ The receiving agent starts with **zero context**: the brief is everything it kno
 
 ## Prerequisites
 
-Load the `fnl-delegate` skill and the host config it names. Requires the `fnl-delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add fioenix/finolabs-vibecode --skill fnl-delegate`, or install the whole plugin) and stop. Grade and route the task there unless the arguments name an agent.
+Load the `fnl-delegate` skill and the host config it names. Requires the `fnl-delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill fnl-delegate`, or install the whole plugin) and stop. Grade and route the task there unless the arguments name an agent.
 
 ## Arguments
 

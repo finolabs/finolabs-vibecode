@@ -6,11 +6,11 @@
   "version": "0.1.2-dev",
   "logo": "assets/icon.svg",
   "author": {
-    "name": "Fioenix",
-    "url": "https://github.com/fioenix"
+    "name": "FINOLABS",
+    "url": "https://github.com/finolabs"
   },
-  "homepage": "https://github.com/fioenix/finolabs-vibecode",
-  "repository": "https://github.com/fioenix/finolabs-vibecode",
+  "homepage": "https://github.com/finolabs/finolabs-vibecode",
+  "repository": "https://github.com/finolabs/finolabs-vibecode",
   "license": "MIT",
   "keywords": [
     "coding-router",

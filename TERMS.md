@@ -6,4 +6,4 @@ The skills, scripts and plugin manifests in this repository are distributed unde
 
 The skills guide an agent's process; they do not guarantee its output. You are responsible for the work you ask agents to do: for having the right to share the files and prompts involved, for approving pushes, releases and other irreversible actions, and for reviewing code and other output before you rely on or publish it.
 
-Report bugs and suggest changes through [GitHub Issues](https://github.com/fioenix/finolabs-vibecode/issues). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md), not in a public issue.
+Report bugs and suggest changes through [GitHub Issues](https://github.com/finolabs/finolabs-vibecode/issues). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md), not in a public issue.
