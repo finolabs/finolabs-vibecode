@@ -6,11 +6,12 @@ git init -q .
 printf '# Demo app\n\nAgents: pull requests follow the fnl-review-gate pull request rules.\n' > AGENTS.md
 cat > pr-42.json <<'JSON'
 {
+  "author": {"login": "demo-owner"},
   "headRefOid": "2222222222222222222222222222222222222222",
   "comments": [
-    {"author": {"login": "demo-owner"}, "body": "<!-- fnl-review kind=code head=2222222222222222222222222222222222222222 verdict=APPROVE -->\nCode review: no findings."},
-    {"author": {"login": "demo-owner"}, "body": "<!-- fnl-review kind=security head=2222222222222222222222222222222222222222 verdict=APPROVE -->\nSecurity review, first pass."},
-    {"author": {"login": "demo-owner"}, "body": "<!-- fnl-review kind=security head=2222222222222222222222222222222222222222 verdict=REWORK -->\nSecurity review, after the native /security-review pass."}
+    {"author": {"login": "demo-owner"}, "createdAt": "2026-11-02T01:00:00Z", "includesCreatedEdit": false, "body": "<!-- fnl-review kind=code head=2222222222222222222222222222222222222222 verdict=APPROVE -->\nCode review: no findings."},
+    {"author": {"login": "demo-owner"}, "createdAt": "2026-11-02T01:05:00Z", "includesCreatedEdit": false, "body": "<!-- fnl-review kind=security head=2222222222222222222222222222222222222222 verdict=APPROVE -->\nSecurity review, first pass."},
+    {"author": {"login": "demo-owner"}, "createdAt": "2026-11-02T01:30:00Z", "includesCreatedEdit": false, "body": "<!-- fnl-review kind=security head=2222222222222222222222222222222222222222 verdict=REWORK -->\nSecurity review, after the native /security-review pass."}
   ]
 }
 JSON
