@@ -30,6 +30,7 @@ The user describes their situation. Place them on the map below, read the target
 | Change touches auth, permissions, private data, untrusted input | `fnl-security-review-gate` | `/security-review` (Claude Code); `security-audit` from Cloudflare for a full audit |
 | "Is it done?" or accepting someone else's work | `fnl-verification` | |
 | Writing a commit | `fnl-commit-messages` | `pr` for the pull request body |
+| Creating, syncing or merging a branch, or a backport | `fnl-commit-messages` "Branches" | |
 | Release, tag, changelog | `fnl-versioning` | |
 | Making a repository public, or checking a public repository's settings | `fnl-open-source-review` | `security-audit` from Cloudflare |
 | Packaging skills as a plugin | `fnl-plugin-packaging` | |

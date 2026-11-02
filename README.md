@@ -47,7 +47,7 @@ Every skill carries the `fnl-` prefix.
 | `fnl-committee` | Stuck or looping: two contrasting agents find the root cause and a plan. |
 | `fnl-coordinator-sessions` | Running a spec as a coordinator plus one app session per task, with standby sessions and review gates. |
 | `fnl-versioning` | Version bumps, tags, changelog and release notes (SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog). |
-| `fnl-commit-messages` | Atomic commits, imperative subjects, no secrets or build output, host attribution trailer, PR descriptions. |
+| `fnl-commit-messages` | Atomic commits, imperative subjects, no secrets or build output, host attribution trailer, PR descriptions, and the branch flow: naming, base, sync, conflicts, merge, cleanup, backports. |
 | `fnl-review-gate` | Independent code review after each user story and before merge; a disposition for every finding; a regression test per runtime fix. |
 | `fnl-security-review-gate` | Changes to auth, permissions, private data, untrusted input or payments; permission-boundary review with negative tests that prove no existence leak. |
 | `fnl-verification` | Choosing targeted tests, reading the evidence, accepting someone else's work, claiming done. |

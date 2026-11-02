@@ -1,6 +1,6 @@
 ---
 name: fnl-commit-messages
-description: Shape commits and their messages. Use when staging changes, writing a commit subject or body, splitting work into commits, committing on behalf of a delegated run, or writing a pull request description.
+description: Shape commits, branches and their messages. Use when staging changes, writing a commit subject or body, splitting work into commits, committing on behalf of a delegated run, creating or naming a branch, syncing a branch with its base, resolving merge conflicts, merging a pull request and cleaning up its branch, backporting a fix to a release branch, or writing a pull request description.
 ---
 
 # Commit messages
@@ -23,9 +23,23 @@ description: Shape commits and their messages. Use when staging changes, writing
 
 When committing a stopped run's work on its behalf, mark it in the subject (`WIP: <task label> …`) so the next writer sees the state.
 
+## Branches
+
+Trunk-based: the default branch stays releasable, and every change reaches it through a short-lived branch and a pull request. A branching scheme the repository already documents wins over this default.
+
+- **Start**: commit on a branch of your own. Fetch, then cut it from the tip of its base: the default branch, or `release/X.Y` for a fix to an older line (`git switch -c <name> origin/<base>`). Parallel runs get one worktree and branch each (`fnl-delegate` "Parallel dispatch"); a feature has one implementing checkout (`fnl-coordinator-sessions` "Checkouts and writers").
+- **Name**: `<type>/<task>` in lowercase kebab case, with a type from `feat`, `fix`, `docs`, `chore`, `refactor`, `hotfix`, and the task ID where the project tracks one (`fix/142-parser-null`). A branch the host names for its own worktree keeps that name.
+- **Lifetime**: days, not weeks. Split a larger change into pull requests that each leave the base releasable.
+- **Sync**: bring the base in before opening the pull request and whenever it changed the files you touch. A branch only you have: rebase onto `origin/<base>`. A pushed branch: merge the base into it, so its published history stays as others fetched it; rebasing it needs authority ("Authority" below) and then `git push --force-with-lease`. Use the host's sync tool where it offers one for its worktrees.
+- **Conflicts**: resolve them on the branch. Read both sides and keep each one's intent; where the intents contradict, stop and ask whoever owns the other change. Rerun the targeted tests (`fnl-verification`); the resolution is part of the change the reviews cover.
+- **Default branch rules**: a ruleset or branch protection on the default branch is the merge path: changes arrive by pull request with its required checks and reviews, without an administrator bypass. A rejected direct push means: open a pull request.
+- **Merge**: through the pull request, after the merge check (`fnl-review-gate` "Pull requests"), with a method the repository allows; prefer a merge commit, which keeps each commit as written. Pin the merge to the reviewed head so a later push cannot ride along: `gh pr merge <number> --merge --match-head-commit <sha>` on GitHub.
+- **After merge**: whoever merged deletes the head branch on the forge (`--delete-branch`, or the repository's automatic deletion) and locally, and removes its worktree (`git worktree remove <path>`) once `git status` there is clean.
+- **Hotfix and backport**: fix on the default branch first, then for each supported older line cut a branch from `release/X.Y`, apply the fix with `git cherry-pick -x <sha>` and open its own pull request. A fix that applies only to the older line starts on that line. Create `release/X.Y` from the tag `vX.Y.0` when an older line first needs a fix; tags follow `fnl-versioning` "Tags".
+
 ## Authority
 
-Committing locally is part of the task when the task calls for it. Pushing, force-pushing, rewriting published history, merging and opening or merging pull requests need explicit authority. Work on a branch when the current branch is the default branch.
+Committing locally is part of the task when the task calls for it. Pushing, force-pushing, rewriting published history, merging and opening or merging pull requests need explicit authority.
 
 ## Pull request descriptions
 
