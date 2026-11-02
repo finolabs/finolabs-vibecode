@@ -33,7 +33,7 @@ Check the response against the evaluator schema, allowed IDs, a valid distributi
 | `NEED_EVIDENCE` | Name the missing fact; fetch it or ask a targeted question; pause only the dependent decision. |
 | Evaluator unavailable or inconclusive | Disclose it; apply a documented owner-approved fallback policy if one settles the choice, else leave it pending and continue independent work. Never claim the evaluator ran without a validated response. |
 
-Candidate examples, not a pipeline: a requirement gap maps to specify or clarify; a design gap to plan; decomposition to tasks; a reproducible unexplained failure to bounded debugging; ready approved tasks to implement. Analysis, convergence, verification and review need their own prerequisites. Without Spec Kit, map the same responsibilities to the fallback handlers.
+Candidate examples, not a pipeline: a requirement gap maps to specify or clarify; a design gap to plan; decomposition to tasks; a moderate story that passes the depth gate to direct implementation; a reproducible unexplained failure to bounded debugging; ready approved tasks to implement. Analysis, convergence, verification and review need their own prerequisites. Without Spec Kit, map the same responsibilities to the fallback handlers.
 
 Record the state binding, eligible and excluded IDs with reasons, the response, distribution and model when called (as the adapter observed them; an agent's own "the evaluator ran" is not evidence), the disposition and the next stop condition. Permission to read a private source is not permission to send it to an evaluator. The evaluator cannot consent, prove facts, accept code or waive gates.
 

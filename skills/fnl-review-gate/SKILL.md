@@ -34,7 +34,7 @@ When an instrument is missing, the reviewer applies the packet and findings rule
 
 Self-contained, no whole-history fork:
 
-- acceptance criteria and the decisions the change rests on;
+- acceptance criteria and the decisions the change rests on; with Spec Kit, the story's acceptance criteria and the feature's `plan.md`;
 - the exact binding: base and head SHAs or the commit range, and a fixed worktree when other writers are active;
 - known consumers of the changed code, as a starting list the reviewer extends;
 - tests and configuration run, with their results and limits;
