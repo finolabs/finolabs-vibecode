@@ -55,7 +55,7 @@ The coordinator's own sandbox decides which delegates it can reach. Each delegat
 
 - **Claude Code coordinating**: Bash runs `codex exec` and `agy -p` under the session's permission rules; allow the exact command prefixes.
 - **Codex coordinating**: the default `workspace-write` sandbox has no network and cannot reach other CLIs' home folders. Reaching `claude -p` or `agy -p` needs a sandbox the user has configured for it; without one, those delegates are unavailable. Codex's own subagents inherit its sandbox.
-- **Antigravity coordinating**: allow `command(claude -p)` and `command(codex exec)` in the allow-rules and run without `--sandbox`; otherwise those calls are soft-denied.
+- **Antigravity coordinating**: allow `command(claude -p)` and `command(codex exec)` in the allow-rules and run without `--sandbox`; otherwise those calls are soft-denied. Both widen what Antigravity may run, so they need the user's approval and belong in the host config.
 
 A delegate the coordinator cannot reach is **unavailable** for routing; record it in the host config rather than retrying it on each task.
 

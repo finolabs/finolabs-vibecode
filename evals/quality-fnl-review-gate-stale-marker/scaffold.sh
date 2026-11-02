@@ -6,10 +6,11 @@ git init -q .
 printf '# Demo app\n\nAgents: pull requests follow the fnl-review-gate pull request rules.\n' > AGENTS.md
 cat > pr-42.json <<'JSON'
 {
+  "author": {"login": "demo-owner"},
   "headRefOid": "2222222222222222222222222222222222222222",
   "comments": [
-    {"author": {"login": "demo-owner"}, "body": "<!-- fnl-review kind=code head=1111111111111111111111111111111111111111 verdict=APPROVE -->\nCode review: no findings."},
-    {"author": {"login": "demo-owner"}, "body": "<!-- fnl-review kind=security head=2222222222222222222222222222222222222222 verdict=APPROVE -->\nSecurity review: no trigger matched; trust paths checked: none reach auth."}
+    {"author": {"login": "demo-owner"}, "createdAt": "2026-11-02T01:00:00Z", "includesCreatedEdit": false, "body": "<!-- fnl-review kind=code head=1111111111111111111111111111111111111111 verdict=APPROVE -->\nCode review: no findings."},
+    {"author": {"login": "demo-owner"}, "createdAt": "2026-11-02T01:01:00Z", "includesCreatedEdit": false, "body": "<!-- fnl-review kind=security head=2222222222222222222222222222222222222222 verdict=APPROVE -->\nSecurity review: no trigger matched; trust paths checked: none reach auth."}
   ]
 }
 JSON
