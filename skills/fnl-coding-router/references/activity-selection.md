@@ -2,6 +2,10 @@
 
 Use this only after the workflow is chosen and host rules, accepted decisions and prerequisites have not settled the next activity. It selects one activity inside that workflow; it never chooses Spec Kit versus the fallback router and grants no execution authority. Call an evaluator (for example TypeSafe Jev) only for material semantic ambiguity whose answer can change the next step; reuse an equivalent valid judgment.
 
+## Depth gate questions
+
+When "Spec Kit depth gate" in `SKILL.md` stays ambiguous, ask two narrow yes/no questions over the plan or story summary, acceptance criteria and touched areas: "fits one implementation pass" and "hides a cross-cutting risk". A yes to the first and a no to the second allows the direct path; any other answer, or an evaluator that is unavailable or inconclusive, runs `speckit-tasks`.
+
 ## 1. Build eligible candidates
 
 The host checks scope and authority, installed skills and callable capabilities, the current phase, accepted artifact revisions, dependencies and required gates. Each candidate has a stable activity ID, the exact installed handler, its purpose, prerequisite evidence, and a bounded output or stop condition.

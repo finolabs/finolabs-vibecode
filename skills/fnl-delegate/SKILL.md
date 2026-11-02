@@ -9,7 +9,7 @@ You are the **coordinator**, whichever agent you run in: Claude Code, Codex or A
 
 Before the first dispatch in a session, read the **host config**: the file named by `ORCHESTRATION_HOST_CONFIG`, else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. It holds this machine's commands, allowed models, which delegates this coordinator can reach, the route judge, the lock path, briefs folder and parallel limit. If it is missing, copy [references/host-template.md](references/host-template.md) and ask the user for the facts you cannot look up. Project rules (`AGENTS.md`, `CLAUDE.md`, a constitution) win over this skill wherever they conflict.
 
-References carry the detail. For routing: [references/models.md](references/models.md) maps each agent's models to tiers and strengths, and [references/route-judgment.md](references/route-judgment.md) covers the optional route judge. For dispatch: [references/agents.md](references/agents.md) gives each agent's dispatch contract, including what each one may run, [references/dispatch.md](references/dispatch.md) the procedures only some runs reach (quota fallback, parallel runs, the heavy-job lock, handover, file placement), and [references/ledger.md](references/ledger.md) the ledger commands.
+References carry the detail. For routing: [references/models.md](references/models.md) maps each agent's models to tiers and strengths, and, only when the host config names a route judge, [references/route-judgment.md](references/route-judgment.md) says how to ask it. For dispatch: [references/agents.md](references/agents.md) gives each agent's dispatch contract, including what each one may run, [references/dispatch.md](references/dispatch.md) the procedures only some runs reach (quota fallback, parallel runs, the heavy-job lock, handover, file placement), and [references/ledger.md](references/ledger.md) the ledger commands.
 
 ## The loop
 
@@ -47,7 +47,7 @@ Done when you can state agent, model, effort and the reason in one line, for exa
 
 When the grade sits between two levels, or two routes still fit, the rules have left a judgment call:
 
-- With a **route judge** in the host config, ask it as `route-judgment.md` says.
+- With a **route judge** in the host config, read `references/route-judgment.md` and ask it as that file says.
 - Otherwise take the **higher grade** and the **earlier agent** in the capability order. This costs more quota, never quality.
 
 More routing rules:
@@ -56,7 +56,7 @@ More routing rules:
 - **Reviews, advice and committee seats** go by capability, like implementation: strong tier or above, a different agent from the implementer, a different model family where one is reachable, in a fresh context. Any of the three agents qualifies. A review that must run commands an agent's allow-rules block (tests, builds) goes to an agent that can run them. `fnl-review-gate` defines reviewer independence. When the implementer's family is the only one with a posting reviewer, the other family reviews read-only and the coordinator posts its report as `fnl-review-gate` relays allow.
 - **Shell access**: when the route picks a delegate whose allow-rules miss commands the brief's tests need, and the user is present, list those exact commands and ask the user to grant them, for this run or remembered for this repository (`agents.md` "Antigravity"); say that a granted test command runs whatever code the test files contain. Route the task to an agent that can run them, or give it an edit-only brief, only when the user declines or is away. Only the user grants a delegate new permissions, never by a flag that skips the permission check.
 - **Load sharing**: when the coordinator's context is past about 60% (`fnl-session-hygiene` "Context pressure") or it holds two or more independent tasks with clear acceptance tests, hand whole easy and medium implementation tasks to a fresh session or headless run of its own kind (in-session subagents never own implementation, `agents.md` "In-session subagents"); when its own quota or token budget is the scarce one, hand them to another agent with quota left. Routing still picks the agent and model by tier, strengths and reachability, among delegates the project rules allow. Keep briefing and acceptance, route reviews as `fnl-review-gate` says, and leave merges to whoever holds the authority. A task that needs the coordinator's own conversation context to finish stays with the coordinator.
-- **User away**: questions that would go to the user go to an advisor or the route judge instead; record each decision and who settled it. Decisions that need the user's authority (merge, production, credentials, new spending) still wait.
+- **User away**: questions that would go to the user go to an advisor, or to the route judge when the host config names one, instead; record each decision and who settled it. Decisions that need the user's authority (merge, production, credentials, new spending) still wait.
 
 ### Quota fallback
 

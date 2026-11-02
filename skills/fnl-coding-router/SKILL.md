@@ -33,7 +33,7 @@ A Spec Kit repository with a missing or broken required skill has an integration
 - any contract change is small and contained: every consumer is known and updated in the same change, and `fnl-security-review-gate` reviews it before merge;
 - the constitution and scoped rules do not require tasks.
 
-Otherwise run `speckit-tasks`, then `speckit-implement`. When fit stays ambiguous after these rules, judge it with two narrow questions over the plan or story summary, acceptance criteria and touched areas: "fits one implementation pass" and "hides a cross-cutting risk" (a semantic evaluator may answer them; see [references/activity-selection.md](references/activity-selection.md)).
+Otherwise run `speckit-tasks`, then `speckit-implement`. When fit stays ambiguous after these rules, run `speckit-tasks`: ambiguity is not evidence that the change is one seam. With the `typesafe-ai` skill installed, read [references/activity-selection.md](references/activity-selection.md) "Depth gate questions" first.
 
 A direct path records the chosen path and its reason in the feature's `plan.md` and meets every acceptance criterion and gate. Its acceptance is `fnl-verification` against each acceptance criterion with fresh targeted tests, plus the two posted reviews of `fnl-review-gate`, whose packet carries the story's acceptance criteria and `plan.md`; it runs no separate analyze or converge step.
 
@@ -55,7 +55,7 @@ The process skills brainstorming, writing-plans, systematic-debugging and test-d
 
 Companion phase tools from other packs fit these rows, for example `grilling`, `prototype`, `tdd` and `diagnosing-bugs` from [mattpocock/skills](https://github.com/mattpocock/skills). They also work inside Spec Kit phases; that pack's process skills (`to-spec`, `to-tickets`, `implement`, `implement-spec`) yield to Spec Kit where it is in use.
 
-When a semantic choice between eligible activities remains after these rules, follow [references/activity-selection.md](references/activity-selection.md).
+When a semantic choice between eligible activities remains after these rules and the `typesafe-ai` skill is installed, follow [references/activity-selection.md](references/activity-selection.md). Without it, choose by observed fit and the table above, or ask the user the one question that decides it.
 
 Done when you can name the workflow, the phase and the next activity.
 

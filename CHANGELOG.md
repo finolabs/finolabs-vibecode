@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- The optional Jev route judge and activity evaluator now sit behind references that an agent reads only when it has one. `fnl-coding-router` runs `speckit-tasks` when the depth gate stays ambiguous and reads `references/activity-selection.md` "Depth gate questions" only with `typesafe-ai` installed; `fnl-delegate` points to `references/route-judgment.md` only when the host config names a judge; `fnl-setup` moves its route judge question to `references/route-judge.md` and records "none" without asking when no judge skill is installed. Without a judge, behavior is unchanged: the fallback rules already applied.
+
 ## [0.1.3] - 2026-11-02
 
 ### Added
