@@ -22,6 +22,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `fnl-advisor` and `fnl-committee`: both are proposed and wait for the user's yes; tier follows difficulty; a same-family advisor stands in only when both other families are out; a committee adds a third member only after two rounds of disagreement, settles it with one reversible experiment, and waits for the user before its plan is dispatched.
 - `fnl-coordinator-sessions`: coordinate from three user stories or ten tasks; the coordinator writes no application code; standby covers the next story plus one fix session; independent stories still run one after another.
 - `fnl-status`: flags a group only from five runs (first-pass acceptance below 60%, or timeouts plus fallbacks at 25%); a coordinator closes the orphaned ledger records its own session created.
+- `fnl-session-hygiene`: a finished user story with its review gate closed is a boundary for a fresh session, knowledge is written back only when it would change what an agent does next time, and session titles use English for the activity unless the user asks for their own language.
 - `fnl-versioning`: an agent never cuts a release on its own and proposes one when a spec is merged, a spec usually bumps the last digit, a release is two pull requests, and changelog entries stay to one or two sentences.
 
 ## [0.1.3] - 2026-11-02
