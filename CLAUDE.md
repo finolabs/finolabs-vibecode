@@ -16,6 +16,12 @@ One plugin with a skill set that gives AI coding agents a single engineering pra
 - Content is generic: no organization, customer or personal names, and no machine paths. Examples use synthetic names.
 - All content is English.
 
+## Reviews
+
+Pull requests follow `fnl-review-gate` "Pull requests"; reviewers may post their review comments on them. Pull requests may take the low-risk lane of `fnl-review-gate`.
+
+Standing relay (owner, 02/11/2026): when one model family wrote a pull request, a code review by another model family that cannot post may be posted unchanged by the coordinator, with a second line naming the reviewer, who relayed it and this record. Security reviews and every other relay still need the owner's approval per pull request.
+
 ## Versions
 
 `.claude-plugin/plugin.json` is the single source of truth for the version; `.codex-plugin/plugin.json` and `.antigravity-plugin/plugin.json` must match it. Follow `skills/fnl-versioning/SKILL.md` for bumps, the changelog and tags. Record every change to the public surface under `Unreleased` in `CHANGELOG.md`.
