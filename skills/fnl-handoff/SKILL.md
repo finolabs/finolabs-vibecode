@@ -65,7 +65,7 @@ Base and new commit SHAs, the test output, uncommitted files, open points.
 
 **Preserve task semantics.** Investigate-only → "Do not edit files." Fix → "implement the fix." Refactor → "refactor, not rewrite." Carry the user's exact intent and scope.
 
-For Antigravity, write an edit-only brief when its commands fall outside the allow-rules in the host config, and paste the search results or excerpts it would otherwise fetch.
+For Antigravity, write an edit-only brief when its commands fall outside both its allow-rules and what the user granted for this run (`fnl-delegate` "Route"), and paste the search results or excerpts it would otherwise fetch.
 
 ## Dispatch
 

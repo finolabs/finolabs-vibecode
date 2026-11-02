@@ -58,4 +58,4 @@ B="<brief file>"; O="<logs folder>"; W="<worktree>"; T="<ledger id>-<slug>"  # s
 - Command: <agy path> -p "$(cat "$B")" --model <model id> --mode accept-edits --output-format json --print-timeout 30m, or the `agybird` runner when installed: <runner command>.
 - Allowed models and their pools: <list>.
 - Per-run settings file with allow-rules: <path>. Global allow-rules: <file path and the command prefixes allowed>. Everything else is soft-denied.
-- Rules the user granted per repository (test and check commands): <repository: literal commands, date approved>.
+- Rules the user granted per repository (test and check commands), as a record only: the grant itself lives in Antigravity's settings or the user's answer. <repository: literal commands, date approved>.
