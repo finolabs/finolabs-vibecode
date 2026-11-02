@@ -4,7 +4,7 @@ Read this only when the host config (`fnl-delegate`) names a judge such as TypeS
 
 ## Depth
 
-Ask one choice over the goal, the touched areas and the risk flags: `MIN`, `NORMAL`, `DEEP` (each with its definition from `SKILL.md` "Choose the depth") or `NEED_EVIDENCE`. A trigger in `SKILL.md` still raises the depth (a security trigger gives at least NORMAL): take the higher of the judge's answer and any trigger. The judge never lowers acceptance, gates, findings or failure counters.
+Ask one choice over the goal, the touched areas and the risk flags: `MIN`, `NORMAL`, `DEEP` (each with its definition from the depth section of `SKILL.md`) or `NEED_EVIDENCE`. A trigger in `SKILL.md` still raises the depth (a security trigger gives at least NORMAL): take the higher of the judge's answer and any trigger. The judge never lowers acceptance, gates, findings or failure counters.
 
 ## Depth gate questions
 
