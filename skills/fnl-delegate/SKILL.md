@@ -101,7 +101,7 @@ Heavy jobs (container-backed suites, scale measurements, end-to-end runs; the ho
 
 ## Accept
 
-A task is done only when you have checked it yourself, as `fnl-verification` "Accepting someone else's work" lays out. Then decide: **accepted**; **rework**, a follow-up to the same agent run naming each defect (count the round); or **rejected**, rerouted with a new brief. The verdict is yours, whatever the agent's report says.
+A task is done only when you have checked it yourself, as `fnl-verification` "Accepting someone else's work" lays out. Then decide: **accepted**; **rework**, a follow-up to the same agent run naming each defect (count the round); or **rejected**, rerouted with a new brief. The verdict is yours, whatever the agent's report says. Check easy and medium runs yourself; use the `fnl-verifier` agent for hard and very hard runs, or when your own context is past about 60% and a self-check would be less reliable.
 
 ## Handover after an interrupted run
 
