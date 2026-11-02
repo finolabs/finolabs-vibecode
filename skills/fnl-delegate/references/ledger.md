@@ -1,0 +1,15 @@
+# Ledger
+
+Record every dispatch with `scripts/ledger.py` in this skill's base directory. It appends to `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode/ledger.jsonl` (override with `ORCHESTRATION_LEDGER`). The ledger measures whether this routing works, so write each line at the moment it happens:
+
+```bash
+L="<this skill's base directory>/scripts/ledger.py"
+python3 -I "$L" start --project demo-app --task "T101 isolation check" \
+  --kind implement --grade medium --coordinator claude --agent codex \
+  --model gpt-6.1-sol --route-by table --budget 45
+python3 -I "$L" finish <id> --outcome accepted --rework-rounds 1 --tests passed
+python3 -I "$L" open                     # dispatches with no finish line
+python3 -I "$L" summary --since 2026-11-01
+```
+
+`--agent claude-session` records a Claude Code app or interactive session, `claude` a headless `claude -p` run, `subagent` an in-session subagent. Task labels are short names; the ledger holds no task data, secrets or personal data. `summary` reports, per agent, model, kind and grade, the first-pass acceptance rate, timeouts and stalls, fallbacks and median duration.
