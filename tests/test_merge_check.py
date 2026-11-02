@@ -205,6 +205,8 @@ class MergeCheckTest(unittest.TestCase):
         self.assertTrue(mc.lane_files(ok + [{"filename": "README.md", "status": "modified"}], read)[0])
         for bad in (
             {"filename": "CLAUDE.md", "status": "modified"},
+            {"filename": "docs/README.md", "status": "modified"},
+            {"filename": "readme.md", "status": "modified"},
             {"filename": "skills/x/SKILL.md", "status": "modified"},
             {"filename": "README.md", "status": "renamed", "previous_filename": "skills/x/SKILL.md"},
             {"filename": "CHANGELOG.md", "status": "renamed", "previous_filename": "skills/x/SKILL.md"},
