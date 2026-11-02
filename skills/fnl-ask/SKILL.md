@@ -21,8 +21,9 @@ The user describes their situation. Place them on the map below, read the target
 | Bug, failing CI, unexplained behavior | `fnl-coding-router` (debug path and checkpoint) | `diagnosing-bugs` |
 | Handing work to another agent (Claude Code, Codex, Antigravity) | `fnl-delegate`, then `fnl-handoff` | `/handoff` for a portable handoff document |
 | Checking delegated runs, or how each agent and model performs | `/fnl-status` | |
-| Want a second opinion | `fnl-advisor` | |
-| Stuck or looping on fixes | `fnl-committee` | |
+| Want a second opinion | `fnl-advisor` (proposed first and waits for your yes; spends quota) | |
+| Stuck or looping on fixes | `fnl-committee` (proposed first and waits for your yes; spends two families' quota) | |
+| A query on live data, an infrastructure change, a dashboard or a forecast | `fnl-coding-router`, which reads `references/non-code-work.md` | |
 | Coordinating a spec across desktop app sessions | `fnl-coordinator-sessions` | |
 | Remembering a decision or lesson, or finding what was decided before | `fnl-knowledge` | `obsidian-cli` from kepano/obsidian-skills for an Obsidian vault |
 | Long session, phase change, compaction | `fnl-session-hygiene` | `/ask-matt` covers its phase-boundary choices |
