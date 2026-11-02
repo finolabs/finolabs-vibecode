@@ -5,7 +5,7 @@ description: Security review for changes that cross a sensitive boundary. Use wh
 
 # Security review gate
 
-Works beside `fnl-review-gate`, which holds the pull request protocol, reviewer independence, the two review rings and finding dispositions; install both (`npx skills add fioenix/finolabs-vibecode --skill fnl-review-gate`).
+Works beside `fnl-review-gate`, which holds the pull request protocol, reviewer independence, the two review rings and finding dispositions; install both (`npx skills add finolabs/finolabs-vibecode --skill fnl-review-gate`).
 
 ## Triggers
 

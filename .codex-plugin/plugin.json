@@ -6,8 +6,8 @@
     "name": "FINOLABS",
     "url": "https://github.com/finolabs"
   },
-  "homepage": "https://github.com/fioenix/finolabs-vibecode",
-  "repository": "https://github.com/fioenix/finolabs-vibecode",
+  "homepage": "https://github.com/finolabs/finolabs-vibecode",
+  "repository": "https://github.com/finolabs/finolabs-vibecode",
   "license": "MIT",
   "keywords": [
     "coding-router",
@@ -32,10 +32,10 @@
       "Grade these three tasks and dispatch the independent ones to agents.",
       "Prepare the version bump and changelog for the next release."
     ],
-    "websiteURL": "https://github.com/fioenix/finolabs-vibecode",
-    "supportURL": "https://github.com/fioenix/finolabs-vibecode/issues",
-    "privacyPolicyURL": "https://github.com/fioenix/finolabs-vibecode/blob/main/PRIVACY.md",
-    "termsOfServiceURL": "https://github.com/fioenix/finolabs-vibecode/blob/main/TERMS.md",
+    "websiteURL": "https://github.com/finolabs/finolabs-vibecode",
+    "supportURL": "https://github.com/finolabs/finolabs-vibecode/issues",
+    "privacyPolicyURL": "https://github.com/finolabs/finolabs-vibecode/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/finolabs/finolabs-vibecode/blob/main/TERMS.md",
     "brandColor": "#9750C4",
     "brandColorDark": "#7FE2CE",
     "composerIcon": "./assets/icon.svg",

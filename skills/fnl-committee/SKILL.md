@@ -17,7 +17,7 @@ Two members from different model families, each on its frontier or strong model 
 
 Whichever agent coordinates, the member from its own family runs as its own subagent, or as a session when the analysis needs longer than one turn; the other runs headless as `fnl-delegate` `references/agents.md` says. Members the user names win. When one member's agent is out of quota or unreachable, the third family takes its seat; with only one family left, say so and run a single advisor instead (`fnl-advisor`).
 
-Load the `fnl-delegate` skill and the host config for the invocation commands. Requires the `fnl-delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add fioenix/finolabs-vibecode --skill fnl-delegate`, or install the whole plugin) and stop.
+Load the `fnl-delegate` skill and the host config for the invocation commands. Requires the `fnl-delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill fnl-delegate`, or install the whole plugin) and stop.
 
 ## Rules
 

@@ -14,8 +14,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
-- Claude Code and Codex install the plugin from the FINOLABS catalog, `finolabs/plugins` (`finolabs-vibecode@finolabs`), which groups the FINOLABS plugins under one name; the repository's own marketplace stays for existing installs. The manifests name FINOLABS as author and developer, and the README says FINOLABS publishes the plugin from the maintainer's repository. The agent install steps check for an existing install before adding the catalog.
-- `fnl-open-source-review` accepts URLs that point at a publisher organization the README names, beside the repository owner.
+- Claude Code and Codex install the plugin from the FINOLABS catalog, `finolabs/plugins` (`finolabs-vibecode@finolabs`), which groups the FINOLABS plugins under one name; the repository's own marketplace stays for existing installs. The manifests name FINOLABS as author and developer. The agent install steps check for an existing install before adding the catalog.
+- The repository moved to `github.com/finolabs/finolabs-vibecode`; links, manifests and install commands use the new address, and GitHub redirects the old one.
 - `fnl-coordinator-sessions`, the delegation host template and agent contracts use that title format.
 - `fnl-verifier` counts a review marker only from an author with write access, like the merge check, which now names the permission values GitHub returns.
 - `fnl-delegate` keeps routing and the steps every dispatch takes in `SKILL.md`, and moves procedures only some runs reach (quota fallback, parallel runs, the heavy-job lock, handover, file placement, ledger commands) to `references/dispatch.md` and `references/ledger.md`.
@@ -70,6 +70,6 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/fioenix/finolabs-vibecode/compare/v0.1.1...HEAD
-[0.1.1]: https://github.com/fioenix/finolabs-vibecode/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/fioenix/finolabs-vibecode/releases/tag/v0.1.0
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/finolabs/finolabs-vibecode/releases/tag/v0.1.0

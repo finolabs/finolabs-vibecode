@@ -4,9 +4,9 @@ One engineering practice for AI coding agents, packaged as a single plugin with 
 
 This pack owns the decisions between tools: routing, depth, delegation, gates and conventions. For the work itself it points to trusted skills and native commands from known publishers (Matt Pocock's skills, Cloudflare's security audit, Spec Kit, each host's own review commands) instead of rewriting them, and every such pointer carries a fallback that keeps the skill working when the companion is not installed.
 
-Published by [FINOLABS](https://github.com/finolabs) through its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins); the code lives in this repository, maintained by [Fioenix](https://github.com/fioenix).
+Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-Latest release: [`v0.1.1`](https://github.com/fioenix/finolabs-vibecode/releases/tag/v0.1.1) (phase 0; see `fnl-versioning`). Between releases, `main` carries the next version with `-dev`. Targets: Claude Code, Codex and Antigravity, from one `skills/` folder.
+Latest release: [`v0.1.1`](https://github.com/finolabs/finolabs-vibecode/releases/tag/v0.1.1) (phase 0; see `fnl-versioning`). Between releases, `main` carries the next version with `-dev`. Targets: Claude Code, Codex and Antigravity, from one `skills/` folder.
 
 The quickest install: give your coding agent this repository's link and ask it to install the plugin. The next section tells it how.
 
@@ -23,8 +23,8 @@ You were given this repository's link to install it for the user. Follow these s
    | --- | --- |
    | Claude Code | `claude plugin marketplace add finolabs/plugins`, then `claude plugin install finolabs-vibecode@finolabs` |
    | Codex | `codex plugin marketplace add finolabs/plugins`, then `codex plugin add finolabs-vibecode@finolabs` |
-   | Antigravity | `agy plugin install https://github.com/fioenix/finolabs-vibecode` |
-   | Other agents | `npx skills add fioenix/finolabs-vibecode -a <agent>` |
+   | Antigravity | `agy plugin install https://github.com/finolabs/finolabs-vibecode` |
+   | Other agents | `npx skills add finolabs/finolabs-vibecode -a <agent>` |
 
 5. **Verify** that `claude plugin list`, `codex plugin list` or `agy plugin list` shows `finolabs-vibecode`. Report the command output to the user, and report any failure as it is.
 6. **Hand over setup.** Plugins load when a session starts. Tell the user to open a new session and type the setup skill: `/finolabs-vibecode:fnl-setup` on Claude Code, `$fnl-setup` on Codex, `/fnl-setup` on Antigravity. Only the user can start setup, because it interviews them before it writes host config and instructions. `/fnl-setup-instructions` does the same for their user-scoped instructions, and is optional.
@@ -96,13 +96,13 @@ codex plugin add finolabs-vibecode@finolabs
 ### Antigravity
 
 ```bash
-agy plugin install https://github.com/fioenix/finolabs-vibecode
+agy plugin install https://github.com/finolabs/finolabs-vibecode
 ```
 
 ### Single skills, any agent
 
 ```bash
-npx skills add fioenix/finolabs-vibecode
+npx skills add finolabs/finolabs-vibecode
 ```
 
 The installer lists the skills to choose from; `--skill <name>` takes one directly and `-a <agent>` picks the agent. It copies editable files into your project (`-g` for every project): update them with `npx skills update`. The plugin path also carries the agents, the session hook and the Antigravity rule, which single-skill installs leave out.
