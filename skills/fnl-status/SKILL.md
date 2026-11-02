@@ -17,7 +17,7 @@ The ledger script is `scripts/ledger.py` in the `fnl-delegate` skill's folder, a
 
 1. Run `python3 -I <ledger.py> open`; it prints each open dispatch's age against its budget. For each one past its check deadline (half the budget), check liveness from artifacts as `fnl-delegate` "Budget and liveness" says (process, log growth, new commits) and mark it **running**, **stalled** or **ended without a finish line**.
 2. Run `python3 -I <ledger.py> summary` with the user's `--since` and `--project` arguments, defaulting to the last 14 days.
-3. Read the `Review by` date at the top of `references/models.md` in the `fnl-delegate` folder. When today is past it, the capability map is stale: say so first, with the date, since routing still reads it.
+3. Read the `Review by` date (ISO, `YYYY-MM-DD`) at the top of `references/models.md` in the `fnl-delegate` folder. When today is past it, the capability map is stale: say so first, with the date, since routing still reads it.
 4. Report in three parts:
    - **Open runs**: id, agent and model, task label, age against budget, liveness verdict.
    - **Routing table**: the summary rows, then one line per agent and model whose first-pass acceptance is low or whose timeouts or fallbacks are frequent, with the count behind it.
