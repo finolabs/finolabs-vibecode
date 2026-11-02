@@ -28,7 +28,7 @@ Follow `fnl-security-review-gate`:
 1. **Triggered boundaries**.
 2. **Findings**, one per item: `[CRITICAL|HIGH|MEDIUM|LOW] file:line` — **Attack or failure scenario**: who does what and gains what. MEDIUM and above need a concrete scenario through a real trust path; a general hypothesis is LOW. **Evidence**: the trust path, from entry point to the changed code. **Fix**: the smallest change and the negative test that proves it. Write `No findings.` when there are none.
 3. **Coverage**: changed files read, the trust paths traced (`entry point → check → changed code → store or output`), and what was not traced with the reason.
-4. **Verdict** bound to the range: `Verdict: APPROVE | REWORK (<n> blocking, <n> non-blocking) — <base>..<head>`, plus `security-audit recommended` when step 5 says so. CRITICAL, HIGH and MEDIUM findings are blocking, LOW is not. On a re-review, say which rework round it is; the gate stops after two (`fnl-review-gate` "Blocking"). When no trigger matches, keep the report short: the trust paths checked and the verdict.
+4. **Verdict** bound to the range: `Verdict: APPROVE | REWORK (<n> blocking, <n> non-blocking) — <base>..<head>`, plus `security-audit recommended` when step 5 says so. CRITICAL, HIGH and MEDIUM findings are blocking, LOW is not. On a re-review, say which rework round it is; the gate stops after two (`fnl-review-gate` "Findings"). When no trigger matches, keep the report short: the trust paths checked and the verdict.
 
 On any leaked secret or personal data: stop, report it at once, and keep the traces for rotation.
 
