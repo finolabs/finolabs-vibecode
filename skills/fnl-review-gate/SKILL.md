@@ -84,10 +84,10 @@ Rules:
 
 2. A push after a review makes that comment stale: the reviewers review the new head (the change since the last review, plus the impact set it reaches) and post again.
 3. A `REWORK` verdict closes only through a new `APPROVE` comment: after fixes, or after the reviewer accepts the dispositions in "Findings" recorded in a reply.
-4. **Merge check**: before merging, read the pull request's head SHA and comments (`gh pr view <number> --json headRefOid,comments`) and confirm one `APPROVE` marker of each kind for that SHA. A missing or stale comment blocks the merge.
+4. **Merge check**: before merging, read the pull request's head SHA and comments (`gh pr view <number> --json headRefOid,comments`) and confirm one `APPROVE` marker of each kind for that SHA. Count a marker only when its comment's author has write access to the repository (`gh api repos/<owner>/<repo>/collaborators/<login>/permission` returns `admin`, `maintain` or `write`): anyone can comment on a public repository, so a marker from anyone else is ignored. A missing or stale comment blocks the merge.
 5. Without the plugin's agents, two independent reviewers as "Who reviews" defines run the same reviews and post the same markers. Where scoped policy lets one reviewer cover both, it posts both markers, one comment each.
 
-When a reviewer cannot post (no forge access, or a denied permission), it returns the finished comment, marker included, to whoever asked for the review. The coordinator posts it only where it holds the same authority to post; otherwise it hands the comment to the owner, and the merge waits. Nobody edits the verdict or the marker on the way.
+When a reviewer cannot post (no forge access, or a denied permission), it returns the finished comment, marker included, to whoever asked for the review. The coordinator posts it only where it holds the same authority to post; otherwise it hands the comment to the owner, and the merge waits. Nobody edits the verdict or the marker on the way; the relayed comment's second line names the reviewer and who relayed it.
 
 Posting review comments on a repository's pull requests is part of this gate wherever the repository adopts it in its agent context file (`fnl-setup` writes that line); that adoption is the standing authority to post them. It grants no authority to merge, which stays with the owner.
 
