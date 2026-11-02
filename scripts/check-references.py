@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""Check that cross-references in the skills, agents and docs still resolve.
+
+- Every `fnl-<name>` in backticks names a skill, an agent or the review marker.
+- Every `fnl-<name>` "Heading" names a heading in that skill or agent.
+- Every `file.md` "Heading" names a heading in that file, in the same skill.
+- Every relative Markdown link points to an existing file.
+- Every ledger flag a skill cites exists in ledger.py, with an allowed value.
+- Every flag in a host config command is described in agents.md for that agent.
+
+Usage: scripts/check-references.py [repository root]
+Prints one line per broken reference and exits 1 when there are any.
+"""
+
+import importlib.util
+import re
+import sys
+from pathlib import Path
+
+# Names in backticks that are neither skills nor agents.
+OTHER_NAMES = {"fnl-review"}  # the review marker in pull request comments
+# Agent CLI flags that fnl-delegate cites beside the ledger's.
+AGENT_FLAGS = {"print-timeout", "timeout", "max-turns"}
+# Files whose inline `--flag` spans are ledger flags.
+LEDGER_PROSE = ["skills/fnl-delegate/SKILL.md", "skills/fnl-delegate/references/dispatch.md",
+                "skills/fnl-delegate/references/ledger.md", "skills/fnl-status/SKILL.md"]
+
+NAME = re.compile(r"`(fnl-[a-z-]+)`")
+SECTION = re.compile(r"`(fnl-[a-z-]+)`(?:'s)? \(?\"([^\"]+)\"")
+FILE_SECTION = re.compile(r"`([A-Za-z0-9_-]+\.md)`(?:'s)? \(?\"([^\"]+)\"")
+REVIEW_BY = re.compile(r"^Checked \d{4}-\d{2}-\d{2}\. Review by \d{4}-\d{2}-\d{2}\.$", re.M)
+LINK = re.compile(r"\]\(([^)\s]+)\)")
+HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.M)
+SPAN = re.compile(r"`([^`\n]+)`")
+FLAG = re.compile(r"(?<![\w-])--([a-zA-Z][\w-]*)(?:[ =]([a-z][\w-]*))?")
+SHORT_FLAG = re.compile(r"(?<![\w-])(-[a-zA-Z])\b")
+
+
+def headings(path):
+    text = re.sub(r"^```.*?^```", "", path.read_text(), flags=re.M | re.S)  # headings inside code fences are not sections
+    return {h.strip("`* ") for h in HEADING.findall(text)}
+
+
+def documents(root):
+    paths = [*root.glob("skills/*/**/*.md"), *root.glob("agents/*.md"), *root.glob("rules/*.md"),
+             *root.glob("*.md"), *root.glob("docs/**/*.md")]
+    return sorted(set(paths))
+
+
+def strip_frontmatter(text):
+    if text.startswith("---\n"):
+        end = text.find("\n---\n", 4)
+        if end != -1:
+            return "\n" * text[:end + 5].count("\n") + text[end + 5:]
+    return text
+
+
+def lines(path):
+    text = strip_frontmatter(path.read_text())
+    if path.name == "CHANGELOG.md":
+        # Released entries name skills and sections as they were; check only Unreleased.
+        released = re.search(r"^## \[\d", text, re.M)
+        text = text[:released.start()] if released else text
+    return enumerate(text.splitlines(), 1)
+
+
+def targets(root):
+    """Skill and agent names mapped to the files that hold their headings."""
+    found = {}
+    for skill in root.glob("skills/fnl-*/SKILL.md"):
+        found[skill.parent.name] = skill
+    for agent in root.glob("agents/fnl-*.md"):
+        found[agent.stem] = agent
+    return found
+
+
+def check_names_and_sections(root, docs, problems):
+    known = targets(root)
+    for path in docs:
+        rel = path.relative_to(root)
+        for n, line in lines(path):
+            for name in NAME.findall(line):
+                if name not in known and name not in OTHER_NAMES:
+                    problems.append(f"{rel}:{n}: unknown skill or agent `{name}`")
+            for name, title in SECTION.findall(line):
+                if name in known and title not in headings(known[name]):
+                    problems.append(f"{rel}:{n}: `{name}` has no section \"{title}\"")
+            for fname, title in FILE_SECTION.findall(line):
+                skill_dir = next((p for p in path.parents if p.parent.name == "skills"), None)
+                base = skill_dir or path.parent
+                matches = [p for p in base.rglob(fname)]
+                if not matches:
+                    problems.append(f"{rel}:{n}: `{fname}` not found beside this file")
+                elif not any(title in headings(p) for p in matches):
+                    problems.append(f"{rel}:{n}: `{fname}` has no section \"{title}\"")
+
+
+def check_links(root, docs, problems):
+    for path in docs:
+        rel = path.relative_to(root)
+        for n, line in lines(path):
+            for target in LINK.findall(SPAN.sub("", line)):
+                if re.match(r"^[a-z]+:|^#|^<", target):
+                    continue
+                file_part = target.split("#", 1)[0]
+                if file_part and not (path.parent / file_part).exists():
+                    problems.append(f"{rel}:{n}: link target {file_part} does not exist")
+
+
+def ledger_options(root):
+    sys.dont_write_bytecode = True  # keep __pycache__ out of the skill folder
+    spec = importlib.util.spec_from_file_location("ledger", root / "skills/fnl-delegate/scripts/ledger.py")
+    ledger = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ledger)
+    parser = ledger.build_parser()
+    options = {}
+    subparsers = next(a for a in parser._actions if a.choices and isinstance(a.choices, dict))
+    for sub in subparsers.choices.values():
+        for action in sub._actions:
+            for opt in action.option_strings:
+                if opt.startswith("--"):
+                    options.setdefault(opt[2:], set()).update(action.choices or [])
+    return options
+
+
+def check_flag(options, flag, value, where, problems, extra=()):
+    if flag in extra:
+        return
+    if flag not in options:
+        problems.append(f"{where}: ledger.py has no option --{flag}")
+    elif value and options[flag] and value not in options[flag]:
+        problems.append(f"{where}: --{flag} {value} is not one of {sorted(options[flag])}")
+
+
+def check_ledger_flags(root, docs, problems):
+    options = ledger_options(root)
+    for path in docs:
+        rel = path.relative_to(root)
+        in_fence = continued = False
+        for n, line in lines(path):
+            if line.lstrip().startswith("```"):
+                in_fence, continued = not in_fence, False
+                continue
+            if in_fence:
+                # A ledger command, or the continuation line of one.
+                code = line.split(" #", 1)[0]
+                calls_ledger = continued or ("ledger.py" in code and not code.startswith("L=")) or bool(re.search(r'"?\$\{?L\}?"?(\s|$)', code))
+                continued = calls_ledger and code.rstrip().endswith("\\")
+            else:
+                code = " ".join(s for s in SPAN.findall(line) if "ledger.py" in s)
+                calls_ledger = bool(code)
+            if calls_ledger:
+                for flag, value in FLAG.findall(code):
+                    check_flag(options, flag, value, f"{rel}:{n}", problems)
+    for name in LEDGER_PROSE:
+        path = root / name
+        for n, line in lines(path):
+            for span in SPAN.findall(line):
+                if span.startswith("--"):
+                    for flag, value in FLAG.findall(span):
+                        check_flag(options, flag, value, f"{name}:{n}", problems, AGENT_FLAGS)
+
+
+def sections(path):
+    """Second-level sections of a file, as {title: text}."""
+    parts = re.split(r"^## (.+)$", path.read_text(), flags=re.M)
+    return {parts[i].strip(): parts[i + 1] for i in range(1, len(parts), 2)}
+
+
+def cli_flags(text):
+    text = re.sub(r"<[^>]*>", " ", text)  # placeholders such as <full model id>
+    return {f"--{f}" for f, _ in FLAG.findall(text)} | set(SHORT_FLAG.findall(text))
+
+
+def check_host_template(root, problems):
+    base = root / "skills/fnl-delegate/references"
+    template, contracts = sections(base / "host-template.md"), sections(base / "agents.md")
+    for agent in ("Claude Code", "Codex", "Antigravity"):
+        if agent not in template or agent not in contracts:
+            problems.append(f"host-template.md and agents.md both need a \"{agent}\" section")
+            continue
+        described = cli_flags(contracts[agent])
+        for flag in sorted(cli_flags(template[agent]) - described):
+            problems.append(f"host-template.md \"{agent}\": {flag} is not described in agents.md")
+
+
+def check_review_by(root, problems):
+    models = root / "skills/fnl-delegate/references/models.md"
+    if not REVIEW_BY.search(models.read_text()):
+        problems.append(f"{models.relative_to(root)}: needs a line \"Checked YYYY-MM-DD. Review by YYYY-MM-DD.\"")
+
+
+def main():
+    root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent)
+    docs = documents(root)
+    problems = []
+    check_names_and_sections(root, docs, problems)
+    check_links(root, docs, problems)
+    check_ledger_flags(root, docs, problems)
+    check_host_template(root, problems)
+    check_review_by(root, problems)
+    print("\n".join(problems) or f"references ok ({len(docs)} files)")
+    sys.exit(1 if problems else 0)
+
+
+if __name__ == "__main__":
+    main()

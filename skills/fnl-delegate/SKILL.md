@@ -9,7 +9,7 @@ You are the **coordinator**, whichever agent you run in: Claude Code, Codex or A
 
 Before the first dispatch in a session, read the **host config**: the file named by `ORCHESTRATION_HOST_CONFIG`, else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. It holds this machine's commands, allowed models, which delegates this coordinator can reach, the route judge, the lock path, briefs folder and parallel limit. If it is missing, copy [references/host-template.md](references/host-template.md) and ask the user for the facts you cannot look up. Project rules (`AGENTS.md`, `CLAUDE.md`, a constitution) win over this skill wherever they conflict.
 
-Three references carry the detail: [references/models.md](references/models.md) maps each agent's models to tiers and strengths, [references/agents.md](references/agents.md) gives each agent's dispatch contract, and [references/route-judgment.md](references/route-judgment.md) covers the optional route judge.
+References carry the detail. For routing: [references/models.md](references/models.md) maps each agent's models to tiers and strengths, and [references/route-judgment.md](references/route-judgment.md) covers the optional route judge. For dispatch: [references/agents.md](references/agents.md) gives each agent's dispatch contract, [references/dispatch.md](references/dispatch.md) the procedures only some runs reach (quota fallback, parallel runs, the heavy-job lock, handover, file placement), and [references/ledger.md](references/ledger.md) the ledger commands.
 
 ## The loop
 
@@ -54,13 +54,13 @@ More routing rules:
 
 - **The route lands on your own host**: do the work yourself, or start a session or subagent of your own kind as `agents.md` says. Delegating to yourself through a headless CLI only adds overhead.
 - **Reviews, advice and committee seats** go by capability, like implementation: strong tier or above, a different agent from the implementer, a different model family where one is reachable, in a fresh context. Any of the three agents qualifies. A review that must run commands an agent's allow-rules block (tests, builds) goes to an agent that can run them. `fnl-review-gate` defines reviewer independence.
-- **Antigravity headless** stops on any shell command outside its allow-rules, and only the user grants permissions. Give it edit-only briefs, or tasks whose commands fit the allow-rules; while the user is away, work that needs wider shell access goes to another agent.
+- **Shell access**: a task whose commands fall outside a delegate's allow-rules goes to an agent that can run them, or gets an edit-only brief (`agents.md` "Antigravity"). Only the user grants a delegate new permissions.
 - **Token budget**: when the coordinator's own budget is the scarce one, delegate implementation and keep yourself on briefing and acceptance.
 - **User away**: questions that would go to the user go to an advisor or the route judge instead; record each decision and who settled it. Decisions that need the user's authority (merge, production, credentials, new spending) still wait.
 
 ### Quota fallback
 
-When a model's quota runs out, move to the next route the rules give: another model of the same tier on the same agent, then the same tier on the next agent in the capability order. Antigravity pools are separate, so one empty pool leaves its other models usable. Moving to a weaker agent at the same tier, split the task smaller. Moving up a tier spends more quota: ask first. Moving down a tier is allowed only for easy and medium work; for hard work, wait for the reset or ask. When every reachable agent is out, report the reset times and wait. Record a fallback as `--reason fallback-quota`; a reroute after a failed run as `--reason fallback-failure`; a route the user named as `--reason user-choice --route-by user`.
+When a model's quota runs out, reroute as [references/dispatch.md](references/dispatch.md) "Quota fallback" says, and record the reason in the ledger. Moving up a tier spends more quota and needs the user's yes; moving down a tier is only for easy and medium work.
 
 ## Capabilities and budget
 
@@ -70,11 +70,7 @@ When a model's quota runs out, move to the next route the rules give: another mo
 
 ## Parallel dispatch
 
-Tasks are independent when they touch disjoint files, need no ordering, and need not land in one commit. Independent tasks go one per agent run, in parallel, at most 5 dispatched at one time (the host config may set a lower limit). Tasks that share files or depend on each other run in sequence.
-
-- Size each run small: one task or a tight pair, budget up to 90 minutes. A long run holding many tasks is slower, bloats the agent's context and loses more when it breaks.
-- Give each parallel run its own git worktree on its own branch, cut from the integration branch tip. One writer per worktree.
-- Merge back one branch at a time into the integration branch, rerunning the targeted tests after each merge. Resolve conflicts yourself or brief a fix run.
+Tasks are independent when they touch disjoint files, need no ordering, and need not land in one commit. Independent tasks go one per agent run, in parallel, at most 5 dispatched at one time (the host config may set a lower limit), each in its own worktree; tasks that share files or depend on each other run in sequence. Sizing, worktrees and merging back: [references/dispatch.md](references/dispatch.md) "Parallel dispatch".
 
 ## Budget and liveness
 
@@ -96,20 +92,11 @@ Take the upper end for frontier models at high effort and for runs that build or
 - The **hard cap** that kills the process (the host config gives the command form): the budget plus a third, and at least 10 minutes over it.
 - The **check deadline**, half the budget, when you inspect the run.
 
-Judge liveness from artifacts, never from status messages: the process and its elapsed time, growth of the log and output files, new commits or diff in the worktree, new transcript events. Two checks with no new artifact means the run has stalled: stop it, run the handover below, then retry once with a smaller scope or switch agents, and tell the user. Each brief tells the agent to report failure rather than retry more than once.
+Judge liveness from artifacts, never from status messages: the process and its elapsed time, growth of the log and output files, new commits or diff in the worktree, new transcript events. Two checks with no new artifact means the run has stalled: stop it, run the handover (below), then retry once with a smaller scope or switch agents, and tell the user. Each brief tells the agent to report failure rather than retry more than once.
 
 ## Heavy jobs
 
-Heavy jobs (container-backed suites, scale measurements, end-to-end runs; the host config lists them) run one at a time per machine; light targeted tests may overlap. Serialise them with an atomic `mkdir` lock at the path the host config names:
-
-```bash
-until mkdir "$LOCK" 2>/dev/null; do sleep 15; done
-echo "$$ <dispatch-id> $(date)" > "$LOCK/owner"
-<heavy command>; status=$?
-rm -rf "$LOCK"; exit $status
-```
-
-A lock whose owner process is gone is stale: confirm with `ps -p <pid>` (the first field of `owner`) before removing it. Test scope follows the `fnl-verification` skill.
+Heavy jobs (container-backed suites, scale measurements, end-to-end runs; the host config lists them) run one at a time per machine under the lock in [references/dispatch.md](references/dispatch.md) "Heavy-job lock"; light targeted tests may overlap. Test scope follows the `fnl-verification` skill.
 
 ## Accept
 
@@ -117,37 +104,15 @@ A task is done only when you have checked it yourself, as `fnl-verification` "Ac
 
 ## Handover after an interrupted run
 
-When a run times out, fails or stops with uncommitted work, before any other agent gets write access to that checkout:
-
-1. Confirm the process has stopped (`ps`, the run's exit status).
-2. Capture its state in the briefs folder: `git status`, the diff saved as a patch, the last lines of its log.
-3. Keep the work: commit it on the run's behalf as work in progress, or name the files in the next brief.
-4. Write the next brief's "Current state" and "What was tried" from that capture.
+When a run times out, fails or stops with uncommitted work, no other agent gets write access to that checkout until you have run the handover in [references/dispatch.md](references/dispatch.md) "Handover after an interrupted run".
 
 ## Where files go
 
-Sort every file that delegation produces by who will read it:
-
-- **Shared**: documentation, design notes and briefs with lasting value for the project's community or as future usage docs. Put them in the project's normal documentation folders (`docs/`, `specs/` or whatever the project uses) and commit them under the project's rules for public content.
-- **Local**: logs, working notes, handoff briefs, captured state from interrupted runs; anything that only serves development on this machine. Put them in the hidden folder `.orchestration/` at the main checkout's root (`git rev-parse --path-format=absolute --git-common-dir`, then its parent): `briefs/` for briefs and notes, `logs/` for logs and final outputs. Keep it out of git with a local `.orchestration/` line in `.git/info/exclude`; the shared `.gitignore` changes only with the user's approval. The host config may name another durable local folder. Temporary directories and session scratchpads are wiped on restart, so never keep briefs there.
-
-When unsure, treat a file as local; promoting it to shared later is a deliberate edit and commit.
+Shared files (documentation and design notes with lasting value) go in the project's documentation folders and are committed. Local files (briefs, logs, working notes, captured state) go in `.orchestration/` at the main checkout's root, kept out of git through `.git/info/exclude` (the shared `.gitignore` changes only with the user's approval); never in temporary directories or session scratchpads. The full rule: [references/dispatch.md](references/dispatch.md) "Where files go".
 
 ## Ledger
 
-Record every dispatch with `scripts/ledger.py` in this skill's base directory. It appends to `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode/ledger.jsonl` (override with `ORCHESTRATION_LEDGER`). The ledger measures whether this routing works, so write each line at the moment it happens:
-
-```bash
-L="<this skill's base directory>/scripts/ledger.py"
-python3 -I "$L" start --project demo-app --task "T101 isolation check" \
-  --kind implement --grade medium --coordinator claude --agent codex \
-  --model gpt-6.1-sol --route-by table --budget 45
-python3 -I "$L" finish <id> --outcome accepted --rework-rounds 1 --tests passed
-python3 -I "$L" open                     # dispatches with no finish line
-python3 -I "$L" summary --since 2026-11-01
-```
-
-`--agent claude-session` records a Claude Code app or interactive session, `claude` a headless `claude -p` run, `subagent` an in-session subagent. Task labels are short names; the ledger holds no task data, secrets or personal data. `summary` reports, per agent, model, kind and grade, the first-pass acceptance rate, timeouts and stalls, fallbacks and median duration.
+Record every dispatch with `scripts/ledger.py` in this skill's base directory, at the moment it happens: a `start` line at dispatch, a `finish` line when the run is accepted, rejected or stopped. Commands, the agent values and what `summary` reports are in [references/ledger.md](references/ledger.md). The ledger holds short task labels only: no task data, secrets or personal data.
 
 ## Related skills
 

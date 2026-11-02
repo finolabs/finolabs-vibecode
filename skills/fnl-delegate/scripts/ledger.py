@@ -135,7 +135,7 @@ def cmd_summary(args):
               f"{len(timed_out):>9}{len(fallback):>10}{median:>12.0f}")
 
 
-def main():
+def build_parser():
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -167,8 +167,11 @@ def main():
     m.add_argument("--since", help="YYYY-MM-DD")
     m.add_argument("--project")
     m.set_defaults(func=cmd_summary)
+    return p
 
-    args = p.parse_args()
+
+def main():
+    args = build_parser().parse_args()
     args.func(args)
 
 

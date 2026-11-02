@@ -7,11 +7,16 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Added
 
 - `fnl-session-hygiene` sets a session title format, `<project> <scope>: <activity>`, with examples, when to rename, whose sessions to rename, and how each host names sessions (`references/titles.md`).
+- CI checks cross-references (`scripts/check-references.py`): skill and agent names, section references, relative links, ledger flags cited in the skills, and host config flags against the agent contracts.
+- `fnl-delegate`'s capability map carries a review-by date, and `/fnl-status` warns when it has passed.
+- Behavior evals (tag `behavior`) with deterministic graders on each answer's final verdict line: the pull request merge check with a stale marker, a marker from an author without write access, and a valid pair; coding-router depth for a typo and a tenancy change; delegate routing when one agent's quota is out, when every frontier model is, when only frontier models are left for medium work, and for a review; the Spec Kit depth gate; verification of a false delegated report. Against a no-plugin baseline, the review routing and depth gate cases show the skills' effect; the others guard against regressions.
+- The contributing guide lists the local checks, how to add a host, and the release checklist, which includes an adversarial review by another model family.
 
 ### Changed
 
 - `fnl-coordinator-sessions`, the delegation host template and agent contracts use that title format.
 - `fnl-verifier` counts a review marker only from an author with write access, like the merge check, which now names the permission values GitHub returns.
+- `fnl-delegate` keeps routing and the steps every dispatch takes in `SKILL.md`, and moves procedures only some runs reach (quota fallback, parallel runs, the heavy-job lock, handover, file placement, ledger commands) to `references/dispatch.md` and `references/ledger.md`.
 
 ## [0.1.1] - 2026-11-02
 
