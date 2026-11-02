@@ -9,7 +9,7 @@ You are the **coordinator**, whichever agent you run in: Claude Code, Codex or A
 
 Before the first dispatch in a session, read the **host config**: the file named by `ORCHESTRATION_HOST_CONFIG`, else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. It holds this machine's commands, allowed models, which delegates this coordinator can reach, the route judge, the lock path, briefs folder and parallel limit. If it is missing, copy [references/host-template.md](references/host-template.md) and ask the user for the facts you cannot look up. Project rules (`AGENTS.md`, `CLAUDE.md`, a constitution) win over this skill wherever they conflict.
 
-References carry the detail. For routing: [references/models.md](references/models.md) maps each agent's models to tiers and strengths, and [references/route-judgment.md](references/route-judgment.md) covers the optional route judge. For dispatch: [references/agents.md](references/agents.md) gives each agent's dispatch contract, [references/dispatch.md](references/dispatch.md) the procedures only some runs reach (quota fallback, parallel runs, the heavy-job lock, handover, file placement), and [references/ledger.md](references/ledger.md) the ledger commands.
+References carry the detail. For routing: [references/models.md](references/models.md) maps each agent's models to tiers and strengths, and [references/route-judgment.md](references/route-judgment.md) covers the optional route judge. For dispatch: [references/agents.md](references/agents.md) gives each agent's dispatch contract, including what each one may run, [references/dispatch.md](references/dispatch.md) the procedures only some runs reach (quota fallback, parallel runs, the heavy-job lock, handover, file placement), and [references/ledger.md](references/ledger.md) the ledger commands.
 
 ## The loop
 
@@ -54,7 +54,7 @@ More routing rules:
 
 - **The route lands on your own host**: do the work yourself, or start a session or subagent of your own kind as `agents.md` says. Delegating to yourself through a headless CLI only adds overhead.
 - **Reviews, advice and committee seats** go by capability, like implementation: strong tier or above, a different agent from the implementer, a different model family where one is reachable, in a fresh context. Any of the three agents qualifies. A review that must run commands an agent's allow-rules block (tests, builds) goes to an agent that can run them. `fnl-review-gate` defines reviewer independence.
-- **Shell access**: a task whose commands fall outside a delegate's allow-rules goes to an agent that can run them, or gets an edit-only brief (`agents.md` "Antigravity"). Only the user grants a delegate new permissions.
+- **Shell access**: a task whose commands fall outside a delegate's allow-rules goes to an agent that can run them, or gets an edit-only brief (`agents.md` "Antigravity"). Only the user grants a delegate new permissions; while the user is away, work that needs wider shell access goes to another agent.
 - **Token budget**: when the coordinator's own budget is the scarce one, delegate implementation and keep yourself on briefing and acceptance.
 - **User away**: questions that would go to the user go to an advisor or the route judge instead; record each decision and who settled it. Decisions that need the user's authority (merge, production, credentials, new spending) still wait.
 
@@ -108,7 +108,7 @@ When a run times out, fails or stops with uncommitted work, no other agent gets 
 
 ## Where files go
 
-Shared files (documentation and design notes with lasting value) go in the project's documentation folders and are committed. Local files (briefs, logs, working notes, captured state) go in `.orchestration/` at the main checkout's root, kept out of git through `.git/info/exclude` (the shared `.gitignore` changes only with the user's approval); never in temporary directories or session scratchpads. The full rule: [references/dispatch.md](references/dispatch.md) "Where files go".
+Shared files (documentation and design notes with lasting value) go in the project's documentation folders and are committed. Local files (briefs, logs, working notes, captured state) go in `.orchestration/` at the main checkout's root (`briefs/` for briefs and notes, `logs/` for logs and outputs), kept out of git through `.git/info/exclude` (the shared `.gitignore` changes only with the user's approval); never in temporary directories or session scratchpads. The full rule: [references/dispatch.md](references/dispatch.md) "Where files go".
 
 ## Ledger
 
