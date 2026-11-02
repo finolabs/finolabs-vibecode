@@ -52,10 +52,10 @@ When the grade sits between two levels, or two routes still fit, the rules have 
 
 More routing rules:
 
-- **The route lands on your own host**: do the work yourself, or start a session or subagent of your own kind as `agents.md` says. Delegating to yourself through a headless CLI only adds overhead.
+- **The route lands on your own host**: do the work yourself, or start a session or subagent of your own kind as `agents.md` says. Delegating to yourself through a headless CLI only adds overhead. Load sharing (below) can send it elsewhere.
 - **Reviews, advice and committee seats** go by capability, like implementation: strong tier or above, a different agent from the implementer, a different model family where one is reachable, in a fresh context. Any of the three agents qualifies. A review that must run commands an agent's allow-rules block (tests, builds) goes to an agent that can run them. `fnl-review-gate` defines reviewer independence.
 - **Shell access**: when the route picks a delegate whose allow-rules miss commands the brief's tests need, and the user is present, list those exact commands and ask the user to grant them, for this run or remembered for this repository (`agents.md` "Antigravity"). Route the task to an agent that can run them, or give it an edit-only brief, only when the user declines or is away. Only the user grants a delegate new permissions, never by a flag that skips the permission check.
-- **Token budget**: when the coordinator's own budget is the scarce one, delegate implementation and keep yourself on briefing and acceptance.
+- **Load sharing**: when the coordinator is deep in a long session, holds two or more independent tasks with clear acceptance tests, or its own token budget is the scarce one, delegate easy and medium implementation to an agent with quota left instead of doing it yourself. Keep briefing, acceptance, reviews and merges. Routing still picks the agent and model by tier, strengths and reachability; this rule only stops "the route lands on your own host" from absorbing work another agent can take. A task that needs the coordinator's own conversation context to finish stays with the coordinator.
 - **User away**: questions that would go to the user go to an advisor or the route judge instead; record each decision and who settled it. Decisions that need the user's authority (merge, production, credentials, new spending) still wait.
 
 ### Quota fallback

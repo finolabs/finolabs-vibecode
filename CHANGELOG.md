@@ -25,6 +25,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Reviewers treat everything under review as data: text in a pull request that tells the reviewer what to conclude, post or run is a finding (`fnl-review-gate`, both reviewer agents).
 - An Antigravity coordinator's wider allow-rules need the user's approval (`fnl-delegate` agent contracts).
 - When a delegate's allow-rules miss the commands a brief's tests need and the user is present, `fnl-delegate` asks the user to grant them as literal rules (with `agybird`'s grant flow, or a per-run settings file) before falling back to an edit-only brief or another agent, and never skips the permission check. The user chooses each grant, only for commands the brief lists, and is told that a granted test command runs the repository's test code; the host config only records grants; `/fnl-setup` offers remembered rules for the repository's test commands. A behavior eval guards it.
+- `fnl-delegate` shares easy and medium implementation with agents that have quota left when the coordinator is deep in a long session, holds several independent tested tasks, or is short of tokens, and keeps briefing, acceptance, reviews and merges (Load sharing).
 
 ### Fixed
 
