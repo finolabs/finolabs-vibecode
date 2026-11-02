@@ -87,6 +87,14 @@ class LedgerTest(unittest.TestCase):
         self.assertIn("malformed line 1", result.stderr)
         self.assertIn("malformed line 2", result.stderr)
 
+    def test_objects_that_are_not_records_are_skipped(self):
+        self.path.write_text('{}\n{"id": "d1"}\n{"event": "start", "id": "d2"}\n{"event": "finish", "id": "d3"}\n')
+        for command in ("open", "summary"):
+            result = self.run_ledger(command)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for n in (1, 2, 3, 4):
+                self.assertIn(f"malformed line {n}", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
