@@ -25,14 +25,17 @@ Spec Kit replaces the overlapping generic process skills (brainstorming, writing
 
 A Spec Kit repository with a missing or broken required skill has an integration gap: report it and pause that step. Installing, migrating or substituting another workflow needs explicit authority.
 
-**Spec Kit depth gate** (tasks and implement only). After a plan or user story is accepted and before `speckit-tasks`, implement directly when all of these hold:
+**Spec Kit depth gate** (tasks and implement only). Specify, clarify and plan are never skipped. After a plan or user story is accepted and before `speckit-tasks`, implement a moderate story directly when all of these hold:
 
-- the change is one coherent seam with known consumers;
+- it fits one implementation pass over one coherent seam, with known consumers;
 - it needs no task ordering or parallel split;
-- it touches no contract, security, privacy, permission, migration, dependency or irreversible boundary;
+- it crosses no security, privacy, permission, migration, dependency or irreversible boundary;
+- any contract change is small and contained: every consumer is known and updated in the same change, and `fnl-security-review-gate` reviews it before merge;
 - the constitution and scoped rules do not require tasks.
 
-Otherwise run `speckit-tasks`, then `speckit-implement`. When fit stays ambiguous after these rules, judge it with two narrow questions over the plan or story summary, acceptance criteria and touched areas: "fits one implementation pass" and "hides a cross-cutting risk" (a semantic evaluator may answer them; see [references/activity-selection.md](references/activity-selection.md)). A direct path still meets every acceptance criterion and gate, runs targeted tests, and records the chosen path and its reason in the feature's `plan.md`. Specify, clarify and plan are never skipped.
+Otherwise run `speckit-tasks`, then `speckit-implement`. When fit stays ambiguous after these rules, judge it with two narrow questions over the plan or story summary, acceptance criteria and touched areas: "fits one implementation pass" and "hides a cross-cutting risk" (a semantic evaluator may answer them; see [references/activity-selection.md](references/activity-selection.md)).
+
+A direct path records the chosen path and its reason in the feature's `plan.md` and meets every acceptance criterion and gate. Its acceptance is `fnl-verification` against each acceptance criterion with fresh targeted tests, plus the two posted reviews of `fnl-review-gate`, whose packet carries the story's acceptance criteria and `plan.md`.
 
 A request that is only a review, with no change to make, goes to `fnl-review-gate`, plus `fnl-security-review-gate` when its triggers hit, in any repository.
 
