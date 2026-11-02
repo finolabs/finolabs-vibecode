@@ -53,7 +53,7 @@ Every skill carries the `fnl-` prefix.
 | `/fnl-setup-instructions` | Interview the user and write their user-scoped instructions for Claude Code, Codex and Antigravity from one shared source. Typed by the user. |
 | `/fnl-status` | Open delegated runs and first-pass acceptance per agent and model, from the dispatch ledger. Typed by the user. |
 | `/fnl-ask` | Not sure which skill fits: describe the situation and get the next command, including companion skills from other packs. Typed by the user. |
-| `fnl-open-source-review` | Before a repository goes public: license, secrets in tree and history, internal leaks, clean payload, community files, identity, data flow, plugin checks. |
+| `fnl-open-source-review` | Before a repository goes public, and after: license, secrets in tree and history, internal leaks, clean payload, community files, repository settings, identity, data flow, plugin checks. |
 
 ### Agents
 

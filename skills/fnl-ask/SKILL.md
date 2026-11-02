@@ -31,7 +31,7 @@ The user describes their situation. Place them on the map below, read the target
 | "Is it done?" or accepting someone else's work | `fnl-verification` | |
 | Writing a commit | `fnl-commit-messages` | `pr` for the pull request body |
 | Release, tag, changelog | `fnl-versioning` | |
-| Making a repository public | `fnl-open-source-review` | `security-audit` from Cloudflare |
+| Making a repository public, or checking a public repository's settings | `fnl-open-source-review` | `security-audit` from Cloudflare |
 | Packaging skills as a plugin | `fnl-plugin-packaging` | |
 
 ## Rules
