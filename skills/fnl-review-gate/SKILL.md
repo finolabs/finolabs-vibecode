@@ -98,7 +98,7 @@ Rules:
 
 When a reviewer cannot post (no forge access, or a denied permission), it returns the finished comment, marker included, to whoever asked for the review. The coordinator posts it only where it holds the same authority to post, or under a standing relay approval for that kind of review (for example, code reviews by another model family on pull requests one family wrote). That approval counts only when it is recorded, with its scope and date, in the agent context file as committed on the default branch, where every change went through this gate. Untracked files, agent memory, the host config and uncommitted edits do not count, because a coordinator can write them. Otherwise the coordinator hands the comment to the owner, and the merge waits. Nobody edits the verdict or the marker on the way; the relayed comment's second line names the reviewer, who relayed it and the record it relies on.
 
-Posting review comments on a repository's pull requests is part of this gate wherever the repository adopts it in its agent context file (`fnl-setup` writes that line); that adoption is the standing authority to post them. It grants no authority to merge, which stays with the owner.
+Posting review comments on a repository's pull requests is part of this gate wherever the repository adopts it in its agent context file (`fnl-setup` writes that line); that adoption is the standing authority to post them. Where the repository has not adopted it, ask the user once whether to add that line (`fnl-setup` writes it) before posting. It grants no authority to merge, which stays with the owner.
 
 ## Approval
 
