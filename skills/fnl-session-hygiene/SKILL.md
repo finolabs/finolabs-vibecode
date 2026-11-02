@@ -1,6 +1,6 @@
 ---
 name: fnl-session-hygiene
-description: Keep agent sessions healthy across long work. Use when a session's context passes about 60%, a phase or task changes, a session title is stale, work moves to a fresh session or another writer, or the task ends with decisions and evidence to preserve.
+description: Keep agent sessions healthy across long work. Use when a session's context passes about 60%, a phase or task changes, a session needs a name or its title is stale, work moves to a fresh session or another writer, or the task ends with decisions and evidence to preserve.
 ---
 
 # Session hygiene
@@ -24,7 +24,23 @@ Every compaction, fresh session or writer change carries: goal and acceptance, d
 
 ## Titles
 
-Name this session as project + current activity at entry, on a stale resume, and after a material change of task or phase. Use the host's supported title mechanism and its conventions; rename only this session and sessions you started. Keep titles accurate without churn. Pin the active session and unpin retired ones only where the host supports it and the user allows it. Titles never carry private history, and session stores and app databases are never edited by hand.
+A title tells the user which session holds which work, without opening it. Format:
+
+```
+<project> <scope>: <activity>
+```
+
+- **project**: the repository or product name the user knows, as short as stays unambiguous (`billing-api`).
+- **scope**, optional: the feature, spec or ticket the work belongs to (`003 search`, `PAY-142`, `US4`, `T044–T046`). Leave it out for work that has none.
+- **activity**: what the session is doing now, verb-led, a few words (`fix webhook retries`, `review PR 12`, `plan rate limits`). A review, advice or committee session says so in its activity.
+
+Keep the whole title near 50 characters, in the user's working language for the activity, with technical names intact. Examples: `billing-api: fix webhook retries`, `billing-api 003 search: T044–T046 rebuild CLI`, `docs-site: review PR 12`.
+
+When to name: at entry, on a resume whose title no longer matches the work, and when the task or phase changes materially (a new story, from planning to implementation, from implementation to review). Do not rename for every step.
+
+Whose: rename only this session and sessions you started; a session someone else started keeps its name unless the user asks. A delegated run takes its title, or its log file name where the host has no titles, from its ledger task label (`fnl-delegate`).
+
+Titles carry no secrets, customer data or private history. Use the host's supported mechanism ([references/titles.md](references/titles.md)); where a host offers none, say so in one line and carry the name in the handover and log file names instead. Pin the active session and unpin retired ones only where the host supports it and the user allows it. Session stores and app databases are never edited by hand.
 
 ## Writers and checkouts
 
