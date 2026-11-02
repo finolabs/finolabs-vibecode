@@ -33,7 +33,7 @@ A Spec Kit repository with a missing or broken required skill has an integration
 - any contract change is small and contained: every consumer is known and updated in the same change, and `fnl-security-review-gate` reviews it before merge;
 - the constitution and scoped rules do not require tasks.
 
-Otherwise run `speckit-tasks`, then `speckit-implement`. When fit stays ambiguous after these rules, run `speckit-tasks`: ambiguity is not evidence that the change is one seam. With the `typesafe-ai` skill installed, read [references/activity-selection.md](references/activity-selection.md) "Depth gate questions" first.
+Otherwise run `speckit-tasks`, then `speckit-implement`. When these conditions leave the fit unclear, take it from the judge if the host config names one (read [references/activity-selection.md](references/activity-selection.md) "Depth gate questions"); otherwise decide it yourself, and run `speckit-tasks` when you still cannot tell: ambiguity is not evidence that the change is one seam.
 
 A direct path records the chosen path and its reason in the feature's `plan.md` and meets every acceptance criterion and gate. Its acceptance is `fnl-verification` against each acceptance criterion with fresh targeted tests, plus the two posted reviews of `fnl-review-gate`, whose packet carries the story's acceptance criteria and `plan.md`; it runs no separate analyze or converge step.
 
@@ -55,7 +55,7 @@ The process skills brainstorming, writing-plans, systematic-debugging and test-d
 
 Companion phase tools from other packs fit these rows, for example `grilling`, `prototype`, `tdd` and `diagnosing-bugs` from [mattpocock/skills](https://github.com/mattpocock/skills). They also work inside Spec Kit phases; that pack's process skills (`to-spec`, `to-tickets`, `implement`, `implement-spec`) yield to Spec Kit where it is in use.
 
-When a semantic choice between eligible activities remains after these rules and the `typesafe-ai` skill is installed, follow [references/activity-selection.md](references/activity-selection.md). Without it, choose by observed fit and the table above, or ask the user the one question that decides it.
+When the host config names a judge, read [references/activity-selection.md](references/activity-selection.md) before choosing the depth and the next activity, and take those judgments from it. Without a judge, decide them yourself: choose by observed fit and the table above, or ask the user the one question that decides it.
 
 Done when you can name the workflow, the phase and the next activity.
 
@@ -65,7 +65,7 @@ Done when you can name the workflow, the phase and the next activity.
 - **NORMAL**: understood behavior and integration.
 - **DEEP**: consequential uncertainty, unknown consumers, sensitive boundaries or irreversible effects. Also: logic that combines several calculations whose errors compound, a prediction or forecast, and user input that is itself ambiguous.
 
-Depth sets effort inside the chosen workflow; in a Spec Kit repository it bypasses nothing except through the depth gate. Upgrade before dependent work. Downgrade only future ceremony when evidence allows, never acceptance, gates, findings or failure counters. File count alone does not set depth.
+With a judge configured, ask it for the depth as [references/activity-selection.md](references/activity-selection.md) "Depth" says; the triggers here still raise it. Depth sets effort inside the chosen workflow; in a Spec Kit repository it bypasses nothing except through the depth gate. Upgrade before dependent work. Downgrade only future ceremony when evidence allows, never acceptance, gates, findings or failure counters. File count alone does not set depth.
 
 Done when the depth and its reason are in the receipt.
 

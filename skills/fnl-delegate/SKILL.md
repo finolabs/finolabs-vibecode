@@ -45,10 +45,10 @@ Choose an agent **and a model**. A user who names either wins; otherwise:
 
 Done when you can state agent, model, effort and the reason in one line, for example "hard, terminal-heavy → Codex `gpt-6.1-sol` high: Claude Code quota at its 5-hour limit".
 
-When the grade sits between two levels, or two routes still fit, the rules have left a judgment call:
+The grade and the route are judgment calls:
 
-- With a **route judge** in the host config, read `references/route-judgment.md` and ask it as that file says.
-- Otherwise take the **higher grade** and the **earlier agent** in the capability order. This costs more quota, never quality.
+- With a **route judge** in the host config, ask it first, as `references/route-judgment.md` says, and take its answer instead of reasoning the call out yourself.
+- Without one, or when its answer is close or inconclusive, decide yourself. When the grade sits between two levels or two routes still fit, take the **higher grade** and the **earlier agent** in the capability order. This costs more quota, never quality.
 
 More routing rules:
 
