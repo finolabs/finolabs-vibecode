@@ -37,6 +37,8 @@ Done when every host's validator finds the expected number of skills.
 
 ## 4. Icon
 
+Apply this section only when preparing a submission to a directory that asks for an icon; a plugin installed straight from its repository needs none of it.
+
 - Square, transparent canvas, one simple glyph that reads at 32 px, in the project's brand family (stroke width, corner style, light and dark colors from the project's brand tokens).
 - Light and dark variants with identical geometry. Keep the SVG sources and export 512 × 512 transparent PNGs; some directories accept only PNG.
 - An `assets/NOTICE.md` records the concept, the owner's approval, that no third-party artwork or image-model output is included, and the SHA-256 of each file.
@@ -55,7 +57,7 @@ Done when every host's validator finds the expected number of skills.
 Run and read each one:
 
 - every host validator above, strict where available;
-- the trigger suite: one `claude plugin eval` case per model-invoked skill that must fire it, plus negative cases that must fire nothing (`--ablation none` keeps `Skill` graders scored);
+- the trigger suite: one `claude plugin eval` case per model-invoked skill that must fire it, plus negative cases that must fire nothing (`--ablation none` keeps `Skill` graders scored). Run only the cases of skills whose `description` changed since the last release (`--case`), and the whole suite before a MINOR release; a patch release with no `description` change needs none;
 - after installing on Claude Code, `/skill-doctor` for each skill's listing cost, and from the second release on, whether it is ever used (an interactive check: where it cannot run, say so);
 - `fnl-open-source-review` for license, payload, leaks and community files;
 - when the plugin is listed in a shared catalog, run the catalog check and, if the catalog pins SHAs, update it after the tag.
