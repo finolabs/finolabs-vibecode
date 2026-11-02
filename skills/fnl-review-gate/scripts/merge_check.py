@@ -231,7 +231,10 @@ def compare(repo, base, head):
     files = data.get("files")
     if not isinstance(files, list) or len(files) >= COMPARE_CAP:
         raise Unknown("the compare API did not list every changed file")
-    return files, data["merge_base_commit"]["sha"]
+    merge_base = (data.get("merge_base_commit") or {}).get("sha")
+    if not merge_base:
+        raise Unknown("the compare API gave no merge base")
+    return files, merge_base
 
 
 def file_at(repo, path, ref):

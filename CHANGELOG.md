@@ -12,7 +12,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Changed
 
 - A standing relay approval counts only when recorded in the agent context file as committed on the default branch; untracked files, agent memory, the host config and uncommitted edits no longer count, because a coordinator can write them. The relayed comment's second line is defined once.
-- `fnl-delegate` reads an Antigravity run's error before retrying: with `agybird` 0.3.2 or later, `evidence.agy_error` with `RESOURCE_EXHAUSTED` or 429 means that model's pool is out, so the run moves to another pool or falls back instead of retrying the same model. The host template points the `agybird` runner at the installed version, not the highest cached folder.
+- `fnl-delegate` reads an Antigravity run's error before retrying: with `agybird` 0.3.2 or later, `evidence.agy_error` with `RESOURCE_EXHAUSTED` or 429 or a 429 naming a quota means that model's pool is out: the run is recorded as `quota` and moves to another allowed model in another pool, or to the quota fallback, instead of retrying the same model; a short rate limit is retried once. The `agybird` outcome table follows the same rule. The host template resolves the `agybird` runner from the current install record at each dispatch, not a pinned or highest cached folder.
 - Antigravity review inputs go to `.orchestration/briefs/` inside the worktree and are removed once the report is read, and the long-lived worktree switches branch once the previous run's work is committed or handed over.
 
 ## [0.1.2] - 2026-11-02

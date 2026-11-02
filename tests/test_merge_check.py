@@ -272,9 +272,13 @@ class MergeCheckTest(unittest.TestCase):
                 fake(payload)
                 with self.assertRaises(mc.Unknown):
                     mc.compare("acme/demo", "b" * 40, HEAD)
-            fake({"files": []})
-            with self.assertRaises(KeyError):  # main() reports it as UNKNOWN, exit 2
-                mc.compare("acme/demo", "b" * 40, HEAD)
+            for payload in ({"files": []}, {"merge_base_commit": {"sha": "c" * 40}, "files": {}}):
+                fake(payload)
+                with self.assertRaises(mc.Unknown):
+                    mc.compare("acme/demo", "b" * 40, HEAD)
+            below = [{"filename": f"f{i}", "status": "modified"} for i in range(mc.COMPARE_CAP - 1)]
+            fake({"merge_base_commit": {"sha": "c" * 40}, "files": below})
+            self.assertEqual(mc.compare("acme/demo", "b" * 40, HEAD), (below, "c" * 40))
         finally:
             mc.gh = real
 
