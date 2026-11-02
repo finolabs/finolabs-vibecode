@@ -44,8 +44,9 @@ Done when every host's validator finds the expected number of skills.
 
 ## 5. Distribution
 
-- Make the repository its own marketplace on hosts that use catalogs, so `owner/repo` installs work before any directory listing.
-- An aggregate marketplace in another repository pins each plugin by commit SHA (`source` of type `github` with `sha`), not by branch.
+- Make the repository its own marketplace on hosts that use catalogs when the plugin is outside any family catalog, so `owner/repo` installs work before any directory listing; inside a family, install from the shared catalog (Codex shows each marketplace as its own group).
+- A family of plugins shares one catalog repository serving every host that uses catalogs; it either pins each plugin by commit SHA or tracks protected default branches, and says which; details in [references/catalogs.md](references/catalogs.md).
+- Antigravity installs from the repository URL (see [references/catalogs.md](references/catalogs.md)).
 - Offer single-skill installs beside the plugin: skills.sh (`npx skills add owner/repo --skill <name>`) finds `skills/<name>/SKILL.md` on its own. Tell users to pick one path per agent, since both list every skill twice.
 - Write the install commands for every host in the README, verified against each host's `--help`.
 
@@ -56,7 +57,8 @@ Run and read each one:
 - every host validator above, strict where available;
 - the trigger suite: one `claude plugin eval` case per model-invoked skill that must fire it, plus negative cases that must fire nothing (`--ablation none` keeps `Skill` graders scored);
 - after installing on Claude Code, `/skill-doctor` for each skill's listing cost, and from the second release on, whether it is ever used (an interactive check: where it cannot run, say so);
-- `fnl-open-source-review` for license, payload, leaks and community files.
+- `fnl-open-source-review` for license, payload, leaks and community files;
+- when the plugin is listed in a shared catalog, run the catalog check and, if the catalog pins SHAs, update it after the tag.
 
 A validator pass shows the package loads; only the trigger suite and real use show the skills help.
 
