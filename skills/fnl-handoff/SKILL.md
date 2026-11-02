@@ -65,11 +65,11 @@ Base and new commit SHAs, the test output, uncommitted files, open points.
 
 **Preserve task semantics.** Investigate-only → "Do not edit files." Fix → "implement the fix." Refactor → "refactor, not rewrite." Carry the user's exact intent and scope.
 
-For Antigravity, write an edit-only brief when its commands fall outside the allow-rules in the host config, and paste the search results or excerpts it would otherwise fetch.
+For Antigravity, write an edit-only brief when its commands fall outside both its allow-rules and what the user granted for this run (`fnl-delegate` "Route"), and paste the search results or excerpts it would otherwise fetch.
 
 ## Dispatch
 
-1. Save the brief where `fnl-delegate` "Where files go" puts it, named after the task: a local handoff brief in `.orchestration/briefs/`, a brief worth keeping as project documentation in the project's documentation folder.
+1. Save the brief where `fnl-delegate` "Where files go" puts it, as `<slug>.md` (`fnl-session-hygiene` titles): a local handoff brief in `.orchestration/briefs/`, a brief worth keeping as project documentation in the project's documentation folder.
 2. Record the dispatch: `ledger.py start ...` (see `fnl-delegate`), keeping the id.
 3. Launch the agent with the host config's command, under the hard cap, in the background, with its log and final output in `.orchestration/logs/`.
 4. Tell the user in one line: agent, model, worktree, budget, check deadline, ledger id.

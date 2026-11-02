@@ -2,7 +2,6 @@
 type: regex
 target: last_message
 match: contains
-flags: m
 ---
 
-^[`*_ ]*Route: WAIT\b
+(?:^|\n)[`*_]*Route: WAIT\b[^\n]*\s*$

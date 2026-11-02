@@ -2,7 +2,6 @@
 type: regex
 target: last_message
 match: contains
-flags: m
 ---
 
-^[`*_ ]*Merge: YES\b
+(?:^|\n)[`*_]*Merge: YES\b[^\n]*\s*$
