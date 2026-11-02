@@ -25,7 +25,7 @@ python3 -I scripts/check-references.py
 ```
 
 - `check-references.py` keeps the skills consistent with each other: every `fnl-` name exists, every `fnl-<name>` "Section" and `<file>.md` "Section" reference names a real heading, relative links resolve, ledger flags cited in the skills exist in `ledger.py`, and every flag in the host config template is described in the agent contracts. When you rename a heading or a flag, fix what it reports.
-- When you change a skill's `description`, run a trigger check: start an agent with the plugin loaded (`claude --plugin-dir .`), give it a representative prompt for the skill, and confirm the skill loads; then give it an unrelated prompt and confirm it does not. The suite in `evals/` runs with `claude plugin eval`.
+- When you change a skill's `description`, run a trigger check: start an agent with the plugin loaded (`claude --plugin-dir .`), give it a representative prompt for the skill, and confirm the skill loads; then give it an unrelated prompt and confirm it does not. The suite in `evals/` runs with `claude plugin eval`; after changing a skill's rules, run its behavior cases (`claude plugin eval . --tag behavior --scaffold`).
 
 ## Adding a host
 

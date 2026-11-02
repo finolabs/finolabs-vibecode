@@ -9,6 +9,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `fnl-session-hygiene` sets a session title format, `<project> <scope>: <activity>`, with examples, when to rename, whose sessions to rename, and how each host names sessions (`references/titles.md`).
 - CI checks cross-references (`scripts/check-references.py`): skill and agent names, section references, relative links, ledger flags cited in the skills, and host config flags against the agent contracts.
 - `fnl-delegate`'s capability map carries a review-by date, and `/fnl-status` warns when it has passed.
+- Behavior evals (tag `behavior`) with deterministic graders on each answer's final verdict line: the pull request merge check with a stale marker, a marker from an author without write access, and a valid pair; coding-router depth for a typo and a tenancy change; delegate routing when one agent's quota is out and when every frontier model is; verification of a false delegated report.
 - The contributing guide lists the local checks, how to add a host, and the release checklist, which includes an adversarial review by another model family.
 
 ### Changed
