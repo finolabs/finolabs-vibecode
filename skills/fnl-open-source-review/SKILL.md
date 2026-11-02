@@ -69,7 +69,7 @@ Check before publishing what the forge plan offers on a private repository, and 
 
 ### Identity and versions
 
-- One name across repository, package, manifests, display names and install commands. URLs resolve and point at the same owner.
+- One name across repository, package, manifests, display names and install commands. URLs resolve and point at the same owner, or at a publisher organization the README names as publishing that owner's repository.
 - Versions agree across every manifest; the changelog's latest release matches them, or between releases its `Unreleased` section targets the `-dev` version; the single source of truth is named (`fnl-versioning`).
 
 ### Data flow and privacy
