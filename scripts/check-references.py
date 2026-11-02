@@ -34,7 +34,7 @@ LINK = re.compile(r"\]\(([^)\s]+)\)")
 HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.M)
 SPAN = re.compile(r"`([^`\n]+)`")
 FLAG = re.compile(r"(?<![\w-])--([a-zA-Z][\w-]*)(?:[ =]([A-Za-z0-9][\w.-]*))?")
-SUBCOMMAND = re.compile(r'(?:ledger\.py|\$\{?L\}?)"?\s+([a-z][\w-]*)')
+SUBCOMMAND = re.compile(r'(?:ledger\.py|\$\{?L\}?)[">]?\s+([a-z][\w-]*)')
 SHORT_FLAG = re.compile(r"(?<![\w-])(-[a-zA-Z])\b")
 
 

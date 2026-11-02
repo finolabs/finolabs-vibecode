@@ -34,6 +34,8 @@ BREAKS = [
      "ledger.py open takes no option --outcome"),
     ("skills/fnl-delegate/references/ledger.md", "--model gpt-6.1-sol", "--model gpt-6.1-sol --rework-rounds 1",
      "ledger.py start takes no option --rework-rounds"),
+    ("skills/fnl-status/SKILL.md", "`python3 -I <ledger.py> open`", "`python3 -I <ledger.py> opn`",
+     "ledger.py has no subcommand opn"),
     ("skills/fnl-advisor/SKILL.md", "`--kind advise`", "`--kind advice`",
      "--kind advice is not one of"),
     ("skills/fnl-delegate/references/route-judgment.md", "`--route-by table`", "`--route-by tables`",
