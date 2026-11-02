@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-02
+
 ### Added
 
 - `fnl-plugin-packaging` covers shared catalogs across hosts, Codex grouping and catalog renames, Antigravity installs from a repository URL, pinning versus tracking, and protection for listed repositories (`references/catalogs.md`).
@@ -30,9 +32,9 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - When a delegate's allow-rules miss the commands a brief's tests need and the user is present, `fnl-delegate` asks the user to grant them as literal rules (with `agybird`'s grant flow, or a per-run settings file) before falling back to an edit-only brief or another agent, and never skips the permission check. The user chooses each grant, only for commands the brief lists, and is told that a granted test command runs the repository's test code; the host config only records grants; `/fnl-setup` offers remembered rules for the repository's test commands. A behavior eval guards it.
 - `fnl-delegate` shares whole easy and medium implementation tasks when the coordinator's context is past about 60% or it holds several independent tested tasks (to a fresh session or headless run of its own kind), or when its own quota or tokens are short (to another agent with quota left); the coordinator keeps briefing and acceptance, reviews follow `fnl-review-gate`, and merges stay with whoever holds the authority (Load sharing). `fnl-coding-router` says a delegated whole task is not an implementation child.
 - Reviews of several pending pull requests go to each reviewer in one packet and one pass, with one comment and marker per pull request and their interactions noted (`fnl-review-gate`, both reviewer agents).
-
-- Antigravity grants are remembered per folder, so `fnl-delegate` dispatches a repository's runs from one long-lived worktree and opens with a short run of the brief's check commands to collect grants; a read-only review exports the diff and check output and reads the report even when the run ends `partial`.
-- A coordinator may post another family's review under a standing relay approval the owner recorded (`fnl-review-gate`), so pull requests one model family wrote get a code review from another.
+- Antigravity grants are remembered per folder, so `fnl-delegate` dispatches a repository's runs from one long-lived worktree, one run at a time, and opens with a short run of the brief's check commands to collect grants; parallel runs keep their own worktrees and grants. A read-only review gets the diff and check output inside its worktree and reads the report even when the run ends `partial`.
+- A coordinator may post another family's review under a standing relay approval that the owner recorded, with its scope and date, in a file the owner controls; the relayed comment names the reviewer and cites the record (`fnl-review-gate`), so pull requests one model family wrote get a code review from another.
+- The owner approval on an outside author's pull request reads each reviewer's latest approving, change-requesting or dismissed review; comment-only reviews do not count.
 - `fnl-commit-messages` names the agent whose accepted work a commit holds.
 
 ### Fixed
@@ -89,6 +91,7 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/finolabs/finolabs-vibecode/releases/tag/v0.1.0
