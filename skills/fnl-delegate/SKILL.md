@@ -54,13 +54,13 @@ More routing rules:
 
 - **The route lands on your own host**: do the work yourself, or start a session or subagent of your own kind as `agents.md` says. Delegating to yourself through a headless CLI only adds overhead.
 - **Reviews, advice and committee seats** go by capability, like implementation: strong tier or above, a different agent from the implementer, a different model family where one is reachable, in a fresh context. Any of the three agents qualifies. A review that must run commands an agent's allow-rules block (tests, builds) goes to an agent that can run them. `fnl-review-gate` defines reviewer independence.
-- **Shell access**: a task whose commands fall outside a delegate's allow-rules goes to an agent that can run them, or gets an edit-only brief (`agents.md` "Antigravity").
+- **Shell access**: a task whose commands fall outside a delegate's allow-rules goes to an agent that can run them, or gets an edit-only brief (`agents.md` "Antigravity"). Only the user grants a delegate new permissions.
 - **Token budget**: when the coordinator's own budget is the scarce one, delegate implementation and keep yourself on briefing and acceptance.
 - **User away**: questions that would go to the user go to an advisor or the route judge instead; record each decision and who settled it. Decisions that need the user's authority (merge, production, credentials, new spending) still wait.
 
 ### Quota fallback
 
-When a model's quota runs out, reroute as [references/dispatch.md](references/dispatch.md) "Quota fallback" says, and record the reason in the ledger.
+When a model's quota runs out, reroute as [references/dispatch.md](references/dispatch.md) "Quota fallback" says, and record the reason in the ledger. Moving up a tier spends more quota and needs the user's yes; moving down a tier is only for easy and medium work.
 
 ## Capabilities and budget
 
@@ -108,7 +108,7 @@ When a run times out, fails or stops with uncommitted work, no other agent gets 
 
 ## Where files go
 
-Shared files (documentation and design notes with lasting value) go in the project's documentation folders and are committed. Local files (briefs, logs, working notes, captured state) go in `.orchestration/` at the main checkout's root, kept out of git; never in temporary directories or session scratchpads. The full rule: [references/dispatch.md](references/dispatch.md) "Where files go".
+Shared files (documentation and design notes with lasting value) go in the project's documentation folders and are committed. Local files (briefs, logs, working notes, captured state) go in `.orchestration/` at the main checkout's root, kept out of git through `.git/info/exclude` (the shared `.gitignore` changes only with the user's approval); never in temporary directories or session scratchpads. The full rule: [references/dispatch.md](references/dispatch.md) "Where files go".
 
 ## Ledger
 
