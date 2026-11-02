@@ -54,15 +54,17 @@ Mark each item **PASS**, **FAIL**, **N/A** (with why) or **BLOCKED** (with what 
 
 ### Repository settings
 
-Read them from the forge (on GitHub, `gh api repos/<owner>/<repo>` and its `rulesets`, `private-vulnerability-reporting` and `actions/permissions` endpoints); without access to the settings, mark the group BLOCKED. Before the repository goes public, settings that protect the public history and its reporters are in place:
+Read them from the forge; without access to the settings, mark the group BLOCKED. On GitHub, read-only `gh api` calls under `repos/<owner>/<repo>`: the repository itself (merge and listing settings, and `security_and_analysis`, which only admins see), `rules/branches/<branch>` for the rules in effect, `rulesets` and `branches/<branch>/protection`, `vulnerability-alerts` and `automated-security-fixes`, `private-vulnerability-reporting`, `actions/permissions` (including `sha_pinning_required`), `actions/permissions/workflow` and `actions/permissions/fork-pr-contributor-approval`.
+
+Check before publishing what the forge plan offers on a private repository, and check again right after the visibility change. Before publishing, an item the plan offers only on public repositories (on GitHub's free plan: rulesets, secret scanning and private vulnerability reporting) is N/A with that reason. Once public, these settings protect the history and its reporters:
 
 - **Default branch protected** by a ruleset or branch protection: changes arrive through pull requests, the CI checks that gate a merge are required, force pushes and deletion are blocked, and administrators follow the same rules (or the owner records why not).
-- **Release tags protected**: `v*` tags cannot be moved or deleted, matching the immutable tags in `fnl-versioning`.
+- **Release tags protected**: `v*` tags, and `<path>/v*` for component tags, cannot be moved or deleted, matching the immutable tags in `fnl-versioning`.
 - **Secret scanning and push protection** on.
 - **Dependency alerts and security updates** on for every ecosystem the repository uses, including its CI actions.
 - **Private vulnerability reporting** on, whenever `SECURITY.md` points reporters to it.
-- **Merge settings**: one merge method that keeps the history the commit conventions expect (`fnl-commit-messages`), and head branches deleted after merge.
-- **Actions**: the workflow token is read-only by default and cannot approve pull requests; workflows from first-time contributors' forks wait for approval; third-party actions are pinned to commit SHAs.
+- **Merge settings**: the allowed merge methods keep each commit as written (merge commit or rebase), or squash only where each pull request title becomes a verb-led subject line that `fnl-commit-messages` accepts; head branches are deleted after merge.
+- **Actions**: the workflow token is read-only by default and cannot approve pull requests; workflows from first-time contributors' forks wait for approval; third-party actions are pinned to commit SHAs (enforced where the forge can, as GitHub's `sha_pinning_required`).
 - **Listing**: description, homepage and topics set; features the project does not use (wiki, projects, discussions) turned off so nothing unmonitored collects reports.
 
 ### Identity and versions
@@ -86,6 +88,6 @@ Only when the repository ships a plugin or skills:
 
 ## 3. Report
 
-A table per group with status and evidence, then the FAIL and BLOCKED items ordered by severity: secrets and private data first, then internal leaks, license, payload, everything else. For each, the smallest fix and whether it needs the owner's authority (history rewrite, visibility change, publishing). End with a one-line verdict: **ready**, **ready after fixes**, or **not ready**.
+A table per group with status and evidence, then the FAIL and BLOCKED items ordered by severity: secrets and private data first, then internal leaks, license, payload, everything else. For each, the smallest fix and whether it needs the owner's authority (history rewrite, visibility change, repository settings, publishing). End with a one-line verdict: **ready**, **ready after fixes**, or **not ready**.
 
 Done when every item above has a status and every FAIL has a fix.
