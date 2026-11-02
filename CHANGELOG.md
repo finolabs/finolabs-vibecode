@@ -30,6 +30,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `fnl-delegate` shares whole easy and medium implementation tasks when the coordinator's context is past about 60% or it holds several independent tested tasks (to a fresh session or headless run of its own kind), or when its own quota or tokens are short (to another agent with quota left); the coordinator keeps briefing and acceptance, reviews follow `fnl-review-gate`, and merges stay with whoever holds the authority (Load sharing). `fnl-coding-router` says a delegated whole task is not an implementation child.
 - Reviews of several pending pull requests go to each reviewer in one packet and one pass, with one comment and marker per pull request and their interactions noted (`fnl-review-gate`, both reviewer agents).
 
+- Antigravity grants are remembered per folder, so `fnl-delegate` dispatches a repository's runs from one long-lived worktree and opens with a short run of the brief's check commands to collect grants; a read-only review exports the diff and check output and reads the report even when the run ends `partial`.
+- A coordinator may post another family's review under a standing relay approval the owner recorded (`fnl-review-gate`), so pull requests one model family wrote get a code review from another.
+- `fnl-commit-messages` names the agent whose accepted work a commit holds.
+
 ### Fixed
 
 - The dispatch ledger skips lines that are valid JSON but not records, instead of crashing.
