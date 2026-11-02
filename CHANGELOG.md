@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- `fnl-verifier` counts a review marker only from an author with write access, like the merge check, which now names the permission values GitHub returns.
+
 ## [0.1.1] - 2026-11-02
 
 ### Added
