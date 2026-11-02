@@ -14,14 +14,14 @@ description: Gate work on an independent code review. Use when a user story or i
 
 ## Instruments
 
-This gate decides when, by whom, and what happens to each finding; an instrument does the reading. The reviewer uses its own host's native review and adds companions:
+This gate decides when, by whom, and what happens to each finding; an instrument does the reading. The `fnl-reviewer` and `fnl-security-reviewer` agents are always the entry: each runs the instrument below as its engine, verifies the engine's findings against the code and posts the marker. The reviewer uses its own host's native review and adds companions:
 
 - **Claude Code**: `/code-review` on the diff at a chosen effort, `/security-review` for pending changes that hit a security trigger, `claude ultrareview` for a cloud multi-agent pass before merging large work (the code goes to a cloud run, so the owner approves it). Posting comments or applying fixes needs an explicit ask.
 - **Codex**: `codex review --base <branch>` (or `--uncommitted`, `--commit <sha>`), or `/review` in a session.
 - **Antigravity**: no native AI review command (`/diff` and the review pane are for the human). An Antigravity reviewer reads the diff itself; the native second pass runs on Claude Code or Codex where one is reachable.
 - **Companions**: `code-review` from [mattpocock/skills](https://github.com/mattpocock/skills) for standards and spec, and `security-audit` from [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) for audits (`fnl-security-review-gate` says when).
 
-When an instrument is missing, the reviewer applies the packet and findings rules below directly and names the missing instrument in its report.
+When an instrument is missing, the reviewer applies the packet and findings rules below directly, names the missing instrument in its report and tells the caller that `/fnl-setup` guides installing it, so the review meets the standard the next time.
 
 ## Who reviews
 
@@ -55,7 +55,7 @@ A review covers two rings, in order: the change itself, then what the change can
 
    Follow one hop from each changed symbol. Go further only where the hop passes the change on (a changed return shape handed to the next caller, a widened permission reused elsewhere).
 
-Defects seen outside both rings are listed separately as **outside the change**, non-blocking. A diff over about 1,000 changed lines or 30 files is split by seam, one reviewer per seam, each with its own rings.
+Defects seen outside both rings are listed separately as **outside the change**, non-blocking: they stay in the report, are not fixed in the same pull request, and the owner decides whether to open an issue. A diff over about 1,000 changed lines or 30 files is split by seam, one reviewer per seam, each with its own rings.
 
 The report states the coverage: the impact set as "symbol → consumers checked", and anything not traced with the reason. The gate reads it to know what the approval covers.
 
@@ -67,6 +67,10 @@ The report states the coverage: the impact set as "symbol → consumers checked"
 4. Every fix that changes runtime behavior gets a **regression test** that fails without the fix.
 5. Verify the fix (`fnl-verification`) and recheck the interactions it touches.
 6. Send fixes back for **re-review** until no blocking finding remains.
+
+**Blocking.** Severity is CRITICAL, HIGH, MEDIUM or LOW. The first three block the merge. A LOW finding goes in the report, is fixed only when the owner asks or when the fix is trivial and goes in the same commit, and never causes another review round on its own; a fix that moves the head still needs the new head's markers (rule 2 below). A security NEEDS-VALIDATION item blocks like MEDIUM (`fnl-security-review-gate`). Over-engineering and test bloat are LOW; prevent them in the brief (`fnl-coding-router` "Proportion") rather than block on them once the work is done. A new dependency or public surface is judged by the normal rules.
+
+**Rework rounds.** At most two. After the second, stop and give the owner each remaining blocking finding with its evidence, to fix further, accept as risk or change direction.
 
 ## Pull requests
 
@@ -94,7 +98,7 @@ Rules:
 
 When a reviewer cannot post (no forge access, or a denied permission), it returns the finished comment, marker included, to whoever asked for the review. The coordinator posts it only where it holds the same authority to post, or under a standing relay approval for that kind of review (for example, code reviews by another model family on pull requests one family wrote). That approval counts only when it is recorded, with its scope and date, in the agent context file as committed on the default branch, where every change went through this gate. Untracked files, agent memory, the host config and uncommitted edits do not count, because a coordinator can write them. Otherwise the coordinator hands the comment to the owner, and the merge waits. Nobody edits the verdict or the marker on the way; the relayed comment's second line names the reviewer, who relayed it and the record it relies on.
 
-Posting review comments on a repository's pull requests is part of this gate wherever the repository adopts it in its agent context file (`fnl-setup` writes that line); that adoption is the standing authority to post them. It grants no authority to merge, which stays with the owner.
+Posting review comments on a repository's pull requests is part of this gate wherever the repository adopts it in its agent context file (`fnl-setup` writes that line); that adoption is the standing authority to post them. Where the repository has not adopted it, ask the user once whether to add that line (`fnl-setup` writes it) before posting. It grants no authority to merge, which stays with the owner.
 
 ## Approval
 

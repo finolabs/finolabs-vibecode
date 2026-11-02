@@ -31,13 +31,14 @@ Sections marked *optional* are skipped when the user has no need. Each section l
 - Status words for reports: drafted, verified, integrated, delivered, parked.
 - Test scope (recommended: targeted tests for changed code and its consumers; full suites only on request, as `fnl-verification` says).
 - Commits and versions: point to `fnl-commit-messages` and `fnl-versioning`; add only the user's own deviations.
+- Learning from corrections: when the user corrects the same behavior twice in a session, propose one line for this contract at the end of the task, at most one proposal per session, and write it only after the user says yes.
 
 ## 5. Delegation (optional)
 
 - Which other agents the user has (Codex, Antigravity, Claude Code sessions) and that `fnl-delegate` governs routing, budgets and acceptance.
 - Machine facts live in the delegation host config written by `/fnl-setup`, not here.
 
-## 6. Knowledge base and memory (optional)
+## 6. Knowledge base (optional)
 
 - Where durable notes live (a knowledge base such as Orrery, an Obsidian vault, a docs repository) and the only approved way to access them.
 - Which single knowledge base agents use (Orrery where available, or an Obsidian vault), and that any other store is retired from agent use.

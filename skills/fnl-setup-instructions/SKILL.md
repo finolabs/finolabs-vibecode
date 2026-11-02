@@ -31,7 +31,7 @@ Done when every required section has confirmed rules and every optional section 
 
 - One **shared body** with the host-neutral sections, plus a short **host section** per host (session naming, compaction, tool quirks).
 - Point to skills by name for practice the plugin already covers: coding entry (`fnl-coding-router`), delegation (`fnl-delegate`), commits (`fnl-commit-messages`), versions (`fnl-versioning`), proof (`fnl-verification`).
-- Keep it short: every line loads on every turn of every session. Cut any line the agent would follow by default.
+- Keep it short: every line loads on every turn of every session. Cut any line the agent would follow by default. Treat about 150 lines in the shared body as a soft limit: beyond it, offer to move detail into a skill or a reference the contract points to, rather than cut lines blindly.
 - Content the user marks private (employer, customers, personal paths) stays in their own files only.
 
 ## 4. Confirm and write

@@ -11,10 +11,11 @@ Before assigning new work, inspect actual context usage where the surface expose
 
 - Above about **60%**, at a safe idle boundary, compact the session for the same workstream. When the agent cannot compact itself, ask the user to, or propose a fresh session with a handover.
 - A wholly new, independent task starts in a fresh, correctly named session in the matching checkout, with a short verified handover.
+- A finished user story, with its review gate closed, is a natural boundary: prefer a fresh session for the next story with a short handover. A coordinator session whose context is still light may continue (`fnl-coordinator-sessions`).
 - Delegated agents follow the same rule: start a fresh run with a short handover brief rather than resuming a run that has used much of its window.
 - Without usage telemetry, say so; never invent a percentage or interrupt active work.
 
-Before a compaction, a fresh session or the end of the work, write back what is worth keeping (decisions, lessons, project state) as `fnl-knowledge` says.
+Before a compaction, a fresh session or the end of the work, write back a decision or lesson that would change what an agent does next time, as `fnl-knowledge` says. A compaction with nothing new to keep carries only the handover.
 
 ## Handover content
 
@@ -34,7 +35,7 @@ A title tells the user which session holds which work, without opening it. Forma
 - **scope**, optional: the feature, spec or ticket the work belongs to (`003 search`, `PAY-142`, `US4`, `T044–T046`). Leave it out for work that has none.
 - **activity**: what the session is doing now, verb-led, a few words (`fix webhook retries`, `review PR 12`, `plan rate limits`). A review, advice or committee session says so in its activity.
 
-Keep the whole title near 50 characters, in the user's working language for the activity, with technical names intact. Examples: `billing-api: fix webhook retries`, `billing-api 003 search: T044–T046 rebuild CLI`, `docs-site: review PR 12`.
+Keep the whole title near 50 characters, in English for the activity unless the user asks for their own language, with technical names intact. Examples: `billing-api: fix webhook retries`, `billing-api 003 search: T044–T046 rebuild CLI`, `docs-site: review PR 12`.
 
 When to name: at entry, on a resume whose title no longer matches the work, and when the task or phase changes materially (a new story, from planning to implementation, from implementation to review). Do not rename for every step.
 

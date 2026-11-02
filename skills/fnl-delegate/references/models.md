@@ -18,7 +18,7 @@ Route by tier first, then by agent. A tier names what the work needs; the agent 
 | strong | Opus 5.5 at `medium`, Sonnet 5.5 at `high` | `gpt-6.1-sol` | `gemini-4-argon-high`, `claude-sonnet-5-5-high` |
 | fast | Sonnet 5.5 at `medium`, Haiku 5.5 | `gpt-6.1-terra`, `gpt-6-luna` | `gemini-3.8-flash-medium`/`-high` |
 
-Capability order when two choices fit equally: **Claude Code, then Codex, then Antigravity**.
+Capability order when two choices fit equally, for code: **Claude Code, then Codex, then Antigravity**. For plain content writing (documentation, prose and copy with no code change) the order is **Codex, then Claude Code, then Antigravity**.
 
 ## Claude Code
 

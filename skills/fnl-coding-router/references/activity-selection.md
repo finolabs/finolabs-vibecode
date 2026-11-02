@@ -1,6 +1,14 @@
 # Activity selection with a semantic evaluator
 
-Use this only after the workflow is chosen and host rules, accepted decisions and prerequisites have not settled the next activity. It selects one activity inside that workflow; it never chooses Spec Kit versus the fallback router and grants no execution authority. Call an evaluator (for example TypeSafe Jev) only for material semantic ambiguity whose answer can change the next step; reuse an equivalent valid judgment.
+Read this only when the host config (`fnl-delegate`) names a judge such as TypeSafe Jev. With one configured, take the judgments below from it first instead of reasoning them out yourself, which saves the host's own reasoning: the depth, the Spec Kit depth gate, and the next activity where host rules, accepted decisions and prerequisites have not settled it. The judge selects one activity inside the chosen workflow; it never chooses Spec Kit versus the fallback router and grants no execution authority. Exact lookups, arithmetic, permissions and schema checks stay with code and authoritative tools. Without a judge, the host decides these itself by the rules in `SKILL.md`. Reuse an equivalent valid judgment.
+
+## Depth
+
+Ask one choice over the goal, the touched areas and the risk flags: `MIN`, `NORMAL`, `DEEP` (each with its definition from the depth section of `SKILL.md`) or `NEED_EVIDENCE`. A trigger in `SKILL.md` still raises the depth (a security trigger gives at least NORMAL): take the higher of the judge's answer and any trigger. The judge never lowers acceptance, gates, findings or failure counters.
+
+## Depth gate questions
+
+When the five conditions of "Spec Kit depth gate" in `SKILL.md` leave the fit unclear, ask two narrow yes/no questions over the plan or story summary, acceptance criteria and touched areas: "fits one implementation pass" and "hides a cross-cutting risk". A yes to the first and a no to the second allows the direct path. Any other answer, or a judge that is unavailable or inconclusive, returns the decision to the host, which runs `speckit-tasks` when it cannot tell.
 
 ## 1. Build eligible candidates
 

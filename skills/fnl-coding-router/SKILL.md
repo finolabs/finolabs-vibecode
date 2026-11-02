@@ -5,7 +5,7 @@ description: Route coding work before the first substantive change. Use when sta
 
 # Coding router
 
-The entry point for coding work. It picks the workflow, the depth and the gates; the other skills in this plugin own the details it points to.
+The entry point for coding work. It picks the workflow, the depth and the gates; the other skills in this plugin own the details it points to. Work that is not code but carries comparable risk (queries on live data, infrastructure configuration, dashboards and reports, predictions and forecasts) reads [references/non-code-work.md](references/non-code-work.md) beside this skill.
 
 ## 1. Inspect before acting
 
@@ -33,7 +33,7 @@ A Spec Kit repository with a missing or broken required skill has an integration
 - any contract change is small and contained: every consumer is known and updated in the same change, and `fnl-security-review-gate` reviews it before merge;
 - the constitution and scoped rules do not require tasks.
 
-Otherwise run `speckit-tasks`, then `speckit-implement`. When fit stays ambiguous after these rules, judge it with two narrow questions over the plan or story summary, acceptance criteria and touched areas: "fits one implementation pass" and "hides a cross-cutting risk" (a semantic evaluator may answer them; see [references/activity-selection.md](references/activity-selection.md)).
+Otherwise run `speckit-tasks`, then `speckit-implement`. When these conditions leave the fit unclear, take it from the judge if the host config names one (read [references/activity-selection.md](references/activity-selection.md) "Depth gate questions"); otherwise decide it yourself, and run `speckit-tasks` when you still cannot tell: ambiguity is not evidence that the change is one seam.
 
 A direct path records the chosen path and its reason in the feature's `plan.md` and meets every acceptance criterion and gate. Its acceptance is `fnl-verification` against each acceptance criterion with fresh targeted tests, plus the two posted reviews of `fnl-review-gate`, whose packet carries the story's acceptance criteria and `plan.md`; it runs no separate analyze or converge step.
 
@@ -55,7 +55,7 @@ The process skills brainstorming, writing-plans, systematic-debugging and test-d
 
 Companion phase tools from other packs fit these rows, for example `grilling`, `prototype`, `tdd` and `diagnosing-bugs` from [mattpocock/skills](https://github.com/mattpocock/skills). They also work inside Spec Kit phases; that pack's process skills (`to-spec`, `to-tickets`, `implement`, `implement-spec`) yield to Spec Kit where it is in use.
 
-When a semantic choice between eligible activities remains after these rules, follow [references/activity-selection.md](references/activity-selection.md).
+When the host config names a judge, read [references/activity-selection.md](references/activity-selection.md) before choosing the depth and the next activity, and take those judgments from it. Without a judge, decide them yourself: choose by observed fit and the table above, or ask the user the one question that decides it.
 
 Done when you can name the workflow, the phase and the next activity.
 
@@ -63,9 +63,9 @@ Done when you can name the workflow, the phase and the next activity.
 
 - **MIN**: a bounded, reversible seam with known consumers and no unexplained failure, blocking finding, or contract, security, privacy, permission, runtime, dependency or migration risk. Work serially: no optional new spec, plan or interview, no implementation children, no broad reruns. Required acceptance, checks and specialist gates still apply. A no-runtime-impact text edit needs its applicable checks, not a new reviewer per edit; text that changes instructions, executable configuration, auth or data is not automatically harmless.
 - **NORMAL**: understood behavior and integration.
-- **DEEP**: consequential uncertainty, unknown consumers, sensitive boundaries or irreversible effects.
+- **DEEP**: consequential uncertainty, unknown consumers, sensitive boundaries or irreversible effects. Also: logic that combines several calculations whose errors compound, a prediction or forecast, and user input that is itself ambiguous.
 
-Depth sets effort inside the chosen workflow; in a Spec Kit repository it bypasses nothing except through the depth gate. Upgrade before dependent work. Downgrade only future ceremony when evidence allows, never acceptance, gates, findings or failure counters. File count alone does not set depth.
+With a judge configured, ask it for the depth as [references/activity-selection.md](references/activity-selection.md) "Depth" says; the triggers here still raise it. Depth sets effort inside the chosen workflow; in a Spec Kit repository it bypasses nothing except through the depth gate. Upgrade before dependent work. Downgrade only future ceremony when evidence allows, never acceptance, gates, findings or failure counters. File count alone does not set depth.
 
 Done when the depth and its reason are in the receipt.
 
@@ -77,6 +77,13 @@ Done when the depth and its reason are in the receipt.
 - Every pull request needs a posted code review and a posted security review before merge (`fnl-review-gate` "Pull requests").
 - Long sessions, handovers and titles follow `fnl-session-hygiene`.
 
+## Proportion
+
+Build what the acceptance criteria require at the stage the product is at now. Every changed hunk traces to an acceptance criterion; a hunk that does not is removed or justified. Set this limit in the brief and the plan, where it costs nothing, rather than after the work is written.
+
+- **Over-engineering** looks like: an abstraction with one use, options or flags nobody asked for, defensive checks for cases that cannot happen, a compatibility shim with no consumer, an extra layer, retries or fallbacks before a real failure, comments or documents longer than the code, and scale or performance work (optimizing, hardening, load tests) beyond the stage the product has reached. Three similar lines beat a premature abstraction.
+- **Over-testing** looks like: tests for unchanged code or plain declarations, mocks around what can be tested directly, and running tests after every edit or running the whole suite. Tests cover new or changed behavior and its traced consumers, with one regression test per fixed defect. Run them at checkpoints (the end of a seam, after a fix); while fixing a failure, rerun only that test, then the targeted set once. The full suite stays the owner's call (`fnl-verification`).
+
 ## Checkpoint: stop repeated local fixes
 
 After two failed corrections of the same invariant, stop before a third. Also stop when:
@@ -86,4 +93,4 @@ After two failed corrections of the same invariant, stop before a third. Also st
 - the proposed fix adds another flag, retry, debounce, timeout or state copy;
 - no shared authority, revision or epoch can prove the invariant.
 
-Then keep the implementation task open and the latest behavioral red as it is, stop product edits, and run a read-only architecture checkpoint: map each layer's owned state, whether it is authority or cache, its revision, its triggers and its stale readers. Separate safety, visibility truth, staleness, monotonicity, idempotency and coalescing. Choose one authoritative boundary or a versioned snapshot. Resume only with a deterministic root-cause test and a coherent design. Ask "which distinct failure does this action prevent?" of every proposed step.
+Then keep the implementation task open and the latest behavioral red as it is, stop product edits, and run a read-only architecture checkpoint: map each layer's owned state, whether it is authority or cache, its revision, its triggers and its stale readers. Separate safety, visibility truth, staleness, monotonicity, idempotency and coalescing. Choose one authoritative boundary or a versioned snapshot. Resume only with a deterministic root-cause test and a coherent design. Ask "which distinct failure does this action prevent?" of every proposed step. When the checkpoint leaves the cause open, propose `fnl-committee` and wait for the user's yes: it spends the quota of two model families.

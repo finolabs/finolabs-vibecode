@@ -31,7 +31,7 @@ On macOS, Codex keeps one plugin cache folder per catalog name without regard to
 ## Pinning versus tracking, and repository protection
 
 - **Pinning by commit SHA** means updating the catalog on every plugin release. The pin is per host: Claude Code takes a `github` source with `sha`; check each other host's catalog schema before relying on a pin there.
-- **Tracking the default branch** (listing plugin repositories without a commit SHA so installs follow each plugin's default branch) avoids a catalog commit per release, and is safe only when every listed repository protects its default branch and release tags.
+- **Tracking the default branch** (listing plugin repositories without a commit SHA so installs follow each plugin's default branch) avoids a catalog commit per release, and is safe only when every listed repository protects its default branch and release tags. Installs then carry the `-dev` version between releases and change with every merge, so say so where users read about the catalog; pin by SHA or release tag for users who need a stable build.
 - Require two rulesets on every listed plugin repository and on the catalog repository itself, since one edit there repoints every install:
   1. The default branch requires a pull request and the CI check, and blocks force pushes and deletion, with no bypass unless the owner records why.
   2. Release tags (`v*`) cannot be updated or deleted.

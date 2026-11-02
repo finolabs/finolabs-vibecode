@@ -5,7 +5,7 @@ description: Review a repository's readiness to be published as open source and 
 
 # Open source review
 
-A read-only review: it finds and reports, it does not publish. Fixes, history rewrites, visibility changes and releases each need the owner's explicit authority.
+A read-only review: it finds and reports, it does not publish. Fixes, history rewrites, visibility changes and releases each need the owner's explicit authority. After a repository is public, run it again before each MINOR release and whenever `SECURITY.md`, CI or the repository settings change; a patch release does not need one.
 
 ## 1. Fix the scope
 
@@ -26,7 +26,7 @@ Mark each item **PASS**, **FAIL**, **N/A** (with why) or **BLOCKED** (with what 
 ### Secrets and private data
 
 - Recommend a `security-audit` run from [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) before the first public release of code that runs (services, CLIs, plugins with scripts or hooks); report whether one ran and its verdicts.
-- Scan the working tree and the full history for secrets (`gitleaks detect`, `trufflehog git file://.`, or `git log -p` with targeted patterns when no scanner is installed). Report the file and commit, never the secret's value.
+- Scan the working tree and the full history for secrets (`gitleaks detect`, `trufflehog git file://.`, or `git log -p` with targeted patterns when no scanner is installed). Report the file and commit, never the secret's value. Install nothing yourself, but strongly recommend that the user installs a scanner when none is present: name `gitleaks` or `trufflehog` with its install command, and say that the `git log -p` fallback covers less.
 - No real `.env` files, credentials, keys, cookies, transcripts, customer data or personal data, in the tree or the history.
 - A leaked secret is a stop: tell the owner so it can be rotated. Removing it from the tree does not remove it from history.
 
@@ -56,7 +56,7 @@ Mark each item **PASS**, **FAIL**, **N/A** (with why) or **BLOCKED** (with what 
 
 Read them from the forge; without access to the settings, mark the group BLOCKED. On GitHub, read-only `gh api` calls under `repos/<owner>/<repo>`: the repository itself (merge and listing settings, and `security_and_analysis`, which only admins see), `rules/branches/<branch>` for the rules in effect, `rulesets` and `branches/<branch>/protection`, `vulnerability-alerts` and `automated-security-fixes`, `private-vulnerability-reporting`, `actions/permissions` (including `sha_pinning_required`), `actions/permissions/workflow` and `actions/permissions/fork-pr-contributor-approval`.
 
-Check before publishing what the forge plan offers on a private repository, and check again right after the visibility change. Before publishing, an item the plan offers only on public repositories (on GitHub's free plan: rulesets, classic branch protection, secret scanning and private vulnerability reporting) is N/A with that reason. Once public, these settings protect the history and its reporters:
+Check before publishing what the forge plan offers on a private repository, and check again right after the visibility change. Before publishing, an item the plan offers only on public repositories (on GitHub's free plan: rulesets, classic branch protection, secret scanning and private vulnerability reporting) is N/A with that reason. Once public, these settings protect the history and its reporters. A FAIL on default branch protection, release tag protection, secret scanning and push protection, dependency alerts and security updates, private vulnerability reporting or Actions blocks a ready verdict; merge settings and listing are recommended and are noted without blocking.
 
 - **Default branch protected** by a ruleset or branch protection: changes arrive through pull requests, the CI checks that gate a merge are required, force pushes and deletion are blocked, and administrators follow the same rules (or the owner records why not).
 - **Release tags protected**: `v*` tags, and `<path>/v*` for component tags, cannot be moved or deleted, matching the immutable tags in `fnl-versioning`.
@@ -88,6 +88,6 @@ Only when the repository ships a plugin or skills:
 
 ## 3. Report
 
-A table per group with status and evidence, then the FAIL and BLOCKED items ordered by severity: secrets and private data first, then internal leaks, license, payload, everything else. For each, the smallest fix and whether it needs the owner's authority (history rewrite, visibility change, repository settings, publishing). List every item marked N/A until publishing as a **recheck after the visibility change**, so a ready verdict does not hide it. End with a one-line verdict: **ready**, **ready after fixes**, or **not ready**.
+A table per group with status and evidence, then the FAIL and BLOCKED items ordered by severity: secrets and private data first, then internal leaks, license, payload, everything else. For each, the smallest fix and whether it needs the owner's authority (history rewrite, visibility change, repository settings, publishing). List every item marked N/A until publishing as a **recheck after the visibility change**, so a ready verdict does not hide it. End with a one-line verdict: **ready**, **ready after fixes**, or **not ready**. A BLOCKED item in secrets and private data, internal leaks or license caps the verdict at **not ready**, naming the group that could not be checked, because what was not scanned cannot be called clean.
 
 Done when every item above has a status and every FAIL has a fix.

@@ -28,7 +28,7 @@ Which agent can coordinate on this machine, and which delegates each one can rea
 
 ## Route judgment
 
-- Judge: <none | the skill name, for example `typesafe-ai`>. The user approved sending task summaries to this service on <DD/MM/YYYY>.
+- Judge: <none | the skill name, for example `typesafe-ai`>. The user approved sending task summaries to this service on <DD/MM/YYYY>. When one is named, the coordinator and the coding router ask it first for grade, route, depth and next activity.
 - Spend limit: <the judge skill's own guard, or a per-day cap>.
 
 ## Claude Code

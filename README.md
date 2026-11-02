@@ -40,7 +40,7 @@ Every skill carries the `fnl-` prefix. The user types four of them, `fnl-setup`,
 | --- | --- |
 | `fnl-coding-router` | Starting or resuming any coding work: Spec Kit first, fallback router, depth (MIN, NORMAL, DEEP), the Spec Kit depth gate, the stop-before-a-third-fix checkpoint. |
 | `fnl-session-hygiene` | A session's context passes about 60%, a phase changes, a title goes stale, or work moves to another session or writer. |
-| `fnl-knowledge` | Remembering and recalling decisions, lessons and project state: native agent memory for working preferences, a shared knowledge base (Orrery, or an Obsidian vault) beside it, the repository for code facts. |
+| `fnl-knowledge` | Remembering and recalling decisions, lessons and project state: a shared knowledge base (Orrery, or an Obsidian vault) for decisions, lessons and project state, and the repository for code facts. |
 | `fnl-delegate` | Coordinating Claude Code, Codex and Antigravity from whichever one you run in: grading, routing by agent and model through a dated capability map, an optional route judge, quota fallback, at most 5 parallel runs, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger. |
 | `fnl-handoff` | Writing a self-contained brief and dispatching one task. |
 | `fnl-advisor` | Getting one second opinion from a stronger model of another family. |
@@ -129,7 +129,7 @@ npx skills add https://github.com/cloudflare/security-audit-skill --skill securi
 
 The orchestration skills keep machine facts (agent commands, allowed models, which delegates each coordinator can reach, the route judge, allow-rules, lock path, parallel limit) outside the plugin, in a host config file: the path in `ORCHESTRATION_HOST_CONFIG`, or else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. Start from `skills/fnl-delegate/references/host-template.md`. The dispatch ledger defaults to `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it). When Codex or Antigravity also coordinates, put both files where every coordinator's sandbox can read and write them.
 
-The route judge is optional. Routing is complete without one; a judge such as TypeSafe's Jev, called through its own `typesafe-ai` skill, settles only the calls the rules leave open, and the plugin holds no key for it.
+The route judge is optional. Without one, the agent's own model makes the grade, route, depth and activity calls. With one configured, such as TypeSafe's Jev called through its own `typesafe-ai` skill, `fnl-delegate` and `fnl-coding-router` ask it first, which saves their own reasoning; the plugin holds no key for it.
 
 ## Layout
 
