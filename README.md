@@ -15,7 +15,7 @@ The quickest install: give your coding agent this repository's link and ask it t
 You were given this repository's link to install it for the user. Follow these steps in order.
 
 1. **Find your host**: Claude Code, Codex, Antigravity, or another agent that reads Agent Skills.
-2. **Confirm with the user before installing.** The install changes their agent configuration for every project. Offer the whole plugin, the default, which carries the skills, agents and session reminder. Offer single skills as the alternative (see [Single skills, any agent](#single-skills-any-agent)). Install only one of the two for an agent, since both together list every skill twice.
+2. **Confirm with the user before installing.** The install changes their agent configuration for every project. Offer the whole plugin by default; it carries the skills, the agents and the session reminder. Offer single skills as the alternative (see [Single skills, any agent](#single-skills-any-agent)). Install only one of the two for an agent, since both together list every skill twice.
 3. **Check for an existing install first**: run `claude plugin list` and `claude plugin marketplace list` (or `codex plugin list` and `codex plugin marketplace list`). If `finolabs-vibecode` is already installed from another catalog, such as `finolabs-vibecode@finolabs-vibecode`, or Codex lists the older `Finolabs` catalog, stop and ask the user before switching: two installs list every skill twice, and on Codex the older catalog shares a cache folder with `finolabs`. The [finolabs/plugins README](https://github.com/finolabs/plugins#codex) has the migration.
 4. **Install from a shell** with your host's commands:
 
@@ -27,54 +27,54 @@ You were given this repository's link to install it for the user. Follow these s
    | Other agents | `npx skills add finolabs/finolabs-vibecode -a <agent>` |
 
 5. **Verify** that `claude plugin list`, `codex plugin list` or `agy plugin list` shows `finolabs-vibecode`. Report the command output to the user, and report any failure as it is.
-6. **Hand over setup.** Plugins load when a session starts. Tell the user to open a new session and type the setup skill: `/finolabs-vibecode:fnl-setup` on Claude Code, `$fnl-setup` on Codex, `/fnl-setup` on Antigravity. Only the user can start setup, because it interviews them before it writes host config and instructions. `/fnl-setup-instructions` does the same for their user-scoped instructions, and is optional.
+6. **Hand over setup.** Plugins load when a session starts. Tell the user to open a new session and run setup: `/finolabs-vibecode:fnl-setup` on Claude Code, `$fnl-setup` on Codex, `/fnl-setup` on Antigravity. Only the user can start setup, because it interviews them before it writes host config and instructions. `/fnl-setup-instructions` does the same for their user-scoped instructions, and is optional.
 7. **Offer the companions, and install them only if the user agrees:** [Matt Pocock's skills](https://github.com/mattpocock/skills) and [Cloudflare's `security-audit`](https://github.com/cloudflare/security-audit-skill) (see [Works well with](#works-well-with)). Every skill works without them.
 
 Done when the plugin is listed by your host and the user knows to run setup in a new session.
 
 ## Skills
 
-Every skill carries the `fnl-` prefix.
+Every skill carries the `fnl-` prefix. The ones marked with `/` are typed by the user; the others load when the situation calls for them.
 
 | Skill | Use it when |
 | --- | --- |
 | `fnl-coding-router` | Starting or resuming any coding work: Spec Kit first, fallback router, depth (MIN, NORMAL, DEEP), the Spec Kit depth gate, the stop-before-a-third-fix checkpoint. |
-| `fnl-session-hygiene` | Context passes about 60%, a phase changes, a title is stale, work moves to another session or writer. |
+| `fnl-session-hygiene` | A session's context passes about 60%, a phase changes, a title goes stale, or work moves to another session or writer. |
 | `fnl-knowledge` | Remembering and recalling decisions, lessons and project state: native agent memory for working preferences, a shared knowledge base (Orrery, or an Obsidian vault) beside it, the repository for code facts. |
-| `fnl-delegate` | Coordinating Claude Code, Codex and Antigravity from whichever one you run in: grade, route by agent and model through a dated capability map, an optional route judge, quota fallback, at most 5 parallel runs, time budgets, liveness from artifacts, heavy-job lock, verify-before-accept, handover, dispatch ledger. |
+| `fnl-delegate` | Coordinating Claude Code, Codex and Antigravity from whichever one you run in: grading, routing by agent and model through a dated capability map, an optional route judge, quota fallback, at most 5 parallel runs, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger. |
 | `fnl-handoff` | Writing a self-contained brief and dispatching one task. |
-| `fnl-advisor` | One second opinion from a stronger, contrasting model. |
-| `fnl-committee` | Stuck or looping: two contrasting agents find the root cause and a plan. |
+| `fnl-advisor` | Getting one second opinion from a stronger model of another family. |
+| `fnl-committee` | Work is stuck or looping: two agents from contrasting families find the root cause and a plan. |
 | `fnl-coordinator-sessions` | Running a spec as a coordinator plus one app session per task, with standby sessions and review gates. |
-| `fnl-versioning` | Version bumps, tags, changelog and release notes (SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog). |
-| `fnl-commit-messages` | Atomic commits, imperative subjects, no secrets or build output, host attribution trailer, PR descriptions, and the branch flow: naming, base, sync, conflicts, merge, cleanup, backports. |
-| `fnl-review-gate` | Independent code review after each user story and before merge; a disposition for every finding; a regression test per runtime fix. |
-| `fnl-security-review-gate` | Changes to auth, permissions, private data, untrusted input or payments; permission-boundary review with negative tests that prove no existence leak. |
+| `fnl-versioning` | Bumping a version, tagging a release, or writing the changelog and release notes: SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog. |
+| `fnl-commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports). |
+| `fnl-review-gate` | A user story is done or a pull request is about to merge: an independent code review, a disposition for every finding, a regression test per runtime fix. |
+| `fnl-security-review-gate` | A change touches auth, permissions, private data, untrusted input or payments: a permission-boundary review, with negative tests proving that not even a record's existence leaks. |
 | `fnl-verification` | Choosing targeted tests, reading the evidence, accepting someone else's work, claiming done. |
 | `fnl-plugin-packaging` | Packaging skills as a plugin for Claude Code, Codex and Antigravity from one repository: layout, manifests, icon, marketplaces, checks. |
-| `/fnl-setup` | First run on a machine or repository: host config, local file placement, the agent-skills block in `CLAUDE.md` or `AGENTS.md`. Typed by the user. |
-| `/fnl-setup-instructions` | Interview the user and write their user-scoped instructions for Claude Code, Codex and Antigravity from one shared source. Typed by the user. |
-| `/fnl-status` | Open delegated runs and first-pass acceptance per agent and model, from the dispatch ledger. Typed by the user. |
-| `/fnl-ask` | Not sure which skill fits: describe the situation and get the next command, including companion skills from other packs. Typed by the user. |
+| `/fnl-setup` | First run on a machine or repository: host config, local file placement, the agent-skills block in `CLAUDE.md` or `AGENTS.md`. |
+| `/fnl-setup-instructions` | Writing your user-scoped instructions: it interviews you and writes them for Claude Code, Codex and Antigravity from one shared source. |
+| `/fnl-status` | Checking open delegated runs and first-pass acceptance per agent and model, from the dispatch ledger. |
+| `/fnl-ask` | You are not sure which skill fits: describe the situation and get the next command, including companion skills from other packs. |
 | `fnl-open-source-review` | Before a repository goes public, and after: license, secrets in tree and history, internal leaks, clean payload, community files, repository settings, identity, data flow, plugin checks. |
 
 ### Agents
 
-Read-only subagents in `agents/` that apply the skills above in a fresh context. They answer different questions:
+The read-only subagents in `agents/` apply the skills above in a fresh context. Each answers a different question:
 
 | Agent | Question | Use it when |
 | --- | --- | --- |
-| `fnl-verifier` | Is the report true? | An agent or session says a task is done: it reruns the targeted tests, checks each acceptance criterion and that the commits are where the report says. It judges facts, not design. |
+| `fnl-verifier` | Is the report true? | An agent or session says a task is done: it reruns the targeted tests, checks each acceptance criterion, and confirms the commits are where the report says. It judges facts, not design. |
 | `fnl-reviewer` | Is the change good? | A pull request or story is ready: it reads every changed file, then the callers, dependencies, contracts and tests the change affects, under `fnl-review-gate`. |
 | `fnl-security-reviewer` | Is the change safe? | The change crosses a sensitive boundary: it reads the changed files, then every trust path that reaches them, under `fnl-security-review-gate`. |
 
-Both reviewers cover two rings, the change and its impact set, rather than the whole repository, and report what they traced. Delegated work is accepted only after the verifier checks it. A pull request merges only after the reviewer and the security reviewer have each posted an approving review comment for its current head commit; a push after a review needs a new review. A story closes after the verifier, then the reviewers.
+Both reviewers cover two rings, the change and its impact set, rather than the whole repository, and report what they traced. Delegated work is accepted only after the verifier checks it. A pull request merges only after the reviewer and the security reviewer have each posted an approving review comment for its current head commit; a push after a review needs a new review. A story closes only after the verifier and then both reviewers have passed it.
 
 ## Install
 
 Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh). Choose one way per agent, because both together list every skill twice.
 
-Claude Code and Codex install it from the [FINOLABS catalog](https://github.com/finolabs/plugins), marketplace `finolabs`, which groups the FINOLABS plugins together. This repository also remains its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. Installs track `main`, which carries the next version with `-dev`; releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
+Claude Code and Codex install the plugin from the [FINOLABS catalog](https://github.com/finolabs/plugins), marketplace `finolabs`, which groups the FINOLABS plugins together. This repository also remains its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. Installs track `main`, which carries the next version with `-dev`; releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
 
 ### Claude Code
 
@@ -107,9 +107,9 @@ agy plugin install https://github.com/finolabs/finolabs-vibecode
 npx skills add finolabs/finolabs-vibecode
 ```
 
-The installer lists the skills to choose from; `--skill <name>` takes one directly and `-a <agent>` picks the agent. It copies editable files into your project (`-g` for every project): update them with `npx skills update`. The plugin path also carries the agents, the session hook and the Antigravity rule, which single-skill installs leave out.
+The installer lists the skills to choose from; `--skill <name>` takes one directly and `-a <agent>` picks the agent. It copies editable files into your project (or, with `-g`, for every project); update them with `npx skills update`. The plugin path also carries the agents, the session hook and the Antigravity rule, which single-skill installs leave out.
 
-Each skill works alone, with one exception: `fnl-handoff`, `fnl-advisor`, `fnl-committee`, `fnl-coordinator-sessions` and `fnl-status` need `fnl-delegate` beside them. Other skills mention their neighbours by name and work without them. A sensible first pick: `fnl-coding-router`, `fnl-verification`, `fnl-review-gate`, `fnl-commit-messages`, plus `fnl-setup` to configure them.
+Each skill works alone, except the delegation family: `fnl-handoff`, `fnl-advisor`, `fnl-committee`, `fnl-coordinator-sessions` and `fnl-status` need `fnl-delegate` beside them. Other skills mention their neighbors by name and work without them. A sensible first pick: `fnl-coding-router`, `fnl-verification`, `fnl-review-gate`, `fnl-commit-messages`, plus `fnl-setup` to configure them.
 
 ### First check
 
@@ -127,7 +127,7 @@ npx skills add https://github.com/cloudflare/security-audit-skill --skill securi
 
 ## Host configuration
 
-The orchestration skills keep machine facts (agent commands, allowed models, which delegates each coordinator can reach, the route judge, allow-rules, lock path, parallel limit) outside the plugin, in a host config file: `ORCHESTRATION_HOST_CONFIG`, else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. Start from `skills/fnl-delegate/references/host-template.md`. The dispatch ledger defaults to `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it). When Codex or Antigravity also coordinates, put both files where every coordinator's sandbox can read and write them.
+The orchestration skills keep machine facts (agent commands, allowed models, which delegates each coordinator can reach, the route judge, allow-rules, lock path, parallel limit) outside the plugin, in a host config file: the path in `ORCHESTRATION_HOST_CONFIG`, or else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. Start from `skills/fnl-delegate/references/host-template.md`. The dispatch ledger defaults to `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it). When Codex or Antigravity also coordinates, put both files where every coordinator's sandbox can read and write them.
 
 The route judge is optional. Routing is complete without one; a judge such as TypeSafe's Jev, called through its own `typesafe-ai` skill, settles only the calls the rules leave open, and the plugin holds no key for it.
 
