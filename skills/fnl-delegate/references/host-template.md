@@ -43,7 +43,7 @@ Which agent can coordinate on this machine, and which delegates each one can rea
 Invocation with a hard cap and the extra directories the toolchain needs:
 
 ```bash
-B="<brief file>"; O="<logs folder>"; W="<worktree>"; T="<task label>"
+B="<brief file>"; O="<logs folder>"; W="<worktree>"; T="<ledger id>-<slug>"  # slug: a-z, 0-9, -, at most 40 characters
 <hard-cap wrapper, e.g. perl -e 'alarm 5400; exec @ARGV'> <codex path> exec \
   -m <model> -c model_reasoning_effort=<level> -s workspace-write -C "$W" -o "$O/$T-last.txt" "$(cat "$B")" \
   < /dev/null > "$O/$T-codex.log" 2>&1; echo "$T=$?"
