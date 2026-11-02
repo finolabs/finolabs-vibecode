@@ -63,7 +63,7 @@ Check before publishing what the forge plan offers on a private repository, and 
 - **Secret scanning and push protection** on.
 - **Dependency alerts and security updates** on for every ecosystem the repository uses, including its CI actions.
 - **Private vulnerability reporting** on, whenever `SECURITY.md` points reporters to it.
-- **Merge settings**: the allowed merge methods keep each commit as written (merge commit or rebase), or squash only where each pull request title becomes a verb-led subject line that `fnl-commit-messages` accepts (on GitHub, `squash_merge_commit_title` is `PR_TITLE` or `COMMIT_OR_PR_TITLE`); head branches are deleted after merge.
+- **Merge settings**: the allowed merge methods keep each commit as written (merge commit or rebase), or squash only where each pull request title becomes a verb-led subject line that `fnl-commit-messages` accepts (on GitHub, `squash_merge_commit_title` is `PR_TITLE` or `COMMIT_OR_PR_TITLE`); head branches are deleted after merge. These match the branch flow in `fnl-commit-messages` "Branches".
 - **Actions**: the workflow token is read-only by default and cannot approve pull requests; workflows from first-time contributors' forks wait for approval; third-party actions are pinned to commit SHAs (enforced where the forge can, as GitHub's `sha_pinning_required`).
 - **Listing**: description, homepage and topics set; features the project does not use (wiki, projects, discussions) turned off so nothing unmonitored collects reports.
 

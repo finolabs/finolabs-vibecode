@@ -69,7 +69,7 @@ Done when the depth and its reason are in the receipt.
 ## 4. Work, then gate
 
 - Delegation to other agents follows the `fnl-delegate` skill. Within one task, budget root and children before spawning: MIN has no implementation children; otherwise at most two lightweight children, one nesting level and one heavy job at a time, unless a stricter cap applies. Independent tasks run in parallel up to `fnl-delegate`'s limit (5 runs), each under these per-task caps.
-- Commits follow `fnl-commit-messages`; versions, tags and changelogs follow `fnl-versioning`.
+- Commits follow `fnl-commit-messages`, and so does every branch: creating, syncing, merging and deleting it (`fnl-commit-messages` "Branches"). Versions, tags and changelogs follow `fnl-versioning`.
 - Proof follows `fnl-verification`.
 - Every pull request needs a posted code review and a posted security review before merge (`fnl-review-gate` "Pull requests").
 - Long sessions, handovers and titles follow `fnl-session-hygiene`.

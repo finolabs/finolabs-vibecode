@@ -32,7 +32,7 @@ One standard for every repository: applications, libraries, CLIs, services, plug
 
 - Format `vX.Y.Z`, pre-release `vX.Y.Z-rc.1`. A repository releasing several components prefixes the component path: `<path>/vX.Y.Z`, one tag per released component.
 - Annotated tags with the message `Release vX.Y.Z` and a short summary; signed where signing is configured.
-- Tag only a commit on the default branch, or on a maintenance branch `release/X.Y` for older lines, after required CI and release gates pass on that exact commit.
+- Tag only a commit on the default branch, or on a maintenance branch `release/X.Y` for older lines (created and fed as `fnl-commit-messages` "Branches" says), after required CI and release gates pass on that exact commit.
 - Published tags are **immutable**: never move, delete or reuse one. A bad release is superseded by a new version and marked (release note, Go `retract`, npm `deprecate`).
 - Go modules at major version 2 or later need the `/vN` module path suffix; plan it with the MAJOR decision.
 

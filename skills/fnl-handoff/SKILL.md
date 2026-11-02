@@ -18,7 +18,7 @@ Load the `fnl-delegate` skill and the host config it names. Requires the `fnl-de
 ## Arguments
 
 1. **Agent and model**: `--agent` and `--model`, or ones named in the text; otherwise the `fnl-delegate` routing.
-2. **Isolation**: `--worktree`, or any parallel dispatch → a new git worktree on a short branch named after the task, cut from the integration branch tip.
+2. **Isolation**: `--worktree`, or any parallel dispatch → a new git worktree on a short branch named after the task, cut from the integration branch tip (`fnl-commit-messages` "Branches").
 3. **Task**: everything else.
 
 ## The brief
