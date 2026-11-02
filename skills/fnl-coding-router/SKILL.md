@@ -5,7 +5,7 @@ description: Route coding work before the first substantive change. Use when sta
 
 # Coding router
 
-The entry point for coding work. It picks the workflow, the depth and the gates; the other skills in this plugin own the details it points to.
+The entry point for coding work. It picks the workflow, the depth and the gates; the other skills in this plugin own the details it points to. Work that is not code but carries comparable risk (queries on live data, infrastructure configuration, dashboards and reports, predictions and forecasts) reads [references/non-code-work.md](references/non-code-work.md) beside this skill.
 
 ## 1. Inspect before acting
 
@@ -63,7 +63,7 @@ Done when you can name the workflow, the phase and the next activity.
 
 - **MIN**: a bounded, reversible seam with known consumers and no unexplained failure, blocking finding, or contract, security, privacy, permission, runtime, dependency or migration risk. Work serially: no optional new spec, plan or interview, no implementation children, no broad reruns. Required acceptance, checks and specialist gates still apply. A no-runtime-impact text edit needs its applicable checks, not a new reviewer per edit; text that changes instructions, executable configuration, auth or data is not automatically harmless.
 - **NORMAL**: understood behavior and integration.
-- **DEEP**: consequential uncertainty, unknown consumers, sensitive boundaries or irreversible effects.
+- **DEEP**: consequential uncertainty, unknown consumers, sensitive boundaries or irreversible effects. Also: logic that combines several calculations whose errors compound, a prediction or forecast, and user input that is itself ambiguous.
 
 Depth sets effort inside the chosen workflow; in a Spec Kit repository it bypasses nothing except through the depth gate. Upgrade before dependent work. Downgrade only future ceremony when evidence allows, never acceptance, gates, findings or failure counters. File count alone does not set depth.
 
@@ -86,4 +86,4 @@ After two failed corrections of the same invariant, stop before a third. Also st
 - the proposed fix adds another flag, retry, debounce, timeout or state copy;
 - no shared authority, revision or epoch can prove the invariant.
 
-Then keep the implementation task open and the latest behavioral red as it is, stop product edits, and run a read-only architecture checkpoint: map each layer's owned state, whether it is authority or cache, its revision, its triggers and its stale readers. Separate safety, visibility truth, staleness, monotonicity, idempotency and coalescing. Choose one authoritative boundary or a versioned snapshot. Resume only with a deterministic root-cause test and a coherent design. Ask "which distinct failure does this action prevent?" of every proposed step.
+Then keep the implementation task open and the latest behavioral red as it is, stop product edits, and run a read-only architecture checkpoint: map each layer's owned state, whether it is authority or cache, its revision, its triggers and its stale readers. Separate safety, visibility truth, staleness, monotonicity, idempotency and coalescing. Choose one authoritative boundary or a versioned snapshot. Resume only with a deterministic root-cause test and a coherent design. Ask "which distinct failure does this action prevent?" of every proposed step. When the checkpoint leaves the cause open, propose `fnl-committee` and wait for the user's yes: it spends the quota of two model families.

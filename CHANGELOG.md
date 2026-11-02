@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- `fnl-coding-router` `references/non-code-work.md`, read on demand for work that is not code but carries comparable risk: queries and pipelines on live data, infrastructure configuration, dashboards and reports, predictions and forecasts. The router stays code by default. DEEP now also covers logic that combines calculations whose errors compound, predictions and forecasts, and ambiguous user input, and a checkpoint that leaves the cause open proposes `fnl-committee` and waits for the user's yes.
+
 ### Changed
 
 - The optional Jev route judge and activity evaluator now sit behind references that an agent reads only when it has one. `fnl-coding-router` runs `speckit-tasks` when the depth gate stays ambiguous and reads `references/activity-selection.md` "Depth gate questions" only with `typesafe-ai` installed; `fnl-delegate` points to `references/route-judgment.md` only when the host config names a judge; `fnl-setup` moves its route judge question to `references/route-judge.md` and records "none" without asking when no judge skill is installed. Without a judge, behavior is unchanged: the fallback rules already applied.
