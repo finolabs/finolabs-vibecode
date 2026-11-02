@@ -4,7 +4,7 @@ One engineering practice for AI coding agents, packaged as a single plugin with 
 
 This pack owns the decisions between tools: routing, depth, delegation, gates and conventions. For the work itself it points to trusted skills and native commands from known publishers (Matt Pocock's skills, Cloudflare's security audit, Spec Kit, each host's own review commands) instead of rewriting them, and every such pointer carries a fallback that keeps the skill working when the companion is not installed.
 
-Version: `0.1.1` (phase 0; see `fnl-versioning`). Between releases, `main` carries the next version with `-dev`. Targets: Claude Code, Codex and Antigravity, from one `skills/` folder.
+Latest release: [`v0.1.1`](https://github.com/fioenix/finolabs-vibecode/releases/tag/v0.1.1) (phase 0; see `fnl-versioning`). Between releases, `main` carries the next version with `-dev`. Targets: Claude Code, Codex and Antigravity, from one `skills/` folder.
 
 The quickest install: give your coding agent this repository's link and ask it to install the plugin. The next section tells it how.
 
