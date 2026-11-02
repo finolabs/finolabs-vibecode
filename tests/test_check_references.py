@@ -26,7 +26,18 @@ BREAKS = [
      "--reason fallback-quotas is not one of"),
     ("skills/fnl-delegate/references/host-template.md", "--max-turns <n>", "--max-turnz <n>",
      "--max-turnz is not described in agents.md"),
+    ("agents/fnl-verifier.md", '`fnl-verification` ("Accepting someone else\'s work")', '`fnl-verification` ("No such heading")',
+     '`fnl-verification` has no section "No such heading"'),
+    ("skills/fnl-status/SKILL.md", '`fnl-delegate` "Ledger"', "`fnl-delegate`'s \"Nope\"",
+     '`fnl-delegate` has no section "Nope"'),
+    ("skills/fnl-delegate/references/ledger.md", 'python3 -I "$L" open', "python3 -I $L open --outcom accepted",
+     "ledger.py has no option --outcom"),
+    ("skills/fnl-delegate/references/models.md", "Review by 2026-12-01.", "Review by 01/12/2026.",
+     "needs a line"),
 ]
+
+FENCED_HEADING = ("skills/fnl-status/SKILL.md", '`fnl-delegate` "Ledger"', '`fnl-handoff` "Budget"',
+                  '`fnl-handoff` has no section "Budget"')
 
 
 class CheckReferencesTest(unittest.TestCase):
@@ -52,7 +63,7 @@ class CheckReferencesTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_each_break_is_caught(self):
-        for rel, old, new, message in BREAKS:
+        for rel, old, new, message in BREAKS + [FENCED_HEADING]:
             with self.subTest(file=rel, message=message):
                 path = self.root / rel
                 original = path.read_text()

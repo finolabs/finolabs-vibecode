@@ -26,8 +26,9 @@ LEDGER_PROSE = ["skills/fnl-delegate/SKILL.md", "skills/fnl-delegate/references/
                 "skills/fnl-delegate/references/ledger.md", "skills/fnl-status/SKILL.md"]
 
 NAME = re.compile(r"`(fnl-[a-z-]+)`")
-SECTION = re.compile(r"`(fnl-[a-z-]+)` \"([^\"]+)\"")
-FILE_SECTION = re.compile(r"`([A-Za-z0-9_-]+\.md)` \"([^\"]+)\"")
+SECTION = re.compile(r"`(fnl-[a-z-]+)`(?:'s)? \(?\"([^\"]+)\"")
+FILE_SECTION = re.compile(r"`([A-Za-z0-9_-]+\.md)`(?:'s)? \(?\"([^\"]+)\"")
+REVIEW_BY = re.compile(r"^Checked \d{4}-\d{2}-\d{2}\. Review by \d{4}-\d{2}-\d{2}\.$", re.M)
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.M)
 SPAN = re.compile(r"`([^`\n]+)`")
@@ -36,7 +37,8 @@ SHORT_FLAG = re.compile(r"(?<![\w-])(-[a-zA-Z])\b")
 
 
 def headings(path):
-    return {h.strip("`* ") for h in HEADING.findall(path.read_text())}
+    text = re.sub(r"^```.*?^```", "", path.read_text(), flags=re.M | re.S)  # headings inside code fences are not sections
+    return {h.strip("`* ") for h in HEADING.findall(text)}
 
 
 def documents(root):
@@ -54,7 +56,12 @@ def strip_frontmatter(text):
 
 
 def lines(path):
-    return enumerate(strip_frontmatter(path.read_text()).splitlines(), 1)
+    text = strip_frontmatter(path.read_text())
+    if path.name == "CHANGELOG.md":
+        # Released entries name skills and sections as they were; check only Unreleased.
+        released = re.search(r"^## \[\d", text, re.M)
+        text = text[:released.start()] if released else text
+    return enumerate(text.splitlines(), 1)
 
 
 def targets(root):
@@ -137,7 +144,7 @@ def check_ledger_flags(root, docs, problems):
             if in_fence:
                 # A ledger command, or the continuation line of one.
                 code = line.split(" #", 1)[0]
-                calls_ledger = continued or ("ledger.py" in code and not code.startswith("L=")) or '"$L"' in code
+                calls_ledger = continued or ("ledger.py" in code and not code.startswith("L=")) or bool(re.search(r'"?\$\{?L\}?"?(\s|$)', code))
                 continued = calls_ledger and code.rstrip().endswith("\\")
             else:
                 code = " ".join(s for s in SPAN.findall(line) if "ledger.py" in s)
@@ -177,6 +184,12 @@ def check_host_template(root, problems):
             problems.append(f"host-template.md \"{agent}\": {flag} is not described in agents.md")
 
 
+def check_review_by(root, problems):
+    models = root / "skills/fnl-delegate/references/models.md"
+    if not REVIEW_BY.search(models.read_text()):
+        problems.append(f"{models.relative_to(root)}: needs a line \"Checked YYYY-MM-DD. Review by YYYY-MM-DD.\"")
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent)
     docs = documents(root)
@@ -185,6 +198,7 @@ def main():
     check_links(root, docs, problems)
     check_ledger_flags(root, docs, problems)
     check_host_template(root, problems)
+    check_review_by(root, problems)
     print("\n".join(problems) or f"references ok ({len(docs)} files)")
     sys.exit(1 if problems else 0)
 
