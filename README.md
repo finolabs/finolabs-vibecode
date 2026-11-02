@@ -6,7 +6,7 @@ This pack owns the decisions between tools: routing, depth, delegation, gates an
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-Latest release: [`v0.1.2`](https://github.com/finolabs/finolabs-vibecode/releases/tag/v0.1.2) (phase 0; see `fnl-versioning`). Between releases, `main` carries the next version with `-dev`. Targets: Claude Code, Codex and Antigravity, from one `skills/` folder.
+It targets Claude Code, Codex and Antigravity from one `skills/` folder. Latest release: [`v0.1.2`](https://github.com/finolabs/finolabs-vibecode/releases/tag/v0.1.2) (phase 0; see `fnl-versioning`). Between releases, `main` carries the next version with `-dev`.
 
 The quickest install: give your coding agent this repository's link and ask it to install the plugin. The next section tells it how.
 
@@ -68,11 +68,13 @@ Read-only subagents in `agents/` that apply the skills above in a fresh context.
 | `fnl-reviewer` | Is the change good? | A pull request or story is ready: it reads every changed file, then the callers, dependencies, contracts and tests the change affects, under `fnl-review-gate`. |
 | `fnl-security-reviewer` | Is the change safe? | The change crosses a sensitive boundary: it reads the changed files, then every trust path that reaches them, under `fnl-security-review-gate`. |
 
-Both reviewers cover two rings, the change and its impact set, rather than the whole repository, and report what they traced. Accepting delegated work takes the verifier. Every pull request merges only after the reviewer and the security reviewer have each posted an approving review comment for its current head commit; a push after a review means a new review. Closing a story takes the verifier first, then the reviewers.
+Both reviewers cover two rings, the change and its impact set, rather than the whole repository, and report what they traced. Delegated work is accepted only after the verifier checks it. A pull request merges only after the reviewer and the security reviewer have each posted an approving review comment for its current head commit; a push after a review needs a new review. A story closes after the verifier, then the reviewers.
 
 ## Install
 
-Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh); choose one way per agent, because both together list every skill twice. Claude Code and Codex install it from the [FINOLABS catalog](https://github.com/finolabs/plugins), which lists the FINOLABS plugins together under **Finolabs**; this repository also stays its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. Installs track `main`, which carries the next version with `-dev`; releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
+Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh). Choose one way per agent, because both together list every skill twice.
+
+Claude Code and Codex install it from the [FINOLABS catalog](https://github.com/finolabs/plugins), marketplace `finolabs`, which groups the FINOLABS plugins together. This repository also remains its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. Installs track `main`, which carries the next version with `-dev`; releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
 
 ### Claude Code
 
@@ -81,7 +83,7 @@ Every install path ships the same `skills/` folder. Install the whole plugin on 
 /plugin install finolabs-vibecode@finolabs
 ```
 
-From a shell, or from an agent: `claude plugin marketplace add finolabs/plugins`, then `claude plugin install finolabs-vibecode@finolabs`. Skills are namespaced, for example `/finolabs-vibecode:fnl-handoff`. To try a local checkout for one session: `claude --plugin-dir /path/to/finolabs-vibecode`.
+From a shell or an agent, run `claude plugin marketplace add finolabs/plugins`, then `claude plugin install finolabs-vibecode@finolabs`. Skills are namespaced, for example `/finolabs-vibecode:fnl-handoff`. To try a local checkout for one session: `claude --plugin-dir /path/to/finolabs-vibecode`.
 
 ### Codex
 
@@ -115,9 +117,9 @@ Ask your agent: "Route this change through the coding router and tell me the dep
 
 ## Works well with
 
-These skills set the gates and the routing; they do not try to replace good phase tools. They pair with [Matt Pocock's skills](https://github.com/mattpocock/skills) (MIT): `tdd` and `diagnosing-bugs` inside the work `fnl-coding-router` routes, `code-review` as the reviewer's instrument in the review gate, `grilling` and `prototype` for clarification, `pr` for pull request bodies, `/handoff` for portable handovers. Install that pack with its own instructions; `/fnl-ask` points to its skills when they fit. The two packs are independent projects.
+These skills set the gates and the routing; they do not try to replace good phase tools. They pair with [Matt Pocock's skills](https://github.com/mattpocock/skills) (MIT): `tdd` and `diagnosing-bugs` inside the work `fnl-coding-router` routes, `code-review` as the reviewer's instrument in the review gate, `grilling` and `prototype` for clarification, `pr` for pull request bodies, and `handoff` for portable handovers. Install that pack with its own instructions; `/fnl-ask` points to its skills when they fit. The two packs are independent projects.
 
-For reviews, the gates and the `fnl-reviewer` agent use each host's native instruments: `/code-review`, `/security-review` and `claude ultrareview` on Claude Code, `codex review` on Codex. Antigravity has no native review command, so it reviews by reading the diff, and the native second pass runs on Claude Code or Codex. For security audits, they recommend [Cloudflare's `security-audit` skill](https://github.com/cloudflare/security-audit-skill) (MIT):
+For reviews, the gates and the `fnl-reviewer` agent use each host's native instruments: `/code-review`, `/security-review` and `claude ultrareview` on Claude Code, `codex review` on Codex. Antigravity has no native review command, so it reviews by reading the diff, and the native second pass runs on Claude Code or Codex. For security audits, the security gates recommend [Cloudflare's `security-audit` skill](https://github.com/cloudflare/security-audit-skill) (MIT):
 
 ```bash
 npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit
@@ -142,18 +144,12 @@ agents/openai.yaml                Codex skill-list display metadata
 skills/fnl-*/SKILL.md             one self-contained skill per folder, references/ and scripts/ beside it
 rules/AGENTS.md                   session-start reminder: an always-on rule on Antigravity, injected by the hook in .claude-plugin/hooks.json on Claude Code
 assets/                           icon (light and dark, SVG and 512 px PNG) and its NOTICE
-evals/                            trigger suite for `claude plugin eval`
+evals/                            trigger, behavior and parity cases for `claude plugin eval`
+scripts/                          repository checks, such as cross-reference validation
+tests/                            unit tests for the repository scripts and the ledger
+CHANGELOG.md                      Keep a Changelog
 LICENSE                           MIT
-CHANGELOG.md                 Keep a Changelog
 ```
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities as [SECURITY.md](SECURITY.md) describes.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
 
 ## Validate
 
@@ -173,7 +169,15 @@ claude plugin eval . --tag trigger --ablation none
 claude plugin eval . --tag quality --ablation none --scaffold
 ```
 
-The eval suite checks that each skill fires on a representative prompt and that unrelated prompts load none. The repository root `CLAUDE.md` is context for agents working on this repository; the validator warns that a plugin does not load it, which is intended.
+The trigger cases check that each skill fires on a representative prompt and that unrelated prompts load none; the quality cases grade what a skill makes the agent decide. The `behavior` cases, a subset of `quality`, are the ones to rerun after changing a skill's rules. The repository root `CLAUDE.md` is context for agents working on this repository; the validator warns that a plugin does not load it, which is intended.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities as [SECURITY.md](SECURITY.md) describes.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
 
 ## Acknowledgements
 
