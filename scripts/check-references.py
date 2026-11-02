@@ -147,6 +147,14 @@ def check_flag(options, sub, flag, value, where, problems, extra=()):
         problems.append(f"{where}: --{flag} {value} is not one of {sorted(choices)}")
 
 
+def check_command(options, sub, code, where, problems):
+    if sub and sub not in options:
+        problems.append(f"{where}: ledger.py has no subcommand {sub}")
+        return
+    for flag, value in FLAG.findall(code):
+        check_flag(options, sub, flag, value, where, problems)
+
+
 def check_ledger_flags(root, docs, problems):
     options = ledger_options(root)
     for path in docs:
@@ -155,27 +163,24 @@ def check_ledger_flags(root, docs, problems):
         sub = None
         for n, line in lines(path):
             if line.lstrip().startswith("```"):
-                in_fence, continued = not in_fence, False
+                in_fence, continued, sub = not in_fence, False, None
                 continue
             if in_fence:
-                # A ledger command, or the continuation line of one.
+                # A ledger command, or the continuation line of one, which keeps its subcommand.
                 code = line.split(" #", 1)[0]
-                calls_ledger = continued or ("ledger.py" in code and not code.startswith("L=")) or bool(re.search(r'"?\$\{?L\}?"?(\s|$)', code))
+                was_continued = continued
+                calls_ledger = was_continued or ("ledger.py" in code and not code.startswith("L=")) or bool(re.search(r'"?\$\{?L\}?"?(\s|$)', code))
                 continued = calls_ledger and code.rstrip().endswith("\\")
+                if calls_ledger:
+                    named = SUBCOMMAND.search(code)
+                    sub = named.group(1) if named else (sub if was_continued else None)
+                    check_command(options, sub, code, f"{rel}:{n}", problems)
             else:
-                code = " ".join(s for s in SPAN.findall(line) if "ledger.py" in s)
-                calls_ledger = bool(code)
-            if calls_ledger:
-                named = SUBCOMMAND.search(code)
-                if named:
-                    sub = named.group(1)
-                elif not continued:
-                    sub = None
-                if sub and sub not in options:
-                    problems.append(f"{rel}:{n}: ledger.py has no subcommand {sub}")
-                    continue
-                for flag, value in FLAG.findall(code):
-                    check_flag(options, sub, flag, value, f"{rel}:{n}", problems)
+                # Each inline span is its own command.
+                for span in SPAN.findall(line):
+                    if "ledger.py" in span:
+                        named = SUBCOMMAND.search(span)
+                        check_command(options, named.group(1) if named else None, span, f"{rel}:{n}", problems)
     for name in LEDGER_PROSE:
         path = root / name
         for n, line in lines(path):
