@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-11-03
+
 ### Added
 
 - `fnl-coding-router` `references/non-code-work.md`, read on demand for queries on live data, infrastructure, dashboards and forecasts; the router stays code by default, and DEEP now also covers compounding calculations, predictions and ambiguous input.
@@ -19,7 +21,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `fnl-verification`: names the gap and proposes a test for an untested runtime change, proposes a full suite for widely shared code, points to the non-code reference, and lets only the owner waive a check.
 - `fnl-commit-messages`: a commit is one whole seam with a body of about six lines; agents commit when a seam passes its targeted tests, on their own branch, without pushing; pull request text stays short.
 - `fnl-handoff`: findings go back to the same run while it is light and to a new run after about 60% context or two failed rework rounds; a prose brief names language and tone, and the editing pass runs only for social content or documents.
-- `fnl-advisor` and `fnl-committee`: both are proposed and wait for the user's yes; tier follows difficulty; a same-family advisor stands in only when both other families are out; a committee adds a third member only after two rounds of disagreement, settles it with one reversible experiment, and waits for the user before its plan is dispatched.
+- `fnl-advisor` and `fnl-committee`: both are proposed and wait for the user's yes (an advisor may run without it while the user is away; a committee never does); tier follows difficulty; a same-family advisor stands in only when both other families are out; a committee adds a third member only after two rounds of disagreement, settles it with one reversible experiment, and waits for the user before its plan is dispatched.
 - `fnl-coordinator-sessions`: coordinate from three user stories or ten tasks; the coordinator writes no application code; standby covers the next story plus one fix session; independent stories still run one after another.
 - `fnl-status`: flags a group only from five runs (first-pass acceptance below 60%, or timeouts plus fallbacks at 25%); a coordinator closes an orphaned ledger record only when its log or the repository shows how the run ended.
 - `fnl-knowledge` covers two layers, the knowledge base and the repository, and leaves an agent's native memory to the agent (the per-host `references/hosts.md` is removed); a decision is written as soon as the user settles it, a lesson at the end of a task or at once after an incident, and a project-state entry carries a review-by date. `fnl-setup` no longer writes a native-memory pointer.
@@ -30,6 +32,11 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `fnl-reviewer`, `fnl-security-reviewer` and `fnl-verifier`: the two reviewers are always the entry and run the host's native review (`/code-review`, `codex review`) as their engine, with the effort set by depth. The security reviewer runs `security-audit` in focused mode on the diff when a trigger matches or the diff is large, and the native security review otherwise; where an instrument is missing it reviews by hand and tells the caller that `/fnl-setup` guides installing it. Reviewers use the CRITICAL to LOW scale, trace each hunk to an acceptance criterion, name engine-only coverage, and need a concrete scenario for a MEDIUM or higher security finding; `fnl-security-reviewer` runs on `opus` and `fnl-verifier` on `sonnet`. `fnl-delegate` uses the verifier for hard and very hard runs, and the coordinator checks easy and medium runs itself. `fnl-setup` gains a review tools step that strongly recommends installing missing instruments.
 - `fnl-session-hygiene`: a finished user story with its review gate closed is a boundary for a fresh session, knowledge is written back only when it would change what an agent does next time, and session titles use English for the activity unless the user asks for their own language.
 - `fnl-versioning`: an agent never cuts a release on its own and proposes one when a spec is merged, a spec usually bumps the last digit, a release is two pull requests, and changelog entries stay to one or two sentences.
+
+### What to do
+
+- Run `/fnl-setup` again: its new review tools step finds the review instruments the reviewer agents use (`/code-review`, `/security-review`, `codex review`, Cloudflare's `security-audit`) and recommends installing any that are missing.
+- If your host config names a route judge, nothing changes in it; the coordinator and the router now ask that judge first.
 
 ## [0.1.3] - 2026-11-02
 
@@ -139,7 +146,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.0...v0.1.1
