@@ -36,9 +36,11 @@ FIELDS = "author,headRefOid,comments,reviews,statusCheckRollup,mergeStateStatus,
 TIMEOUT = 60  # seconds for each gh call
 
 # The low-risk lane: files a pull request may change and still take one review
-# pass. The changelog may change freely; a plugin manifest only in its
-# top-level "version".
-LANE_FREE = {"CHANGELOG.md"}
+# pass. The changelog and the root documents written for people may change
+# freely; a plugin manifest only in its top-level "version". Agent context
+# files (CLAUDE.md, AGENTS.md), skills, agents and rules never qualify.
+LANE_FREE = {"CHANGELOG.md", "README.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md",
+             "SECURITY.md", "PRIVACY.md", "TERMS.md"}
 LANE_VERSION_ONLY = {".claude-plugin/plugin.json", ".codex-plugin/plugin.json", ".antigravity-plugin/plugin.json"}
 
 
