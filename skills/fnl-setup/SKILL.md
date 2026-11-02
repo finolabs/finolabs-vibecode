@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Prepare this machine and repository so the `fnl-` skills work as written. Explore, grill the user to settle each choice, confirm, then write.
 
-Let the user choose the mode first: **detailed** interviews each section, **quick** asks every decision once with its recommended default and writes after one confirmation. In quick mode, leave unsettled any item the findings cannot fill and name it in the report; the skill that later needs it, given the repository's context, asks the user once. Run setup again only when an agent on the machine is added or changed, or a new plugin version adds a field to the host template; it updates in place.
+Let the user choose the mode first: **detailed** interviews each section, **quick** asks every decision once with its recommended default and writes after one confirmation, except that consent to send data to a service (the route judge) is always asked on its own and never bundled. In quick mode, leave unsettled any item the findings cannot fill and name it in the report; the skill that later needs it, given the repository's context, asks the user once. Run setup again only when an agent on the machine is added or changed, or a new plugin version adds a field to the host template; it updates in place.
 
 ## 1. Explore
 

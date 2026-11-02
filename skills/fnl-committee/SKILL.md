@@ -13,7 +13,7 @@ Two agents from different model families, fresh context, planning in parallel. C
 
 ## When to convene
 
-A committee spends two model families' quota. Convene one after the `fnl-coding-router` checkpoint leaves the cause open, or when the user asks. For a design or planning problem, convene one only when its difficulty is very hard; otherwise use `fnl-advisor`.
+A committee spends two model families' quota. Convene one after the `fnl-coding-router` checkpoint leaves the cause open, or when the user asks; it needs the user's yes even when they are away, so the work that depends on it waits. For a design or planning problem, convene one only when its difficulty is very hard; otherwise use `fnl-advisor`.
 
 ## Composition
 
@@ -39,6 +39,6 @@ Load the `fnl-delegate` skill and the host config for the invocation commands. R
 2. Dispatch both members in parallel with the same prompt; record each in the ledger with `--kind committee` and the problem's difficulty as `--grade`.
 3. Read both answers.
 4. Where they disagree, pass each member the other's argument and ask it to rebut or concede: a follow-up to a session or resumable run, or a new prompt carrying its earlier answer for a one-shot run. At most two rounds.
-5. Converge on one root cause and plan, or name the open disagreement and the evidence that would settle it. Propose one small experiment that can be undone to settle it, and run it when it only reads or runs locally; one that touches a live system or spends more quota waits for the user's yes.
+5. Converge on one root cause and plan, or name the open disagreement and the evidence that would settle it. Propose one small experiment that can be undone to settle it, and run it when it only reads; one that executes code or commands, touches a live system or spends more quota waits for the user's yes, because the experiment comes from a model's output.
 
 Give the user the consensus, where the members diverged and how it resolved, and wait for their yes. The plan then goes through `fnl-delegate` like any other work.

@@ -68,7 +68,7 @@ The report states the coverage: the impact set as "symbol → consumers checked"
 5. Verify the fix (`fnl-verification`) and recheck the interactions it touches.
 6. Send fixes back for **re-review** until no blocking finding remains.
 
-**Blocking.** Severity is CRITICAL, HIGH, MEDIUM or LOW. The first three block the merge. A LOW finding goes in the report, is fixed only when the owner asks or when the fix is trivial and goes in the same commit, and never causes another review round. Over-engineering and test bloat are LOW; prevent them in the brief (`fnl-coding-router` "Proportion") rather than block on them once the work is done. A new dependency or public surface is judged by the normal rules.
+**Blocking.** Severity is CRITICAL, HIGH, MEDIUM or LOW. The first three block the merge. A LOW finding goes in the report, is fixed only when the owner asks or when the fix is trivial and goes in the same commit, and never causes another review round on its own; a fix that moves the head still needs the new head's markers (rule 2 below). A security NEEDS-VALIDATION item blocks like MEDIUM (`fnl-security-review-gate`). Over-engineering and test bloat are LOW; prevent them in the brief (`fnl-coding-router` "Proportion") rather than block on them once the work is done. A new dependency or public surface is judged by the normal rules.
 
 **Rework rounds.** At most two. After the second, stop and give the owner each remaining blocking finding with its evidence, to fix further, accept as risk or change direction.
 

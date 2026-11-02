@@ -34,7 +34,7 @@ Report each check as **PASS**, **FAIL**, **PENDING**, **SKIP**, **WAIVED** (with
 Before accepting a delegated run or a session's report, check all three:
 
 - the commits sit on the branch and base the brief named, and nothing that belongs in them is left uncommitted;
-- the whole diff is in scope: each hunk traces to an acceptance criterion (`fnl-coding-router` "Proportion"), with no unrelated edits, secrets, env files or stray generated output;
+- the whole diff is in scope: each hunk traces to an acceptance criterion (`fnl-coding-router` "Proportion"; an untraced hunk is removed or justified before the task is marked done, and stays LOW at the review gate), with no unrelated edits, secrets, env files or stray generated output;
 - the brief's targeted tests, rerun by you, pass, and you have read their output.
 
 A task is marked done only on this evidence.

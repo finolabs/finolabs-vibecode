@@ -13,7 +13,7 @@ One agent reads the situation and gives a judgement. You stay the decider; the a
 
 ## When to run
 
-Propose an advisor and wait for the user's yes, because each run spends quota. Propose it when the decision cannot be undone or changes a contract, or when your own analysis leaves you unsure. A user who asks for one needs no proposal.
+Propose an advisor and wait for the user's yes, because each run spends quota. Propose it when the decision cannot be undone or changes a contract, or when your own analysis leaves you unsure. A user who asks for one needs no proposal. When the user is away, run one without the yes when a decision would otherwise wait for them, as `fnl-delegate` says for an absent user, and record who settled it.
 
 ## Picking the advisor
 
