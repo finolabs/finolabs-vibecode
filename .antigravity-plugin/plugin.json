@@ -3,7 +3,7 @@
   "name": "finolabs-vibecode",
   "displayName": "Finolabs Vibecode",
   "description": "Engineering practice for coding agents: coding-work routing, agent delegation, versioning, commits, review and security gates, verification.",
-  "version": "0.1.2",
+  "version": "0.1.3-dev",
   "logo": "assets/icon.svg",
   "author": {
     "name": "FINOLABS",
