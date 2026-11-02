@@ -2,8 +2,8 @@
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "finolabs-vibecode",
   "owner": {
-    "name": "Fioenix",
-    "url": "https://github.com/fioenix"
+    "name": "FINOLABS",
+    "url": "https://github.com/finolabs"
   },
   "description": "Distribution channel for the finolabs-vibecode plugin.",
   "plugins": [

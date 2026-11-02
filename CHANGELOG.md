@@ -14,6 +14,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Claude Code and Codex install the plugin from the FINOLABS catalog, `finolabs/plugins` (`finolabs-vibecode@finolabs`), which groups the FINOLABS plugins under one name; the repository's own marketplace stays for existing installs. The manifests name FINOLABS as author and developer.
 - `fnl-coordinator-sessions`, the delegation host template and agent contracts use that title format.
 - `fnl-verifier` counts a review marker only from an author with write access, like the merge check, which now names the permission values GitHub returns.
 - `fnl-delegate` keeps routing and the steps every dispatch takes in `SKILL.md`, and moves procedures only some runs reach (quota fallback, parallel runs, the heavy-job lock, handover, file placement, ledger commands) to `references/dispatch.md` and `references/ledger.md`.

@@ -18,8 +18,8 @@ You were given this repository's link to install it for the user. Follow these s
 
    | Host | Commands |
    | --- | --- |
-   | Claude Code | `claude plugin marketplace add fioenix/finolabs-vibecode`, then `claude plugin install finolabs-vibecode@finolabs-vibecode` |
-   | Codex | `codex plugin marketplace add fioenix/finolabs-vibecode`, then `codex plugin add finolabs-vibecode@finolabs-vibecode` |
+   | Claude Code | `claude plugin marketplace add finolabs/plugins`, then `claude plugin install finolabs-vibecode@finolabs` |
+   | Codex | `codex plugin marketplace add finolabs/plugins`, then `codex plugin add finolabs-vibecode@finolabs` |
    | Antigravity | `agy plugin install https://github.com/fioenix/finolabs-vibecode` |
    | Other agents | `npx skills add fioenix/finolabs-vibecode -a <agent>` |
 
@@ -69,25 +69,25 @@ Both reviewers cover two rings, the change and its impact set, rather than the w
 
 ## Install
 
-Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh); choose one way per agent, because both together list every skill twice. The repository is its own marketplace for each host. Installs from it track `main`, which carries the next version with `-dev`; releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
+Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh); choose one way per agent, because both together list every skill twice. Claude Code and Codex install it from the [FINOLABS catalog](https://github.com/finolabs/plugins), which lists the FINOLABS plugins together under **Finolabs**; this repository also stays its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. Installs track `main`, which carries the next version with `-dev`; releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
 
 ### Claude Code
 
 ```text
-/plugin marketplace add fioenix/finolabs-vibecode
-/plugin install finolabs-vibecode@finolabs-vibecode
+/plugin marketplace add finolabs/plugins
+/plugin install finolabs-vibecode@finolabs
 ```
 
-From a shell, or from an agent: `claude plugin marketplace add fioenix/finolabs-vibecode`, then `claude plugin install finolabs-vibecode@finolabs-vibecode`. Skills are namespaced, for example `/finolabs-vibecode:fnl-handoff`. To try a local checkout for one session: `claude --plugin-dir /path/to/finolabs-vibecode`.
+From a shell, or from an agent: `claude plugin marketplace add finolabs/plugins`, then `claude plugin install finolabs-vibecode@finolabs`. Skills are namespaced, for example `/finolabs-vibecode:fnl-handoff`. To try a local checkout for one session: `claude --plugin-dir /path/to/finolabs-vibecode`.
 
 ### Codex
 
 ```bash
-codex plugin marketplace add fioenix/finolabs-vibecode
+codex plugin marketplace add finolabs/plugins
 ```
 
 ```bash
-codex plugin add finolabs-vibecode@finolabs-vibecode
+codex plugin add finolabs-vibecode@finolabs
 ```
 
 ### Antigravity

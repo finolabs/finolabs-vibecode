@@ -10,8 +10,8 @@
   "version": "0.1.2-dev",
   "description": "One engineering practice for AI coding agents: coding-work routing, agent delegation, versioning, commit messages, review gates, security review, verification and open source readiness.",
   "author": {
-    "name": "Fioenix",
-    "url": "https://github.com/fioenix"
+    "name": "FINOLABS",
+    "url": "https://github.com/finolabs"
   },
   "homepage": "https://github.com/fioenix/finolabs-vibecode",
   "repository": "https://github.com/fioenix/finolabs-vibecode",
