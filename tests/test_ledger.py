@@ -81,6 +81,12 @@ class LedgerTest(unittest.TestCase):
         result = self.run_ledger("open")
         self.assertIn("malformed line 1", result.stderr)
 
+    def test_json_lines_that_are_not_objects_are_skipped(self):
+        self.path.write_text('["start"]\n42\n')
+        result = self.run_ledger("open")
+        self.assertIn("malformed line 1", result.stderr)
+        self.assertIn("malformed line 2", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
