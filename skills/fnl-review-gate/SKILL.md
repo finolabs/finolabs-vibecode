@@ -87,6 +87,8 @@ Rules:
 4. **Merge check**: before merging, read the pull request's head SHA and comments (`gh pr view <number> --json headRefOid,comments`) and confirm one `APPROVE` marker of each kind for that SHA. A missing or stale comment blocks the merge.
 5. Without the plugin's agents, two independent reviewers as "Who reviews" defines run the same reviews and post the same markers. Where scoped policy lets one reviewer cover both, it posts both markers, one comment each.
 
+When a reviewer cannot post (no forge access, or a denied permission), it returns the finished comment, marker included, to whoever asked for the review. The coordinator posts it only where it holds the same authority to post; otherwise it hands the comment to the owner, and the merge waits. Nobody edits the verdict or the marker on the way.
+
 Posting review comments on a repository's pull requests is part of this gate wherever the repository adopts it in its agent context file (`fnl-setup` writes that line); that adoption is the standing authority to post them. It grants no authority to merge, which stays with the owner.
 
 ## Approval
