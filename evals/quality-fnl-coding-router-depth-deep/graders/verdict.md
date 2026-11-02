@@ -4,4 +4,4 @@ target: last_message
 match: contains
 ---
 
-(?:^|\n)[`*_]*Depth: DEEP\b[^\n]*\s*$
+(?:^|\n)[ \t]*[`*_]*Depth: DEEP[`*_.]*\s*$

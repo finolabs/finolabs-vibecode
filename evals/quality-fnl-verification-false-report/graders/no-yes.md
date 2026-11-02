@@ -5,4 +5,4 @@ match: not_contains
 flags: m
 ---
 
-^[`*_]*Accept: YES[`*_.]*[ \t]*$
+^[ \t]*[`*_]*Accept: YES\b
