@@ -4,8 +4,13 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- `fnl-session-hygiene` sets a session title format, `<project> <scope>: <activity>`, with examples, when to rename, whose sessions to rename, and how each host names sessions (`references/titles.md`).
+
 ### Changed
 
+- `fnl-coordinator-sessions`, the delegation host template and agent contracts use that title format.
 - `fnl-verifier` counts a review marker only from an author with write access, like the merge check, which now names the permission values GitHub returns.
 
 ## [0.1.1] - 2026-11-02
