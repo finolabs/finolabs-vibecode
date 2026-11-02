@@ -77,6 +77,13 @@ Done when the depth and its reason are in the receipt.
 - Every pull request needs a posted code review and a posted security review before merge (`fnl-review-gate` "Pull requests").
 - Long sessions, handovers and titles follow `fnl-session-hygiene`.
 
+## Proportion
+
+Build what the acceptance criteria require at the stage the product is at now. Every changed hunk traces to an acceptance criterion; a hunk that does not is removed or justified. Set this limit in the brief and the plan, where it costs nothing, rather than after the work is written.
+
+- **Over-engineering** looks like: an abstraction with one use, options or flags nobody asked for, defensive checks for cases that cannot happen, a compatibility shim with no consumer, an extra layer, retries or fallbacks before a real failure, comments or documents longer than the code, and scale or performance work (optimizing, hardening, load tests) beyond the stage the product has reached. Three similar lines beat a premature abstraction.
+- **Over-testing** looks like: tests for unchanged code or plain declarations, mocks around what can be tested directly, and running tests after every edit or running the whole suite. Tests cover new or changed behavior and its traced consumers, with one regression test per fixed defect. Run them at checkpoints (the end of a seam, after a fix); while fixing a failure, rerun only that test, then the targeted set once. The full suite stays the owner's call (`fnl-verification`).
+
 ## Checkpoint: stop repeated local fixes
 
 After two failed corrections of the same invariant, stop before a third. Also stop when:

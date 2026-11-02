@@ -53,6 +53,7 @@ Use every heading; write "none" where one is empty, so the agent knows it was co
 ## Constraints
 - [Project rules that bind this task, quoted or pointed at by path]
 - [Files the agent must leave alone, e.g. the coordinator's task list or plan]
+- The smallest change that meets the acceptance criteria: no extra abstraction, options, tests or scale work, and tests run only as the Tests to run says, at checkpoints (`fnl-coding-router` "Proportion").
 - No secrets in code, commands or commits; never read env or credential files.
 - [Commit format: atomic commits, subject line, trailers]
 

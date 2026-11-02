@@ -55,7 +55,7 @@ A review covers two rings, in order: the change itself, then what the change can
 
    Follow one hop from each changed symbol. Go further only where the hop passes the change on (a changed return shape handed to the next caller, a widened permission reused elsewhere).
 
-Defects seen outside both rings are listed separately as **outside the change**, non-blocking. A diff over about 1,000 changed lines or 30 files is split by seam, one reviewer per seam, each with its own rings.
+Defects seen outside both rings are listed separately as **outside the change**, non-blocking: they stay in the report, are not fixed in the same pull request, and the owner decides whether to open an issue. A diff over about 1,000 changed lines or 30 files is split by seam, one reviewer per seam, each with its own rings.
 
 The report states the coverage: the impact set as "symbol → consumers checked", and anything not traced with the reason. The gate reads it to know what the approval covers.
 
@@ -67,6 +67,10 @@ The report states the coverage: the impact set as "symbol → consumers checked"
 4. Every fix that changes runtime behavior gets a **regression test** that fails without the fix.
 5. Verify the fix (`fnl-verification`) and recheck the interactions it touches.
 6. Send fixes back for **re-review** until no blocking finding remains.
+
+**Blocking.** Severity is CRITICAL, HIGH, MEDIUM or LOW. The first three block the merge. A LOW finding goes in the report, is fixed only when the owner asks or when the fix is trivial and goes in the same commit, and never causes another review round. Over-engineering and test bloat are LOW; prevent them in the brief (`fnl-coding-router` "Proportion") rather than block on them once the work is done. A new dependency or public surface is judged by the normal rules.
+
+**Rework rounds.** At most two. After the second, stop and give the owner each remaining blocking finding with its evidence, to fix further, accept as risk or change direction.
 
 ## Pull requests
 
