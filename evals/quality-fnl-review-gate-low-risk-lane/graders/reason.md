@@ -3,4 +3,4 @@ type: llm
 weight: 1
 ---
 
-Pass if the answer gives pull request #51, which changes only the README and changelog, one reviewer covering both the code and the security review, and sends #52 to two reviewers because it changes a skill file that agents follow. Fail if it treats both alike, or if it lets #52 take the single-reviewer path.
+Pass if the answer gives pull request #51, which only edits the changelog and a manifest's version line, one reviewer covering both reviews, and sends #52 to two reviewers because a README is outside the low-risk lane (agents read and follow it). Fail if it treats both alike, or lets #52 take the single-reviewer path.

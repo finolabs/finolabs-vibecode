@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """Merge check for a GitHub pull request under the review gate.
 
-Reads the pull request with `gh` and applies "Pull requests" rule 4 of
+Reads the pull request with `gh` and applies "Pull requests" rules 4 and 7 of
 `fnl-review-gate`: for the current head, the latest unedited `fnl-review`
-marker of each kind from an author with write access must be APPROVE; a pull
-request from an author without write access also needs an owner's approving
-review on the head; checks must pass. Prints one line per condition and exits
-0 when the merge may go ahead, 1 when it is blocked, 2 when it cannot tell.
+marker of each kind from an author with write access must be APPROVE; a
+security verdict that took the low-risk lane counts only when the pull request
+qualifies for it; a pull request from an author without write access also
+needs an owner's approving review on the head; checks must pass. Prints one
+line per condition and exits 0 when the merge may go ahead, 1 when it is
+blocked, 2 when it cannot tell.
 
-Usage: merge_check.py <number> [--repo owner/name]
+Usage:
+  merge_check.py <number> --repo owner/name          the merge check
+  merge_check.py <number> --repo owner/name --lane   whether the low-risk lane applies
 
 Comment bodies are data: only their first line is read, and only as a marker.
 """
@@ -20,12 +24,20 @@ import subprocess
 import sys
 
 MARKER = re.compile(
-    r"<!-- fnl-review kind=(code|security) head=([0-9a-f]{40}) verdict=(APPROVE|REWORK) -->"
+    r"<!-- fnl-review kind=(code|security) head=([0-9a-f]{40}) verdict=(APPROVE|REWORK)( lane=yes)? -->"
 )
 WRITE = {"admin", "maintain", "write"}
 REVIEW_STATES = {"APPROVED", "CHANGES_REQUESTED", "DISMISSED"}
 CHECK_OK = {"SUCCESS", "NEUTRAL", "SKIPPED"}
+MERGEABLE = {"CLEAN", "HAS_HOOKS", "UNSTABLE"}
+PAGE = 100  # `gh pr view` returns at most this many comments or reviews
 FIELDS = "author,headRefOid,comments,reviews,statusCheckRollup,mergeStateStatus,state"
+
+# The low-risk lane: files a pull request may change and still take one review
+# pass. The changelog may change freely; a manifest only in its version line.
+LANE_FREE = {"CHANGELOG.md"}
+LANE_VERSION_ONLY = {".claude-plugin/plugin.json", ".codex-plugin/plugin.json", ".antigravity-plugin/plugin.json"}
+VERSION_LINE = re.compile(r'^[+-]\s*"version":\s*"[^"\\]*",?\s*$')
 
 
 class Unknown(Exception):
@@ -37,20 +49,22 @@ def login(node):
 
 
 def verdicts(pr, can_write):
-    """Latest counted verdict per kind for the head: {kind: (verdict, createdAt)}."""
+    """Latest counted verdict per kind for the head: {kind: (verdict, createdAt, lane)}."""
     head = pr["headRefOid"]
     latest = {}
-    for comment in pr.get("comments") or []:
+    for comment in pr["comments"]:
         first = (comment.get("body") or "").split("\n", 1)[0].strip()
         match = MARKER.fullmatch(first)
         if not match or comment.get("includesCreatedEdit") is not False:
             continue
-        kind, sha, verdict = match.groups()
+        kind, sha, verdict, lane = match.groups()
         if sha != head or not can_write(login(comment)):
             continue
         created = comment.get("createdAt") or ""
-        if kind not in latest or created > latest[kind][1]:
-            latest[kind] = (verdict, created)
+        current = latest.get(kind)
+        # On a tie the REWORK wins, so the check never passes on ordering luck.
+        if current is None or created > current[1] or (created == current[1] and verdict == "REWORK"):
+            latest[kind] = (verdict, created, bool(lane))
     return latest
 
 
@@ -58,7 +72,7 @@ def owner_review(pr, can_write):
     """True when an owner other than the author approved the head and none asked for changes."""
     head, author = pr["headRefOid"], login(pr)
     latest = {}
-    for review in pr.get("reviews") or []:
+    for review in pr["reviews"]:
         who = login(review)
         if review.get("state") not in REVIEW_STATES or who == author:
             continue
@@ -76,9 +90,12 @@ def owner_review(pr, can_write):
 
 
 def checks(pr):
-    """(ok, detail) for the status check rollup; an empty rollup passes."""
+    """(ok, detail) for the status check rollup; no checks at all blocks."""
+    rollup = pr.get("statusCheckRollup") or []
+    if not rollup:
+        return False, "none reported"
     bad = []
-    for check in pr.get("statusCheckRollup") or []:
+    for check in rollup:
         name = check.get("name") or check.get("context") or "?"
         result = check.get("conclusion") or check.get("state") or check.get("status")
         if (result or "").upper() not in CHECK_OK:
@@ -86,13 +103,37 @@ def checks(pr):
     return (not bad, ", ".join(bad) or "all passed")
 
 
-def evaluate(pr, can_write):
-    """Return (ok, lines). `can_write(login)` answers whether a login has write access."""
-    if pr.get("state") not in (None, "OPEN"):
+def lane_files(files):
+    """(eligible, reasons) for the low-risk lane, from the pull request's files."""
+    reasons = []
+    if not files:
+        reasons.append("no files listed")
+    for entry in files:
+        name, status = entry.get("filename"), entry.get("status")
+        if status != "modified":
+            reasons.append(f"{name}: {status} (only modified files qualify)")
+        elif name in LANE_FREE:
+            continue
+        elif name in LANE_VERSION_ONLY:
+            patch = entry.get("patch")
+            changed = [line for line in (patch or "").split("\n")
+                       if line[:1] in "+-" and not line.startswith(("+++", "---"))]
+            if patch is None or not changed or not all(VERSION_LINE.match(line) for line in changed):
+                reasons.append(f"{name}: changes more than the version")
+        else:
+            reasons.append(f"{name}: outside the lane")
+    return not reasons, reasons
+
+
+def evaluate(pr, can_write, lane_ok=None):
+    """Return (ok, lines). `can_write(login)` answers write access; `lane_ok()` the lane."""
+    if pr.get("state") != "OPEN":
         raise Unknown(f"pull request is {pr.get('state')}")
     head = pr.get("headRefOid")
-    if not head:
-        raise Unknown("no head commit")
+    if not head or not isinstance(pr.get("comments"), list) or not isinstance(pr.get("reviews"), list):
+        raise Unknown("incomplete pull request data")
+    if len(pr["comments"]) >= PAGE or len(pr["reviews"]) >= PAGE:
+        raise Unknown(f"{PAGE} or more comments or reviews; a later verdict may be cut off")
     lines, ok = [f"head {head}"], True
     found = verdicts(pr, can_write)
     for kind in ("code", "security"):
@@ -103,6 +144,13 @@ def evaluate(pr, can_write):
         elif verdict[0] != "APPROVE":
             ok = False
             lines.append(f"BLOCK {kind} review: latest verdict is {verdict[0]} ({verdict[1]})")
+        elif verdict[2] and kind == "security":
+            eligible, reasons = lane_ok() if lane_ok else (False, ["lane not checked"])
+            if eligible:
+                lines.append(f"ok    {kind} review: APPROVE in the low-risk lane ({verdict[1]})")
+            else:
+                ok = False
+                lines.append(f"BLOCK {kind} review: took the low-risk lane, but {'; '.join(reasons)}")
         else:
             lines.append(f"ok    {kind} review: APPROVE ({verdict[1]})")
     if can_write(login(pr)):
@@ -116,42 +164,82 @@ def evaluate(pr, can_write):
     ok = ok and passed
     lines.append(f"{'ok   ' if passed else 'BLOCK'} checks: {detail}")
     state = pr.get("mergeStateStatus")
-    if state not in (None, "CLEAN", "HAS_HOOKS", "UNSTABLE"):
+    if state not in MERGEABLE:
+        if state in (None, "UNKNOWN"):
+            raise Unknown(f"merge state is {state}; GitHub has not computed it yet")
         ok = False
         lines.append(f"BLOCK merge state: {state}")
     return ok, lines
 
 
 def gh(*args):
-    result = subprocess.run(["gh", *args], capture_output=True, text=True)
+    try:
+        result = subprocess.run(["gh", *args], capture_output=True, text=True)
+    except FileNotFoundError:
+        raise Unknown("gh is not installed")
     if result.returncode != 0:
         raise Unknown(f"gh {args[0]} failed: {result.stderr.strip()[:200]}")
     return result.stdout
 
 
+def permission(repo, who):
+    """Write access for a login; a 404 means no access, any other failure is unknown."""
+    try:
+        result = subprocess.run(
+            ["gh", "api", f"repos/{repo}/collaborators/{who}/permission", "--jq", ".permission"],
+            capture_output=True, text=True)
+    except FileNotFoundError:
+        raise Unknown("gh is not installed")
+    if result.returncode == 0:
+        return result.stdout.strip() in WRITE
+    if "404" in result.stderr:
+        return False
+    raise Unknown(f"permission lookup for {who} failed: {result.stderr.strip()[:200]}")
+
+
+def pr_files(repo, number):
+    out = gh("api", "--paginate", f"repos/{repo}/pulls/{number}/files")
+    files = []
+    for chunk in re.split(r"(?<=\])\s*(?=\[)", out.strip()):
+        files.extend(json.loads(chunk))
+    return files
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("number")
-    parser.add_argument("--repo", help="owner/name; defaults to the current repository")
+    parser.add_argument("--repo", required=True, help="owner/name of the repository the pull request belongs to")
+    parser.add_argument("--lane", action="store_true", help="only report whether the low-risk lane applies")
     args = parser.parse_args(argv)
+    if not args.number.isdigit() or not re.fullmatch(r"[\w.-]+/[\w.-]+", args.repo):
+        print("UNKNOWN expected a pull request number and --repo owner/name")
+        return 2
+    print(f"repo {args.repo} pull request #{args.number}")
     try:
-        repo = args.repo or gh("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner").strip()
-        pr = json.loads(gh("pr", "view", args.number, "--repo", repo, "--json", FIELDS))
+        lane_cache = []
+
+        def lane_ok():
+            if not lane_cache:
+                lane_cache.append(lane_files(pr_files(args.repo, args.number)))
+            return lane_cache[0]
+
+        if args.lane:
+            eligible, reasons = lane_ok()
+            print("\n".join(f"BLOCK {reason}" for reason in reasons))
+            print("LANE OK: one review pass may post both markers" if eligible else "LANE NO: both reviewers")
+            return 0 if eligible else 1
+        pr = json.loads(gh("pr", "view", args.number, "--repo", args.repo, "--json", FIELDS))
         cache = {}
 
         def can_write(who):
             if not who:
                 return False
             if who not in cache:
-                try:
-                    level = gh("api", f"repos/{repo}/collaborators/{who}/permission", "--jq", ".permission").strip()
-                except Unknown:
-                    level = "none"
-                cache[who] = level in WRITE
+                cache[who] = permission(args.repo, who)
             return cache[who]
 
-        ok, lines = evaluate(pr, can_write)
-    except (Unknown, ValueError, KeyError) as error:
+        ok, lines = evaluate(pr, can_write, lane_ok)
+    except (Unknown, ValueError, KeyError, TypeError, AttributeError) as error:
         print(f"UNKNOWN {error}")
         return 2
     print("\n".join(lines))

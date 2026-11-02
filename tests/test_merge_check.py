@@ -131,6 +131,62 @@ class MergeCheckTest(unittest.TestCase):
         with self.assertRaises(mc.Unknown):
             run(data)
 
+    def test_on_a_tie_the_rework_wins(self):
+        data = pr(comments=[comment(marker("code", "APPROVE")),
+                            comment(marker("security", "APPROVE"), at="2026-11-02T01:00:00Z"),
+                            comment(marker("security", "REWORK"), at="2026-11-02T01:00:00Z")])
+        self.assertBlocked(data, "security review: latest verdict is REWORK")
+
+    def test_a_failed_permission_lookup_is_unknown(self):
+        def can_write(who):
+            raise mc.Unknown("lookup failed")
+        with self.assertRaises(mc.Unknown):
+            mc.evaluate(pr(), can_write)
+
+    def test_an_uncomputed_merge_state_is_unknown(self):
+        for state in ("UNKNOWN", None):
+            with self.assertRaises(mc.Unknown):
+                run(pr(merge_state=state))
+
+    def test_no_reported_checks_block(self):
+        self.assertBlocked(pr(checks=[]), "checks: none reported")
+
+    def test_a_status_context_counts_by_its_state(self):
+        self.assertTrue(run(pr(checks=[{"context": "ci/legacy", "state": "SUCCESS"}]))[0])
+        self.assertBlocked(pr(checks=[{"context": "ci/legacy", "state": "PENDING"}]), "ci/legacy=PENDING")
+
+    def test_a_full_page_of_comments_is_unknown(self):
+        data = pr()
+        data["comments"] += [comment("note")] * mc.PAGE
+        with self.assertRaises(mc.Unknown):
+            run(data)
+
+    def test_a_lane_verdict_needs_a_lane_pull_request(self):
+        data = pr(comments=[comment(marker("code", "APPROVE")),
+                            comment(marker("security", "APPROVE").replace(" -->", " lane=yes -->"))])
+        self.assertTrue(mc.evaluate(data, lambda who: who in WRITERS, lambda: (True, []))[0])
+        ok, lines = mc.evaluate(data, lambda who: who in WRITERS, lambda: (False, ["README.md: outside the lane"]))
+        self.assertFalse(ok)
+        self.assertTrue(any("took the low-risk lane" in line for line in lines), lines)
+        self.assertFalse(mc.evaluate(data, lambda who: who in WRITERS)[0])
+
+    def test_lane_files(self):
+        version = '@@ -1 +1 @@\n-  "version": "0.1.2",\n+  "version": "0.1.3-dev",'
+        ok = [{"filename": "CHANGELOG.md", "status": "modified", "patch": "@@\n+- x"},
+              {"filename": ".claude-plugin/plugin.json", "status": "modified", "patch": version}]
+        self.assertTrue(mc.lane_files(ok)[0])
+        for bad in (
+            {"filename": "README.md", "status": "modified", "patch": "+x"},
+            {"filename": "CHANGELOG.md", "status": "renamed", "previous_filename": "skills/x/SKILL.md"},
+            {"filename": "CHANGELOG.md", "status": "changed"},
+            {"filename": "CHANGELOG.md", "status": "added"},
+            {"filename": ".claude-plugin/plugin.json", "status": "modified",
+             "patch": version + '\n+  "hooks": "./evil.json",'},
+            {"filename": ".claude-plugin/plugin.json", "status": "modified"},
+        ):
+            self.assertFalse(mc.lane_files(ok + [bad])[0], bad)
+        self.assertFalse(mc.lane_files([])[0])
+
     def test_cli_reads_gh_and_exits_by_result(self):
         with tempfile.TemporaryDirectory() as tmp:
             fake = Path(tmp) / "gh"
@@ -141,7 +197,9 @@ class MergeCheckTest(unittest.TestCase):
                 "if args[0] == 'pr':\n"
                 f"    print({json.dumps(json.dumps(pr()))})\n"
                 "elif args[0] == 'api':\n"
-                "    print('admin' if '/owner/' in args[1] else 'read')\n"
+                "    if '/owner/' not in args[1]:\n"
+                "        sys.stderr.write('HTTP 404: Not Found'); sys.exit(1)\n"
+                "    print('admin')\n"
                 "else:\n"
                 "    sys.exit(1)\n"
             )
@@ -151,6 +209,14 @@ class MergeCheckTest(unittest.TestCase):
                                     capture_output=True, text=True, env=env)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("MERGE OK", result.stdout)
+        self.assertIn("repo acme/demo", result.stdout)
+
+    def test_cli_requires_the_repository(self):
+        result = subprocess.run([sys.executable, "-I", str(SCRIPT), "7"], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        result = subprocess.run([sys.executable, "-I", str(SCRIPT), "main", "--repo", "acme/demo"],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
 
 
 if __name__ == "__main__":

@@ -6,12 +6,12 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
-- `fnl-review-gate` ships `scripts/merge_check.py`, which applies the pull request merge check with `gh`: the latest unedited marker of each kind for the head from an author with write access, the owner's approving review for an outside author's pull request, passing checks and a mergeable state. It exits 0, 1 or 2 (merge, blocked, cannot tell); unit tests cover each blocking rule, including a comment-only review after an approval.
-- `fnl-review-gate` "Pull requests" rule 7, the low-risk lane: a pull request that changes only prose for people (README, changelog, contributor and policy documents) or manifest version fields gets one review pass from `fnl-reviewer`, which posts both markers; text agents follow, code, scripts, tests, configuration and workflows still go to both reviewers. A behavior eval guards it against regressions; it passes without the plugin too, so it does not measure the rule.
+- `fnl-review-gate` ships `scripts/merge_check.py <number> --repo <owner/name>`, which applies the pull request merge check with `gh`: the latest unedited marker of each kind for the head from an author with write access, the owner's approving review for an outside author's pull request, passing checks and a mergeable state. It exits 0, 1 or 2 (merge, blocked, cannot tell) and fails closed: a failed permission lookup, an uncomputed merge state, a full page of comments or no reported checks never pass. Unit tests cover each blocking rule, including a comment-only review after an approval and a tie between verdicts.
+- `fnl-review-gate` "Pull requests" rule 7, the low-risk lane, for repositories whose agent context file adopts it: a pull request that only edits the changelog and the manifests' version line takes one pass by `fnl-reviewer`, which posts both markers, the security one with ` lane=yes`. `merge_check.py --lane` decides, not an agent, and the merge check blocks a lane verdict on a pull request that does not qualify. README files and docs stay out, because agents read them. `fnl-setup`'s optional combined-review line now adopts this lane. A behavior eval guards it: against a no-plugin baseline it separates (scores 1.0 and 0.67 with the plugin, 0 and 0 without).
 
 ### Changed
 
-- A standing relay approval counts only from the agent context file or an untracked file only the owner keeps, recorded by the owner or at the owner's request; the host config no longer counts, because coordinators can write it. The relayed comment's second line is defined once.
+- A standing relay approval counts only when recorded in the agent context file as committed on the default branch; untracked files, agent memory, the host config and uncommitted edits no longer count, because a coordinator can write them. The relayed comment's second line is defined once.
 - Antigravity review inputs go to `.orchestration/briefs/` inside the worktree and are removed once the report is read, and the long-lived worktree switches branch once the previous run's work is committed or handed over.
 
 ## [0.1.2] - 2026-11-02
