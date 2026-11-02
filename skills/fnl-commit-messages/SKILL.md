@@ -15,6 +15,7 @@ description: Shape commits, branches and their messages. Use when staging change
 ## The message
 
 - **Subject**: imperative and verb-led (`Add`, `Fix`, `Remove`, `Rename`), about 50 characters, no trailing period. It completes "This commit will …".
+- **Attribution**: a commit holding another agent's accepted work says so in its body, for example "Written by <agent> from a coordinator brief; checked by the coordinator."
 - **Body** when the why is not obvious: the reason, the consumer impact, and any follow-up, wrapped at about 72 columns. Reference task or issue IDs the project tracks.
 - Follow a convention the repository already uses (for example Conventional Commits) over this default.
 - End with the attribution trailer the host asks for, exactly as given, and only that one.
