@@ -28,11 +28,14 @@ jobs:
       - name: No personal paths or addresses
         run: |
           # Machine paths and email addresses other than the published contact,
-          # the commit attribution and example.com placeholders.
-          found=$(git grep -n -I -E '/Users/[A-Za-z]|/home/[a-z][a-z0-9_-]*/|C:\\\\Users\\\\[A-Za-z]|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}' -- . \
-            | grep -v -E 'finos@finolabs\.io|noreply@anthropic\.com|@example\.com' || true)
+          # the commit attribution and example.com placeholders. Prints file and
+          # line only, so a match never lands in the public log.
+          pattern='/Users/[A-Za-z]|/home/[a-z][a-z0-9_-]*/|C:\\Users\\[A-Za-z]|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}'
+          found=$(git grep -n -I -E "$pattern" -- . \
+            | sed -E 's/finos@finolabs\.io|noreply@anthropic\.com|[A-Za-z0-9._%+-]+@example\.com//g' \
+            | grep -E "$pattern" | cut -d: -f1,2 || true)
           if [ -n "$found" ]; then
-            printf 'Personal paths or addresses:\n%s\n' "$found"
+            printf 'Personal paths or addresses at:\n%s\n' "$found"
             exit 1
           fi
       - name: Ledger script tests
