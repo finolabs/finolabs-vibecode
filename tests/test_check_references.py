@@ -22,8 +22,22 @@ BREAKS = [
      "link target references/title.md does not exist"),
     ("skills/fnl-delegate/references/ledger.md", "--rework-rounds 1", "--rework 1",
      "ledger.py has no option --rework"),
-    ("skills/fnl-delegate/references/dispatch.md", "--reason fallback-quota", "--reason fallback-quotas",
+    ("skills/fnl-delegate/references/ledger.md", "--reason fallback-quota", "--reason fallback-quotas",
      "--reason fallback-quotas is not one of"),
+    ("skills/fnl-delegate/references/ledger.md", "--reason fallback-quota", "--reason FALLBACK",
+     "--reason FALLBACK is not one of"),
+    ("skills/fnl-delegate/references/dispatch.md", "## Heavy-job lock", "## Heavy job lock",
+     '`references/dispatch.md` has no section "Heavy-job lock"'),
+    ("skills/fnl-delegate/references/ledger.md", 'python3 -I "$L" open', 'python3 -I "$L" opn',
+     "ledger.py has no subcommand opn"),
+    ("skills/fnl-delegate/references/ledger.md", 'python3 -I "$L" open', 'python3 -I "$L" open --outcome accepted',
+     "ledger.py open takes no option --outcome"),
+    ("skills/fnl-delegate/references/ledger.md", "--model gpt-6.1-sol", "--model gpt-6.1-sol --rework-rounds 1",
+     "ledger.py start takes no option --rework-rounds"),
+    ("skills/fnl-advisor/SKILL.md", "`--kind advise`", "`--kind advice`",
+     "--kind advice is not one of"),
+    ("skills/fnl-delegate/references/route-judgment.md", "`--route-by table`", "`--route-by tables`",
+     "--route-by tables is not one of"),
     ("skills/fnl-delegate/references/host-template.md", "--max-turns <n>", "--max-turnz <n>",
      "--max-turnz is not described in agents.md"),
     ("agents/fnl-verifier.md", '`fnl-verification` ("Accepting someone else\'s work")', '`fnl-verification` ("No such heading")',
@@ -38,6 +52,11 @@ BREAKS = [
 
 FENCED_HEADING = ("skills/fnl-status/SKILL.md", '`fnl-delegate` "Ledger"', '`fnl-handoff` "Budget"',
                   '`fnl-handoff` has no section "Budget"')
+
+
+# A prose line that names the script in one span and a subcommand in another.
+TWO_SPANS = ("skills/fnl-delegate/references/ledger.md", "Record every dispatch with `scripts/ledger.py`",
+             "Record every dispatch with `scripts/ledger.py` (`ledger.py summary` reports it)")
 
 
 class CheckReferencesTest(unittest.TestCase):
@@ -59,6 +78,13 @@ class CheckReferencesTest(unittest.TestCase):
                               capture_output=True, text=True)
 
     def test_clean_tree_passes(self):
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_script_path_beside_a_subcommand_span_passes(self):
+        rel, old, new = TWO_SPANS
+        path = self.root / rel
+        path.write_text(path.read_text().replace(old, new, 1))
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stdout)
 

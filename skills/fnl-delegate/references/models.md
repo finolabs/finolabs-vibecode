@@ -8,8 +8,8 @@ Model lineups, quotas and flags change every few weeks: before routing on a row,
 
 Route by tier first, then by agent. A tier names what the work needs; the agent sections below say which model on each agent serves it.
 
-- **frontier**: novel design, subtle bugs, security, long autonomous runs, final review of hard work.
-- **strong**: everyday agentic coding across several files, reviews of medium work.
+- **frontier**: novel design, subtle bugs, security, long autonomous runs, reviews of medium and harder work.
+- **strong**: everyday agentic coding across several files, reviews of easy work.
 - **fast**: bounded edits, mechanical changes, extraction, bulk runs.
 
 | Tier | Claude Code | Codex | Antigravity |

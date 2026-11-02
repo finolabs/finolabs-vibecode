@@ -3,9 +3,9 @@
 
 - Every `fnl-<name>` in backticks names a skill, an agent or the review marker.
 - Every `fnl-<name>` "Heading" names a heading in that skill or agent.
-- Every `file.md` "Heading" names a heading in that file, in the same skill.
+- Every `file.md` "Heading" or [file.md](file.md) "Heading" names a heading in that file, in the same skill.
 - Every relative Markdown link points to an existing file.
-- Every ledger flag a skill cites exists in ledger.py, with an allowed value.
+- Every ledger subcommand a skill cites exists in ledger.py, with its own flags and allowed values.
 - Every flag in a host config command is described in agents.md for that agent.
 
 Usage: scripts/check-references.py [repository root]
@@ -23,16 +23,18 @@ OTHER_NAMES = {"fnl-review"}  # the review marker in pull request comments
 AGENT_FLAGS = {"print-timeout", "timeout", "max-turns"}
 # Files whose inline `--flag` spans are ledger flags.
 LEDGER_PROSE = ["skills/fnl-delegate/SKILL.md", "skills/fnl-delegate/references/dispatch.md",
-                "skills/fnl-delegate/references/ledger.md", "skills/fnl-status/SKILL.md"]
+                "skills/fnl-delegate/references/ledger.md", "skills/fnl-delegate/references/route-judgment.md",
+                "skills/fnl-status/SKILL.md", "skills/fnl-advisor/SKILL.md", "skills/fnl-committee/SKILL.md"]
 
 NAME = re.compile(r"`(fnl-[a-z-]+)`")
 SECTION = re.compile(r"`(fnl-[a-z-]+)`(?:'s)? \(?\"([^\"]+)\"")
-FILE_SECTION = re.compile(r"`([A-Za-z0-9_-]+\.md)`(?:'s)? \(?\"([^\"]+)\"")
+FILE_SECTION = re.compile(r"(?:`([A-Za-z0-9_-][A-Za-z0-9_/-]*\.md)`|\[[^\]]+\]\(([A-Za-z0-9_/.-]+\.md)\))(?:'s)? \(?\"([^\"]+)\"")
 REVIEW_BY = re.compile(r"^Checked \d{4}-\d{2}-\d{2}\. Review by \d{4}-\d{2}-\d{2}\.$", re.M)
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.M)
 SPAN = re.compile(r"`([^`\n]+)`")
-FLAG = re.compile(r"(?<![\w-])--([a-zA-Z][\w-]*)(?:[ =]([a-z][\w-]*))?")
+FLAG = re.compile(r"(?<![\w-])--([a-zA-Z][\w-]*)(?:[ =]([A-Za-z0-9][\w.-]*))?")
+SUBCOMMAND = re.compile(r'(?:ledger\.py|\$\{?L\}?)"?\s+([a-z][\w-]*)')
 SHORT_FLAG = re.compile(r"(?<![\w-])(-[a-zA-Z])\b")
 
 
@@ -85,10 +87,12 @@ def check_names_and_sections(root, docs, problems):
             for name, title in SECTION.findall(line):
                 if name in known and title not in headings(known[name]):
                     problems.append(f"{rel}:{n}: `{name}` has no section \"{title}\"")
-            for fname, title in FILE_SECTION.findall(line):
+            for quoted, linked, title in FILE_SECTION.findall(line):
+                fname = quoted or linked
                 skill_dir = next((p for p in path.parents if p.parent.name == "skills"), None)
                 base = skill_dir or path.parent
-                matches = [p for p in base.rglob(fname)]
+                matches = ([path.parent / linked] if linked and (path.parent / linked).exists()
+                           else [p for p in base.glob(f"**/{fname}")])
                 if not matches:
                     problems.append(f"{rel}:{n}: `{fname}` not found beside this file")
                 elif not any(title in headings(p) for p in matches):
@@ -113,23 +117,42 @@ def ledger_options(root):
     ledger = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ledger)
     parser = ledger.build_parser()
-    options = {}
+    options = {}  # {subcommand: {flag: choices}}
     subparsers = next(a for a in parser._actions if a.choices and isinstance(a.choices, dict))
-    for sub in subparsers.choices.values():
+    for name, sub in subparsers.choices.items():
         for action in sub._actions:
             for opt in action.option_strings:
-                if opt.startswith("--"):
-                    options.setdefault(opt[2:], set()).update(action.choices or [])
+                if opt.startswith("--") and opt != "--help":
+                    options.setdefault(name, {})[opt[2:]] = set(action.choices or [])
+        options.setdefault(name, {})
     return options
 
 
-def check_flag(options, flag, value, where, problems, extra=()):
+def check_flag(options, sub, flag, value, where, problems, extra=()):
+    """Check one flag against its subcommand, or against every subcommand when none is named."""
     if flag in extra:
         return
-    if flag not in options:
+    merged = {}
+    for flags in options.values():
+        for f, choices in flags.items():
+            merged.setdefault(f, set()).update(choices)
+    if flag not in merged:
         problems.append(f"{where}: ledger.py has no option --{flag}")
-    elif value and options[flag] and value not in options[flag]:
-        problems.append(f"{where}: --{flag} {value} is not one of {sorted(options[flag])}")
+        return
+    if sub and flag not in options[sub]:
+        problems.append(f"{where}: ledger.py {sub} takes no option --{flag}")
+        return
+    choices = options[sub][flag] if sub else merged[flag]
+    if value and choices and value not in choices:
+        problems.append(f"{where}: --{flag} {value} is not one of {sorted(choices)}")
+
+
+def check_command(options, sub, code, where, problems):
+    if sub and sub not in options:
+        problems.append(f"{where}: ledger.py has no subcommand {sub}")
+        return
+    for flag, value in FLAG.findall(code):
+        check_flag(options, sub, flag, value, where, problems)
 
 
 def check_ledger_flags(root, docs, problems):
@@ -137,28 +160,34 @@ def check_ledger_flags(root, docs, problems):
     for path in docs:
         rel = path.relative_to(root)
         in_fence = continued = False
+        sub = None
         for n, line in lines(path):
             if line.lstrip().startswith("```"):
-                in_fence, continued = not in_fence, False
+                in_fence, continued, sub = not in_fence, False, None
                 continue
             if in_fence:
-                # A ledger command, or the continuation line of one.
+                # A ledger command, or the continuation line of one, which keeps its subcommand.
                 code = line.split(" #", 1)[0]
-                calls_ledger = continued or ("ledger.py" in code and not code.startswith("L=")) or bool(re.search(r'"?\$\{?L\}?"?(\s|$)', code))
+                was_continued = continued
+                calls_ledger = was_continued or ("ledger.py" in code and not code.startswith("L=")) or bool(re.search(r'"?\$\{?L\}?"?(\s|$)', code))
                 continued = calls_ledger and code.rstrip().endswith("\\")
+                if calls_ledger:
+                    named = SUBCOMMAND.search(code)
+                    sub = named.group(1) if named else (sub if was_continued else None)
+                    check_command(options, sub, code, f"{rel}:{n}", problems)
             else:
-                code = " ".join(s for s in SPAN.findall(line) if "ledger.py" in s)
-                calls_ledger = bool(code)
-            if calls_ledger:
-                for flag, value in FLAG.findall(code):
-                    check_flag(options, flag, value, f"{rel}:{n}", problems)
+                # Each inline span is its own command.
+                for span in SPAN.findall(line):
+                    if "ledger.py" in span:
+                        named = SUBCOMMAND.search(span)
+                        check_command(options, named.group(1) if named else None, span, f"{rel}:{n}", problems)
     for name in LEDGER_PROSE:
         path = root / name
         for n, line in lines(path):
             for span in SPAN.findall(line):
                 if span.startswith("--"):
                     for flag, value in FLAG.findall(span):
-                        check_flag(options, flag, value, f"{name}:{n}", problems, AGENT_FLAGS)
+                        check_flag(options, None, flag, value, f"{name}:{n}", problems, AGENT_FLAGS)
 
 
 def sections(path):

@@ -2,7 +2,6 @@
 type: regex
 target: last_message
 match: contains
-flags: m
 ---
 
-^[`*_ ]*Depth: DEEP\b
+(?:^|\n)[`*_]*Depth: DEEP\b[^\n]*\s*$
