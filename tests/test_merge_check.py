@@ -202,8 +202,11 @@ class MergeCheckTest(unittest.TestCase):
         ok = [{"filename": "CHANGELOG.md", "status": "modified"},
               {"filename": ".claude-plugin/plugin.json", "status": "modified"}]
         self.assertTrue(mc.lane_files(ok, read)[0])
+        self.assertTrue(mc.lane_files(ok + [{"filename": "README.md", "status": "modified"}], read)[0])
         for bad in (
-            {"filename": "README.md", "status": "modified"},
+            {"filename": "CLAUDE.md", "status": "modified"},
+            {"filename": "skills/x/SKILL.md", "status": "modified"},
+            {"filename": "README.md", "status": "renamed", "previous_filename": "skills/x/SKILL.md"},
             {"filename": "CHANGELOG.md", "status": "renamed", "previous_filename": "skills/x/SKILL.md"},
             {"filename": "CHANGELOG.md", "status": "changed"},
             {"filename": "CHANGELOG.md", "status": "added"},
@@ -248,7 +251,7 @@ class MergeCheckTest(unittest.TestCase):
         result = self.cli(pr(), "--lane", files="CHANGELOG.md,.claude-plugin/plugin.json")
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn(f"head {HEAD}", result.stdout)
-        result = self.cli(pr(), "--lane", files="CHANGELOG.md,README.md")
+        result = self.cli(pr(), "--lane", files="CHANGELOG.md,CLAUDE.md")
         self.assertEqual(result.returncode, 1, result.stdout)
 
     def test_cli_permission_404_means_no_access_and_other_errors_are_unknown(self):
