@@ -48,6 +48,30 @@ def run(data):
     return mc.evaluate(data, lambda who: who in WRITERS)
 
 
+FAKE_GH = """#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+if args[0] == 'pr':
+    data = json.loads(@PR@)
+    data['baseRefOid'] = 'c' * 40
+    print(json.dumps(data))
+elif args[0] == 'api' and '--slurp' in args:
+    print(json.dumps([[{'filename': name, 'status': 'modified'} for name in os.environ['FAKE_FILES'].split(',')]]))
+elif args[0] == 'api' and '/contents/' in args[-1]:
+    print(json.dumps({'name': 'demo', 'version': '1' if 'c' * 40 in args[-1] else '2'}))
+elif args[0] == 'api':
+    who = args[1].split('/')[4]
+    if who == 'owner':
+        print('admin')
+    elif who == 'broken':
+        sys.stderr.write('HTTP 502: Bad Gateway'); sys.exit(1)
+    else:
+        sys.stderr.write('gh: Not Found (HTTP 404)'); sys.exit(1)
+else:
+    sys.exit(1)
+"""
+
+
 class MergeCheckTest(unittest.TestCase):
     def assertBlocked(self, data, reason):
         ok, lines = run(data)
@@ -171,45 +195,70 @@ class MergeCheckTest(unittest.TestCase):
         self.assertFalse(mc.evaluate(data, lambda who: who in WRITERS)[0])
 
     def test_lane_files(self):
-        version = '@@ -1 +1 @@\n-  "version": "0.1.2",\n+  "version": "0.1.3-dev",'
-        ok = [{"filename": "CHANGELOG.md", "status": "modified", "patch": "@@\n+- x"},
-              {"filename": ".claude-plugin/plugin.json", "status": "modified", "patch": version}]
-        self.assertTrue(mc.lane_files(ok)[0])
+        base = '{"name": "demo", "version": "0.1.2", "author": {"name": "x"}}'
+        texts = {"base": base, "head": base.replace("0.1.2", "0.1.3-dev")}
+        read = lambda path, side: texts[side]
+        ok = [{"filename": "CHANGELOG.md", "status": "modified"},
+              {"filename": ".claude-plugin/plugin.json", "status": "modified"}]
+        self.assertTrue(mc.lane_files(ok, read)[0])
         for bad in (
-            {"filename": "README.md", "status": "modified", "patch": "+x"},
+            {"filename": "README.md", "status": "modified"},
             {"filename": "CHANGELOG.md", "status": "renamed", "previous_filename": "skills/x/SKILL.md"},
             {"filename": "CHANGELOG.md", "status": "changed"},
             {"filename": "CHANGELOG.md", "status": "added"},
-            {"filename": ".claude-plugin/plugin.json", "status": "modified",
-             "patch": version + '\n+  "hooks": "./evil.json",'},
-            {"filename": ".claude-plugin/plugin.json", "status": "modified"},
         ):
-            self.assertFalse(mc.lane_files(ok + [bad])[0], bad)
-        self.assertFalse(mc.lane_files([])[0])
+            self.assertFalse(mc.lane_files(ok + [bad], read)[0], bad)
+        self.assertFalse(mc.lane_files([], read)[0])
+
+    def test_a_manifest_qualifies_only_for_its_top_level_version(self):
+        base = '{"name": "demo", "version": "0.1.2", "author": {"name": "x"}}'
+        self.assertTrue(mc.version_only(base, base.replace("0.1.2", "0.1.3")))
+        for head in (
+            base.replace('"name": "x"', '"name": "x", "version": "9"'),   # nested version added
+            base.replace('"name": "demo"', '"name": "demo", "hooks": "./h.json"'),
+            base.replace('"version": "0.1.2", ', ''),                       # version removed
+            base.replace('"version": "0.1.2"', '"version": "0.1.2", "version": "0.1.3"'),  # duplicate key
+            "not json",
+        ):
+            self.assertFalse(mc.version_only(base, head), head)
 
     def test_cli_reads_gh_and_exits_by_result(self):
         with tempfile.TemporaryDirectory() as tmp:
             fake = Path(tmp) / "gh"
-            fake.write_text(
-                "#!/usr/bin/env python3\n"
-                "import json, sys\n"
-                "args = sys.argv[1:]\n"
-                "if args[0] == 'pr':\n"
-                f"    print({json.dumps(json.dumps(pr()))})\n"
-                "elif args[0] == 'api':\n"
-                "    if '/owner/' not in args[1]:\n"
-                "        sys.stderr.write('HTTP 404: Not Found'); sys.exit(1)\n"
-                "    print('admin')\n"
-                "else:\n"
-                "    sys.exit(1)\n"
-            )
+            fake.write_text(FAKE_GH.replace("@PR@", json.dumps(json.dumps(pr()))))
             fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
-            env = {**os.environ, "PATH": f"{tmp}{os.pathsep}{os.environ['PATH']}"}
+            env = {**os.environ, "PATH": f"{tmp}{os.pathsep}{os.environ['PATH']}", "FAKE_FILES": "CHANGELOG.md"}
             result = subprocess.run([sys.executable, "-I", str(SCRIPT), "7", "--repo", "acme/demo"],
                                     capture_output=True, text=True, env=env)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("MERGE OK", result.stdout)
         self.assertIn("repo acme/demo", result.stdout)
+
+    def cli(self, data, *extra, files="CHANGELOG.md"):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp) / "gh"
+            fake.write_text(FAKE_GH.replace("@PR@", json.dumps(json.dumps(data))))
+            fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+            env = {**os.environ, "PATH": f"{tmp}{os.pathsep}{os.environ['PATH']}", "FAKE_FILES": files}
+            return subprocess.run([sys.executable, "-I", str(SCRIPT), "7", "--repo", "acme/demo", *extra],
+                                  capture_output=True, text=True, env=env)
+
+    def test_cli_lane_check(self):
+        result = self.cli(pr(), "--lane", files="CHANGELOG.md,.claude-plugin/plugin.json")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn(f"head {HEAD}", result.stdout)
+        result = self.cli(pr(), "--lane", files="CHANGELOG.md,README.md")
+        self.assertEqual(result.returncode, 1, result.stdout)
+
+    def test_cli_permission_404_means_no_access_and_other_errors_are_unknown(self):
+        stranger = pr(comments=[comment(marker("code", "APPROVE"), who="stranger"),
+                                comment(marker("security", "APPROVE"))])
+        self.assertEqual(self.cli(stranger).returncode, 1)
+        broken = pr(comments=[comment(marker("code", "APPROVE"), who="broken"),
+                              comment(marker("security", "APPROVE"))])
+        result = self.cli(broken)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("permission lookup for broken failed", result.stdout)
 
     def test_cli_requires_the_repository(self):
         result = subprocess.run([sys.executable, "-I", str(SCRIPT), "7"], capture_output=True, text=True)

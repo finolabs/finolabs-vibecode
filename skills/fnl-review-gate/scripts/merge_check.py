@@ -33,11 +33,13 @@ MERGEABLE = {"CLEAN", "HAS_HOOKS", "UNSTABLE"}
 PAGE = 100  # `gh pr view` returns at most this many comments or reviews
 FIELDS = "author,headRefOid,comments,reviews,statusCheckRollup,mergeStateStatus,state"
 
+TIMEOUT = 60  # seconds for each gh call
+
 # The low-risk lane: files a pull request may change and still take one review
-# pass. The changelog may change freely; a manifest only in its version line.
+# pass. The changelog may change freely; a plugin manifest only in its
+# top-level "version".
 LANE_FREE = {"CHANGELOG.md"}
 LANE_VERSION_ONLY = {".claude-plugin/plugin.json", ".codex-plugin/plugin.json", ".antigravity-plugin/plugin.json"}
-VERSION_LINE = re.compile(r'^[+-]\s*"version":\s*"[^"\\]*",?\s*$')
 
 
 class Unknown(Exception):
@@ -103,8 +105,33 @@ def checks(pr):
     return (not bad, ", ".join(bad) or "all passed")
 
 
-def lane_files(files):
-    """(eligible, reasons) for the low-risk lane, from the pull request's files."""
+def strict_object(text):
+    """Parse a JSON object, refusing duplicate keys; None when it is not one."""
+    def pairs(items):
+        keys = [key for key, _ in items]
+        if len(keys) != len(set(keys)):
+            raise ValueError("duplicate key")
+        return dict(items)
+    try:
+        value = json.loads(text, object_pairs_hook=pairs)
+    except (ValueError, TypeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def version_only(base_text, head_text):
+    """True when two manifests differ in nothing but their top-level "version"."""
+    base, head = strict_object(base_text), strict_object(head_text)
+    if base is None or head is None or not isinstance(head.get("version"), str):
+        return False
+    base.pop("version", None)
+    head.pop("version")
+    return base == head
+
+
+def lane_files(files, read):
+    """(eligible, reasons) for the low-risk lane. `read(path, side)` returns the
+    file's text at "base" or "head"."""
     reasons = []
     if not files:
         reasons.append("no files listed")
@@ -115,11 +142,8 @@ def lane_files(files):
         elif name in LANE_FREE:
             continue
         elif name in LANE_VERSION_ONLY:
-            patch = entry.get("patch")
-            changed = [line for line in (patch or "").split("\n")
-                       if line[:1] in "+-" and not line.startswith(("+++", "---"))]
-            if patch is None or not changed or not all(VERSION_LINE.match(line) for line in changed):
-                reasons.append(f"{name}: changes more than the version")
+            if not version_only(read(name, "base"), read(name, "head")):
+                reasons.append(f"{name}: changes more than the top-level version")
         else:
             reasons.append(f"{name}: outside the lane")
     return not reasons, reasons
@@ -172,37 +196,39 @@ def evaluate(pr, can_write, lane_ok=None):
     return ok, lines
 
 
-def gh(*args):
+def run_gh(*args):
     try:
-        result = subprocess.run(["gh", *args], capture_output=True, text=True)
+        return subprocess.run(["gh", *args], capture_output=True, text=True, timeout=TIMEOUT)
     except FileNotFoundError:
         raise Unknown("gh is not installed")
+    except subprocess.TimeoutExpired:
+        raise Unknown(f"gh {args[0]} timed out")
+
+
+def gh(*args):
+    result = run_gh(*args)
     if result.returncode != 0:
         raise Unknown(f"gh {args[0]} failed: {result.stderr.strip()[:200]}")
     return result.stdout
 
 
 def permission(repo, who):
-    """Write access for a login; a 404 means no access, any other failure is unknown."""
-    try:
-        result = subprocess.run(
-            ["gh", "api", f"repos/{repo}/collaborators/{who}/permission", "--jq", ".permission"],
-            capture_output=True, text=True)
-    except FileNotFoundError:
-        raise Unknown("gh is not installed")
+    """Write access for a login; GitHub's 404 means no access, any other failure is unknown."""
+    result = run_gh("api", f"repos/{repo}/collaborators/{who}/permission", "--jq", ".permission")
     if result.returncode == 0:
         return result.stdout.strip() in WRITE
-    if "404" in result.stderr:
+    if "(HTTP 404)" in result.stderr:
         return False
     raise Unknown(f"permission lookup for {who} failed: {result.stderr.strip()[:200]}")
 
 
 def pr_files(repo, number):
-    out = gh("api", "--paginate", f"repos/{repo}/pulls/{number}/files")
-    files = []
-    for chunk in re.split(r"(?<=\])\s*(?=\[)", out.strip()):
-        files.extend(json.loads(chunk))
-    return files
+    pages = json.loads(gh("api", "--paginate", "--slurp", f"repos/{repo}/pulls/{number}/files"))
+    return [entry for page in pages for entry in page]
+
+
+def file_at(repo, path, ref):
+    return gh("api", "-H", "Accept: application/vnd.github.raw+json", f"repos/{repo}/contents/{path}?ref={ref}")
 
 
 def main(argv=None):
@@ -216,19 +242,22 @@ def main(argv=None):
         return 2
     print(f"repo {args.repo} pull request #{args.number}")
     try:
+        pr = json.loads(gh("pr", "view", args.number, "--repo", args.repo, "--json", FIELDS + ",baseRefOid"))
         lane_cache = []
 
         def lane_ok():
             if not lane_cache:
-                lane_cache.append(lane_files(pr_files(args.repo, args.number)))
+                refs = {"base": pr["baseRefOid"], "head": pr["headRefOid"]}
+                read = lambda path, side: file_at(args.repo, path, refs[side])
+                lane_cache.append(lane_files(pr_files(args.repo, args.number), read))
             return lane_cache[0]
 
         if args.lane:
+            print(f"head {pr['headRefOid']}")
             eligible, reasons = lane_ok()
-            print("\n".join(f"BLOCK {reason}" for reason in reasons))
+            print("\n".join(f"BLOCK {reason}" for reason in reasons) or "ok    every file qualifies")
             print("LANE OK: one review pass may post both markers" if eligible else "LANE NO: both reviewers")
             return 0 if eligible else 1
-        pr = json.loads(gh("pr", "view", args.number, "--repo", args.repo, "--json", FIELDS))
         cache = {}
 
         def can_write(who):

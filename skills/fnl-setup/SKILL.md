@@ -43,7 +43,7 @@ Ask whether to use a route judge for the routing calls the rules leave open (the
 This repository uses the finolabs-vibecode skills. Start coding work with `fnl-coding-router`; it routes to the other `fnl-` skills. <Spec Kit line, when present: Spec Kit owns the development workflow.> Pull requests merge only after a code review and a security review are posted on them, as `fnl-review-gate` says; reviewers may post those comments. <Optional, when the user wants it: Pull requests may take the low-risk lane of `fnl-review-gate`.> Type `/fnl-ask` when unsure which skill fits.
 ```
 
-Offer the optional lane line for repositories with one maintainer. The lane covers only changelog edits and manifest version bumps, and its script decides which pull requests qualify.
+Offer the optional lane line for repositories with one maintainer. The lane covers only changelog edits and version bumps in the three plugin manifests, and its script decides which pull requests qualify.
 
 **D. User-scoped instructions**. When the findings show no user-scoped instructions, or ones that restate coding rules the plugin now covers, recommend that the user type `/fnl-setup-instructions` after this setup. That skill interviews them and writes their working contract for every host; this one only points to it.
 
