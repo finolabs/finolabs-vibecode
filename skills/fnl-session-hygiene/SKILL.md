@@ -38,7 +38,7 @@ Keep the whole title near 50 characters, in the user's working language for the 
 
 When to name: at entry, on a resume whose title no longer matches the work, and when the task or phase changes materially (a new story, from planning to implementation, from implementation to review). Do not rename for every step.
 
-Whose: rename only this session and sessions you started; a session someone else started keeps its name unless the user asks. A delegated run takes its title, or its log file name where the host has no titles, from its ledger task label (`fnl-delegate`).
+Whose: rename only this session and sessions you started; a session someone else started keeps its name unless the user asks. A delegated run takes its title, or its log file name where the host has no titles, from its ledger project and task label (`fnl-delegate`).
 
 Titles carry no secrets, customer data or private history. Use the host's supported mechanism ([references/titles.md](references/titles.md)); where a host offers none, say so in one line and carry the name in the handover and log file names instead. Pin the active session and unpin retired ones only where the host supports it and the user allows it. Session stores and app databases are never edited by hand.
 

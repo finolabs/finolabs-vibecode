@@ -1,8 +1,8 @@
 ---
 name: fnl-advisor
-description: Get a second opinion from another model family (Claude or Codex) without handing over the work. Use when the user asks for an advisor, a second opinion or what another model thinks, or before committing to a risky design or fix.
+description: Get a second opinion from another model family (Claude, Codex or Antigravity) without handing over the work. Use when the user asks for an advisor, a second opinion or what another model thinks, or before committing to a risky design or fix.
 user-invocable: true
-argument-hint: "[--agent claude|codex] <question>"
+argument-hint: "[--agent claude|codex|antigravity] <question>"
 ---
 
 # Advisor
