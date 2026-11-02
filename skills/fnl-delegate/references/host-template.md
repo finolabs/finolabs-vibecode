@@ -55,7 +55,7 @@ B="<brief file>"; O="<logs folder>"; W="<worktree>"; T="<ledger id>-<slug>"  # s
 
 ## Antigravity
 
-- Command: <agy path> -p "$(cat "$B")" --model <model id> --mode accept-edits --output-format json --print-timeout 30m, or the `agybird` runner when installed: <runner command>.
+- Command: <agy path> -p "$(cat "$B")" --model <model id> --mode accept-edits --output-format json --print-timeout 30m, or the `agybird` runner when installed: <how to look up the runner's install path at each dispatch, for example a command that reads it from the host's plugin list; not a path>. Resolve it at each dispatch, never from a pinned version folder or the highest folder in the plugin cache, which keeps old versions after an upgrade.
 - Allowed models and their pools: <list>.
 - Per-run settings file with allow-rules: <path>. Global allow-rules: <file path and the command prefixes allowed>. Everything else is soft-denied.
 - Rules the user granted per repository (test and check commands), as a record only: the grant itself lives in Antigravity's settings or the user's answer. <repository: literal commands, date approved>.

@@ -261,6 +261,29 @@ class MergeCheckTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertIn("permission lookup for broken failed", result.stdout)
 
+    def test_compare_fails_closed(self):
+        def fake(payload):
+            mc.gh = lambda *args: json.dumps(payload)
+        real = mc.gh
+        try:
+            for payload in ({"merge_base_commit": {"sha": "c" * 40}},
+                            {"merge_base_commit": {"sha": "c" * 40},
+                             "files": [{"filename": f"f{i}", "status": "modified"} for i in range(mc.COMPARE_CAP)]}):
+                fake(payload)
+                with self.assertRaises(mc.Unknown):
+                    mc.compare("acme/demo", "b" * 40, HEAD)
+            for payload in ({"files": []}, {"merge_base_commit": None, "files": []},
+                            {"merge_base_commit": {"sha": "main"}, "files": []},
+                            {"merge_base_commit": {"sha": "c" * 40}, "files": {}}):
+                fake(payload)
+                with self.assertRaises(mc.Unknown):
+                    mc.compare("acme/demo", "b" * 40, HEAD)
+            below = [{"filename": f"f{i}", "status": "modified"} for i in range(mc.COMPARE_CAP - 1)]
+            fake({"merge_base_commit": {"sha": "c" * 40}, "files": below})
+            self.assertEqual(mc.compare("acme/demo", "b" * 40, HEAD), (below, "c" * 40))
+        finally:
+            mc.gh = real
+
     def test_cli_requires_the_repository(self):
         result = subprocess.run([sys.executable, "-I", str(SCRIPT), "7"], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
