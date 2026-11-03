@@ -13,6 +13,8 @@ python3 -I "$L" summary --since 2026-11-01
 python3 -I "$L" summary --json           # the same rows as JSON, with quota and error counts
 ```
 
+`--grade` is one of `easy`, `medium`, `hard`, `very-hard` and `ultra-hard` (`SKILL.md` "Grade" defines them); lines written before `ultra-hard` existed still read.
+
 Record why a route was taken: `--reason fallback-quota` for a quota fallback, `--reason fallback-failure` for a reroute after a failed run, `--reason user-choice --route-by user` for a route the user named, and `--route-by judge` when the route judge settled it.
 
 `--agent claude-session` records a Claude Code app or interactive session, `claude` a headless `claude -p` run, `subagent` an in-session subagent. Task labels are short names; the ledger holds no task data, secrets or personal data. `summary` reports, per agent, model, kind and grade, the first-pass acceptance rate, timeouts and stalls, fallbacks and median duration.
