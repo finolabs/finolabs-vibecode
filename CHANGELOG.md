@@ -4,9 +4,15 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-03
+
 ### Fixed
 
 - Antigravity skipped `fnl-security-reviewer` and `fnl-verifier` in 0.1.4, because their `model: opus` and `model: sonnet` are not Antigravity model tiers. All three agents are back on `model: inherit`; `fnl-review-gate` and `fnl-delegate` now tell the caller which tier to start them on where the host lets it pick, and a test keeps every agent on `inherit`.
+
+### What to do
+
+- On Antigravity, reinstall with `agy plugin install https://github.com/finolabs/finolabs-vibecode`; `agy plugin list --json` should show three agents.
 
 ## [0.1.4] - 2026-11-03
 
@@ -150,7 +156,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.1...v0.1.2
