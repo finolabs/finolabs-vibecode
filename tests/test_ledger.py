@@ -72,6 +72,15 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(row[:5], ["codex", "m1", "implement", "medium", "2"])
         self.assertEqual(row[5:9], ["50%", "100%", "0", "1"])
 
+    def test_summary_json_reports_the_same_counts_with_quota_and_error(self):
+        ids = [self.run_ledger(*START).stdout.strip() for _ in range(3)]
+        self.run_ledger("finish", ids[0], "--outcome", "accepted")
+        self.run_ledger("finish", ids[1], "--outcome", "quota")
+        self.run_ledger("finish", ids[2], "--outcome", "error")
+        [row] = json.loads(self.run_ledger("summary", "--json").stdout)
+        self.assertEqual((row["agent"], row["kind"], row["n"], row["quota"], row["error"]), ("codex", "implement", 3, 1, 1))
+        self.assertAlmostEqual(row["first_pass"], 1 / 3)
+
     def test_summary_without_finished_runs_says_so(self):
         self.run_ledger(*START)
         self.assertIn("no finished dispatches", self.run_ledger("summary").stdout)
