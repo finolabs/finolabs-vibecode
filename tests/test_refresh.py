@@ -203,6 +203,48 @@ class RefreshTest(unittest.TestCase):
         self.refresh("purge", "--yes")
         self.assertEqual([p.name for p in self.dir.iterdir()], ["consent.json"])
 
+    def agy_hook(self, config, *args):
+        return self.refresh("antigravity-hook", "--config", str(config), *args, check=False)
+
+    def test_the_antigravity_hook_is_merged_with_a_backup_and_every_other_group_kept(self):
+        config = Path(self.tmp.name) / "my config" / "hooks.json"
+        config.parent.mkdir()
+        others = {"finos": {"Stop": [{"type": "command", "command": "x", "timeout": 5}]}, "hatch": {"PreToolUse": []}}
+        config.write_text(json.dumps(others))
+        config.chmod(0o640)
+        result = self.agy_hook(config, "--yes")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(config.read_text())
+        self.assertEqual({k: data[k] for k in others}, others)
+        group = data["finolabs-vibecode"]
+        script = str(ROOT / "scripts/metrics_hook.py")
+        self.assertIn(script, group["SessionStart"][0]["command"])
+        self.assertIn("--host antigravity --event post_tool_use", group["PostToolUse"][0]["hooks"][0]["command"])
+        self.assertEqual(oct(config.stat().st_mode & 0o777), "0o640")
+        backups = list(config.parent.glob("hooks.json.finolabs-backup-*"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(json.loads(backups[0].read_text()), others)
+        self.agy_hook(config, "--yes")
+        self.assertEqual(len([k for k in json.loads(config.read_text()) if k == "finolabs-vibecode"]), 1)
+
+    def test_the_antigravity_hook_can_be_removed_and_leaves_the_rest(self):
+        config = Path(self.tmp.name) / "hooks.json"
+        config.write_text(json.dumps({"finos": {"Stop": []}}))
+        self.agy_hook(config, "--yes")
+        self.assertEqual(self.agy_hook(config, "--remove", "--yes").returncode, 0)
+        self.assertEqual(json.loads(config.read_text()), {"finos": {"Stop": []}})
+
+    def test_the_antigravity_hook_is_refused_without_yes_or_for_a_file_that_is_not_a_json_object(self):
+        config = Path(self.tmp.name) / "hooks.json"
+        config.write_text("{}")
+        self.assertNotEqual(self.agy_hook(config).returncode, 0)
+        self.assertEqual(config.read_text(), "{}")
+        for bad in ("not json", "[1]"):
+            config.write_text(bad)
+            self.assertNotEqual(self.agy_hook(config, "--yes").returncode, 0)
+            self.assertEqual(config.read_text(), bad)
+        self.assertEqual(list(config.parent.glob("hooks.json.finolabs-backup-*")), [])
+
     def test_consent_rejects_an_unknown_retention(self):
         self.assertNotEqual(self.refresh("consent", "--retention", "7", check=False).returncode, 0)
         self.assertFalse((self.dir / "consent.json").exists())

@@ -5,6 +5,8 @@
            --if-older MINUTES skips the work when data.js is newer than that)
   consent  record the user's consent and retention (30, 90 or 365 days)
   purge    delete the recorded events, data.js and dashboard.html (needs --yes)
+  antigravity-hook  add (or --remove) the plugin's hook group in the user's own Antigravity hooks.json,
+           with an absolute path to the script and a backup of the file (needs --yes)
 
 The page reads data.js; a browser will not read local JSON from a page, but it loads a
 sibling script. Nothing is sent anywhere. Dates are the machine's local dates.
@@ -13,6 +15,9 @@ sibling script. Nothing is sent anywhere. Dates are the machine's local dates.
 import argparse
 import importlib.util
 import json
+import os
+import shlex
+import shutil
 import sys
 import webbrowser
 from collections import Counter, defaultdict
@@ -31,6 +36,8 @@ REVIEWS_SHOWN = 8
 NO_CONSENT = "consent not given (run fnl-setup)"
 NO_EVENTS = "no events recorded yet"
 ROUTER_SKILL = "fnl-coding-router"
+HOOK_GROUP = "finolabs-vibecode"
+AGY_TOOLS = "run_command|write_file|write_to_file|replace_file_content|multi_replace_file_content"
 
 
 def local_date(ts):
@@ -239,6 +246,43 @@ def cmd_purge(args):
     print("purge: removed %d files" % removed)
 
 
+def antigravity_group(script):
+    def command(event):
+        return "python3 -I %s --host antigravity --event %s" % (shlex.quote(str(script)), event)
+    return {"SessionStart": [{"type": "command", "command": command("session_start"), "timeout": 10}],
+            "PostToolUse": [{"matcher": AGY_TOOLS, "hooks": [{"type": "command", "command": command("post_tool_use"), "timeout": 5}]}]}
+
+
+def cmd_antigravity_hook(args):
+    """Merge one hook group into the user's Antigravity hooks.json, keeping every other group and a backup of the file."""
+    if not args.yes:
+        sys.exit("antigravity-hook: pass --yes once the user has confirmed the change to their hooks file")
+    script = HERE.parents[2] / "scripts/metrics_hook.py"
+    if not args.remove and not script.is_file():
+        sys.exit("antigravity-hook: the plugin's hook script is not beside this skill (install the whole plugin)")
+    path = Path(args.config).expanduser()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (OSError, ValueError) as error:
+        sys.exit("antigravity-hook: cannot read %s as JSON (%s); nothing changed" % (path, error))
+    if not isinstance(data, dict):
+        sys.exit("antigravity-hook: %s is not a JSON object; nothing changed" % path)
+    if args.remove:
+        if HOOK_GROUP not in data:
+            print("antigravity-hook: no %s group in %s" % (HOOK_GROUP, path))
+            return
+        data.pop(HOOK_GROUP)
+    else:
+        data[HOOK_GROUP] = antigravity_group(script.resolve())
+    if path.exists():
+        shutil.copy2(path, path.with_name(path.name + ".finolabs-backup-" + fm.now().strftime("%Y%m%d-%H%M%S")))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    mode = path.stat().st_mode & 0o777 if path.exists() else 0o600
+    fm.atomic_write(path, json.dumps(data, indent=2) + "\n")
+    os.chmod(path, mode)
+    print("antigravity-hook: %s the %s group in %s" % ("removed" if args.remove else "set", HOOK_GROUP, path))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -252,6 +296,11 @@ def main():
     purge = sub.add_parser("purge", help="delete recorded events and the dashboard files")
     purge.add_argument("--yes", action="store_true")
     purge.set_defaults(func=cmd_purge)
+    agy = sub.add_parser("antigravity-hook", help="add or remove the hook group in the user's Antigravity hooks.json")
+    agy.add_argument("--config", default="~/.gemini/config/hooks.json")
+    agy.add_argument("--remove", action="store_true")
+    agy.add_argument("--yes", action="store_true")
+    agy.set_defaults(func=cmd_antigravity_hook)
     args = parser.parse_args()
     args.func(args)
 
