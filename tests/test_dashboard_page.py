@@ -4,6 +4,8 @@ import importlib.util
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -71,6 +73,48 @@ class DashboardPageTest(unittest.TestCase):
         sample = json.loads(FIXTURE.read_text(encoding="utf-8"))
         for key in sample:
             self.assertIn("D." + key, self.text, "the page never reads " + key)
+
+
+RUNNER = ROOT / "tests/page_runner.js"
+
+
+@unittest.skipUnless(shutil.which("node") or Path("/opt/homebrew/bin/node").exists(), "node is not installed")
+class DashboardScriptTest(unittest.TestCase):
+    """Runs the page's own script in node against a small fake DOM."""
+
+    @staticmethod
+    def render(data=None):
+        node = shutil.which("node") or "/opt/homebrew/bin/node"
+        args = [node, str(RUNNER), str(PAGE)] + ([str(data)] if data else [])
+        done = subprocess.run(args, capture_output=True, text=True, timeout=30)
+        if done.returncode:
+            raise AssertionError(done.stderr[-800:])
+        return json.loads(done.stdout)
+
+    def test_the_sample_data_draws_every_chart_without_an_error(self):
+        out = self.render(FIXTURE)
+        for expected in ("Router coverage", "events per day", "October 2026", "skill and agent use", "fnl-coding-router"):
+            self.assertIn(expected, out["text"])
+        self.assertNotIn("No data yet", out["text"])
+        self.assertGreaterEqual(out["cells"], 28)
+        self.assertGreater(out["svg"], 0)
+
+    def test_without_data_the_page_shows_the_empty_state_and_its_skeleton(self):
+        out = self.render()
+        self.assertIn("No data yet", out["text"])
+        self.assertIn("no data:", out["text"])
+        self.assertGreaterEqual(out["cells"], 35)
+
+    def test_a_source_with_no_data_shows_its_reason_and_the_rest_still_draws(self):
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["router"] = None
+        data["missing"] = {"router": "no session with an edit in this period"}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "data.json"
+            path.write_text(json.dumps(data), encoding="utf-8")
+            out = self.render(path)
+        self.assertIn("no data: no session with an edit in this period", out["text"])
+        self.assertIn("fnl-coding-router", out["text"])
 
 
 if __name__ == "__main__":
