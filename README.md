@@ -8,6 +8,15 @@ Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin ca
 
 It targets Claude Code, Codex and Antigravity from one `skills/` folder. Latest release: [`v0.1.5`](https://github.com/finolabs/finolabs-vibecode/releases/tag/v0.1.5) (phase 0; see `fnl-versioning`). Between releases, `main` carries the next version with `-dev`.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/dashboard-dark.png">
+    <img src="assets/dashboard-light.png" alt="The usage dashboard that fnl-status opens: router coverage, skill and agent use, load cost, depth against review outcome, the review gate and delegation, in a terminal-style window with a dark and a light theme." width="920">
+  </picture>
+</p>
+
+The dashboard `fnl-status` opens, drawn here from synthetic numbers. It reads your dispatch ledger and, once you consent in setup, local usage metadata that never leaves your machine ([PRIVACY.md](PRIVACY.md)).
+
 The quickest install: give your coding agent this repository's link and ask it to install the plugin. The next section tells it how.
 
 ## For AI agents: install and set up
@@ -54,7 +63,7 @@ Every skill carries the `fnl-` prefix. The user types four of them, `fnl-setup`,
 | `fnl-plugin-packaging` | Packaging skills as a plugin for Claude Code, Codex and Antigravity from one repository: layout, manifests, icon, marketplaces, checks. |
 | `fnl-setup` | First run on a machine or repository: host config, local file placement, the agent-skills block in `CLAUDE.md` or `AGENTS.md`. |
 | `fnl-setup-instructions` | Writing your user-scoped instructions: it interviews you and writes them for Claude Code, Codex and Antigravity from one shared source. |
-| `fnl-status` | Checking open delegated runs and first-pass acceptance per agent and model, from the dispatch ledger. |
+| `fnl-status` | Opening the usage dashboard: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, from the usage events (Claude Code, after you consent in setup) and the dispatch ledger. It also lists delegated runs still open. |
 | `fnl-ask` | You are not sure which skill fits: describe the situation and get the next command, including companion skills from other packs. |
 | `fnl-open-source-review` | Before a repository goes public, and after: license, secrets in tree and history, internal leaks, clean payload, community files, repository settings, identity, data flow, plugin checks. |
 
