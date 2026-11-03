@@ -1,6 +1,6 @@
 {
   "name": "finolabs-vibecode",
-  "version": "0.1.6",
+  "version": "0.1.7-dev",
   "description": "Engineering practice for AI coding agents: routing, delegation, review and security gates, verification, versioning and open source readiness.",
   "author": {
     "name": "FINOLABS",
