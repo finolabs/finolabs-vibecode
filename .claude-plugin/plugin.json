@@ -7,7 +7,7 @@
   "supportUrl": "https://github.com/finolabs/finolabs-vibecode/issues",
   "privacyPolicyUrl": "https://github.com/finolabs/finolabs-vibecode/blob/main/PRIVACY.md",
   "termsOfServiceUrl": "https://github.com/finolabs/finolabs-vibecode/blob/main/TERMS.md",
-  "version": "0.1.5-dev",
+  "version": "0.1.5",
   "description": "One engineering practice for AI coding agents: coding-work routing, agent delegation, versioning, commit messages, review gates, security review, verification and open source readiness.",
   "author": {
     "name": "FINOLABS",
