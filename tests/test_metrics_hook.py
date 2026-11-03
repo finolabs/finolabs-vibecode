@@ -38,11 +38,11 @@ class HookTest(unittest.TestCase):
         finally:
             del os.environ["FNL_STATE_DIR"]
 
-    def run_hook(self, payload, env=None, raw=None):
-        result = subprocess.run([sys.executable, "-I", str(HOOK)], input=raw if raw is not None else json.dumps(payload),
+    def run_hook(self, payload, env=None, raw=None, args=(), stdout=""):
+        result = subprocess.run([sys.executable, "-I", str(HOOK), *args], input=raw if raw is not None else json.dumps(payload),
                                 capture_output=True, text=True, env=env or self.env)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.stdout, stdout)
         return result
 
     def post(self, tool, tool_input, **extra):
@@ -173,6 +173,84 @@ class HookTest(unittest.TestCase):
         self.post("Bash", {"command": "gh pr comment 6 --body-file - <<'A'\n" + MARKER + "\nA\ngh pr comment 7 --body-file - <<'B'\n" + approve + "\nB"})
         got = [(e["event"], e.get("pr"), e.get("verdict")) for e in self.events()]
         self.assertEqual(got, [("router", None, None), ("review", 5, "REWORK"), ("review", 6, "REWORK"), ("review", 7, "APPROVE")])
+
+    def agy(self, event, call=None):
+        """An Antigravity payload in the shape a real `agy` run sent: camelCase, no event name, a toolCall for tool hooks."""
+        payload = {"conversationId": "31357bed-2c92-4bc3-ad3d-23c9545c7b3e", "workspacePaths": [str(self.repo)], "modelName": "m",
+                   "transcriptPath": "t", "artifactDirectoryPath": "a", "lastUserInput": "u"}
+        if call:
+            payload.update({"stepIdx": 2, "error": "", "toolCall": call})
+        return self.run_hook(payload, args=("--host", "antigravity", "--event", event), stdout="{}\n")
+
+    def test_an_antigravity_session_is_recorded_from_its_own_payload_shape(self):
+        self.consent()
+        self.agy("session_start")
+        self.agy("post_tool_use", {"name": "write_file", "args": {"Content": "hi\n", "Path": str(self.repo / "hello.txt")}})
+        self.agy("post_tool_use", {"name": "replace_file_content", "args": {"TargetFile": "x"}})
+        self.agy("post_tool_use", {"name": "run_command", "args": {"CommandLine": "git commit -q -m x", "Cwd": str(self.repo)}})
+        self.agy("post_tool_use", {"name": "view_file", "args": {"Path": "x"}})
+        started, edited, committed = self.events()
+        self.assertEqual((started["event"], started["host"], started["source"]), ("session_start", "antigravity", "startup"))
+        self.assertEqual(started["sid"], "31357bed-2c92-4bc3-ad3d-23c9545c7b3e")
+        self.assertEqual((edited["event"], committed["event"]), ("first_edit", "commit"))
+
+    def test_an_antigravity_hook_still_answers_with_an_empty_object_when_off_or_given_garbage(self):
+        self.run_hook(None, raw="garbage", args=("--host", "antigravity", "--event", "post_tool_use"), stdout="{}\n")
+        self.assertFalse(self.dir.exists())
+        self.consent()
+        self.run_hook(None, raw="garbage", args=("--host", "antigravity", "--event", "post_tool_use"), stdout="{}\n")
+        self.run_hook(None, raw="{}", args=("--host", "antigravity", "--event", "post_tool_use"),
+                      env={**self.env, "FNL_METRICS": "off"}, stdout="{}\n")
+        self.assertEqual(self.events(), [])
+
+    def test_a_codex_session_uses_its_edit_tool_and_may_send_a_command_as_an_array(self):
+        self.consent()
+        base = {"session_id": "codex-1", "cwd": str(self.repo), "model": "m", "transcript_path": None}
+        self.run_hook({**base, "hook_event_name": "SessionStart", "source": "resume", "permission_mode": "default"}, args=("--host", "codex"))
+        self.run_hook({**base, "hook_event_name": "PostToolUse", "tool_name": "apply_patch", "tool_use_id": "u", "turn_id": "t",
+                       "tool_input": {"command": "*** Begin Patch"}, "tool_response": {}}, args=("--host", "codex"))
+        self.run_hook({**base, "hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {"command": ["git", "commit", "-m", "x"]}},
+                      args=("--host", "codex"))
+        started, edited, committed = self.events()
+        self.assertEqual((started["host"], started["source"]), ("codex", "resume"))
+        self.assertEqual((edited["event"], committed["event"]), ("first_edit", "commit"))
+
+    def test_the_codex_command_runs_nothing_and_exits_zero_when_no_root_variable_is_set(self):
+        config = json.loads((ROOT / ".codex-plugin/hooks.json").read_text())
+        commands = {h["command"] for groups in config["hooks"].values() for g in groups for h in g["hooks"]}
+        self.assertEqual(len(commands), 1)
+        [command] = commands
+        bare = {"PATH": os.environ["PATH"]}
+        self.assertEqual(subprocess.run(["sh", "-c", command], input="{}", env=bare, capture_output=True, text=True).returncode, 0)
+        self.consent()
+        result = subprocess.run(["sh", "-c", command], input=json.dumps({"hook_event_name": "SessionStart", "session_id": "c1", "cwd": str(self.repo)}),
+                                env={**self.env, "PLUGIN_ROOT": str(ROOT)}, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual([e["host"] for e in self.events()], ["codex"])
+
+    def test_no_plugin_root_hooks_file_is_shipped_for_antigravity(self):
+        self.assertFalse((ROOT / "hooks.json").exists(), "see the spec: its working folder on a real install is unverified")
+
+    def test_a_closed_output_pipe_does_not_break_the_exit_code(self):
+        from unittest import mock
+        spec = importlib.util.spec_from_file_location("metrics_hook_under_test", HOOK)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with mock.patch.object(sys, "argv", ["metrics_hook.py", "--host", "antigravity", "--event", "post_tool_use"]), \
+                mock.patch("builtins.print", side_effect=BrokenPipeError), mock.patch.object(sys, "stdin", mock.Mock(read=lambda: "")):
+            module.main()
+
+    def test_a_command_made_to_slow_the_regexes_is_dismissed_by_the_cheap_checks(self):
+        self.consent()
+        self.run_within("a=;" * 2700)
+        self.run_within(";a=a" * 2000)
+        self.assertEqual(self.events(), [])
+
+    def test_an_unknown_host_is_recorded_as_other(self):
+        self.consent()
+        self.run_hook({"hook_event_name": "SessionStart", "session_id": "s9", "cwd": str(self.repo), "source": "startup"},
+                      args=("--host", "somewhere-else"))
+        self.assertEqual(self.events()[0]["host"], "other")
 
     def test_the_router_receipt_command_is_recorded_with_its_depth_and_trigger(self):
         self.consent()

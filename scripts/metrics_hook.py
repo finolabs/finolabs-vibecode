@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Claude Code hook that records usage metadata (see fnl_metrics.py).
 
-Reads one hook payload from stdin and writes at most one event. It prints nothing and always
+Reads one hook payload from stdin and writes at most one event. `--host claude|codex|antigravity`
+says which agent sent it (default claude); Antigravity payloads carry no event name, so `--event
+session_start|post_tool_use` says which hook fired. It prints nothing (Antigravity wants `{}`) and always
 exits 0, so it can never fail or change the session. It reads command text only to test for a
 trigger and discards it; the only file it opens is a review body named in a `gh pr comment`
 command, and only the first line of that file is read.
@@ -33,7 +35,9 @@ VALUE_FLAGS = {"--repo", "-R", "--body", "-b", "--body-file", "-F"}
 REFRESH = Path(__file__).resolve().parent.parent / "skills/fnl-status/scripts/refresh.py"
 REFRESH_MINUTES = "10"
 REFRESH_SECONDS = 8
-EDIT_TOOLS = {"Edit", "Write", "NotebookEdit"}
+EDIT_TOOLS = {"Edit", "Write", "NotebookEdit", "apply_patch"}  # apply_patch is Codex's edit tool
+AGY_SHELL = {"run_command"}
+AGY_EDIT = {"write_file", "write_to_file", "replace_file_content", "multi_replace_file_content"}
 HEAD_BYTES = 4096
 MAX_COMMAND = 8192  # longer command text is not tested at all: a trigger is never that long
 
@@ -130,20 +134,44 @@ def refresh_dashboard():
         pass
 
 
-def session_start(sid, cwd, payload):
+def options(argv):
+    """(host, event) from the command line. An unknown host is recorded as "other"."""
+    host, event, words = "claude", None, iter(argv)
+    for word in words:
+        if word == "--host":
+            host = next(words, "claude")
+        elif word == "--event":
+            event = next(words, None)
+    return (host if host in fm.HOSTS else "other"), event
+
+
+def read_payload(payload, host, event):
+    """Normalize a hook payload to (event, session id, cwd, source, tool, tool input) in Claude Code's vocabulary."""
+    if host == "antigravity":
+        folders = payload.get("workspacePaths")
+        cwd = folders[0] if isinstance(folders, list) and folders and isinstance(folders[0], str) else os.getcwd()
+        call = payload.get("toolCall") if isinstance(payload.get("toolCall"), dict) else {}
+        args = call.get("args") if isinstance(call.get("args"), dict) else {}
+        tool = "Bash" if call.get("name") in AGY_SHELL else "Edit" if call.get("name") in AGY_EDIT else None
+        data = {"command": args.get("CommandLine") or args.get("command")} if tool == "Bash" else {}
+        name = {"session_start": "SessionStart", "post_tool_use": "PostToolUse"}.get(event)
+        return name, payload.get("conversationId"), cwd, None, tool, data
+    data = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else {}
+    return (payload.get("hook_event_name"), payload.get("session_id"), payload.get("cwd") or os.getcwd(),
+            payload.get("source"), payload.get("tool_name"), data)
+
+
+def session_start(sid, cwd, source, host):
     dispatch = os.environ.get("FNL_DISPATCH_ID")
-    source = payload.get("source")
     source = "resume" if source == "fork" else source if source in fm.SOURCES else "startup"
-    fm.record("session_start", sid, cwd, host="claude", dispatch=dispatch if fm.valid_id(dispatch) else None, source=source)
+    fm.record("session_start", sid, cwd, host=host, dispatch=dispatch if fm.valid_id(dispatch) else None, source=source)
     consent = fm.read_consent()
     if consent:
         fm.prune(consent["retention_days"])
         refresh_dashboard()
 
 
-def post_tool_use(sid, cwd, payload):
-    tool, data = payload.get("tool_name"), payload.get("tool_input")
-    data = data if isinstance(data, dict) else {}
+def post_tool_use(sid, cwd, tool, data):
     if tool == "Skill":
         name = fnl_name(data.get("skill"))
         if name:
@@ -157,35 +185,43 @@ def post_tool_use(sid, cwd, payload):
             fm.record("first_edit", sid, cwd)
     elif tool == "Bash":
         command = data.get("command")
+        if isinstance(command, list) and all(isinstance(word, str) for word in command):
+            command = " ".join(command)  # an argv array, as some hosts send it
         if not isinstance(command, str) or len(command) > MAX_COMMAND:
             return
-        if COMMIT.search(command):
+        if "commit" in command and COMMIT.search(command):  # the substring test is a cheap gate before each regex
             fm.record("commit", sid, cwd)
-        for kind, verdict, pr in reviews_from(command, cwd):
+        for kind, verdict, pr in reviews_from(command, cwd) if "comment" in command else ():
             fm.record("review", sid, cwd, kind=kind, verdict=verdict, pr=pr)
-        if ROUTER.search(command):
+        if "record.py" in command and ROUTER.search(command):
             depth, trigger = DEPTH.search(command), TRIGGER.search(command)
             if depth and trigger and depth.group(1) in fm.DEPTHS and trigger.group(1) in fm.TRIGGERS:
                 fm.record("router", sid, cwd, depth=depth.group(1), trigger=trigger.group(1))
 
 
 def main():
+    host, hook_event = options(sys.argv[1:])
     try:
         if not fm.enabled():
             return  # off and not consented means nothing is read, parsed or written
         payload = json.load(sys.stdin)
         if not isinstance(payload, dict):
             return
-        sid, cwd = payload.get("session_id"), payload.get("cwd") or os.getcwd()
+        event, sid, cwd, source, tool, data = read_payload(payload, host, hook_event)
         if not fm.valid_id(sid) or not isinstance(cwd, str):
             return
-        event = payload.get("hook_event_name")
         if event == "SessionStart":
-            session_start(sid, cwd, payload)
+            session_start(sid, cwd, source, host)
         elif event == "PostToolUse":
-            post_tool_use(sid, cwd, payload)
+            post_tool_use(sid, cwd, tool, data)
     except Exception:
         fm.bump_errors()
+    finally:
+        if host == "antigravity":
+            try:
+                print("{}")  # its hook contract: a JSON object on stdout
+            except OSError:
+                pass  # the reader went away; there is nothing left to tell it
 
 
 if __name__ == "__main__":
