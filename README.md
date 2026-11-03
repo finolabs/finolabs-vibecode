@@ -24,7 +24,7 @@ The quickest install: give your coding agent this repository's link and ask it t
 You were given this repository's link to install it for the user. Follow these steps in order.
 
 1. **Find your host**: Claude Code, Codex, Antigravity, or another agent that reads Agent Skills.
-2. **Confirm with the user before installing.** The install changes their agent configuration for every project. Offer the whole plugin by default; it carries the skills, the agents and the session reminder. Offer single skills as the alternative (see [Single skills, any agent](#single-skills-any-agent)). Install only one of the two for an agent, since both together list every skill twice.
+2. **Confirm with the user before installing.** The install changes their agent configuration for every project. Offer the whole plugin by default; it carries the skills, the agents, the session reminder and the hooks for the optional usage metrics (off until the user consents). Offer single skills as the alternative (see [Single skills, any agent](#single-skills-any-agent)). Install only one of the two for an agent, since both together list every skill twice.
 3. **Check for an existing install first**: run `claude plugin list` and `claude plugin marketplace list` (or `codex plugin list` and `codex plugin marketplace list`). If `finolabs-vibecode` is already installed from another catalog, such as `finolabs-vibecode@finolabs-vibecode`, or Codex lists the older `Finolabs` catalog, stop and ask the user before switching: two installs list every skill twice, and on Codex the older catalog shares a cache folder with `finolabs`. The [finolabs/plugins README](https://github.com/finolabs/plugins#codex) has the migration.
 4. **Install from a shell** with your host's commands:
 
@@ -104,6 +104,8 @@ codex plugin marketplace add finolabs/plugins
 codex plugin add finolabs-vibecode@finolabs
 ```
 
+Codex runs a plugin's hooks only after you trust them: open `/hooks` once in a new session. Until then the usage metrics stay off.
+
 ### Antigravity
 
 ```bash
@@ -136,6 +138,28 @@ npx skills add https://github.com/cloudflare/security-audit-skill --skill securi
 
 `fnl-setup` also recommends two skills from the `finolabs` catalog, each where it fits: [`agybird`](https://github.com/finolabs/agybird) (MIT), which runs Antigravity dispatches for `fnl-delegate` when Antigravity is a delegate of Claude Code or Codex, and [`vietnamizer`](https://github.com/finolabs/vietnamizer) (MIT), which writes and edits Vietnamese documents for people. Both install the way this plugin does, with `agybird@finolabs` or `vietnamizer@finolabs` in place of `finolabs-vibecode@finolabs`.
 
+## Usage metrics
+
+Off until you say yes in `fnl-setup` (section F), where you also pick how long events are kept: 30, 90 or 365 days. Hooks then record metadata about your own sessions on your machine: a time, a session id, a short code derived from the repository path, the name of an `fnl-` skill or agent that ran, the router's depth, and a review verdict. They never record prompts, code, command text, file paths or review text, and nothing is sent anywhere ([PRIVACY.md](PRIVACY.md)). `fnl-status` opens the dashboard drawn from them.
+
+| Host | What is recorded |
+| --- | --- |
+| Claude Code | sessions, skill and agent use, first edits, commits, review comments, the router's depth |
+| Codex | the same without skill and agent use; trust the hooks once with `/hooks` |
+| Antigravity | the same as Codex; its hook is not part of the plugin, and setup adds it to your own `~/.gemini/config/hooks.json` only after a clear yes (`refresh.py antigravity-hook`, with a backup; `--remove` takes it out) |
+
+Events are best effort: they are read from tool calls and command text, so they can miss an action. Stop recording with `FNL_METRICS=off` or `refresh.py consent --revoke`; delete what was recorded with `fnl-status purge`.
+
+### Where the plugin keeps its files
+
+| Path | Holds |
+| --- | --- |
+| `~/.finolabs/vibecode/host.md` | host config for delegation (`ORCHESTRATION_HOST_CONFIG` overrides) |
+| `~/.finolabs/vibecode/ledger.jsonl` | dispatch ledger (`ORCHESTRATION_LEDGER` overrides) |
+| `~/.finolabs/vibecode/state/` | consent, usage events, the dashboard (`FNL_STATE_DIR` overrides) |
+
+Folders it creates are private (mode `0700`). A machine that already keeps these in `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` or `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode` and has nothing in the new place keeps using the old files; nothing is moved. Each host's own configuration stays where that host keeps it.
+
 ## Host configuration
 
 The orchestration skills keep machine facts (agent commands, allowed models, which delegates each coordinator can reach, the route judge, allow-rules, lock path, parallel limit) outside the plugin, in a host config file: the path in `ORCHESTRATION_HOST_CONFIG`, or else `~/.finolabs/vibecode/host.md` (or the older `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md` while only that file exists). Start from `skills/fnl-delegate/references/host-template.md`. The dispatch ledger defaults to `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it). When Codex or Antigravity also coordinates, put both files where every coordinator's sandbox can read and write them.
@@ -146,18 +170,21 @@ The route judge is optional. Without one, the agent's own model makes the grade,
 
 ```text
 .claude-plugin/plugin.json        Claude Code manifest (the version's single source of truth)
+.claude-plugin/hooks.json         Claude Code hooks: the session reminder and the usage-metrics hooks
 .claude-plugin/marketplace.json   Claude Code marketplace listing this repository
 .codex-plugin/plugin.json         Codex manifest, version kept equal
+.codex-plugin/hooks.json          Codex hooks for the usage metrics (named by the manifest)
 .antigravity-plugin/plugin.json   Antigravity manifest, version kept equal
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 agents/fnl-*.md                   read-only reviewer, security reviewer and verifier subagents
 agents/openai.yaml                Codex skill-list display metadata
 skills/fnl-*/SKILL.md             one self-contained skill per folder, references/ and scripts/ beside it
 rules/AGENTS.md                   session-start reminder: an always-on rule on Antigravity, injected by the hook in .claude-plugin/hooks.json on Claude Code
-assets/                           icon (light and dark, SVG and 512 px PNG) and its NOTICE
+assets/                           icon (light and dark, SVG and 512 px PNG), dashboard screenshots and their NOTICE
 evals/                            trigger, behavior and parity cases for `claude plugin eval`
-scripts/                          repository checks, such as cross-reference validation
-tests/                            unit tests for the repository scripts and the ledger
+scripts/                          repository checks, and the usage-metrics hook (metrics_hook.py) with its shared core (fnl_metrics.py, copied into the skills that import it)
+docs/specs/                       design specs, such as usage-metrics.md
+tests/                            unit tests for the repository scripts, the ledger, the metrics hook and the dashboard page (the page script runs in node when it is installed)
 CHANGELOG.md                      Keep a Changelog
 LICENSE                           MIT
 ```
