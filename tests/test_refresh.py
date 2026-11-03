@@ -279,6 +279,12 @@ class RefreshTest(unittest.TestCase):
         self.agy_hook(config, "--yes")
         self.assertIn("xin chào", config.read_text())
 
+    def test_a_lone_surrogate_escape_in_the_hooks_file_is_still_written(self):
+        config = Path(self.tmp.name) / "hooks.json"
+        config.write_text('{"note": "\\ud800"}')
+        self.assertEqual(self.agy_hook(config, "--yes").returncode, 0)
+        self.assertIn("finolabs-vibecode", json.loads(config.read_text()))
+
     def test_two_runs_in_one_second_keep_two_backups(self):
         config = Path(self.tmp.name) / "hooks.json"
         config.write_text("{}")

@@ -136,7 +136,7 @@ def enabled():
 
 def read_small(path):
     """The first 4 KB of a regular file as text; never blocks on a pipe and never follows a symlink."""
-    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | NOFOLLOW)
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | NOFOLLOW)
     try:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
             raise OSError("not a regular file")

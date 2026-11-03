@@ -294,11 +294,16 @@ def cmd_antigravity_hook(args):
         data.pop(HOOK_GROUP)
     else:
         data[HOOK_GROUP] = antigravity_group(script.resolve())
+    try:
+        text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+        text.encode("utf-8")
+    except UnicodeEncodeError:  # a lone surrogate escape in the user's file cannot be written as UTF-8
+        text = json.dumps(data, indent=2) + "\n"
     if path.exists():
         shutil.copy2(path, path.with_name(path.name + ".finolabs-backup-" + fm.now().strftime("%Y%m%d-%H%M%S-%f")))
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = path.stat().st_mode & 0o777 if path.exists() else 0o600
-    fm.atomic_write(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    fm.atomic_write(path, text)
     os.chmod(path, mode)
     print("antigravity-hook: %s the %s group in %s" % ("removed" if args.remove else "set", HOOK_GROUP, path))
 

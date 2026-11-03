@@ -24,7 +24,7 @@ The page marks a delegation group of fewer than five runs with an open ring and 
 
 ## Purge
 
-When the argument is `purge`, skip the steps above and ask the user to confirm deleting the recorded events, `data.js` and `dashboard.html`. Their consent record stays, so recording continues; to stop it as well, run `python3 -I <refresh.py> consent --revoke` after the same yes, or set `FNL_METRICS=off`. Only after a clear yes, run `python3 -I <refresh.py> purge --yes`, and report how many files it removed. Never run it unasked.
+When the argument is `purge`, skip the steps above and ask the user to confirm deleting the recorded events, `data.js` and `dashboard.html`. Their consent record stays, so recording continues; to stop it as well, ask separately whether to withdraw consent, and only after a second yes run `python3 -I <refresh.py> consent --revoke` (or the user sets `FNL_METRICS=off`). Only after a clear yes, run `python3 -I <refresh.py> purge --yes`, and report how many files it removed. Never run it unasked.
 
 ## What is recorded
 
