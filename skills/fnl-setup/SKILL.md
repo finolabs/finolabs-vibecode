@@ -20,6 +20,7 @@ Report only what you observe:
 - **Host config**: the file at `$ORCHESTRATION_HOST_CONFIG`, else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. Present, missing, or still holding template placeholders.
 - **Repository**: the git root; whether it uses Spec Kit (`.specify/` plus installed `speckit-*` skills); which of `CLAUDE.md` and `AGENTS.md` exist and whether one already has an `## Agent skills` section; whether `.orchestration/` is excluded in `.git/info/exclude`.
 - **Knowledge base**: where the user keeps durable decisions that agents write to: a notes vault or knowledge-base server their user-scoped instructions name, with the access those instructions approve.
+- **Usage metrics**: whether the plugin's hooks are installed (the whole plugin on Claude Code; a single skill installed alone has none) and whether `consent.json` already exists in the state folder (`${FNL_STATE_DIR:-${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode}`). Read only its date and retention.
 - **User-scoped instructions**: whether `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` (or `$CODEX_HOME/AGENTS.md`) and `~/.gemini/GEMINI.md` (or `~/.gemini/AGENTS.md`) exist, and whether they already point coding work at `fnl-coding-router`.
 
 A check that cannot run here (a command or path is unavailable) is listed as **unverified** in one line, and the interview goes on.
@@ -28,7 +29,7 @@ Done when the findings are listed for the user.
 
 ## 2. Grill
 
-Settle sections A–E. Sections whose findings are verified are ready first; a section that depends on an unverified item waits until the user supplies that fact.
+Settle sections A–F. Sections whose findings are verified are ready first; a section that depends on an unverified item waits until the user supplies that fact.
 
 Interview by the rules in [references/interview.md](references/interview.md): map the decisions, look up facts yourself, ask every ready decision in one numbered round with a recommended answer, and finish with a read-back and a yes.
 
@@ -52,9 +53,11 @@ Offer the optional lane line only for a repository with one owner, and say that 
 
 **E. Review tools**. The `fnl-reviewer` and `fnl-security-reviewer` agents run these instruments as their engine, so a review meets the standard only where they are installed. For each one the findings show missing, strongly recommend installing it and give the command: for `security-audit`, `npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit`; for a host's native review, the host's own update or install path, checked against its docs. Install nothing yourself. Until a tool is installed, the reviewers work by hand and say so in each report.
 
+**F. Usage metrics** (optional; skip when the hooks are not installed). Offer to record usage metadata so the user can see how the practice performs on their own machine. Say, in this order: what is recorded (a time, a session id, a short repository code, a skill or agent name, the router's depth, a review verdict; never prompts, code, command text or file paths), where it lives (the state folder on this machine, readable only by the user), that nothing leaves the machine and the dashboard is a local page, and that it stays off until they say yes and `FNL_METRICS=off` turns it off at any time. Then ask for consent and the retention (30, 90 or 365 days, recommend 90) as one question of its own, never bundled with another. This release records on Claude Code only. A declined or skipped section leaves everything off.
+
 ## 3. Confirm and write
 
-Show each draft and apply the user's edits. Then write only what was confirmed: the host config (outside the repository), the exclude line, and the agent-skills block (update an existing block in place).
+Show each draft and apply the user's edits. Then write only what was confirmed: the host config (outside the repository), the exclude line, and the agent-skills block (update an existing block in place). After a yes to section F, run `python3 -I <fnl-status folder>/scripts/refresh.py consent --retention <days>` to record the consent with its date, then `python3 -I <fnl-status folder>/scripts/refresh.py run` once so the dashboard exists; `fnl-status` must be installed beside this skill, and when it is not, say so and skip the section.
 
 When the findings show a knowledge base, also record the settled decisions there as `fnl-knowledge` says (the route judge and the date of consent, which agents coordinate, the parallel limit, the host config path), through the access the user's instructions approve. Write to the one knowledge base those instructions name, and report any write that failed. Install nothing and change no shared settings.
 

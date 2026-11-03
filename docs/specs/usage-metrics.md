@@ -22,7 +22,7 @@ Show each user whether `finolabs-vibecode` earns its cost on their own machine: 
 | 3 | Hooks are the primary source; the delegate ledger keeps delegate semantics; the router adds one receipt line. No third collection mechanism. |
 | 4 | Claude Code first. Codex after its event names and trust step are confirmed. Antigravity has ledger data only until it ships plugin hooks. |
 | 5 | `fnl-status` is upgraded into the dashboard. No new skill. |
-| 6 | Sessions started by a delegate dispatch are marked with `FNL_DISPATCH_ID`; sessions started by the desktop app are shown as "unclassified". |
+| 6 | Sessions started by a delegate dispatch are marked with `FNL_DISPATCH_ID`; sessions of unknown origin (no recorded session start) are shown as "unclassified". |
 | 7 | Retention is chosen in `fnl-setup` (30, 90 or 365 days), default 90, plus a `purge` command. |
 | 8 | The dashboard is one static local page, `dashboard.html`, that loads its numbers from a `data.js` beside it. The agent creates and publishes nothing; there is no Artifact and no terminal report. A refresh script keeps `data.js` current. (Replaces the earlier Artifact decision.) |
 | 9 | Codebase and direction analysis is a later, separate spec. |
@@ -33,8 +33,8 @@ Each is computed by the refresh script from the event store and the ledger; the 
 
 | Metric | Definition | Action it supports |
 | --- | --- | --- |
-| Router coverage | Sessions with a file edit whose first `router` or `skill` event for `fnl-coding-router` precedes the first `first_edit` event, over sessions with a file edit. Dispatch sessions are excluded; app-started sessions are shown as unclassified. | Router not firing: check `CLAUDE.md`, `fnl-setup` and the session reminder. |
-| Skill and agent use | Count of `skill` and `agent` events per `fnl-` name, per week. | Remove or fix what is never used. |
+| Router coverage | Sessions with a file edit whose first `router` or `skill` event for `fnl-coding-router` precedes the first `first_edit` event, over sessions with a file edit. Dispatch sessions are excluded. Unclassified sessions (a file edit but no recorded `session_start`, so the origin is unknown, for example a session that began before consent) are shown apart. The hook cannot tell a desktop-app task session from a user-started one, so those are not separated. | Router not firing: check `CLAUDE.md`, `fnl-setup` and the session reminder. |
+| Skill and agent use | Count of `skill` and `agent` events per `fnl-` name over the period (top ten), and calls per week. | Remove or fix what is never used. |
 | Load cost | Per session, the sum of bytes of `SKILL.md` for each `skill` event, divided by four, labeled as an estimate. | Trim a skill that is loaded often and rarely acted on. |
 | Depth vs outcome | Per router receipt, the depth, and whether the next pull request in that repository got a `REWORK` verdict before merge. Indicative only: the join is by repository and time, not by session. | Thresholds too loose when `MIN` work is reworked often. |
 | Delegation | `ledger.py summary` per agent, model and grade: first-pass acceptance, quota and error rates, rework rounds. Groups under five runs show counts without comment. | Reroute or change budgets. |
@@ -42,9 +42,9 @@ Each is computed by the refresh script from the event store and the ledger; the 
 
 ## Event store
 
-Directory: `${FNL_STATE_DIR:-${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode}`, created with mode `0700`; files `0600`. One file per month, `events-YYYY-MM.jsonl`, one JSON object per line, written with a single append.
+Directory: `${FNL_STATE_DIR:-${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode}`, created with mode `0700` (a folder that already exists keeps its mode); files `0600`. `FNL_STATE_DIR` counts only when it is an absolute path, and the `markers` folder inside must be a real folder, never a symlink. One file per month, `events-YYYY-MM.jsonl`, one JSON object per line, written with a single append.
 
-Common fields: `ts` (UTC, ISO 8601), `sid` (the host's session id), `repo` (first 8 hex characters of SHA-256 of the repository root path), `event`. No other free-form field exists.
+Common fields: `ts` (UTC, ISO 8601), `sid` (the host's session id), `repo` (first 8 hex characters of SHA-256 of the main repository's root path, so a linked worktree shares its repository's code), `event`. No other free-form field exists.
 
 | `event` | Extra fields | Recorded by |
 | --- | --- | --- |
@@ -53,22 +53,22 @@ Common fields: `ts` (UTC, ISO 8601), `sid` (the host's session id), `repo` (firs
 | `agent` | `name` (only when it starts with `fnl-`) | hook after the `Agent` tool |
 | `first_edit` | none; written once per session | hook after `Edit` or `Write`, guarded by a marker file per session |
 | `commit` | none | hook after `Bash`, only when the command contains `git commit` |
-| `review` | `kind` (`code` or `security`), `verdict` (`APPROVE` or `REWORK`), `pr` (number) | hook after `Bash`, only when the command posts a comment (`gh pr comment`) whose body file starts with a `fnl-review` marker |
-| `router` | `depth` (`MIN`, `NORMAL`, `DEEP`), `trigger` (one value from a fixed list in the router skill) | `fnl-coding-router`, one `metrics.py record` call at the end of step 3 |
+| `review` | `kind` (`code` or `security`), `verdict` (`APPROVE` or `REWORK`), `pr` (number) | hook after `Bash`, only when the command posts a comment (`gh pr comment`) whose body (a file, `--body`, or a heredoc on stdin) starts with a `fnl-review` marker line |
+| `router` | `depth` (`MIN`, `NORMAL`, `DEEP`), `trigger` (one value from a fixed list in the router skill) | hook after `Bash`, when the command is the router's `record.py router --depth D --trigger T`. The command only prints a receipt; the hook records it with the session id, which the router does not have. |
 
 Rules the writer enforces, so a hook bug cannot widen what is stored:
 
 - Fields are checked against the table; an unknown field or a value outside its enum drops the whole event.
 - For `review`, only the first line of the body file is read, capped at 4 KB, regular files only (no symlink follow). Nothing from the comment body is stored except `kind` and `verdict` parsed from the marker.
 - For `commit` and `review`, the command string is tested for the trigger and discarded; it is never written or logged.
-- The writer exits 0 on every path and finishes within 2 seconds. A failure increments `errors.count` in the state directory and writes nothing else; the dashboard shows that count.
+- The writer exits 0 on every path and finishes within 2 seconds. A failure appends one byte to `errors.count` in the state directory (only while metrics are on) and writes nothing else; the dashboard shows that count.
 - `FNL_METRICS=off` makes the writer exit before touching the store. Without recorded consent (`consent.json`, written by `fnl-setup`) it also exits before touching the store.
 
 ## Hooks
 
 Plugin-level, not inside a skill: they only exist when the whole plugin is installed, and the dashboard says so when it finds no events.
 
-- Claude Code: extend `.claude-plugin/hooks.json` with `PostToolUse` entries (matchers `Skill`, `Agent`, `Edit|Write`, `Bash`) and a `SessionStart` entry beside the existing reminder. The `Bash` entry uses the host's `if` condition, so a Bash call that is not `git commit` or `gh pr comment` does not start the script. The script lives at `scripts/metrics_hook.py` and is called as `python3 -I`.
+- Claude Code: extend `.claude-plugin/hooks.json` with a `PostToolUse` entry (matcher `Skill|Agent|Edit|Write|NotebookEdit|Bash`) and a `SessionStart` entry with no matcher, beside the existing reminder. Every entry is `async`, so a hook never delays a tool call. The `Bash` entry has no `if` filter: the host's `if` takes one permission rule and the docs do not say how it matches compound commands such as `cd x && git commit`, so the script tests the command text itself and discards it. The script is `scripts/metrics_hook.py`, called as `python3 -I`; it reads `tool_input.skill` for the Skill tool and `tool_input.subagent_type` for the Agent tool, the names the session transcripts use.
 - On `SessionStart`, after recording `session_start`, the hook runs the refresh (below) when `data.js` is older than ten minutes.
 - Codex: same events and the same script, shipped in the Codex plugin's hooks file, once the verification items below are confirmed. The user must trust the hook hash; `fnl-setup` says so.
 - Antigravity: none in this release.
@@ -81,7 +81,7 @@ Plugin-level, not inside a skill: they only exist when the whole plugin is insta
 
 `fnl-setup` gains a section that, in this order, states what is recorded and where, states that the dashboard is a local page and that nothing leaves the machine, asks for consent, asks the retention (30, 90, 365 days), and writes `consent.json` with the date and the retention. Consent is asked on its own and never bundled, like the route judge. Declining leaves everything off and the dashboard still shows the ledger.
 
-Retention: on each `session_start` the writer deletes event files older than the retention, and marker files older than seven days. `fnl-status purge` deletes the whole store, `data.js` and `dashboard.html` after one confirmation.
+Retention: on each `session_start` the writer deletes event files that end before the retention window, drops the older lines from the file the window cuts through, and deletes marker files older than seven days. `fnl-status purge` deletes the whole store, `data.js` and `dashboard.html` after one confirmation.
 
 ## Dashboard
 
@@ -92,13 +92,13 @@ Two files in the state directory:
 
 The refresh runs when `fnl-status` is called and on `SessionStart` when `data.js` is more than ten minutes old. The page shows its `generated` time, so a stale page says so. `fnl-status` (`disable-model-invocation: true` stays) is one step: run `python3 -I refresh.py --open`, which refreshes and opens `dashboard.html` with the system opener, then report the script's one-line summary: the period, the number of sessions, unclassified sessions, the writer's error count and any missing source (no hooks installed, consent not given, ledger empty). A missing source is stated, never shown as zero.
 
-Repository labels are short codes (`repo-3f2a`); folder names appear only when the user asked for them in setup.
+Repository labels are short codes (`repo-3f2a`) in this release; folder names are not shown.
 
 `ledger.py` gains `summary --json` so the refresh reads the same numbers the text report would.
 
 ### Page contract
 
-The layout is fixed, so every user's dashboard has the same sections in the same order: the prompt line, four KPI tiles, two bands of panes, delegation, the data tables, then sources and a status line. The page renders every value with `textContent` or an attribute, never as markup, and reads `window.FNL_DATA` only; with no `data.js` it shows an empty state that says how to fill it. It is a complete HTML document with a doctype, `<meta charset="utf-8">` and a viewport meta, because nothing wraps it (without the charset a browser reads it as Windows-1252 and garbles its punctuation). It has a `<title>` of two to four words, colors as tokens on `:root` with a dark and a light set and an explicit `body` background, a layout that works at phone width, an inline script and style, and no external script, stylesheet, font or image.
+The layout is fixed, so every user's dashboard has the same sections in the same order: the prompt line, four KPI tiles, two bands of panes, delegation, the data tables, then sources and a status line. The page renders every value with `textContent` or an attribute, never as markup, and reads `window.FNL_DATA` only; when a source is missing it keeps its full size: each pane shows placeholder shapes and the reason, and with no data at all a card over a lightly blurred layer says so (the card stays in view while the page scrolls). It is a complete HTML document with a doctype, `<meta charset="utf-8">` and a viewport meta, because nothing wraps it (without the charset a browser reads it as Windows-1252 and garbles its punctuation). It has a `<title>` of two to four words, colors as tokens on `:root` with a dark and a light set and an explicit `body` background, a layout that works at phone width, an inline script and style, and no external script, stylesheet, font or image. A `Content-Security-Policy` meta tag (`default-src 'none'`, scripts only from the page itself and `file:`) blocks any network request.
 
 `data.js` is generated with `json.dumps` (its default `ensure_ascii` keeps the file ASCII, so it loads the same under any charset) and then has `<`, U+2028 and U+2029 escaped, so stored text can never close or break the script. The refresh writes it atomically (write a temporary file, then rename) with mode `0600`.
 
@@ -124,8 +124,8 @@ A reviewable preview with synthetic data is `tests/fixtures/status-sample.json` 
 - With consent and `FNL_METRICS` unset, each trigger in the event table appends one valid line.
 - Without consent, or with `FNL_METRICS=off`, no file is created or changed.
 - An event with an unknown field or out-of-enum value is dropped and counted in `errors.count`.
-- The writer never exits non-zero, and a `Bash` call that is not a trigger does not start it on Claude Code.
-- Median hook latency is under 50 ms on the developer's machine (one measurement, reported with the command), and a `SessionStart` that also refreshes stays under two seconds.
+- The writer never exits non-zero. A `Bash` call that is not a trigger does start it (there is no `if` filter and the hook is async) but records and prints nothing; a test pins this. Malformed input creates no file when metrics are off or not consented.
+- Hooks are async, so they add no latency to a tool call. Process time is measured once and reported (median 48 to 58 ms on the developer's machine, under the 100 ms target), and a `SessionStart` that also refreshes is bounded by the refresh's own eight-second timeout.
 
 **US2. Router and dispatch marker.**
 - `fnl-coding-router` records `router` with a depth and a trigger from the fixed list.
@@ -145,7 +145,7 @@ A reviewable preview with synthetic data is `tests/fixtures/status-sample.json` 
 
 ## Security review triggers
 
-This change hits `fnl-security-review-gate` for: new input to a process that runs automatically (hook payloads and command text), writes of user behavior data, a file read named by a command, and a script file generated from stored data and loaded by a page. The reviewer checks at least: event validation and enum bounds, path handling for the marker file, file modes and atomic writes, no command text reaching disk or logs, escaping in `data.js` and in the page, behavior when the state directory is unwritable or full, and that off means off.
+This change hits `fnl-security-review-gate` for: new input to a process that runs automatically (hook payloads and command text), writes of user behavior data, a file read named by a command, and a script file generated from stored data and loaded by a page. The reviewer checks at least: event validation and enum bounds, path handling for the marker file, file modes and atomic writes, no command text reaching disk or logs, escaping in `data.js` and in the page, behavior when the state directory is unwritable or full, and that off means off. Known limits, accepted: the retention rewrite of the one month file the cutoff cuts through can lose an event another session appends in the same few milliseconds; the `review` event is read from command text, so a model can write a marker it did not post, which is an integrity limit of any command-text hook and not a security boundary; a review is recorded from `--body-file <path>` (a `~` is expanded, a `$VAR` is not), `--body-file -` with a heredoc or pipe, `--body`, and `--body "$(cat <<EOF`, and every other way of posting goes unrecorded. The hook opens a file named in a command only to read its first line: any readable regular file, never a symlink or a pipe, and nothing but a marker match is kept.
 
 ## Out of scope for tests
 
@@ -153,12 +153,12 @@ Tests cover the writer, the refresh computations and the escaping. No load or sc
 
 ## Files
 
-New: `scripts/metrics_hook.py`, `skills/fnl-status/scripts/refresh.py`, `skills/fnl-status/assets/dashboard.html`, `skills/fnl-status/references/events.md`, tests for both scripts and a parity test for event names between the writer and `events.md`.
+New: `scripts/fnl_metrics.py` (the shared core, copied byte for byte into `skills/fnl-coding-router/scripts/` and `skills/fnl-status/scripts/`; a test keeps the copies equal), `scripts/metrics_hook.py`, `skills/fnl-coding-router/scripts/record.py`, `skills/fnl-status/scripts/refresh.py`, `skills/fnl-status/assets/dashboard.html`, `.github/social-preview.json` and its rendered `.github/social-preview.png`, the two dashboard screenshots under `assets/`, and tests for the core, the hook and the refresh. The core's schema is the one list of events, so there is no separate `events.md`.
 Changed: `.claude-plugin/hooks.json`, `skills/fnl-status/SKILL.md`, `skills/fnl-coding-router/SKILL.md` (receipt call), `skills/fnl-delegate/scripts/ledger.py` (`summary --json`), `skills/fnl-delegate/references/host-template.md`, `skills/fnl-setup/SKILL.md`, `PRIVACY.md`, `README.md`, `CHANGELOG.md`.
 
 ## Verify before building
 
-1. Claude Code: the `if` field on a `Bash` hook, the matcher names `Skill` and `Agent`, and the fields in the `SessionStart` payload (`source`).
+1. Claude Code: checked on 03/11/2026 against the hooks reference and the session transcripts. Plugin hooks use the `${CLAUDE_PLUGIN_ROOT}` variable and a `hooks` wrapper. The Agent tool is `Agent`; the Skill tool's name and its `skill` input key come from the transcripts, not from the docs. `SessionStart` carries `source` (`startup`, `resume`, `clear`, `compact`, `fork`). A PostToolUse hook's output never reaches the model. A command hook can be `async`. The `if` field takes a single permission rule and was not used (see "Hooks").
 2. Codex: event names, how a plugin ships hooks, and the trust step.
 3. Antigravity: whether a plugin can ship hooks.
 4. Whether `FNL_DISPATCH_ID` reaches a hook through `codex exec` and through `agybird`.
