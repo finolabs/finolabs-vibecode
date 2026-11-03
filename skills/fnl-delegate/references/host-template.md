@@ -10,6 +10,10 @@ Machine-specific facts for the `fnl-delegate` skills. The skills hold what is tr
 - Heavy-job lock: `<absolute path, e.g. ~/.finolabs/vibecode/state/heavy.lock>`.
 - Fixture size for local tests and measurements: <e.g. about 1,000 items unless the owner asks for more>.
 
+## Effort preference
+
+Optional. The plugin's default is `medium` effort on every agent, and `high` or above only for very hard work or after a `medium` run fell short (`models.md` "Tiers"). Write a different default here, for example "<effort level> for <which agents or kinds of work>", and it overrides that default for this machine.
+
 ## Briefs folder
 
 Durable, never `/tmp` or a session scratchpad. Default: `.finolabs/` at the main checkout's root, as `fnl-delegate` "Where files go" says. Per-project exceptions: <project → folder>.

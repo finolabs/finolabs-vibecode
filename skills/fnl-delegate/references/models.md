@@ -14,9 +14,13 @@ Route by tier first, then by agent. A tier names what the work needs; the agent 
 
 | Tier | Claude Code | Codex | Antigravity |
 | --- | --- | --- | --- |
-| frontier | Opus 5.5 at `high`/`xhigh`; Fable 5.1 when Opus has already fallen short | `gpt-6-astra` at `high` or above | `claude-opus-5-5-high` (Claude pool) |
-| strong | Opus 5.5 at `medium`, Sonnet 5.5 at `high` | `gpt-6.1-sol` | `gemini-4-argon-high`, `claude-sonnet-5-5-high` |
-| fast | Sonnet 5.5 at `medium`, Haiku 5.5 | `gpt-6.1-terra`, `gpt-6-luna` | `gemini-3.8-flash-medium`/`-high` |
+| frontier | Opus 5.5; Fable 5.1 when Opus has already fallen short | `gpt-6-astra` | `claude-opus-5-5-*` (Claude pool) |
+| strong | Sonnet 5.5 | `gpt-6.1-sol` | `gemini-4-argon-*`, `claude-sonnet-5-5-*` |
+| fast | Haiku 5.5 | `gpt-6.1-terra`, `gpt-6-luna` | `gemini-3.8-flash-*` |
+
+The model places the work in a tier; effort is a separate choice. **Default to `medium` effort on every agent and tier, hard work included**: a `medium` run still does hard work, and it spends less quota and time. Use `high` only for very hard work, or when a `medium` run has already fallen short, and `xhigh` or `max` only when `high` has fallen short too. A host config's "Effort preference" overrides this default.
+
+Each agent's own scale (checked 04/11/2026 with its CLI): Claude Code `low`, `medium`, `high`, `xhigh`, `max`; Codex the same five plus `ultra` (maximum reasoning with automatic task delegation; `gpt-6-luna` has no `ultra`); Antigravity `low`, `medium`, `high`, written as the model name's suffix. Use one five-level scale across agents, `low`, `medium`, `high`, `xhigh`, `max`, and map it to the agent in hand: an agent that lacks a level takes the nearest one below it (Antigravity has nothing above `high`). Routing never picks `ultra`: it delegates on its own, and delegation stays with the coordinator.
 
 Capability order when two choices fit equally, for code: **Claude Code, then Codex, then Antigravity**. For plain content writing (documentation, prose and copy with no code change) the order is **Codex, then Claude Code, then Antigravity**.
 

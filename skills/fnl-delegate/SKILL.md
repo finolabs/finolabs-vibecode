@@ -42,8 +42,9 @@ Choose an agent **and a model**. A user who names either wins; otherwise:
 2. **Strength overrides** from `models.md`: long logs, screenshots, recordings or PDFs; UI from a design; terminal-heavy work; bulk edits.
 3. **Capability order** among what still fits: for code, Claude Code, then Codex, then Antigravity; for plain content writing, Codex, then Claude Code, then Antigravity (`models.md`). Fast-tier work goes instead to the agent with the most quota left, which keeps the stronger agents' quota for hard work.
 4. **Reachability and quota**: skip delegates the host config marks unreachable from this coordinator, and models whose quota is out (below).
+5. **Effort**: `medium`, whatever the grade, unless the work is very hard or a `medium` run already fell short (`models.md` "Tiers"); the host config may set its own preference.
 
-Done when you can state agent, model, effort and the reason in one line, for example "hard, terminal-heavy → Codex `gpt-6.1-sol` high: Claude Code quota at its 5-hour limit".
+Done when you can state agent, model, effort and the reason in one line, for example "hard, terminal-heavy → Codex `gpt-6.1-sol` medium: Claude Code quota at its 5-hour limit".
 
 The grade and the route are judgment calls:
 
@@ -87,7 +88,7 @@ Every dispatch carries a **budget**, written into the brief, and three numbers d
 | advise | 15–30 minutes |
 | committee member | 30–45 minutes |
 
-Take the upper end for frontier models at high effort and for runs that build or test. Once `fnl-status` shows at least five finished runs for the same agent, model and grade, set the budget to about 1.5 times their median instead.
+Take the upper end for very hard work and for runs that build or test. Once `fnl-status` shows at least five finished runs for the same agent, model and grade, set the budget to about 1.5 times their median instead.
 
 - The **agent's own timeout** (`--print-timeout`, the agybird `--timeout`, `--max-turns`), a few minutes under the hard cap, so the agent stops and reports before it is killed.
 - The **hard cap** that kills the process (the host config gives the command form): the budget plus a third, and at least 10 minutes over it.
