@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -60,11 +61,12 @@ SCHEMA = {
 
 
 def state_dir():
-    """FNL_STATE_DIR when it is an absolute path, else the default folder. A relative override is ignored."""
+    """FNL_STATE_DIR when it is an absolute path, else the default folder. A relative override is ignored, as is a relative XDG_STATE_HOME."""
     override = os.environ.get("FNL_STATE_DIR")
     if override and os.path.isabs(override):
         return Path(override)
-    state = os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state"
+    xdg = os.environ.get("XDG_STATE_HOME")
+    state = xdg if xdg and os.path.isabs(xdg) else Path.home() / ".local/state"
     return Path(state) / "finolabs-vibecode"
 
 
@@ -132,6 +134,17 @@ def enabled():
     return os.environ.get("FNL_METRICS", "").lower() != "off" and read_consent() is not None
 
 
+def read_small(path):
+    """The first 4 KB of a regular file as text; never blocks on a pipe and never follows a symlink."""
+    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | NOFOLLOW)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("not a regular file")
+        return os.read(fd, 4096).decode("utf-8", "replace")
+    finally:
+        os.close(fd)
+
+
 def repo_root(cwd):
     """The main repository root: the folder holding .git, or for a linked worktree the root of the repository it belongs to."""
     start = Path(cwd).resolve()
@@ -145,7 +158,7 @@ def repo_root(cwd):
                     text = handle.read(4096).decode("utf-8", "replace").strip()
                 if text.startswith("gitdir:"):
                     gitdir = (folder / text[len("gitdir:"):].strip()).resolve()
-                    common = (gitdir / (gitdir / "commondir").read_text(encoding="utf-8").strip()).resolve()
+                    common = (gitdir / read_small(gitdir / "commondir").strip()).resolve()
                     return common.parent if common.name == ".git" else common
             except (OSError, ValueError):
                 pass

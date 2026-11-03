@@ -107,6 +107,21 @@ class MetricsTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"FNL_STATE_DIR": ".fnl", "XDG_STATE_HOME": str(Path(self.tmp.name) / "xdg")}):
             self.assertEqual(m.state_dir(), Path(self.tmp.name) / "xdg" / "finolabs-vibecode")
 
+    def test_a_relative_xdg_state_home_is_ignored_too(self):
+        env = {"XDG_STATE_HOME": "rel", "HOME": self.tmp.name}
+        with mock.patch.dict(os.environ, env), mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("FNL_STATE_DIR", None)
+            self.assertEqual(m.state_dir(), Path.home() / ".local/state/finolabs-vibecode")
+
+    def test_a_commondir_that_is_a_pipe_does_not_hang_the_lookup(self):
+        folder = Path(self.tmp.name) / "tree"
+        gitdir = Path(self.tmp.name) / "gitdir"
+        folder.mkdir()
+        gitdir.mkdir()
+        os.mkfifo(gitdir / "commondir")
+        (folder / ".git").write_text("gitdir: %s\n" % gitdir)
+        self.assertEqual(m.repo_root(folder), folder.resolve())
+
     def test_nothing_is_created_when_metrics_are_off_or_not_consented(self):
         m.bump_errors()
         self.assertFalse(self.dir.exists())

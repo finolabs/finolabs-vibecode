@@ -230,6 +230,12 @@ def cmd_run(args):
 
 
 def cmd_consent(args):
+    if args.revoke:
+        (fm.state_dir() / "consent.json").unlink(missing_ok=True)
+        print("consent withdrawn: nothing is recorded until consent is given again")
+        return
+    if args.retention is None:
+        sys.exit("consent: pass --retention DAYS, or --revoke")
     fm.write_consent(args.retention)
     print("consent recorded: events kept %d days" % args.retention)
 
@@ -246,6 +252,19 @@ def cmd_purge(args):
     print("purge: removed %d files" % removed)
 
 
+def is_plugin_root(folder):
+    """True when folder holds the finolabs-vibecode manifest and the hook script, so a path in some other tree is never written to the user's config."""
+    try:
+        manifest = json.loads((folder / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(manifest, dict) and manifest.get("name") == "finolabs-vibecode" and (folder / "scripts/metrics_hook.py").is_file()
+
+
+def reject_constant(name):
+    raise ValueError("%s is not valid JSON" % name)
+
+
 def antigravity_group(script):
     def command(event):
         return "python3 -I %s --host antigravity --event %s" % (shlex.quote(str(script)), event)
@@ -258,11 +277,12 @@ def cmd_antigravity_hook(args):
     if not args.yes:
         sys.exit("antigravity-hook: pass --yes once the user has confirmed the change to their hooks file")
     script = HERE.parents[2] / "scripts/metrics_hook.py"
-    if not args.remove and not script.is_file():
-        sys.exit("antigravity-hook: the plugin's hook script is not beside this skill (install the whole plugin)")
-    path = Path(args.config).expanduser()
+    if not args.remove and not is_plugin_root(script.parent.parent):
+        sys.exit("antigravity-hook: this skill is not inside the finolabs-vibecode plugin (no .claude-plugin/plugin.json named finolabs-vibecode "
+                 "beside scripts/metrics_hook.py); install the whole plugin. Nothing changed.")
+    path = Path(args.config).expanduser().resolve()  # a symlinked file is edited in place, not replaced by a regular file
     try:
-        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        data = json.loads(path.read_text(encoding="utf-8"), parse_constant=reject_constant) if path.exists() else {}
     except (OSError, ValueError) as error:
         sys.exit("antigravity-hook: cannot read %s as JSON (%s); nothing changed" % (path, error))
     if not isinstance(data, dict):
@@ -275,10 +295,10 @@ def cmd_antigravity_hook(args):
     else:
         data[HOOK_GROUP] = antigravity_group(script.resolve())
     if path.exists():
-        shutil.copy2(path, path.with_name(path.name + ".finolabs-backup-" + fm.now().strftime("%Y%m%d-%H%M%S")))
+        shutil.copy2(path, path.with_name(path.name + ".finolabs-backup-" + fm.now().strftime("%Y%m%d-%H%M%S-%f")))
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = path.stat().st_mode & 0o777 if path.exists() else 0o600
-    fm.atomic_write(path, json.dumps(data, indent=2) + "\n")
+    fm.atomic_write(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
     os.chmod(path, mode)
     print("antigravity-hook: %s the %s group in %s" % ("removed" if args.remove else "set", HOOK_GROUP, path))
 
@@ -291,7 +311,8 @@ def main():
     run.add_argument("--if-older", type=int, metavar="MINUTES", help="skip when data.js is newer than this")
     run.set_defaults(func=cmd_run)
     consent = sub.add_parser("consent", help="record consent and retention")
-    consent.add_argument("--retention", type=int, required=True, choices=fm.RETENTIONS)
+    consent.add_argument("--retention", type=int, choices=fm.RETENTIONS)
+    consent.add_argument("--revoke", action="store_true", help="withdraw consent; recording stops, recorded events stay until purge")
     consent.set_defaults(func=cmd_consent)
     purge = sub.add_parser("purge", help="delete recorded events and the dashboard files")
     purge.add_argument("--yes", action="store_true")

@@ -168,7 +168,8 @@ def session_start(sid, cwd, source, host):
     consent = fm.read_consent()
     if consent:
         fm.prune(consent["retention_days"])
-        refresh_dashboard()
+        if host != "antigravity":  # its hook is not async, and a refresh must not hold up the start of a session
+            refresh_dashboard()
 
 
 def post_tool_use(sid, cwd, tool, data):

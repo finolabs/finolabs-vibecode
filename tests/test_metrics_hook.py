@@ -194,6 +194,11 @@ class HookTest(unittest.TestCase):
         self.assertEqual(started["sid"], "31357bed-2c92-4bc3-ad3d-23c9545c7b3e")
         self.assertEqual((edited["event"], committed["event"]), ("first_edit", "commit"))
 
+    def test_an_antigravity_session_start_does_not_wait_for_a_dashboard_refresh(self):
+        self.consent()
+        self.agy("session_start")
+        self.assertFalse((self.dir / "data.js").exists())
+
     def test_an_antigravity_hook_still_answers_with_an_empty_object_when_off_or_given_garbage(self):
         self.run_hook(None, raw="garbage", args=("--host", "antigravity", "--event", "post_tool_use"), stdout="{}\n")
         self.assertFalse(self.dir.exists())

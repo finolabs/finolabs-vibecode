@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -244,6 +245,53 @@ class RefreshTest(unittest.TestCase):
             self.assertNotEqual(self.agy_hook(config, "--yes").returncode, 0)
             self.assertEqual(config.read_text(), bad)
         self.assertEqual(list(config.parent.glob("hooks.json.finolabs-backup-*")), [])
+
+    def test_the_antigravity_hook_is_refused_for_a_skill_outside_the_plugin(self):
+        tree = Path(self.tmp.name) / "repo" / ".claude"
+        shutil.copytree(ROOT / "skills/fnl-status", tree / "skills/fnl-status")
+        (tree / "scripts").mkdir()
+        (tree / "scripts/metrics_hook.py").write_text("print('pwned')\n")
+        config = Path(self.tmp.name) / "hooks.json"
+        config.write_text("{}")
+        result = subprocess.run([sys.executable, "-I", str(tree / "skills/fnl-status/scripts/refresh.py"), "antigravity-hook",
+                                 "--config", str(config), "--yes"], capture_output=True, text=True, env=self.env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not inside the finolabs-vibecode plugin", result.stderr)
+        self.assertEqual(config.read_text(), "{}")
+        self.assertEqual(list(config.parent.glob("hooks.json.finolabs-backup-*")), [])
+
+    def test_a_symlinked_hooks_file_is_edited_in_place_and_stays_a_link(self):
+        real = Path(self.tmp.name) / "dotfiles" / "hooks.json"
+        real.parent.mkdir()
+        real.write_text(json.dumps({"finos": {}}))
+        link = Path(self.tmp.name) / "hooks.json"
+        link.symlink_to(real)
+        self.assertEqual(self.agy_hook(link, "--yes").returncode, 0)
+        self.assertTrue(link.is_symlink())
+        self.assertIn("finolabs-vibecode", json.loads(real.read_text()))
+
+    def test_a_hooks_file_with_nan_is_refused_and_non_ascii_text_is_kept_readable(self):
+        config = Path(self.tmp.name) / "hooks.json"
+        config.write_text('{"a": NaN}')
+        self.assertNotEqual(self.agy_hook(config, "--yes").returncode, 0)
+        self.assertEqual(config.read_text(), '{"a": NaN}')
+        config.write_text(json.dumps({"note": "xin chào"}, ensure_ascii=False))
+        self.agy_hook(config, "--yes")
+        self.assertIn("xin chào", config.read_text())
+
+    def test_two_runs_in_one_second_keep_two_backups(self):
+        config = Path(self.tmp.name) / "hooks.json"
+        config.write_text("{}")
+        self.agy_hook(config, "--yes")
+        self.agy_hook(config, "--yes")
+        self.assertEqual(len(list(config.parent.glob("hooks.json.finolabs-backup-*"))), 2)
+
+    def test_consent_can_be_withdrawn_and_recorded_events_stay_until_purge(self):
+        self.consent()
+        self.refresh("run")
+        self.refresh("consent", "--revoke")
+        self.assertFalse((self.dir / "consent.json").exists())
+        self.assertNotEqual(self.refresh("consent", check=False).returncode, 0)
 
     def test_consent_rejects_an_unknown_retention(self):
         self.assertNotEqual(self.refresh("consent", "--retention", "7", check=False).returncode, 0)
