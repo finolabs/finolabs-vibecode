@@ -61,13 +61,19 @@ SCHEMA = {
 
 
 def state_dir():
-    """FNL_STATE_DIR when it is an absolute path, else the default folder. A relative override is ignored, as is a relative XDG_STATE_HOME."""
+    """FNL_STATE_DIR when it is an absolute path, else ~/.finolabs/vibecode/state.
+
+    A relative override is ignored, as is a relative XDG_STATE_HOME. A machine that already
+    keeps its state in the older folder (${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode)
+    and has none in the new one keeps using the older folder; nothing is moved.
+    """
     override = os.environ.get("FNL_STATE_DIR")
     if override and os.path.isabs(override):
         return Path(override)
+    new = Path.home() / ".finolabs/vibecode/state"
     xdg = os.environ.get("XDG_STATE_HOME")
-    state = xdg if xdg and os.path.isabs(xdg) else Path.home() / ".local/state"
-    return Path(state) / "finolabs-vibecode"
+    old = Path(xdg if xdg and os.path.isabs(xdg) else Path.home() / ".local/state") / "finolabs-vibecode"
+    return old if old.is_dir() and not new.exists() else new
 
 
 def now():
@@ -102,12 +108,17 @@ def ensure_dir(path, follow=False):
         if not path.is_dir():
             raise ValueError("not a folder: " + path.name)
     else:
-        try:
-            path.mkdir(mode=0o700, parents=True)
-            os.chmod(path, 0o700)
-        except FileExistsError:  # another hook made it first
-            if not path.is_dir() or path.is_symlink():
-                raise ValueError("not a folder: " + path.name)
+        missing, folder = [], path
+        while not folder.exists() and folder != folder.parent:
+            missing.append(folder)
+            folder = folder.parent
+        for new in reversed(missing):  # every folder made here, ~/.finolabs included, is private
+            try:
+                new.mkdir(mode=0o700)
+                os.chmod(new, 0o700)
+            except FileExistsError:  # another hook made it first
+                if not new.is_dir() or new.is_symlink():
+                    raise ValueError("not a folder: " + new.name)
     return path
 
 

@@ -13,6 +13,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `fnl-setup` recommends companion skills from `references/companions.md`: `agybird` when Antigravity is a delegate of Claude Code or Codex, and `vietnamizer` when the user writes Vietnamese documents for people. It gives their install commands and installs nothing.
 
 ### Changed
+- The plugin's own data and configuration now default to `~/.finolabs/vibecode/`: `host.md`, `ledger.jsonl` and `state/` (consent, usage events, the dashboard). Folders it creates there are mode `0700`. A machine that already keeps them in `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` or `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode` and has nothing in the new place keeps using the old files; nothing is moved. `FNL_STATE_DIR`, `ORCHESTRATION_LEDGER` and `ORCHESTRATION_HOST_CONFIG` still win.
 
 - `fnl-status` no longer takes `--since` or `--project` and no longer prints a routing table in the terminal; the dashboard shows the same figures, and the skill still lists open dispatches and checks the capability map's review date.
 - `PRIVACY.md` no longer says the plugin has no analytics; it describes the opt-in local record and what it holds.

@@ -42,7 +42,7 @@ Each is computed by the refresh script from the event store and the ledger; the 
 
 ## Event store
 
-Directory: `${FNL_STATE_DIR:-${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode}`, created with mode `0700` (a folder that already exists keeps its mode); files `0600`. `FNL_STATE_DIR` counts only when it is an absolute path, and the `markers` folder inside must be a real folder, never a symlink. One file per month, `events-YYYY-MM.jsonl`, one JSON object per line, written with a single append.
+Directory: `${FNL_STATE_DIR:-~/.finolabs/vibecode/state}` (a machine that already has `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` and no new folder keeps using the old one; nothing is moved, and every folder created here, `~/.finolabs` included, is mode `0700`); a folder that already exists keeps its mode; files `0600`. `FNL_STATE_DIR` counts only when it is an absolute path, and the `markers` folder inside must be a real folder, never a symlink. One file per month, `events-YYYY-MM.jsonl`, one JSON object per line, written with a single append.
 
 Common fields: `ts` (UTC, ISO 8601), `sid` (the host's session id), `repo` (first 8 hex characters of SHA-256 of the main repository's root path, so a linked worktree shares its repository's code), `event`. No other free-form field exists.
 

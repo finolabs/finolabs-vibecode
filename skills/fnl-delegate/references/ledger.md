@@ -1,6 +1,6 @@
 # Ledger
 
-Record every dispatch with `scripts/ledger.py` in this skill's base directory. It appends to `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode/ledger.jsonl` (override with `ORCHESTRATION_LEDGER`). The ledger measures whether this routing works, so write each line at the moment it happens:
+Record every dispatch with `scripts/ledger.py` in this skill's base directory. It appends to `~/.finolabs/vibecode/ledger.jsonl` (override with `ORCHESTRATION_LEDGER`; a machine whose ledger is still in `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` keeps using it until a new one exists). The ledger measures whether this routing works, so write each line at the moment it happens:
 
 ```bash
 L="<this skill's base directory>/scripts/ledger.py"

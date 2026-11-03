@@ -105,5 +105,43 @@ class LedgerTest(unittest.TestCase):
                 self.assertIn(f"malformed line {n}", result.stderr)
 
 
+class LedgerLocationTest(unittest.TestCase):
+    """The default file: the finolabs home, or the older XDG file while only that one exists."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.home = Path(self.dir.name) / "home"
+        self.xdg = Path(self.dir.name) / "xdg"
+        self.home.mkdir()
+        env = {k: v for k, v in os.environ.items() if k != "ORCHESTRATION_LEDGER"}
+        self.env = {**env, "HOME": str(self.home), "XDG_STATE_HOME": str(self.xdg)}
+
+    def start(self):
+        return subprocess.run([sys.executable, "-I", str(LEDGER), *START], capture_output=True, text=True, env=self.env, check=True)
+
+    def test_a_new_machine_writes_to_the_finolabs_home_in_private_folders(self):
+        self.start()
+        ledger = self.home / ".finolabs/vibecode/ledger.jsonl"
+        self.assertTrue(ledger.is_file())
+        self.assertFalse(self.xdg.exists())
+        for folder in (self.home / ".finolabs", self.home / ".finolabs/vibecode"):
+            self.assertEqual(folder.stat().st_mode & 0o777, 0o700, folder)
+
+    def test_an_existing_older_ledger_keeps_being_used_until_a_new_one_exists(self):
+        old = self.xdg / "finolabs-vibecode/ledger.jsonl"
+        old.parent.mkdir(parents=True)
+        old.write_text("")
+        self.start()
+        self.assertEqual(len(old.read_text().splitlines()), 1)
+        self.assertFalse((self.home / ".finolabs").exists())
+        new = self.home / ".finolabs/vibecode/ledger.jsonl"
+        new.parent.mkdir(parents=True)
+        new.write_text("")
+        self.start()
+        self.assertEqual(len(new.read_text().splitlines()), 1)
+        self.assertEqual(len(old.read_text().splitlines()), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

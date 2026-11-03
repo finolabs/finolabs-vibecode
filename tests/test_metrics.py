@@ -103,15 +103,39 @@ class MetricsTest(unittest.TestCase):
         m.bump_errors()
         self.assertEqual(list(self.dir.glob("events-*")), [])
 
-    def test_a_relative_state_dir_override_is_ignored(self):
-        with mock.patch.dict(os.environ, {"FNL_STATE_DIR": ".fnl", "XDG_STATE_HOME": str(Path(self.tmp.name) / "xdg")}):
-            self.assertEqual(m.state_dir(), Path(self.tmp.name) / "xdg" / "finolabs-vibecode")
+    def home_env(self, **extra):
+        home = Path(self.tmp.name) / "home"
+        home.mkdir(exist_ok=True)
+        env = {"HOME": str(home), **extra}
+        patcher = mock.patch.dict(os.environ, env)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("FNL_STATE_DIR", None)
+        if "XDG_STATE_HOME" not in extra:
+            os.environ.pop("XDG_STATE_HOME", None)
+        return home
 
-    def test_a_relative_xdg_state_home_is_ignored_too(self):
-        env = {"XDG_STATE_HOME": "rel", "HOME": self.tmp.name}
-        with mock.patch.dict(os.environ, env), mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("FNL_STATE_DIR", None)
-            self.assertEqual(m.state_dir(), Path.home() / ".local/state/finolabs-vibecode")
+    def test_the_default_state_folder_is_under_the_finolabs_home(self):
+        home = self.home_env()
+        self.assertEqual(m.state_dir(), home / ".finolabs/vibecode/state")
+
+    def test_a_relative_override_or_relative_xdg_state_home_is_ignored(self):
+        home = self.home_env(FNL_STATE_DIR=".fnl", XDG_STATE_HOME="rel")
+        self.assertEqual(m.state_dir(), home / ".finolabs/vibecode/state")
+
+    def test_a_machine_with_only_the_older_state_folder_keeps_using_it_and_the_new_one_wins_once_it_exists(self):
+        home = self.home_env(XDG_STATE_HOME=str(Path(self.tmp.name) / "xdg"))
+        old = Path(self.tmp.name) / "xdg" / "finolabs-vibecode"
+        old.mkdir(parents=True)
+        self.assertEqual(m.state_dir(), old)
+        (home / ".finolabs/vibecode/state").mkdir(parents=True)
+        self.assertEqual(m.state_dir(), home / ".finolabs/vibecode/state")
+
+    def test_folders_made_for_the_state_are_private_including_the_finolabs_home(self):
+        home = self.home_env()
+        m.ensure_dir(m.state_dir())
+        for folder in (home / ".finolabs", home / ".finolabs/vibecode", home / ".finolabs/vibecode/state"):
+            self.assertEqual(folder.stat().st_mode & 0o777, 0o700, folder)
 
     def test_a_commondir_that_is_a_pipe_does_not_hang_the_lookup(self):
         folder = Path(self.tmp.name) / "tree"

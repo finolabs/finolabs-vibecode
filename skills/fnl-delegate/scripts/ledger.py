@@ -2,8 +2,9 @@
 """Append-only dispatch ledger for the delegation skills.
 
 Each dispatch writes a `start` line and later a `finish` line to a JSONL file
-(default $XDG_STATE_HOME/finolabs-vibecode/ledger.jsonl, with XDG_STATE_HOME
-defaulting to ~/.local/state; override with ORCHESTRATION_LEDGER).
+(default ~/.finolabs/vibecode/ledger.jsonl; override with ORCHESTRATION_LEDGER).
+A machine whose ledger is still in ${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode and has
+none in the new place keeps using the old file; nothing is moved.
 `summary` joins them to measure routing: first-pass acceptance, timeouts,
 fallbacks and duration per agent, model, kind and grade.
 """
@@ -40,8 +41,10 @@ def ledger_path():
     override = os.environ.get("ORCHESTRATION_LEDGER")
     if override:
         return Path(override)
-    state = os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state"
-    return Path(state) / "finolabs-vibecode/ledger.jsonl"
+    new = Path.home() / ".finolabs/vibecode/ledger.jsonl"
+    xdg = os.environ.get("XDG_STATE_HOME")
+    old = Path(xdg if xdg and os.path.isabs(xdg) else Path.home() / ".local/state") / "finolabs-vibecode/ledger.jsonl"
+    return old if old.is_file() and not new.exists() else new
 
 
 def now():
@@ -50,7 +53,13 @@ def now():
 
 def append(record):
     path = ledger_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
+    missing, folder = [], path.parent
+    while not folder.exists() and folder != folder.parent:
+        missing.append(folder)
+        folder = folder.parent
+    for new in reversed(missing):  # a folder made here is private
+        new.mkdir(mode=0o700, exist_ok=True)
+        os.chmod(new, 0o700)
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
