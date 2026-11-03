@@ -14,9 +14,13 @@ Route by tier first, then by agent. A tier names what the work needs; the agent 
 
 | Tier | Claude Code | Codex | Antigravity |
 | --- | --- | --- | --- |
-| frontier | Opus 5.5 at `high`/`xhigh`; Fable 5.1 when Opus has already fallen short | `gpt-6-astra` at `high` or above | `claude-opus-5-5-high` (Claude pool) |
-| strong | Opus 5.5 at `medium`, Sonnet 5.5 at `high` | `gpt-6.1-sol` | `gemini-4-argon-high`, `claude-sonnet-5-5-high` |
-| fast | Sonnet 5.5 at `medium`, Haiku 5.5 | `gpt-6.1-terra`, `gpt-6-luna` | `gemini-3.8-flash-medium`/`-high` |
+| frontier | Opus 5.5; Fable 5.1 when Opus has already fallen short | `gpt-6-astra` | `claude-opus-5-5-*` (Claude pool) |
+| strong | Sonnet 5.5 | `gpt-6.1-sol` | `gemini-4-argon-*`, `claude-sonnet-5-5-*` |
+| fast | Haiku 5.5 | `gpt-6.1-terra`, `gpt-6-luna` | `gemini-3.8-flash-*` |
+
+The model places the work in a tier; effort is a separate choice. **Default to `medium` effort on every agent and tier, hard work included**: a `medium` run still does hard work, and it spends less quota and time. By grade (`SKILL.md` "Grade"): `medium` for easy, medium and hard work, `high` for very hard, `xhigh` for ultra hard, and `max` only when `xhigh` has fallen short. A run that fell short at its level is retried one level up. A host config's "Effort preference" overrides this default.
+
+Each agent's own scale (checked 04/11/2026 with its CLI): Claude Code `low`, `medium`, `high`, `xhigh`, `max`; Codex the same five plus `ultra` (maximum reasoning with automatic task delegation; `gpt-6-luna` has no `ultra`); Antigravity `low`, `medium`, `high`, written as the model name's suffix. Use one five-level scale across agents, `low`, `medium`, `high`, `xhigh`, `max`, and map it to the agent in hand: an agent that lacks a level takes the nearest one below it (Antigravity has nothing above `high`). Routing never picks Codex's `ultra` or Claude Code's `ultracode`: both delegate on their own, and delegation stays with the coordinator.
 
 Capability order when two choices fit equally, for code: **Claude Code, then Codex, then Antigravity**. For plain content writing (documentation, prose and copy with no code change) the order is **Codex, then Claude Code, then Antigravity**.
 
@@ -24,7 +28,7 @@ Capability order when two choices fit equally, for code: **Claude Code, then Cod
 
 Recheck: `claude --help`, `/model` in a session, and the [model overview](https://platform.claude.com/docs/en/about-claude/models/choosing-a-model).
 
-- Models: Fable 5.1, Opus 5.5, Sonnet 5.5, Haiku 5.5; 1M context each. Effort `low`…`max` (Claude Code adds `ultracode`). Pin full model IDs in headless runs: aliases such as `opus` map to different models on different providers.
+- Models: Fable 5.1, Opus 5.5, Sonnet 5.5, Haiku 5.5; 1M context each. Effort `low`, `medium`, `high`, `xhigh`, `max`; `ultracode` is not a level but a session setting (`/effort`, or `--effort ultracode`, which also sets `xhigh`) that makes Claude plan dynamic subagent workflows on its own, so routing never picks it. Pin full model IDs in headless runs: aliases such as `opus` map to different models on different providers.
 - Strengths: long-running agentic coding and terminal work (Opus 5.5), the strongest reasoning for hard cases (Fable 5.1, at about 2.5 times Opus's price), speed with good judgement (Sonnet 5.5), cheap high-volume subtasks (Haiku 5.5).
 - Quota: plan limits or API billing. A rate limit shows as a `system/api_retry` event with `rate_limit` in `stream-json` output.
 

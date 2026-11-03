@@ -20,6 +20,7 @@
     "agent-skills"
   ],
   "skills": "./skills/",
+  "hooks": "./.codex-plugin/hooks.json",
   "interface": {
     "displayName": "Finolabs Vibecode",
     "shortDescription": "Engineering rules for agents",

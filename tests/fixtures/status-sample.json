@@ -1,0 +1,599 @@
+{
+ "generated": "2026-10-31T18:00:00Z",
+ "period": {
+  "from": "2026-08-09",
+  "to": "2026-10-31",
+  "days": 84
+ },
+ "sessions": {
+  "total": 138,
+  "with_edits": 69,
+  "dispatch": 22,
+  "unclassified": 31
+ },
+ "errors": 0,
+ "missing": {},
+ "kpi": {
+  "router_coverage": 0.76,
+  "sessions": 138,
+  "calls": 184,
+  "first_pass": 0.68,
+  "spark": {
+   "router_coverage": [
+    0.4,
+    0.45,
+    0.5,
+    0.55,
+    0.6,
+    0.62,
+    0.66,
+    0.7,
+    0.68,
+    0.72,
+    0.74,
+    0.76
+   ],
+   "sessions": [
+    7,
+    12,
+    11,
+    13,
+    9,
+    7,
+    11,
+    13,
+    9,
+    16,
+    11,
+    10
+   ],
+   "calls": [
+    19,
+    15,
+    12,
+    11,
+    10,
+    11,
+    11,
+    12,
+    19,
+    12,
+    9,
+    16
+   ],
+   "first_pass": [
+    0.5,
+    0.55,
+    0.6,
+    0.58,
+    0.62,
+    0.7,
+    0.66,
+    0.7,
+    0.68,
+    0.72,
+    0.7,
+    0.68
+   ]
+  }
+ },
+ "router": {
+  "covered": 28,
+  "missed": 9,
+  "excluded": 22,
+  "unclassified": 31,
+  "eligible": 37
+ },
+ "use": [
+  {
+   "name": "fnl-coding-router",
+   "kind": "skill",
+   "count": 49
+  },
+  {
+   "name": "fnl-reviewer",
+   "kind": "agent",
+   "count": 48
+  },
+  {
+   "name": "fnl-security-reviewer",
+   "kind": "agent",
+   "count": 29
+  },
+  {
+   "name": "fnl-review-gate",
+   "kind": "skill",
+   "count": 7
+  },
+  {
+   "name": "fnl-coordinator-sessions",
+   "kind": "skill",
+   "count": 7
+  },
+  {
+   "name": "fnl-open-source-review",
+   "kind": "skill",
+   "count": 7
+  },
+  {
+   "name": "fnl-commit-messages",
+   "kind": "skill",
+   "count": 2
+  },
+  {
+   "name": "fnl-versioning",
+   "kind": "skill",
+   "count": 2
+  }
+ ],
+ "load": {
+  "avg_tokens_per_session": 4100,
+  "estimate": true,
+  "top": [
+   {
+    "name": "fnl-delegate",
+    "tokens": 3400,
+    "loads": 6
+   },
+   {
+    "name": "fnl-coding-router",
+    "tokens": 2800,
+    "loads": 49
+   },
+   {
+    "name": "fnl-review-gate",
+    "tokens": 3600,
+    "loads": 7
+   },
+   {
+    "name": "fnl-setup",
+    "tokens": 2900,
+    "loads": 3
+   }
+  ]
+ },
+ "depth": [
+  {
+   "depth": "MIN",
+   "receipts": 14,
+   "reworked": 4
+  },
+  {
+   "depth": "NORMAL",
+   "receipts": 17,
+   "reworked": 3
+  },
+  {
+   "depth": "DEEP",
+   "receipts": 9,
+   "reworked": 6
+  }
+ ],
+ "delegation": [
+  {
+   "agent": "antigravity",
+   "model": "gemini-4-argon-high",
+   "grade": "medium",
+   "runs": 8,
+   "first_pass": 0.75,
+   "quota": 1,
+   "error": 0,
+   "median_min": 5,
+   "rework": 0.4
+  },
+  {
+   "agent": "antigravity",
+   "model": "gemini-3.8-flash-high",
+   "grade": "easy",
+   "runs": 5,
+   "first_pass": 0.6,
+   "quota": 0,
+   "error": 0,
+   "median_min": 10,
+   "rework": 0.2
+  },
+  {
+   "agent": "codex",
+   "model": "gpt-6-astra",
+   "grade": "hard",
+   "runs": 1,
+   "first_pass": null,
+   "quota": 0,
+   "error": 0,
+   "median_min": 0,
+   "rework": 0.0
+  }
+ ],
+ "reviews": [
+  {
+   "repo": "repo-3f2a",
+   "pr": 31,
+   "verdicts": [
+    "APPROVE"
+   ]
+  },
+  {
+   "repo": "repo-3f2a",
+   "pr": 30,
+   "verdicts": [
+    "REWORK",
+    "APPROVE"
+   ]
+  },
+  {
+   "repo": "repo-3f2a",
+   "pr": 29,
+   "verdicts": [
+    "REWORK",
+    "REWORK",
+    "APPROVE"
+   ]
+  },
+  {
+   "repo": "repo-9c01",
+   "pr": 12,
+   "verdicts": [
+    "APPROVE"
+   ]
+  }
+ ],
+ "sources": [
+  {
+   "name": "hooks",
+   "ok": true,
+   "note": "events from 14 days"
+  },
+  {
+   "name": "consent",
+   "ok": true,
+   "note": "given 03/11/2026, kept 90 days"
+  },
+  {
+   "name": "ledger",
+   "ok": true,
+   "note": "22 runs"
+  }
+ ],
+ "activity": [
+  {
+   "date": "2026-08-09",
+   "count": 0
+  },
+  {
+   "date": "2026-08-10",
+   "count": 3
+  },
+  {
+   "date": "2026-08-11",
+   "count": 0
+  },
+  {
+   "date": "2026-08-12",
+   "count": 12
+  },
+  {
+   "date": "2026-08-13",
+   "count": 7
+  },
+  {
+   "date": "2026-08-14",
+   "count": 1
+  },
+  {
+   "date": "2026-08-15",
+   "count": 0
+  },
+  {
+   "date": "2026-08-16",
+   "count": 0
+  },
+  {
+   "date": "2026-08-17",
+   "count": 0
+  },
+  {
+   "date": "2026-08-18",
+   "count": 7
+  },
+  {
+   "date": "2026-08-19",
+   "count": 0
+  },
+  {
+   "date": "2026-08-20",
+   "count": 15
+  },
+  {
+   "date": "2026-08-21",
+   "count": 1
+  },
+  {
+   "date": "2026-08-22",
+   "count": 0
+  },
+  {
+   "date": "2026-08-23",
+   "count": 0
+  },
+  {
+   "date": "2026-08-24",
+   "count": 12
+  },
+  {
+   "date": "2026-08-25",
+   "count": 16
+  },
+  {
+   "date": "2026-08-26",
+   "count": 7
+  },
+  {
+   "date": "2026-08-27",
+   "count": 0
+  },
+  {
+   "date": "2026-08-28",
+   "count": 18
+  },
+  {
+   "date": "2026-08-29",
+   "count": 0
+  },
+  {
+   "date": "2026-08-30",
+   "count": 0
+  },
+  {
+   "date": "2026-08-31",
+   "count": 8
+  },
+  {
+   "date": "2026-09-01",
+   "count": 12
+  },
+  {
+   "date": "2026-09-02",
+   "count": 14
+  },
+  {
+   "date": "2026-09-03",
+   "count": 18
+  },
+  {
+   "date": "2026-09-04",
+   "count": 0
+  },
+  {
+   "date": "2026-09-05",
+   "count": 1
+  },
+  {
+   "date": "2026-09-06",
+   "count": 1
+  },
+  {
+   "date": "2026-09-07",
+   "count": 2
+  },
+  {
+   "date": "2026-09-08",
+   "count": 1
+  },
+  {
+   "date": "2026-09-09",
+   "count": 1
+  },
+  {
+   "date": "2026-09-10",
+   "count": 1
+  },
+  {
+   "date": "2026-09-11",
+   "count": 3
+  },
+  {
+   "date": "2026-09-12",
+   "count": 1
+  },
+  {
+   "date": "2026-09-13",
+   "count": 1
+  },
+  {
+   "date": "2026-09-14",
+   "count": 13
+  },
+  {
+   "date": "2026-09-15",
+   "count": 6
+  },
+  {
+   "date": "2026-09-16",
+   "count": 15
+  },
+  {
+   "date": "2026-09-17",
+   "count": 5
+  },
+  {
+   "date": "2026-09-18",
+   "count": 6
+  },
+  {
+   "date": "2026-09-19",
+   "count": 0
+  },
+  {
+   "date": "2026-09-20",
+   "count": 1
+  },
+  {
+   "date": "2026-09-21",
+   "count": 0
+  },
+  {
+   "date": "2026-09-22",
+   "count": 14
+  },
+  {
+   "date": "2026-09-23",
+   "count": 15
+  },
+  {
+   "date": "2026-09-24",
+   "count": 8
+  },
+  {
+   "date": "2026-09-25",
+   "count": 9
+  },
+  {
+   "date": "2026-09-26",
+   "count": 1
+  },
+  {
+   "date": "2026-09-27",
+   "count": 0
+  },
+  {
+   "date": "2026-09-28",
+   "count": 1
+  },
+  {
+   "date": "2026-09-29",
+   "count": 8
+  },
+  {
+   "date": "2026-09-30",
+   "count": 4
+  },
+  {
+   "date": "2026-10-01",
+   "count": 10
+  },
+  {
+   "date": "2026-10-02",
+   "count": 1
+  },
+  {
+   "date": "2026-10-03",
+   "count": 0
+  },
+  {
+   "date": "2026-10-04",
+   "count": 1
+  },
+  {
+   "date": "2026-10-05",
+   "count": 18
+  },
+  {
+   "date": "2026-10-06",
+   "count": 5
+  },
+  {
+   "date": "2026-10-07",
+   "count": 7
+  },
+  {
+   "date": "2026-10-08",
+   "count": 11
+  },
+  {
+   "date": "2026-10-09",
+   "count": 7
+  },
+  {
+   "date": "2026-10-10",
+   "count": 0
+  },
+  {
+   "date": "2026-10-11",
+   "count": 0
+  },
+  {
+   "date": "2026-10-12",
+   "count": 12
+  },
+  {
+   "date": "2026-10-13",
+   "count": 0
+  },
+  {
+   "date": "2026-10-14",
+   "count": 8
+  },
+  {
+   "date": "2026-10-15",
+   "count": 17
+  },
+  {
+   "date": "2026-10-16",
+   "count": 9
+  },
+  {
+   "date": "2026-10-17",
+   "count": 1
+  },
+  {
+   "date": "2026-10-18",
+   "count": 0
+  },
+  {
+   "date": "2026-10-19",
+   "count": 3
+  },
+  {
+   "date": "2026-10-20",
+   "count": 9
+  },
+  {
+   "date": "2026-10-21",
+   "count": 4
+  },
+  {
+   "date": "2026-10-22",
+   "count": 0
+  },
+  {
+   "date": "2026-10-23",
+   "count": 0
+  },
+  {
+   "date": "2026-10-24",
+   "count": 0
+  },
+  {
+   "date": "2026-10-25",
+   "count": 0
+  },
+  {
+   "date": "2026-10-26",
+   "count": 3
+  },
+  {
+   "date": "2026-10-27",
+   "count": 13
+  },
+  {
+   "date": "2026-10-28",
+   "count": 7
+  },
+  {
+   "date": "2026-10-29",
+   "count": 3
+  },
+  {
+   "date": "2026-10-30",
+   "count": 11
+  },
+  {
+   "date": "2026-10-31",
+   "count": 0
+  }
+ ],
+ "review_stats": {
+  "total": 4,
+  "reworked": 2
+ }
+}

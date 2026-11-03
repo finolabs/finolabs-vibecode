@@ -2,8 +2,9 @@
 """Append-only dispatch ledger for the delegation skills.
 
 Each dispatch writes a `start` line and later a `finish` line to a JSONL file
-(default $XDG_STATE_HOME/finolabs-vibecode/ledger.jsonl, with XDG_STATE_HOME
-defaulting to ~/.local/state; override with ORCHESTRATION_LEDGER).
+(default ~/.finolabs/vibecode/ledger.jsonl; override with ORCHESTRATION_LEDGER).
+A machine whose ledger is still in ${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode and has
+none in the new place keeps using the old file; nothing is moved.
 `summary` joins them to measure routing: first-pass acceptance, timeouts,
 fallbacks and duration per agent, model, kind and grade.
 """
@@ -19,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 KINDS = ["implement", "review", "advise", "committee"]
-GRADES = ["easy", "medium", "hard", "very-hard"]
+GRADES = ["easy", "medium", "hard", "very-hard", "ultra-hard"]
 AGENTS = ["claude", "claude-session", "codex", "antigravity", "subagent"]
 COORDINATORS = ["claude", "codex", "antigravity"]
 ROUTE_BY = ["table", "judge", "user"]
@@ -40,8 +41,10 @@ def ledger_path():
     override = os.environ.get("ORCHESTRATION_LEDGER")
     if override:
         return Path(override)
-    state = os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state"
-    return Path(state) / "finolabs-vibecode/ledger.jsonl"
+    new = Path.home() / ".finolabs/vibecode/ledger.jsonl"
+    xdg = os.environ.get("XDG_STATE_HOME")
+    old = Path(xdg if xdg and os.path.isabs(xdg) else Path.home() / ".local/state") / "finolabs-vibecode/ledger.jsonl"
+    return old if old.is_file() and not new.exists() else new
 
 
 def now():
@@ -50,7 +53,13 @@ def now():
 
 def append(record):
     path = ledger_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
+    missing, folder = [], path.parent
+    while not folder.exists() and folder != folder.parent:
+        missing.append(folder)
+        folder = folder.parent
+    for new in reversed(missing):  # a folder made here is private
+        new.mkdir(mode=0o700, exist_ok=True)
+        os.chmod(new, 0o700)
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
@@ -115,32 +124,53 @@ def cmd_open(args):
                   f"{s['agent']}/{s['model']}  {s['project']}: {s['task']}")
 
 
-def cmd_summary(args):
+SUMMARY_KEYS = ("agent", "model", "kind", "grade")
+
+
+def summary_rows(keys=SUMMARY_KEYS, since=None, project=None):
+    """One dict per group of finished dispatches: the key fields, the counts and the rates."""
     starts, finishes = load()
     groups = defaultdict(list)
     for dispatch_id, s in starts.items():
-        if args.since and s["ts"][:10] < args.since:
+        if since and s["ts"][:10] < since:
             continue
-        if args.project and s["project"] != args.project:
+        if project and s["project"] != project:
             continue
         f = finishes.get(dispatch_id)
         if f is None:
             continue
-        groups[(s["agent"], s["model"], s["kind"], s["grade"])].append((s, f))
-    if not groups:
+        groups[tuple(s[k] for k in keys)].append((s, f))
+    rows = []
+    for key, pairs in sorted(groups.items()):
+        n = len(pairs)
+        accepted = [f for _, f in pairs if f["outcome"] == "accepted"]
+        rows.append({
+            **dict(zip(keys, key)), "n": n,
+            "first_pass": len([f for f in accepted if f["rework_rounds"] == 0]) / n,
+            "accepted": len(accepted) / n,
+            "timeout": len([f for _, f in pairs if f["outcome"] in ("timeout", "stalled")]),
+            "fallback": len([s for s, _ in pairs if s["reason"].startswith("fallback")]),
+            "quota": len([f for _, f in pairs if f["outcome"] == "quota"]),
+            "error": len([f for _, f in pairs if f["outcome"] == "error"]),
+            "median_min": statistics.median(minutes(s, f) for s, f in pairs),
+            "rework": statistics.mean(f["rework_rounds"] for _, f in pairs),
+        })
+    return rows
+
+
+def cmd_summary(args):
+    rows = summary_rows(since=args.since, project=args.project)
+    if args.json:
+        print(json.dumps(rows))
+        return
+    if not rows:
         print("ledger: no finished dispatches match")
         return
     header = f"{'agent':<16}{'model':<24}{'kind':<10}{'grade':<10}{'n':>4}{'1st-pass':>10}{'accepted':>10}{'timeout':>9}{'fallback':>10}{'median min':>12}"
     print(header)
-    for (agent, model, kind, grade), rows in sorted(groups.items()):
-        n = len(rows)
-        accepted = [f for _, f in rows if f["outcome"] == "accepted"]
-        first_pass = [f for f in accepted if f["rework_rounds"] == 0]
-        timed_out = [f for _, f in rows if f["outcome"] in ("timeout", "stalled")]
-        fallback = [s for s, _ in rows if s["reason"].startswith("fallback")]
-        median = statistics.median(minutes(s, f) for s, f in rows)
-        print(f"{agent:<16}{model:<24}{kind:<10}{grade:<10}{n:>4}{len(first_pass) / n:>10.0%}{len(accepted) / n:>10.0%}"
-              f"{len(timed_out):>9}{len(fallback):>10}{median:>12.0f}")
+    for r in rows:
+        print(f"{r['agent']:<16}{r['model']:<24}{r['kind']:<10}{r['grade']:<10}{r['n']:>4}{r['first_pass']:>10.0%}{r['accepted']:>10.0%}"
+              f"{r['timeout']:>9}{r['fallback']:>10}{r['median_min']:>12.0f}")
 
 
 def build_parser():
@@ -174,6 +204,7 @@ def build_parser():
     m = sub.add_parser("summary", help="acceptance and timing per agent, model, kind and grade")
     m.add_argument("--since", help="YYYY-MM-DD")
     m.add_argument("--project")
+    m.add_argument("--json", action="store_true", help="print the rows as JSON")
     m.set_defaults(func=cmd_summary)
     return p
 

@@ -7,7 +7,7 @@ description: Coordinate other coding agents (Claude Code, Codex, Antigravity) fr
 
 You are the **coordinator**, whichever agent you run in: Claude Code, Codex or Antigravity. Agents implement; you grade, route, brief, watch, verify and accept. An agent's report is a claim; the diff and the test output are the evidence.
 
-Before the first dispatch in a session, read the **host config**: the file named by `ORCHESTRATION_HOST_CONFIG`, else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. It holds this machine's commands, allowed models, which delegates this coordinator can reach, the route judge, the lock path, briefs folder and parallel limit. If it is missing, copy [references/host-template.md](references/host-template.md) and ask the user for the facts you cannot look up. Project rules (`AGENTS.md`, `CLAUDE.md`, a constitution) win over this skill wherever they conflict.
+Before the first dispatch in a session, read the **host config**: the file named by `ORCHESTRATION_HOST_CONFIG`, else `~/.finolabs/vibecode/host.md` (or the older `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md` while only that file exists). It holds this machine's commands, allowed models, which delegates this coordinator can reach, the route judge, the lock path, briefs folder and parallel limit. If it is missing, copy [references/host-template.md](references/host-template.md) and ask the user for the facts you cannot look up. Project rules (`AGENTS.md`, `CLAUDE.md`, a constitution) win over this skill wherever they conflict.
 
 References carry the detail. For routing: [references/models.md](references/models.md) maps each agent's models to tiers and strengths, and, only when the host config names a route judge, [references/route-judgment.md](references/route-judgment.md) says how to ask it. For dispatch: [references/agents.md](references/agents.md) gives each agent's dispatch contract, including what each one may run, [references/dispatch.md](references/dispatch.md) the procedures only some runs reach (quota fallback, parallel runs, the heavy-job lock, handover, file placement), and [references/ledger.md](references/ledger.md) the ledger commands.
 
@@ -18,7 +18,7 @@ Run this loop for every delegated task. Each step ends on its criterion.
 1. **Grade** the task: kind and difficulty (below). Done when both are named.
 2. **Route** it to an agent and model (below). Done when you can state the choice and its reason in one line.
 3. **Brief** it with the `fnl-handoff` template, saved as "Where files go" says. Without `fnl-handoff`, use its headings: Task, Checkout, Context, Relevant files, Current state, What was tried, Acceptance criteria, Tests to run, Constraints, Budget, Report. Done when an agent with zero context could finish the task from the brief alone.
-4. **Dispatch** it with a hard time cap and record it in the ledger. Done when the process is running and the ledger has its `start` line.
+4. **Dispatch** it with a hard time cap and record it in the ledger. Start the command with `FNL_DISPATCH_ID=<ledger id>`, the id `ledger.py start` printed (a host config written before this variable existed lacks it), so the usage metrics can tell the run from a session the user started. Done when the process is running and the ledger has its `start` line.
 5. **Watch** liveness at the check deadline from artifacts. Done when the run has ended or been stopped.
 6. **Accept** after verifying the diff and the tests yourself. Done when the work is accepted, sent back for rework, or rejected.
 7. **Record** the outcome in the ledger. A dispatch sent back for rework stays open; it gets one `finish` line when it is finally accepted, rejected or stopped, with `--rework-rounds <n>`. Done when the dispatch has its `finish` line.
@@ -33,17 +33,33 @@ Difficulty:
 - **medium**: several files in one seam, new tests, consumers known.
 - **hard**: cross-cutting change, concurrency, security or permissions, migrations, subtle bugs, or a medium task that already failed once.
 - **very hard**: novel design, high ambiguity, many interacting parts, or work that keeps needing judgement drawn from the coordinator's own context.
+- **ultra hard**: very hard work where a wrong result is costly or hard to undo (production data, a migration, a security boundary), or very hard work that a `high` run already fell short on.
+
+### Decision matrix
+
+The grade fixes the rest of the plan; later sections say how to carry it out.
+
+| Grade | Tier | Effort | Budget | Runs as | Accepted by |
+| --- | --- | --- | --- | --- | --- |
+| easy | fast | `medium` | 20 minutes | headless run | the coordinator |
+| medium | strong | `medium` | 30–45 minutes | headless run | the coordinator |
+| hard | frontier, or strong for implementation with clear acceptance tests | `medium` | 60–90 minutes; split a task that needs more | headless run | `fnl-verifier` |
+| very hard | frontier | `high` | 90 minutes per headless sub-run | a session, not a headless run | `fnl-verifier` |
+| ultra hard | frontier | `xhigh`, then `max` if `xhigh` falls short | 90 minutes per headless sub-run | a session, not a headless run | `fnl-verifier` |
+
+A run that fell short at its level is retried one level up; the host config may set its own effort preference; `models.md` maps each level to every agent's own scale. A review, an advice or a committee seat takes its tier from the work it covers (Route, step 1) and its budget from "Budget and liveness".
 
 ## Route
 
 Choose an agent **and a model**. A user who names either wins; otherwise:
 
-1. **Tier** from the grade: very hard → frontier; hard → frontier, or strong for implementation with clear acceptance tests; medium → strong; easy → fast. Reviews take the tier above the work they review, at least strong.
+1. **Tier** from the decision matrix. Reviews take the tier above the work they review, at least strong.
 2. **Strength overrides** from `models.md`: long logs, screenshots, recordings or PDFs; UI from a design; terminal-heavy work; bulk edits.
 3. **Capability order** among what still fits: for code, Claude Code, then Codex, then Antigravity; for plain content writing, Codex, then Claude Code, then Antigravity (`models.md`). Fast-tier work goes instead to the agent with the most quota left, which keeps the stronger agents' quota for hard work.
 4. **Reachability and quota**: skip delegates the host config marks unreachable from this coordinator, and models whose quota is out (below).
+5. **Effort** from the decision matrix (`models.md` "Tiers" maps the levels to each agent).
 
-Done when you can state agent, model, effort and the reason in one line, for example "hard, terminal-heavy → Codex `gpt-6.1-sol` high: Claude Code quota at its 5-hour limit".
+Done when you can state agent, model, effort and the reason in one line, for example "hard, terminal-heavy → Codex `gpt-6.1-sol` medium: Claude Code quota at its 5-hour limit".
 
 The grade and the route are judgment calls:
 
@@ -75,19 +91,15 @@ Tasks are independent when they touch disjoint files, need no ordering, and need
 
 ## Budget and liveness
 
-Every dispatch carries a **budget**, written into the brief, and three numbers derived from it:
+Every dispatch carries a **budget**, written into the brief, and three numbers derived from it (below). Implementation budgets follow the grade in the decision matrix; the other kinds:
 
 | Work | Budget |
 | --- | --- |
-| easy | 20 minutes |
-| medium | 30–45 minutes |
-| hard | 60–90 minutes; split a task that needs more |
-| very hard | owned by a session, not a headless run; 90 minutes per headless sub-run |
 | review | 30 minutes |
 | advise | 15–30 minutes |
 | committee member | 30–45 minutes |
 
-Take the upper end for frontier models at high effort and for runs that build or test. Once `fnl-status` shows at least five finished runs for the same agent, model and grade, set the budget to about 1.5 times their median instead.
+Take the upper end of a range for runs that build or test. Once `fnl-status` shows at least five finished runs for the same agent, model and grade, set the budget to about 1.5 times their median instead.
 
 - The **agent's own timeout** (`--print-timeout`, the agybird `--timeout`, `--max-turns`), a few minutes under the hard cap, so the agent stops and reports before it is killed.
 - The **hard cap** that kills the process (the host config gives the command form): the budget plus a third, and at least 10 minutes over it.
@@ -101,7 +113,7 @@ Heavy jobs (container-backed suites, scale measurements, end-to-end runs; the ho
 
 ## Accept
 
-A task is done only when you have checked it yourself, as `fnl-verification` "Accepting someone else's work" lays out. Then decide: **accepted**; **rework**, a follow-up to the same agent run naming each defect (count the round); or **rejected**, rerouted with a new brief. The verdict is yours, whatever the agent's report says. Check easy and medium runs yourself; use the `fnl-verifier` agent, started on the strong tier where the host lets you pick its model, for hard and very hard runs, or when your own context is past about 60% and a self-check would be less reliable.
+A task is done only when you have checked it yourself, as `fnl-verification` "Accepting someone else's work" lays out. Then decide: **accepted**; **rework**, a follow-up to the same agent run naming each defect (count the round); or **rejected**, rerouted with a new brief. The verdict is yours, whatever the agent's report says. Check the runs the decision matrix leaves to you yourself; use the `fnl-verifier` agent, started on the strong tier where the host lets you pick its model, for the runs it names (hard and above), or when your own context is past about 60% and a self-check would be less reliable.
 
 ## Handover after an interrupted run
 
@@ -109,7 +121,7 @@ When a run times out, fails or stops with uncommitted work, no other agent gets 
 
 ## Where files go
 
-Shared files (documentation and design notes with lasting value) go in the project's documentation folders and are committed. Local files (briefs, logs, working notes, captured state) go in `.orchestration/` at the main checkout's root (`briefs/` for briefs and notes, `logs/` for logs and outputs), kept out of git through `.git/info/exclude` (the shared `.gitignore` changes only with the user's approval); never in temporary directories or session scratchpads. The full rule: [references/dispatch.md](references/dispatch.md) "Where files go".
+Shared files (documentation and design notes with lasting value) go in the project's documentation folders and are committed. Local files (briefs, logs, working notes, captured state) go in `.finolabs/` at the main checkout's root (`briefs/` for briefs and notes, `logs/` for logs and outputs), kept out of git through `.git/info/exclude` (the shared `.gitignore` changes only with the user's approval); never in temporary directories or session scratchpads. A repository that still has the older `.orchestration/` folder and no `.finolabs/` keeps using it; nothing is moved for the user. The full rule: [references/dispatch.md](references/dispatch.md) "Where files go".
 
 ## Ledger
 
@@ -121,4 +133,4 @@ Record every dispatch with `scripts/ledger.py` in this skill's base directory, a
 - `fnl-advisor`: one second opinion, no edits.
 - `fnl-committee`: two contrasting agents for root cause or planning when stuck.
 - `fnl-coordinator-sessions`: a spec run as coordinator plus task sessions in the desktop app.
-- `fnl-status`: open runs and acceptance per agent and model, from the ledger.
+- `fnl-status`: the usage dashboard (router coverage, skill use, load cost, delegation, review gate) and the runs still open.

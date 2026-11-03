@@ -1,0 +1,11 @@
+{
+  "name": "Vibecode",
+  "tagline": "One engineering practice for\nClaude Code, Codex, Antigravity",
+  "mark": "../assets/icon-dark.svg",
+  "input": "Route this change and tell me\nthe depth you chose.",
+  "output": "router receipt:\n  depth=NORMAL\n  trigger=none",
+  "footer": [
+    "A **FINOLABS** plugin for AI coding agents",
+    "MIT licensed, github.com/finolabs/finolabs-vibecode"
+  ]
+}

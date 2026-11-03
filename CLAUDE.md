@@ -4,7 +4,7 @@ Agent context for contributing to this repository. User-facing documentation is 
 
 ## What this repository is
 
-One plugin with a skill set that gives AI coding agents a single engineering practice: routing of coding work, agent delegation, session hygiene, versioning, commit messages, code and security review gates, verification, and open source readiness. It ships to Claude Code (`.claude-plugin/plugin.json`), Codex (`.codex-plugin/plugin.json`) and Antigravity (`.antigravity-plugin/plugin.json`) from one `skills/` folder. Keep each host's manifest in its own folder: a root `plugin.json` would be read by both Codex and Antigravity, whose schemas conflict.
+One plugin with a skill set that gives AI coding agents a single engineering practice: routing of coding work, agent delegation, session hygiene, versioning, commit messages, code and security review gates, verification, and open source readiness. It also carries optional, consent-based usage metrics (hooks that record metadata only, and a local dashboard that `fnl-status` opens). It ships to Claude Code (`.claude-plugin/plugin.json`), Codex (`.codex-plugin/plugin.json`) and Antigravity (`.antigravity-plugin/plugin.json`) from one `skills/` folder. Keep each host's manifest in its own folder: a root `plugin.json` would be read by both Codex and Antigravity, whose schemas conflict.
 
 ## Conventions
 
@@ -15,6 +15,8 @@ One plugin with a skill set that gives AI coding agents a single engineering pra
 - Host-specific facts (paths, commands, shims, allow-rules) belong in the host config described by `fnl-delegate`, never in skill bodies.
 - Content is generic: no organization, customer or personal names, and no machine paths. Examples use synthetic names.
 - All content is English.
+- Usage metrics hold metadata only and stay off until the user consents. A new event field goes through `SCHEMA` in `scripts/fnl_metrics.py` and `docs/specs/usage-metrics.md`, never carries prompt, code, command text or paths, and updates `PRIVACY.md`. A hook never blocks a session: it exits 0 and fails closed.
+- The plugin's own data and config live under `~/.finolabs/vibecode/` (see `README.md`); a skill never hard-codes another location.
 
 ## Reviews
 
@@ -31,6 +33,7 @@ Standing relay (owner, 02/11/2026): when one model family wrote a pull request, 
 - `claude plugin validate .` passes.
 - A changed `description` gets a trigger check: a representative prompt fires the skill, and an unrelated prompt does not.
 - `skills/fnl-open-source-review/SKILL.md` stays green for this repository.
+- `python3 -m unittest discover -s tests` passes, and `python3 scripts/check-references.py .` passes.
 
 ## Commits
 

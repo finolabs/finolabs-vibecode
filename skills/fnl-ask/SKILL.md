@@ -20,7 +20,7 @@ The user describes their situation. Place them on the map below, read the target
 | Ready to implement one seam | `fnl-coding-router` (depth, gates) | `tdd` for the red-green loop |
 | Bug, failing CI, unexplained behavior | `fnl-coding-router` (debug path and checkpoint) | `diagnosing-bugs` |
 | Handing work to another agent (Claude Code, Codex, Antigravity) | `fnl-delegate`, then `fnl-handoff` | `/handoff` for a portable handoff document |
-| Checking delegated runs, or how each agent and model performs | `/fnl-status` | |
+| How the practice is working for you: router coverage, skill use, load cost, delegated runs, review outcomes | `/fnl-status` (opens the usage dashboard) | |
 | Want a second opinion | `fnl-advisor` (proposed first and waits for your yes; spends quota) | |
 | Stuck or looping on fixes | `fnl-committee` (proposed first and waits for your yes; spends two families' quota) | |
 | A query on live data, an infrastructure change, a dashboard or a forecast | `fnl-coding-router`, which reads `references/non-code-work.md` | |

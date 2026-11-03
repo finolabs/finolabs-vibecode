@@ -47,4 +47,4 @@ Titles carry no secrets, customer data or private history. Use the host's suppor
 
 - One writer per scope, with an explicit handover between writers.
 - Prefer a suitable existing checkout or worktree; stricter isolation rules win.
-- Keep notes, briefs and logs in a durable local folder (`.orchestration/` at the main checkout's root, kept out of git, unless the host config names another); temporary directories and scratchpads are wiped on restart.
+- Keep notes, briefs and logs in a durable local folder (`.finolabs/` at the main checkout's root, kept out of git, unless the host config names another); temporary directories and scratchpads are wiped on restart.

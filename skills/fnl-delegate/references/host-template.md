@@ -1,18 +1,22 @@
 # Delegation host config: <machine name>
 
-Machine-specific facts for the `fnl-delegate` skills. The skills hold what is true on any host; this file holds paths, commands and permission rules for one machine. Keep it outside the plugin (default `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`, or the path in `ORCHESTRATION_HOST_CONFIG`) so plugin updates never overwrite it. When more than one agent coordinates, keep this file and the ledger (`ORCHESTRATION_LEDGER`) where every coordinator's sandbox can read and write them. Changing an allow-rule or a shared setting listed here needs the owner's approval.
+Machine-specific facts for the `fnl-delegate` skills. The skills hold what is true on any host; this file holds paths, commands and permission rules for one machine. Keep it outside the plugin (default `~/.finolabs/vibecode/host.md`, or the path in `ORCHESTRATION_HOST_CONFIG`) so plugin updates never overwrite it. When more than one agent coordinates, keep this file and the ledger (`ORCHESTRATION_LEDGER`) where every coordinator's sandbox can read and write them. Changing an allow-rule or a shared setting listed here needs the owner's approval.
 
 ## Limits
 
 - Parallel dispatches: at most <N> at one time (5 or fewer).
 - Machine role: <daily workstation | CI box>. Heavy jobs at one time: <1>.
 - Heavy jobs: <container-backed suites, scale measurements, end-to-end suites>.
-- Heavy-job lock: `<absolute path, e.g. ~/.local/state/finolabs-vibecode/heavy.lock>`.
+- Heavy-job lock: `<absolute path, e.g. ~/.finolabs/vibecode/state/heavy.lock>`.
 - Fixture size for local tests and measurements: <e.g. about 1,000 items unless the owner asks for more>.
+
+## Effort preference
+
+Optional. The plugin's default is `medium` effort on every agent, and one level up per grade above hard (`high` for very hard, `xhigh` for ultra hard) or after a run fell short (`models.md` "Tiers"). Write a different default here, for example "<effort level> for <which agents or kinds of work>", and it overrides that default for this machine.
 
 ## Briefs folder
 
-Durable, never `/tmp` or a session scratchpad. Default: `.orchestration/` at the main checkout's root, as `fnl-delegate` "Where files go" says. Per-project exceptions: <project → folder>.
+Durable, never `/tmp` or a session scratchpad. Default: `.finolabs/` at the main checkout's root, as `fnl-delegate` "Where files go" says. Per-project exceptions: <project → folder>.
 
 Brief preamble that lets a delegated agent skip its own workflow entry read: "<preamble text>".
 
@@ -31,9 +35,13 @@ Which agent can coordinate on this machine, and which delegates each one can rea
 - Judge: <none | the skill name, for example `typesafe-ai`>. The user approved sending task summaries to this service on <DD/MM/YYYY>. When one is named, the coordinator and the coding router ask it first for grade, route, depth and next activity.
 - Spend limit: <the judge skill's own guard, or a per-day cap>.
 
+## Dispatch marker
+
+Each headless command below starts with `FNL_DISPATCH_ID=<ledger id>`, the id `ledger.py start` printed. The usage metrics read it to tell a delegated session from one the user started. It is a short label and carries no task data.
+
 ## Claude Code
 
-- Headless command: <hard-cap wrapper> <claude path> -p "$(cat "$B")" --model <full model id> --effort <level> --output-format json --max-turns <n> --max-budget-usd <cap> --allowedTools "<tools the brief needs>" < /dev/null
+- Headless command: FNL_DISPATCH_ID=<ledger id> <hard-cap wrapper> <claude path> -p "$(cat "$B")" --model <full model id> --effort <level> --output-format json --max-turns <n> --max-budget-usd <cap> --allowedTools "<tools the brief needs>" < /dev/null
 - Allowed models: <full model ids>.
 - How task sessions start on this host: <desktop app session tools | `claude -p` headless>.
 - Session title convention: <`<project> <scope>: <activity>` as `fnl-session-hygiene` says, or this machine's own>.
@@ -44,7 +52,7 @@ Invocation with a hard cap and the extra directories the toolchain needs:
 
 ```bash
 B="<brief file>"; O="<logs folder>"; W="<worktree>"; T="<ledger id>-<slug>"  # slug: a-z, 0-9, -, at most 40 characters
-<hard-cap wrapper, e.g. perl -e 'alarm 5400; exec @ARGV'> <codex path> exec \
+FNL_DISPATCH_ID="<ledger id>" <hard-cap wrapper, e.g. perl -e 'alarm 5400; exec @ARGV'> <codex path> exec \
   -m <model> -c model_reasoning_effort=<level> -s workspace-write -C "$W" -o "$O/$T-last.txt" "$(cat "$B")" \
   < /dev/null > "$O/$T-codex.log" 2>&1; echo "$T=$?"
 ```
@@ -55,7 +63,7 @@ B="<brief file>"; O="<logs folder>"; W="<worktree>"; T="<ledger id>-<slug>"  # s
 
 ## Antigravity
 
-- Command: <agy path> -p "$(cat "$B")" --model <model id> --mode accept-edits --output-format json --print-timeout 30m, or the `agybird` runner when installed: <how to look up the runner's install path at each dispatch, for example a command that reads it from the host's plugin list; not a path>. Resolve it at each dispatch, never from a pinned version folder or the highest folder in the plugin cache, which keeps old versions after an upgrade.
+- Command: FNL_DISPATCH_ID=<ledger id> <agy path> -p "$(cat "$B")" --model <model id> --mode accept-edits --output-format json --print-timeout 30m, or the `agybird` runner when installed: <how to look up the runner's install path at each dispatch, for example a command that reads it from the host's plugin list; not a path>. Resolve it at each dispatch, never from a pinned version folder or the highest folder in the plugin cache, which keeps old versions after an upgrade.
 - Allowed models and their pools: <list>.
 - Per-run settings file with allow-rules: <path>. Global allow-rules: <file path and the command prefixes allowed>. Everything else is soft-denied.
 - Rules the user granted per repository (test and check commands), as a record only: the grant itself lives in Antigravity's settings or the user's answer. <repository: literal commands, date approved>.

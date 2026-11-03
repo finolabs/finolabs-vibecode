@@ -4,8 +4,25 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- Usage metrics on Claude Code and Codex (and Antigravity, through a hook that setup adds to the user's own hooks.json after a clear yes), off until the user consents in `fnl-setup`. The plugin's hooks record metadata only (a time, a session id, a short repository code, an `fnl-` skill or agent name, the router's depth, a review verdict) in a local folder, with a retention the user picks (30, 90 or 365 days). Nothing is sent anywhere; `FNL_METRICS=off` or `consent --revoke` stops it, and `fnl-status purge` deletes it.
+- `fnl-status` now opens a local dashboard page: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, in the FINOLABS palette with a dark and a light theme. A refresh script builds its data from the usage events and the dispatch ledger.
+- The coding router prints a depth receipt (`scripts/record.py`) that the hook records with the session, and the host template marks delegated runs with `FNL_DISPATCH_ID`.
+- `refresh.py consent --revoke` withdraws consent for the usage metrics; recorded events stay until `fnl-status purge`.
+- The test suite runs the dashboard page's script in node against a fake DOM (skipped when node is not installed).
+- `ledger.py summary --json` prints the summary rows as JSON, with quota and error counts.
+- `fnl-setup` recommends companion skills from `references/companions.md`: `agybird` when Antigravity is a delegate of Claude Code or Codex, and `vietnamizer` when the user writes Vietnamese documents for people. It gives their install commands and installs nothing.
+
 ### Changed
 
+- Router coverage counts a commit as a session's first change when it comes before any edit, because agents often write files through the shell, which no edit hook sees.
+- `fnl-delegate` grades work on five levels (`easy`, `medium`, `hard`, `very hard`, and the new `ultra hard`, which `ledger.py` accepts as `ultra-hard`; earlier ledger lines still read), and routing defaults to `medium` effort on every agent and tier, hard work included, with `high` for very hard, `xhigh` for ultra hard and one level up after a run fell short; the tier table now names models, not effort levels, and the host template has an optional "Effort preference" section to override the default.
+- The project-scoped folder for briefs, logs and handover notes is now `.finolabs/` at the main checkout's root, matching `~/.finolabs/vibecode/` for the machine. A repository that still has `.orchestration/` and no `.finolabs/` keeps using it; nothing is moved.
+- The plugin's own data and configuration now default to `~/.finolabs/vibecode/`: `host.md`, `ledger.jsonl` and `state/` (consent, usage events, the dashboard). Folders it creates there are mode `0700`. A machine that already keeps them in `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` or `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode` and has nothing in the new place keeps using the old files; nothing is moved. `FNL_STATE_DIR`, `ORCHESTRATION_LEDGER` and `ORCHESTRATION_HOST_CONFIG` still win.
+
+- `fnl-status` no longer takes `--since` or `--project` and no longer prints a routing table in the terminal; the dashboard shows the same figures, and the skill still lists open dispatches and checks the capability map's review date.
+- `PRIVACY.md` no longer says the plugin has no analytics; it describes the opt-in local record and what it holds.
 - Shortened the plugin description to 142 characters and made it identical in the Claude Code, Codex and Antigravity manifests, matching the shared catalog.
 
 ## [0.1.5] - 2026-11-03

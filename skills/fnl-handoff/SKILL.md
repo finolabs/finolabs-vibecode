@@ -74,9 +74,9 @@ For Antigravity, write an edit-only brief when its commands fall outside both it
 
 ## Dispatch
 
-1. Save the brief where `fnl-delegate` "Where files go" puts it, as `<slug>.md` (`fnl-session-hygiene` titles): a local handoff brief in `.orchestration/briefs/`, a brief worth keeping as project documentation in the project's documentation folder.
+1. Save the brief where `fnl-delegate` "Where files go" puts it, as `<slug>.md` (`fnl-session-hygiene` titles): a local handoff brief in `.finolabs/briefs/`, a brief worth keeping as project documentation in the project's documentation folder.
 2. Record the dispatch: `ledger.py start ...` (see `fnl-delegate`), keeping the id.
-3. Launch the agent with the host config's command, under the hard cap, in the background, with its log and final output in `.orchestration/logs/`.
+3. Launch the agent with the host config's command, under the hard cap, in the background, with its log and final output in `.finolabs/logs/`.
 4. Tell the user in one line: agent, model, worktree, budget, check deadline, ledger id.
 
 The completion notice brings you back. At the check deadline, judge liveness from artifacts as `fnl-delegate` describes, then accept and record the outcome there.

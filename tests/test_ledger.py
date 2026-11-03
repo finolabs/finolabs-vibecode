@@ -32,6 +32,17 @@ class LedgerTest(unittest.TestCase):
     def records(self):
         return [json.loads(line) for line in self.path.read_text().splitlines()]
 
+    def test_the_five_grades_are_accepted_and_an_ultra_hard_run_is_summarised(self):
+        ids = {}
+        for grade in ("easy", "medium", "hard", "very-hard", "ultra-hard"):
+            args = [a if a != "medium" else grade for a in START]
+            ids[grade] = self.run_ledger(*args).stdout.strip()
+        self.assertNotEqual(self.run_ledger(*[a if a != "medium" else "extreme" for a in START], check=False).returncode, 0)
+        self.run_ledger("finish", ids["ultra-hard"], "--outcome", "accepted")  # a summary counts finished runs only
+        rows = json.loads(self.run_ledger("summary", "--json").stdout)
+        self.assertEqual([(r["grade"], r["n"]) for r in rows], [("ultra-hard", 1)])
+        self.assertIn("ultra-hard", self.run_ledger("summary").stdout)
+
     def test_start_writes_a_start_line_and_prints_its_id(self):
         dispatch_id = self.run_ledger(*START).stdout.strip()
         [rec] = self.records()
@@ -72,6 +83,15 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(row[:5], ["codex", "m1", "implement", "medium", "2"])
         self.assertEqual(row[5:9], ["50%", "100%", "0", "1"])
 
+    def test_summary_json_reports_the_same_counts_with_quota_and_error(self):
+        ids = [self.run_ledger(*START).stdout.strip() for _ in range(3)]
+        self.run_ledger("finish", ids[0], "--outcome", "accepted")
+        self.run_ledger("finish", ids[1], "--outcome", "quota")
+        self.run_ledger("finish", ids[2], "--outcome", "error")
+        [row] = json.loads(self.run_ledger("summary", "--json").stdout)
+        self.assertEqual((row["agent"], row["kind"], row["n"], row["quota"], row["error"]), ("codex", "implement", 3, 1, 1))
+        self.assertAlmostEqual(row["first_pass"], 1 / 3)
+
     def test_summary_without_finished_runs_says_so(self):
         self.run_ledger(*START)
         self.assertIn("no finished dispatches", self.run_ledger("summary").stdout)
@@ -94,6 +114,44 @@ class LedgerTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             for n in (1, 2, 3, 4):
                 self.assertIn(f"malformed line {n}", result.stderr)
+
+
+class LedgerLocationTest(unittest.TestCase):
+    """The default file: the finolabs home, or the older XDG file while only that one exists."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.home = Path(self.dir.name) / "home"
+        self.xdg = Path(self.dir.name) / "xdg"
+        self.home.mkdir()
+        env = {k: v for k, v in os.environ.items() if k != "ORCHESTRATION_LEDGER"}
+        self.env = {**env, "HOME": str(self.home), "XDG_STATE_HOME": str(self.xdg)}
+
+    def start(self):
+        return subprocess.run([sys.executable, "-I", str(LEDGER), *START], capture_output=True, text=True, env=self.env, check=True)
+
+    def test_a_new_machine_writes_to_the_finolabs_home_in_private_folders(self):
+        self.start()
+        ledger = self.home / ".finolabs/vibecode/ledger.jsonl"
+        self.assertTrue(ledger.is_file())
+        self.assertFalse(self.xdg.exists())
+        for folder in (self.home / ".finolabs", self.home / ".finolabs/vibecode"):
+            self.assertEqual(folder.stat().st_mode & 0o777, 0o700, folder)
+
+    def test_an_existing_older_ledger_keeps_being_used_until_a_new_one_exists(self):
+        old = self.xdg / "finolabs-vibecode/ledger.jsonl"
+        old.parent.mkdir(parents=True)
+        old.write_text("")
+        self.start()
+        self.assertEqual(len(old.read_text().splitlines()), 1)
+        self.assertFalse((self.home / ".finolabs").exists())
+        new = self.home / ".finolabs/vibecode/ledger.jsonl"
+        new.parent.mkdir(parents=True)
+        new.write_text("")
+        self.start()
+        self.assertEqual(len(new.read_text().splitlines()), 1)
+        self.assertEqual(len(old.read_text().splitlines()), 1)
 
 
 if __name__ == "__main__":

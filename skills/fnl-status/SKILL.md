@@ -1,28 +1,31 @@
 ---
 name: fnl-status
-description: Show the state of delegated work from the dispatch ledger: runs still open, and first-pass acceptance, timeouts and fallbacks per agent, model and grade. Run only when the user asks for it.
-argument-hint: "[--since YYYY-MM-DD] [--project <name>]"
+description: Open the finolabs-vibecode usage dashboard, a local page with how often the router and skills fired, what they cost to load, and how delegated runs and reviews went. Refreshes its numbers from the usage events and the dispatch ledger first, and lists dispatches still open. Run only when the user asks for it, or to delete the recorded usage data.
+argument-hint: "[purge]"
 disable-model-invocation: true
 ---
 
-# Delegation status
+# Usage dashboard
 
-Read-only. Requires the `fnl-delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill fnl-delegate`, or install the whole plugin) and stop.
+The dashboard is a static page, `dashboard.html`, in the state folder (`${FNL_STATE_DIR:-~/.finolabs/vibecode/state}`; an existing `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` is used while there is no new folder). It loads its numbers from a `data.js` beside it. This skill never writes or edits the page; a script rebuilds the data and copies the shipped page.
 
-The ledger script is `scripts/ledger.py` in the `fnl-delegate` skill's folder, a sibling of this skill's base directory. It reads `ORCHESTRATION_LEDGER`, else `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode/ledger.jsonl`.
+The scripts are in this skill's base directory: `scripts/refresh.py` builds the dashboard data, and the `fnl-delegate` skill beside this one holds `scripts/ledger.py`. Without `fnl-delegate`, the dashboard still shows the usage events and names the ledger as a missing source.
 
 **Arguments:** $ARGUMENTS
 
 ## Steps
 
-1. Run `python3 -I <ledger.py> open`; it prints each open dispatch's age against its budget. For each one past its check deadline (half the budget), check liveness from artifacts as `fnl-delegate` "Budget and liveness" says (process, log growth, new commits) and mark it **running**, **stalled** or **ended without a finish line**.
-2. Run `python3 -I <ledger.py> summary` with the user's `--since` and `--project` arguments, defaulting to the last 14 days.
-3. Read the `Review by` date (ISO, `YYYY-MM-DD`) at the top of `references/models.md` in the `fnl-delegate` folder. When today is past it, the capability map is stale: say so first, with the date, since routing still reads it.
-4. Report in three parts:
-   - **Open runs**: id, agent and model, task label, age against budget, liveness verdict.
-   - **Routing table**: the summary rows, then one line per agent and model flagged by the thresholds below, with the count behind it.
-   - **Next actions**: stalled runs to stop and hand over, finish lines still missing (`ledger.py finish <id> …`), and a stale capability map to recheck. A coordinator closes a record only when its log or the repository shows how the run ended, with that outcome and a note that it was closed late; otherwise list it and ask the user.
+1. Run `python3 -I <refresh.py> run --open`. It rebuilds `data.js`, copies the page and opens it in the default browser. Done when it prints its one-line summary.
+2. Report that line, then name each missing source it lists and what fixes it: consent not given means `fnl-setup`; no events means the plugin's hooks need the whole plugin and a session started after consent; a missing ledger means `fnl-delegate` "Ledger".
+3. Run `python3 -I <ledger.py> open`. It prints each open dispatch's age against its budget. For each one past its check deadline (half the budget), check liveness from artifacts as `fnl-delegate` "Budget and liveness" says and mark it **running**, **stalled** or **ended without a finish line**. A coordinator closes a record only when its log or the repository shows how the run ended, with that outcome and a note that it was closed late; otherwise list it and ask the user.
+4. Read the `Review by` date (ISO, `YYYY-MM-DD`) at the top of `references/models.md` in the `fnl-delegate` folder. When today is past it, the capability map is stale: say so, with the date, since routing still reads it.
 
-**Thresholds.** Judge only a group of at least five runs: flag it when first-pass acceptance is below 60%, or when timeouts plus fallbacks are 25% or more of its runs. A smaller group gets its counts and no comment.
+The page marks a delegation group of fewer than five runs with an open ring and passes no judgment on it. A group of five or more is judged by first-pass acceptance below 60%.
 
-The ledger holds only task labels and outcomes. When it is missing or empty, say so and point to `fnl-delegate` "Ledger" for how runs get recorded.
+## Purge
+
+When the argument is `purge`, skip the steps above and ask the user to confirm deleting the recorded events, `data.js` and `dashboard.html`. Their consent record stays, so recording continues; to stop it as well, ask separately whether to withdraw consent, and only after a second yes run `python3 -I <refresh.py> consent --revoke` (or the user sets `FNL_METRICS=off`). Only after a clear yes, run `python3 -I <refresh.py> purge --yes`, and report how many files it removed. Never run it unasked.
+
+## What is recorded
+
+Only when the user consented in `fnl-setup`: the plugin's hooks append metadata to `events-YYYY-MM.jsonl` in the state folder (a time, a session id, a short repository code, a skill or agent name, a depth, a review verdict), never prompts, code, command text or file paths. Nothing is sent anywhere.
