@@ -139,7 +139,7 @@ class MetricsTest(unittest.TestCase):
 
     def test_a_failed_write_keeps_the_error_class_but_never_its_message(self):
         self.consent()
-        m.bump_errors(ValueError("secret text /Users/someone/private"))
+        m.bump_errors(ValueError("secret text in /var/private/note"))
         self.assertEqual(m.errors_count(), 1)
         last = m.errors_last()
         self.assertTrue(last.endswith(" ValueError"), last)
