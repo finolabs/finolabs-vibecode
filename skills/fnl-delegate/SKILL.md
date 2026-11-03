@@ -18,7 +18,7 @@ Run this loop for every delegated task. Each step ends on its criterion.
 1. **Grade** the task: kind and difficulty (below). Done when both are named.
 2. **Route** it to an agent and model (below). Done when you can state the choice and its reason in one line.
 3. **Brief** it with the `fnl-handoff` template, saved as "Where files go" says. Without `fnl-handoff`, use its headings: Task, Checkout, Context, Relevant files, Current state, What was tried, Acceptance criteria, Tests to run, Constraints, Budget, Report. Done when an agent with zero context could finish the task from the brief alone.
-4. **Dispatch** it with a hard time cap and record it in the ledger. Done when the process is running and the ledger has its `start` line.
+4. **Dispatch** it with a hard time cap and record it in the ledger. Start the command with `FNL_DISPATCH_ID=<ledger id>`, the id `ledger.py start` printed (a host config written before this variable existed lacks it), so the usage metrics can tell the run from a session the user started. Done when the process is running and the ledger has its `start` line.
 5. **Watch** liveness at the check deadline from artifacts. Done when the run has ended or been stopped.
 6. **Accept** after verifying the diff and the tests yourself. Done when the work is accepted, sent back for rework, or rejected.
 7. **Record** the outcome in the ledger. A dispatch sent back for rework stays open; it gets one `finish` line when it is finally accepted, rejected or stopped, with `--rework-rounds <n>`. Done when the dispatch has its `finish` line.
@@ -121,4 +121,4 @@ Record every dispatch with `scripts/ledger.py` in this skill's base directory, a
 - `fnl-advisor`: one second opinion, no edits.
 - `fnl-committee`: two contrasting agents for root cause or planning when stuck.
 - `fnl-coordinator-sessions`: a spec run as coordinator plus task sessions in the desktop app.
-- `fnl-status`: open runs and acceptance per agent and model, from the ledger.
+- `fnl-status`: the usage dashboard (router coverage, skill use, load cost, delegation, review gate) and the runs still open.

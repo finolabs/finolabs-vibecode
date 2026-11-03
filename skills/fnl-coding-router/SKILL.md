@@ -69,6 +69,8 @@ With a judge configured, ask it for the depth as [references/activity-selection.
 
 Done when the depth and its reason are in the receipt.
 
+Record the receipt with `python3 -I <this skill's folder>/scripts/record.py router --depth <MIN|NORMAL|DEEP> --trigger <trigger>`. The command only prints the receipt; when the user has turned usage metrics on, the plugin's hook records it with the session. The trigger names what set the depth, one of `none`, `contract`, `security`, `privacy`, `permission`, `migration`, `dependency`, `uncertainty`, `consumers`, `irreversible`, `calculation`, `prediction`, `input`.
+
 ## 4. Work, then gate
 
 - Delegation to other agents follows the `fnl-delegate` skill. Within one task, budget root and children before spawning: MIN has no implementation children (handing a whole task to another agent under `fnl-delegate` is a delegation, not a child); otherwise at most two lightweight children, one nesting level and one heavy job at a time, unless a stricter cap applies. Independent tasks run in parallel up to `fnl-delegate`'s limit (5 runs), each under these per-task caps.
