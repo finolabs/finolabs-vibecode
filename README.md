@@ -134,6 +134,8 @@ For reviews, the gates and the `fnl-reviewer` agent use each host's native instr
 npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit
 ```
 
+`fnl-setup` also recommends two skills from the `finolabs` catalog, each where it fits: [`agybird`](https://github.com/finolabs/agybird) (MIT), which runs Antigravity dispatches for `fnl-delegate` when Antigravity is a delegate of Claude Code or Codex, and [`vietnamizer`](https://github.com/finolabs/vietnamizer) (MIT), which writes and edits Vietnamese documents for people. Both install the way this plugin does, with `agybird@finolabs` or `vietnamizer@finolabs` in place of `finolabs-vibecode@finolabs`.
+
 ## Host configuration
 
 The orchestration skills keep machine facts (agent commands, allowed models, which delegates each coordinator can reach, the route judge, allow-rules, lock path, parallel limit) outside the plugin, in a host config file: the path in `ORCHESTRATION_HOST_CONFIG`, or else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. Start from `skills/fnl-delegate/references/host-template.md`. The dispatch ledger defaults to `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it). When Codex or Antigravity also coordinates, put both files where every coordinator's sandbox can read and write them.

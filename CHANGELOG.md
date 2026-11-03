@@ -10,12 +10,12 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `fnl-status` now opens a local dashboard page: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, in the FINOLABS palette with a dark and a light theme. A refresh script builds its data from the usage events and the dispatch ledger.
 - The coding router prints a depth receipt (`scripts/record.py`) that the hook records with the session, and the host template marks delegated runs with `FNL_DISPATCH_ID`.
 - `ledger.py summary --json` prints the summary rows as JSON, with quota and error counts.
+- `fnl-setup` recommends companion skills from `references/companions.md`: `agybird` when Antigravity is a delegate of Claude Code or Codex, and `vietnamizer` when the user writes Vietnamese documents for people. It gives their install commands and installs nothing.
 
 ### Changed
 
 - `fnl-status` no longer takes `--since` or `--project` and no longer prints a routing table in the terminal; the dashboard shows the same figures, and the skill still lists open dispatches and checks the capability map's review date.
 - `PRIVACY.md` no longer says the plugin has no analytics; it describes the opt-in local record and what it holds.
-
 - Shortened the plugin description to 142 characters and made it identical in the Claude Code, Codex and Antigravity manifests, matching the shared catalog.
 
 ## [0.1.5] - 2026-11-03

@@ -17,6 +17,7 @@ Report only what you observe:
 - **Installed hosts**: `claude plugin list`, `codex plugin list`, `agy plugin list --json`. Note where `finolabs-vibecode` is installed and which agent CLIs exist (`codex`, `agy`, `claude`).
 - **Route judge**: whether a semantic evaluator skill such as `typesafe-ai` is installed (skill listing only; never look for its credentials).
 - **Review tools**: which review instruments each installed host has, from the skill listing and `--help` only: Claude Code `/code-review` and `/security-review`, Codex `codex review`, and the `security-audit` skill from Cloudflare. Antigravity has none.
+- **Companion skills**: which skills in [references/companions.md](references/companions.md) are installed, from the skill and plugin listings.
 - **Host config**: the file at `$ORCHESTRATION_HOST_CONFIG`, else `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md`. Present, missing, or still holding template placeholders.
 - **Repository**: the git root; whether it uses Spec Kit (`.specify/` plus installed `speckit-*` skills); which of `CLAUDE.md` and `AGENTS.md` exist and whether one already has an `## Agent skills` section; whether `.orchestration/` is excluded in `.git/info/exclude`.
 - **Knowledge base**: where the user keeps durable decisions that agents write to: a notes vault or knowledge-base server their user-scoped instructions name, with the access those instructions approve.
@@ -29,7 +30,7 @@ Done when the findings are listed for the user.
 
 ## 2. Grill
 
-Settle sections A–F. Sections whose findings are verified are ready first; a section that depends on an unverified item waits until the user supplies that fact.
+Settle sections A–G. Sections whose findings are verified are ready first; a section that depends on an unverified item waits until the user supplies that fact.
 
 Interview by the rules in [references/interview.md](references/interview.md): map the decisions, look up facts yourself, ask every ready decision in one numbered round with a recommended answer, and finish with a read-back and a yes.
 
@@ -54,6 +55,8 @@ Offer the optional lane line only for a repository with one owner, and say that 
 **E. Review tools**. The `fnl-reviewer` and `fnl-security-reviewer` agents run these instruments as their engine, so a review meets the standard only where they are installed. For each one the findings show missing, strongly recommend installing it and give the command: for `security-audit`, `npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit`; for a host's native review, the host's own update or install path, checked against its docs. Install nothing yourself. Until a tool is installed, the reviewers work by hand and say so in each report.
 
 **F. Usage metrics** (optional; skip when the hooks are not installed). Offer to record usage metadata so the user can see how the practice performs on their own machine. Say, in this order: what is recorded (a time, a session id, a short repository code, a skill or agent name, the router's depth, a review verdict; never prompts, code, command text or file paths), where it lives (the state folder on this machine, readable only by the user), that nothing leaves the machine and the dashboard is a local page, and that it stays off until they say yes and `FNL_METRICS=off` turns it off at any time. Then ask for consent and the retention (30, 90 or 365 days, recommend 90) as one question of its own, never bundled with another. This release records on Claude Code only. A declined or skipped section leaves everything off.
+
+**G. Companion skills**. Read [references/companions.md](references/companions.md) and recommend each missing skill whose condition the findings match, with its install commands. Install nothing yourself.
 
 ## 3. Confirm and write
 
