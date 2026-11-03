@@ -215,8 +215,8 @@ def main():
             session_start(sid, cwd, source, host)
         elif event == "PostToolUse":
             post_tool_use(sid, cwd, tool, data)
-    except Exception:
-        fm.bump_errors()
+    except Exception as error:
+        fm.bump_errors(error)
     finally:
         if host == "antigravity":
             try:

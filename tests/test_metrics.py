@@ -137,6 +137,22 @@ class MetricsTest(unittest.TestCase):
         for folder in (home / ".finolabs", home / ".finolabs/vibecode", home / ".finolabs/vibecode/state"):
             self.assertEqual(folder.stat().st_mode & 0o777, 0o700, folder)
 
+    def test_a_failed_write_keeps_the_error_class_but_never_its_message(self):
+        self.consent()
+        m.bump_errors(ValueError("secret text /Users/someone/private"))
+        self.assertEqual(m.errors_count(), 1)
+        last = m.errors_last()
+        self.assertTrue(last.endswith(" ValueError"), last)
+        self.assertNotIn("secret", (self.dir / "errors.last").read_text())
+        m.purge_store()
+        self.assertIsNone(m.errors_last())
+        self.assertEqual(m.errors_count(), 0)
+
+    def test_a_record_that_fails_leaves_its_class_in_errors_last(self):
+        self.consent()
+        self.assertFalse(m.record("skill", SID, self.repo, name="not-an-fnl-name"))
+        self.assertIn("ValueError", m.errors_last())
+
     def test_a_commondir_that_is_a_pipe_does_not_hang_the_lookup(self):
         folder = Path(self.tmp.name) / "tree"
         gitdir = Path(self.tmp.name) / "gitdir"

@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 HOOK = ROOT / "scripts/metrics_hook.py"
@@ -27,16 +28,15 @@ class HookTest(unittest.TestCase):
         self.dir = Path(self.tmp.name) / "state"
         self.repo = Path(self.tmp.name) / "repo"
         (self.repo / ".git").mkdir(parents=True)
+        patcher = mock.patch.dict(os.environ, {"FNL_STATE_DIR": str(self.dir)})  # in-process calls must never reach the real state
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.env = {**os.environ, "FNL_STATE_DIR": str(self.dir)}
         self.env.pop("FNL_METRICS", None)
         self.env.pop("FNL_DISPATCH_ID", None)
 
     def consent(self, days=90):
-        os.environ["FNL_STATE_DIR"] = str(self.dir)
-        try:
-            fm.write_consent(days)
-        finally:
-            del os.environ["FNL_STATE_DIR"]
+        fm.write_consent(days)
 
     def run_hook(self, payload, env=None, raw=None, args=(), stdout=""):
         result = subprocess.run([sys.executable, "-I", str(HOOK), *args], input=raw if raw is not None else json.dumps(payload),
@@ -237,7 +237,6 @@ class HookTest(unittest.TestCase):
         self.assertFalse((ROOT / "hooks.json").exists(), "see the spec: its working folder on a real install is unverified")
 
     def test_a_closed_output_pipe_does_not_break_the_exit_code(self):
-        from unittest import mock
         spec = importlib.util.spec_from_file_location("metrics_hook_under_test", HOOK)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)

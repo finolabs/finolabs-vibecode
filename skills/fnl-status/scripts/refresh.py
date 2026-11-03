@@ -223,9 +223,11 @@ def cmd_run(args):
     fm.atomic_write(target, js_text(data))
     fm.atomic_write(folder / "dashboard.html", PAGE.read_bytes())
     miss = sorted(data["missing"])
-    print("dashboard %s · %s to %s · sessions %d · unclassified %d · writer errors %d%s" % (
+    last = fm.errors_last()
+    print("dashboard %s · %s to %s · sessions %d · unclassified %d · writer errors %d%s%s" % (
         folder / "dashboard.html", data["period"]["from"], data["period"]["to"], data["sessions"]["total"],
-        data["sessions"]["unclassified"], data["errors"], " · missing: " + ", ".join(miss) if miss else ""))
+        data["sessions"]["unclassified"], data["errors"], " (latest: %s)" % last if last else "",
+        " · missing: " + ", ".join(miss) if miss else ""))
     if args.open:
         webbrowser.open((folder / "dashboard.html").as_uri())
 

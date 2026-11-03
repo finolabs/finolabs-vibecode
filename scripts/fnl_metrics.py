@@ -212,18 +212,33 @@ def valid_event(item):
     return all(check(item[key]) for key, check in schema.items())
 
 
-def bump_errors():
-    """Count one writer failure as one appended byte in errors.count. Only when metrics are enabled; never raises."""
+def bump_errors(error=None):
+    """Count one writer failure as one appended byte in errors.count, and keep the class name of the latest one in errors.last.
+
+    Only when metrics are enabled; never raises. Only the exception's class name is kept, never its message.
+    """
     try:
         if not enabled():
             return
-        fd = os.open(ensure_dir(state_dir(), follow=True) / "errors.count", os.O_WRONLY | os.O_APPEND | os.O_CREAT | NOFOLLOW, 0o600)
+        folder = ensure_dir(state_dir(), follow=True)
+        fd = os.open(folder / "errors.count", os.O_WRONLY | os.O_APPEND | os.O_CREAT | NOFOLLOW, 0o600)
         try:
             os.write(fd, b"x")
         finally:
             os.close(fd)
+        if error is not None and re.match(r"^[A-Za-z_][A-Za-z0-9_]{0,60}\Z", type(error).__name__):
+            atomic_write(folder / "errors.last", "%s %s\n" % (now().isoformat(timespec="seconds"), type(error).__name__))
     except Exception:
         pass
+
+
+def errors_last():
+    """The time and exception class of the latest writer failure, or None."""
+    try:
+        text = (state_dir() / "errors.last").read_text(encoding="utf-8").strip()
+    except (OSError, ValueError):
+        return None
+    return text if re.match(r"^\d{4}-\d{2}-\d{2}T[\d:+]+ [A-Za-z_][A-Za-z0-9_]{0,60}\Z", text) else None
 
 
 def errors_count():
@@ -251,8 +266,8 @@ def record(event, sid, cwd, **fields):
             return False
         append(build_event(event, sid, repo_code(cwd), fields))
         return True
-    except Exception:
-        bump_errors()
+    except Exception as error:
+        bump_errors(error)
         return False
 
 
@@ -337,9 +352,9 @@ def read_events():
 
 
 def purge_store():
-    """Delete the recorded events, the marker files and the error count. Keeps consent.json. Returns files removed."""
+    """Delete the recorded events, the marker files and the error record. Keeps consent.json. Returns files removed."""
     folder, removed = state_dir(), 0
-    for path in [p for p in _regular_files(folder) if EVENT_FILE.match(p.name) or p.name == "errors.count"] + _regular_files(folder / "markers"):
+    for path in [p for p in _regular_files(folder) if EVENT_FILE.match(p.name) or p.name in ("errors.count", "errors.last")] + _regular_files(folder / "markers"):
         path.unlink()
         removed += 1
     return removed
