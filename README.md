@@ -63,7 +63,7 @@ Every skill carries the `fnl-` prefix. The user types four of them, `fnl-setup`,
 | `fnl-plugin-packaging` | Packaging skills as a plugin for Claude Code, Codex and Antigravity from one repository: layout, manifests, icon, marketplaces, checks. |
 | `fnl-setup` | First run on a machine or repository: host config, local file placement, the agent-skills block in `CLAUDE.md` or `AGENTS.md`. |
 | `fnl-setup-instructions` | Writing your user-scoped instructions: it interviews you and writes them for Claude Code, Codex and Antigravity from one shared source. |
-| `fnl-status` | Opening the usage dashboard: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, from the usage events (Claude Code, after you consent in setup) and the dispatch ledger. It also lists delegated runs still open. |
+| `fnl-status` | Opening the usage dashboard: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, from the usage events (after you consent in setup) and the dispatch ledger. It also lists delegated runs still open. |
 | `fnl-ask` | You are not sure which skill fits: describe the situation and get the next command, including companion skills from other packs. |
 | `fnl-open-source-review` | Before a repository goes public, and after: license, secrets in tree and history, internal leaks, clean payload, community files, repository settings, identity, data flow, plugin checks. |
 
@@ -118,7 +118,7 @@ npx skills add finolabs/finolabs-vibecode
 
 The installer lists the skills to choose from; `--skill <name>` takes one directly and `-a <agent>` picks the agent. It copies editable files into your project (or, with `-g`, for every project); update them with `npx skills update`. The plugin path also carries the agents, the session hook and the Antigravity rule, which single-skill installs leave out.
 
-Each skill works alone, except the delegation family: `fnl-handoff`, `fnl-advisor`, `fnl-committee`, `fnl-coordinator-sessions` and `fnl-status` need `fnl-delegate` beside them. Other skills mention their neighbors by name and work without them. A sensible first pick: `fnl-coding-router`, `fnl-verification`, `fnl-review-gate`, `fnl-commit-messages`, plus `fnl-setup` to configure them.
+Each skill works alone, except the delegation family: `fnl-handoff`, `fnl-advisor`, `fnl-committee` and `fnl-coordinator-sessions` need `fnl-delegate` beside them; `fnl-status` shows the usage events without it and adds the dispatch ledger when it is there. Other skills mention their neighbors by name and work without them. A sensible first pick: `fnl-coding-router`, `fnl-verification`, `fnl-review-gate`, `fnl-commit-messages`, plus `fnl-setup` to configure them.
 
 ### First check
 

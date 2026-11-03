@@ -1,6 +1,6 @@
 # Usage metrics and the status dashboard
 
-Status: draft for review. Target release: `0.1.7`. Depth: DEEP (hooks run on every matching tool call and record behavior data).
+Status: draft for review. Target release: the next patch release (`0.1.6` while the version is `0.1.6-dev`). Depth: DEEP (hooks run on every matching tool call and record behavior data).
 
 ## Goal
 
@@ -20,7 +20,7 @@ Show each user whether `finolabs-vibecode` earns its cost on their own machine: 
 | 1 | Six metrics, each tied to an action the user can take (below). |
 | 2 | Metadata only, stored locally, off until the user consents in `fnl-setup`, with an environment switch to turn it off. |
 | 3 | Hooks are the primary source; the delegate ledger keeps delegate semantics; the router adds one receipt line. No third collection mechanism. |
-| 4 | Claude Code first. Codex after its event names and trust step are confirmed. Antigravity has ledger data only until it ships plugin hooks. |
+| 4 | The same hook script serves Claude Code, Codex and Antigravity through a small adapter. Codex and Antigravity record fewer events than Claude Code (below). |
 | 5 | `fnl-status` is upgraded into the dashboard. No new skill. |
 | 6 | Sessions started by a delegate dispatch are marked with `FNL_DISPATCH_ID`; sessions of unknown origin (no recorded session start) are shown as "unclassified". |
 | 7 | Retention is chosen in `fnl-setup` (30, 90 or 365 days), default 90, plus a `purge` command. |
@@ -70,8 +70,8 @@ Plugin-level, not inside a skill: they only exist when the whole plugin is insta
 
 - Claude Code: extend `.claude-plugin/hooks.json` with a `PostToolUse` entry (matcher `Skill|Agent|Edit|Write|NotebookEdit|Bash`) and a `SessionStart` entry with no matcher, beside the existing reminder. Every entry is `async`, so a hook never delays a tool call. The `Bash` entry has no `if` filter: the host's `if` takes one permission rule and the docs do not say how it matches compound commands such as `cd x && git commit`, so the script tests the command text itself and discards it. The script is `scripts/metrics_hook.py`, called as `python3 -I`; it reads `tool_input.skill` for the Skill tool and `tool_input.subagent_type` for the Agent tool, the names the session transcripts use.
 - On `SessionStart`, after recording `session_start`, the hook runs the refresh (below) when `data.js` is older than ten minutes.
-- Codex: same events and the same script, shipped in the Codex plugin's hooks file, once the verification items below are confirmed. The user must trust the hook hash; `fnl-setup` says so.
-- Antigravity: none in this release.
+- Codex: `.codex-plugin/hooks.json`, named by the `hooks` key of `.codex-plugin/plugin.json` (an explicit value replaces the default `hooks/hooks.json` discovery, which Claude Code would also load, so that path is not used). The command is `metrics_hook.py --host codex`, async, with the plugin root from `PLUGIN_ROOT` or `CODEX_PLUGIN_ROOT`. Codex names its shell tool `Bash` and its edit tool `apply_patch`, may send a command as an array, and has no Skill or Agent tool, so it records sessions, first edits, commits, review comments and router receipts. A user must trust the plugin's hooks once with `/hooks`; until then they do not run, and `fnl-setup` says so.
+- Antigravity: the same script serves it (`--host antigravity --event <session_start|post_tool_use>`), but the plugin does not ship its hook yet. A plugin-root `hooks.json` would have to name the script by a relative path, and whether Antigravity runs a plugin hook from the plugin folder or from the workspace is unverified; if it were the workspace, opening a repository that ships its own `scripts/metrics_hook.py` would run it. Until a probe on a real install settles that, a user who wants it adds the hook to their own `~/.gemini/config/hooks.json` with an absolute path. Its payloads are camelCase with no event name (hence `--event`), the session id is `conversationId`, the folder is the first of `workspacePaths`, the shell tool is `run_command` with `CommandLine`, and a real run named its file tool `write_file` where the docs say `write_to_file`, so both are accepted. It has no Skill or Agent tool in the payload, so it records the same events as Codex. The hook prints `{}` on every path. It is not documented as async, so it would run in the tool's path (about 50 ms).
 
 ## Dispatch marker
 
@@ -159,8 +159,8 @@ Changed: `.claude-plugin/hooks.json`, `skills/fnl-status/SKILL.md`, `skills/fnl-
 ## Verify before building
 
 1. Claude Code: checked on 03/11/2026 against the hooks reference and the session transcripts. Plugin hooks use the `${CLAUDE_PLUGIN_ROOT}` variable and a `hooks` wrapper. The Agent tool is `Agent`; the Skill tool's name and its `skill` input key come from the transcripts, not from the docs. `SessionStart` carries `source` (`startup`, `resume`, `clear`, `compact`, `fork`). A PostToolUse hook's output never reaches the model. A command hook can be `async`. The `if` field takes a single permission rule and was not used (see "Hooks").
-2. Codex: event names, how a plugin ships hooks, and the trust step.
-3. Antigravity: whether a plugin can ship hooks.
+2. Codex: the hooks reference and installed plugins (the shape, the event names, the `hooks` manifest key, the trust step) were read on 04/11/2026. A real run was not possible: the probe hook in a throwaway project was not loaded because the project layer was untrusted, the trust-bypass flag was refused, and the account was out of quota. The payload shape, the root variable name and plugin hooks from a marketplace install are therefore unverified.
+3. Antigravity: a real `agy` run with a project `.agents/hooks.json` fired both hooks and gave the payload shape above, with no trust step; `agy plugin validate . --strict` accepted a root `hooks.json`. Not verified, and the reason the plugin ships no hook: the working folder of a plugin hook on a real install (probe: install a throwaway plugin whose hook prints its folder), and the shell tool's real name and async behavior.
 4. Whether `FNL_DISPATCH_ID` reaches a hook through `codex exec` and through `agybird`.
 5. A `file://` page loading a sibling `data.js` in Chrome, Safari and Firefox, and the system opener on macOS, Linux and Windows.
 

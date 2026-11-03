@@ -6,7 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
-- Usage metrics on Claude Code, off until the user consents in `fnl-setup`. The plugin's hooks record metadata only (a time, a session id, a short repository code, an `fnl-` skill or agent name, the router's depth, a review verdict) in a local folder, with a retention the user picks (30, 90 or 365 days). Nothing is sent anywhere; `FNL_METRICS=off` stops it, and `fnl-status purge` deletes it.
+- Usage metrics on Claude Code and Codex, off until the user consents in `fnl-setup`. The plugin's hooks record metadata only (a time, a session id, a short repository code, an `fnl-` skill or agent name, the router's depth, a review verdict) in a local folder, with a retention the user picks (30, 90 or 365 days). Nothing is sent anywhere; `FNL_METRICS=off` stops it, and `fnl-status purge` deletes it.
 - `fnl-status` now opens a local dashboard page: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, in the FINOLABS palette with a dark and a light theme. A refresh script builds its data from the usage events and the dispatch ledger.
 - The coding router prints a depth receipt (`scripts/record.py`) that the hook records with the session, and the host template marks delegated runs with `FNL_DISPATCH_ID`.
 - `ledger.py summary --json` prints the summary rows as JSON, with quota and error counts.
