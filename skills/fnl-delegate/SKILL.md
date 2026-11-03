@@ -33,16 +33,31 @@ Difficulty:
 - **medium**: several files in one seam, new tests, consumers known.
 - **hard**: cross-cutting change, concurrency, security or permissions, migrations, subtle bugs, or a medium task that already failed once.
 - **very hard**: novel design, high ambiguity, many interacting parts, or work that keeps needing judgement drawn from the coordinator's own context.
+- **ultra hard**: very hard work where a wrong result is costly or hard to undo (production data, a migration, a security boundary), or very hard work that a `high` run already fell short on.
+
+### Decision matrix
+
+The grade fixes the rest of the plan; later sections say how to carry it out.
+
+| Grade | Tier | Effort | Budget | Runs as | Accepted by |
+| --- | --- | --- | --- | --- | --- |
+| easy | fast | `medium` | 20 minutes | headless run | the coordinator |
+| medium | strong | `medium` | 30–45 minutes | headless run | the coordinator |
+| hard | frontier, or strong for implementation with clear acceptance tests | `medium` | 60–90 minutes; split a task that needs more | headless run | `fnl-verifier` |
+| very hard | frontier | `high` | 90 minutes per headless sub-run | a session, not a headless run | `fnl-verifier` |
+| ultra hard | frontier | `xhigh`, then `max` if `xhigh` falls short | 90 minutes per headless sub-run | a session, not a headless run | `fnl-verifier` |
+
+A run that fell short at its level is retried one level up; the host config may set its own effort preference; `models.md` maps each level to every agent's own scale. A review, an advice or a committee seat takes its tier from the work it covers (Route, step 1) and its budget from "Budget and liveness".
 
 ## Route
 
 Choose an agent **and a model**. A user who names either wins; otherwise:
 
-1. **Tier** from the grade: very hard → frontier; hard → frontier, or strong for implementation with clear acceptance tests; medium → strong; easy → fast. Reviews take the tier above the work they review, at least strong.
+1. **Tier** from the decision matrix. Reviews take the tier above the work they review, at least strong.
 2. **Strength overrides** from `models.md`: long logs, screenshots, recordings or PDFs; UI from a design; terminal-heavy work; bulk edits.
 3. **Capability order** among what still fits: for code, Claude Code, then Codex, then Antigravity; for plain content writing, Codex, then Claude Code, then Antigravity (`models.md`). Fast-tier work goes instead to the agent with the most quota left, which keeps the stronger agents' quota for hard work.
 4. **Reachability and quota**: skip delegates the host config marks unreachable from this coordinator, and models whose quota is out (below).
-5. **Effort**: `medium`, whatever the grade, unless the work is very hard or a `medium` run already fell short (`models.md` "Tiers"); the host config may set its own preference.
+5. **Effort** from the decision matrix (`models.md` "Tiers" maps the levels to each agent).
 
 Done when you can state agent, model, effort and the reason in one line, for example "hard, terminal-heavy → Codex `gpt-6.1-sol` medium: Claude Code quota at its 5-hour limit".
 
@@ -76,19 +91,15 @@ Tasks are independent when they touch disjoint files, need no ordering, and need
 
 ## Budget and liveness
 
-Every dispatch carries a **budget**, written into the brief, and three numbers derived from it:
+Every dispatch carries a **budget**, written into the brief, and three numbers derived from it (below). Implementation budgets follow the grade in the decision matrix; the other kinds:
 
 | Work | Budget |
 | --- | --- |
-| easy | 20 minutes |
-| medium | 30–45 minutes |
-| hard | 60–90 minutes; split a task that needs more |
-| very hard | owned by a session, not a headless run; 90 minutes per headless sub-run |
 | review | 30 minutes |
 | advise | 15–30 minutes |
 | committee member | 30–45 minutes |
 
-Take the upper end for very hard work and for runs that build or test. Once `fnl-status` shows at least five finished runs for the same agent, model and grade, set the budget to about 1.5 times their median instead.
+Take the upper end for very hard and ultra hard work and for runs that build or test. Once `fnl-status` shows at least five finished runs for the same agent, model and grade, set the budget to about 1.5 times their median instead.
 
 - The **agent's own timeout** (`--print-timeout`, the agybird `--timeout`, `--max-turns`), a few minutes under the hard cap, so the agent stops and reports before it is killed.
 - The **hard cap** that kills the process (the host config gives the command form): the budget plus a third, and at least 10 minutes over it.
@@ -102,7 +113,7 @@ Heavy jobs (container-backed suites, scale measurements, end-to-end runs; the ho
 
 ## Accept
 
-A task is done only when you have checked it yourself, as `fnl-verification` "Accepting someone else's work" lays out. Then decide: **accepted**; **rework**, a follow-up to the same agent run naming each defect (count the round); or **rejected**, rerouted with a new brief. The verdict is yours, whatever the agent's report says. Check easy and medium runs yourself; use the `fnl-verifier` agent, started on the strong tier where the host lets you pick its model, for hard and very hard runs, or when your own context is past about 60% and a self-check would be less reliable.
+A task is done only when you have checked it yourself, as `fnl-verification` "Accepting someone else's work" lays out. Then decide: **accepted**; **rework**, a follow-up to the same agent run naming each defect (count the round); or **rejected**, rerouted with a new brief. The verdict is yours, whatever the agent's report says. Check the runs the decision matrix leaves to you yourself; use the `fnl-verifier` agent, started on the strong tier where the host lets you pick its model, for the runs it names (hard and above), or when your own context is past about 60% and a self-check would be less reliable.
 
 ## Handover after an interrupted run
 

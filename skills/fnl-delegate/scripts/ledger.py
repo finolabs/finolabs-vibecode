@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 KINDS = ["implement", "review", "advise", "committee"]
-GRADES = ["easy", "medium", "hard", "very-hard"]
+GRADES = ["easy", "medium", "hard", "very-hard", "ultra-hard"]
 AGENTS = ["claude", "claude-session", "codex", "antigravity", "subagent"]
 COORDINATORS = ["claude", "codex", "antigravity"]
 ROUTE_BY = ["table", "judge", "user"]

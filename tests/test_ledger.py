@@ -32,6 +32,13 @@ class LedgerTest(unittest.TestCase):
     def records(self):
         return [json.loads(line) for line in self.path.read_text().splitlines()]
 
+    def test_the_five_grades_are_accepted_and_an_ultra_hard_run_is_summarised(self):
+        for grade in ("easy", "medium", "hard", "very-hard", "ultra-hard"):
+            args = [a if a != "medium" else grade for a in START]
+            self.assertEqual(self.run_ledger(*args).returncode, 0, grade)
+        self.assertNotEqual(self.run_ledger(*[a if a != "medium" else "extreme" for a in START], check=False).returncode, 0)
+        self.assertEqual(sorted(r["grade"] for r in json.loads(self.run_ledger("summary", "--json").stdout)), [])
+
     def test_start_writes_a_start_line_and_prints_its_id(self):
         dispatch_id = self.run_ledger(*START).stdout.strip()
         [rec] = self.records()

@@ -18,7 +18,7 @@ Route by tier first, then by agent. A tier names what the work needs; the agent 
 | strong | Sonnet 5.5 | `gpt-6.1-sol` | `gemini-4-argon-*`, `claude-sonnet-5-5-*` |
 | fast | Haiku 5.5 | `gpt-6.1-terra`, `gpt-6-luna` | `gemini-3.8-flash-*` |
 
-The model places the work in a tier; effort is a separate choice. **Default to `medium` effort on every agent and tier, hard work included**: a `medium` run still does hard work, and it spends less quota and time. Use `high` only for very hard work, or when a `medium` run has already fallen short, and `xhigh` or `max` only when `high` has fallen short too. A host config's "Effort preference" overrides this default.
+The model places the work in a tier; effort is a separate choice. **Default to `medium` effort on every agent and tier, hard work included**: a `medium` run still does hard work, and it spends less quota and time. By grade (`SKILL.md` "Grade"): `medium` for easy, medium and hard work, `high` for very hard, `xhigh` for ultra hard, and `max` only when `xhigh` has fallen short. A run that fell short at its level is retried one level up. A host config's "Effort preference" overrides this default.
 
 Each agent's own scale (checked 04/11/2026 with its CLI): Claude Code `low`, `medium`, `high`, `xhigh`, `max`; Codex the same five plus `ultra` (maximum reasoning with automatic task delegation; `gpt-6-luna` has no `ultra`); Antigravity `low`, `medium`, `high`, written as the model name's suffix. Use one five-level scale across agents, `low`, `medium`, `high`, `xhigh`, `max`, and map it to the agent in hand: an agent that lacks a level takes the nearest one below it (Antigravity has nothing above `high`). Routing never picks `ultra`: it delegates on its own, and delegation stays with the coordinator.
 

@@ -12,7 +12,7 @@ Machine-specific facts for the `fnl-delegate` skills. The skills hold what is tr
 
 ## Effort preference
 
-Optional. The plugin's default is `medium` effort on every agent, and `high` or above only for very hard work or after a `medium` run fell short (`models.md` "Tiers"). Write a different default here, for example "<effort level> for <which agents or kinds of work>", and it overrides that default for this machine.
+Optional. The plugin's default is `medium` effort on every agent, and one level up per grade above hard (`high` for very hard, `xhigh` for ultra hard) or after a run fell short (`models.md` "Tiers"). Write a different default here, for example "<effort level> for <which agents or kinds of work>", and it overrides that default for this machine.
 
 ## Briefs folder
 

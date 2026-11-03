@@ -22,7 +22,7 @@ Sending task data to a judge sends it to that service. The user approves the ser
 Batch both questions for one task into one call where the judge supports it.
 
 - **Task**: the brief's goal and acceptance criteria in at most five lines, the touched areas (folders or modules, no file contents), and the risk flags (security, migration, concurrency, contract, permission).
-- **Grade question**: which grade fits, from `easy`, `medium`, `hard`, `very-hard`, with each grade's definition from `SKILL.md`, plus `need-evidence` for "the summary does not say enough".
+- **Grade question**: which grade fits, from `easy`, `medium`, `hard`, `very-hard`, `ultra-hard`, with each grade's definition from `SKILL.md`, plus `need-evidence` for "the summary does not say enough".
 - **Route question**: which candidate fits best, with each candidate's tier line and strengths from `models.md`, quota state, and whether the user is away; plus `none-fits`.
 
 Never send code, secrets, personal data or customer records.
