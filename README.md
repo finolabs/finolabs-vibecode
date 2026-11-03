@@ -126,6 +126,15 @@ Each skill works alone, except the delegation family: `fnl-handoff`, `fnl-adviso
 
 Ask your agent: "Route this change through the coding router and tell me the depth you chose." It should load `fnl-coding-router`.
 
+## Getting started
+
+1. **Install** for your host (above), then open a new session: plugins load when a session starts.
+2. **Run setup once**: `/fnl-setup` (Claude Code, Antigravity) or `$fnl-setup` (Codex). Choose quick mode to accept the recommended defaults after one confirmation, or detailed mode to be asked about each part. It can set up delegation to other agents, keep `.orchestration/` out of git, add a short `## Agent skills` block to your `CLAUDE.md` or `AGENTS.md`, recommend review tools and companion skills, and offer the usage metrics. It installs nothing and writes nothing you have not confirmed. Everything optional can be skipped and run again later.
+3. **Work as you normally do.** Ask for a change; the agent starts coding work by loading `fnl-coding-router`, which names the workflow and the depth (MIN, NORMAL or DEEP) before it edits. On Claude Code a session-start reminder prompts this and on Antigravity an always-on rule does; on Codex, run `$fnl-setup-instructions` once so your own instructions point coding work at the router.
+4. **What you should see:** a stated depth and reason; commits written as `fnl-commit-messages` says; pull requests held for a posted code review and, when the change touches a sensitive boundary, a security review; and, if you set up delegation, other agents given bounded tasks whose results are checked before they are accepted.
+5. **When you are unsure which skill fits,** type `/fnl-ask`. To see how the practice is working for you, type `/fnl-status` once you have consented to the usage metrics and have used a few sessions.
+6. **Go further** when you need it: [Host configuration](#host-configuration) for delegation, [Usage metrics](#usage-metrics) for what is recorded and where, and [Works well with](#works-well-with) for companion skills.
+
 ## Works well with
 
 These skills set the gates and the routing; they do not try to replace good phase tools. They pair with [Matt Pocock's skills](https://github.com/mattpocock/skills) (MIT): `tdd` and `diagnosing-bugs` inside the work `fnl-coding-router` routes, `code-review` as the reviewer's instrument in the review gate, `grilling` and `prototype` for clarification, `pr` for pull request bodies, and `handoff` for portable handovers. Install that pack with its own instructions; `/fnl-ask` points to its skills when they fit. The two packs are independent projects.
