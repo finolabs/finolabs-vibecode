@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Fixed
+
+- Antigravity skipped `fnl-security-reviewer` and `fnl-verifier` in 0.1.4, because their `model: opus` and `model: sonnet` are not Antigravity model tiers. All three agents are back on `model: inherit`; `fnl-review-gate` and `fnl-delegate` now tell the caller which tier to start them on where the host lets it pick, and a test keeps every agent on `inherit`.
+
 ## [0.1.4] - 2026-11-03
 
 ### Added

@@ -1,7 +1,7 @@
 ---
 name: fnl-security-reviewer
 description: Security review of a pull request or commit range: the changed code first, then every trust path that reaches it, with a permission-boundary review where it crosses authentication, authorization, tenancy, private data, secrets, untrusted input, payments, or file and network access. Use on every pull request before merge outside the low-risk lane, when `fnl-security-review-gate` triggers, or when re-reviewing a security fix.
-model: opus
+model: inherit
 disallowedTools: [Write, Edit, NotebookEdit]
 ---
 

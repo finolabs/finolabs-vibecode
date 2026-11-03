@@ -1,7 +1,7 @@
 ---
 name: fnl-verifier
 description: Checks whether a report is true (done, fixed, tests passing) against the diff, fresh targeted test runs and each acceptance criterion; judges facts, not design. Use before accepting a delegated run or session report, before marking a task done, or whenever `fnl-verification` requires independent proof.
-model: sonnet
+model: inherit
 disallowedTools: [Write, Edit, NotebookEdit]
 ---
 
