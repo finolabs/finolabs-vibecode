@@ -12,7 +12,7 @@ Machine-specific facts for the `fnl-delegate` skills. The skills hold what is tr
 
 ## Briefs folder
 
-Durable, never `/tmp` or a session scratchpad. Default: `.orchestration/` at the main checkout's root, as `fnl-delegate` "Where files go" says. Per-project exceptions: <project → folder>.
+Durable, never `/tmp` or a session scratchpad. Default: `.finolabs/` at the main checkout's root, as `fnl-delegate` "Where files go" says. Per-project exceptions: <project → folder>.
 
 Brief preamble that lets a delegated agent skip its own workflow entry read: "<preamble text>".
 

@@ -17,6 +17,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Changed
 
 - Router coverage counts a commit as a session's first change when it comes before any edit, because agents often write files through the shell, which no edit hook sees.
+- The project-scoped folder for briefs, logs and handover notes is now `.finolabs/` at the main checkout's root, matching `~/.finolabs/vibecode/` for the machine. A repository that still has `.orchestration/` and no `.finolabs/` keeps using it; nothing is moved.
 - The plugin's own data and configuration now default to `~/.finolabs/vibecode/`: `host.md`, `ledger.jsonl` and `state/` (consent, usage events, the dashboard). Folders it creates there are mode `0700`. A machine that already keeps them in `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` or `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode` and has nothing in the new place keeps using the old files; nothing is moved. `FNL_STATE_DIR`, `ORCHESTRATION_LEDGER` and `ORCHESTRATION_HOST_CONFIG` still win.
 
 - `fnl-status` no longer takes `--since` or `--project` and no longer prints a routing table in the terminal; the dashboard shows the same figures, and the skill still lists open dispatches and checks the capability map's review date.

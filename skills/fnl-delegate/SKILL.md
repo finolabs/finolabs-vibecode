@@ -109,7 +109,7 @@ When a run times out, fails or stops with uncommitted work, no other agent gets 
 
 ## Where files go
 
-Shared files (documentation and design notes with lasting value) go in the project's documentation folders and are committed. Local files (briefs, logs, working notes, captured state) go in `.orchestration/` at the main checkout's root (`briefs/` for briefs and notes, `logs/` for logs and outputs), kept out of git through `.git/info/exclude` (the shared `.gitignore` changes only with the user's approval); never in temporary directories or session scratchpads. The full rule: [references/dispatch.md](references/dispatch.md) "Where files go".
+Shared files (documentation and design notes with lasting value) go in the project's documentation folders and are committed. Local files (briefs, logs, working notes, captured state) go in `.finolabs/` at the main checkout's root (`briefs/` for briefs and notes, `logs/` for logs and outputs), kept out of git through `.git/info/exclude` (the shared `.gitignore` changes only with the user's approval); never in temporary directories or session scratchpads. A repository that still has the older `.orchestration/` folder and no `.finolabs/` keeps using it; nothing is moved for the user. The full rule: [references/dispatch.md](references/dispatch.md) "Where files go".
 
 ## Ledger
 

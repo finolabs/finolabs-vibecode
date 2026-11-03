@@ -19,7 +19,7 @@ Report only what you observe:
 - **Review tools**: which review instruments each installed host has, from the skill listing and `--help` only: Claude Code `/code-review` and `/security-review`, Codex `codex review`, and the `security-audit` skill from Cloudflare. Antigravity has none.
 - **Companion skills**: which skills in [references/companions.md](references/companions.md) are installed, from the skill and plugin listings.
 - **Host config**: the file at `$ORCHESTRATION_HOST_CONFIG`, else `~/.finolabs/vibecode/host.md` (or the older `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md` while only that file exists). Present, missing, or still holding template placeholders.
-- **Repository**: the git root; whether it uses Spec Kit (`.specify/` plus installed `speckit-*` skills); which of `CLAUDE.md` and `AGENTS.md` exist and whether one already has an `## Agent skills` section; whether `.orchestration/` is excluded in `.git/info/exclude`.
+- **Repository**: the git root; whether it uses Spec Kit (`.specify/` plus installed `speckit-*` skills); which of `CLAUDE.md` and `AGENTS.md` exist and whether one already has an `## Agent skills` section; whether `.finolabs/` is excluded in `.git/info/exclude`.
 - **Knowledge base**: where the user keeps durable decisions that agents write to: a notes vault or knowledge-base server their user-scoped instructions name, with the access those instructions approve.
 - **Usage metrics**: whether the plugin's hooks are installed (the whole plugin, on Claude Code, Codex or Antigravity; a single skill installed alone has none) and whether `consent.json` already exists in the state folder (`${FNL_STATE_DIR:-~/.finolabs/vibecode/state}`; a machine that still has `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` and no new folder keeps using the old one). Read only its date and retention.
 - **User-scoped instructions**: whether `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` (or `$CODEX_HOME/AGENTS.md`) and `~/.gemini/GEMINI.md` (or `~/.gemini/AGENTS.md`) exist, and whether they already point coding work at `fnl-coding-router`.
@@ -38,7 +38,7 @@ Interview by the rules in [references/interview.md](references/interview.md): ma
 
 When the findings show a judge skill such as `typesafe-ai` installed, read [references/route-judge.md](references/route-judge.md) and settle the route judge with it; otherwise record "none" without asking, since routing works without one. Recommend the defaults the template names; leave unknown commands as questions in the file rather than guesses.
 
-**B. Local files**. Recommend adding `.orchestration/` to `.git/info/exclude` so briefs and logs stay out of git. The shared `.gitignore` changes only if the user asks.
+**B. Local files**. Recommend adding `.finolabs/` to `.git/info/exclude` so briefs and logs stay out of git (a repository that still has the older `.orchestration/` folder keeps that one excluded too, and keeps using it until the user moves it). The shared `.gitignore` changes only if the user asks.
 
 **C. Agent skills block**. Offer a short `## Agent skills` section for the agent context file that already exists (prefer the one the repository uses; never create the second file). Draft:
 
