@@ -246,6 +246,15 @@ class RefreshTest(unittest.TestCase):
             self.assertEqual(config.read_text(), bad)
         self.assertEqual(list(config.parent.glob("hooks.json.finolabs-backup-*")), [])
 
+    def test_a_commit_counts_as_a_change_when_files_were_written_through_the_shell(self):
+        start = {"host": "claude", "dispatch": None, "source": "startup"}
+        self.consent()
+        self.write_events([self.event(30, "s", X, "session_start", **start), self.event(29, "s", X, "skill", name="fnl-coding-router"),
+                           self.event(20, "s", X, "commit")])
+        self.refresh("run")
+        self.assertEqual(self.data()["router"]["eligible"], 1)
+        self.assertEqual(self.data()["router"]["covered"], 1)
+
     def test_the_antigravity_hook_is_refused_for_a_skill_outside_the_plugin(self):
         tree = Path(self.tmp.name) / "repo" / ".claude"
         shutil.copytree(ROOT / "skills/fnl-status", tree / "skills/fnl-status")

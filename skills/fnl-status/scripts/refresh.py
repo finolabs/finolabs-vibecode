@@ -99,7 +99,8 @@ def build(days=WEEKS * 7):
         w = week_of(local_date(evs[0]["ts"]), start)
         if w is not None:
             sessions_week[w] += 1
-        edit = next((e["ts"] for e in evs if e["event"] == "first_edit"), None)
+        # A commit proves a change too: agents often write files through the shell, which no edit hook sees.
+        edit = next((e["ts"] for e in evs if e["event"] in ("first_edit", "commit")), None)
         if edit is None:
             continue
         with_edits += 1
