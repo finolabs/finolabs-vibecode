@@ -6,7 +6,7 @@ This pack owns the decisions between tools: routing, depth, delegation, gates an
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-It targets Claude Code, Codex and Antigravity from one `skills/` folder. Latest release: [`v0.1.5`](https://github.com/finolabs/finolabs-vibecode/releases/tag/v0.1.5) (phase 0; see `fnl-versioning`). Between releases, `main` carries the next version with `-dev`.
+It targets Claude Code, Codex and Antigravity from one `skills/` folder. Latest release: [`v0.1.6`](https://github.com/finolabs/finolabs-vibecode/releases/tag/v0.1.6) (phase 0; see `fnl-versioning`). Between releases, `main` carries the next version with `-dev`.
 
 <p align="center">
   <picture>

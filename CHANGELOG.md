@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-11-04
+
 ### Added
 
 - Usage metrics on Claude Code and Codex (and Antigravity, through a hook that setup adds to the user's own hooks.json after a clear yes), off until the user consents in `fnl-setup`. The plugin's hooks record metadata only (a time, a session id, a short repository code, an `fnl-` skill or agent name, the router's depth, a review verdict) in a local folder, with a retention the user picks (30, 90 or 365 days). Nothing is sent anywhere; `FNL_METRICS=off` or `consent --revoke` stops it, and `fnl-status purge` deletes it.
@@ -24,6 +26,11 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `fnl-status` no longer takes `--since` or `--project` and no longer prints a routing table in the terminal; the dashboard shows the same figures, and the skill still lists open dispatches and checks the capability map's review date.
 - `PRIVACY.md` no longer says the plugin has no analytics; it describes the opt-in local record and what it holds.
 - Shortened the plugin description to 142 characters and made it identical in the Claude Code, Codex and Antigravity manifests, matching the shared catalog.
+
+### What to do
+
+- Update the plugin through your host's plugin update, or on Antigravity reinstall with `agy plugin install https://github.com/finolabs/finolabs-vibecode`.
+- Usage metrics are off until you consent. To turn them on, run setup (`/fnl-setup`, or `$fnl-setup` on Codex) and answer section F; on Codex also trust the plugin's hooks once with `/hooks`. Nothing else is required, and your existing ledger, host config and `.orchestration/` folders keep working where they are.
 
 ## [0.1.5] - 2026-11-03
 
@@ -177,7 +184,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.2...v0.1.3
