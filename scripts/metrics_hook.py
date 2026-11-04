@@ -26,15 +26,20 @@ START = r"(?:^|[;&|(\n])[ \t]*(?:\w+=\S+[ \t]+)*"
 COMMIT = re.compile(START + r"git(?:[ \t]+(?:-[cC][ \t]+(?:\"[^\"]*\"|'[^']*'|[^\s\"']\S*)|--[\w-]+(?:=\S+)?))*[ \t]+commit(?![\w-])")
 GH_COMMENT = re.compile(START + r"gh[ \t]+pr[ \t]+comment\b([^;&|\n]*)")
 ROUTER = re.compile(START + r"(?:python3?(?:[ \t]+-\S+)*[ \t]+)?[\"']?[^\s\"']*record\.py[\"']?[ \t]+router\b")
+KEEP = re.compile(START + r"(?:python3?(?:[ \t]+-\S+)*[ \t]+)?[\"']?(?:[^\s\"']*/)?record\.py[\"']?[ \t]+keep\b([^;&|)\n]*)")
 MARKER_TEXT = r"<!-- fnl-review kind=(code|security) head=[0-9a-f]{7,40} verdict=(APPROVE|REWORK)(?: lane=yes)? -->"
 MARKER = re.compile("^" + MARKER_TEXT)
 MARKER_LINE = re.compile("^" + MARKER_TEXT, re.M)
 DEPTH = re.compile(r"--depth[\s=]+([A-Z]+)\b")
 TRIGGER = re.compile(r"--trigger[\s=]+([a-z-]+)\b")
+TASKS = re.compile(r"--tasks[\s=]+(\d{1,3})(?!\S)")
+REASON = re.compile(r"--reason[\s=]+([a-z-]+)(?!\S)")
+ROUTED = re.compile(r"--route-by[\s=]+(\S+)")
 VALUE_FLAGS = {"--repo", "-R", "--body", "-b", "--body-file", "-F"}
 REFRESH = Path(__file__).resolve().parent.parent / "skills/fnl-status/scripts/refresh.py"
-REFRESH_MINUTES = "10"
+REFRESH_EVERY = 10  # seconds between rebuilds while tools run, so an open dashboard stays current
 REFRESH_SECONDS = 8
+REFRESH_AFTER_TOOL_SECONDS = 4  # under the PostToolUse hook's own timeout
 EDIT_TOOLS = {"Edit", "Write", "NotebookEdit", "apply_patch"}  # apply_patch is Codex's edit tool
 AGY_SHELL = {"run_command"}
 AGY_EDIT = {"write_file", "write_to_file", "replace_file_content", "multi_replace_file_content"}
@@ -123,15 +128,26 @@ def reviews_from(command, cwd):
     return found
 
 
-def refresh_dashboard():
-    """Rebuild the dashboard data when it is older than REFRESH_MINUTES. A slow or missing refresh is not an error."""
+def refresh_dashboard(seconds=REFRESH_SECONDS, extra=()):
+    """Rebuild the dashboard data. A slow or missing refresh is not an error."""
     if not REFRESH.is_file():
         return
     try:
-        subprocess.run([sys.executable, "-I", str(REFRESH), "run", "--if-older", REFRESH_MINUTES],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=REFRESH_SECONDS)
+        subprocess.run([sys.executable, "-I", str(REFRESH), "run", *extra],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=seconds)
     except subprocess.TimeoutExpired:
         pass
+
+
+def refresh_if_stale():
+    """Rebuild at most once per REFRESH_EVERY seconds. The stat here spares most tool calls a process; the script
+    checks again under its lock, so two hooks that both pass the stat still rebuild once."""
+    try:
+        if fm.now().timestamp() - (fm.state_dir() / "data.js").stat().st_mtime < REFRESH_EVERY:
+            return
+    except OSError:
+        pass  # no data.js yet
+    refresh_dashboard(REFRESH_AFTER_TOOL_SECONDS, ("--throttle", str(REFRESH_EVERY)))
 
 
 def options(argv):
@@ -198,6 +214,14 @@ def post_tool_use(sid, cwd, tool, data):
             depth, trigger = DEPTH.search(command), TRIGGER.search(command)
             if depth and trigger and depth.group(1) in fm.DEPTHS and trigger.group(1) in fm.TRIGGERS:
                 fm.record("router", sid, cwd, depth=depth.group(1), trigger=trigger.group(1))
+        if "record.py" in command and "<<" not in command:  # text inside a heredoc never ran
+            for keep in KEEP.finditer(command):  # one receipt per command, each read from its own arguments
+                args = keep.group(1)
+                tasks, reason, routed = TASKS.search(args), REASON.search(args), ROUTED.search(args)
+                fields = {"tasks": int(tasks.group(1)) if tasks else 0, "reason": reason.group(1) if reason else "",
+                          "route_by": routed.group(1) if routed else "table"}
+                if all(check(fields[key]) for key, check in fm.SCHEMA["kept"].items()):
+                    fm.record("kept", sid, cwd, **fields)
 
 
 def main():
@@ -215,6 +239,10 @@ def main():
             session_start(sid, cwd, source, host)
         elif event == "PostToolUse":
             post_tool_use(sid, cwd, tool, data)
+            if host != "antigravity":  # its hook is not async: a rebuild would hold up the tool call
+                refresh_if_stale()
+        elif event == "Stop" and host != "antigravity":
+            refresh_dashboard()
     except Exception as error:
         fm.bump_errors(error)
     finally:

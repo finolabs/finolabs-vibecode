@@ -222,7 +222,8 @@ td.r, th.r { text-align: right; }
 (function () {
   "use strict";
   /* data.js sits beside this page and sets window.FNL_DATA; without it the page shows an empty state. */
-  var D = window.FNL_DATA && typeof window.FNL_DATA === "object" ? window.FNL_DATA : null;
+  function dataNow() { return window.FNL_DATA && typeof window.FNL_DATA === "object" ? window.FNL_DATA : null; }
+  var D = dataNow();
   var app = document.getElementById("app"), tip = document.getElementById("tip");
 
   /* Theme switch: follows the viewer until clicked, then remembers the choice when storage allows. */
@@ -352,11 +353,17 @@ td.r, th.r { text-align: right; }
       h("tbody", "", rows.map(function (r) { return h("tr", "", r.map(function (c, i) { return t("td", i ? "r" : "", c); })); }))])]);
   }
 
+  /* draw() builds the whole page from D, so a newer data.js can replace it in place; the month shown and the open tables stay. */
+  var month = null, tables = null, tablesOpen = false, genEl = null;
+  function draw() {
+  if (tables) tablesOpen = tables.open;
+  app.replaceChildren();
+  tables = null;
+  document.querySelector(".win").classList.toggle("skel", !D);
   var emptyNotice = null;
   if (!D) {
     D = { missing: {}, sources: [] };
     ["activity", "router", "use", "load", "depth", "reviews", "delegation"].forEach(function (key) { D.missing[key] = "no data yet"; });
-    document.querySelector(".win").classList.add("skel");
     emptyNotice = h("div", "veil", [h("div", "notice", [h("div", "badge", [brandMark()]), t("strong", "", "No data yet"),
       t("span", "", "Run fnl-status to build this page from your usage events and dispatch ledger."),
       t("span", "", "Usage events need your consent in fnl-setup and a session started after it.")])]);
@@ -396,7 +403,8 @@ td.r, th.r { text-align: right; }
       var ym = a.date.slice(0, 7); if (months.indexOf(ym) < 0) months.push(ym);
     });
     var MONTH = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    var WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], lastDay = act[act.length - 1].date, cur = months.length - 1;
+    var WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], lastDay = act[act.length - 1].date, cur = months.indexOf(month);
+    if (cur < 0) cur = months.length - 1;
     var prev = t("button", "", "‹"), next = t("button", "", "›"), ttl = t("strong", "", ""), side = h("div", "calside"), cg = h("div", "cal");
     prev.type = next.type = "button"; prev.setAttribute("aria-label", "Previous month"); next.setAttribute("aria-label", "Next month");
     var level = function (c) { return c === 0 ? 0 : Math.min(4, 1 + Math.floor(c / amax * 3.999)); };
@@ -431,8 +439,8 @@ td.r, th.r { text-align: right; }
       side.appendChild(h("div", "", [t("div", "cal-title", "events by weekday"), wdc]));
       prev.disabled = cur === 0; next.disabled = cur === months.length - 1;
     };
-    prev.addEventListener("click", function () { if (cur > 0) { cur--; drawCal(); } });
-    next.addEventListener("click", function () { if (cur < months.length - 1) { cur++; drawCal(); } });
+    prev.addEventListener("click", function () { if (cur > 0) { cur--; month = months[cur]; drawCal(); } });
+    next.addEventListener("click", function () { if (cur < months.length - 1) { cur++; month = months[cur]; drawCal(); } });
     var sc = h("div", "scale", [t("span", "", "less")]);
     [0, 1, 2, 3, 4].forEach(function (l) { var q = h("i"); q.style.background = "var(--h" + l + ")"; sc.appendChild(q); });
     sc.appendChild(t("span", "", "more"));
@@ -516,6 +524,11 @@ td.r, th.r { text-align: right; }
     });
     dl = stack([h("div", "dl", rows), legend([["first pass at or above 60%", "var(--good)"], ["below 60%", "var(--crit)"], ["open ring: fewer than 5 runs", "var(--faint)"]])]);
   }
+  if (D.kept) {
+    var plural = function (n, word) { return n + " " + word + (n === 1 ? "" : "s"); };
+    var keptLine = t("p", "meta", plural(D.kept.tasks, "task") + " kept by the coordinator in " + plural(D.kept.receipts, "receipt") + (D.kept.handed_off == null ? "" : "; " + plural(D.kept.handed_off, "implementation run") + " handed off"));
+    dl = stack([keptLine, dl || t("div", "nodata", "no data: " + (missing("delegation") || "ledger is empty"))]);
+  }
   app.appendChild(pane("delegation", "from the dispatch ledger", "wide", dl, missing("delegation") || "ledger is empty", "dl"));
 
   /* Tables twin, sources and footer */
@@ -524,17 +537,21 @@ td.r, th.r { text-align: right; }
   if (D.load && D.load.top) tabs.push(tableOf("load (estimate)", ["skill", "tokens", "loads"], D.load.top.map(function (x) { return [x.name, x.tokens, x.loads]; })));
   if (D.depth) tabs.push(tableOf("depth", ["depth", "receipts", "reworked"], D.depth.map(function (x) { return [x.depth, x.receipts, x.reworked]; })));
   if (D.delegation) tabs.push(tableOf("delegation", ["agent / model / grade", "runs", "first pass", "quota", "error", "median min", "rework"], D.delegation.map(function (x) { return [x.agent + " / " + x.model + " / " + x.grade, x.runs, pct(x.first_pass), x.quota, x.error, x.median_min, x.rework]; })));
+  if (D.kept && D.kept.rows.length) tabs.push(tableOf("kept by the coordinator", ["coordinator / reason / settled by", "receipts", "tasks"], D.kept.rows.map(function (x) { return [x.coordinator + " / " + x.reason + " / " + x.route_by, x.receipts, x.tasks]; })));
   if (D.reviews) tabs.push(tableOf("reviews", ["pr", "verdicts"], D.reviews.map(function (x) { return [x.repo + " #" + x.pr, x.verdicts.join(" → ")]; })));
   if (act.length) {
     var wk = [];
     for (var w = 0; w < act.length; w += 7) { var sum = 0; act.slice(w, w + 7).forEach(function (a) { sum += a.count; }); wk.push([act[w].date, sum]); }
     tabs.push(tableOf("activity by week", ["week of", "events"], wk));
   }
-  if (tabs.length) app.appendChild(h("details", "", [t("summary", "", "show the data as tables"), h("div", "tables", tabs)]));
+  if (tabs.length) { tables = app.appendChild(h("details", "", [t("summary", "", "show the data as tables"), h("div", "tables", tabs)])); tables.open = tablesOpen; }
 
   var src = h("div", "src", [t("b", "", "sources")]);
   (D.sources || []).forEach(function (x) { src.appendChild(tipOn(t("span", x.ok ? "" : "no", x.name), x.note || "")); });
-  app.appendChild(h("div", "status", [src, t("span", "", "sessions " + num(sess.total) + " · with edits " + num(sess.with_edits) + " · unclassified " + num(sess.unclassified) + " · writer errors " + num(D.errors) + " · generated " + (D.generated || "—"))]));
+  genEl = t("span", "", D.generated || "—");
+  app.appendChild(h("div", "status", [src, h("span", "", ["sessions " + num(sess.total) + " · with edits " + num(sess.with_edits) + " · unclassified " + num(sess.unclassified) + " · writer errors " + num(D.errors) + " · generated ", genEl])]));
+  }
+  draw();
 
   document.addEventListener("pointermove", function (e) {
     var el = e.target.closest && e.target.closest("[data-tip]");
@@ -549,6 +566,28 @@ td.r, th.r { text-align: right; }
     tip.style.left = Math.min(b.left, window.innerWidth - 270) + "px"; tip.style.top = (b.bottom + 6) + "px";
   });
   document.addEventListener("focusout", function () { tip.hidden = true; });
+
+  /* Live update: while the tab is visible, load data.js again. A page on disk cannot watch a file, and this needs no server. */
+  var POLL_MS = 5000, loading = false;
+  function content(d) { return JSON.stringify(d, function (key, v) { return key === "generated" ? undefined : v; }); }
+  var shown = content(dataNow());
+  function apply() {
+    var next = dataNow();
+    if (!next || next === D) return;
+    D = next;
+    var c = content(next);
+    if (c !== shown) { shown = c; draw(); } else genEl.textContent = next.generated || "—";
+  }
+  function poll() {
+    if (loading || document.visibilityState !== "visible") return;
+    loading = true;
+    var s = document.createElement("script");
+    s.src = "data.js?t=" + Date.now();
+    s.onload = s.onerror = function () { s.remove(); loading = false; apply(); };
+    document.head.appendChild(s);
+  }
+  setInterval(poll, POLL_MS);
+  document.addEventListener("visibilitychange", poll);
 })();
 </script>
 </body>

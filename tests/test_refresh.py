@@ -1,14 +1,18 @@
 """Tests for skills/fnl-status/scripts/refresh.py: the six metrics from a fixture store and ledger, and the files it writes."""
 
+import importlib.util
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 REFRESH = ROOT / "skills/fnl-status/scripts/refresh.py"
@@ -146,6 +150,94 @@ class RefreshTest(unittest.TestCase):
         self.refresh("run")
         self.assertEqual(self.data()["missing"]["use"], "no fnl- skill or agent used in this period")
 
+    def test_kept_work_is_counted_beside_the_implementation_runs_handed_off(self):
+        self.consent()
+        self.fixture_ledger()
+        start = {"host": "codex", "dispatch": None, "source": "startup"}
+        self.write_events([self.event(9, "k", X, "session_start", **start),
+                           self.event(8, "k", X, "kept", tasks=2, reason="needs-context", route_by="table"),
+                           self.event(7, "k", X, "kept", tasks=3, reason="needs-context", route_by="table"),
+                           self.event(6, "m", X, "kept", tasks=2, reason="user-choice", route_by="user")])
+        self.refresh("run")
+        kept = self.data()["kept"]
+        self.assertEqual((kept["receipts"], kept["tasks"], kept["handed_off"]), (3, 7, 2))
+        self.assertEqual(kept["rows"], [
+            {"coordinator": "codex", "reason": "needs-context", "route_by": "table", "receipts": 2, "tasks": 5},
+            {"coordinator": "unknown", "reason": "user-choice", "route_by": "user", "receipts": 1, "tasks": 2}])
+
+    def test_the_hand_off_count_leaves_out_subagents_and_reroutes_after_a_failure(self):
+        self.consent()
+        base = ["start", "--project", "demo", "--task", "t", "--kind", "implement", "--grade", "easy", "--model", "m", "--budget", "20"]
+        for extra in (["--agent", "codex"], ["--agent", "codex", "--reason", "fallback-quota"],
+                      ["--agent", "codex", "--reason", "fallback-failure"], ["--agent", "subagent"]):
+            subprocess.run([sys.executable, "-I", str(LEDGER), *base, *extra], check=True, env=self.env, capture_output=True)
+        self.write_events([self.event(9, "k", X, "first_edit")])
+        self.refresh("run")
+        self.assertEqual(self.data()["kept"]["handed_off"], 2)
+
+    def test_without_consent_no_zero_is_shown_for_kept_work(self):
+        self.fixture_ledger()
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
+    def fixture_old_implementation_starts(self):
+        starts = [{"event": "start", "id": "old-%d" % age,
+                   "ts": (self.at - timedelta(days=age)).isoformat(),
+                   "project": "demo", "task": "t", "kind": "implement", "grade": "easy",
+                   "agent": "codex", "model": "m", "reason": "routing"}
+                  for age in range(40, 50)]
+        self.ledger.write_text("".join(json.dumps(s) + "\n" for s in starts))
+
+    def test_old_handoffs_do_not_imply_zero_kept_since_consent_today(self):
+        self.consent("30")
+        self.write_events([self.event(0, "k", X, "first_edit")])
+        self.fixture_old_implementation_starts()
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
+    def test_handoffs_after_the_first_available_event_still_count(self):
+        self.consent("30")
+        self.write_events([self.event(0, "k", X, "first_edit"),
+                           self.days_ago(2, "k", X, "first_edit")])
+        self.fixture_old_implementation_starts()
+        self.fixture_ledger()
+        self.refresh("run")
+        kept = self.data()["kept"]
+        self.assertEqual((kept["tasks"], kept["handed_off"]), (0, 2))
+
+    def test_handoff_window_uses_local_dates_at_the_first_event(self):
+        self.env["TZ"] = "Asia/Ho_Chi_Minh"
+        self.at = datetime.now(timezone(timedelta(hours=7))).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+        self.consent("30")
+        self.write_events([self.event(0, "k", X, "first_edit")])
+        starts = [{"event": "start", "id": "local-%d" % hour,
+                   "ts": (self.at + timedelta(hours=hour)).astimezone(timezone.utc).isoformat(),
+                   "project": "demo", "task": "t", "kind": "implement", "grade": "easy",
+                   "agent": "codex", "model": "m", "reason": "routing"}
+                  for hour in (-1, 1)]
+        self.ledger.write_text("".join(json.dumps(s) + "\n" for s in starts))
+        self.refresh("run")
+        self.assertEqual(self.data()["kept"]["handed_off"], 1)
+
+    def test_with_consent_but_no_hook_running_no_zero_is_shown_for_kept_work(self):
+        self.consent()
+        self.fixture_ledger()
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
+    def test_purge_removes_kept_work_with_the_other_events(self):
+        self.consent()
+        self.write_events([self.event(8, "k", X, "kept", tasks=2, reason="no-delegate", route_by="table")])
+        self.refresh("run")
+        self.assertEqual(self.data()["kept"]["tasks"], 2)
+        self.refresh("purge", "--yes")
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
+    def test_kept_work_stays_null_when_the_ledger_holds_neither_side(self):
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
     def test_a_malformed_ledger_line_does_not_stop_the_refresh(self):
         self.consent()
         start = {"event": "start", "id": "d1", "ts": "garbage", "project": "p", "task": "t", "kind": "implement",
@@ -185,16 +277,6 @@ class RefreshTest(unittest.TestCase):
         self.assertNotIn("</script", text)
         self.assertNotIn("onerror", text)
 
-    def test_if_older_skips_a_fresh_file(self):
-        self.consent()
-        self.refresh("run")
-        before = (self.dir / "data.js").stat().st_mtime_ns
-        self.refresh("run", "--if-older", "10")
-        self.assertEqual((self.dir / "data.js").stat().st_mtime_ns, before)
-        os.utime(self.dir / "data.js", (0, 0))
-        self.refresh("run", "--if-older", "10")
-        self.assertGreater((self.dir / "data.js").stat().st_mtime, 1_000_000_000, "a stale file is rebuilt")
-
     def test_purge_needs_a_yes_and_keeps_consent(self):
         self.consent()
         self.fixture_store()
@@ -202,7 +284,7 @@ class RefreshTest(unittest.TestCase):
         self.assertNotEqual(self.refresh("purge", check=False).returncode, 0)
         self.assertTrue(list(self.dir.glob("events-*")))
         self.refresh("purge", "--yes")
-        self.assertEqual([p.name for p in self.dir.iterdir()], ["consent.json"])
+        self.assertEqual(sorted(p.name for p in self.dir.iterdir()), ["consent.json", "refresh.lock"])  # the lock file stays on purpose
 
     def agy_hook(self, config, *args):
         return self.refresh("antigravity-hook", "--config", str(config), *args, check=False)
@@ -311,6 +393,150 @@ class RefreshTest(unittest.TestCase):
     def test_consent_rejects_an_unknown_retention(self):
         self.assertNotEqual(self.refresh("consent", "--retention", "7", check=False).returncode, 0)
         self.assertFalse((self.dir / "consent.json").exists())
+
+
+class RefreshOverlapTest(unittest.TestCase):
+    """Overlapping rebuilds. Threads stand in for hook processes; the lock is the operating system's, so they exclude each other."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        patcher = mock.patch.dict(os.environ, {"FNL_STATE_DIR": str(Path(self.tmp.name) / "state")})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        spec = importlib.util.spec_from_file_location("fnl_refresh_overlap", REFRESH)
+        self.refresh = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.refresh)
+        self.state = Path(self.tmp.name) / "state"
+
+    @staticmethod
+    def data(tag="x"):
+        return {"tag": tag, "missing": {}, "period": {"from": "", "to": ""}, "sessions": {"total": 0, "unclassified": 0}, "errors": 0}
+
+    @staticmethod
+    def args(throttle=None, open_page=False):
+        return mock.Mock(throttle=throttle, open=open_page)
+
+    def test_a_run_waits_for_a_rebuild_in_progress_and_then_rebuilds_so_the_newest_data_wins(self):
+        inside, release, order = threading.Event(), threading.Event(), []
+
+        def build():
+            order.append("build")
+            if len(order) == 1:
+                inside.set()
+                release.wait(5)
+            return self.data("first" if len(order) == 1 else "second")
+
+        with mock.patch.object(self.refresh, "build", build):
+            first = threading.Thread(target=self.refresh.cmd_run, args=(self.args(),))
+            first.start()
+            self.assertTrue(inside.wait(5))
+            second = threading.Thread(target=self.refresh.cmd_run, args=(self.args(),))
+            second.start()
+            time.sleep(0.3)
+            self.assertEqual(order, ["build"], "the second run waits while the first builds")
+            release.set()
+            first.join(5)
+            second.join(5)
+        self.assertEqual(len(order), 2)
+        self.assertIn('"tag":"second"', (self.state / "data.js").read_text())
+
+    def test_a_throttled_run_that_waited_skips_because_the_data_it_waited_for_is_fresh(self):
+        inside, release, builds = threading.Event(), threading.Event(), []
+
+        def build():
+            builds.append(1)
+            inside.set()
+            release.wait(5)
+            return self.data()
+
+        with mock.patch.object(self.refresh, "build", build):
+            first = threading.Thread(target=self.refresh.cmd_run, args=(self.args(),))
+            first.start()
+            self.assertTrue(inside.wait(5))
+            second = threading.Thread(target=self.refresh.cmd_run, args=(self.args(throttle=10),))
+            second.start()
+            time.sleep(0.2)
+            release.set()
+            first.join(5)
+            second.join(5)
+        self.assertEqual(len(builds), 1)
+
+    def test_a_forced_run_after_a_throttled_one_still_rebuilds(self):
+        with mock.patch.object(self.refresh, "build", return_value=self.data()) as build:
+            self.refresh.cmd_run(self.args(throttle=10))
+            self.refresh.cmd_run(self.args())
+        self.assertEqual(build.call_count, 2)
+
+    def test_a_run_gives_up_after_the_wait_and_never_hangs(self):
+        self.state.mkdir(parents=True)
+        held = self.refresh.take_lock(self.state / "refresh.lock", 0)
+        try:
+            started = time.monotonic()
+            with mock.patch.object(self.refresh, "LOCK_WAIT", 0.2), mock.patch.object(self.refresh, "build") as build:
+                self.refresh.cmd_run(self.args())
+            self.assertLess(time.monotonic() - started, 3)
+        finally:
+            os.close(held)
+        build.assert_not_called()
+
+    def test_a_lock_file_left_by_a_killed_process_does_not_block(self):
+        self.state.mkdir(parents=True)
+        (self.state / "refresh.lock").write_text("")
+        with mock.patch.object(self.refresh, "build", return_value=self.data()) as build:
+            self.refresh.cmd_run(self.args())
+        self.assertEqual(build.call_count, 1)
+
+    def test_two_processes_cannot_hold_the_lock_at_once(self):
+        self.state.mkdir(parents=True)
+        first = self.refresh.take_lock(self.state / "refresh.lock", 0)
+        self.assertIsNotNone(first)
+        try:
+            self.assertIsNone(self.refresh.take_lock(self.state / "refresh.lock", 0))
+        finally:
+            os.close(first)
+        second = self.refresh.take_lock(self.state / "refresh.lock", 0)
+        self.assertIsNotNone(second, "released when the holder closes it")
+        os.close(second)
+
+    def test_a_symlink_directory_or_fifo_at_the_lock_name_is_refused_without_blocking(self):
+        self.state.mkdir(parents=True)
+        lock = self.state / "refresh.lock"
+        target = Path(self.tmp.name) / "elsewhere"
+        lock.symlink_to(target)
+        self.assertIsNone(self.refresh.take_lock(lock, 0))
+        self.assertFalse(target.exists())
+        lock.unlink()
+        lock.mkdir()
+        self.assertIsNone(self.refresh.take_lock(lock, 0))
+        lock.rmdir()
+        os.mkfifo(lock)
+        started = time.monotonic()
+        self.assertIsNone(self.refresh.take_lock(lock, 0))
+        self.assertLess(time.monotonic() - started, 2)
+
+    def test_a_refused_lock_does_not_lose_the_request_to_open_the_page(self):
+        self.state.mkdir(parents=True)
+        (self.state / "dashboard.html").write_text("<html></html>")
+        held = self.refresh.take_lock(self.state / "refresh.lock", 0)
+        try:
+            with mock.patch.object(self.refresh, "LOCK_WAIT", 0.1), mock.patch.object(self.refresh.webbrowser, "open") as opened, \
+                    mock.patch.object(self.refresh, "build") as build:
+                self.refresh.cmd_run(self.args(open_page=True))
+        finally:
+            os.close(held)
+        opened.assert_called_once()
+        build.assert_not_called()
+
+    def test_purge_leaves_the_lock_file_so_a_holder_keeps_the_only_lock(self):
+        self.state.mkdir(parents=True)
+        held = self.refresh.take_lock(self.state / "refresh.lock", 0)
+        try:
+            self.refresh.cmd_purge(mock.Mock(yes=True))
+            self.assertTrue((self.state / "refresh.lock").exists())
+            self.assertIsNone(self.refresh.take_lock(self.state / "refresh.lock", 0))
+        finally:
+            os.close(held)
 
 
 if __name__ == "__main__":

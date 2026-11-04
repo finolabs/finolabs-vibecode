@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -223,12 +224,12 @@ class HookTest(unittest.TestCase):
     def test_the_codex_command_runs_nothing_and_exits_zero_when_no_root_variable_is_set(self):
         config = json.loads((ROOT / ".codex-plugin/hooks.json").read_text())
         commands = {h["command"] for groups in config["hooks"].values() for g in groups for h in g["hooks"]}
-        self.assertEqual(len(commands), 1)
-        [command] = commands
+        [metrics] = [c for c in commands if "metrics_hook.py" in c]  # the other hooks are independent reminders and checks
         bare = {"PATH": os.environ["PATH"]}
-        self.assertEqual(subprocess.run(["sh", "-c", command], input="{}", env=bare, capture_output=True, text=True).returncode, 0)
+        for command in commands:
+            self.assertEqual(subprocess.run(["sh", "-c", command], input="{}", env=bare, capture_output=True, text=True).returncode, 0)
         self.consent()
-        result = subprocess.run(["sh", "-c", command], input=json.dumps({"hook_event_name": "SessionStart", "session_id": "c1", "cwd": str(self.repo)}),
+        result = subprocess.run(["sh", "-c", metrics], input=json.dumps({"hook_event_name": "SessionStart", "session_id": "c1", "cwd": str(self.repo)}),
                                 env={**self.env, "PLUGIN_ROOT": str(ROOT)}, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0)
         self.assertEqual([e["host"] for e in self.events()], ["codex"])
@@ -274,6 +275,65 @@ class HookTest(unittest.TestCase):
                              capture_output=True, text=True)
         self.assertNotEqual(bad.returncode, 0)
 
+    def test_the_keep_receipt_command_is_recorded_with_fixed_values_only(self):
+        self.consent()
+        base = 'python3 -I "/a/skills/fnl-delegate/scripts/record.py" keep '
+        self.post("Bash", {"command": base + "--tasks 3 --reason needs-context"})
+        self.post("Bash", {"command": base + "--tasks=2 --reason=user-choice --route-by=user"})
+        self.post("Bash", {"command": base + "--tasks 0 --reason needs-context"})
+        self.post("Bash", {"command": base + "--tasks 3 --reason because-the-parser-is-hard"})
+        self.post("Bash", {"command": base + "--tasks 3 --reason no-delegate --route-by me"})
+        self.post("Bash", {"command": "echo record.py keep --tasks 3 --reason no-delegate"})
+        got = [(e["event"], e["tasks"], e["reason"], e["route_by"]) for e in self.events()]
+        self.assertEqual(got, [("kept", 3, "needs-context", "table"), ("kept", 2, "user-choice", "user")])
+        self.assertEqual(set(self.events()[0]), {"ts", "sid", "repo", "event", "tasks", "reason", "route_by"})
+
+    def test_invalid_route_by_never_defaults_to_table(self):
+        self.consent()
+        keep = "python3 -I record.py keep --tasks 3 --reason no-delegate "
+        for value in ("route-judge", "user1", "USER", "table_extra"):
+            with self.subTest(route_by=value):
+                self.post("Bash", {"command": keep + "--route-by " + value})
+                self.post("Bash", {"command": keep + "--route-by=" + value})
+                self.assertEqual(self.events(), [])
+
+    def test_the_keep_receipt_is_not_recorded_without_consent(self):
+        self.post("Bash", {"command": "python3 -I record.py keep --tasks 3 --reason needs-context"})
+        self.assertEqual(self.events(), [])
+
+    def test_the_keep_receipt_command_prints_one_line_and_offers_the_schema_values(self):
+        record = ROOT / "skills/fnl-delegate/scripts/record.py"
+        ok = subprocess.run([sys.executable, "-I", str(record), "keep", "--tasks", "2", "--reason", "no-delegate"],
+                            capture_output=True, text=True)
+        self.assertEqual((ok.returncode, ok.stdout.strip()), (0, "keep receipt: tasks=2 reason=no-delegate route_by=table"))
+        for bad in (["--tasks", "0", "--reason", "no-delegate"], ["--tasks", "2", "--reason", "other"],
+                    ["--tasks", "2", "--reason", "no-delegate", "--route-by", "me"], ["--task", "2", "--rea", "no-delegate"]):
+            self.assertNotEqual(subprocess.run([sys.executable, "-I", str(record), "keep", *bad], capture_output=True).returncode, 0, bad)
+        spec = importlib.util.spec_from_file_location("fnl_keep_record", record)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual((module.REASONS, module.ROUTE_BY), (fm.KEPT_REASONS, fm.ROUTE_BY))
+
+    def test_each_keep_receipt_is_read_from_its_own_arguments(self):
+        self.consent()
+        keep = 'python3 -I /a/scripts/record.py keep '
+        start = 'python3 -I /a/scripts/ledger.py start --reason routing --route-by judge --budget 5 --tasks 7 && '
+        self.post("Bash", {"command": keep + "--tasks 2 --reason needs-context && " + keep + "--tasks 1 --reason no-delegate"})
+        self.post("Bash", {"command": keep + "--tasks 3 --reason hard-grade; echo done"})
+        self.post("Bash", {"command": start + keep + "--tasks 4 --reason user-choice --route-by user"})
+        self.post("Bash", {"command": start + keep + "--tasks 5 --reason no-delegate"})
+        self.post("Bash", {"command": keep + "--tasks 6 --reason no-delegate; other --tasks 7 --reason user-choice"})
+        got = [(e["tasks"], e["reason"], e["route_by"]) for e in self.events()]
+        self.assertEqual(got, [(2, "needs-context", "table"), (1, "no-delegate", "table"), (3, "hard-grade", "table"),
+                               (4, "user-choice", "user"), (5, "no-delegate", "table"), (6, "no-delegate", "table")])
+
+    def test_text_that_only_looks_like_a_keep_receipt_is_not_recorded(self):
+        self.consent()
+        self.post("Bash", {"command": "python3 myrecord.py keep --tasks 2 --reason no-delegate"})
+        self.post("Bash", {"command": "cat > note <<E\npython3 record.py keep --tasks 2 --reason no-delegate\nE"})
+        self.post("Bash", {"command": "python3 record.py keep --tasks 2"})
+        self.assertEqual(self.events(), [])
+
     def test_session_start_records_host_source_and_the_dispatch_marker(self):
         self.consent()
         self.run_hook({"hook_event_name": "SessionStart", "session_id": "s1", "cwd": str(self.repo), "source": "fork"},
@@ -289,6 +349,54 @@ class HookTest(unittest.TestCase):
         self.run_hook({"hook_event_name": "SessionStart", "session_id": "s1", "cwd": str(self.repo), "source": "startup"})
         self.assertTrue((self.dir / "data.js").is_file())
         self.assertEqual((self.dir / "dashboard.html").read_bytes(), (ROOT / "skills/fnl-status/assets/dashboard.html").read_bytes())
+
+    def tool_call(self, **extra):
+        return {"hook_event_name": "PostToolUse", "session_id": "s1", "cwd": str(self.repo), "tool_name": "Bash",
+                "tool_input": {"command": "ls"}, **extra}
+
+    def test_a_tool_call_rebuilds_old_dashboard_data_and_leaves_fresh_data_alone(self):
+        self.consent()
+        self.run_hook(self.tool_call())
+        data = self.dir / "data.js"
+        fresh = data.stat().st_mtime_ns
+        self.run_hook(self.tool_call())
+        self.assertEqual(data.stat().st_mtime_ns, fresh, "rebuilt inside the 10 seconds")
+        os.utime(data, (0, 0))
+        self.run_hook(self.tool_call())
+        self.assertGreater(data.stat().st_mtime, 1_000_000_000, "old data is rebuilt")
+
+    def test_stop_and_session_start_rebuild_fresh_data(self):
+        self.consent()
+        self.run_hook(self.tool_call())
+        data = self.dir / "data.js"
+        for payload in ({"hook_event_name": "Stop", "session_id": "s1", "cwd": str(self.repo)},
+                        {"hook_event_name": "SessionStart", "session_id": "s1", "cwd": str(self.repo), "source": "startup"}):
+            fresh = time.time() - 1  # inside the 10 second throttle: a forced rebuild must still run
+            os.utime(data, (fresh, fresh))
+            self.run_hook(payload)
+            self.assertGreater(data.stat().st_mtime, fresh + 0.5, payload["hook_event_name"])
+
+    def test_nothing_is_rebuilt_without_consent_or_when_turned_off(self):
+        stop = {"hook_event_name": "Stop", "session_id": "s1", "cwd": str(self.repo)}
+        self.run_hook(stop)
+        self.run_hook(self.tool_call())
+        self.assertFalse((self.dir / "data.js").exists())
+        self.consent()
+        off = {**self.env, "FNL_METRICS": "off"}
+        self.run_hook(stop, env=off)
+        self.run_hook(self.tool_call(), env=off)
+        self.assertFalse((self.dir / "data.js").exists())
+
+    def test_an_antigravity_tool_call_does_not_wait_for_a_rebuild(self):
+        self.consent()
+        self.agy("post_tool_use", {"name": "run_command", "args": {"CommandLine": "ls"}})
+        self.assertFalse((self.dir / "data.js").exists())
+
+    def test_the_stop_hook_is_async_on_both_hosts(self):
+        for name in (".claude-plugin", ".codex-plugin"):
+            config = json.loads((ROOT / name / "hooks.json").read_text())
+            for group in config["hooks"]["Stop"]:
+                self.assertTrue(all(h["async"] for h in group["hooks"]), name)
 
     def test_session_start_prunes_files_past_retention(self):
         self.consent(30)

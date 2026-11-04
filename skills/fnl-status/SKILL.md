@@ -15,7 +15,7 @@ The scripts are in this skill's base directory: `scripts/refresh.py` builds the 
 
 ## Steps
 
-1. Run `python3 -I <refresh.py> run --open`. It rebuilds `data.js`, copies the page and opens it in the default browser. Done when it prints its one-line summary.
+1. Run `python3 -I <refresh.py> run --open`. It rebuilds `data.js`, copies the page and opens it in the default browser. Done when it prints its one-line summary. While its tab is visible the page reloads `data.js` every 5 seconds, and the hooks rebuild it during a session, so the user can leave it open.
 2. Report that line, then name each missing source it lists and what fixes it: consent not given means `fnl-setup`; no events means the plugin's hooks need the whole plugin and a session started after consent; a missing ledger means `fnl-delegate` "Ledger".
 3. Run `python3 -I <ledger.py> open`. It prints each open dispatch's age against its budget. For each one past its check deadline (half the budget), check liveness from artifacts as `fnl-delegate` "Budget and liveness" says and mark it **running**, **stalled** or **ended without a finish line**. A coordinator closes a record only when its log or the repository shows how the run ended, with that outcome and a note that it was closed late; otherwise list it and ask the user.
 4. Read the `Review by` date (ISO, `YYYY-MM-DD`) at the top of `references/models.md` in the `fnl-delegate` folder. When today is past it, the capability map is stale: say so, with the date, since routing still reads it.
@@ -28,4 +28,4 @@ When the argument is `purge`, skip the steps above and ask the user to confirm d
 
 ## What is recorded
 
-Only when the user consented in `fnl-setup`: the plugin's hooks append metadata to `events-YYYY-MM.jsonl` in the state folder (a time, a session id, a short repository code, a skill or agent name, a depth, a review verdict), never prompts, code, command text or file paths. Nothing is sent anywhere.
+Only when the user consented in `fnl-setup`: the plugin's hooks append metadata to `events-YYYY-MM.jsonl` in the state folder (a time, a session id, a short repository code, a skill or agent name, a depth, a review verdict, a kept-task count with its reason and who settled it), never prompts, code, command text or file paths. Nothing is sent anywhere.

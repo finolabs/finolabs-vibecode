@@ -12,6 +12,8 @@ CHECKER = "scripts/check-references.py"
 
 # (file, text to replace, replacement, expected message fragment)
 BREAKS = [
+    ("scripts/mode.py", '"suggest"', '"manual"', "mode.py copies differ"),
+    ("skills/fnl-setup/scripts/mode.py", '"suggest"', '"manual"', "mode.py copies differ"),
     ("skills/fnl-status/SKILL.md", '"Budget and liveness"', '"Budget and live"',
      '`fnl-delegate` has no section "Budget and live"'),
     ("skills/fnl-delegate/SKILL.md", "`fnl-handoff`: write", "`fnl-handof`: write",

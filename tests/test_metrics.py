@@ -13,7 +13,8 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 CORE = ROOT / "scripts/fnl_metrics.py"
-COPIES = [ROOT / "skills/fnl-coding-router/scripts/fnl_metrics.py", ROOT / "skills/fnl-status/scripts/fnl_metrics.py"]
+COPIES = [ROOT / "skills/fnl-coding-router/scripts/fnl_metrics.py", ROOT / "skills/fnl-status/scripts/fnl_metrics.py",
+          ROOT / "skills/fnl-update/scripts/fnl_metrics.py"]
 
 spec = importlib.util.spec_from_file_location("fnl_metrics", CORE)
 m = importlib.util.module_from_spec(spec)
@@ -318,11 +319,21 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertTrue(target.is_dir())
 
-    def test_shared_copies_equal_the_core(self):
-        for copy in COPIES:
-            with self.subTest(copy=str(copy.relative_to(ROOT))):
-                self.assertTrue(copy.exists(), "missing copy")
-                self.assertEqual(copy.read_bytes(), CORE.read_bytes())
+    def test_shared_copies_equal_their_source(self):
+        groups = [
+            (CORE, COPIES),
+            (ROOT / "skills/fnl-ask/references/plain-language.md",
+             [ROOT / "skills/fnl-setup/references/plain-language.md"]),
+        ]
+        for source, copies in groups:
+            for copy in copies:
+                with self.subTest(copy=str(copy.relative_to(ROOT))):
+                    self.assertTrue(copy.exists(), "missing copy")
+                    self.assertEqual(copy.read_bytes(), source.read_bytes())
+
+    def test_update_check_copy_equals_core(self):
+        self.assertEqual((ROOT / "scripts/update_check.py").read_bytes(),
+                         (ROOT / "skills/fnl-update/scripts/update_check.py").read_bytes())
 
 
 if __name__ == "__main__":

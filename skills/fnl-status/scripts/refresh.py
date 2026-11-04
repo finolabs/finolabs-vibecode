@@ -2,7 +2,8 @@
 """Build the status dashboard's data from the usage events and the dispatch ledger.
 
   run      write data.js and dashboard.html into the state folder (--open shows the page,
-           --if-older MINUTES skips the work when data.js is newer than that)
+           --throttle SECONDS skips the work when data.js is newer than that). One rebuild runs at
+           a time and a run waits its turn, so the files never go back to an older snapshot.
   consent  record the user's consent and retention (30, 90 or 365 days)
   purge    delete the recorded events, data.js and dashboard.html (needs --yes)
   antigravity-hook  add (or --remove) the plugin's hook group in the user's own Antigravity hooks.json,
@@ -18,7 +19,9 @@ import json
 import os
 import shlex
 import shutil
+import stat
 import sys
+import time
 import webbrowser
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
@@ -63,8 +66,8 @@ def ratio(num, den):
     return num / den if den else None
 
 
-def ledger_metrics(ledger, start):
-    """(delegation rows, overall first pass, weekly first pass with None for empty weeks, finished runs)."""
+def ledger_metrics(ledger, start, usage_start=None):
+    """(delegation rows, overall first pass, weekly first pass with None for empty weeks, finished runs, runs handed off)."""
     rows = ledger.summary_rows(keys=("agent", "model", "grade"), since=start.isoformat())
     delegation = [{"agent": r["agent"], "model": r["model"], "grade": r["grade"], "runs": r["n"], "first_pass": r["first_pass"],
                    "quota": r["quota"], "error": r["error"], "median_min": round(r["median_min"]), "rework": round(r["rework"], 1)}
@@ -78,7 +81,25 @@ def ledger_metrics(ledger, start):
         if w is not None:
             done[w] += 1
             good[w] += f["outcome"] == "accepted" and f["rework_rounds"] == 0
-    return delegation, ratio(sum(r["first_pass"] * r["n"] for r in rows), runs), [ratio(g, d) for g, d in zip(good, done)], runs
+    handoff_start = max(start, usage_start) if usage_start is not None else start
+    handed_off = sum(s["kind"] == "implement" and s["agent"] != "subagent" and s["reason"] != "fallback-failure"
+                     and local_date(s["ts"]) >= handoff_start for s in starts.values())
+    return delegation, ratio(sum(r["first_pass"] * r["n"] for r in rows), runs), [ratio(g, d) for g, d in zip(good, done)], runs, handed_off
+
+
+def kept_metrics(events, by_sid, handed_off):
+    """Tasks coordinators kept, beside implementation runs handed off (None when the ledger is unread); None when neither exists."""
+    groups = defaultdict(lambda: [0, 0])
+    for e in events:
+        if e["event"] == "kept":
+            host = next((x["host"] for x in by_sid[e["sid"]] if x["event"] == "session_start"), "unknown")
+            group = groups[(host, e["reason"], e["route_by"])]
+            group[0] += 1
+            group[1] += e["tasks"]
+    if not groups and not (handed_off and events and fm.enabled()):  # with nothing recording, no receipt does not mean nothing was kept
+        return None
+    rows = [{"coordinator": c, "reason": r, "route_by": b, "receipts": n, "tasks": t} for (c, r, b), (n, t) in sorted(groups.items())]
+    return {"receipts": sum(r["receipts"] for r in rows), "tasks": sum(r["tasks"] for r in rows), "handed_off": handed_off, "rows": rows}
 
 
 def build(days=WEEKS * 7):
@@ -159,11 +180,12 @@ def build(days=WEEKS * 7):
     per_day = Counter(local_date(e["ts"]).isoformat() for e in events)
     activity = [{"date": (start + timedelta(days=i)).isoformat(), "count": per_day.get((start + timedelta(days=i)).isoformat(), 0)} for i in range(days)]
 
-    delegation, first_pass, fp_week, runs = None, None, [None] * WEEKS, 0
+    delegation, first_pass, fp_week, runs, handed_off = None, None, [None] * WEEKS, 0, None
     ledger_note = "fnl-delegate is not installed"
     if LEDGER.exists():
         try:
-            delegation, first_pass, fp_week, runs = ledger_metrics(load_ledger(), start)
+            usage_start = min((local_date(e["ts"]) for e in events), default=None)
+            delegation, first_pass, fp_week, runs, handed_off = ledger_metrics(load_ledger(), start, usage_start)
             ledger_note = "%d runs" % runs if runs else "no finished runs in this period"
         except Exception:
             delegation, ledger_note = None, "ledger could not be read"
@@ -196,7 +218,7 @@ def build(days=WEEKS * 7):
                           "sessions": sessions_week if events else None, "calls": calls_week if events else None,
                           "first_pass": fp_week if first_pass is not None else None}},
         "router": {"covered": covered, "missed": missed, "excluded": excluded, "unclassified": unclassified, "eligible": eligible} if eligible else None,
-        "use": use or None, "load": load, "depth": depth_rows or None, "delegation": delegation or None,
+        "use": use or None, "load": load, "depth": depth_rows or None, "delegation": delegation or None, "kept": kept_metrics(events, by_sid, handed_off),
         "reviews": reviews or None, "review_stats": review_stats if groups else None, "activity": activity if events else None,
         "sources": [
             {"name": "hooks", "ok": bool(events), "note": "%d events" % len(events) if events else (why or "")},
@@ -213,12 +235,65 @@ def js_text(data):
     return "window.FNL_DATA = " + body + ";\n"
 
 
+LOCK_WAIT = 3.0  # seconds a run waits for a rebuild in progress; under the hook's 4 s (tool call) and 8 s (stop) timeouts
+LOCK_POLL = 0.05
+
+
+def take_lock(path, wait=None):
+    """The descriptor holding the rebuild lock, or None when it stays held for `wait` seconds or cannot be used.
+
+    The operating system owns the lock and drops it when the process ends, so a killed rebuild leaves nothing to
+    clean up. The file is created with NOFOLLOW and mode 0600, must be a regular file, and is never removed (not
+    even by purge): removing it while a holder has it would let a second process lock a new file. Windows has no
+    fcntl and uses msvcrt; that path is untested."""
+    try:
+        fd = os.open(path, os.O_RDWR | os.O_CREAT | fm.NOFOLLOW | getattr(os, "O_NONBLOCK", 0), 0o600)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("not a regular file")
+        deadline = time.monotonic() + (LOCK_WAIT if wait is None else wait)
+        while True:
+            try:
+                try:
+                    import fcntl
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except ImportError:
+                    import msvcrt
+                    msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                return fd
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(LOCK_POLL)
+    except OSError:
+        os.close(fd)
+        return None
+
+
 def cmd_run(args):
+    """Rebuild one run at a time. A run waits for one in progress and then rebuilds, so the run that reads the events last
+    publishes last and the files never go back to an older snapshot. A throttled run skips when data.js is fresh once it
+    holds the lock, which is also how two hooks that both passed the cheap age check end up rebuilding once."""
     folder = fm.ensure_dir(fm.state_dir(), follow=True)
-    target = folder / "data.js"
-    if args.if_older is not None and target.exists() and (folder / "dashboard.html").exists():
-        if fm.now().timestamp() - target.stat().st_mtime < args.if_older * 60:
+    held = take_lock(folder / "refresh.lock")
+    if held is None:
+        if args.open and (folder / "dashboard.html").exists():  # a rebuild is under way; the page still opens
+            print("dashboard %s · a rebuild is already running" % (folder / "dashboard.html"))
+            webbrowser.open((folder / "dashboard.html").as_uri())
+        return
+    try:
+        if args.throttle is not None and (folder / "data.js").exists() and \
+                fm.now().timestamp() - (folder / "data.js").stat().st_mtime < args.throttle:
             return
+        publish(folder, args)
+    finally:
+        os.close(held)  # closing the descriptor releases the lock
+
+
+def publish(folder, args):
+    target = folder / "data.js"
     data = build()
     fm.atomic_write(target, js_text(data))
     fm.atomic_write(folder / "dashboard.html", PAGE.read_bytes())
@@ -316,7 +391,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="write data.js and dashboard.html")
     run.add_argument("--open", action="store_true", help="show the page in the default browser")
-    run.add_argument("--if-older", type=int, metavar="MINUTES", help="skip when data.js is newer than this")
+    run.add_argument("--throttle", type=float, metavar="SECONDS", help="skip when data.js is newer than this")
     run.set_defaults(func=cmd_run)
     consent = sub.add_parser("consent", help="record consent and retention")
     consent.add_argument("--retention", type=int, choices=fm.RETENTIONS)

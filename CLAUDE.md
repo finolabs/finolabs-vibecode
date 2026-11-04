@@ -8,6 +8,7 @@ One plugin with a skill set that gives AI coding agents a single engineering pra
 
 ## Conventions
 
+- Every rule a skill states names its enforcer: a host setting, a hook, the review gate, or agent judgment. A rule enforced only by agent judgment is marked advisory and never promised as automatic.
 - Compose before you build. Before adding a capability, look for a native host command or a trusted published skill that already does it: a known organization or author, an OSI license, active maintenance, readable instructions, no hidden network or credential behavior. Point to it by name with its source and install command, keep a fallback in our skill that holds the same quality bar without it, and credit it in the README. Our skills own routing, depth, delegation, gates and conventions.
 - Every skill lives in `skills/fnl-<name>/SKILL.md`; the folder name equals the `name` field, and every name starts with `fnl-`. Skills refer to each other by their `fnl-` names.
 - Each skill folder is self-contained, so it works when installed alone through skills.sh: nothing in it points outside its own folder. A file two skills need is copied into both (CI checks the copies match); a skill that needs another names it as a dependency.
@@ -16,6 +17,7 @@ One plugin with a skill set that gives AI coding agents a single engineering pra
 - Content is generic: no organization, customer or personal names, and no machine paths. Examples use synthetic names.
 - All content is English.
 - Usage metrics hold metadata only and stay off until the user consents. A new event field goes through `SCHEMA` in `scripts/fnl_metrics.py` and `docs/specs/usage-metrics.md`, never carries prompt, code, command text or paths, and updates `PRIVACY.md`. A hook never blocks a session: it exits 0 and fails closed.
+- The update check is the one allowed network call: a detached worker makes a GET to the fixed public GitHub latest-release endpoint, sends nothing about the user, and stores only a timestamp and validated stable tag. It is on by default, separate from metrics consent; `FNL_UPDATE_CHECK=off` stops it. The session-start hook reads local state only, never waits for the worker, exits 0 and fails closed. See `docs/specs/update-check.md`.
 - The plugin's own data and config live under `~/.finolabs/vibecode/` (see `README.md`); a skill never hard-codes another location.
 
 ## Reviews
