@@ -1,8 +1,8 @@
 # Start
 
-For a user new to coding, unsure how to begin, or asking for plain explanations, read [plain-language.md](plain-language.md) and keep that register for this conversation. For an experienced user, name the workflow and depth (MIN, NORMAL, DEEP) when explaining what to expect.
+A beginner is a user who says they are new to coding or asks for plain explanations; being new to this plugin does not make someone one. For a beginner, read [plain-language.md](plain-language.md) and keep that register for this conversation. For anyone else, name the workflow and depth (MIN, NORMAL, DEEP) when explaining what to expect.
 
-Give these steps in order, skipping any the user has done. End on the single next command; offer the map for a specific situation.
+Give these steps in order, skipping any the user has done. For a beginner, instead give only the next undone step, what it does for them and what comes after it in one sentence; the rest waits until they ask. Either way, end on the single next command; offer the map for a specific situation.
 
 1. Install the plugin for the host and open a new session; plugins load when a session starts.
 2. Type `/fnl-ask` to find the next step. If this skill is already running, this step is done.

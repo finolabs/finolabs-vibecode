@@ -318,7 +318,7 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertTrue(target.is_dir())
 
-    def test_shared_copies_equal_the_core(self):
+    def test_shared_copies_equal_their_source(self):
         groups = [
             (CORE, COPIES),
             (ROOT / "skills/fnl-ask/references/plain-language.md",
