@@ -54,6 +54,7 @@ class DashboardPageTest(unittest.TestCase):
 
     def test_it_reads_only_the_sibling_data_file(self):
         self.assertIn('<script src="data.js"></script>', self.text)
+        self.assertIn('"data.js?t="', self.text)
         self.assertIn("window.FNL_DATA", self.text)
 
     def test_the_sample_data_has_exactly_the_keys_refresh_writes(self):
@@ -83,9 +84,14 @@ class DashboardScriptTest(unittest.TestCase):
     """Runs the page's own script in node against a small fake DOM."""
 
     @staticmethod
-    def render(data=None):
+    def render(data=None, scenario=None):
         node = shutil.which("node") or "/opt/homebrew/bin/node"
-        args = [node, str(RUNNER), str(PAGE)] + ([str(data)] if data else [])
+        args = [node, str(RUNNER), str(PAGE), str(data) if data else ""]
+        if scenario is not None:
+            handle = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+            json.dump(scenario, handle)
+            handle.close()
+            args.append(handle.name)
         done = subprocess.run(args, capture_output=True, text=True, timeout=30)
         if done.returncode:
             raise AssertionError(done.stderr[-800:])
@@ -130,6 +136,44 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertIn("7 tasks kept", out["text"])
         self.assertIn("1 implementation run handed off", out["text"])
         self.assertIn("no data: no finished runs in this period", out["text"])
+
+    def sample(self):
+        return json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+    def test_a_visible_tab_polls_every_five_seconds_and_redraws_new_numbers(self):
+        changed = self.sample()
+        changed["sessions"]["with_edits"] = 98765
+        out = self.render(FIXTURE, {"next": changed})
+        self.assertEqual(out["poll_ms"], [5000])
+        self.assertEqual(len(out["loads"]), 1)
+        self.assertRegex(out["loads"][0], r"^data\.js\?t=\d+$")
+        self.assertTrue(out["redrawn"])
+        self.assertIn("with edits 98765", out["text"])
+
+    def test_a_new_build_with_the_same_numbers_only_updates_the_generated_time(self):
+        same = self.sample()
+        same["generated"] = "2099-01-01T00:00:00+07:00"
+        out = self.render(FIXTURE, {"next": same})
+        self.assertFalse(out["redrawn"])
+        self.assertIn("generated 2099-01-01T00:00:00+07:00", out["text"])
+
+    def test_a_hidden_tab_loads_nothing(self):
+        changed = self.sample()
+        changed["sessions"]["with_edits"] = 98765
+        out = self.render(FIXTURE, {"hidden": True, "next": changed})
+        self.assertEqual(out["loads"], [])
+        self.assertNotIn("98765", out["text"])
+
+    def test_a_failed_load_keeps_the_page_and_the_next_poll_tries_again(self):
+        out = self.render(FIXTURE, {"fail": True, "ticks": 2})
+        self.assertEqual(len(out["loads"]), 2)
+        self.assertFalse(out["redrawn"])
+        self.assertIn("fnl-coding-router", out["text"])
+
+    def test_the_empty_page_draws_the_data_once_it_arrives(self):
+        out = self.render(None, {"next": self.sample()})
+        self.assertNotIn("No data yet", out["text"])
+        self.assertIn("fnl-coding-router", out["text"])
 
 
 if __name__ == "__main__":

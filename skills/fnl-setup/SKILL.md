@@ -6,9 +6,11 @@ disable-model-invocation: true
 
 # Set up finolabs-vibecode
 
-Prepare this machine and repository so the `fnl-` skills work as written. Explore, grill the user to settle each choice, confirm, then write.
+Prepare this machine and repository so the `fnl-` skills work as written. Explore, settle the user's choices, confirm, then write.
 
-Let the user choose the mode first: **detailed** interviews each section, **quick** asks every decision once with its recommended default and writes after one confirmation, except that consent to send data to a service (the route judge) is always asked on its own and never bundled. In quick mode, leave unsettled any item the findings cannot fill and name it in the report; the skill that later needs it, given the repository's context, asks the user once. Run setup again only when an agent on the machine is added or changed, or a new plugin version adds a field to the host template; it updates in place.
+Before the mode choice, offer the beginner path once in plain words: "Would you like a simpler setup? It leaves settings for other AI helpers, review tools and extra skills until later." Start it only when the user says they are new to coding or accepts the offer. Otherwise let the user choose the mode: **detailed** interviews each section, **quick** asks every decision once with its recommended default and writes after one confirmation, except that consent to send data to a service (the route judge) is always asked on its own and never bundled. In quick mode, leave unsettled any item the findings cannot fill and name it in the report; the skill that later needs it, given the repository's context, asks the user once. Run setup again only when an agent on the machine is added or changed, a new plugin version adds a field to the host template, or the user wants a skipped section; it updates in place.
+
+**Beginner path.** Read [references/plain-language.md](references/plain-language.md) and follow its register for this conversation. Use Quick instead of the detailed interview below. Ask only for a final yes to the shown changes. Ask one question at a time; skip a question whose answer is already known. Take the recommended default for the rest, and leave out section C's optional low-risk lane line. Tell the user this path skips A (host config for delegation), E (review tools), F (usage metrics, left off) and G (companions), and that they can run those sections later. End with the handover in section 4.
 
 ## 1. Explore
 
@@ -50,13 +52,13 @@ This repository uses the finolabs-vibecode skills. Start coding work with `fnl-c
 
 Offer the optional lane line only for a repository with one owner, and say that the script, not an agent, decides which pull requests qualify; leave it out where several people write. The lane covers edits to the root documents written for people (README, changelog, contributing, conduct, security, privacy, terms) and version bumps in the three plugin manifests, never agent context files, skills, agents or rules; its script decides which pull requests qualify. A README's install steps are in the lane: the one reviewer reads them as text agents follow, and an outside author still needs the owner's approving review.
 
-**D. User-scoped instructions**. When the findings show no user-scoped instructions, or ones that restate coding rules the plugin now covers, recommend that the user type `/fnl-setup-instructions` after this setup. That skill interviews them and writes their working contract for every host; this one only points to it.
+**D. User-scoped instructions**. When the findings show no user-scoped instructions, or ones that restate coding rules the plugin now covers, record the need for the handover in section 4. `fnl-setup-instructions` interviews them and writes their working contract for every host; this one only points to it.
 
 **E. Review tools**. The `fnl-reviewer` and `fnl-security-reviewer` agents run these instruments as their engine, so a review meets the standard only where they are installed. For each one the findings show missing, strongly recommend installing it and give the command: for `security-audit`, `npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit`; for a host's native review, the host's own update or install path, checked against its docs. Install nothing yourself. Until a tool is installed, the reviewers work by hand and say so in each report.
 
 **F. Usage metrics** (optional; skip when the hooks are not installed). Offer to record usage metadata so the user can see how the practice performs on their own machine. Say, in this order: what is recorded (a time, a session id, a short repository code, a skill or agent name, the router's depth, a review verdict, the number of tasks a coordinator kept with a fixed reason and who settled it; never prompts, code, command text or file paths), where it lives (the state folder on this machine, readable only by the user), that nothing leaves the machine and the dashboard is a local page, and that it stays off until they say yes and `FNL_METRICS=off` turns it off at any time. Then ask for consent and the retention (30, 90 or 365 days, recommend 90) as one question of its own, never bundled with another. Claude Code records skill and agent use, first edits, commits, review comments, the router's depth and keep receipts; Codex records sessions, first edits, commits, review comments, the router's depth and keep receipts (it reports no skill or agent use), and the user must also trust the plugin's hooks once, with `/hooks`, or they stay off. Antigravity records the same events as Codex, but its hook is not part of the plugin, because a plugin hook's working folder is unverified: with the user's clear yes, after showing what it adds, run `python3 -I <fnl-status folder>/scripts/refresh.py antigravity-hook --yes`. It merges one group, `finolabs-vibecode`, into `~/.gemini/config/hooks.json` with an absolute path to the script, leaves every other group alone and keeps a backup of the file; `--remove` takes it out. The command refuses unless the skill sits inside the `finolabs-vibecode` plugin, so a hook script from some other folder is not written into the user's config by mistake. That file is shared Gemini configuration, so never run it unasked. A declined or skipped section leaves everything off.
 
-**G. Companion skills**. Read [references/companions.md](references/companions.md) and recommend each missing skill whose condition the findings match, with its install commands. Install nothing yourself.
+**G. Companion skills**. Read [references/companions.md](references/companions.md) and record each missing skill whose condition the findings match for the handover in section 4. Install nothing yourself.
 
 ## 3. Confirm and write
 
@@ -67,3 +69,11 @@ When the findings show a knowledge base, also record the settled decisions there
 ## 4. Report
 
 List each file written, each item skipped and why, and anything left for the user (for example installing the plugin on another host, using the commands in the plugin's README).
+
+At the end of setup, say an **After your first result** list to the user, marking the Codex instructions step as immediate:
+
+- When section D recorded the need, type `/fnl-setup-instructions` to set how the assistants work with you. On Codex, instead type `$fnl-setup-instructions` immediately after setup, before the first task, so it follows the coding router.
+- Consider each missing companion whose condition the findings match in [references/companions.md](references/companions.md), with its install commands. Include these reminders even when the beginner path skipped section G.
+- For the beginner path, revisit the skipped sections listed above by running setup again when needed. Usage metrics stay off until the user runs section F, which explains what is recorded and, on Codex and Antigravity, the hook step that turns recording on.
+
+End by pointing to the immediate instructions step on Codex; on other hosts, ask the user to describe what they want to build.
