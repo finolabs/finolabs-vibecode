@@ -13,10 +13,19 @@ SETTINGS = {"delegation_mode": ("Delegation mode", "FNL_DELEGATION_MODE", {"manu
 MAX_BYTES = 262144
 
 
+def config_path():
+    """The override, else the default file, else the older XDG file while only that one exists."""
+    explicit = os.environ.get("ORCHESTRATION_HOST_CONFIG")
+    path = Path(os.path.abspath(os.path.expanduser(explicit or "~/.finolabs/vibecode/host.md")))
+    if not explicit and not os.path.lexists(path):
+        xdg = os.environ.get("XDG_CONFIG_HOME") or "~/.config"
+        return Path(os.path.abspath(os.path.expanduser(xdg))) / "finolabs-vibecode/host.md"
+    return path
+
+
 def host_text():
     """Bounded regular Markdown file only; refuse symlinks in every component."""
-    path = Path(os.path.abspath(os.path.expanduser(os.environ.get(
-        "ORCHESTRATION_HOST_CONFIG", "~/.finolabs/vibecode/host.md"))))
+    path = config_path()
     if path.suffix.lower() != ".md" or any(
         p.lower().startswith((".env", "credentials", "secrets")) or
         p.lower() in {".aws", ".ssh", ".gnupg"} for p in path.parts

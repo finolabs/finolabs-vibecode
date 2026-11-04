@@ -44,6 +44,17 @@ class DelegationModeTest(unittest.TestCase):
         self.env.update(FNL_DELEGATION_MODE="auto", FNL_ROUTING="on")
         self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "on"})
 
+    def test_legacy_config_counts_only_while_the_new_file_is_absent(self):
+        legacy = self.home / ".config/finolabs-vibecode/host.md"
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text("## Delegation mode\nauto\n## Routing\noff\n")
+        self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "off"})
+        self.env["XDG_CONFIG_HOME"] = str(self.home / "xdg")
+        self.assertEqual(self.values(), DEFAULTS)
+        del self.env["XDG_CONFIG_HOME"]
+        self.config.write_text("## Limits\n")
+        self.assertEqual(self.values(), DEFAULTS)
+
     def test_override_path(self):
         custom = self.home / "custom.md"
         custom.write_text("## Delegation mode\nauto\n## Routing\noff\n")
