@@ -167,10 +167,17 @@ class RefreshTest(unittest.TestCase):
         for extra in (["--agent", "codex"], ["--agent", "codex", "--reason", "fallback-quota"],
                       ["--agent", "codex", "--reason", "fallback-failure"], ["--agent", "subagent"]):
             subprocess.run([sys.executable, "-I", str(LEDGER), *base, *extra], check=True, env=self.env, capture_output=True)
+        self.write_events([self.event(9, "k", X, "first_edit")])
         self.refresh("run")
         self.assertEqual(self.data()["kept"]["handed_off"], 2)
 
     def test_without_consent_no_zero_is_shown_for_kept_work(self):
+        self.fixture_ledger()
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
+    def test_with_consent_but_no_hook_running_no_zero_is_shown_for_kept_work(self):
+        self.consent()
         self.fixture_ledger()
         self.refresh("run")
         self.assertIsNone(self.data()["kept"])

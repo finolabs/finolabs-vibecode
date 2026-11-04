@@ -3,7 +3,7 @@
 
 The command records nothing itself. When the user has turned usage metrics on, the plugin's
 hook reads this command after it runs and records the count, the reason and who settled it
-with the session. The values match the `kept` event in fnl_metrics.py, in the plugin's scripts folder.
+with the session.
 """
 
 import argparse
@@ -22,7 +22,7 @@ def task_count(value):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    keep = sub.add_parser("keep", help="print the keep receipt")
+    keep = sub.add_parser("keep", help="print the keep receipt", allow_abbrev=False)  # the hook reads full flag names
     keep.add_argument("--tasks", required=True, type=task_count, help="how many tasks you kept for this reason")
     keep.add_argument("--reason", required=True, choices=REASONS)
     keep.add_argument("--route-by", default="table", choices=ROUTE_BY)

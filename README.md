@@ -149,11 +149,11 @@ npx skills add https://github.com/cloudflare/security-audit-skill --skill securi
 
 ## Usage metrics
 
-Off until you say yes in `fnl-setup` (section F), where you also pick how long events are kept: 30, 90 or 365 days. Hooks then record metadata about your own sessions on your machine: a time, a session id, a short code derived from the repository path, the name of an `fnl-` skill or agent that ran, the router's depth, and a review verdict. They never record prompts, code, command text, file paths or review text, and nothing is sent anywhere ([PRIVACY.md](PRIVACY.md)). `fnl-status` opens the dashboard drawn from them.
+Off until you say yes in `fnl-setup` (section F), where you also pick how long events are kept: 30, 90 or 365 days. Hooks then record metadata about your own sessions on your machine: a time, a session id, a short code derived from the repository path, the name of an `fnl-` skill or agent that ran, the router's depth, a review verdict, and the number of tasks a coordinator kept with a fixed reason and who settled it. They never record prompts, code, command text, file paths or review text, and nothing is sent anywhere ([PRIVACY.md](PRIVACY.md)). `fnl-status` opens the dashboard drawn from them.
 
 | Host | What is recorded |
 | --- | --- |
-| Claude Code | sessions, skill and agent use, first edits, commits, review comments, the router's depth |
+| Claude Code | sessions, skill and agent use, first edits, commits, review comments, the router's depth, keep receipts |
 | Codex | the same without skill and agent use; trust the hooks once with `/hooks` |
 | Antigravity | the same as Codex; its hook is not part of the plugin, and setup adds it to your own `~/.gemini/config/hooks.json` only after a clear yes (`refresh.py antigravity-hook`, with a backup; `--remove` takes it out) |
 

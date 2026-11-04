@@ -92,7 +92,7 @@ def kept_metrics(events, by_sid, handed_off):
             group = groups[(host, e["reason"], e["route_by"])]
             group[0] += 1
             group[1] += e["tasks"]
-    if not groups and not (handed_off and fm.enabled()):  # with recording off, no receipt does not mean nothing was kept
+    if not groups and not (handed_off and events and fm.enabled()):  # with nothing recording, no receipt does not mean nothing was kept
         return None
     rows = [{"coordinator": c, "reason": r, "route_by": b, "receipts": n, "tasks": t} for (c, r, b), (n, t) in sorted(groups.items())]
     return {"receipts": sum(r["receipts"] for r in rows), "tasks": sum(r["tasks"] for r in rows), "handed_off": handed_off, "rows": rows}
