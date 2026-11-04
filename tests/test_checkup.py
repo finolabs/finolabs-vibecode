@@ -160,6 +160,21 @@ class CheckupTest(unittest.TestCase):
         for rows in [*data["hosts"].values(), data["setup"]]:
             self.assertTrue(all(r["status"] in {"ok", "missing", "unverified"} for r in rows))
 
+    def test_legacy_host_config_counts_only_while_new_file_is_absent(self):
+        headings = "\n".join("## " + h for h in sorted(checkup.HEADINGS))
+        legacy = self.write(self.home / ".config/finolabs-vibecode/host.md", headings)
+        self.env.pop("XDG_CONFIG_HOME", None)
+        self.assertEqual(self.setup_item("host config")["status"], "ok")
+        self.write(self.home / ".finolabs/vibecode/host.md", "## Limits\n")
+        self.assertEqual(self.setup_item("host config")["status"], "missing")
+        legacy.unlink()
+
+    def test_review_adoption_inside_the_generated_paragraph(self):
+        skill = (ROOT / "skills/fnl-setup/SKILL.md").read_text()
+        paragraph = next(line for line in skill.splitlines() if line.startswith("This repository uses the finolabs-vibecode skills."))
+        self.write(self.repo / "AGENTS.md", "## Agent skills\n\n" + paragraph + "\n")
+        self.assertEqual(self.setup_item("review adoption")["status"], "ok")
+
     def test_repo_adoption_and_user_instruction_pointers(self):
         self.write(self.repo / "CLAUDE.md", "## Agent skills\n\n"
                    "Pull requests follow `fnl-review-gate` \"Pull requests\".\n")
