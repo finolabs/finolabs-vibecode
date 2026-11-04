@@ -524,6 +524,11 @@ td.r, th.r { text-align: right; }
     });
     dl = stack([h("div", "dl", rows), legend([["first pass at or above 60%", "var(--good)"], ["below 60%", "var(--crit)"], ["open ring: fewer than 5 runs", "var(--faint)"]])]);
   }
+  if (D.kept) {
+    var plural = function (n, word) { return n + " " + word + (n === 1 ? "" : "s"); };
+    var keptLine = t("p", "meta", plural(D.kept.tasks, "task") + " kept by the coordinator in " + plural(D.kept.receipts, "receipt") + (D.kept.handed_off == null ? "" : "; " + plural(D.kept.handed_off, "implementation run") + " handed off"));
+    dl = stack([keptLine, dl || t("div", "nodata", "no data: " + (missing("delegation") || "ledger is empty"))]);
+  }
   app.appendChild(pane("delegation", "from the dispatch ledger", "wide", dl, missing("delegation") || "ledger is empty", "dl"));
 
   /* Tables twin, sources and footer */
@@ -532,6 +537,7 @@ td.r, th.r { text-align: right; }
   if (D.load && D.load.top) tabs.push(tableOf("load (estimate)", ["skill", "tokens", "loads"], D.load.top.map(function (x) { return [x.name, x.tokens, x.loads]; })));
   if (D.depth) tabs.push(tableOf("depth", ["depth", "receipts", "reworked"], D.depth.map(function (x) { return [x.depth, x.receipts, x.reworked]; })));
   if (D.delegation) tabs.push(tableOf("delegation", ["agent / model / grade", "runs", "first pass", "quota", "error", "median min", "rework"], D.delegation.map(function (x) { return [x.agent + " / " + x.model + " / " + x.grade, x.runs, pct(x.first_pass), x.quota, x.error, x.median_min, x.rework]; })));
+  if (D.kept && D.kept.rows.length) tabs.push(tableOf("kept by the coordinator", ["coordinator / reason / settled by", "receipts", "tasks"], D.kept.rows.map(function (x) { return [x.coordinator + " / " + x.reason + " / " + x.route_by, x.receipts, x.tasks]; })));
   if (D.reviews) tabs.push(tableOf("reviews", ["pr", "verdicts"], D.reviews.map(function (x) { return [x.repo + " #" + x.pr, x.verdicts.join(" → ")]; })));
   if (act.length) {
     var wk = [];

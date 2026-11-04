@@ -150,6 +150,94 @@ class RefreshTest(unittest.TestCase):
         self.refresh("run")
         self.assertEqual(self.data()["missing"]["use"], "no fnl- skill or agent used in this period")
 
+    def test_kept_work_is_counted_beside_the_implementation_runs_handed_off(self):
+        self.consent()
+        self.fixture_ledger()
+        start = {"host": "codex", "dispatch": None, "source": "startup"}
+        self.write_events([self.event(9, "k", X, "session_start", **start),
+                           self.event(8, "k", X, "kept", tasks=2, reason="needs-context", route_by="table"),
+                           self.event(7, "k", X, "kept", tasks=3, reason="needs-context", route_by="table"),
+                           self.event(6, "m", X, "kept", tasks=2, reason="user-choice", route_by="user")])
+        self.refresh("run")
+        kept = self.data()["kept"]
+        self.assertEqual((kept["receipts"], kept["tasks"], kept["handed_off"]), (3, 7, 2))
+        self.assertEqual(kept["rows"], [
+            {"coordinator": "codex", "reason": "needs-context", "route_by": "table", "receipts": 2, "tasks": 5},
+            {"coordinator": "unknown", "reason": "user-choice", "route_by": "user", "receipts": 1, "tasks": 2}])
+
+    def test_the_hand_off_count_leaves_out_subagents_and_reroutes_after_a_failure(self):
+        self.consent()
+        base = ["start", "--project", "demo", "--task", "t", "--kind", "implement", "--grade", "easy", "--model", "m", "--budget", "20"]
+        for extra in (["--agent", "codex"], ["--agent", "codex", "--reason", "fallback-quota"],
+                      ["--agent", "codex", "--reason", "fallback-failure"], ["--agent", "subagent"]):
+            subprocess.run([sys.executable, "-I", str(LEDGER), *base, *extra], check=True, env=self.env, capture_output=True)
+        self.write_events([self.event(9, "k", X, "first_edit")])
+        self.refresh("run")
+        self.assertEqual(self.data()["kept"]["handed_off"], 2)
+
+    def test_without_consent_no_zero_is_shown_for_kept_work(self):
+        self.fixture_ledger()
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
+    def fixture_old_implementation_starts(self):
+        starts = [{"event": "start", "id": "old-%d" % age,
+                   "ts": (self.at - timedelta(days=age)).isoformat(),
+                   "project": "demo", "task": "t", "kind": "implement", "grade": "easy",
+                   "agent": "codex", "model": "m", "reason": "routing"}
+                  for age in range(40, 50)]
+        self.ledger.write_text("".join(json.dumps(s) + "\n" for s in starts))
+
+    def test_old_handoffs_do_not_imply_zero_kept_since_consent_today(self):
+        self.consent("30")
+        self.write_events([self.event(0, "k", X, "first_edit")])
+        self.fixture_old_implementation_starts()
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
+    def test_handoffs_after_the_first_available_event_still_count(self):
+        self.consent("30")
+        self.write_events([self.event(0, "k", X, "first_edit"),
+                           self.days_ago(2, "k", X, "first_edit")])
+        self.fixture_old_implementation_starts()
+        self.fixture_ledger()
+        self.refresh("run")
+        kept = self.data()["kept"]
+        self.assertEqual((kept["tasks"], kept["handed_off"]), (0, 2))
+
+    def test_handoff_window_uses_local_dates_at_the_first_event(self):
+        self.env["TZ"] = "Asia/Ho_Chi_Minh"
+        self.at = datetime.now(timezone(timedelta(hours=7))).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+        self.consent("30")
+        self.write_events([self.event(0, "k", X, "first_edit")])
+        starts = [{"event": "start", "id": "local-%d" % hour,
+                   "ts": (self.at + timedelta(hours=hour)).astimezone(timezone.utc).isoformat(),
+                   "project": "demo", "task": "t", "kind": "implement", "grade": "easy",
+                   "agent": "codex", "model": "m", "reason": "routing"}
+                  for hour in (-1, 1)]
+        self.ledger.write_text("".join(json.dumps(s) + "\n" for s in starts))
+        self.refresh("run")
+        self.assertEqual(self.data()["kept"]["handed_off"], 1)
+
+    def test_with_consent_but_no_hook_running_no_zero_is_shown_for_kept_work(self):
+        self.consent()
+        self.fixture_ledger()
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
+    def test_purge_removes_kept_work_with_the_other_events(self):
+        self.consent()
+        self.write_events([self.event(8, "k", X, "kept", tasks=2, reason="no-delegate", route_by="table")])
+        self.refresh("run")
+        self.assertEqual(self.data()["kept"]["tasks"], 2)
+        self.refresh("purge", "--yes")
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
+    def test_kept_work_stays_null_when_the_ledger_holds_neither_side(self):
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
     def test_a_malformed_ledger_line_does_not_stop_the_refresh(self):
         self.consent()
         start = {"event": "start", "id": "d1", "ts": "garbage", "project": "p", "task": "t", "kind": "implement",

@@ -26,11 +26,15 @@ START = r"(?:^|[;&|(\n])[ \t]*(?:\w+=\S+[ \t]+)*"
 COMMIT = re.compile(START + r"git(?:[ \t]+(?:-[cC][ \t]+(?:\"[^\"]*\"|'[^']*'|[^\s\"']\S*)|--[\w-]+(?:=\S+)?))*[ \t]+commit(?![\w-])")
 GH_COMMENT = re.compile(START + r"gh[ \t]+pr[ \t]+comment\b([^;&|\n]*)")
 ROUTER = re.compile(START + r"(?:python3?(?:[ \t]+-\S+)*[ \t]+)?[\"']?[^\s\"']*record\.py[\"']?[ \t]+router\b")
+KEEP = re.compile(START + r"(?:python3?(?:[ \t]+-\S+)*[ \t]+)?[\"']?(?:[^\s\"']*/)?record\.py[\"']?[ \t]+keep\b([^;&|)\n]*)")
 MARKER_TEXT = r"<!-- fnl-review kind=(code|security) head=[0-9a-f]{7,40} verdict=(APPROVE|REWORK)(?: lane=yes)? -->"
 MARKER = re.compile("^" + MARKER_TEXT)
 MARKER_LINE = re.compile("^" + MARKER_TEXT, re.M)
 DEPTH = re.compile(r"--depth[\s=]+([A-Z]+)\b")
 TRIGGER = re.compile(r"--trigger[\s=]+([a-z-]+)\b")
+TASKS = re.compile(r"--tasks[\s=]+(\d{1,3})(?!\S)")
+REASON = re.compile(r"--reason[\s=]+([a-z-]+)(?!\S)")
+ROUTED = re.compile(r"--route-by[\s=]+(\S+)")
 VALUE_FLAGS = {"--repo", "-R", "--body", "-b", "--body-file", "-F"}
 REFRESH = Path(__file__).resolve().parent.parent / "skills/fnl-status/scripts/refresh.py"
 REFRESH_EVERY = 10  # seconds between rebuilds while tools run, so an open dashboard stays current
@@ -210,6 +214,14 @@ def post_tool_use(sid, cwd, tool, data):
             depth, trigger = DEPTH.search(command), TRIGGER.search(command)
             if depth and trigger and depth.group(1) in fm.DEPTHS and trigger.group(1) in fm.TRIGGERS:
                 fm.record("router", sid, cwd, depth=depth.group(1), trigger=trigger.group(1))
+        if "record.py" in command and "<<" not in command:  # text inside a heredoc never ran
+            for keep in KEEP.finditer(command):  # one receipt per command, each read from its own arguments
+                args = keep.group(1)
+                tasks, reason, routed = TASKS.search(args), REASON.search(args), ROUTED.search(args)
+                fields = {"tasks": int(tasks.group(1)) if tasks else 0, "reason": reason.group(1) if reason else "",
+                          "route_by": routed.group(1) if routed else "table"}
+                if all(check(fields[key]) for key, check in fm.SCHEMA["kept"].items()):
+                    fm.record("kept", sid, cwd, **fields)
 
 
 def main():

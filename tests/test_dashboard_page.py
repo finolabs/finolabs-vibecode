@@ -99,7 +99,9 @@ class DashboardScriptTest(unittest.TestCase):
 
     def test_the_sample_data_draws_every_chart_without_an_error(self):
         out = self.render(FIXTURE)
-        for expected in ("Router coverage", "events per day", "October 2026", "skill and agent use", "fnl-coding-router"):
+        for expected in ("Router coverage", "events per day", "October 2026", "skill and agent use", "fnl-coding-router",
+                         "7 tasks kept by the coordinator in 3 receipts; 14 implementation runs handed off",
+                         "claude / needs-context / table"):
             self.assertIn(expected, out["text"])
         self.assertNotIn("No data yet", out["text"])
         self.assertGreaterEqual(out["cells"], 28)
@@ -121,6 +123,19 @@ class DashboardScriptTest(unittest.TestCase):
             out = self.render(path)
         self.assertIn("no data: no session with an edit in this period", out["text"])
         self.assertIn("fnl-coding-router", out["text"])
+
+    def test_kept_work_shows_even_when_no_dispatch_has_finished(self):
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        data["delegation"] = None
+        data["kept"]["handed_off"] = 1
+        data["missing"] = {"delegation": "no finished runs in this period"}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "data.json"
+            path.write_text(json.dumps(data), encoding="utf-8")
+            out = self.render(path)
+        self.assertIn("7 tasks kept", out["text"])
+        self.assertIn("1 implementation run handed off", out["text"])
+        self.assertIn("no data: no finished runs in this period", out["text"])
 
     def sample(self):
         return json.loads(FIXTURE.read_text(encoding="utf-8"))

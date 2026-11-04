@@ -37,7 +37,7 @@ Each is computed by the refresh script from the event store and the ledger; the 
 | Skill and agent use | Count of `skill` and `agent` events per `fnl-` name over the period (top ten), and calls per week. | Remove or fix what is never used. |
 | Load cost | Per session, the sum of bytes of `SKILL.md` for each `skill` event, divided by four, labeled as an estimate. | Trim a skill that is loaded often and rarely acted on. |
 | Depth vs outcome | Per router receipt, the depth, and whether the next pull request in that repository got a `REWORK` verdict before merge. Indicative only: the join is by repository and time, not by session. | Thresholds too loose when `MIN` work is reworked often. |
-| Delegation | `ledger.py summary` per agent, model and grade: first-pass acceptance, quota and error rates, rework rounds. Groups under five runs show counts without comment. | Reroute or change budgets. |
+| Delegation | `ledger.py summary` per agent, model and grade: first-pass acceptance, quota and error rates, rework rounds. Groups under five runs show counts without comment. Beside them, the tasks coordinators kept (`kept` events, per coordinator, reason and who settled it) and the implementation runs handed off in the period, without in-session subagents and reroutes after a failed run. Only a recorded receipt counts, so a skipped check still shows nothing. | Reroute or change budgets; a kept count growing on one reason says which rule or brief to change. |
 | Review gate | Per pull request: review verdicts in order. Share of pull requests that took at least one `REWORK`. | Briefs or acceptance criteria too thin. |
 
 ## Event store
@@ -55,6 +55,7 @@ Common fields: `ts` (UTC, ISO 8601), `sid` (the host's session id), `repo` (firs
 | `commit` | none | hook after `Bash`, only when the command contains `git commit` |
 | `review` | `kind` (`code` or `security`), `verdict` (`APPROVE` or `REWORK`), `pr` (number) | hook after `Bash`, only when the command posts a comment (`gh pr comment`) whose body (a file, `--body`, or a heredoc on stdin) starts with a `fnl-review` marker line |
 | `router` | `depth` (`MIN`, `NORMAL`, `DEEP`), `trigger` (one value from a fixed list in the router skill) | hook after `Bash`, when the command is the router's `record.py router --depth D --trigger T`. The command only prints a receipt; the hook records it with the session id, which the router does not have. |
+| `kept` | `tasks` (1 to 999), `reason` (one value from a fixed list), `route_by` (`table`, `judge`, `user`) | hook after `Bash`, when the command is `fnl-delegate`'s `record.py keep --tasks N --reason R [--route-by B]`, which only prints a receipt. |
 
 Rules the writer enforces, so a hook bug cannot widen what is stored:
 
@@ -80,6 +81,8 @@ Plugin-level, not inside a skill: they only exist when the whole plugin is insta
 ## Setup, consent and retention
 
 `fnl-setup` gains a section that, in this order, states what is recorded and where, states that the dashboard is a local page and that nothing leaves the machine, asks for consent, asks the retention (30, 90, 365 days), and writes `consent.json` with the date and the retention. Consent is asked on its own and never bundled, like the route judge. Declining leaves everything off and the dashboard still shows the ledger.
+
+A new event containing only counts or values from a closed set needs no fresh consent if it stays local under the existing retention, purge and revoke controls and is listed in `PRIVACY.md`, `fnl-setup` section F and `fnl-status`; adding free text, paths, command text or anything sent off the machine requires fresh consent with a consent version.
 
 Retention: on each `session_start` the writer deletes event files that end before the retention window, drops the older lines from the file the window cuts through, and deletes marker files older than seven days. `fnl-status purge` deletes the whole store, `data.js` and `dashboard.html` after one confirmation.
 

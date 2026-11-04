@@ -275,6 +275,65 @@ class HookTest(unittest.TestCase):
                              capture_output=True, text=True)
         self.assertNotEqual(bad.returncode, 0)
 
+    def test_the_keep_receipt_command_is_recorded_with_fixed_values_only(self):
+        self.consent()
+        base = 'python3 -I "/a/skills/fnl-delegate/scripts/record.py" keep '
+        self.post("Bash", {"command": base + "--tasks 3 --reason needs-context"})
+        self.post("Bash", {"command": base + "--tasks=2 --reason=user-choice --route-by=user"})
+        self.post("Bash", {"command": base + "--tasks 0 --reason needs-context"})
+        self.post("Bash", {"command": base + "--tasks 3 --reason because-the-parser-is-hard"})
+        self.post("Bash", {"command": base + "--tasks 3 --reason no-delegate --route-by me"})
+        self.post("Bash", {"command": "echo record.py keep --tasks 3 --reason no-delegate"})
+        got = [(e["event"], e["tasks"], e["reason"], e["route_by"]) for e in self.events()]
+        self.assertEqual(got, [("kept", 3, "needs-context", "table"), ("kept", 2, "user-choice", "user")])
+        self.assertEqual(set(self.events()[0]), {"ts", "sid", "repo", "event", "tasks", "reason", "route_by"})
+
+    def test_invalid_route_by_never_defaults_to_table(self):
+        self.consent()
+        keep = "python3 -I record.py keep --tasks 3 --reason no-delegate "
+        for value in ("route-judge", "user1", "USER", "table_extra"):
+            with self.subTest(route_by=value):
+                self.post("Bash", {"command": keep + "--route-by " + value})
+                self.post("Bash", {"command": keep + "--route-by=" + value})
+                self.assertEqual(self.events(), [])
+
+    def test_the_keep_receipt_is_not_recorded_without_consent(self):
+        self.post("Bash", {"command": "python3 -I record.py keep --tasks 3 --reason needs-context"})
+        self.assertEqual(self.events(), [])
+
+    def test_the_keep_receipt_command_prints_one_line_and_offers_the_schema_values(self):
+        record = ROOT / "skills/fnl-delegate/scripts/record.py"
+        ok = subprocess.run([sys.executable, "-I", str(record), "keep", "--tasks", "2", "--reason", "no-delegate"],
+                            capture_output=True, text=True)
+        self.assertEqual((ok.returncode, ok.stdout.strip()), (0, "keep receipt: tasks=2 reason=no-delegate route_by=table"))
+        for bad in (["--tasks", "0", "--reason", "no-delegate"], ["--tasks", "2", "--reason", "other"],
+                    ["--tasks", "2", "--reason", "no-delegate", "--route-by", "me"], ["--task", "2", "--rea", "no-delegate"]):
+            self.assertNotEqual(subprocess.run([sys.executable, "-I", str(record), "keep", *bad], capture_output=True).returncode, 0, bad)
+        spec = importlib.util.spec_from_file_location("fnl_keep_record", record)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual((module.REASONS, module.ROUTE_BY), (fm.KEPT_REASONS, fm.ROUTE_BY))
+
+    def test_each_keep_receipt_is_read_from_its_own_arguments(self):
+        self.consent()
+        keep = 'python3 -I /a/scripts/record.py keep '
+        start = 'python3 -I /a/scripts/ledger.py start --reason routing --route-by judge --budget 5 --tasks 7 && '
+        self.post("Bash", {"command": keep + "--tasks 2 --reason needs-context && " + keep + "--tasks 1 --reason no-delegate"})
+        self.post("Bash", {"command": keep + "--tasks 3 --reason hard-grade; echo done"})
+        self.post("Bash", {"command": start + keep + "--tasks 4 --reason user-choice --route-by user"})
+        self.post("Bash", {"command": start + keep + "--tasks 5 --reason no-delegate"})
+        self.post("Bash", {"command": keep + "--tasks 6 --reason no-delegate; other --tasks 7 --reason user-choice"})
+        got = [(e["tasks"], e["reason"], e["route_by"]) for e in self.events()]
+        self.assertEqual(got, [(2, "needs-context", "table"), (1, "no-delegate", "table"), (3, "hard-grade", "table"),
+                               (4, "user-choice", "user"), (5, "no-delegate", "table"), (6, "no-delegate", "table")])
+
+    def test_text_that_only_looks_like_a_keep_receipt_is_not_recorded(self):
+        self.consent()
+        self.post("Bash", {"command": "python3 myrecord.py keep --tasks 2 --reason no-delegate"})
+        self.post("Bash", {"command": "cat > note <<E\npython3 record.py keep --tasks 2 --reason no-delegate\nE"})
+        self.post("Bash", {"command": "python3 record.py keep --tasks 2"})
+        self.assertEqual(self.events(), [])
+
     def test_session_start_records_host_source_and_the_dispatch_marker(self):
         self.consent()
         self.run_hook({"hook_event_name": "SessionStart", "session_id": "s1", "cwd": str(self.repo), "source": "fork"},

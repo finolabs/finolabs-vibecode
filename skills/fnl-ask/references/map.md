@@ -42,6 +42,7 @@
 | `scripts/merge_check.py` | Checks a pull request's posted reviews before merge, and the low-risk lane. | `fnl-review-gate` |
 | `scripts/refresh.py` | Rebuilds the dashboard data; also consent and purge for usage metrics. | `fnl-status` |
 | `scripts/record.py` | Prints the router's depth receipt. | `fnl-coding-router` |
+| `scripts/record.py` | Prints a coordinator's keep receipt. | `fnl-delegate` |
 
 ## Rules
 
