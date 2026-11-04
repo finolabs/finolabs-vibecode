@@ -3,6 +3,7 @@
 | Situation | Skill | Companion skills and native commands |
 | --- | --- | --- |
 | New to the plugin, or not sure what it holds | this skill, "Start" or "Contents" | |
+| "Is it set up right?" or what happens automatically on this host | `/fnl-setup` Check mode | |
 | First time in this repository or on this machine | `/fnl-setup` | `/setup-matt-pocock-skills` if that pack is installed |
 | Writing or revising your own instructions for every agent and repository | `/fnl-setup-instructions` | |
 | Starting, resuming or redirecting coding work | `fnl-coding-router` | |
