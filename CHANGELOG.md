@@ -19,6 +19,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- `fnl-delegate`: under `suggest` the coordinator no longer asks the user to approve a session of its own kind (for example a Codex session in its own worktree started from Codex, or one a repository's rules require); that is the coordinator doing the work, and an offer names an agent of another family.
 - The three usage-metrics hook commands on Claude Code now end with `; exit 0`, as the Codex and update hooks already did, so a missing or broken script can never return a blocking exit code. A test pins the guard on every shipped hook command.
 - The update-check tests no longer depend on the manifest version, so a version bump cannot break them.
 
