@@ -1,6 +1,6 @@
 # Activity selection with a semantic evaluator
 
-Read this only when the host config (`fnl-delegate`) names a judge such as TypeSafe Jev. With one configured, take the judgments below from it first instead of reasoning them out yourself, which saves the host's own reasoning: the depth, the Spec Kit depth gate, and the next activity where host rules, accepted decisions and prerequisites have not settled it. The judge selects one activity inside the chosen workflow; it never chooses Spec Kit versus the fallback router and grants no execution authority. Exact lookups, arithmetic, permissions and schema checks stay with code and authoritative tools. Without a judge, the host decides these itself by the rules in `SKILL.md`. Reuse an equivalent valid judgment.
+Read this only when the host config (`fnl-delegate`) names a judge such as TypeSafe Jev. With one configured, take the judgments below from it first instead of reasoning them out yourself, which saves the host's own reasoning: the depth, the Spec Kit depth gate, and the next activity where host rules, accepted decisions and prerequisites have not settled it. The judge selects one activity inside the chosen workflow path; it never chooses the path and grants no execution authority. Exact lookups, arithmetic, permissions and schema checks stay with code and authoritative tools. Without a judge, the host decides these itself by the rules in `SKILL.md`. Reuse an equivalent valid judgment.
 
 ## Depth
 
@@ -8,7 +8,7 @@ Ask one choice over the goal, the touched areas and the risk flags: `MIN`, `NORM
 
 ## Depth gate questions
 
-When the five conditions of "Spec Kit depth gate" in `SKILL.md` leave the fit unclear, ask two narrow yes/no questions over the plan or story summary, acceptance criteria and touched areas: "fits one implementation pass" and "hides a cross-cutting risk". A yes to the first and a no to the second allows the direct path. Any other answer, or a judge that is unavailable or inconclusive, returns the decision to the host, which runs `speckit-tasks` when it cannot tell.
+When the five conditions of [workflows/speckit.md](workflows/speckit.md) "Spec Kit depth gate" leave the fit unclear, ask two narrow yes/no questions over the plan or story summary, acceptance criteria and touched areas: "fits one implementation pass" and "hides a cross-cutting risk". A yes to the first and a no to the second allows the direct path. Any other answer, or a judge that is unavailable or inconclusive, returns the decision to the host, which runs `speckit-tasks` when it cannot tell.
 
 ## 1. Build eligible candidates
 
@@ -41,7 +41,7 @@ Check the response against the evaluator schema, allowed IDs, a valid distributi
 | `NEED_EVIDENCE` | Name the missing fact; fetch it or ask a targeted question; pause only the dependent decision. |
 | Evaluator unavailable or inconclusive | Disclose it; apply a documented owner-approved fallback policy if one settles the choice, else leave it pending and continue independent work. Never claim the evaluator ran without a validated response. |
 
-Candidate examples, not a pipeline: a requirement gap maps to specify or clarify; a design gap to plan; decomposition to tasks; a moderate story that passes the depth gate to direct implementation; a reproducible unexplained failure to bounded debugging; ready approved tasks to implement. Analysis, convergence, verification and review need their own prerequisites. Without Spec Kit, map the same responsibilities to the fallback handlers.
+Candidate examples, not a pipeline: a requirement gap maps to specify or clarify; a design gap to plan; decomposition to tasks; a moderate story that passes the depth gate to direct implementation; a reproducible unexplained failure to bounded debugging; ready approved tasks to implement. Analysis, convergence, verification and review need their own prerequisites. Without Spec Kit, map the same responsibilities to the handlers of the active workflow adapter under `workflows/`.
 
 Record the state binding, eligible and excluded IDs with reasons, the response, distribution and model when called (as the adapter observed them; an agent's own "the evaluator ran" is not evidence), the disposition and the next stop condition. Permission to read a private source is not permission to send it to an evaluator. The evaluator cannot consent, prove facts, accept code or waive gates.
 
