@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- Shortened the plugin description to 147 characters, identical in the three manifests, to meet the catalog's 120-160 character standard (the 0.1.7 manifests carry a 199-character one). A unit test now pins both the length and the match across hosts.
+
 ## [0.1.7] - 2026-11-05
 
 ### Added
