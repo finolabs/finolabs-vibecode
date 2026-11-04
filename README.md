@@ -1,5 +1,32 @@
 # finolabs-vibecode
 
+**In plain words.** finolabs-vibecode is a safety and quality layer for your AI coding assistant (Claude Code, Codex or Antigravity). It makes the assistant decide how careful to be before it changes anything, get a second opinion on its work, check that it really runs, and tell you what happened in everyday words. You describe what you want; you do not need to know Git or use a terminal.
+
+## Start in 3 minutes (you)
+
+On Codex, use `$` instead of `/` for every skill command below. Claude Code and Antigravity use `/`.
+
+1. **Ask your AI assistant to install it.** Paste this into your assistant's chat: "Install https://github.com/finolabs/finolabs-vibecode for me, and explain each step before you do it."
+2. **Open a new chat.** Plugins load when a chat starts.
+3. **Type `/fnl-ask`.** (Claude Code may show it as `/finolabs-vibecode:fnl-ask`.) It tells you in plain words where to start, and you can ask it anything about the plugin.
+4. **Type `/fnl-setup` and choose Quick.** It asks a few plain questions and changes nothing without your yes.
+5. **Say what you want to build, in your own words.** For example: "I run a small shop and want a page that tracks my stock and turns red when an item runs low." The assistant plans it, builds it, checks it and tells you where to see it.
+6. **Later, once you have a first result:** type `/fnl-setup-instructions` to teach your assistants how you like to work (on Codex, type `$fnl-setup-instructions` right after step 4), and `/fnl-status` after a few chats to see how it is going.
+
+## Words you may see
+
+| You may see | It means |
+| --- | --- |
+| depth (MIN, NORMAL, DEEP) | how careful the assistant is being: a quick tweak, a normal change or a big one |
+| review, security review | a second pair of eyes before a change counts, and a safety check for private data and logins |
+| commit | a save point |
+| pull request | a proposal to add a change to a project |
+| branch, worktree | a separate copy to try things safely |
+| Spec Kit | a way of writing a plan before building |
+| delegate, agent | another AI helper |
+
+## For engineers
+
 One engineering practice for AI coding agents, packaged as a single plugin with a focused skill set. It tells an agent how to route a change, how deep to go, how to delegate to other agents and accept their work, how to commit, version and release, and which review and verification gates a change must pass.
 
 This pack owns the decisions between tools: routing, depth, delegation, gates and conventions. For the work itself it points to trusted skills and native commands from known publishers (Matt Pocock's skills, Cloudflare's security audit, Spec Kit, each host's own review commands) instead of rewriting them, and every such pointer carries a fallback that keeps the skill working when the companion is not installed.
@@ -36,14 +63,21 @@ You were given this repository's link to install it for the user. Follow these s
    | Other agents | `npx skills add finolabs/finolabs-vibecode -a <agent>` |
 
 5. **Verify** that `claude plugin list`, `codex plugin list` or `agy plugin list` shows `finolabs-vibecode`. Report the command output to the user, and report any failure as it is.
-6. **Hand over setup.** Plugins load when a session starts. Tell the user to open a new session and run setup: `/finolabs-vibecode:fnl-setup` on Claude Code, `$fnl-setup` on Codex, `/fnl-setup` on Antigravity. Only the user can start setup, because it interviews them before it writes host config and instructions. `/fnl-setup-instructions` does the same for their user-scoped instructions, and is optional.
-7. **Offer the companions, and install them only if the user agrees:** [Matt Pocock's skills](https://github.com/mattpocock/skills) and [Cloudflare's `security-audit`](https://github.com/cloudflare/security-audit-skill) (see [Works well with](#works-well-with)). Every skill works without them.
+6. **Hand over to the user.** Plugins load when a session starts. Tell the user, in one message and in this order: open a new session; type `/fnl-ask` (`/finolabs-vibecode:fnl-ask` on Claude Code, `$fnl-ask` on Codex); then `/fnl-setup` and choose Quick (`$fnl-setup` on Codex). Only the user can start these, because setup interviews them before it writes host config and instructions. Tell them `/fnl-setup-instructions` (their user-scoped instructions) comes after their first result, except on Codex, where it comes right after setup.
+7. **After the first result, offer the companions and install them only if the user agrees:** [Matt Pocock's skills](https://github.com/mattpocock/skills) and [Cloudflare's `security-audit`](https://github.com/cloudflare/security-audit-skill) (see [Works well with](#works-well-with)). Every skill works without them.
 
-Done when the plugin is listed by your host and the user knows to run setup in a new session.
+Done when the plugin is listed by your host and the user knows the order: `/fnl-ask`, `/fnl-setup` (Quick), a first real task, `/fnl-setup-instructions` (immediately after setup on Codex), then `/fnl-status` later.
+
+### For AI agents: working with a new user
+
+- **Start coding work with `fnl-coding-router`.** On Claude Code a session-start reminder prompts it and on Antigravity an always-on rule does; on Codex the user's instructions must point at it (`$fnl-setup-instructions`).
+- **A user who says they are new to coding or not technical** should type `/fnl-ask` first: it loads the plain-language register, and you keep it for the rest of that conversation. Suggest it once; never start setup for them.
+- **Speak in everyday words, lead with the result, and ask only the user's own decisions.** Every check and gate still runs; only the wording changes.
+
 
 ## Skills
 
-Every skill carries the `fnl-` prefix. The user types five of them, `fnl-setup`, `fnl-setup-instructions`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); the agent loads the others when the situation calls for them.
+Every skill carries the `fnl-` prefix. The user types five of them, `fnl-setup`, `fnl-setup-instructions`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff`, `fnl-advisor` and `fnl-committee` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` and `fnl-committee` for the user to approve, and loads the rest when the situation calls for them.
 
 | Skill | Use it when |
 | --- | --- |
@@ -127,14 +161,17 @@ Each skill works alone, except the delegation family: `fnl-handoff`, `fnl-adviso
 
 Ask your agent: "Route this change through the coding router and tell me the depth you chose." It should load `fnl-coding-router`.
 
-## Getting started
+## Getting started in detail
+
+The short version is "Start in 3 minutes" above; the order is `/fnl-ask`, `/fnl-setup`, a first real task, then `/fnl-setup-instructions` (right after setup on Codex) and `/fnl-status`.
 
 1. **Install** for your host (above), then open a new session: plugins load when a session starts.
-2. **Run setup once**: `/fnl-setup` (Claude Code, Antigravity) or `$fnl-setup` (Codex). Choose quick mode to accept the recommended defaults after one confirmation, or detailed mode to be asked about each part. It can set up delegation to other agents, keep `.finolabs/` out of git, add a short `## Agent skills` block to your `CLAUDE.md` or `AGENTS.md`, recommend review tools and companion skills, and offer the usage metrics. It installs nothing and writes nothing you have not confirmed. Everything optional can be skipped and run again later.
-3. **Work as you normally do.** Ask for a change; the agent starts coding work by loading `fnl-coding-router`, which names the workflow and the depth (MIN, NORMAL or DEEP) before it edits. On Claude Code a session-start reminder prompts this and on Antigravity an always-on rule does; on Codex, run `$fnl-setup-instructions` once so your own instructions point coding work at the router.
-4. **What you should see:** a stated depth and reason; commits written as `fnl-commit-messages` says; pull requests held for a posted code review and, when the change touches a sensitive boundary, a security review; and, if you set up delegation, other agents given bounded tasks whose results are checked before they are accepted.
-5. **When you do not know where to start, what the plugin holds, or how a skill works,** type `/fnl-ask`. To see how the practice is working for you, type `/fnl-status` once you have consented to the usage metrics and have used a few sessions.
-6. **Go further** when you need it: [Host configuration](#host-configuration) for delegation, [Usage metrics](#usage-metrics) for what is recorded and where, and [Works well with](#works-well-with) for companion skills.
+2. **Type `/fnl-ask`** (`$fnl-ask` on Codex). It explains where to begin. For a beginner, it loads plain-language guidance that the agent follows for the conversation.
+3. **Run setup once**: `/fnl-setup` (Claude Code, Antigravity) or `$fnl-setup` (Codex). Choose Quick for recommended defaults and a confirmation before writing, or Detailed to decide each part. The beginner path asks at most three plain questions and defers technical choices. Setup installs nothing; usage recording needs its own consent. On Codex, type `$fnl-setup-instructions` next so your instructions point coding work at the router from the first task.
+4. **Give it a first real task.** Ask for a change; the agent starts coding work by loading `fnl-coding-router`. It chooses a workflow and depth (MIN, NORMAL or DEEP), checks the result, and explains what happened in your register within the same chat. On Claude Code a session-start reminder prompts the router and on Antigravity an always-on rule does.
+5. **What you should see:** a stated depth and reason, expressed in everyday words for a beginner; commits written as `fnl-commit-messages` says; pull requests held for a posted code review and, at sensitive boundaries, a security review; and, if delegation is set up, bounded tasks whose results are checked before acceptance.
+6. **After your first result**, type `/fnl-setup-instructions` to set how your assistants work with you (already done after setup on Codex). After a few sessions, type `/fnl-status` to see how the practice is working, if you consented to usage metrics. Return to `/fnl-ask` whenever you need help with a skill.
+7. **Go further** when you need it: [Host configuration](#host-configuration) for delegation, [Usage metrics](#usage-metrics) for what is recorded and where, and [Works well with](#works-well-with) for companion skills.
 
 ## Works well with
 
@@ -146,7 +183,7 @@ For reviews, the gates and the `fnl-reviewer` agent use each host's native instr
 npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit
 ```
 
-`fnl-setup` also recommends two skills from the `finolabs` catalog, each where it fits: [`agybird`](https://github.com/finolabs/agybird) (MIT), which runs Antigravity dispatches for `fnl-delegate` when Antigravity is a delegate of Claude Code or Codex, and [`vietnamizer`](https://github.com/finolabs/vietnamizer) (MIT), which writes and edits Vietnamese documents for people. Both install the way this plugin does, with `agybird@finolabs` or `vietnamizer@finolabs` in place of `finolabs-vibecode@finolabs`.
+`fnl-setup` also suggests two skills after the first result from the `finolabs` catalog, each where it fits: [`agybird`](https://github.com/finolabs/agybird) (MIT), which runs Antigravity dispatches for `fnl-delegate` when Antigravity is a delegate of Claude Code or Codex, and [`vietnamizer`](https://github.com/finolabs/vietnamizer) (MIT), which writes and edits Vietnamese documents for people. Both install the way this plugin does, with `agybird@finolabs` or `vietnamizer@finolabs` in place of `finolabs-vibecode@finolabs`.
 
 ## Usage metrics
 
