@@ -11,6 +11,12 @@ Before the first dispatch in a session, read the **host config**: the file named
 
 References carry the detail. For routing: [references/models.md](references/models.md) maps each agent's models to tiers and strengths, and, only when the host config names a route judge, [references/route-judgment.md](references/route-judgment.md) says how to ask it. For dispatch: [references/agents.md](references/agents.md) gives each agent's dispatch contract, including what each one may run, [references/dispatch.md](references/dispatch.md) the procedures only some runs reach (quota fallback, parallel runs, the heavy-job lock, handover, file placement), and [references/ledger.md](references/ledger.md) the ledger commands.
 
+## Delegation mode
+
+Run `python3 -I <this skill folder>/scripts/mode.py` before Route. `manual`: delegate only when the user says so. `suggest` (default): at Route say “this could go to <agent>; say yes to hand it off” and wait. `auto`: use the guideline for independent tasks with clear acceptance tests, record the decision in the ledger and tell the user after dispatch. An explicit handoff request is approval. Modes govern routing and load sharing; the Never delegated list, review gates, security gates and merge authority stay identical.
+
+Each mode relies on the agent's judgment unless backed by a hook or host setting; auto is never 100%. Read [references/modes.md](references/modes.md) only when the mode matters.
+
 ## The loop
 
 Run this loop for every delegated task. Each step ends on its criterion.
