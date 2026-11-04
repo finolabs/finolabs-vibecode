@@ -1,6 +1,6 @@
 # Agent scan, mode command and skill consolidation
 
-Status: package 1 (Parts C, D and the applicable Part E surfaces) implemented for 0.1.7. Parts A and B remain specified for package 2; they are not available commands or settings yet.
+Status: implemented for 0.1.7 (Parts A–E). Verified with local Python tests and plugin validation on macOS from a Codex coordinator; PATH, consent, section preservation and symlink cases use synthetic fixtures. Live slash-command execution on Claude Code, Codex and Antigravity and behavior eval results remain unverified; the coordinator runs the supplied eval cases. `codex --help` exposes no offline model-list command; `agy --help` advertises `models`, whose offline behavior is unverified and is not used by the scan.
 Owner decisions: 2026-11-04. All of it ships in 0.1.7 (a large upgrade); the manifest version does not change.
 
 ## Why
@@ -39,7 +39,7 @@ User-invoked skill, `argument-hint: "[manual|suggest|auto] [routing on|off]"`. N
 
 ## Part C: consolidation
 
-Package 1 reduces 20 skills to 17 folders (model-visible 15 → 12, five user-only skills unchanged). Package 2 will add two user-only skills, for 19 folders.
+Package 1 reduces 20 skills to 17 folders (model-visible 15 → 12, five user-only skills unchanged). Package 2 adds two user-only skills, for 19 folders (12 model-visible, seven user-only).
 
 | Change | Result |
 | --- | --- |
@@ -55,7 +55,7 @@ Out of scope: moving `fnl-review-gate` "Pull requests" into a reference. It is t
 
 1. `fnl-delegate` "Delegation mode": say "a session or headless run of your own kind", not "or subagent" (subagents never own implementation, `agents.md`).
 2. Under `manual`: an own-kind session starts without an offer only when the project requires it or your context needs sparing, and you say so in one line.
-3. In package 1, own kind means "the family of the host that runs you". Package 2 replaces this with the coordinator's recorded family in the agent-scan section; an unrecorded family will be another family.
+3. Own kind means "the family recorded as the coordinator's in `Agents on this machine`, else the family of the host that runs you". Other families still require recorded presence to route to them.
 4. An own-kind session stays a delegate for the Never delegated list: it gains none of the coordinator's authority.
 5. The project's rules still decide whether own-kind sessions are allowed.
 6. The `verdict` grader of `quality-fnl-delegate-keep-own-kind` must fail when the reply offers Codex as the hand-off target, instead of only matching "worktree".
@@ -81,13 +81,13 @@ Every surface that tells a person or an agent what the plugin contains or how to
 
 ## Acceptance
 
-The first three checks and present-agent routing eval below belong to package 2. Package 1 checks consolidation, the six follow-ups and consistent guides, with no scan or mode command added.
+Package 1 covers consolidation; package 2 adds scan, mode settings, inventory-aware routing and onboarding. Automated script checks use fake CLIs and host files; routing behavior cases are supplied for the coordinator to run.
 
 - fnl-scan-agents on a machine with only two of the three CLIs records exactly those two, marks the rest absent, writes nothing without a yes, and a second run with no change reports no difference.
 - With one family present, `fnl-delegate` offers no hand-off and says why; with two, an offer names only the other family.
 - fnl-set-mode changes only the two headings, reports an environment override, and never writes without a yes.
 - No removed skill name remains in the repository except in the changelog mapping; `check-references.py`, the unit tests, `claude plugin validate .` and the evals (trigger cases renamed, new cases below) pass.
-- New eval cases: routing with a host config naming only Claude Code and Codex never offers Antigravity; a `suggest` coordinator with `manual` says the one-line reason for an own-kind session.
+- New eval cases: a Claude Code coordinator with only Claude Code and Codex present never offers Antigravity; no other family present states delegation is off and continues itself; an environment override wins over mode file changes. The existing own-kind case remains.
 
 ## Delivery
 

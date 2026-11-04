@@ -29,3 +29,5 @@ Use `AGENTS.md` as the sole repository source, with only the include and Claude-
 3. **Managed copies**: write the merged text into each file and record in each one where its source lives. Simplest to read, but every later change must be applied to all copies.
 
 **Default recommendation** for a user who runs Claude Code most: its file `~/.claude/CLAUDE.md` is the source. A host with an include (Antigravity) points at it with that include. A host without one (Codex today) gets a managed copy that records its source and warns that a change to the source must be applied to the copy by hand.
+
+Keep machine inventory and settings out of instruction files: `/fnl-scan-agents` refreshes the local agent section, and `/fnl-set-mode` shows or changes Delegation mode and Routing with environment overrides explained. Both ask before writing host config.

@@ -35,6 +35,57 @@ class DelegationModeTest(unittest.TestCase):
     def values(self):
         return json.loads(self.run_script())
 
+    def mode_action(self, *args):
+        result = subprocess.run([sys.executable, "-I", str(READER), *args], env=self.env,
+                                capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout
+
+    def test_show_sources_and_env_override(self):
+        self.assertIn("source: default", self.mode_action("show"))
+        self.config.write_text("## Delegation mode\nmanual\n## Routing\noff\n")
+        self.assertIn("source: host config", self.mode_action("show"))
+        self.env["FNL_DELEGATION_MODE"] = "auto"
+        output = self.mode_action("show")
+        self.assertIn("Delegation mode: auto (source: FNL_DELEGATION_MODE)", output)
+        self.assertIn("overrides the file; writing the file has no effect", output)
+        self.env["FNL_ROUTING"] = "invalid"
+        self.assertIn("Routing: on (source: FNL_ROUTING (invalid; default used))", self.mode_action("show"))
+
+    def test_set_requires_yes_and_preserves_other_sections(self):
+        prefix = b"# Host\r\n\r\n## Limits\r\nretain \xc3\xa9\r\n\r\n"
+        middle = b"## Agents on this machine\r\nkeep table\r\n\r\n"
+        suffix = b"## Other\r\nlast byte"
+        self.config.write_bytes(prefix + b"## Delegation mode\r\nmanual\r\n\r\n" + middle +
+                                b"## Routing\r\non\r\n\r\n" + suffix)
+        before = self.config.read_bytes()
+        args = ("set", "--delegation-mode", "auto", "--routing", "off")
+        self.assertIn("manual -> auto", self.mode_action(*args))
+        self.assertEqual(before, self.config.read_bytes())
+        self.assertIn("Updated host settings", self.mode_action(*args, "--yes"))
+        after = self.config.read_bytes()
+        self.assertTrue(after.startswith(prefix))
+        self.assertTrue(after.endswith(suffix))
+        self.assertIn(middle, after)
+        self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "off"})
+        self.assertIn("No difference", self.mode_action(*args, "--yes"))
+
+    def test_set_new_file_and_refuse_symlinks(self):
+        self.assertIn("Updated", self.mode_action("set", "--routing", "off", "--yes"))
+        self.assertTrue(self.config.exists())
+        target = self.home / "target.md"
+        target.write_text("# preserve\n")
+        self.config.unlink()
+        self.config.symlink_to(target)
+        self.assertIn("unsafe path", self.mode_action("set", "--routing", "off", "--yes"))
+        self.assertEqual(target.read_text(), "# preserve\n")
+        self.config.unlink()
+        self.config.parent.rmdir()
+        self.config.parent.symlink_to(self.home, target_is_directory=True)
+        self.assertIn("unsafe path", self.mode_action("set", "--routing", "off", "--yes"))
+        self.assertFalse((self.home / "host.md").exists())
+
+
     def test_missing_file_defaults(self):
         self.assertEqual(self.values(), DEFAULTS)
 

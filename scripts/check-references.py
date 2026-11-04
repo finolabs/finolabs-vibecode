@@ -223,7 +223,7 @@ def check_review_by(root, problems):
 
 def check_mode_copies(root, problems):
     source = root / "skills/fnl-delegate/scripts/mode.py"
-    for relative in ("scripts/mode.py", "skills/fnl-setup/scripts/mode.py"):
+    for relative in ("scripts/mode.py", "skills/fnl-setup/scripts/mode.py", "skills/fnl-set-mode/scripts/mode.py"):
         copy = root / relative
         if not source.is_file() or not copy.is_file() or source.read_bytes() != copy.read_bytes():
             problems.append(f"{relative}: mode.py copies differ or are missing")
