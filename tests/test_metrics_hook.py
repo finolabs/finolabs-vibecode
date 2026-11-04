@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -311,9 +312,10 @@ class HookTest(unittest.TestCase):
         data = self.dir / "data.js"
         for payload in ({"hook_event_name": "Stop", "session_id": "s1", "cwd": str(self.repo)},
                         {"hook_event_name": "SessionStart", "session_id": "s1", "cwd": str(self.repo), "source": "startup"}):
-            os.utime(data, (1_000_000_000, 1_000_000_000))
+            fresh = time.time() - 1  # inside the 10 second throttle: a forced rebuild must still run
+            os.utime(data, (fresh, fresh))
             self.run_hook(payload)
-            self.assertGreater(data.stat().st_mtime, 1_000_000_000, payload["hook_event_name"])
+            self.assertGreater(data.stat().st_mtime, fresh + 0.5, payload["hook_event_name"])
 
     def test_nothing_is_rebuilt_without_consent_or_when_turned_off(self):
         stop = {"hook_event_name": "Stop", "session_id": "s1", "cwd": str(self.repo)}

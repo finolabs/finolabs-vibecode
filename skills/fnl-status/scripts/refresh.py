@@ -3,8 +3,7 @@
 
   run      write data.js and dashboard.html into the state folder (--open shows the page,
            --throttle SECONDS skips the work when data.js is newer than that). One rebuild runs at
-           a time; a run that finds one in progress asks it to go round again and returns, so the
-           files never go back to an older snapshot.
+           a time and a run waits its turn, so the files never go back to an older snapshot.
   consent  record the user's consent and retention (30, 90 or 365 days)
   purge    delete the recorded events, data.js and dashboard.html (needs --yes)
   antigravity-hook  add (or --remove) the plugin's hook group in the user's own Antigravity hooks.json,
@@ -20,7 +19,9 @@ import json
 import os
 import shlex
 import shutil
+import stat
 import sys
+import time
 import webbrowser
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
@@ -215,56 +216,61 @@ def js_text(data):
     return "window.FNL_DATA = " + body + ";\n"
 
 
-def take_lock(path):
-    """The open lock file when this process now holds the rebuild lock, else None.
+LOCK_WAIT = 3.0  # seconds a run waits for a rebuild in progress; under the hook's 4 s (tool call) and 8 s (stop) timeouts
+LOCK_POLL = 0.05
 
-    The operating system owns the lock and drops it when the process ends, so a killed rebuild leaves nothing
-    to clean up and no lock ever needs to be taken over. The file is never removed. Windows has no fcntl and
-    uses msvcrt; that path is untested."""
+
+def take_lock(path, wait=None):
+    """The descriptor holding the rebuild lock, or None when it stays held for `wait` seconds or cannot be used.
+
+    The operating system owns the lock and drops it when the process ends, so a killed rebuild leaves nothing to
+    clean up. The file is created with NOFOLLOW and mode 0600, must be a regular file, and is never removed (not
+    even by purge): removing it while a holder has it would let a second process lock a new file. Windows has no
+    fcntl and uses msvcrt; that path is untested."""
     try:
-        fd = os.open(path, os.O_RDWR | os.O_CREAT | fm.NOFOLLOW, 0o600)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT | fm.NOFOLLOW | getattr(os, "O_NONBLOCK", 0), 0o600)
     except OSError:
         return None
     try:
-        try:
-            import fcntl
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except ImportError:
-            import msvcrt
-            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
-        return fd
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("not a regular file")
+        deadline = time.monotonic() + (LOCK_WAIT if wait is None else wait)
+        while True:
+            try:
+                try:
+                    import fcntl
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except ImportError:
+                    import msvcrt
+                    msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                return fd
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(LOCK_POLL)
     except OSError:
         os.close(fd)
         return None
 
 
 def cmd_run(args):
+    """Rebuild one run at a time. A run waits for one in progress and then rebuilds, so the run that reads the events last
+    publishes last and the files never go back to an older snapshot. A throttled run skips when data.js is fresh once it
+    holds the lock, which is also how two hooks that both passed the cheap age check end up rebuilding once."""
     folder = fm.ensure_dir(fm.state_dir(), follow=True)
-    lock, dirty = folder / "refresh.lock", folder / "refresh.dirty"
-    if args.throttle is None:
-        try:  # a forced run is never lost: the holder goes round again before it leaves
-            os.close(os.open(dirty, os.O_WRONLY | os.O_CREAT | fm.NOFOLLOW, 0o600))
-        except OSError:
-            pass
-    while True:
-        held = take_lock(lock)
-        if held is None:
-            if args.open and (folder / "dashboard.html").exists():  # a rebuild is under way; the page still opens
-                print("dashboard %s · a rebuild is already running" % (folder / "dashboard.html"))
-                webbrowser.open((folder / "dashboard.html").as_uri())
+    held = take_lock(folder / "refresh.lock")
+    if held is None:
+        if args.open and (folder / "dashboard.html").exists():  # a rebuild is under way; the page still opens
+            print("dashboard %s · a rebuild is already running" % (folder / "dashboard.html"))
+            webbrowser.open((folder / "dashboard.html").as_uri())
+        return
+    try:
+        if args.throttle is not None and (folder / "data.js").exists() and \
+                fm.now().timestamp() - (folder / "data.js").stat().st_mtime < args.throttle:
             return
-        try:
-            if args.throttle is not None and (folder / "data.js").exists() and \
-                    fm.now().timestamp() - (folder / "data.js").stat().st_mtime < args.throttle:
-                return
-            dirty.unlink(missing_ok=True)
-            publish(folder, args)
-        finally:
-            os.close(held)  # closing the descriptor releases the lock
-        if not dirty.exists():  # checked after the release, so a run that touched it late can take the lock itself
-            return
-        args.throttle = None  # queued forced work is never throttled away
-        args.open = False
+        publish(folder, args)
+    finally:
+        os.close(held)  # closing the descriptor releases the lock
 
 
 def publish(folder, args):
@@ -297,7 +303,7 @@ def cmd_purge(args):
     if not args.yes:
         sys.exit("purge: pass --yes once the user has confirmed")
     removed = fm.purge_store()
-    for name in ("data.js", "dashboard.html", "refresh.lock", "refresh.dirty"):
+    for name in ("data.js", "dashboard.html"):
         path = fm.state_dir() / name
         if path.is_file() and not path.is_symlink():
             path.unlink()
