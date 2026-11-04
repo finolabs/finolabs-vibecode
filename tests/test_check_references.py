@@ -73,6 +73,8 @@ class CheckReferencesTest(unittest.TestCase):
         for path in ROOT.iterdir():
             if path.is_file() and (path.suffix == ".md" or path.name == "LICENSE"):
                 shutil.copy(path, self.root / path.name)
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True, capture_output=True)
+        subprocess.run(["git", "add", "."], cwd=self.root, check=True, capture_output=True)
 
     def tearDown(self):
         self.dir.cleanup()
@@ -91,6 +93,36 @@ class CheckReferencesTest(unittest.TestCase):
         path.write_text(path.read_text().replace(old, new, 1))
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_skill_lists_match_folders(self):
+        for relative in ("README.md", "skills/fnl-ask/references/map.md"):
+            path = self.root / relative
+            original = path.read_text()
+            for replacement, expected in (("", "skill folder fnl-advisor missing from skill list"),
+                                          ("| `fnl-missing` | Missing. |", "listed skill fnl-missing has no folder")):
+                with self.subTest(file=relative, replacement=replacement):
+                    row = next(line for line in original.splitlines() if line.startswith("| `fnl-advisor` |"))
+                    path.write_text(original.replace(row, replacement, 1))
+                    try:
+                        result = self.check()
+                    finally:
+                        path.write_text(original)
+                    self.assertEqual(result.returncode, 1, result.stdout)
+                    self.assertIn(expected, result.stdout)
+
+    def test_retired_names_only_in_changelog_mapping(self):
+        for suffix in ("committee", "coordinator-sessions", "knowledge"):
+            for relative in ("scripts/session_start.py", "CHANGELOG.md"):
+                with self.subTest(name=suffix, file=relative):
+                    path = self.root / relative
+                    original = path.read_text()
+                    path.write_text(original + "\n# Retired: fnl-" + suffix + "\n")
+                    try:
+                        result = self.check()
+                    finally:
+                        path.write_text(original)
+                    self.assertEqual(result.returncode, 1, result.stdout)
+                    self.assertIn("retired skill name fnl-" + suffix, result.stdout)
 
     def test_each_break_is_caught(self):
         for rel, old, new, message in BREAKS + [FENCED_HEADING]:

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check that cross-references in the skills, agents and docs still resolve.
 
+- README and the ask map list exactly the skill folders; retired names occur only in the changelog migration mapping.
 - Every `fnl-<name>` in backticks names a skill, an agent or the review marker.
 - Every `fnl-<name>` "Heading" names a heading in that skill or agent.
 - Every `file.md` "Heading" or [file.md](file.md) "Heading" names a heading in that file, in the same skill.
@@ -14,6 +15,7 @@ Prints one line per broken reference and exits 1 when there are any.
 
 import importlib.util
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -227,6 +229,47 @@ def check_mode_copies(root, problems):
             problems.append(f"{relative}: mode.py copies differ or are missing")
 
 
+def check_skill_inventory(root, problems):
+    folders = {p.name for p in (root / "skills").iterdir() if p.is_dir()}
+    for relative in ("README.md", "skills/fnl-ask/references/map.md"):
+        path = root / relative
+        # The canonical skill table lives under Skills, before the next heading.
+        section = sections(path).get("Skills", "")
+        section = re.split(r"^#{1,6} ", section, maxsplit=1, flags=re.M)[0]
+        listed = set(re.findall(r"^\| `(fnl-[a-z-]+)` \|", section, re.M))
+        for name in sorted(folders - listed):
+            problems.append(f"{relative}: skill folder {name} missing from skill list")
+        for name in sorted(listed - folders):
+            problems.append(f"{relative}: listed skill {name} has no folder")
+
+    # Keep retired names out of this source too: only the changelog spells them out.
+    retired = {"fnl-" + old: "fnl-" + new for old, new in (
+        ("committee", "advisor"), ("coordinator-sessions", "delegate"),
+        ("knowledge", "session-hygiene"))}
+    result = subprocess.run(["git", "ls-files", "--cached", "-z"], cwd=root,
+                            capture_output=True, check=False)
+    if result.returncode:
+        problems.append("cannot list tracked files for retired skill check")
+        return
+    for relative in result.stdout.decode().split("\0"):
+        path = root / relative
+        if not relative or not path.is_file():
+            continue  # a tracked deletion in the working tree
+        version = heading = ""
+        for n, line in enumerate(path.read_bytes().decode("utf-8", errors="replace").splitlines(), 1):
+            if line.startswith("## "):
+                version, heading = line, ""
+            elif line.startswith("### "):
+                heading = line
+            for old, new in retired.items():
+                if old not in line:
+                    continue
+                mapping = (relative == "CHANGELOG.md" and version.startswith("## [0.1.7]")
+                           and heading == "### Changed" and f"`{old}` → `{new}`" in line)
+                if not mapping:
+                    problems.append(f"{relative}:{n}: retired skill name {old}")
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent)
     docs = documents(root)
@@ -237,6 +280,7 @@ def main():
     check_host_template(root, problems)
     check_review_by(root, problems)
     check_mode_copies(root, problems)
+    check_skill_inventory(root, problems)
     print("\n".join(problems) or f"references ok ({len(docs)} files)")
     sys.exit(1 if problems else 0)
 
