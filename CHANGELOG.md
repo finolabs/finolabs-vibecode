@@ -4,6 +4,14 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- New behavior evals for the router in a Spec Kit repository, a repository with mattpocock/skills, and one with no workflow pack.
+
+### Changed
+
+- `fnl-coding-router` now works in any repository. Depth, the review and security gates, proof, "Proportion" and the stop-before-a-third-fix checkpoint are the core; the workflow is a short first step that reads one adapter under `references/workflows/`: `speckit.md` (every Spec Kit rule and the Spec Kit depth gate, unchanged in meaning), `mattpocock.md`, `superpowers.md`, or `none.md`, a self-contained procedure (bounded clarification, a genuine red, the smallest change, proof, review) for repositories with no workflow pack. The description is workflow-neutral, and the fallback table that pointed to skills a user might not have is gone.
+
 ## [0.1.6] - 2026-11-04
 
 ### Added

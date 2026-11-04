@@ -1,0 +1,13 @@
+# Workflow: none
+
+Read this when the repository uses neither Spec Kit nor a workflow skill pack. These steps need no other skill. A tool the session does offer (a debugging or test-first skill) may carry the step it fits; the step's done-condition still holds. Keep accepted decisions and existing artifacts, and fill only what is missing. The router's depth, gates, "Proportion" and checkpoint still apply.
+
+## Steps
+
+1. **Clarify, bounded.** Write each acceptance criterion as an observable check (an input and its expected result) in the receipt. When one is missing, or two readings would change the code, ask the user at most three questions in one message, each with your proposed answer, and record the answers (issue, plan note or commit body) before dependent code. Done when every criterion is checkable and no open question changes the code.
+2. **Plan, only when needed.** For NORMAL work across more than one seam, or any DEEP work: a short plan naming the seams to change, every consumer of each, the order and the risks, kept where the repository keeps plans (else the pull request description). Skip it at MIN and for a single seam. Done when every consumer of a changed seam is named.
+3. **Red.** Bug or CI failure: reproduce it with a failing test at the nearest seam (a script when no test reaches it), run it, and see it fail for the reported reason; then read the failing path and state the cause in one sentence. Feature: a failing test for the first acceptance criterion, then one criterion at a time. A change with no behavior (text, configuration) takes as its red the check that will prove it (a build, lint, link or config check). Done when the red fails for the reason the change addresses; a failure from an import error or a typo is not red.
+4. **Smallest change.** Change only what turns the red green. Rerun that test until it passes, then the targeted set once: the changed code's tests and the tests of its traced consumers. Refactor only while green. Done when the red is green and the targeted set passes.
+5. **Prove.** `fnl-verification` where installed. Otherwise rerun the targeted set from a clean state, quote the output, and map each acceptance criterion to the test or observation that shows it. Done when every criterion has fresh evidence.
+6. **Review.** `fnl-review-gate`, plus `fnl-security-review-gate` when its triggers hit, where installed. Otherwise an independent reviewer (an agent in a fresh context, or a person) reads the diff, its callers and its tests, and every finding gets a disposition before merge. Done when the reviews are posted and no blocking finding is open.
+7. **Report** the actual disposition: what changed, the evidence, and what is not done or not verified.

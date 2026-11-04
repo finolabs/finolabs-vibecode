@@ -4,7 +4,7 @@ Read this only when the request is not code but a wrong result costs about as mu
 
 ## Inspect
 
-Add to the receipt: the question the output answers, who acts on it, where the data comes from and how fresh it is, and what a wrong answer costs. A request that is itself ambiguous gets a bounded clarification before any work (the fallback router's first row).
+Add to the receipt: the question the output answers, who acts on it, where the data comes from and how fresh it is, and what a wrong answer costs. A request that is itself ambiguous gets a bounded clarification before any work ([workflows/none.md](workflows/none.md) step 1 describes one).
 
 ## Depth
 
