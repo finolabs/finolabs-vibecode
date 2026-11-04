@@ -6,6 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add a default-on, cached release check and synchronous startup notice, verified on Claude Code and unverified on Codex and Antigravity (Codex ships a hook; Antigravity has none), with `FNL_UPDATE_CHECK=off` and the user-invoked `fnl-update` skill for explicit update approval, skip and never-ask choices; the detached GET sends nothing about the user and works independently of metrics consent.
 - `fnl-setup` has a Check mode: a read-only local check reports setup evidence and runtime limits per host, with a small optional smoke task. `fnl-ask` routes setup checks to it.
 
 - The `fnl-status` dashboard updates itself while its tab is open: the page reloads `data.js` every 5 seconds while visible and redraws when the numbers changed, and the hooks rebuild the file at most once per 10 seconds during a session and at each stop and session start (Claude Code and Codex; on Antigravity the page follows rebuilds made elsewhere). Checked in Chrome; Safari and Firefox are unverified. It stays local: no server and no listener.

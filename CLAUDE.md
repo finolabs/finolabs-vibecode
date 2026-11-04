@@ -16,6 +16,7 @@ One plugin with a skill set that gives AI coding agents a single engineering pra
 - Content is generic: no organization, customer or personal names, and no machine paths. Examples use synthetic names.
 - All content is English.
 - Usage metrics hold metadata only and stay off until the user consents. A new event field goes through `SCHEMA` in `scripts/fnl_metrics.py` and `docs/specs/usage-metrics.md`, never carries prompt, code, command text or paths, and updates `PRIVACY.md`. A hook never blocks a session: it exits 0 and fails closed.
+- The update check is the one allowed network call: a detached worker makes a GET to the fixed public GitHub latest-release endpoint, sends nothing about the user, and stores only a timestamp and validated stable tag. It is on by default, separate from metrics consent; `FNL_UPDATE_CHECK=off` stops it. The session-start hook reads local state only, never waits for the worker, exits 0 and fails closed. See `docs/specs/update-check.md`.
 - The plugin's own data and config live under `~/.finolabs/vibecode/` (see `README.md`); a skill never hard-codes another location.
 
 ## Reviews

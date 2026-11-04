@@ -1,10 +1,20 @@
 # Privacy
 
-`finolabs-vibecode` is a set of Agent Skills: Markdown instructions plus small local Python scripts. It has no server and sends nothing anywhere, and its maintainers receive nothing from your sessions. If you choose, it records usage metadata on your machine so you can see how the practice performs; that record never leaves the machine, and it is off until you consent.
+`finolabs-vibecode` is a set of Agent Skills: Markdown instructions plus small local Python scripts. It has no server. Its only network call is the update check described below; it sends nothing about you or your sessions. If you choose, it records usage metadata on your machine so you can see how the practice performs; that record never leaves the machine, and it is off until you consent.
 
 ## Where your data goes
 
 The skills run inside a host agent such as Claude Code or Codex, which processes your conversation under its provider's policy. When you follow the delegation skills and delegate work to another agent (for example Codex or Antigravity), the brief, the files that agent reads and anything it produces are processed by that agent's provider under that provider's terms. Delegate only work over files you are allowed to share with that provider.
+
+## Update check
+
+The update check is **on by default**, separate from usage metrics and their consent. At startup on Claude Code and Codex, a detached worker makes one HTTPS GET to `https://api.github.com/repos/finolabs/finolabs-vibecode/releases/latest` when the cache is missing or at least 24 hours old. It uses only the generic User-Agent `finolabs-vibecode-update-check`: no request body, credentials, cookies, username, machine, repository, session, installed version, prompts, code, paths or usage events. It sends nothing about the user. GitHub necessarily sees your connection's source IP. There are no redirects, proxies or retries.
+
+Set `FNL_UPDATE_CHECK=off` in your host's environment to stop requests and notices. A “never ask” choice suppresses notices while checking continues. A “skip this version” choice suppresses only that version. The checker never updates the plugin; `fnl-update` asks for your clear yes before a native host update. Host-native updates have their own network behavior.
+
+The state folder returned by `fnl_metrics.state_dir()` (normally `~/.finolabs/vibecode/state/`, with the same override and legacy rules as metrics below) holds `update-check.json` with only `checked_at` (Unix timestamp) and `tag` (validated stable release tag), plus `update-state.json` with only `skipped` (versions) and `never_ask` (boolean). Both are mode `0600`. No response body or error text is stored. These files are separate from usage events and metrics consent; turning metrics off or purging them does not stop the update check. Turning the update check off leaves existing files unchanged.
+
+The first stable release carrying the checker gives no notice of itself: older installs have no checker, and an equal version produces no notice. Missing caches initialize silently; failures print nothing and never stop a session. See the [update-check spec](docs/specs/update-check.md) for the exact data and limits.
 
 ## What the plugin stores on your machine
 
