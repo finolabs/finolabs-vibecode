@@ -6,8 +6,9 @@ Skills from other packs that make the `fnl-` skills work better where they fit. 
 | --- | --- | --- |
 | `agybird` ([finolabs/agybird](https://github.com/finolabs/agybird), MIT) | Antigravity is a delegate of Claude Code or Codex | Runs Antigravity dispatches with modes, quota checks and a JSON status envelope that `fnl-delegate` reads, and the remembered grants of section A. |
 | `vietnamizer` ([finolabs/vietnamizer](https://github.com/finolabs/vietnamizer), MIT) | The user writes Vietnamese documents or posts for people to read | Writes and edits Vietnamese text for people while keeping its meaning and the writer's voice. Agent-facing text, logs and code stay out of its scope. |
+| `diagram-design` ([cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design), MIT) | The user draws architecture, flow or data diagrams for docs, a README or a deck | Makes diagrams as self-contained HTML or SVG, with PNG export, in a saved brand profile. It sends nothing to its author; a generated file loads its fonts from Google Fonts when opened. Our skills do not depend on it. |
 
-Both are listed in the `finolabs` catalog ([finolabs/plugins](https://github.com/finolabs/plugins)):
+`agybird` and `vietnamizer` are listed in the `finolabs` catalog ([finolabs/plugins](https://github.com/finolabs/plugins)):
 
 | Host | Commands |
 | --- | --- |
@@ -16,3 +17,5 @@ Both are listed in the `finolabs` catalog ([finolabs/plugins](https://github.com
 | Other agents (`vietnamizer` only) | `npx skills add finolabs/vietnamizer --skill vietnamizer -a <agent>` |
 
 `agybird` runs from Claude Code or Codex and calls the Antigravity CLI, so it is not installed in Antigravity itself. Skip a skill the findings show installed already.
+
+`diagram-design` installs from its own repository: in Claude Code, `/plugin marketplace add cathrynlavery/diagram-design`, then `/plugin install diagram-design@diagram-design`; in Codex and other agents, `npx skills add cathrynlavery/diagram-design -a <agent>`. Its maintainer lists the official builds on that repository only; a listing under another name is an unofficial copy.
