@@ -9,7 +9,7 @@ description: Keep agent sessions healthy across long work. Use when a session's 
 
 Before assigning new work, inspect actual context usage where the surface exposes it.
 
-- Above about **60%**, at a safe idle boundary, compact the session for the same workstream. When the agent cannot compact itself, ask the user to, or propose a fresh session with a handover.
+- Above about **60%**, at a safe idle boundary, compact the session for the same workstream. When the agent cannot compact itself, ask the user to, or propose a fresh session with a handover. This is advisory unless the host's own threshold or a hook enforces it; no host signal this pack relies on gives exact usage, so check at task boundaries and when the host shows usage. `/fnl-setup` Check reports compaction enforcement as unverified until verified.
 - A wholly new, independent task starts in a fresh, correctly named session in the matching checkout, with a short verified handover.
 - A finished user story, with its review gate closed, is a natural boundary: prefer a fresh session for the next story with a short handover. A coordinator session whose context is still light may continue (`fnl-coordinator-sessions`).
 - Delegated agents follow the same rule: start a fresh run with a short handover brief rather than resuming a run that has used much of its window.
@@ -18,6 +18,8 @@ Before assigning new work, inspect actual context usage where the surface expose
 Before a compaction, a fresh session or the end of the work, write back a decision or lesson that would change what an agent does next time, as `fnl-knowledge` says. A compaction with nothing new to keep carries only the handover.
 
 ## Handover content
+
+`fnl-handoff` Resume mode writes a handover for a later session or another agent.
 
 For a portable handover document, the user can type `/handoff` from [mattpocock/skills](https://github.com/mattpocock/skills); its `/ask-matt` also explains when to continue, clear, hand off or compact.
 
