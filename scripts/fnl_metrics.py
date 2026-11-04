@@ -24,6 +24,8 @@ TRIGGERS = ("none", "contract", "security", "privacy", "permission", "migration"
             "uncertainty", "consumers", "irreversible", "calculation", "prediction", "input")
 KINDS = ("code", "security")
 VERDICTS = ("APPROVE", "REWORK")
+KEPT_REASONS = ("needs-context", "brief-costs-more", "hard-grade", "no-delegate", "never-delegated", "user-choice")
+ROUTE_BY = ("table", "judge", "user")
 RETENTIONS = (30, 90, 365)
 MARKER_DAYS = 7
 NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
@@ -43,6 +45,10 @@ def _name(v):
     return isinstance(v, str) and NAME.match(v) is not None
 
 
+def _tasks(v):
+    return isinstance(v, int) and not isinstance(v, bool) and 0 < v < 1000
+
+
 def _pr(v):
     return isinstance(v, int) and not isinstance(v, bool) and 0 < v < 10**8
 
@@ -57,6 +63,7 @@ SCHEMA = {
     "commit": {},
     "review": {"kind": lambda v: v in KINDS, "verdict": lambda v: v in VERDICTS, "pr": _pr},
     "router": {"depth": lambda v: v in DEPTHS, "trigger": lambda v: v in TRIGGERS},
+    "kept": {"tasks": _tasks, "reason": lambda v: v in KEPT_REASONS, "route_by": lambda v: v in ROUTE_BY},
 }
 
 

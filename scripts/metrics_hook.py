@@ -26,11 +26,15 @@ START = r"(?:^|[;&|(\n])[ \t]*(?:\w+=\S+[ \t]+)*"
 COMMIT = re.compile(START + r"git(?:[ \t]+(?:-[cC][ \t]+(?:\"[^\"]*\"|'[^']*'|[^\s\"']\S*)|--[\w-]+(?:=\S+)?))*[ \t]+commit(?![\w-])")
 GH_COMMENT = re.compile(START + r"gh[ \t]+pr[ \t]+comment\b([^;&|\n]*)")
 ROUTER = re.compile(START + r"(?:python3?(?:[ \t]+-\S+)*[ \t]+)?[\"']?[^\s\"']*record\.py[\"']?[ \t]+router\b")
+KEEP = re.compile(START + r"(?:python3?(?:[ \t]+-\S+)*[ \t]+)?[\"']?[^\s\"']*record\.py[\"']?[ \t]+keep\b")
 MARKER_TEXT = r"<!-- fnl-review kind=(code|security) head=[0-9a-f]{7,40} verdict=(APPROVE|REWORK)(?: lane=yes)? -->"
 MARKER = re.compile("^" + MARKER_TEXT)
 MARKER_LINE = re.compile("^" + MARKER_TEXT, re.M)
 DEPTH = re.compile(r"--depth[\s=]+([A-Z]+)\b")
 TRIGGER = re.compile(r"--trigger[\s=]+([a-z-]+)\b")
+TASKS = re.compile(r"--tasks[\s=]+(\d{1,3})(?!\S)")
+REASON = re.compile(r"--reason[\s=]+([a-z-]+)(?!\S)")
+ROUTED = re.compile(r"--route-by[\s=]+([a-z]+)(?!\S)")
 VALUE_FLAGS = {"--repo", "-R", "--body", "-b", "--body-file", "-F"}
 REFRESH = Path(__file__).resolve().parent.parent / "skills/fnl-status/scripts/refresh.py"
 REFRESH_MINUTES = "10"
@@ -198,6 +202,11 @@ def post_tool_use(sid, cwd, tool, data):
             depth, trigger = DEPTH.search(command), TRIGGER.search(command)
             if depth and trigger and depth.group(1) in fm.DEPTHS and trigger.group(1) in fm.TRIGGERS:
                 fm.record("router", sid, cwd, depth=depth.group(1), trigger=trigger.group(1))
+        if "record.py" in command and KEEP.search(command):
+            tasks, reason, routed = TASKS.search(command), REASON.search(command), ROUTED.search(command)
+            if tasks and reason:  # the writer drops any value outside the schema
+                fm.record("kept", sid, cwd, tasks=int(tasks.group(1)), reason=reason.group(1),
+                          route_by=routed.group(1) if routed else "table")
 
 
 def main():
