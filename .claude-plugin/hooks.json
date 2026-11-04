@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/metrics_hook.py\"",
+            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/metrics_hook.py\"; exit 0",
             "timeout": 10,
             "async": true
           }
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/metrics_hook.py\"",
+            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/metrics_hook.py\"; exit 0",
             "timeout": 5,
             "async": true
           }
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/metrics_hook.py\"",
+            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/metrics_hook.py\"; exit 0",
             "timeout": 10,
             "async": true
           }

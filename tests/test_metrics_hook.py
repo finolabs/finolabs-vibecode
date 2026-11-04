@@ -234,6 +234,14 @@ class HookTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual([e["host"] for e in self.events()], ["codex"])
 
+    def test_every_shipped_hook_command_ends_with_exit_zero(self):
+        for name in (".claude-plugin/hooks.json", ".codex-plugin/hooks.json"):
+            config = json.loads((ROOT / name).read_text())
+            for groups in config["hooks"].values():
+                for group in groups:
+                    for hook in group["hooks"]:
+                        self.assertRegex(hook["command"], r"; exit 0\s*$", name + ": " + hook["command"])
+
     def test_no_plugin_root_hooks_file_is_shipped_for_antigravity(self):
         self.assertFalse((ROOT / "hooks.json").exists(), "see the spec: its working folder on a real install is unverified")
 
