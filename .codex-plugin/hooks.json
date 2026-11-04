@@ -24,6 +24,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "r=\"${PLUGIN_ROOT:-$CODEX_PLUGIN_ROOT}\"; [ -n \"$r\" ] && python3 -I \"$r/scripts/metrics_hook.py\" --host codex; exit 0",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
     ]
   }
 }

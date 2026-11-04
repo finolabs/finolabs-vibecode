@@ -1,5 +1,7 @@
 /* Runs the script of skills/fnl-status/assets/dashboard.html against a small fake DOM and prints the rendered text.
-   Usage: node page_runner.js <dashboard.html> [data.json]. Exits 1 on any script error. */
+   Usage: node page_runner.js <dashboard.html> [data.json] [scenario.json]. Exits 1 on any script error.
+   A scenario runs the live update with fake timers: {"hidden": true} keeps the tab hidden, {"next": {...}} is what the next
+   data.js sets, {"fail": true} makes it fail to load, {"ticks": n} is how many polls run (default 1). */
 "use strict";
 const fs = require("fs");
 const vm = require("vm");
@@ -24,21 +26,31 @@ class Node_ {
   replaceChildren(...cs) { this.children = cs; }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
+  remove() { this.removed = true; }
   addEventListener(type, fn) { (this.handlers[type] = this.handlers[type] || []).push(fn); }
   getBoundingClientRect() { return { left: 0, top: 0, width: 400, height: 300, right: 400, bottom: 300 }; }
   querySelector() { return new Node_("div"); }
   querySelectorAll() { return []; }
 }
 
-const [pagePath, dataPath] = process.argv.slice(2);
+const [pagePath, dataPath, scenarioPath] = process.argv.slice(2);
+const scenario = scenarioPath ? JSON.parse(fs.readFileSync(scenarioPath, "utf8")) : {};
 const html = fs.readFileSync(pagePath, "utf8");
 const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
 if (scripts.length !== 1) throw new Error("expected one inline script, found " + scripts.length);
 
 const byId = {};
+const loads = [], timers = [];
 const document = {
   documentElement: new Node_("html"),
   body: new Node_("body"),
+  head: { appendChild(s) {
+    loads.push(s.src);
+    if (scenario.fail) return s.onerror();
+    if (scenario.next) sandbox.window.FNL_DATA = JSON.parse(JSON.stringify(scenario.next));
+    s.onload();
+  } },
+  visibilityState: scenario.hidden ? "hidden" : "visible",
   createElement: (t) => new Node_(t),
   createElementNS: (ns, t) => new Node_(t),
   createTextNode: (s) => { const n = new Node_("#text"); n._text = String(s); return n; },
@@ -49,6 +61,7 @@ const document = {
 const sandbox = {
   document,
   console,
+  setInterval: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
   window: { matchMedia: () => ({ matches: false }), addEventListener() {}, innerWidth: 400 },
   localStorage: { getItem: () => null, setItem() {} },
 };
@@ -58,6 +71,8 @@ vm.createContext(sandbox);
 vm.runInContext(scripts[0], sandbox, { filename: "dashboard.html" });
 
 const app = byId["app"];
-const out = { text: app ? app.textContent.replace(/\s+/g, " ").trim() : "", cells: 0, svg: 0 };
+const first = app ? app.children[0] : null;
+if (scenarioPath) for (let i = 0; i < (scenario.ticks || 1); i++) timers.forEach((x) => x.fn());
+const out = { text: app ? app.textContent.replace(/\s+/g, " ").trim() : "", cells: 0, svg: 0, loads, poll_ms: timers.map((x) => x.ms), redrawn: !!first && app.children[0] !== first };
 (function walk(n) { out.cells += n.className.split(" ").includes("dy") ? 1 : 0; out.svg += n.tag === "svg" ? 1 : 0; n.children.forEach(walk); })(app || new Node_("x"));
 process.stdout.write(JSON.stringify(out));
