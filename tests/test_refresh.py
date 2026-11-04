@@ -319,6 +319,10 @@ class RefreshOverlapTest(unittest.TestCase):
         spec.loader.exec_module(self.refresh)
         self.state = Path(self.tmp.name) / "state"
 
+    @staticmethod
+    def data():
+        return {"missing": {}, "period": {"from": "", "to": ""}, "sessions": {"total": 0, "unclassified": 0}, "errors": 0}
+
     def args(self, throttle=None):
         return mock.Mock(throttle=throttle, open=False)
 
@@ -338,7 +342,6 @@ class RefreshOverlapTest(unittest.TestCase):
             self.refresh.cmd_run(self.args())
         self.assertEqual(seen, ["old", "new"])
         self.assertIn('"snapshot":"new"', (self.state / "data.js").read_text())
-        self.assertFalse((self.state / "refresh.lock").exists())
         self.assertFalse((self.state / "refresh.dirty").exists())
 
     def test_a_throttled_run_during_a_rebuild_neither_waits_nor_asks_for_another(self):
@@ -361,22 +364,78 @@ class RefreshOverlapTest(unittest.TestCase):
             self.refresh.cmd_run(self.args(throttle=10))
         self.assertEqual(build.call_count, 1)
 
-    def test_a_lock_left_by_a_killed_process_is_taken_over(self):
+    def test_a_lock_file_left_by_a_killed_process_does_not_block(self):
         self.state.mkdir(parents=True)
-        lock = self.state / "refresh.lock"
-        lock.write_text("")
-        os.utime(lock, (0, 0))
-        with mock.patch.object(self.refresh, "build", return_value={"missing": {}, "period": {"from": "", "to": ""},
-                                                                       "sessions": {"total": 0, "unclassified": 0}, "errors": 0}) as build:
+        (self.state / "refresh.lock").write_text("")  # a file with no live holder holds nothing
+        with mock.patch.object(self.refresh, "build", return_value=self.data()) as build:
             self.refresh.cmd_run(self.args())
         self.assertEqual(build.call_count, 1)
-        self.assertFalse(lock.exists())
+
+    def test_a_forced_run_queued_behind_a_throttled_holder_is_not_throttled_away(self):
+        builds = []
+
+        def build():
+            builds.append(1)
+            if len(builds) == 1:
+                self.refresh.cmd_run(self.args())  # forced run arrives while the throttled holder builds
+            return self.data()
+
+        with mock.patch.object(self.refresh, "build", build):
+            self.refresh.cmd_run(self.args(throttle=10))
+        self.assertEqual(len(builds), 2)
+
+    def test_the_dirty_flag_never_follows_a_symlink(self):
+        self.state.mkdir(parents=True)
+        target = Path(self.tmp.name) / "elsewhere"
+        (self.state / "refresh.dirty").symlink_to(target)
+        held = self.refresh.take_lock(self.state / "refresh.lock")
+        try:
+            with mock.patch.object(self.refresh, "build") as build:
+                self.refresh.cmd_run(self.args())
+        finally:
+            os.close(held)
+        build.assert_not_called()
+        self.assertFalse(target.exists())
+
+    def test_a_symlink_at_the_lock_name_is_refused(self):
+        self.state.mkdir(parents=True)
+        target = Path(self.tmp.name) / "elsewhere"
+        (self.state / "refresh.lock").symlink_to(target)
+        self.assertIsNone(self.refresh.take_lock(self.state / "refresh.lock"))
+        self.assertFalse(target.exists())
+
+    def test_two_runs_cannot_hold_the_lock_at_once(self):
+        self.state.mkdir(parents=True)
+        first = self.refresh.take_lock(self.state / "refresh.lock")
+        self.assertIsNotNone(first)
+        try:
+            self.assertIsNone(self.refresh.take_lock(self.state / "refresh.lock"))
+        finally:
+            os.close(first)
+        second = self.refresh.take_lock(self.state / "refresh.lock")
+        self.assertIsNotNone(second, "released when the holder closes it")
+        os.close(second)
+
+    def test_a_refused_lock_does_not_lose_the_request_to_open_the_page(self):
+        self.state.mkdir(parents=True)
+        (self.state / "dashboard.html").write_text("<html></html>")
+        held = self.refresh.take_lock(self.state / "refresh.lock")
+        try:
+            with mock.patch.object(self.refresh.webbrowser, "open") as opened, mock.patch.object(self.refresh, "build") as build:
+                self.refresh.cmd_run(mock.Mock(throttle=None, open=True))
+        finally:
+            os.close(held)
+        opened.assert_called_once()
+        build.assert_not_called()
 
     def test_a_fresh_lock_held_by_another_process_makes_a_run_return_without_building(self):
         self.state.mkdir(parents=True)
-        (self.state / "refresh.lock").write_text("")
-        with mock.patch.object(self.refresh, "build") as build:
-            self.refresh.cmd_run(self.args())
+        held = self.refresh.take_lock(self.state / "refresh.lock")
+        try:
+            with mock.patch.object(self.refresh, "build") as build:
+                self.refresh.cmd_run(self.args())
+        finally:
+            os.close(held)
         build.assert_not_called()
         self.assertTrue((self.state / "refresh.dirty").exists(), "the holder is asked to go round again")
 

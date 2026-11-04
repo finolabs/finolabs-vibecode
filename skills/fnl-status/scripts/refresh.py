@@ -215,31 +215,44 @@ def js_text(data):
     return "window.FNL_DATA = " + body + ";\n"
 
 
-LOCK_STALE_SECONDS = 120  # a rebuild takes well under a second; a lock this old was left by a killed process
-
-
 def take_lock(path):
-    """True when this process now holds the rebuild lock. A lock file older than LOCK_STALE_SECONDS is removed first."""
-    for _ in range(2):
+    """The open lock file when this process now holds the rebuild lock, else None.
+
+    The operating system owns the lock and drops it when the process ends, so a killed rebuild leaves nothing
+    to clean up and no lock ever needs to be taken over. The file is never removed. Windows has no fcntl and
+    uses msvcrt; that path is untested."""
+    try:
+        fd = os.open(path, os.O_RDWR | os.O_CREAT | fm.NOFOLLOW, 0o600)
+    except OSError:
+        return None
+    try:
         try:
-            os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
-            return True
-        except FileExistsError:
-            try:
-                if fm.now().timestamp() - path.stat().st_mtime < LOCK_STALE_SECONDS:
-                    return False
-                path.unlink()
-            except OSError:
-                return False
-    return False
+            import fcntl
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except ImportError:
+            import msvcrt
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        return fd
+    except OSError:
+        os.close(fd)
+        return None
 
 
 def cmd_run(args):
     folder = fm.ensure_dir(fm.state_dir(), follow=True)
     lock, dirty = folder / "refresh.lock", folder / "refresh.dirty"
     if args.throttle is None:
-        dirty.touch()  # a forced run is never lost: the holder goes round again before it leaves
-    while take_lock(lock):
+        try:  # a forced run is never lost: the holder goes round again before it leaves
+            os.close(os.open(dirty, os.O_WRONLY | os.O_CREAT | fm.NOFOLLOW, 0o600))
+        except OSError:
+            pass
+    while True:
+        held = take_lock(lock)
+        if held is None:
+            if args.open and (folder / "dashboard.html").exists():  # a rebuild is under way; the page still opens
+                print("dashboard %s · a rebuild is already running" % (folder / "dashboard.html"))
+                webbrowser.open((folder / "dashboard.html").as_uri())
+            return
         try:
             if args.throttle is not None and (folder / "data.js").exists() and \
                     fm.now().timestamp() - (folder / "data.js").stat().st_mtime < args.throttle:
@@ -247,9 +260,10 @@ def cmd_run(args):
             dirty.unlink(missing_ok=True)
             publish(folder, args)
         finally:
-            lock.unlink(missing_ok=True)
+            os.close(held)  # closing the descriptor releases the lock
         if not dirty.exists():  # checked after the release, so a run that touched it late can take the lock itself
             return
+        args.throttle = None  # queued forced work is never throttled away
         args.open = False
 
 
@@ -283,7 +297,7 @@ def cmd_purge(args):
     if not args.yes:
         sys.exit("purge: pass --yes once the user has confirmed")
     removed = fm.purge_store()
-    for name in ("data.js", "dashboard.html"):
+    for name in ("data.js", "dashboard.html", "refresh.lock", "refresh.dirty"):
         path = fm.state_dir() / name
         if path.is_file() and not path.is_symlink():
             path.unlink()
