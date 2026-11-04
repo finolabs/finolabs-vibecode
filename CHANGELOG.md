@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- `fnl-delegate` "Keep or hand off": a coordinator holding two or more independent tasks with clear acceptance tests dispatches them or records why it kept them, before starting the first; the coding router points to it. `record.py keep` prints one line with a count, a fixed reason and who settled it, and with usage metrics on the hook stores it as a new `kept` event, under the same consent, retention and purge as other events; existing consents cover it. The `fnl-status` delegation pane shows the tasks kept beside the implementation runs handed off.
+
 ### Changed
 
 - `fnl-ask` now answers four kinds of question: where to start (the first steps for someone new), what the plugin contains (skills, agents and scripts, grouped by purpose), how a named skill, agent or script works, and which skill fits a situation. It reads the target file before answering, and still invokes nothing.
