@@ -1,5 +1,6 @@
 """Tests for skills/fnl-status/scripts/refresh.py: the six metrics from a fixture store and ledger, and the files it writes."""
 
+import importlib.util
 import json
 import os
 import shutil
@@ -9,6 +10,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 REFRESH = ROOT / "skills/fnl-status/scripts/refresh.py"
@@ -301,6 +303,82 @@ class RefreshTest(unittest.TestCase):
     def test_consent_rejects_an_unknown_retention(self):
         self.assertNotEqual(self.refresh("consent", "--retention", "7", check=False).returncode, 0)
         self.assertFalse((self.dir / "consent.json").exists())
+
+
+class RefreshOverlapTest(unittest.TestCase):
+    """Overlapping rebuilds, run in-process with the build replaced so the interleaving is exact."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        patcher = mock.patch.dict(os.environ, {"FNL_STATE_DIR": str(Path(self.tmp.name) / "state")})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        spec = importlib.util.spec_from_file_location("fnl_refresh_overlap", REFRESH)
+        self.refresh = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.refresh)
+        self.state = Path(self.tmp.name) / "state"
+
+    def args(self, throttle=None):
+        return mock.Mock(throttle=throttle, open=False)
+
+    def test_a_run_during_a_rebuild_makes_the_holder_rebuild_again_and_the_newest_data_wins(self):
+        snapshots = iter(["old", "new"])
+        seen = []
+
+        def build():
+            value = next(snapshots)
+            seen.append(value)
+            if value == "old":
+                self.refresh.cmd_run(self.args())  # a forced run arrives while the first build is in progress
+            return {"snapshot": value, "missing": {}, "period": {"from": "", "to": ""}, "sessions": {"total": 0, "unclassified": 0},
+                    "errors": 0}
+
+        with mock.patch.object(self.refresh, "build", build):
+            self.refresh.cmd_run(self.args())
+        self.assertEqual(seen, ["old", "new"])
+        self.assertIn('"snapshot":"new"', (self.state / "data.js").read_text())
+        self.assertFalse((self.state / "refresh.lock").exists())
+        self.assertFalse((self.state / "refresh.dirty").exists())
+
+    def test_a_throttled_run_during_a_rebuild_neither_waits_nor_asks_for_another(self):
+        builds = []
+
+        def build():
+            builds.append(1)
+            if len(builds) == 1:
+                self.refresh.cmd_run(self.args(throttle=10))
+            return {"missing": {}, "period": {"from": "", "to": ""}, "sessions": {"total": 0, "unclassified": 0}, "errors": 0}
+
+        with mock.patch.object(self.refresh, "build", build):
+            self.refresh.cmd_run(self.args())
+        self.assertEqual(len(builds), 1)
+
+    def test_a_throttled_run_skips_fresh_data_even_when_it_holds_the_lock(self):
+        with mock.patch.object(self.refresh, "build", return_value={"missing": {}, "period": {"from": "", "to": ""},
+                                                                       "sessions": {"total": 0, "unclassified": 0}, "errors": 0}) as build:
+            self.refresh.cmd_run(self.args())
+            self.refresh.cmd_run(self.args(throttle=10))
+        self.assertEqual(build.call_count, 1)
+
+    def test_a_lock_left_by_a_killed_process_is_taken_over(self):
+        self.state.mkdir(parents=True)
+        lock = self.state / "refresh.lock"
+        lock.write_text("")
+        os.utime(lock, (0, 0))
+        with mock.patch.object(self.refresh, "build", return_value={"missing": {}, "period": {"from": "", "to": ""},
+                                                                       "sessions": {"total": 0, "unclassified": 0}, "errors": 0}) as build:
+            self.refresh.cmd_run(self.args())
+        self.assertEqual(build.call_count, 1)
+        self.assertFalse(lock.exists())
+
+    def test_a_fresh_lock_held_by_another_process_makes_a_run_return_without_building(self):
+        self.state.mkdir(parents=True)
+        (self.state / "refresh.lock").write_text("")
+        with mock.patch.object(self.refresh, "build") as build:
+            self.refresh.cmd_run(self.args())
+        build.assert_not_called()
+        self.assertTrue((self.state / "refresh.dirty").exists(), "the holder is asked to go round again")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Build the status dashboard's data from the usage events and the dispatch ledger.
 
-  run      write data.js and dashboard.html into the state folder (--open shows the page)
+  run      write data.js and dashboard.html into the state folder (--open shows the page,
+           --throttle SECONDS skips the work when data.js is newer than that). One rebuild runs at
+           a time; a run that finds one in progress asks it to go round again and returns, so the
+           files never go back to an older snapshot.
   consent  record the user's consent and retention (30, 90 or 365 days)
   purge    delete the recorded events, data.js and dashboard.html (needs --yes)
   antigravity-hook  add (or --remove) the plugin's hook group in the user's own Antigravity hooks.json,
@@ -212,8 +215,45 @@ def js_text(data):
     return "window.FNL_DATA = " + body + ";\n"
 
 
+LOCK_STALE_SECONDS = 120  # a rebuild takes well under a second; a lock this old was left by a killed process
+
+
+def take_lock(path):
+    """True when this process now holds the rebuild lock. A lock file older than LOCK_STALE_SECONDS is removed first."""
+    for _ in range(2):
+        try:
+            os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+            return True
+        except FileExistsError:
+            try:
+                if fm.now().timestamp() - path.stat().st_mtime < LOCK_STALE_SECONDS:
+                    return False
+                path.unlink()
+            except OSError:
+                return False
+    return False
+
+
 def cmd_run(args):
     folder = fm.ensure_dir(fm.state_dir(), follow=True)
+    lock, dirty = folder / "refresh.lock", folder / "refresh.dirty"
+    if args.throttle is None:
+        dirty.touch()  # a forced run is never lost: the holder goes round again before it leaves
+    while take_lock(lock):
+        try:
+            if args.throttle is not None and (folder / "data.js").exists() and \
+                    fm.now().timestamp() - (folder / "data.js").stat().st_mtime < args.throttle:
+                return
+            dirty.unlink(missing_ok=True)
+            publish(folder, args)
+        finally:
+            lock.unlink(missing_ok=True)
+        if not dirty.exists():  # checked after the release, so a run that touched it late can take the lock itself
+            return
+        args.open = False
+
+
+def publish(folder, args):
     target = folder / "data.js"
     data = build()
     fm.atomic_write(target, js_text(data))
@@ -312,6 +352,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="write data.js and dashboard.html")
     run.add_argument("--open", action="store_true", help="show the page in the default browser")
+    run.add_argument("--throttle", type=float, metavar="SECONDS", help="skip when data.js is newer than this")
     run.set_defaults(func=cmd_run)
     consent = sub.add_parser("consent", help="record consent and retention")
     consent.add_argument("--retention", type=int, choices=fm.RETENTIONS)

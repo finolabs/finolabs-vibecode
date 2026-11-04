@@ -124,25 +124,26 @@ def reviews_from(command, cwd):
     return found
 
 
-def refresh_dashboard(seconds=REFRESH_SECONDS):
+def refresh_dashboard(seconds=REFRESH_SECONDS, extra=()):
     """Rebuild the dashboard data. A slow or missing refresh is not an error."""
     if not REFRESH.is_file():
         return
     try:
-        subprocess.run([sys.executable, "-I", str(REFRESH), "run"],
+        subprocess.run([sys.executable, "-I", str(REFRESH), "run", *extra],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=seconds)
     except subprocess.TimeoutExpired:
         pass
 
 
 def refresh_if_stale():
-    """Rebuild at most once per REFRESH_EVERY seconds; the stat comes first so most tool calls start no process."""
+    """Rebuild at most once per REFRESH_EVERY seconds. The stat here spares most tool calls a process; the script
+    checks again under its lock, so two hooks that both pass the stat still rebuild once."""
     try:
         if fm.now().timestamp() - (fm.state_dir() / "data.js").stat().st_mtime < REFRESH_EVERY:
             return
     except OSError:
         pass  # no data.js yet
-    refresh_dashboard(REFRESH_AFTER_TOOL_SECONDS)
+    refresh_dashboard(REFRESH_AFTER_TOOL_SECONDS, ("--throttle", str(REFRESH_EVERY)))
 
 
 def options(argv):
