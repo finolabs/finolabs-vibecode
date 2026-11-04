@@ -7,11 +7,14 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Added
 
 - The `fnl-status` dashboard updates itself while its tab is open: the page reloads `data.js` every 5 seconds while visible and redraws when the numbers changed, and the hooks rebuild the file at most once per 10 seconds during a session and at each stop and session start (Claude Code and Codex; on Antigravity the page follows rebuilds made elsewhere). Checked in Chrome; Safari and Firefox are unverified. It stays local: no server and no listener.
+- Plain-language guidance in `fnl-ask` and `fnl-setup`: lead with the result, use everyday words and ask only the user's decisions. Both skills carry an identical reference so each works alone; CI checks the copies match.
 - `fnl-handoff` has a Resume mode: it writes a handover for a later session or another agent without dispatching anything. The handover is a note in the knowledge base the user's instructions name (tagged `handoff`, with a pointer line at the top of the project's state entry), or a brief file without one, and the agent's native memory holds at most a pointer. The agent that continues reads the latest handover, trusts the repository where they disagree, does the first unfinished step, asks before a merge, a deploy or a deletion, and updates the same note as it goes. The brief template gains two optional headings, "Waiting on" and "Linked runs or sessions".
 
 ### Changed
 
-- `fnl-ask` now answers four kinds of question: where to start (the first steps for someone new), what the plugin contains (skills, agents and scripts, grouped by purpose), how a named skill, agent or script works, and which skill fits a situation. It reads the target file before answering, and still invokes nothing.
+- `fnl-ask` routes Start, Contents, Explain and Route questions to references, reads the target before answering and still invokes nothing; all modes share the beginner definition and register, with one question first for a bare invocation. The onboarding order is `/fnl-ask`, Quick setup, a first task, user instructions (immediately after setup on Codex), and the dashboard later.
+- The README opens in plain words, with a three-minute start and a glossary, and teaches the same onboarding order to users and agents.
+- `fnl-setup` offers a beginner path before the mode choice and uses it only for users who say they are new to coding or accept the offer. Its closing handover lists user instructions (immediately on Codex, after the first result elsewhere), matching companion suggestions and the skipped sections to revisit later.
 
 ## [0.1.6] - 2026-11-04
 
