@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 Prepare this machine and repository so the `fnl-` skills work as written. Explore, settle the user's choices, confirm, then write.
 
+On a bare invocation, ask one question first: "Set up, or check what is already set up?" Recommend **Check** when setup has already been run, otherwise **Set up**. Wait for the answer before the setup interview. An explicit Check request goes straight to **Check**: load [references/check.md](references/check.md), follow it and stop. Load that reference only in Check mode. **Set up** continues below.
+
 Before the mode choice, offer the beginner path once in plain words: "Would you like a simpler setup? It leaves settings for other AI helpers, review tools and extra skills until later." Start it only when the user says they are new to coding or accepts the offer. Otherwise let the user choose the mode: **detailed** interviews each section, **quick** asks every decision once with its recommended default and writes after one confirmation, except that consent to send data to a service (the route judge) is always asked on its own and never bundled. In quick mode, leave unsettled any item the findings cannot fill and name it in the report; the skill that later needs it, given the repository's context, asks the user once. Run setup again only when an agent on the machine is added or changed, a new plugin version adds a field to the host template, or the user wants a skipped section; it updates in place.
 
 **Beginner path.** Read [references/plain-language.md](references/plain-language.md) and follow its register for this conversation. Use Quick instead of the detailed interview below. Ask only for a final yes to the shown changes. Ask one question at a time; skip a question whose answer is already known. Take the recommended default for the rest, and leave out section C's optional low-risk lane line. Tell the user this path skips A (host config for delegation), E (review tools), F (usage metrics, left off) and G (companions), and that they can run those sections later. End with the handover in section 4.
@@ -67,6 +69,8 @@ Show each draft and apply the user's edits. Then write only what was confirmed: 
 When the findings show a knowledge base, also record the settled decisions there as `fnl-knowledge` says (the route judge and the date of consent, which agents coordinate, the parallel limit, the host config path), through the access the user's instructions approve. Write to the one knowledge base those instructions name, and report any write that failed. Install nothing and change no shared settings.
 
 ## 4. Report
+
+Offer `/fnl-setup` **Check** to see what is configured and what still needs observation on each host.
 
 List each file written, each item skipped and why, and anything left for the user (for example installing the plugin on another host, using the commands in the plugin's README).
 
