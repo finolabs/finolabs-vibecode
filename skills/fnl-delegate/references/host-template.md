@@ -2,6 +2,14 @@
 
 Machine-specific facts for the `fnl-delegate` skills. The skills hold what is true on any host; this file holds paths, commands and permission rules for one machine. Keep it outside the plugin (default `~/.finolabs/vibecode/host.md`, or the path in `ORCHESTRATION_HOST_CONFIG`) so plugin updates never overwrite it. When more than one agent coordinates, keep this file and the ledger (`ORCHESTRATION_LEDGER`) where every coordinator's sandbox can read and write them. Changing an allow-rule or a shared setting listed here needs the owner's approval.
 
+## Delegation mode
+
+suggest
+
+## Routing
+
+on
+
 ## Limits
 
 - Parallel dispatches: at most <N> at one time (5 or fewer).

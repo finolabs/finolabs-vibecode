@@ -78,7 +78,17 @@ class CheckupTest(unittest.TestCase):
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)))
         self.assertEqual(self.setup_item("host config")["status"], "ok")
         template = (ROOT / "skills/fnl-delegate/references/host-template.md").read_text()
-        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference"})
+        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing"})
+
+    def test_effective_settings_and_enforcement_limits(self):
+        self.env.update(FNL_DELEGATION_MODE="auto", FNL_ROUTING="off")
+        self.assertIn("delegation mode=auto; routing=off", self.setup_item("effective settings")["reason"])
+        rows = self.data()["hosts"]
+        for host, expected in (("claude", "continuation reminders"), ("codex", "user trust"),
+                               ("agy", "static always-on rule")):
+            row = next(r for r in rows[host] if r["check"] == "mode enforcement")
+            self.assertEqual(row["status"], "unverified")
+            self.assertIn(expected, row["reason"])
 
     def test_unverified_runtime_never_becomes_ok(self):
         self.install_claude()

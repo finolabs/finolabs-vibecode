@@ -1,5 +1,5 @@
 {
-  "description": "Remind every new or resumed session to start coding work with fnl-coding-router, and record usage metadata when the user has consented",
+  "description": "Offer the configured coding reminder at session start, and record usage metadata when the user has consented",
   "hooks": {
     "SessionStart": [
       {
@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cat \"${CLAUDE_PLUGIN_ROOT}/rules/AGENTS.md\"",
+            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/session_start.py\"; exit 0",
             "timeout": 10
           }
         ]
