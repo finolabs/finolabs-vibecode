@@ -64,7 +64,7 @@ Every skill carries the `fnl-` prefix. The user types four of them, `fnl-setup`,
 | `fnl-setup` | First run on a machine or repository: host config, local file placement, the agent-skills block in `CLAUDE.md` or `AGENTS.md`. |
 | `fnl-setup-instructions` | Writing your user-scoped instructions: it interviews you and writes them for Claude Code, Codex and Antigravity from one shared source. |
 | `fnl-status` | Opening the usage dashboard: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, from the usage events (after you consent in setup) and the dispatch ledger. It also lists delegated runs still open. |
-| `fnl-ask` | You are not sure which skill fits: describe the situation and get the next command, including companion skills from other packs. |
+| `fnl-ask` | You are new and do not know where to start, want to know what the plugin holds, or have a question about a skill, agent or script: it gives the first steps, lists the contents, explains the piece you name, or maps your situation to the next command, including companion skills from other packs. |
 | `fnl-open-source-review` | Before a repository goes public, and after: license, secrets in tree and history, internal leaks, clean payload, community files, repository settings, identity, data flow, plugin checks. |
 
 ### Agents
@@ -132,7 +132,7 @@ Ask your agent: "Route this change through the coding router and tell me the dep
 2. **Run setup once**: `/fnl-setup` (Claude Code, Antigravity) or `$fnl-setup` (Codex). Choose quick mode to accept the recommended defaults after one confirmation, or detailed mode to be asked about each part. It can set up delegation to other agents, keep `.finolabs/` out of git, add a short `## Agent skills` block to your `CLAUDE.md` or `AGENTS.md`, recommend review tools and companion skills, and offer the usage metrics. It installs nothing and writes nothing you have not confirmed. Everything optional can be skipped and run again later.
 3. **Work as you normally do.** Ask for a change; the agent starts coding work by loading `fnl-coding-router`, which names the workflow and the depth (MIN, NORMAL or DEEP) before it edits. On Claude Code a session-start reminder prompts this and on Antigravity an always-on rule does; on Codex, run `$fnl-setup-instructions` once so your own instructions point coding work at the router.
 4. **What you should see:** a stated depth and reason; commits written as `fnl-commit-messages` says; pull requests held for a posted code review and, when the change touches a sensitive boundary, a security review; and, if you set up delegation, other agents given bounded tasks whose results are checked before they are accepted.
-5. **When you are unsure which skill fits,** type `/fnl-ask`. To see how the practice is working for you, type `/fnl-status` once you have consented to the usage metrics and have used a few sessions.
+5. **When you do not know where to start, what the plugin holds, or how a skill works,** type `/fnl-ask`. To see how the practice is working for you, type `/fnl-status` once you have consented to the usage metrics and have used a few sessions.
 6. **Go further** when you need it: [Host configuration](#host-configuration) for delegation, [Usage metrics](#usage-metrics) for what is recorded and where, and [Works well with](#works-well-with) for companion skills.
 
 ## Works well with

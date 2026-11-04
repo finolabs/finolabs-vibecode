@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- `fnl-ask` now answers four kinds of question: where to start (the first steps for someone new), what the plugin contains (skills, agents and scripts, grouped by purpose), how a named skill, agent or script works, and which skill fits a situation. It reads the target file before answering, and still invokes nothing.
+
 ## [0.1.6] - 2026-11-04
 
 ### Added
