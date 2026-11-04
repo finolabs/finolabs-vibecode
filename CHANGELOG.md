@@ -8,6 +8,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - The `fnl-status` dashboard updates itself while its tab is open: the page reloads `data.js` every 5 seconds while visible and redraws when the numbers changed, and the hooks rebuild the file at most once per 10 seconds during a session and at each stop and session start (Claude Code and Codex; on Antigravity the page follows rebuilds made elsewhere). Checked in Chrome; Safari and Firefox are unverified. It stays local: no server and no listener.
 - Plain-language guidance in `fnl-ask` and `fnl-setup`: lead with the result, use everyday words and ask only the user's decisions. Both skills carry an identical reference so each works alone; CI checks the copies match.
+- `fnl-handoff` has a Resume mode: it writes a handover for a later session or another agent without dispatching anything. The handover is a note in the knowledge base the user's instructions name (tagged `handoff`, with a pointer line at the top of the project's state entry), or a brief file without one, and the agent's native memory holds at most a pointer. The agent that continues reads the latest handover, trusts the repository where they disagree, does the first unfinished step, asks before a merge, a deploy or a deletion, and updates the same note as it goes. The brief template gains two optional headings, "Waiting on" and "Linked runs or sessions".
 
 ### Changed
 

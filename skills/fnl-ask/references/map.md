@@ -11,6 +11,7 @@
 | Ready to implement one seam | `fnl-coding-router` (depth, gates) | `tdd` for the red-green loop |
 | Bug, failing CI, unexplained behavior | `fnl-coding-router` (debug path and checkpoint) | `diagnosing-bugs` |
 | Handing work to another agent (Claude Code, Codex, Antigravity) | `fnl-delegate`, then `fnl-handoff` | `/handoff` for a portable handoff document |
+| Stopping or switching and wanting the work continued later by a new session or another agent | `fnl-handoff` (Resume mode) | writes a handover note and launches nothing |
 | How the practice is working for you: router coverage, skill use, load cost, delegated runs, review outcomes | `/fnl-status` (opens the usage dashboard) | |
 | Deleting the recorded usage data, or stopping the recording | `/fnl-status purge` (asks before deleting) | |
 | Want a second opinion | `fnl-advisor` (proposed first and waits for your yes; spends quota) | |
