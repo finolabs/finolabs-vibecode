@@ -288,6 +288,15 @@ class HookTest(unittest.TestCase):
         self.assertEqual(got, [("kept", 3, "needs-context", "table"), ("kept", 2, "user-choice", "user")])
         self.assertEqual(set(self.events()[0]), {"ts", "sid", "repo", "event", "tasks", "reason", "route_by"})
 
+    def test_invalid_route_by_never_defaults_to_table(self):
+        self.consent()
+        keep = "python3 -I record.py keep --tasks 3 --reason no-delegate "
+        for value in ("route-judge", "user1", "USER", "table_extra"):
+            with self.subTest(route_by=value):
+                self.post("Bash", {"command": keep + "--route-by " + value})
+                self.post("Bash", {"command": keep + "--route-by=" + value})
+                self.assertEqual(self.events(), [])
+
     def test_the_keep_receipt_is_not_recorded_without_consent(self):
         self.post("Bash", {"command": "python3 -I record.py keep --tasks 3 --reason needs-context"})
         self.assertEqual(self.events(), [])

@@ -34,7 +34,7 @@ DEPTH = re.compile(r"--depth[\s=]+([A-Z]+)\b")
 TRIGGER = re.compile(r"--trigger[\s=]+([a-z-]+)\b")
 TASKS = re.compile(r"--tasks[\s=]+(\d{1,3})(?!\S)")
 REASON = re.compile(r"--reason[\s=]+([a-z-]+)(?!\S)")
-ROUTED = re.compile(r"--route-by[\s=]+([a-z]+)(?!\S)")
+ROUTED = re.compile(r"--route-by[\s=]+(\S+)")
 VALUE_FLAGS = {"--repo", "-R", "--body", "-b", "--body-file", "-F"}
 REFRESH = Path(__file__).resolve().parent.parent / "skills/fnl-status/scripts/refresh.py"
 REFRESH_EVERY = 10  # seconds between rebuilds while tools run, so an open dashboard stays current
