@@ -10,6 +10,15 @@
             "async": true
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "r=\"${PLUGIN_ROOT:-$CODEX_PLUGIN_ROOT}\"; [ -n \"$r\" ] && python3 -I \"$r/scripts/session_start.py\"; exit 0",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [

@@ -219,6 +219,14 @@ def check_review_by(root, problems):
         problems.append(f"{models.relative_to(root)}: needs a line \"Checked YYYY-MM-DD. Review by YYYY-MM-DD.\"")
 
 
+def check_mode_copies(root, problems):
+    source = root / "skills/fnl-delegate/scripts/mode.py"
+    for relative in ("scripts/mode.py", "skills/fnl-setup/scripts/mode.py"):
+        copy = root / relative
+        if not source.is_file() or not copy.is_file() or source.read_bytes() != copy.read_bytes():
+            problems.append(f"{relative}: mode.py copies differ or are missing")
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent)
     docs = documents(root)
@@ -228,6 +236,7 @@ def main():
     check_ledger_flags(root, docs, problems)
     check_host_template(root, problems)
     check_review_by(root, problems)
+    check_mode_copies(root, problems)
     print("\n".join(problems) or f"references ok ({len(docs)} files)")
     sys.exit(1 if problems else 0)
 
