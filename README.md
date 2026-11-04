@@ -51,7 +51,7 @@ Every skill carries the `fnl-` prefix. The user types four of them, `fnl-setup`,
 | `fnl-session-hygiene` | A session's context passes about 60%, a phase changes, a title goes stale, or work moves to another session or writer. |
 | `fnl-knowledge` | Remembering and recalling decisions, lessons and project state: a shared knowledge base (Orrery, or an Obsidian vault) for decisions, lessons and project state, and the repository for code facts. |
 | `fnl-delegate` | Coordinating Claude Code, Codex and Antigravity from whichever one you run in: grading on five levels with one decision matrix (tier, effort, budget, who accepts), routing by agent and model through a dated capability map, an optional route judge, quota fallback, at most 5 parallel runs, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger. |
-| `fnl-handoff` | Writing a self-contained brief and dispatching one task. |
+| `fnl-handoff` | Writing a self-contained brief and dispatching one task, or saving a handover (in your knowledge base when you have one) so a later session or another agent continues the work. |
 | `fnl-advisor` | Getting one second opinion from a stronger model of another family. |
 | `fnl-committee` | Work is stuck or looping: two agents from contrasting families find the root cause and a plan. |
 | `fnl-coordinator-sessions` | Running a spec as a coordinator plus one app session per task, with standby sessions and review gates. |

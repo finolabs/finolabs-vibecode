@@ -1,6 +1,6 @@
 ---
 name: fnl-handoff
-description: Write a self-contained brief and dispatch one task to Claude Code, Codex or Antigravity under a hard time budget. Use when handing a task or half-finished work to another agent, restarting a stalled or timed-out run, or sending review findings back for a fix.
+description: Write a self-contained brief and either dispatch one task to Claude Code, Codex or Antigravity under a hard time budget, or save a handover so a later session or another agent continues the work. Use when handing a task or half-finished work to another agent, restarting a stalled or timed-out run, sending review findings back for a fix, or wrapping up a session to resume it later.
 user-invocable: true
 argument-hint: "[--agent claude|codex|antigravity] [--model <id>] [--worktree] <task>"
 ---
@@ -11,9 +11,16 @@ The receiving agent starts with **zero context**: the brief is everything it kno
 
 **User's arguments:** $ARGUMENTS
 
+## Modes
+
+- **Dispatch**: a task goes to another agent now. Everything below applies.
+- **Resume**: the user is stopping or switching and wants the work continued later, by a new session or another agent. You write the handover and launch nothing; see "Resume".
+
+Take Resume when the user says to hand over, save the state, wrap up or continue later, and no agent is named. When unsure, ask which one in one line.
+
 ## Prerequisites
 
-Load the `fnl-delegate` skill and the host config it names. Requires the `fnl-delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill fnl-delegate`, or install the whole plugin) and stop. Grade and route the task there unless the arguments name an agent.
+Dispatch only. Load the `fnl-delegate` skill and the host config it names. Requires the `fnl-delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill fnl-delegate`, or install the whole plugin) and stop. Grade and route the task there unless the arguments name an agent.
 
 ## Arguments
 
@@ -23,7 +30,7 @@ Load the `fnl-delegate` skill and the host config it names. Requires the `fnl-de
 
 ## The brief
 
-Use every heading; write "none" where one is empty, so the agent knows it was considered.
+Use every heading except those marked optional; write "none" where one is empty, so the agent knows it was considered.
 
 ```
 ## Task
@@ -43,6 +50,12 @@ Use every heading; write "none" where one is empty, so the agent knows it was co
 
 ## What was tried
 - [Approach] — [why it failed or was abandoned]
+
+## Waiting on
+[Optional. What blocks the work and who unblocks it: a decision, an approval, a fix elsewhere.]
+
+## Linked runs or sessions
+[Optional. Other runs or sessions on this work: id, task, state, where its report is.]
 
 ## Acceptance criteria
 - [ ] [Checkable criterion]
@@ -80,3 +93,18 @@ For Antigravity, write an edit-only brief when its commands fall outside both it
 4. Tell the user in one line: agent, model, worktree, budget, check deadline, ledger id.
 
 The completion notice brings you back. At the check deadline, judge liveness from artifacts as `fnl-delegate` describes, then accept and record the outcome there.
+
+## Resume
+
+The reader is a future session or agent with zero context, so write the brief above with these changes: drop **Budget**, add an ordered **Next steps** list under Current state (each step checkable, the first one the next thing to do), and fill **Waiting on** and **Linked runs or sessions** when they apply.
+
+1. **Save it** as a note in the knowledge base the user's instructions name (`fnl-knowledge`), titled `<project> handoff <date>` and tagged `handoff` plus the project name. Without a knowledge base, save it as `<slug>.md` where "Dispatch" step 1 puts briefs. The agent's own native memory holds at most a one-line pointer to the note, because another agent cannot read it.
+2. **Point to it.** Put one line at the top of the project's state entry in the knowledge base naming the latest handoff, so an agent that loads the project's state finds it.
+3. **Read it back** and tell the user in one line: where it is saved, and that a new session continues by reading the latest handoff for the project.
+
+**Continuing** (the agent that picks it up):
+
+1. Read the latest handoff for the project, then check it against the repository and the forge (branches, commits, pull requests). When they disagree, the repository wins; say so in one line.
+2. Do the first unfinished step.
+3. Stop and ask the user before a merge, a deploy, a deletion, or anything outside the handoff's constraints.
+4. Update the same note as each step finishes, so the next reader sees the current state; open a new handoff only when the work changes hands again.

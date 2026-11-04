@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- `fnl-handoff` has a Resume mode: it writes a handover for a later session or another agent without dispatching anything. The handover is a note in the knowledge base the user's instructions name (tagged `handoff`, with a pointer line at the top of the project's state entry), or a brief file without one, and the agent's native memory holds at most a pointer. The agent that continues reads the latest handover, trusts the repository where they disagree, does the first unfinished step, asks before a merge, a deploy or a deletion, and updates the same note as it goes. The brief template gains two optional headings, "Waiting on" and "Linked runs or sessions".
+
 ### Changed
 
 - `fnl-ask` now answers four kinds of question: where to start (the first steps for someone new), what the plugin contains (skills, agents and scripts, grouped by purpose), how a named skill, agent or script works, and which skill fits a situation. It reads the target file before answering, and still invokes nothing.
