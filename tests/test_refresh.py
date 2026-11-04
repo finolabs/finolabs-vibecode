@@ -180,6 +180,45 @@ class RefreshTest(unittest.TestCase):
         self.refresh("run")
         self.assertIsNone(self.data()["kept"])
 
+    def fixture_old_implementation_starts(self):
+        starts = [{"event": "start", "id": "old-%d" % age,
+                   "ts": (self.at - timedelta(days=age)).isoformat(),
+                   "project": "demo", "task": "t", "kind": "implement", "grade": "easy",
+                   "agent": "codex", "model": "m", "reason": "routing"}
+                  for age in range(40, 50)]
+        self.ledger.write_text("".join(json.dumps(s) + "\n" for s in starts))
+
+    def test_old_handoffs_do_not_imply_zero_kept_since_consent_today(self):
+        self.consent("30")
+        self.write_events([self.event(0, "k", X, "first_edit")])
+        self.fixture_old_implementation_starts()
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
+    def test_handoffs_after_the_first_available_event_still_count(self):
+        self.consent("30")
+        self.write_events([self.event(0, "k", X, "first_edit"),
+                           self.days_ago(2, "k", X, "first_edit")])
+        self.fixture_old_implementation_starts()
+        self.fixture_ledger()
+        self.refresh("run")
+        kept = self.data()["kept"]
+        self.assertEqual((kept["tasks"], kept["handed_off"]), (0, 2))
+
+    def test_handoff_window_uses_local_dates_at_the_first_event(self):
+        self.env["TZ"] = "Asia/Ho_Chi_Minh"
+        self.at = datetime.now(timezone(timedelta(hours=7))).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+        self.consent("30")
+        self.write_events([self.event(0, "k", X, "first_edit")])
+        starts = [{"event": "start", "id": "local-%d" % hour,
+                   "ts": (self.at + timedelta(hours=hour)).astimezone(timezone.utc).isoformat(),
+                   "project": "demo", "task": "t", "kind": "implement", "grade": "easy",
+                   "agent": "codex", "model": "m", "reason": "routing"}
+                  for hour in (-1, 1)]
+        self.ledger.write_text("".join(json.dumps(s) + "\n" for s in starts))
+        self.refresh("run")
+        self.assertEqual(self.data()["kept"]["handed_off"], 1)
+
     def test_with_consent_but_no_hook_running_no_zero_is_shown_for_kept_work(self):
         self.consent()
         self.fixture_ledger()

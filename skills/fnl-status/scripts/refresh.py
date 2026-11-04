@@ -66,7 +66,7 @@ def ratio(num, den):
     return num / den if den else None
 
 
-def ledger_metrics(ledger, start):
+def ledger_metrics(ledger, start, usage_start=None):
     """(delegation rows, overall first pass, weekly first pass with None for empty weeks, finished runs, runs handed off)."""
     rows = ledger.summary_rows(keys=("agent", "model", "grade"), since=start.isoformat())
     delegation = [{"agent": r["agent"], "model": r["model"], "grade": r["grade"], "runs": r["n"], "first_pass": r["first_pass"],
@@ -81,8 +81,9 @@ def ledger_metrics(ledger, start):
         if w is not None:
             done[w] += 1
             good[w] += f["outcome"] == "accepted" and f["rework_rounds"] == 0
+    handoff_start = max(start, usage_start) if usage_start is not None else start
     handed_off = sum(s["kind"] == "implement" and s["agent"] != "subagent" and s["reason"] != "fallback-failure"
-                     and s["ts"][:10] >= start.isoformat() for s in starts.values())
+                     and local_date(s["ts"]) >= handoff_start for s in starts.values())
     return delegation, ratio(sum(r["first_pass"] * r["n"] for r in rows), runs), [ratio(g, d) for g, d in zip(good, done)], runs, handed_off
 
 
@@ -183,7 +184,8 @@ def build(days=WEEKS * 7):
     ledger_note = "fnl-delegate is not installed"
     if LEDGER.exists():
         try:
-            delegation, first_pass, fp_week, runs, handed_off = ledger_metrics(load_ledger(), start)
+            usage_start = min((local_date(e["ts"]) for e in events), default=None)
+            delegation, first_pass, fp_week, runs, handed_off = ledger_metrics(load_ledger(), start, usage_start)
             ledger_note = "%d runs" % runs if runs else "no finished runs in this period"
         except Exception:
             delegation, ledger_note = None, "ledger could not be read"
