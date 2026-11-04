@@ -4,7 +4,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
-## [0.1.7] - 2026-11-04
+## [0.1.7] - 2026-11-05
 
 ### Added
 
