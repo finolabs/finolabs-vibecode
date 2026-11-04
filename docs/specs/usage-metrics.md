@@ -82,6 +82,8 @@ Plugin-level, not inside a skill: they only exist when the whole plugin is insta
 
 `fnl-setup` gains a section that, in this order, states what is recorded and where, states that the dashboard is a local page and that nothing leaves the machine, asks for consent, asks the retention (30, 90, 365 days), and writes `consent.json` with the date and the retention. Consent is asked on its own and never bundled, like the route judge. Declining leaves everything off and the dashboard still shows the ledger.
 
+A new event containing only counts or values from a closed set needs no fresh consent if it stays local under the existing retention, purge and revoke controls and is listed in `PRIVACY.md`, `fnl-setup` section F and `fnl-status`; adding free text, paths, command text or anything sent off the machine requires fresh consent with a consent version.
+
 Retention: on each `session_start` the writer deletes event files that end before the retention window, drops the older lines from the file the window cuts through, and deletes marker files older than seven days. `fnl-status purge` deletes the whole store, `data.js` and `dashboard.html` after one confirmation.
 
 ## Dashboard
