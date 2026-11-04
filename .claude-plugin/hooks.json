@@ -18,7 +18,7 @@
           {
             "type": "command",
             "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/update_check.py\" 2>/dev/null; exit 0",
-            "timeout": 2
+            "timeout": 5
           }
         ]
       },

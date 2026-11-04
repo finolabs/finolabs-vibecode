@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Update the plugin
 
-Run only at the user's request. A session-start notice is an invitation to ask once in that session whether the user wants to run this skill; it is not permission to update. An earlier yes to checking or opening this skill is not a yes to installing an update.
+Run only at the user's request. A session-start notice tells the agent to let the user know a newer version is available and that they can type `/fnl-update` (on Codex `$fnl-update`). Only the user can invoke this skill; the notice is not permission to update. An earlier yes to checking or opening this skill is not a yes to installing an update.
 
 The helper and its shared core are in this skill's own `scripts/` folder. Resolve `<update_check.py>` there. It uses `fnl_metrics.state_dir()` for all state, independently of metrics consent. It reads the plugin's own manifest when installed with the plugin; a standalone skill has no manifest, so its installed version is unknown. Use the host's installed-plugin listing to establish that version rather than guessing it.
 

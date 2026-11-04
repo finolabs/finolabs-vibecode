@@ -13,6 +13,7 @@
 | Handing work to another agent (Claude Code, Codex, Antigravity) | `fnl-delegate`, then `fnl-handoff` | `/handoff` for a portable handoff document |
 | How the practice is working for you: router coverage, skill use, load cost, delegated runs, review outcomes | `/fnl-status` (opens the usage dashboard) | |
 | Deleting the recorded usage data, or stopping the recording | `/fnl-status purge` (asks before deleting) | |
+| Checking for a plugin update, skipping a release, or stopping update notices | `/fnl-update` (shows versions and asks before updating) | |
 | Want a second opinion | `fnl-advisor` (proposed first and waits for your yes; spends quota) | |
 | Stuck or looping on fixes | `fnl-committee` (proposed first and waits for your yes; spends two families' quota) | |
 | A query on live data, an infrastructure change, a dashboard or a forecast | `fnl-coding-router`, which reads `references/non-code-work.md` | |

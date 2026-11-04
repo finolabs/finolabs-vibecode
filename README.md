@@ -139,7 +139,7 @@ codex plugin marketplace add finolabs/plugins
 codex plugin add finolabs-vibecode@finolabs
 ```
 
-Codex runs a plugin's hooks only after you trust them: open `/hooks` once in a new session. Until then the usage metrics and update notice hooks do not run. Trust the hooks again after a plugin update.
+Codex runs a plugin's hooks only after you trust them: open `/hooks` once in a new session. Until then plugin hooks cannot run. The update check and notice are unverified on Codex. Trust the hooks again after a plugin update.
 
 ### Antigravity
 
@@ -199,9 +199,9 @@ Events are best effort: they are read from tool calls and command text, so they 
 
 ## Update check
 
-On by default on Claude Code and Codex, independently of usage metrics consent. A startup hook reads a local cache and starts a detached worker when it is missing or at least 24 hours old. The worker makes the plugin's only network call: one HTTPS GET to `https://api.github.com/repos/finolabs/finolabs-vibecode/releases/latest` with generic User-Agent `finolabs-vibecode-update-check`. It sends nothing about the user, repository, session or installed version. GitHub sees the connection's source IP. Only a timestamp and validated stable release tag are cached; no response text is displayed. Failures stay silent and the session continues.
+On by default, independently of usage metrics consent. The check and startup notice are verified on Claude Code and unverified on Codex and Antigravity; Codex ships a hook, while Antigravity has no automatic update hook. A startup hook reads a local cache and starts a detached worker when it is missing or at least 24 hours old. The worker makes the plugin's only network call: one HTTPS GET to `https://api.github.com/repos/finolabs/finolabs-vibecode/releases/latest` with generic User-Agent `finolabs-vibecode-update-check`. It sends nothing about the user, repository, session or installed version. GitHub sees the connection's source IP. Only a timestamp and validated stable release tag are cached; no response text is displayed. Failures stay silent and the session continues.
 
-A newer stable version prompts the agent to ask once per session about `fnl-update`. That skill shows the installed and cached available versions, asks for a clear yes before a native update, and records “skip this version” or “never ask” when requested. Claude Code needs a restart after updating; Codex hooks need trust again through `/hooks`. Codex and Antigravity update procedures are currently unverified; the skill explains that limit. The first carrying stable release gives no notice of itself. Set `FNL_UPDATE_CHECK=off` to stop requests and notices; “never ask” suppresses notices only. Antigravity has the skill but no automatic update hook. See [PRIVACY.md](PRIVACY.md) and the [spec](docs/specs/update-check.md).
+A newer stable version prompts the agent to let the user know they can type `/fnl-update` (on Codex `$fnl-update`), at most once per session. That skill shows the installed and cached available versions, asks for a clear yes before a native update, and records “skip this version” or “never ask” when requested. Claude Code needs a restart after updating; Codex hooks need trust again through `/hooks`. Codex and Antigravity update procedures are currently unverified; the skill explains that limit. The first carrying stable release gives no notice of itself. Set `FNL_UPDATE_CHECK=off` to stop requests and notices; “never ask” suppresses notices only. Antigravity has the skill but no automatic update hook. See [PRIVACY.md](PRIVACY.md) and the [spec](docs/specs/update-check.md).
 
 ## Where the plugin keeps its files
 

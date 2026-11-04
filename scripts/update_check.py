@@ -8,7 +8,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-import urllib.request
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # also works with python -I
 import fnl_metrics as fm  # noqa: E402
@@ -45,7 +44,11 @@ def installed_version():
     path = root / ".claude-plugin/plugin.json"
     if not path.is_file():
         return None
-    manifest = json.loads(fm.read_small(path))
+    with path.open("rb") as handle:
+        body = handle.read(65537)
+    if len(body) > 65536:
+        raise ValueError("manifest too large")
+    manifest = json.loads(body)
     if manifest.get("name") != "finolabs-vibecode":
         raise ValueError("unexpected manifest")
     value = manifest["version"]
@@ -58,6 +61,8 @@ def read_json(name, default):
         return json.loads(fm.read_small(fm.state_dir() / name))
     except FileNotFoundError:
         return default
+    except (OSError, ValueError):
+        return None
 
 
 def cache():
@@ -65,21 +70,26 @@ def cache():
     if data is None:
         return None
     if not isinstance(data, dict) or set(data) != {"checked_at", "tag"}:
-        raise ValueError("invalid cache")
+        return None
     at = data["checked_at"]
-    if (type(at) not in (int, float) or not math.isfinite(at) or at < 0
-            or at > fm.now().timestamp() or not release_tag(data["tag"])):
-        raise ValueError("invalid cache")
+    if (type(at) not in (int, float) or at < 0 or at > fm.now().timestamp()
+            or not math.isfinite(at) or not release_tag(data["tag"])):
+        return None
     return data
 
 
-def choices():
+def stored_choices():
+    """Keep invalid choices distinct so the hook stays silent until repaired."""
     data = read_json("update-state.json", {"skipped": [], "never_ask": False})
     if (not isinstance(data, dict) or set(data) != {"skipped", "never_ask"}
             or type(data["never_ask"]) is not bool or not isinstance(data["skipped"], list)
             or not all(release_tag(tag) for tag in data["skipped"])):
-        raise ValueError("invalid choices")
+        return None
     return data
+
+
+def choices():
+    return stored_choices() or {"skipped": [], "never_ask": False}
 
 
 def write_json(name, data):
@@ -87,12 +97,13 @@ def write_json(name, data):
     fm.atomic_write(folder / name, json.dumps(data, separators=(",", ":")) + "\n")
 
 
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None  # one fixed HTTPS GET; never follow response URLs
-
-
 def fetch():
+    import urllib.request
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None  # one fixed HTTPS GET; never follow response URLs
+
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
     request = urllib.request.Request(URL, headers={"User-Agent": USER_AGENT}, method="GET")
     with opener.open(request, timeout=TIMEOUT) as response:
@@ -106,9 +117,11 @@ def fetch():
 
 
 def start_fetch():
+    detach = ({"creationflags": 0x00000008 | 0x00000200} if sys.platform == "win32"
+              else {"start_new_session": True})
     subprocess.Popen([sys.executable, "-I", str(Path(__file__).resolve()), "--fetch"],
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                     stderr=subprocess.DEVNULL, start_new_session=True, close_fds=True,
+                     stderr=subprocess.DEVNULL, close_fds=True, **detach,
                      cwd=str(Path(__file__).resolve().parent))
 
 
@@ -131,7 +144,8 @@ def run(argv):
         return
     if argv not in ([], ["status"]):
         return
-    installed, saved, state = installed_version(), cache(), choices()
+    installed, saved = installed_version(), cache()
+    state = choices() if argv == ["status"] else stored_choices()
     stale = saved is None or fm.now().timestamp() - saved["checked_at"] >= MAX_AGE
     available = saved["tag"].removeprefix("v") if saved else None
     newer = bool(installed and available and version(available) > version(installed))
@@ -143,9 +157,9 @@ def run(argv):
         return
     if stale:
         start_fetch()  # no wait; this invocation only uses the cache read above
-    if (newer and not state["never_ask"]
+    if (newer and state is not None and not state["never_ask"]
             and available not in [tag.removeprefix("v") for tag in state["skipped"]]):
-        print("A newer finolabs-vibecode (%s) is available. Ask the user once whether to run fnl-update; do not update on your own." % available)
+        print("A newer finolabs-vibecode (%s) is available. Let the user know they can type /fnl-update (on Codex $fnl-update); do not update on your own." % available)
 
 
 def main(argv=None):

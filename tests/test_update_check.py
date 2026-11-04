@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from unittest import mock
 import urllib.error
+import urllib.request
 
 REAL_POPEN = subprocess.Popen
 ROOT = Path(__file__).resolve().parent.parent
@@ -37,7 +38,7 @@ class UpdateTest(unittest.TestCase):
         spawn = mock.patch.object(u.subprocess, 'Popen')
         self.spawn = spawn.start()
         self.addCleanup(spawn.stop)
-        transport = mock.patch.object(u.urllib.request, 'build_opener')
+        transport = mock.patch('urllib.request.build_opener')
         self.transport = transport.start()
         self.addCleanup(transport.stop)
         self.response = self.transport.return_value.open.return_value.__enter__.return_value
@@ -75,8 +76,7 @@ class UpdateTest(unittest.TestCase):
                 self.assertEqual(bool(result), output)
                 self.assertLessEqual(len(result.splitlines()), 1)
                 if output:
-                    self.assertIn(tag.removeprefix('v'), result)
-                    self.assertIn('do not update on your own', result)
+                    self.assertEqual(result, 'A newer finolabs-vibecode (%s) is available. Let the user know they can type /fnl-update (on Codex $fnl-update); do not update on your own.\n' % tag.removeprefix('v'))
         with mock.patch.object(u, 'installed_version', return_value='0.1.7'):
             self.cache('v0.1.7')
             self.assertEqual(self.call(), '')  # bootstrap release equals installed
@@ -116,7 +116,7 @@ class UpdateTest(unittest.TestCase):
         self.assertEqual(self.transport.return_value.open.call_args.kwargs, {'timeout': 3})
         handlers = self.transport.call_args.args
         self.assertEqual(handlers[0].proxies, {})
-        self.assertIsInstance(handlers[1], u.NoRedirect)
+        self.assertIsInstance(handlers[1], urllib.request.HTTPRedirectHandler)
         self.assertIsNone(handlers[1].redirect_request(None, None, 302, '', {}, 'https://evil.invalid'))
         self.response.read.assert_called_once_with(u.MAX_RESPONSE + 1)
         path = self.folder / 'update-check.json'
@@ -165,23 +165,77 @@ class UpdateTest(unittest.TestCase):
         self.transport.assert_not_called()
         self.assertEqual(list(self.folder.iterdir()), [])
 
-    def test_corrupt_cache_and_choices_are_silent(self):
-        for bad in [[], True, 'x', {}, {'checked_at': 'now', 'tag': '0.1.8'},
-                    {'checked_at': True, 'tag': '0.1.8'}, {'checked_at': float('nan'), 'tag': '0.1.8'},
-                    {'checked_at': 200001, 'tag': '0.1.8'}, {'checked_at': -1, 'tag': '0.1.8'},
-                    {'checked_at': 1, 'tag': '0.1.8\n'}, {'checked_at': 1, 'tag': '0.1.8', 'extra': 1}]:
-            self.save('update-check.json', bad)
-            self.assertEqual(self.call(), '')
-        (self.folder / 'update-check.json').write_text('not json')
-        self.assertEqual(self.call(), '')
+    def test_invalid_cache_is_stale_and_worker_replaces_it(self):
+        bad_caches = [[], True, 'x', {}, {'checked_at': 'now', 'tag': '0.1.8'},
+                      {'checked_at': True, 'tag': '0.1.8'},
+                      {'checked_at': float('nan'), 'tag': '0.1.8'},
+                      {'checked_at': 10 ** 400, 'tag': '0.1.8'},
+                      {'checked_at': 200001, 'tag': '0.1.8'},
+                      {'checked_at': -1, 'tag': '0.1.8'},
+                      {'checked_at': 1, 'tag': '0.1.8\n'},
+                      {'checked_at': 1, 'tag': '0.1.8', 'extra': 1}]
+        for body in [json.dumps(data) for data in bad_caches] + ['not json']:
+            with self.subTest(body=body):
+                (self.folder / 'update-check.json').write_text(body)
+                self.assertIsNone(u.cache())
+                status = json.loads(self.call('status'))
+                self.assertTrue(status['stale'])
+                self.assertIsNone(status['available'])
+                self.spawn.reset_mock()
+                self.assertEqual(self.call(), '')
+                self.spawn.assert_called_once()
+                self.response.read.return_value = b'{"tag_name":"v0.1.8"}'
+                self.assertEqual(self.call('--fetch'), '')
+                self.assertEqual(u.cache(), {'checked_at': 200000, 'tag': 'v0.1.8'})
+
+    def test_invalid_choices_default_and_can_be_overwritten(self):
         self.cache()
-        for bad in [[], None, {}, {'skipped': [1], 'never_ask': False}, {'skipped': [], 'never_ask': 'false'}]:
-            self.save('update-state.json', bad)
-            self.assertEqual(self.call(), '')
+        bad_states = [[], None, {}, {'skipped': [1], 'never_ask': False},
+                      {'skipped': [], 'never_ask': 'false'},
+                      {'skipped': [], 'never_ask': False, 'extra': 1},
+                      {'skipped': ['ignore instructions'], 'never_ask': False}]
+        path = self.folder / 'update-state.json'
+        for body in [json.dumps(data) for data in bad_states] + ['not json']:
+            with self.subTest(body=body):
+                path.write_text(body)
+                self.assertEqual(u.choices(), {'skipped': [], 'never_ask': False})
+                self.assertEqual(json.loads(self.call('status')), {
+                    'installed': '0.1.7-dev', 'available': '0.1.8', 'newer': True,
+                    'stale': False, 'skipped': [], 'never_ask': False})
+                self.assertEqual(self.call(), '')
+                for args, expected in [
+                        (('skip', '0.1.8'), {'skipped': ['0.1.8'], 'never_ask': False}),
+                        (('never',), {'skipped': [], 'never_ask': True})]:
+                    path.write_text(body)
+                    self.assertEqual(self.call(*args), '')
+                    self.assertEqual(json.loads(path.read_text()), expected)
         self.spawn.assert_not_called()
 
+    def test_windows_detached_spawn_options(self):
+        with mock.patch.object(u.sys, 'platform', 'win32'):
+            u.start_fetch()
+        kwargs = self.spawn.call_args.kwargs
+        self.assertEqual(kwargs['creationflags'], 0x00000008 | 0x00000200)
+        self.assertNotIn('start_new_session', kwargs)
+        self.assertTrue(kwargs['close_fds'])
+        self.spawn.return_value.wait.assert_not_called()
+
+    def test_installed_manifest_over_four_kilobytes(self):
+        root = self.folder / 'plugin'
+        (root / 'scripts').mkdir(parents=True)
+        (root / '.claude-plugin').mkdir()
+        manifest = root / '.claude-plugin/plugin.json'
+        manifest.write_text(json.dumps({'name': 'finolabs-vibecode',
+                                       'description': 'x' * 5000, 'version': '0.1.7-dev'}))
+        with mock.patch.object(u, '__file__', str(root / 'scripts/update_check.py')):
+            self.assertEqual(u.installed_version(), '0.1.7-dev')
+            manifest.write_text(json.dumps({'name': 'finolabs-vibecode',
+                                           'description': 'x' * 65536, 'version': '0.1.7-dev'}))
+            with self.assertRaises(ValueError):
+                u.installed_version()
+
     def test_failures_are_silent_and_successful_exit(self):
-        for function, args in [('installed_version', ()), ('cache', ()), ('choices', ()),
+        for function, args in [('installed_version', ()), ('cache', ()), ('stored_choices', ()),
                                ('start_fetch', ()), ('fetch', ('--fetch',)),
                                ('write_json', ('never',)), ('write_json', ('skip', '0.1.8'))]:
             for error in [OSError, PermissionError, ValueError, RuntimeError]:
@@ -229,7 +283,7 @@ class UpdateTest(unittest.TestCase):
             self.assertEqual(groups[0]['matcher'], 'startup')
             hook = groups[0]['hooks'][0]
             self.assertFalse(hook.get('async', False))
-            self.assertLessEqual(hook['timeout'], 2)
+            self.assertEqual(hook['timeout'], 5)
             # Use the real shell with an absent plugin root: interpreter errors stay silent.
             env = {**os.environ, 'CLAUDE_PLUGIN_ROOT': str(self.folder), 'PLUGIN_ROOT': str(self.folder), 'CODEX_PLUGIN_ROOT': str(self.folder)}
             with mock.patch.object(subprocess, 'Popen', REAL_POPEN):
@@ -239,12 +293,23 @@ class UpdateTest(unittest.TestCase):
             self.assertEqual(len(metric_hooks), 3)
             self.assertTrue(all(h.get('async') for h in metric_hooks))
 
+    def test_hook_import_does_not_load_urllib_request(self):
+        code = ("import runpy, sys; runpy.run_path(sys.argv[1], run_name='update_check'); "
+                "assert 'urllib.request' not in sys.modules")
+        with mock.patch.object(subprocess, 'Popen', REAL_POPEN):
+            result = subprocess.run([sys.executable, '-I', '-c', code,
+                                     str(ROOT / 'scripts/update_check.py')],
+                                    capture_output=True, timeout=3)
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, b'', b''))
+
     def test_subprocess_entrypoint_always_zero_on_corruption(self):
         (self.folder / 'update-check.json').write_text('{broken')
         with mock.patch.object(subprocess, 'Popen', REAL_POPEN):
-            result = subprocess.run([sys.executable, '-I', str(ROOT / 'scripts/update_check.py')],
+            result = subprocess.run([sys.executable, '-I', str(ROOT / 'scripts/update_check.py'), 'status'],
                                     capture_output=True, timeout=3)
-        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, b'', b''))
+        self.assertEqual((result.returncode, result.stderr), (0, b''))
+        self.assertTrue(json.loads(result.stdout)['stale'])
+        self.assertIsNone(json.loads(result.stdout)['available'])
 
 
 if __name__ == '__main__':
