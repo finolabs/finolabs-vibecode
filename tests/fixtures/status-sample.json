@@ -595,5 +595,9 @@
  "review_stats": {
   "total": 4,
   "reworked": 2
- }
+ },
+  "kept": {"receipts": 3, "tasks": 7, "handed_off": 14, "rows": [
+    {"coordinator": "claude", "reason": "needs-context", "route_by": "table", "receipts": 2, "tasks": 5},
+    {"coordinator": "claude", "reason": "user-choice", "route_by": "user", "receipts": 1, "tasks": 2}
+  ]}
 }

@@ -64,7 +64,7 @@ def ratio(num, den):
 
 
 def ledger_metrics(ledger, start):
-    """(delegation rows, overall first pass, weekly first pass with None for empty weeks, finished runs)."""
+    """(delegation rows, overall first pass, weekly first pass with None for empty weeks, finished runs, runs handed off)."""
     rows = ledger.summary_rows(keys=("agent", "model", "grade"), since=start.isoformat())
     delegation = [{"agent": r["agent"], "model": r["model"], "grade": r["grade"], "runs": r["n"], "first_pass": r["first_pass"],
                    "quota": r["quota"], "error": r["error"], "median_min": round(r["median_min"]), "rework": round(r["rework"], 1)}
@@ -78,7 +78,24 @@ def ledger_metrics(ledger, start):
         if w is not None:
             done[w] += 1
             good[w] += f["outcome"] == "accepted" and f["rework_rounds"] == 0
-    return delegation, ratio(sum(r["first_pass"] * r["n"] for r in rows), runs), [ratio(g, d) for g, d in zip(good, done)], runs
+    handed_off = sum(s["kind"] == "implement" and s["agent"] != "subagent" and not s["reason"].startswith("fallback")
+                     and s["ts"][:10] >= start.isoformat() for s in starts.values())
+    return delegation, ratio(sum(r["first_pass"] * r["n"] for r in rows), runs), [ratio(g, d) for g, d in zip(good, done)], runs, handed_off
+
+
+def kept_metrics(events, by_sid, handed_off):
+    """Tasks coordinators kept, beside implementation runs handed off (None when the ledger is unread); None when neither exists."""
+    groups = defaultdict(lambda: [0, 0])
+    for e in events:
+        if e["event"] == "kept":
+            host = next((x["host"] for x in by_sid[e["sid"]] if x["event"] == "session_start"), "unknown")
+            group = groups[(host, e["reason"], e["route_by"])]
+            group[0] += 1
+            group[1] += e["tasks"]
+    if not groups and not handed_off:
+        return None
+    rows = [{"coordinator": c, "reason": r, "route_by": b, "receipts": n, "tasks": t} for (c, r, b), (n, t) in sorted(groups.items())]
+    return {"receipts": sum(r["receipts"] for r in rows), "tasks": sum(r["tasks"] for r in rows), "handed_off": handed_off, "rows": rows}
 
 
 def build(days=WEEKS * 7):
@@ -159,11 +176,11 @@ def build(days=WEEKS * 7):
     per_day = Counter(local_date(e["ts"]).isoformat() for e in events)
     activity = [{"date": (start + timedelta(days=i)).isoformat(), "count": per_day.get((start + timedelta(days=i)).isoformat(), 0)} for i in range(days)]
 
-    delegation, first_pass, fp_week, runs = None, None, [None] * WEEKS, 0
+    delegation, first_pass, fp_week, runs, handed_off = None, None, [None] * WEEKS, 0, None
     ledger_note = "fnl-delegate is not installed"
     if LEDGER.exists():
         try:
-            delegation, first_pass, fp_week, runs = ledger_metrics(load_ledger(), start)
+            delegation, first_pass, fp_week, runs, handed_off = ledger_metrics(load_ledger(), start)
             ledger_note = "%d runs" % runs if runs else "no finished runs in this period"
         except Exception:
             delegation, ledger_note = None, "ledger could not be read"
@@ -196,7 +213,7 @@ def build(days=WEEKS * 7):
                           "sessions": sessions_week if events else None, "calls": calls_week if events else None,
                           "first_pass": fp_week if first_pass is not None else None}},
         "router": {"covered": covered, "missed": missed, "excluded": excluded, "unclassified": unclassified, "eligible": eligible} if eligible else None,
-        "use": use or None, "load": load, "depth": depth_rows or None, "delegation": delegation or None,
+        "use": use or None, "load": load, "depth": depth_rows or None, "delegation": delegation or None, "kept": kept_metrics(events, by_sid, handed_off),
         "reviews": reviews or None, "review_stats": review_stats if groups else None, "activity": activity if events else None,
         "sources": [
             {"name": "hooks", "ok": bool(events), "note": "%d events" % len(events) if events else (why or "")},

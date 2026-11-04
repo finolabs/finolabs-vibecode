@@ -146,6 +146,34 @@ class RefreshTest(unittest.TestCase):
         self.refresh("run")
         self.assertEqual(self.data()["missing"]["use"], "no fnl- skill or agent used in this period")
 
+    def test_kept_work_is_counted_beside_the_implementation_runs_handed_off(self):
+        self.consent()
+        self.fixture_ledger()
+        start = {"host": "codex", "dispatch": None, "source": "startup"}
+        self.write_events([self.event(9, "k", X, "session_start", **start),
+                           self.event(8, "k", X, "kept", tasks=2, reason="needs-context", route_by="table"),
+                           self.event(7, "k", X, "kept", tasks=3, reason="needs-context", route_by="table"),
+                           self.event(6, "m", X, "kept", tasks=2, reason="user-choice", route_by="user")])
+        self.refresh("run")
+        kept = self.data()["kept"]
+        self.assertEqual((kept["receipts"], kept["tasks"], kept["handed_off"]), (3, 7, 2))
+        self.assertEqual(kept["rows"], [
+            {"coordinator": "codex", "reason": "needs-context", "route_by": "table", "receipts": 2, "tasks": 5},
+            {"coordinator": "unknown", "reason": "user-choice", "route_by": "user", "receipts": 1, "tasks": 2}])
+
+    def test_purge_removes_kept_work_with_the_other_events(self):
+        self.consent()
+        self.write_events([self.event(8, "k", X, "kept", tasks=2, reason="no-delegate", route_by="table")])
+        self.refresh("run")
+        self.assertEqual(self.data()["kept"]["tasks"], 2)
+        self.refresh("purge", "--yes")
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
+    def test_kept_work_stays_null_when_the_ledger_holds_neither_side(self):
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
     def test_a_malformed_ledger_line_does_not_stop_the_refresh(self):
         self.consent()
         start = {"event": "start", "id": "d1", "ts": "garbage", "project": "p", "task": "t", "kind": "implement",
