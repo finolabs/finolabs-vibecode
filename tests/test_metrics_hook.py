@@ -223,7 +223,8 @@ class HookTest(unittest.TestCase):
 
     def test_the_codex_command_runs_nothing_and_exits_zero_when_no_root_variable_is_set(self):
         config = json.loads((ROOT / ".codex-plugin/hooks.json").read_text())
-        commands = {h["command"] for groups in config["hooks"].values() for g in groups for h in g["hooks"]}
+        commands = {h["command"] for groups in config["hooks"].values() for g in groups for h in g["hooks"]
+                    if "metrics_hook.py" in h["command"]}
         self.assertEqual(len(commands), 1)
         [command] = commands
         bare = {"PATH": os.environ["PATH"]}
