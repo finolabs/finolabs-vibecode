@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- The `fnl-status` dashboard updates itself while its tab is open: the page reloads `data.js` every 5 seconds while visible and redraws when the numbers changed, and the hooks rebuild the file at most once per 10 seconds during a session and at each stop and session start (Claude Code and Codex; on Antigravity the page follows rebuilds made elsewhere). Checked in Chrome; Safari and Firefox are unverified. It stays local: no server and no listener.
+
 ### Changed
 
 - `fnl-ask` now answers four kinds of question: where to start (the first steps for someone new), what the plugin contains (skills, agents and scripts, grouped by purpose), how a named skill, agent or script works, and which skill fits a situation. It reads the target file before answering, and still invokes nothing.
