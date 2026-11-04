@@ -51,3 +51,5 @@ Never write an instruction file in either scope without that file's explicit yes
 ## 5. Report
 
 Files written by scope, backups made, files left unchanged and why, pending `/fnl-setup` items and anything unverified. Remind the user to keep local context and backups out of git. To check the result, start a fresh session on each host in the repository and ask the agent to summarize its instruction sources and rules; docs checks alone do not prove runtime loading.
+
+Keep machine inventory and settings out of instruction files: `/fnl-scan-agents` refreshes the local agent section, and `/fnl-set-mode` shows or changes Delegation mode and Routing with environment overrides explained. Both ask before writing host config.

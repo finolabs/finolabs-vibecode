@@ -19,3 +19,5 @@ Skills from other packs that make the `fnl-` skills work better where they fit. 
 `agybird` runs from Claude Code or Codex and calls the Antigravity CLI, so it is not installed in Antigravity itself. Skip a skill the findings show installed already.
 
 `diagram-design` installs from its own repository: in Claude Code, `/plugin marketplace add cathrynlavery/diagram-design`, then `/plugin install diagram-design@diagram-design`; in Codex and other agents, `npx skills add cathrynlavery/diagram-design -a <agent>`. Its maintainer lists the official builds on that repository only; a listing under another name is an unofficial copy.
+
+First-run order: `/fnl-ask`, `/fnl-setup` (section A depends on `fnl-scan-agents`), user instructions immediately on Codex or after a first result elsewhere, then companions and `/fnl-status` when useful. Use `/fnl-set-mode` for later preference changes.

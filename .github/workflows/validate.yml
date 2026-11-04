@@ -74,7 +74,8 @@ jobs:
         run: |
           python3 - <<'PY'
           import filecmp, sys
-          groups = [["skills/fnl-setup/references/interview.md", "skills/fnl-setup-instructions/references/interview.md"]]
+          groups = [["skills/fnl-setup/references/interview.md", "skills/fnl-setup-instructions/references/interview.md"],
+                    ["scripts/mode.py", "skills/fnl-delegate/scripts/mode.py", "skills/fnl-setup/scripts/mode.py", "skills/fnl-set-mode/scripts/mode.py"]]
           bad = [g for g in groups if not all(filecmp.cmp(g[0], p, shallow=False) for p in g[1:])]
           print(bad or "shared copies match")
           sys.exit(bool(bad))

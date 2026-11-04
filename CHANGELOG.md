@@ -8,6 +8,9 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- `fnl-scan-agents` refreshes the local agent inventory and user-confirmed allowed models; `fnl-delegate` routes only among recorded present families and warns once per session when the section is older than 30 days. The scan runs only three fixed `--version` calls, reads `host.md`, uses no network and stores nothing outside `host.md`; a clear yes is required for its atomic section-only write.
+- `fnl-set-mode` shows effective Delegation mode and Routing with their sources and environment overrides, previews changes and writes only those settings after a clear yes. Setup uses the scan, Check reports missing/stale inventory and retired context pointers, and the README includes light/dark skill architecture diagrams.
+
 - New behavior evals for the router in a Spec Kit repository, a repository with mattpocock/skills, and one with no workflow pack.
 - `fnl-delegate` "Keep or hand off": a coordinator holding two or more independent tasks with clear acceptance tests dispatches them or records why it kept them, before starting the first; under `suggest` (the default), it asks first. The coding router points to it. `record.py keep` prints one line with a count, a fixed reason and who settled it, and with usage metrics on the hook stores it as a new `kept` event, under the same consent, retention and purge as other events; existing consents cover it. The `fnl-status` delegation pane shows the tasks kept beside the implementation runs handed off.
 - Add user-chosen Delegation mode (manual, suggest or auto) and Routing (on/off), with a read-only settings reader, setup choices and honest Check reporting. Claude Code and Codex session-start reminders honor Routing; Antigravity’s static rule cannot, and safety gates remain unchanged.
@@ -27,7 +30,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Changed
 
 - Consolidate 20 skill folders into 17: `fnl-committee` → `fnl-advisor` (`references/committee.md`), `fnl-coordinator-sessions` → `fnl-delegate` (`references/coordinator-sessions.md`), and `fnl-knowledge` → `fnl-session-hygiene` (`references/knowledge.md`). Use the surviving skill names; committee and knowledge procedures load only when needed, and session hygiene owns saved handovers.
-- Clarify six own-kind delegation follow-ups: use sessions or headless runs, limit offer-free starts under manual to project requirements or context pressure with a one-line reason, define own kind by the host family, retain delegate authority limits, respect project session rules, and reject Codex hand-off offers in the keep-own-kind eval.
+- Clarify six own-kind delegation follow-ups: use sessions or headless runs, limit offer-free starts under manual to project requirements or context pressure with a one-line reason, define own kind by the recorded coordinator family, else the host family, retain delegate authority limits, respect project session rules, and reject Codex hand-off offers in the keep-own-kind eval.
 
 - The README explains the bricks idea (small skills plus a guideline, inspired by the LEGO Group's turnaround under Jørgen Vig Knudstorp; independent of and not endorsed by the LEGO Group), says what you hand over and what stays with you, and gains a Check step in the three-minute start. The repository social preview shows a robot built from bricks.
 - `fnl-coding-router` now works in any repository. Depth, the review and security gates, proof, "Proportion" and the stop-before-a-third-fix checkpoint are the core; the workflow is a short first step that reads one adapter under `references/workflows/`: `speckit.md` (every Spec Kit rule and the Spec Kit depth gate, unchanged in meaning), `mattpocock.md`, `superpowers.md`, or `none.md`, a self-contained procedure (bounded clarification, a genuine red, the smallest change, proof, review) for repositories with no workflow pack. The description is workflow-neutral, and the fallback table that pointed to skills a user might not have is gone.
@@ -40,7 +43,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### What to do
 
 - Update the plugin through your host's plugin update (the new update check, on by default, will tell you from now on; type `/fnl-update`, `$fnl-update` on Codex), or on Antigravity reinstall with `agy plugin install https://github.com/finolabs/finolabs-vibecode`. Claude Code needs a restart; Codex hooks need your trust again.
-- Delegation mode defaults to `suggest` (the agent names who could take a task and waits for your yes). To change it, or to turn Routing off, run setup (`/fnl-setup`, `$fnl-setup` on Codex) or add `## Delegation mode` and `## Routing` to your host config.
+- Delegation mode defaults to `suggest` (the agent names who could take a task and waits for your yes). Use `/fnl-set-mode` (`$fnl-set-mode` on Codex) to see or change it and Routing, and `/fnl-scan-agents` to refresh present families and confirmed models.
 - The update check makes one GitHub request every 24 hours. Set `FNL_UPDATE_CHECK=off` to stop it; see `PRIVACY.md`.
 - Run `/fnl-setup` and choose Check to see what runs on its own on your host and what is unverified.
 

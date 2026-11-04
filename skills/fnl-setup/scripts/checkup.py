@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read-only setup evidence; no host commands, network, or credential files."""
 
+import datetime
 import json
 import os
 import re
@@ -211,6 +212,50 @@ def text_check(name, paths, predicate, present, absent):
     return item(name, status, "file unreadable or symlink refused" if status == "unverified" else absent)
 
 
+def agents_evidence(status, text):
+    if status == "unverified":
+        return item("agents inventory", "unverified", "host config unreadable or symlink refused")
+    sections = re.findall(r"^## Agents on this machine[ \t]*\r?$.*?(?=^#{1,2} |\Z)", text, re.M | re.S)
+    if not sections:
+        return item("agents inventory", "missing", "section absent; run /fnl-scan-agents")
+    if len(sections) != 1:
+        return item("agents inventory", "unverified", "duplicate section; run /fnl-scan-agents")
+    rows = {}
+    for line in sections[0].splitlines():
+        cells = [v.strip() for v in line.strip().strip("|").split("|")]
+        if len(cells) == 5 and cells[0] in {"Claude Code", "Codex", "Antigravity"}:
+            if cells[0] in rows:
+                return item("agents inventory", "unverified", "duplicate agent row")
+            rows[cells[0]] = cells[-1]
+    try:
+        if len(rows) != 3:
+            raise ValueError("incomplete rows")
+        dates = [datetime.date.fromisoformat(value) for value in rows.values()]
+        today = datetime.date.today()
+        if max(dates) > today:
+            raise ValueError("future check")
+    except ValueError:
+        return item("agents inventory", "unverified", "incomplete rows or invalid Checked dates; run /fnl-scan-agents")
+    if (today - min(dates)).days > 30:
+        return item("agents inventory", "missing", "section stale (older than 30 days); run /fnl-scan-agents")
+    return item("agents inventory", "ok", "recent file inventory only; live access unverified")
+
+
+def retired_evidence(paths):
+    # Construct the historical names so the repository's retired-name rule still applies.
+    names = ["fnl-" + suffix for suffix in ("committee", "coordinator-sessions", "knowledge")]
+    evidence = [read(path) for path in paths]
+    found = sorted({name for status, text in evidence if status == "ok"
+                    for name in names if re.search(r"(?<![\w-])" + re.escape(name) + r"(?![\w-])", text)})
+    unknown = any(status == "unverified" for status, _ in evidence)
+    if found:
+        return item("retired skill pointers", "missing", "references found: " + ", ".join(found) +
+                    ("; some files unverified" if unknown else ""))
+    return item("retired skill pointers", "unverified" if unknown else "ok",
+                "some context files unreadable or symlink refused" if unknown else
+                "none in readable known context files; runtime loading unverified")
+
+
 def collect():
     # A local copy keeps this skill usable when installed alone, including under -I.
     sys.dont_write_bytecode = True
@@ -220,11 +265,13 @@ def collect():
     home = Path(os.path.abspath(os.environ.get("HOME", "~")))
     codex = Path(os.path.abspath(os.path.expanduser(os.environ.get("CODEX_HOME", str(home / ".codex")))))
     hosts = {}
+    user_context = []
     for host, folder, instructions in (
         ("claude", home / ".claude", [home / ".claude/CLAUDE.md"]),
-        ("codex", codex, [codex / "AGENTS.md"]),
+        ("codex", codex, [codex / "AGENTS.override.md", codex / "AGENTS.md"]),
         ("agy", home / ".gemini", [home / ".gemini/GEMINI.md", home / ".gemini/AGENTS.md"]),
     ):
+        user_context.extend(instructions)
         plugin, found = plugin_evidence(host, folder)
         hosts[host] = [cli_present(host), plugin, hooks_evidence(host, folder, found),
                        text_check("instructions", instructions, lambda t: "fnl-coding-router" in t,
@@ -240,6 +287,7 @@ def collect():
         hosts[host].append(item("mode enforcement", "unverified", enforcement + "; auto is never 100%"))
     explicit = os.environ.get("ORCHESTRATION_HOST_CONFIG")
     config = Path(os.path.expanduser(explicit or str(home / ".finolabs/vibecode/host.md")))
+    status, text = "unverified", ""
     if config.suffix.lower() != ".md":
         host_config = item("host config", "unverified", "only Markdown host config is inspected")
     else:
@@ -254,6 +302,7 @@ def collect():
                            ("required headings present; values not validated" if not missing else
                             "required headings absent: " + ", ".join(missing)) if status == "ok" else
                            "host config absent or unreadable")
+    inventory = agents_evidence(status, text)
     cwd = Path.cwd()
     # Locate the nearest repository without invoking git or reading its config.
     root = next((p for p in (cwd, *cwd.parents) if os.path.lexists(p / ".git")), cwd)
@@ -265,7 +314,8 @@ def collect():
         status, common = read(git / "commondir")
         if status == "ok":
             git = Path(os.path.abspath(git / common.strip()))
-    context = [root / "CLAUDE.md", root / "AGENTS.md"]
+    context = [root / "CLAUDE.md", root / "CLAUDE.local.md", root / "AGENTS.override.md",
+               root / "AGENTS.md", root / "GEMINI.md"]
     repository = [
         text_check("local exclude", [git / "info/exclude"],
                    lambda t: any(line.strip() in {".finolabs/", "/.finolabs/"} for line in t.splitlines()),
@@ -277,7 +327,8 @@ def collect():
                    "review-gate adoption line present", "review-gate adoption line absent"),
         item("workflow", "unverified", "files cannot prove agents follow routing or review gates"),
     ]
-    return {"principle": PRINCIPLE, "hosts": hosts, "setup": [host_config,
+    return {"principle": PRINCIPLE, "hosts": hosts, "setup": [host_config, inventory,
+            retired_evidence([*user_context, *context]),
             item("effective settings", "ok", "delegation mode=" + settings["delegation_mode"] +
                  "; routing=" + settings["routing"] + "; selected values only, not runtime proof"), *repository]}
 

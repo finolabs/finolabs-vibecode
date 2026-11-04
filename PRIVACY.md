@@ -2,6 +2,8 @@
 
 `finolabs-vibecode` is a set of Agent Skills: Markdown instructions plus small local Python scripts. It has no server. Its only network call is the update check described below; it sends nothing about you or your sessions. If you choose, it records usage metadata on your machine so you can see how the practice performs; that record never leaves the machine, and it is off until you consent.
 
+The agent scan runs `--version` on three fixed executables (`claude`, `codex`, `agy`) and reads `host.md`; it uses no network and stores nothing outside `host.md`.
+
 ## Where your data goes
 
 The skills run inside a host agent such as Claude Code or Codex, which processes your conversation under its provider's policy. When you follow the delegation skills and delegate work to another agent (for example Codex or Antigravity), the brief, the files that agent reads and anything it produces are processed by that agent's provider under that provider's terms. Delegate only work over files you are allowed to share with that provider.

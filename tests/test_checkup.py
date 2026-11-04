@@ -1,5 +1,6 @@
 """Bounded, read-only evidence for setup Check mode, using only fake host data."""
 
+import datetime
 import importlib.util
 import json
 import re
@@ -62,6 +63,41 @@ class CheckupTest(unittest.TestCase):
             "plugins": {"finolabs-vibecode@example": [{"installPath": str(root)}]}}))
         return root
 
+    def inventory(self, date):
+        return "## Agents on this machine\n\nCoordinator: Codex\n\n" + "\n".join(
+            f"| {name} | yes | fake | unverified | {date} |"
+            for name in ("Claude Code", "Codex", "Antigravity")) + "\n"
+
+    def test_missing_stale_recent_and_invalid_inventory(self):
+        self.assertEqual(self.setup_item("agents inventory")["status"], "missing")
+        config = self.home / ".finolabs/vibecode/host.md"
+        today = datetime.date.today()
+        self.write(config, self.inventory((today - datetime.timedelta(days=31)).isoformat()))
+        row = self.setup_item("agents inventory")
+        self.assertEqual(row["status"], "missing")
+        self.assertIn("stale", row["reason"])
+        config.write_text(self.inventory((today - datetime.timedelta(days=30)).isoformat()))
+        self.assertEqual(self.setup_item("agents inventory")["status"], "ok")
+        config.write_text(self.inventory("unverified"))
+        self.assertEqual(self.setup_item("agents inventory")["status"], "unverified")
+        config.unlink()
+        outside = self.write(self.base / "outside.md", self.inventory(today.isoformat()))
+        config.symlink_to(outside)
+        self.assertEqual(self.setup_item("agents inventory")["status"], "unverified")
+
+    def test_retired_pointers_in_user_and_project_context(self):
+        for suffix, path in (("committee", self.home / ".claude/CLAUDE.md"),
+                             ("coordinator-sessions", self.home / ".codex/AGENTS.override.md"),
+                             ("knowledge", self.repo / "AGENTS.md")):
+            with self.subTest(name=suffix):
+                self.write(path, "Use fnl-" + suffix + ".\n")
+                row = self.setup_item("retired skill pointers")
+                self.assertEqual(row["status"], "missing")
+                self.assertIn("fnl-" + suffix, row["reason"])
+                path.unlink()
+        self.assertEqual(self.setup_item("retired skill pointers")["status"], "ok")
+
+
     def test_missing_host_config(self):
         self.assertEqual(self.setup_item("host config")["status"], "missing")
 
@@ -78,7 +114,7 @@ class CheckupTest(unittest.TestCase):
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)))
         self.assertEqual(self.setup_item("host config")["status"], "ok")
         template = (ROOT / "skills/fnl-delegate/references/host-template.md").read_text()
-        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing"})
+        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine"})
 
     def test_effective_settings_and_enforcement_limits(self):
         self.env.update(FNL_DELEGATION_MODE="auto", FNL_ROUTING="off")

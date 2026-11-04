@@ -34,18 +34,30 @@ One engineering practice for AI coding agents, packaged as a single plugin with 
 
 This pack owns the decisions between tools: routing, depth, delegation, gates and conventions. For the work itself it points to trusted skills and native commands from known publishers (Matt Pocock's skills, Cloudflare's security audit, Spec Kit, each host's own review commands) instead of rewriting them, and every such pointer carries a fallback that keeps the skill working when the companion is not installed.
 
+### How the skills fit together
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/skills-architecture-dark.png">
+    <img src="assets/skills-architecture-light.png" alt="Skills architecture: the coding router connects delegation, verification and review gates with session and delivery skills; user commands refresh the local host config, dispatch ledger and usage dashboard." width="920">
+  </picture>
+</p>
+
 ### Bricks, not a framework
 
 The pack is a set of small skills that each do one job, plus a guideline that shows how we combine them. Follow the guideline, or assemble your own set.
 
 The modular approach was inspired by the LEGO Group's turnaround under Jørgen Vig Knudstorp: a small set of parts that fit together. This project is independent of, and is not sponsored or endorsed by, the LEGO Group. LEGO is a trademark of the LEGO Group.
 
-Two settings are yours. They live in the host config (`## Delegation mode` and `## Routing`), and `/fnl-setup` asks about them:
+Three settings are yours. They live in host config: `## Delegation mode`, `## Routing` and `## Agents on this machine`. Setup asks about them:
 
 - **Delegation mode.** `manual`: other agents get work only when you say so. `suggest` (default): the agent names who could take a task and waits for your yes. `auto`: it hands off bounded tasks by the guideline, records the decision in the ledger and tells you after.
+- **Agents.** Present agent families and user-confirmed allowed models. Delegation uses only present families; with no other family present it is off. A missing inventory keeps previous behavior and suggests a scan; an inventory older than 30 days prompts a stale warning once per session.
 - **Routing.** `on` (default) or `off`. Off removes the session-start reminder that sends the agent to `fnl-coding-router`; the skill still works when called by name.
 
-These settings govern hand-offs to another model family. Own-family sessions or headless runs follow project rules and may start without an offer for a project requirement or to spare context, with a one-line reason; they retain delegate authority limits. Neither setting weakens a gate: the review gates and the never-delegated list in `fnl-delegate` (merges, pushes, deploys, secrets) apply in every mode. What a setting guarantees depends on the host. It is agent judgment unless a hook or a host setting backs it; Codex hooks need your trust; Antigravity's always-on rule is a static file that Routing cannot switch off. So `auto` is never 100% automatic. `/fnl-ask` explains this in plain words, and `/fnl-setup` Check shows what your host enforces.
+Type `/fnl-scan-agents` to refresh which helpers are on this machine, and `/fnl-set-mode` to see or change Delegation mode and Routing; both show changes and ask for a clear yes before writing. Environment overrides (`FNL_DELEGATION_MODE`, `FNL_ROUTING`) win over the file; the mode command says when a write has no effect.
+
+These settings govern hand-offs to another model family. Own-family sessions or headless runs follow project rules and may start without an offer for a project requirement or to spare context, with a one-line reason; they retain delegate authority limits. No setting weakens a gate: the review gates and the never-delegated list in `fnl-delegate` (merges, pushes, deploys, secrets) apply in every mode. What a setting guarantees depends on the host. It is agent judgment unless a hook or a host setting backs it; Codex hooks need your trust; Antigravity's always-on rule is a static file that Routing cannot switch off. So `auto` is never 100% automatic. `/fnl-ask` explains this in plain words, and `/fnl-setup` Check shows what your host enforces.
 
 Suggested combinations, not presets (nothing selects a build for you):
 
@@ -104,7 +116,7 @@ Done when the plugin is listed by your host and the user knows the order: `/fnl-
 
 ## Skills
 
-The plugin has **17 skill folders**: 12 model-visible skills and five user-only skills. Every skill carries the `fnl-` prefix. The user types five of them, `fnl-setup`, `fnl-setup-instructions`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff` and `fnl-advisor` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
+The plugin has **19 skill folders**: 12 model-visible skills and seven user-only skills. Every skill carries the `fnl-` prefix. The user types seven of them, `fnl-scan-agents`, `fnl-set-mode`, `fnl-setup`, `fnl-setup-instructions`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff` and `fnl-advisor` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
 
 | Skill | Use it when |
 | --- | --- |
@@ -119,6 +131,8 @@ The plugin has **17 skill folders**: 12 model-visible skills and five user-only 
 | `fnl-security-review-gate` | A change touches auth, permissions, private data, untrusted input or payments: a permission-boundary review, with negative tests proving that not even a record's existence leaks. |
 | `fnl-verification` | Choosing targeted tests, reading the evidence, accepting someone else's work, claiming done. |
 | `fnl-plugin-packaging` | Packaging skills as a plugin for Claude Code, Codex and Antigravity from one repository: layout, manifests, icon, marketplaces, checks. |
+| `fnl-scan-agents` | Refreshing the local inventory of Claude Code, Codex and Antigravity, with user-confirmed allowed models and a yes before writing host config. |
+| `fnl-set-mode` | Showing or changing Delegation mode and Routing, their sources and environment overrides, with a yes before writing. |
 | `fnl-setup` | First run on a machine or repository: host config, local file placement, the agent-skills block in `CLAUDE.md` or `AGENTS.md`. |
 | `fnl-setup-instructions` | Writing user-scoped working contracts, project-scoped repository context, or both: it interviews you and keeps one source per scope for Claude Code, Codex and Antigravity. |
 | `fnl-status` | Opening the usage dashboard: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, from the usage events (after you consent in setup) and the dispatch ledger. It also lists delegated runs still open. |
@@ -179,7 +193,7 @@ npx skills add finolabs/finolabs-vibecode
 
 The installer lists the skills to choose from; `--skill <name>` takes one directly and `-a <agent>` picks the agent. It copies editable files into your project (or, with `-g`, for every project); update them with `npx skills update`. The plugin path also carries the agents, the session hook and the Antigravity rule, which single-skill installs leave out.
 
-Each skill works alone, except the dispatch and advice procedures: `fnl-handoff` Dispatch and `fnl-advisor` need `fnl-delegate` beside them; `fnl-handoff` Resume needs `fnl-session-hygiene`; `fnl-status` shows the usage events without it and adds the dispatch ledger when it is there. Other skills mention their neighbors by name and work without them. A sensible first pick: `fnl-coding-router`, `fnl-verification`, `fnl-review-gate`, `fnl-commit-messages`, plus `fnl-setup` to configure them.
+Each skill works alone, except that setup section A needs `fnl-scan-agents`, whose model-confirmation step uses the `fnl-delegate` tier table (or leaves models unverified without it), and the dispatch and advice procedures: `fnl-handoff` Dispatch and `fnl-advisor` need `fnl-delegate` beside them; `fnl-handoff` Resume needs `fnl-session-hygiene`; `fnl-status` shows the usage events without it and adds the dispatch ledger when it is there. Other skills mention their neighbors by name and work without them. A sensible first pick: `fnl-coding-router`, `fnl-verification`, `fnl-review-gate`, `fnl-commit-messages`, plus `fnl-setup` to configure them.
 
 ### First check
 
@@ -191,7 +205,7 @@ The short version is "Start in 3 minutes" above; the order is `/fnl-ask`, `/fnl-
 
 1. **Install** for your host (above), then open a new session: plugins load when a session starts.
 2. **Type `/fnl-ask`** (`$fnl-ask` on Codex). It explains where to begin. For a beginner, it loads plain-language guidance that the agent follows for the conversation.
-3. **Run setup once**: `/fnl-setup` (Claude Code, Antigravity) or `$fnl-setup` (Codex). Choose Quick for recommended defaults and a confirmation before writing, or Detailed to decide each part. The beginner path asks at most three plain questions and defers technical choices. Setup installs nothing; usage recording needs its own consent. On Codex, type `$fnl-setup-instructions` next so your instructions point coding work at the router from the first task.
+3. **Run setup once**: `/fnl-setup` (Claude Code, Antigravity) or `$fnl-setup` (Codex). Choose Quick for recommended defaults and a confirmation before writing, or Detailed to decide each part. The beginner path asks at most three plain questions and defers technical choices. Section A runs `/fnl-scan-agents` before configuring reach; the beginner path leaves that section until later. Setup installs nothing; usage recording needs its own consent. On Codex, type `$fnl-setup-instructions` next so your instructions point coding work at the router from the first task.
 4. **Give it a first real task.** Ask for a change; the agent starts coding work by loading `fnl-coding-router`. It chooses a workflow and depth (MIN, NORMAL or DEEP), checks the result, and explains what happened in your register within the same chat. On Claude Code and Codex a session-start reminder prompts the router (Codex hooks need your trust) and on Antigravity an always-on rule does; setting Routing to off removes the reminder.
 5. **What you should see:** a stated depth and reason, expressed in everyday words for a beginner; commits written as `fnl-commit-messages` says; pull requests held for a posted code review and, at sensitive boundaries, a security review; and, if delegation is set up, bounded tasks whose results are checked before acceptance.
 6. **After your first result**, type `/fnl-setup-instructions` to set how your assistants work with you (already done after setup on Codex). After a few sessions, type `/fnl-status` to see how the practice is working, if you consented to usage metrics. Return to `/fnl-ask` whenever you need help with a skill.
@@ -239,7 +253,7 @@ Folders it creates are private (mode `0700`). A machine that already keeps these
 
 ## Host configuration
 
-The orchestration skills keep machine facts (agent commands, allowed models, which delegates each coordinator can reach, the route judge, allow-rules, lock path, parallel limit, an optional effort preference, and the optional `## Delegation mode` and `## Routing` settings) outside the plugin, in a host config file: the path in `ORCHESTRATION_HOST_CONFIG`, or else `~/.finolabs/vibecode/host.md` (or the older `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md` while only that file exists). Start from `skills/fnl-delegate/references/host-template.md`. The dispatch ledger defaults to `~/.finolabs/vibecode/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it; an older ledger in `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` is used while there is no new one). When Codex or Antigravity also coordinates, put both files where every coordinator's sandbox can read and write them.
+The orchestration skills keep machine facts (agent commands, allowed models, which delegates each coordinator can reach, the route judge, allow-rules, lock path, parallel limit, an optional effort preference, and the `## Agents on this machine`, `## Delegation mode` and `## Routing` settings) outside the plugin, in a host config file: the path in `ORCHESTRATION_HOST_CONFIG`, or else `~/.finolabs/vibecode/host.md` (or the older `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md` while only that file exists). Start from `skills/fnl-delegate/references/host-template.md`. The dispatch ledger defaults to `~/.finolabs/vibecode/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it; an older ledger in `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` is used while there is no new one). When Codex or Antigravity also coordinates, put both files where every coordinator's sandbox can read and write them.
 
 The route judge is optional. Without one, the agent's own model makes the grade, route, depth and activity calls. With one configured, such as TypeSafe's Jev called through its own `typesafe-ai` skill, `fnl-delegate` and `fnl-coding-router` ask it first, which saves their own reasoning; the plugin holds no key for it.
 
@@ -255,15 +269,15 @@ The route judge is optional. Without one, the agent's own model makes the grade,
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 agents/fnl-*.md                   read-only reviewer, security reviewer and verifier subagents
 agents/openai.yaml                Codex skill-list display metadata
-skills/fnl-*/SKILL.md             17 self-contained skill folders (12 model-visible, 5 user-only)
+skills/fnl-*/SKILL.md             19 self-contained skill folders (12 model-visible, 7 user-only)
 skills/fnl-advisor/references/committee.md       committee procedure, loaded only for a committee
 skills/fnl-delegate/references/coordinator-sessions.md  spec coordinator and task sessions
 skills/fnl-session-hygiene/references/knowledge.md      remember/recall procedure; handovers live in SKILL.md
 rules/AGENTS.md                   session-start reminder: an always-on rule on Antigravity, printed by scripts/session_start.py on Claude Code and Codex
-assets/                           icon (light and dark, SVG and 512 px PNG), dashboard screenshots and their NOTICE
+assets/                           icons, light/dark architecture diagrams, dashboard screenshots and their NOTICE
 evals/                            trigger, behavior and parity cases for `claude plugin eval`
 scripts/                          repository checks, the session reminder (session_start.py) with its settings reader (mode.py, copied into the skills that read it), and the usage-metrics hook (metrics_hook.py) with its shared core (fnl_metrics.py, copied into the skills that import it)
-docs/specs/                       design specs, such as usage-metrics.md
+docs/specs/                       design specs (index.md), including agent-scan-and-consolidation.md
 tests/                            unit tests for the repository scripts, the ledger, the metrics hook and the dashboard page (the page script runs in node when it is installed)
 CHANGELOG.md                      Keep a Changelog
 LICENSE                           MIT
