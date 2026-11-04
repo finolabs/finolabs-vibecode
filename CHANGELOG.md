@@ -12,6 +12,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- `fnl-setup-instructions` offers user, project or both scopes, with repository context sourced from `AGENTS.md`, a Claude include and private local context kept out of git. Its user contract asks for delegation and compaction preferences and distinguishes advisory rules from verified enforcement.
 - `fnl-ask` routes Start, Contents, Explain and Route questions to references, reads the target before answering and still invokes nothing; all modes share the beginner definition and register, with one question first for a bare invocation. The onboarding order is `/fnl-ask`, Quick setup, a first task, user instructions (immediately after setup on Codex), and the dashboard later.
 - The README opens in plain words, with a three-minute start and a glossary, and teaches the same onboarding order to users and agents.
 - `fnl-setup` offers a beginner path before the mode choice and uses it only for users who say they are new to coding or accept the offer. Its closing handover lists user instructions (immediately on Codex, after the first result elsewhere), matching companion suggestions and the skipped sections to revisit later.
