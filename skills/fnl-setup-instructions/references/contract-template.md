@@ -2,6 +2,8 @@
 
 Sections marked *optional* are skipped when the user has no need. Each section lists the decisions to settle; turn each answer into one or two imperative lines.
 
+Each rule line says who enforces it: a host setting, a hook, the review gate, or agent judgment. A rule enforced only by agent judgment is advisory.
+
 ## 1. Identity and voice (required)
 
 - Default language for replies, and when to switch (the user writes in another language, a document is for another audience).
@@ -36,6 +38,7 @@ Sections marked *optional* are skipped when the user has no need. Each section l
 ## 5. Delegation (optional)
 
 - Which other agents the user has (Codex, Antigravity, Claude Code sessions) and that `fnl-delegate` governs routing, budgets and acceptance.
+- How much work should the agent hand to other agents? Recommended: propose delegation for independent tasks and ask before dispatch; when the plugin supports a delegation setting, record it here; until then record the preference in one line. This is a preference, not an available plugin setting.
 - Machine facts live in the delegation host config written by `/fnl-setup`, not here.
 
 ## 6. Knowledge base (optional)
@@ -56,5 +59,5 @@ Sections marked *optional* are skipped when the user has no need. Each section l
 ## 9. Host section (one per host)
 
 - Session titles: when and how to name or rename the session.
-- Context pressure: when to compact or start fresh (`fnl-session-hygiene`).
+- Context pressure: when to compact or start fresh (`fnl-session-hygiene` "Context pressure"); for Claude Code, ask the user's threshold (recommended: about 60% at a safe idle boundary) and record it in one line. Enforcement belongs to host settings or hooks written by `fnl-setup`; a contract line alone is advisory, and no enforcement is claimed until verified.
 - Host quirks: model selection, review commands, tools that need care.

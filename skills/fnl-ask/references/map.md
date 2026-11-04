@@ -3,6 +3,7 @@
 | Situation | Skill | Companion skills and native commands |
 | --- | --- | --- |
 | New to the plugin, or not sure what it holds | this skill, "Start" or "Contents" | |
+| "Is it set up right?" or what happens automatically on this host | `/fnl-setup` Check mode | |
 | First time in this repository or on this machine | `/fnl-setup` | `/setup-matt-pocock-skills` if that pack is installed |
 | Writing or revising your own instructions for every agent and repository | `/fnl-setup-instructions` | |
 | Starting, resuming or redirecting coding work | `fnl-coding-router` | |
@@ -11,6 +12,7 @@
 | Ready to implement one seam | `fnl-coding-router` (depth, gates) | `tdd` for the red-green loop |
 | Bug, failing CI, unexplained behavior | `fnl-coding-router` (debug path and checkpoint) | `diagnosing-bugs` |
 | Handing work to another agent (Claude Code, Codex, Antigravity) | `fnl-delegate`, then `fnl-handoff` | `/handoff` for a portable handoff document |
+| Stopping or switching and wanting the work continued later by a new session or another agent | `fnl-handoff` (Resume mode) | writes a handover note and launches nothing |
 | How the practice is working for you: router coverage, skill use, load cost, delegated runs, review outcomes | `/fnl-status` (opens the usage dashboard) | |
 | Deleting the recorded usage data, or stopping the recording | `/fnl-status purge` (asks before deleting) | |
 | Checking for a plugin update, skipping a release, or stopping update notices | `/fnl-update` (shows versions and asks before updating) | |

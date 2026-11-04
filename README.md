@@ -63,7 +63,7 @@ You were given this repository's link to install it for the user. Follow these s
    | Other agents | `npx skills add finolabs/finolabs-vibecode -a <agent>` |
 
 5. **Verify** that `claude plugin list`, `codex plugin list` or `agy plugin list` shows `finolabs-vibecode`. Report the command output to the user, and report any failure as it is.
-6. **Hand over to the user.** Plugins load when a session starts. Tell the user, in one message and in this order: open a new session; type `/fnl-ask` (`/finolabs-vibecode:fnl-ask` on Claude Code, `$fnl-ask` on Codex); then `/fnl-setup` and choose Quick (`$fnl-setup` on Codex). Only the user can start these, because setup interviews them before it writes host config and instructions. Tell them `/fnl-setup-instructions` (their user-scoped instructions) comes after their first result, except on Codex, where it comes right after setup.
+6. **Hand over to the user.** Plugins load when a session starts. Tell the user, in one message and in this order: open a new session; type `/fnl-ask` (`/finolabs-vibecode:fnl-ask` on Claude Code, `$fnl-ask` on Codex); then `/fnl-setup` and choose Quick (`$fnl-setup` on Codex). Only the user can start these, because setup interviews them before it writes host config and instructions. Tell them `/fnl-setup-instructions` (choose user scope for their working contract) comes after their first result, except on Codex, where it comes right after setup.
 7. **After the first result, offer the companions and install them only if the user agrees:** [Matt Pocock's skills](https://github.com/mattpocock/skills) and [Cloudflare's `security-audit`](https://github.com/cloudflare/security-audit-skill) (see [Works well with](#works-well-with)). Every skill works without them.
 
 Done when the plugin is listed by your host and the user knows the order: `/fnl-ask`, `/fnl-setup` (Quick), a first real task, `/fnl-setup-instructions` (immediately after setup on Codex), then `/fnl-status` later.
@@ -85,7 +85,7 @@ Every skill carries the `fnl-` prefix. The user types five of them, `fnl-setup`,
 | `fnl-session-hygiene` | A session's context passes about 60%, a phase changes, a title goes stale, or work moves to another session or writer. |
 | `fnl-knowledge` | Remembering and recalling decisions, lessons and project state: a shared knowledge base (Orrery, or an Obsidian vault) for decisions, lessons and project state, and the repository for code facts. |
 | `fnl-delegate` | Coordinating Claude Code, Codex and Antigravity from whichever one you run in: grading on five levels with one decision matrix (tier, effort, budget, who accepts), routing by agent and model through a dated capability map, an optional route judge, quota fallback, at most 5 parallel runs, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger. |
-| `fnl-handoff` | Writing a self-contained brief and dispatching one task. |
+| `fnl-handoff` | Writing a self-contained brief and dispatching one task, or saving a handover (in your knowledge base when you have one) so a later session or another agent continues the work. |
 | `fnl-advisor` | Getting one second opinion from a stronger model of another family. |
 | `fnl-committee` | Work is stuck or looping: two agents from contrasting families find the root cause and a plan. |
 | `fnl-coordinator-sessions` | Running a spec as a coordinator plus one app session per task, with standby sessions and review gates. |
@@ -96,7 +96,7 @@ Every skill carries the `fnl-` prefix. The user types five of them, `fnl-setup`,
 | `fnl-verification` | Choosing targeted tests, reading the evidence, accepting someone else's work, claiming done. |
 | `fnl-plugin-packaging` | Packaging skills as a plugin for Claude Code, Codex and Antigravity from one repository: layout, manifests, icon, marketplaces, checks. |
 | `fnl-setup` | First run on a machine or repository: host config, local file placement, the agent-skills block in `CLAUDE.md` or `AGENTS.md`. |
-| `fnl-setup-instructions` | Writing your user-scoped instructions: it interviews you and writes them for Claude Code, Codex and Antigravity from one shared source. |
+| `fnl-setup-instructions` | Writing user-scoped working contracts, project-scoped repository context, or both: it interviews you and keeps one source per scope for Claude Code, Codex and Antigravity. |
 | `fnl-status` | Opening the usage dashboard: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, from the usage events (after you consent in setup) and the dispatch ledger. It also lists delegated runs still open. |
 | `fnl-update` | Showing installed and cached available versions, updating through the host after a clear yes, skipping a release, or stopping update notices. |
 | `fnl-ask` | You are new and do not know where to start, want to know what the plugin holds, or have a question about a skill, agent or script: it gives the first steps, lists the contents, explains the piece you name, or maps your situation to the next command, including companion skills from other packs. |
