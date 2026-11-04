@@ -7,4 +7,4 @@ timeout_seconds: 300
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-/finolabs-vibecode:fnl-ask How does fnl-committee work, and does it cost me anything to run it?
+/finolabs-vibecode:fnl-ask How does a committee through fnl-advisor work, and does it cost me anything to run it?

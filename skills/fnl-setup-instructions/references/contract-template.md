@@ -38,14 +38,14 @@ Each rule line says who enforces it: a host setting, a hook, the review gate, or
 ## 5. Delegation (optional)
 
 - Which other agents the user has (Codex, Antigravity, Claude Code sessions) and that `fnl-delegate` governs routing, budgets and acceptance.
-- How much work should the agent hand to other agents? Recommended: propose delegation for independent tasks and ask before dispatch; when the plugin supports a delegation setting, record it here; until then record the preference in one line. This is a preference, not an available plugin setting.
+- Which Delegation mode the user wants: `manual`, `suggest` (default) or `auto`, and whether Routing is `on` (default) or `off`. `/fnl-setup` writes these preferences to host config. Modes govern other-family hand-offs; own-family sessions follow the project and context rules in `fnl-delegate` and retain delegate authority limits.
 - Machine facts live in the delegation host config written by `/fnl-setup`, not here.
 
 ## 6. Knowledge base (optional)
 
 - Where durable notes live (a knowledge base such as Orrery, an Obsidian vault, a docs repository) and the only approved way to access them.
 - Which single knowledge base agents use (Orrery where available, or an Obsidian vault), and that any other store is retired from agent use.
-- What gets written back, and where decisions and lessons go. `fnl-knowledge` covers the practice; the contract holds only the user's stores and access rules.
+- What gets written back, and where decisions and lessons go. `fnl-session-hygiene` "Remember or recall" covers the practice; the contract holds only the user's stores and access rules.
 
 ## 7. Evaluators and external services (optional)
 

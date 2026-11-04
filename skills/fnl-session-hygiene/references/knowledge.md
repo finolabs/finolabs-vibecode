@@ -1,8 +1,3 @@
----
-name: fnl-knowledge
-description: Keep what agents learn in the right place: a shared knowledge base (Orrery, or an Obsidian vault) for decisions, lessons and project state, and the repository for facts about the code. Use when the user says to remember something, asks what was decided or learned before, a decision or lesson comes out of the work, a session ends with something worth keeping, or notes and the repository disagree.
----
-
 # Knowledge
 
 Two places hold what agents learn. Each has one job; the skill is choosing the right one, reading both, and writing each fact to the one store it belongs in. An agent's native memory is its own: the agent manages it, and this skill neither writes to it nor relies on it.

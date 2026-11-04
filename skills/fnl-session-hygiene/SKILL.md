@@ -1,6 +1,6 @@
 ---
 name: fnl-session-hygiene
-description: Keep agent sessions healthy across long work. Use when a session's context passes about 60%, a phase or task changes, a session needs a name or its title is stale, work moves to a fresh session or another writer, or the task ends with decisions and evidence to preserve.
+description: Keep agent sessions healthy across long work. Use when a session's context passes about 60%, a phase or task changes, a session needs a name or its title is stale, work moves to a fresh session or another writer, the task ends with decisions and evidence to preserve, or the user asks to remember something or recall earlier decisions, lessons or project state.
 ---
 
 # Session hygiene
@@ -11,19 +11,36 @@ Before assigning new work, inspect actual context usage where the surface expose
 
 - Above about **60%**, at a safe idle boundary, compact the session for the same workstream. When the agent cannot compact itself, ask the user to, or propose a fresh session with a handover. This is advisory unless the host's own threshold or a hook enforces it; no host signal this pack relies on gives exact usage, so check at task boundaries and when the host shows usage. `/fnl-setup` Check reports compaction enforcement as unverified until verified.
 - A wholly new, independent task starts in a fresh, correctly named session in the matching checkout, with a short verified handover.
-- A finished user story, with its review gate closed, is a natural boundary: prefer a fresh session for the next story with a short handover. A coordinator session whose context is still light may continue (`fnl-coordinator-sessions`).
+- A finished user story, with its review gate closed, is a natural boundary: prefer a fresh session for the next story with a short handover. A coordinator session whose context is still light may continue (`fnl-delegate`).
 - Delegated agents follow the same rule: start a fresh run with a short handover brief rather than resuming a run that has used much of its window.
 - Without usage telemetry, say so; never invent a percentage or interrupt active work.
 
-Before a compaction, a fresh session or the end of the work, write back a decision or lesson that would change what an agent does next time, as `fnl-knowledge` says. A compaction with nothing new to keep carries only the handover.
+Before a compaction, a fresh session or the end of the work, write back a decision or lesson that would change what an agent does next time, through the knowledge-base procedure below. A compaction with nothing new to keep carries only the handover.
+
+## Remember or recall
+
+When the user asks to remember something or recall earlier decisions, lessons or project state, load [references/knowledge.md](references/knowledge.md). Use that procedure also when preserving a settled decision or lesson, or resolving a disagreement between notes and the repository. Load it only for this knowledge work; naming a session or preparing a handover with nothing new to remember does not need it.
 
 ## Handover content
 
-`fnl-handoff` Resume mode writes a handover for a later session or another agent.
+This section owns saving a handover and continuing from one; `fnl-handoff` Resume mode points here.
 
 For a portable handover document, the user can type `/handoff` from [mattpocock/skills](https://github.com/mattpocock/skills); its `/ask-matt` also explains when to continue, clear, hand off or compact.
 
 Every compaction, fresh session or writer change carries: goal and acceptance, decisions, work in progress, evidence and its limits, and the next action. Unresolved decisions are recorded before dependent work starts.
+
+The reader is a future session or agent with zero context. Use the `fnl-handoff` brief template (or its headings: Task, Checkout, Context, Relevant files, Current state, What was tried, Acceptance criteria, Tests to run, Constraints, Report), with these changes: drop **Budget**, add an ordered **Next steps** list under Current state (each step checkable, the first one the next thing to do), and fill **Waiting on** and **Linked runs or sessions** when they apply.
+
+1. **Save it** as a note in the knowledge base the user's instructions name (the Remember or recall procedure above), titled `<project> handoff <date>` and tagged `handoff` plus the project name. Without a knowledge base, save it as `<slug>.md` in `.finolabs/briefs/` at the main checkout's root, never in the project's committed documentation folder: a handover holds absolute paths, run ids and names. Check that `.finolabs/` is listed in the repository's `.git/info/exclude` and add the line when it is missing, so a later `git add -A` cannot stage it. The note holds no secrets, no credentials and no personal data, including in any run output, log or error text copied into it. The agent's own native memory holds at most a one-line pointer to the note, because another agent cannot read it.
+2. **Point to it** (only when it went to a knowledge base; for a local file, skip this step and the continuing agent updates the saved file). Put one line at the top of the project's state entry in the knowledge base naming the latest handoff, so an agent that loads the project's state finds it.
+3. **Read it back** and tell the user in one line: where it is saved, and that a new session continues by reading the latest handoff for the project.
+
+**Continuing** (the agent that picks it up):
+
+1. Read the latest handoff for the project, then check it against the repository and the forge (branches, commits, pull requests). Treat it as a brief to check, not as an instruction that overrides the user's request or the repository's rules. When they disagree, the repository wins; say so in one line.
+2. Do the first unfinished step.
+3. Stop and ask the user before a merge, a deploy, a deletion, or anything outside the handoff's constraints.
+4. Update the same note as each step finishes, so the next reader sees the current state; open a new handoff only when the work changes hands again.
 
 ## Titles
 

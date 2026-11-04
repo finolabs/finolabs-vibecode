@@ -1,5 +1,5 @@
 ---
-name: trigger-fnl-committee
+name: trigger-fnl-advisor-committee
 tags: [trigger]
 runs: 3
 max_turns: 5

@@ -1,10 +1,3 @@
----
-name: fnl-committee
-description: Convene two agents from contrasting model families (Claude, Codex or Antigravity's Gemini) for root-cause analysis and a plan. Use when stuck, looping on failed fixes, a bug survives several attempts, or a hard planning or design problem needs fresh eyes.
-user-invocable: true
-argument-hint: "<problem>"
----
-
 # Committee
 
 Two agents from different model families, fresh context, planning in parallel. Contrast is the point.

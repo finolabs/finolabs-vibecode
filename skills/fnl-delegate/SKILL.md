@@ -1,6 +1,6 @@
 ---
 name: fnl-delegate
-description: Coordinate other coding agents (Claude Code, Codex, Antigravity) from whichever one you run in. Use whenever work is delegated to another agent or split across agents: choosing the agent and model for each task, dispatching independent tasks in parallel, an agent's quota runs out, or a delegated run stalls, times out or is interrupted.
+description: Coordinate other coding agents (Claude Code, Codex, Antigravity) from whichever one you run in. Use whenever work is delegated to another agent or split across agents: choosing the agent and model for each task, dispatching independent tasks in parallel, an agent's quota runs out, a delegated run stalls, times out or is interrupted, or to run a spec as a coordinator with one session per task.
 ---
 
 # Delegate
@@ -10,6 +10,8 @@ You are the **coordinator**, whichever agent you run in: Claude Code, Codex or A
 Before the first dispatch in a session, read the **host config**: the file named by `ORCHESTRATION_HOST_CONFIG`, else `~/.finolabs/vibecode/host.md` (or the older `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md` while only that file exists). It holds this machine's commands, allowed models, which delegates this coordinator can reach, the route judge, the lock path, briefs folder and parallel limit. If it is missing, copy [references/host-template.md](references/host-template.md) and ask the user for the facts you cannot look up. Project rules (`AGENTS.md`, `CLAUDE.md`, a constitution) win over this skill wherever they conflict.
 
 References carry the detail. For routing: [references/models.md](references/models.md) maps each agent's models to tiers and strengths, and, only when the host config names a route judge, [references/route-judgment.md](references/route-judgment.md) says how to ask it. For dispatch: [references/agents.md](references/agents.md) gives each agent's dispatch contract, including what each one may run, [references/dispatch.md](references/dispatch.md) the procedures only some runs reach (quota fallback, parallel runs, the heavy-job lock, handover, file placement), and [references/ledger.md](references/ledger.md) the ledger commands.
+
+For a spec run as a coordinator with one app session per task, load [references/coordinator-sessions.md](references/coordinator-sessions.md). It covers ownership, standby sessions, checkout handovers and the review gate per user story.
 
 ## Delegation mode
 
@@ -140,7 +142,5 @@ Record every dispatch with `scripts/ledger.py` in this skill's base directory, a
 ## Related skills
 
 - `fnl-handoff`: write the brief and dispatch one task.
-- `fnl-advisor`: one second opinion, no edits.
-- `fnl-committee`: two contrasting agents for root cause or planning when stuck.
-- `fnl-coordinator-sessions`: a spec run as coordinator plus task sessions in the desktop app.
+- `fnl-advisor`: one second opinion or two contrasting families for root cause or planning when stuck, all read-only.
 - `fnl-status`: the usage dashboard (router coverage, skill use, load cost, delegation, review gate) and the runs still open.

@@ -1,11 +1,13 @@
 ---
 name: fnl-advisor
-description: Get a second opinion from another model family (Claude, Codex or Antigravity) without handing over the work. Use when the user asks for an advisor, a second opinion or what another model thinks, or before committing to a risky design or fix.
+description: Get one second opinion or convene two contrasting model families for root-cause analysis and a plan. Use when the user asks for an advisor, a second opinion or what another model thinks, before committing to a risky design or fix, or when stuck, looping on failed fixes, or facing a hard planning or design problem.
 user-invocable: true
 argument-hint: "[--agent claude|codex|antigravity] <question>"
 ---
 
 # Advisor
+
+For a committee of two contrasting families, load [references/committee.md](references/committee.md) and follow that procedure instead. Load it only for a committee: stuck or looping work, or a very hard planning or design problem. The procedure below is for one second opinion.
 
 One agent reads the situation and gives a judgement. You stay the decider; the advisor does not drive the work.
 

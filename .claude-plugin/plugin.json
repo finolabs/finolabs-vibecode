@@ -8,7 +8,7 @@
   "privacyPolicyUrl": "https://github.com/finolabs/finolabs-vibecode/blob/main/PRIVACY.md",
   "termsOfServiceUrl": "https://github.com/finolabs/finolabs-vibecode/blob/main/TERMS.md",
   "version": "0.1.7",
-  "description": "Engineering practice for AI coding agents: routing, delegation, review and security gates, verification, versioning and open source readiness.",
+  "description": "17 skills for AI coding agents: routing, delegation, second opinions and committees, session hygiene and shared knowledge, review gates, verification and versioning.",
   "author": {
     "name": "FINOLABS",
     "url": "https://github.com/finolabs"
