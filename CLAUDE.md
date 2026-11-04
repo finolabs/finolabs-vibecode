@@ -8,6 +8,7 @@ One plugin with a skill set that gives AI coding agents a single engineering pra
 
 ## Conventions
 
+- Every rule a skill states names its enforcer: a host setting, a hook, the review gate, or agent judgment. A rule enforced only by agent judgment is marked advisory and never promised as automatic.
 - Compose before you build. Before adding a capability, look for a native host command or a trusted published skill that already does it: a known organization or author, an OSI license, active maintenance, readable instructions, no hidden network or credential behavior. Point to it by name with its source and install command, keep a fallback in our skill that holds the same quality bar without it, and credit it in the README. Our skills own routing, depth, delegation, gates and conventions.
 - Every skill lives in `skills/fnl-<name>/SKILL.md`; the folder name equals the `name` field, and every name starts with `fnl-`. Skills refer to each other by their `fnl-` names.
 - Each skill folder is self-contained, so it works when installed alone through skills.sh: nothing in it points outside its own folder. A file two skills need is copied into both (CI checks the copies match); a skill that needs another names it as a dependency.
