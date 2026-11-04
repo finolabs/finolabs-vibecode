@@ -1,5 +1,5 @@
 ---
-name: trigger-fnl-coordinator-sessions
+name: trigger-fnl-delegate-coordinator-sessions
 tags: [trigger]
 runs: 3
 max_turns: 5

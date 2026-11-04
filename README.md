@@ -2,7 +2,7 @@
 
 **In plain words.** finolabs-vibecode is a safety and quality layer for your AI coding assistant (Claude Code, Codex or Antigravity). It makes the assistant decide how careful to be before it changes anything, get a second opinion on its work, check that it really runs, and tell you what happened in everyday words. You describe what you want; you do not need to know Git or use a terminal.
 
-**What you hand over, and what stays with you.** You hand over the task. Once set up, the assistant handles the routine within the task and the permissions you give it: it plans, picks how careful to be, runs what it built and arranges a second look at the change. It asks you when a decision or action needs your approval, and it tells you what it could not verify. You can change how much runs on its own: see [Bricks, not a framework](#bricks-not-a-framework).
+**What you hand over, and what stays with you.** You hand over the task. Once set up, the assistant handles the routine within the task and the permissions you give it: it plans, picks how careful to be, runs what it built and arranges a second look at the change. It uses `fnl-advisor` for one second opinion or a committee, `fnl-delegate` for task coordination, and `fnl-session-hygiene` for handovers and shared decisions. It asks you when a decision or action needs your approval, and it tells you what it could not verify. You can change how much runs on its own: see [Bricks, not a framework](#bricks-not-a-framework).
 
 ## Start in 3 minutes (you)
 
@@ -45,7 +45,7 @@ Two settings are yours. They live in the host config (`## Delegation mode` and `
 - **Delegation mode.** `manual`: other agents get work only when you say so. `suggest` (default): the agent names who could take a task and waits for your yes. `auto`: it hands off bounded tasks by the guideline, records the decision in the ledger and tells you after.
 - **Routing.** `on` (default) or `off`. Off removes the session-start reminder that sends the agent to `fnl-coding-router`; the skill still works when called by name.
 
-Neither setting weakens a gate: the review gates and the never-delegated list in `fnl-delegate` (merges, pushes, deploys, secrets) apply in every mode. What a setting guarantees depends on the host. It is agent judgment unless a hook or a host setting backs it; Codex hooks need your trust; Antigravity's always-on rule is a static file that Routing cannot switch off. So `auto` is never 100% automatic. `/fnl-ask` explains this in plain words, and `/fnl-setup` Check shows what your host enforces.
+These settings govern hand-offs to another model family. Own-family sessions or headless runs follow project rules and may start without an offer for a project requirement or to spare context, with a one-line reason; they retain delegate authority limits. Neither setting weakens a gate: the review gates and the never-delegated list in `fnl-delegate` (merges, pushes, deploys, secrets) apply in every mode. What a setting guarantees depends on the host. It is agent judgment unless a hook or a host setting backs it; Codex hooks need your trust; Antigravity's always-on rule is a static file that Routing cannot switch off. So `auto` is never 100% automatic. `/fnl-ask` explains this in plain words, and `/fnl-setup` Check shows what your host enforces.
 
 Suggested combinations, not presets (nothing selects a build for you):
 
@@ -53,10 +53,10 @@ Suggested combinations, not presets (nothing selects a build for you):
 | --- | --- | --- |
 | **Solo** | One implementer that plans before editing, proves its work and writes clean commits | `fnl-coding-router`, `fnl-verification`, `fnl-commit-messages` |
 | **Reviewed** | Solo, plus pull requests held for posted code and security reviews | Solo + `fnl-review-gate`, `fnl-security-review-gate` (and the `fnl-reviewer` and `fnl-security-reviewer` agents, which only the plugin install carries) |
-| **Whole team** | Reviewed, plus coordination of the agents you have | Reviewed + `fnl-delegate`, `fnl-handoff`; optionally `fnl-advisor`, `fnl-committee`, `fnl-coordinator-sessions`, `fnl-status` |
+| **Whole team** | Reviewed, plus coordination of the agents you have | Reviewed + `fnl-delegate`, `fnl-handoff`; optionally `fnl-advisor`, `fnl-status` |
 | **Your own** | Any subset that fits how you work | Any skills; the delegation family needs `fnl-delegate` beside it |
 
-Start any of them with `/fnl-setup` (on Codex, also `$fnl-setup-instructions` right after). The lifecycle skills (`fnl-session-hygiene`, `fnl-knowledge`, `fnl-versioning`, `fnl-update`, `fnl-open-source-review`, `fnl-plugin-packaging`) fit any build when needed. Not sure? `/fnl-ask` shows what each skill gives you and what you lose without it.
+Start any of them with `/fnl-setup` (on Codex, also `$fnl-setup-instructions` right after). The lifecycle skills (`fnl-session-hygiene`, `fnl-versioning`, `fnl-update`, `fnl-open-source-review`, `fnl-plugin-packaging`) fit any build when needed. Not sure? `/fnl-ask` shows what each skill gives you and what you lose without it.
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
@@ -104,18 +104,15 @@ Done when the plugin is listed by your host and the user knows the order: `/fnl-
 
 ## Skills
 
-Every skill carries the `fnl-` prefix. The user types five of them, `fnl-setup`, `fnl-setup-instructions`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff`, `fnl-advisor` and `fnl-committee` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` and `fnl-committee` for the user to approve, and loads the rest when the situation calls for them.
+The plugin has **17 skill folders**: 12 model-visible skills and five user-only skills. Every skill carries the `fnl-` prefix. The user types five of them, `fnl-setup`, `fnl-setup-instructions`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff` and `fnl-advisor` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
 
 | Skill | Use it when |
 | --- | --- |
 | `fnl-coding-router` | Starting or resuming any coding work, in any repository: depth (MIN, NORMAL, DEEP), review and security gates, proof, the stop-before-a-third-fix checkpoint, and a workflow path for Spec Kit (with its depth gate), mattpocock/skills, obra/superpowers, or none. |
-| `fnl-session-hygiene` | A session's context passes about 60%, a phase changes, a title goes stale, or work moves to another session or writer. |
-| `fnl-knowledge` | Remembering and recalling decisions, lessons and project state: a shared knowledge base (Orrery, or an Obsidian vault) for decisions, lessons and project state, and the repository for code facts. |
-| `fnl-delegate` | Coordinating Claude Code, Codex and Antigravity from whichever one you run in: grading on five levels with one decision matrix (tier, effort, budget, who accepts), routing by agent and model through a dated capability map, an optional route judge, quota fallback, at most 5 parallel runs, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger. |
-| `fnl-handoff` | Writing a self-contained brief and dispatching one task, or wrapping up a session by saving a handover (in your knowledge base when you have one) so a later session or another agent continues the work. |
-| `fnl-advisor` | Getting one second opinion from a stronger model of another family. |
-| `fnl-committee` | Work is stuck or looping: two agents from contrasting families find the root cause and a plan. |
-| `fnl-coordinator-sessions` | Running a spec as a coordinator plus one app session per task, with standby sessions and review gates. |
+| `fnl-session-hygiene` | Keeping sessions healthy: context pressure, phase changes, stale titles, handovers, and remembering or recalling decisions, lessons and project state in one shared knowledge base (Orrery or an Obsidian vault); code facts stay in the repository. |
+| `fnl-delegate` | Coordinating Claude Code, Codex and Antigravity from whichever one you run in: grading on five levels with one decision matrix (tier, effort, budget, who accepts), routing by agent and model through a dated capability map, an optional route judge, quota fallback, at most 5 parallel runs, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger; running a spec as a coordinator with one app session per task, standby sessions and review gates. |
+| `fnl-handoff` | Writing a self-contained brief and dispatching one task, or saving a handover through session hygiene so a later session or another agent continues the work. |
+| `fnl-advisor` | Getting one second opinion from another model family, or convening two contrasting families for root-cause analysis and a plan when stuck or looping; both are read-only and spend quota, with approval governed by their procedure. |
 | `fnl-versioning` | Bumping a version, tagging a release, or writing the changelog and release notes: SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog. |
 | `fnl-commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports). |
 | `fnl-review-gate` | A user story is done or a pull request is about to merge: an independent code review, a disposition for every finding, a regression test per runtime fix. |
@@ -182,7 +179,7 @@ npx skills add finolabs/finolabs-vibecode
 
 The installer lists the skills to choose from; `--skill <name>` takes one directly and `-a <agent>` picks the agent. It copies editable files into your project (or, with `-g`, for every project); update them with `npx skills update`. The plugin path also carries the agents, the session hook and the Antigravity rule, which single-skill installs leave out.
 
-Each skill works alone, except the delegation family: `fnl-handoff`, `fnl-advisor`, `fnl-committee` and `fnl-coordinator-sessions` need `fnl-delegate` beside them; `fnl-status` shows the usage events without it and adds the dispatch ledger when it is there. Other skills mention their neighbors by name and work without them. A sensible first pick: `fnl-coding-router`, `fnl-verification`, `fnl-review-gate`, `fnl-commit-messages`, plus `fnl-setup` to configure them.
+Each skill works alone, except the dispatch and advice procedures: `fnl-handoff` Dispatch and `fnl-advisor` need `fnl-delegate` beside them; `fnl-handoff` Resume needs `fnl-session-hygiene`; `fnl-status` shows the usage events without it and adds the dispatch ledger when it is there. Other skills mention their neighbors by name and work without them. A sensible first pick: `fnl-coding-router`, `fnl-verification`, `fnl-review-gate`, `fnl-commit-messages`, plus `fnl-setup` to configure them.
 
 ### First check
 
@@ -210,7 +207,7 @@ For reviews, the gates and the `fnl-reviewer` agent use each host's native instr
 npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit
 ```
 
-`fnl-setup` also suggests two skills after the first result from the `finolabs` catalog, each where it fits: [`agybird`](https://github.com/finolabs/agybird) (MIT), which runs Antigravity dispatches for `fnl-delegate` when Antigravity is a delegate of Claude Code or Codex, and [`vietnamizer`](https://github.com/finolabs/vietnamizer) (MIT), which writes and edits Vietnamese documents for people. Both install the way this plugin does, with `agybird@finolabs` or `vietnamizer@finolabs` in place of `finolabs-vibecode@finolabs`.
+`fnl-setup` also suggests two skills after the first result from the `finolabs` catalog, each where it fits: [`agybird`](https://github.com/finolabs/agybird) (MIT), which runs Antigravity dispatches for `fnl-delegate` when Antigravity is a delegate of Claude Code or Codex, and [`vietnamizer`](https://github.com/finolabs/vietnamizer) (MIT), which writes and edits Vietnamese documents for people. Both install the way this plugin does, with `agybird@finolabs` or `vietnamizer@finolabs` in place of `finolabs-vibecode@finolabs`. For diagrams in docs, the README or a deck, it also suggests [`diagram-design`](https://github.com/cathrynlavery/diagram-design) (MIT, by Cathryn Lavery), which draws them as self-contained HTML or SVG with PNG export; it sends nothing to its author, and a generated file loads its fonts from Google Fonts when opened. Install it from its own repository, as its README says.
 
 ## Usage metrics
 
@@ -258,7 +255,10 @@ The route judge is optional. Without one, the agent's own model makes the grade,
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 agents/fnl-*.md                   read-only reviewer, security reviewer and verifier subagents
 agents/openai.yaml                Codex skill-list display metadata
-skills/fnl-*/SKILL.md             one self-contained skill per folder, references/ and scripts/ beside it
+skills/fnl-*/SKILL.md             17 self-contained skill folders (12 model-visible, 5 user-only)
+skills/fnl-advisor/references/committee.md       committee procedure, loaded only for a committee
+skills/fnl-delegate/references/coordinator-sessions.md  spec coordinator and task sessions
+skills/fnl-session-hygiene/references/knowledge.md      remember/recall procedure; handovers live in SKILL.md
 rules/AGENTS.md                   session-start reminder: an always-on rule on Antigravity, printed by scripts/session_start.py on Claude Code and Codex
 assets/                           icon (light and dark, SVG and 512 px PNG), dashboard screenshots and their NOTICE
 evals/                            trigger, behavior and parity cases for `claude plugin eval`
@@ -302,8 +302,8 @@ MIT. See [LICENSE](LICENSE).
 This pack stands on other people's work. Thank you to:
 
 - **Matt Pocock** and [mattpocock/skills](https://github.com/mattpocock/skills) ([overview](https://www.aihero.dev/skills)), MIT. Its `/setup-matt-pocock-skills` and `/ask-matt` skills inspired `/fnl-setup` and `/fnl-ask`; its user-invoked and model-invoked split, its grilling interview and its `writing-for-agents` guidance shaped how these skills are written. No text is copied, and the two packs are independent projects.
-- [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) by Steph Ango, MIT, which `fnl-knowledge` recommends for Obsidian vaults.
-- Orrery, the FINOLABS knowledge base for agents that `fnl-knowledge` recommends where it is available (not yet published).
+- [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) by Steph Ango, MIT, which `fnl-session-hygiene` recommends for Obsidian vaults.
+- Orrery, the FINOLABS knowledge base for agents that `fnl-session-hygiene` recommends where it is available (not yet published).
 - [Cloudflare's security-audit skill](https://github.com/cloudflare/security-audit-skill), MIT, which the security gates recommend for audits.
 - [Spec Kit](https://github.com/github/spec-kit) by GitHub, which `fnl-coding-router` routes through first.
 - [Superpowers](https://github.com/obra/superpowers) by Jesse Vincent, whose process skills (brainstorming, systematic debugging, test-driven development, verification before completion, code review requests) carry the steps of the router's superpowers path.

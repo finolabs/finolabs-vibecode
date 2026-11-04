@@ -1,11 +1,6 @@
----
-name: fnl-coordinator-sessions
-description: Run a spec as a coordinator session that starts one app session per task and gates each user story on review. Use when coordinating a Spec Kit feature across Claude Code desktop sessions, starting or releasing task and review sessions, preparing standby sessions before an unattended stretch, or handing a checkout from one writer to another.
----
-
 # Coordinator sessions
 
-The session a spec starts in is its **coordinator**. It works at the level of spec and plan; each task runs in its own app session. Agent choice, briefs, budgets and acceptance follow `fnl-delegate`; this skill adds the session model around them. Requires the `fnl-delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill fnl-delegate`, or install the whole plugin) and stop.
+The session a spec starts in is its **coordinator**. It works at the level of spec and plan; each task runs in its own app session. Agent choice, briefs, budgets and acceptance follow `fnl-delegate`; this reference adds the session model around them.
 
 ## When to coordinate
 

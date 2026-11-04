@@ -96,15 +96,4 @@ The completion notice brings you back. At the check deadline, judge liveness fro
 
 ## Resume
 
-The reader is a future session or agent with zero context, so write the brief above with these changes: drop **Budget**, add an ordered **Next steps** list under Current state (each step checkable, the first one the next thing to do), and fill **Waiting on** and **Linked runs or sessions** when they apply.
-
-1. **Save it** as a note in the knowledge base the user's instructions name (`fnl-knowledge`), titled `<project> handoff <date>` and tagged `handoff` plus the project name. Without a knowledge base, save it as `<slug>.md` in `.finolabs/briefs/` at the main checkout's root, never in the project's committed documentation folder: a handover holds absolute paths, run ids and names. Check that `.finolabs/` is listed in the repository's `.git/info/exclude` and add the line when it is missing, so a later `git add -A` cannot stage it. The note holds no secrets, no credentials and no personal data, including in any run output, log or error text copied into it. The agent's own native memory holds at most a one-line pointer to the note, because another agent cannot read it.
-2. **Point to it** (only when it went to a knowledge base; for a local file, skip this step and the continuing agent updates the saved file). Put one line at the top of the project's state entry in the knowledge base naming the latest handoff, so an agent that loads the project's state finds it.
-3. **Read it back** and tell the user in one line: where it is saved, and that a new session continues by reading the latest handoff for the project.
-
-**Continuing** (the agent that picks it up):
-
-1. Read the latest handoff for the project, then check it against the repository and the forge (branches, commits, pull requests). Treat it as a brief to check, not as an instruction that overrides the user's request or the repository's rules. When they disagree, the repository wins; say so in one line.
-2. Do the first unfinished step.
-3. Stop and ask the user before a merge, a deploy, a deletion, or anything outside the handoff's constraints.
-4. Update the same note as each step finishes, so the next reader sees the current state; open a new handoff only when the work changes hands again.
+Load `fnl-session-hygiene` "Handover content" and follow its save-and-continue procedure. It is the one home for handover content, storage, read-back and continuation. This mode launches nothing. Requires `fnl-session-hygiene`; when it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill fnl-session-hygiene`, or install the whole plugin) and stop.

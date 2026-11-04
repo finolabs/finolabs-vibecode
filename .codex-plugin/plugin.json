@@ -1,7 +1,7 @@
 {
   "name": "finolabs-vibecode",
   "version": "0.1.7",
-  "description": "Engineering practice for AI coding agents: routing, delegation, review and security gates, verification, versioning and open source readiness.",
+  "description": "17 skills for AI coding agents: routing, delegation, second opinions and committees, session hygiene and shared knowledge, review gates, verification and versioning.",
   "author": {
     "name": "FINOLABS",
     "url": "https://github.com/finolabs"
@@ -25,12 +25,12 @@
     "displayName": "Finolabs Vibecode",
     "shortDescription": "Engineering rules for agents",
     "developerName": "FINOLABS",
-    "longDescription": "A skill set that gives coding agents one engineering practice. Route each change at the right depth, through Spec Kit, another workflow skill pack or a built-in procedure. Coordinate Codex, Antigravity and Claude Code agents with self-contained briefs, time budgets and verify-before-accept. Version and tag releases by SemVer, and write atomic commits. Gate each user story on an independent code and security review, and verify with targeted tests whose output is read before anything is accepted. Before a repository goes public, review its open source readiness.",
+    "longDescription": "A skill set that gives coding agents one engineering practice. Route each change at the right depth, through Spec Kit, another workflow skill pack or a built-in procedure. Coordinate Codex, Antigravity and Claude Code agents with self-contained briefs, time budgets and verify-before-accept. Version and tag releases by SemVer, and write atomic commits. Gate each user story on an independent code and security review, and verify with targeted tests whose output is read before anything is accepted. Get one second opinion or a committee through fnl-advisor, run spec task sessions through fnl-delegate, and preserve handovers and shared decisions through fnl-session-hygiene. Before a repository goes public, review its open source readiness.",
     "category": "Coding",
     "capabilities": [],
     "defaultPrompt": [
       "Route this change through the coding router and tell me the depth you chose.",
-      "Grade these three tasks and dispatch the independent ones to agents.",
+      "Use fnl-delegate to coordinate this spec with one session per task.",
       "Prepare the version bump and changelog for the next release."
     ],
     "websiteURL": "https://github.com/finolabs/finolabs-vibecode",

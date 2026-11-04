@@ -2,7 +2,7 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "finolabs-vibecode",
   "displayName": "Finolabs Vibecode",
-  "description": "Engineering practice for AI coding agents: routing, delegation, review and security gates, verification, versioning and open source readiness.",
+  "description": "17 skills for AI coding agents: routing, delegation, second opinions and committees, session hygiene and shared knowledge, review gates, verification and versioning.",
   "version": "0.1.7",
   "logo": "assets/icon.svg",
   "author": {
@@ -24,7 +24,7 @@
   ],
   "suggestedPrompts": [
     "Route this change through the coding router and tell me the depth you chose.",
-    "Grade these three tasks and dispatch the independent ones to agents.",
+    "Use fnl-delegate to coordinate this spec with one session per task.",
     "Prepare the version bump and changelog for the next release."
   ]
 }

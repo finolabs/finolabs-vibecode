@@ -68,7 +68,7 @@ Offer the optional lane line only for a repository with one owner, and say that 
 
 Show each draft and apply the user's edits. Then write only what was confirmed: the host config (outside the repository), the exclude line, and the agent-skills block (update an existing block in place). After a yes to section F, run `python3 -I <fnl-status folder>/scripts/refresh.py consent --retention <days>` to record the consent with its date, then `python3 -I <fnl-status folder>/scripts/refresh.py run` once so the dashboard exists; `fnl-status` must be installed beside this skill, and when it is not, say so and skip the section.
 
-When the findings show a knowledge base, also record the settled decisions there as `fnl-knowledge` says (the route judge and the date of consent, which agents coordinate, the parallel limit, the host config path), through the access the user's instructions approve. Write to the one knowledge base those instructions name, and report any write that failed. Install nothing and change no shared settings.
+When the findings show a knowledge base, also record the settled decisions there as `fnl-session-hygiene` "Remember or recall" says (the route judge and the date of consent, which agents coordinate, the parallel limit, the host config path), through the access the user's instructions approve. Write to the one knowledge base those instructions name, and report any write that failed. Install nothing and change no shared settings.
 
 ## 4. Report
 

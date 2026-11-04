@@ -1,5 +1,5 @@
 ---
-name: trigger-fnl-knowledge
+name: trigger-fnl-session-hygiene-knowledge
 tags: [trigger]
 runs: 3
 max_turns: 5
