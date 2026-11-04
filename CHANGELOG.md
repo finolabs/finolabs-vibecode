@@ -4,9 +4,15 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- Plain-language guidance in `fnl-ask` and `fnl-setup`: lead with the result, use everyday words and ask only the user's decisions. Both skills carry an identical reference so each works alone; CI checks the copies match.
+
 ### Changed
 
-- `fnl-ask` now answers four kinds of question: where to start (the first steps for someone new), what the plugin contains (skills, agents and scripts, grouped by purpose), how a named skill, agent or script works, and which skill fits a situation. It reads the target file before answering, and still invokes nothing.
+- `fnl-ask` is a short router over Start, Contents, Explain and Route references. It stays user-invoked; beginners start with `/fnl-ask`, then Quick setup, a first task, user instructions (immediately after setup on Codex), and the dashboard later.
+- The README opens in plain words, with a three-minute start and a glossary, and teaches the same onboarding order to users and agents.
+- `fnl-setup` has a beginner path with at most three plain questions and recommended defaults; user instructions and companion suggestions wait until the first result, except for user instructions on Codex.
 
 ## [0.1.6] - 2026-11-04
 
