@@ -2,8 +2,8 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "finolabs-vibecode",
   "displayName": "Finolabs Vibecode",
-  "description": "19 skills for AI coding agents: routing, delegation, second opinions and committees, session hygiene and shared knowledge, review gates, verification, versioning, local agent scans and mode settings.",
-  "version": "0.1.7",
+  "description": "Engineering practice for AI coding agents: routing, delegation, review and security gates, verification, versioning, agent scans and mode settings.",
+  "version": "0.1.8-dev",
   "logo": "assets/icon.svg",
   "author": {
     "name": "FINOLABS",
