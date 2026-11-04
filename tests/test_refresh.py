@@ -185,16 +185,6 @@ class RefreshTest(unittest.TestCase):
         self.assertNotIn("</script", text)
         self.assertNotIn("onerror", text)
 
-    def test_if_older_skips_a_fresh_file(self):
-        self.consent()
-        self.refresh("run")
-        before = (self.dir / "data.js").stat().st_mtime_ns
-        self.refresh("run", "--if-older", "10")
-        self.assertEqual((self.dir / "data.js").stat().st_mtime_ns, before)
-        os.utime(self.dir / "data.js", (0, 0))
-        self.refresh("run", "--if-older", "10")
-        self.assertGreater((self.dir / "data.js").stat().st_mtime, 1_000_000_000, "a stale file is rebuilt")
-
     def test_purge_needs_a_yes_and_keeps_consent(self):
         self.consent()
         self.fixture_store()

@@ -290,6 +290,53 @@ class HookTest(unittest.TestCase):
         self.assertTrue((self.dir / "data.js").is_file())
         self.assertEqual((self.dir / "dashboard.html").read_bytes(), (ROOT / "skills/fnl-status/assets/dashboard.html").read_bytes())
 
+    def tool_call(self, **extra):
+        return {"hook_event_name": "PostToolUse", "session_id": "s1", "cwd": str(self.repo), "tool_name": "Bash",
+                "tool_input": {"command": "ls"}, **extra}
+
+    def test_a_tool_call_rebuilds_old_dashboard_data_and_leaves_fresh_data_alone(self):
+        self.consent()
+        self.run_hook(self.tool_call())
+        data = self.dir / "data.js"
+        fresh = data.stat().st_mtime_ns
+        self.run_hook(self.tool_call())
+        self.assertEqual(data.stat().st_mtime_ns, fresh, "rebuilt inside the 10 seconds")
+        os.utime(data, (0, 0))
+        self.run_hook(self.tool_call())
+        self.assertGreater(data.stat().st_mtime, 1_000_000_000, "old data is rebuilt")
+
+    def test_stop_and_session_start_rebuild_fresh_data(self):
+        self.consent()
+        self.run_hook(self.tool_call())
+        data = self.dir / "data.js"
+        for payload in ({"hook_event_name": "Stop", "session_id": "s1", "cwd": str(self.repo)},
+                        {"hook_event_name": "SessionStart", "session_id": "s1", "cwd": str(self.repo), "source": "startup"}):
+            os.utime(data, (1_000_000_000, 1_000_000_000))
+            self.run_hook(payload)
+            self.assertGreater(data.stat().st_mtime, 1_000_000_000, payload["hook_event_name"])
+
+    def test_nothing_is_rebuilt_without_consent_or_when_turned_off(self):
+        stop = {"hook_event_name": "Stop", "session_id": "s1", "cwd": str(self.repo)}
+        self.run_hook(stop)
+        self.run_hook(self.tool_call())
+        self.assertFalse((self.dir / "data.js").exists())
+        self.consent()
+        off = {**self.env, "FNL_METRICS": "off"}
+        self.run_hook(stop, env=off)
+        self.run_hook(self.tool_call(), env=off)
+        self.assertFalse((self.dir / "data.js").exists())
+
+    def test_an_antigravity_tool_call_does_not_wait_for_a_rebuild(self):
+        self.consent()
+        self.agy("post_tool_use", {"name": "run_command", "args": {"CommandLine": "ls"}})
+        self.assertFalse((self.dir / "data.js").exists())
+
+    def test_the_stop_hook_is_async_on_both_hosts(self):
+        for name in (".claude-plugin", ".codex-plugin"):
+            config = json.loads((ROOT / name / "hooks.json").read_text())
+            for group in config["hooks"]["Stop"]:
+                self.assertTrue(all(h["async"] for h in group["hooks"]), name)
+
     def test_session_start_prunes_files_past_retention(self):
         self.consent(30)
         (self.dir / "events-2020-01.jsonl").write_text("{}\n")

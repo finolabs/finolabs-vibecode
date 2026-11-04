@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Build the status dashboard's data from the usage events and the dispatch ledger.
 
-  run      write data.js and dashboard.html into the state folder (--open shows the page,
-           --if-older MINUTES skips the work when data.js is newer than that)
+  run      write data.js and dashboard.html into the state folder (--open shows the page)
   consent  record the user's consent and retention (30, 90 or 365 days)
   purge    delete the recorded events, data.js and dashboard.html (needs --yes)
   antigravity-hook  add (or --remove) the plugin's hook group in the user's own Antigravity hooks.json,
@@ -216,9 +215,6 @@ def js_text(data):
 def cmd_run(args):
     folder = fm.ensure_dir(fm.state_dir(), follow=True)
     target = folder / "data.js"
-    if args.if_older is not None and target.exists() and (folder / "dashboard.html").exists():
-        if fm.now().timestamp() - target.stat().st_mtime < args.if_older * 60:
-            return
     data = build()
     fm.atomic_write(target, js_text(data))
     fm.atomic_write(folder / "dashboard.html", PAGE.read_bytes())
@@ -316,7 +312,6 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="write data.js and dashboard.html")
     run.add_argument("--open", action="store_true", help="show the page in the default browser")
-    run.add_argument("--if-older", type=int, metavar="MINUTES", help="skip when data.js is newer than this")
     run.set_defaults(func=cmd_run)
     consent = sub.add_parser("consent", help="record consent and retention")
     consent.add_argument("--retention", type=int, choices=fm.RETENTIONS)
