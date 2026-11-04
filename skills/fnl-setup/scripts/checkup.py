@@ -10,7 +10,7 @@ from pathlib import Path
 
 PLUGIN = "finolabs-vibecode"
 PRINCIPLE = "A file that says something is on is not proof that it runs."
-# Required sections of fnl-delegate's host template; Effort preference is optional.
+# Required sections; Effort preference, Delegation mode and Routing are optional.
 HEADINGS = {"Limits", "Briefs folder", "Coordinators and reach", "Route judgment",
             "Dispatch marker", "Claude Code", "Codex", "Antigravity"}
 MAX_BYTES = 262144
@@ -212,6 +212,11 @@ def text_check(name, paths, predicate, present, absent):
 
 
 def collect():
+    # A local copy keeps this skill usable when installed alone, including under -I.
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mode import effective
+    settings = effective()
     home = Path(os.path.abspath(os.environ.get("HOME", "~")))
     codex = Path(os.path.abspath(os.path.expanduser(os.environ.get("CODEX_HOME", str(home / ".codex")))))
     hosts = {}
@@ -227,6 +232,12 @@ def collect():
                                   "user file or fnl-coding-router pointer absent"),
                        item("runtime", "unverified", "hook trust/execution and approval policy not exercised"),
                        item("compaction", "unverified", "host threshold enforcement not exercised")]
+        enforcement = {
+            "claude": "agent judgment; Claude Code hooks can add continuation reminders; execution unverified",
+            "codex": "agent judgment; Codex hooks require user trust; trust/execution unverified",
+            "agy": "agent judgment; no enforcement hook relied on; static always-on rule ignores Routing",
+        }[host]
+        hosts[host].append(item("mode enforcement", "unverified", enforcement + "; auto is never 100%"))
     explicit = os.environ.get("ORCHESTRATION_HOST_CONFIG")
     config = Path(os.path.expanduser(explicit or str(home / ".finolabs/vibecode/host.md")))
     if config.suffix.lower() != ".md":
@@ -266,7 +277,9 @@ def collect():
                    "review-gate adoption line present", "review-gate adoption line absent"),
         item("workflow", "unverified", "files cannot prove agents follow routing or review gates"),
     ]
-    return {"principle": PRINCIPLE, "hosts": hosts, "setup": [host_config, *repository]}
+    return {"principle": PRINCIPLE, "hosts": hosts, "setup": [host_config,
+            item("effective settings", "ok", "delegation mode=" + settings["delegation_mode"] +
+                 "; routing=" + settings["routing"] + "; selected values only, not runtime proof"), *repository]}
 
 
 def main():
