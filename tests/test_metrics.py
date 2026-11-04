@@ -318,11 +318,17 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertTrue(target.is_dir())
 
-    def test_shared_copies_equal_the_core(self):
-        for copy in COPIES:
-            with self.subTest(copy=str(copy.relative_to(ROOT))):
-                self.assertTrue(copy.exists(), "missing copy")
-                self.assertEqual(copy.read_bytes(), CORE.read_bytes())
+    def test_shared_copies_equal_their_source(self):
+        groups = [
+            (CORE, COPIES),
+            (ROOT / "skills/fnl-ask/references/plain-language.md",
+             [ROOT / "skills/fnl-setup/references/plain-language.md"]),
+        ]
+        for source, copies in groups:
+            for copy in copies:
+                with self.subTest(copy=str(copy.relative_to(ROOT))):
+                    self.assertTrue(copy.exists(), "missing copy")
+                    self.assertEqual(copy.read_bytes(), source.read_bytes())
 
 
 if __name__ == "__main__":
