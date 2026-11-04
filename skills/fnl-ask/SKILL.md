@@ -20,9 +20,9 @@ The user is new, curious or stuck. Pick the mode that fits what they said, read 
 
 The plugin's README, section "Getting started", holds the full version; name it for detail.
 
-**Contents.** The user asks what is in the plugin, or what exists for a purpose. List it grouped by purpose from the map below and "Agents and scripts", marking the skills the user types (`fnl-setup`, `fnl-setup-instructions`, `fnl-status`, `fnl-ask`, `fnl-advisor`, `fnl-committee`, `fnl-handoff`) apart from those the agent loads on its own. When the installed folder differs from the map, trust the folder: list the sibling `skills/` and `agents/` names with each file's one-line description. State a count only after counting it in the folder; when the folder cannot be listed, say the list comes from the map and give no totals.
+**Contents.** The user asks what is in the plugin, or what exists for a purpose. List it grouped by purpose from the map below and "Agents and scripts", in three groups: typed by the user only (`fnl-setup`, `fnl-setup-instructions`, `fnl-status`, `fnl-ask`); typed by the user or proposed by the agent (`fnl-advisor`, `fnl-committee`, `fnl-handoff`); and loaded by the agent when the task matches (the rest). When the installed folder differs from the map, trust the folder: list the `fnl-` skills beside this one and the plugin root's `agents/fnl-*.md` with each file's one-line description, and fall back to the map when neither can be listed. State a count only after counting it in the folder; when the folder cannot be listed, say the list comes from the map and give no totals.
 
-**Explain.** The user asks how a skill, agent or script works. Read its `SKILL.md`, `agents/<name>.md` or the script's header and `--help`, then answer in plain words: what it does, when it fires (typed by the user, or loaded by the agent), what it needs and writes, what it costs (quota, time, a confirmation), and what to type. Keep it to about six lines, or one short paragraph and a few bullets, then offer to go deeper on the part they care about (steps, cost, limits); leave the rest in the file. For a companion skill from another pack, say in one line what it is and that it is a separate project.
+**Explain.** The user asks how a skill, agent or script works. Read its `SKILL.md`, `agents/<name>.md` or the script's header comment and argument definitions (read the file; run nothing), then answer in plain words: what it does, when it fires (typed by the user, or loaded by the agent), what it needs and writes, what it costs (quota, time, a confirmation), and what to type. Keep it to about six lines, or one short paragraph and a few bullets, then offer to go deeper on the part they care about (steps, cost, limits); leave the rest in the file. For a companion skill from another pack, say in one line what it is and that it is a separate project.
 
 **Route.** The user describes a situation. Place them on the map, then name the skill and the command in one or two sentences.
 
@@ -60,7 +60,7 @@ The plugin's README, section "Getting started", holds the full version; name it 
 
 | Piece | What it answers or does | Where it comes from |
 | --- | --- | --- |
-| `fnl-verifier` agent | Is the report true? Reruns targeted tests and checks each acceptance criterion. | `fnl-verification` |
+| `fnl-verifier` agent | Is the report true? Reruns targeted tests and checks each acceptance criterion. | `fnl-delegate` (accepting delegated work) |
 | `fnl-reviewer` agent | Is the change good? Reads the diff, then its callers, contracts and tests. | `fnl-review-gate` |
 | `fnl-security-reviewer` agent | Is the change safe? Reads the diff, then every trust path that reaches it. | `fnl-security-review-gate` |
 | `scripts/ledger.py` | Records delegated runs and lists the open ones. | `fnl-delegate` |
