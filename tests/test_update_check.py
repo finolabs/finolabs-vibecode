@@ -31,6 +31,11 @@ class UpdateTest(unittest.TestCase):
         env = mock.patch.dict(os.environ, {'FNL_STATE_DIR': str(self.folder), 'FNL_UPDATE_CHECK': '', 'FNL_METRICS': 'off'})
         env.start()
         self.addCleanup(env.stop)
+        # The status tests assume a fixed installed version, so a version bump never breaks them.
+        self.real_installed = u.installed_version
+        fixed = mock.patch.object(u, 'installed_version', return_value='0.1.7-dev')
+        fixed.start()
+        self.addCleanup(fixed.stop)
         clock = mock.patch.object(u.fm, 'now')
         self.clock = clock.start()
         self.clock.return_value.timestamp.return_value = 200000
@@ -66,7 +71,7 @@ class UpdateTest(unittest.TestCase):
         for bad in [None, 7, [], {}, '0.1', '0.1.7-rc.1', '0.1.7\n', '0.1.7;sh', '９.1.7']:
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 u.version(bad)
-        self.assertEqual(u.installed_version(), json.loads((ROOT / '.claude-plugin/plugin.json').read_text())['version'])
+        self.assertEqual(self.real_installed(), json.loads((ROOT / '.claude-plugin/plugin.json').read_text())['version'])
 
     def test_only_newer_prints_one_safe_line(self):
         for tag, output in [('v0.1.6', False), ('0.1.7', True), ('v0.1.8', True)]:
@@ -228,11 +233,11 @@ class UpdateTest(unittest.TestCase):
         manifest.write_text(json.dumps({'name': 'finolabs-vibecode',
                                        'description': 'x' * 5000, 'version': '0.1.7-dev'}))
         with mock.patch.object(u, '__file__', str(root / 'scripts/update_check.py')):
-            self.assertEqual(u.installed_version(), '0.1.7-dev')
+            self.assertEqual(self.real_installed(), '0.1.7-dev')
             manifest.write_text(json.dumps({'name': 'finolabs-vibecode',
                                            'description': 'x' * 65536, 'version': '0.1.7-dev'}))
             with self.assertRaises(ValueError):
-                u.installed_version()
+                self.real_installed()
 
     def test_failures_are_silent_and_successful_exit(self):
         for function, args in [('installed_version', ()), ('cache', ()), ('stored_choices', ()),
