@@ -13,7 +13,7 @@ References carry the detail. For routing: [references/models.md](references/mode
 
 ## Delegation mode
 
-Run `python3 -I <this skill folder>/scripts/mode.py` before Route. `manual`: delegate only when the user says so. `suggest` (default): at Route say “this could go to <agent>; say yes to hand it off” and wait. `auto`: use the guideline for independent tasks with clear acceptance tests, record the decision in the ledger and tell the user after dispatch. An explicit handoff request is approval. Modes govern routing and load sharing; the Never delegated list, review gates, security gates and merge authority stay identical.
+Run `python3 -I <this skill folder>/scripts/mode.py` before Route. `manual`: delegate only when the user says so. `suggest` (default): at Route say “this could go to <agent>; say yes to hand it off” and wait. `auto`: use the guideline for independent tasks with clear acceptance tests, record the decision in the ledger and tell the user after dispatch. An explicit handoff request is approval. Modes govern hand-offs to another agent family, in routing and load sharing. A session or subagent of your own kind, started because the project requires it (for example implementation in its own worktree) or to spare your own context, is you doing the work: start it without an offer, and never name your own family as the `<agent>` in an offer. The Never delegated list, review gates, security gates and merge authority stay identical.
 
 Each mode relies on the agent's judgment unless backed by a hook or host setting; auto is never 100%. Read [references/modes.md](references/modes.md) only when the mode matters.
 
@@ -83,7 +83,7 @@ More routing rules:
 
 ### Keep or hand off
 
-The moment you hold two or more independent tasks with clear acceptance tests, before you start the first, run load sharing and the route over them. Each task you dispatch gets its `start` line in the ledger; for the tasks you keep, run `python3 -I <this skill's folder>/scripts/record.py keep --tasks <count> --reason <reason>` once per reason ([references/keep-receipt.md](references/keep-receipt.md) lists the reasons). The command prints one line; when the user has turned usage metrics on, the plugin's hook records it with the session. "Delegation mode" still applies: under `suggest`, ask before you start the first, and a task the user declines is kept as `user-choice`; under `manual`, make no offer and keep them as `user-choice`. A delegated run reports these tasks to its coordinator instead of dispatching them. Done when those lines account for every task.
+The moment you hold two or more independent tasks with clear acceptance tests, before you start the first, run load sharing and the route over them. Each task you dispatch gets its `start` line in the ledger; for the tasks you keep, run `python3 -I <this skill's folder>/scripts/record.py keep --tasks <count> --reason <reason>` once per reason ([references/keep-receipt.md](references/keep-receipt.md) lists the reasons). The command prints one line; when the user has turned usage metrics on, the plugin's hook records it with the session. "Delegation mode" still applies: under `suggest`, ask before you start the first hand-off to another family, and a task the user declines is kept as `user-choice`; under `manual`, make no offer and keep them as `user-choice`. A delegated run reports these tasks to its coordinator instead of dispatching them. Done when those lines account for every task.
 
 ### Quota fallback
 
