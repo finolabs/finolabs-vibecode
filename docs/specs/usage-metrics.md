@@ -1,6 +1,6 @@
 # Usage metrics and the status dashboard
 
-Status: draft for review. Target release: the next patch release (`0.1.6` while the version is `0.1.6-dev`). Depth: DEEP (hooks run on every matching tool call and record behavior data).
+Status: implemented in `0.1.6`; later releases add the `kept` event (`0.1.7`). Depth: DEEP (hooks run on every matching tool call and record behavior data).
 
 ## Goal
 

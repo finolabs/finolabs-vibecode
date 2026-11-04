@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-04
+
 ### Added
 
 - New behavior evals for the router in a Spec Kit repository, a repository with mattpocock/skills, and one with no workflow pack.
@@ -18,15 +20,24 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Fixed
 
 - The three usage-metrics hook commands on Claude Code now end with `; exit 0`, as the Codex and update hooks already did, so a missing or broken script can never return a blocking exit code. A test pins the guard on every shipped hook command.
+- The update-check tests no longer depend on the manifest version, so a version bump cannot break them.
 
 ### Changed
 
+- The README explains the bricks idea (small skills plus a guideline, inspired by the LEGO Group's turnaround under Jørgen Vig Knudstorp; independent of and not endorsed by the LEGO Group), says what you hand over and what stays with you, and gains a Check step in the three-minute start. The repository social preview shows a robot built from bricks.
 - `fnl-coding-router` now works in any repository. Depth, the review and security gates, proof, "Proportion" and the stop-before-a-third-fix checkpoint are the core; the workflow is a short first step that reads one adapter under `references/workflows/`: `speckit.md` (every Spec Kit rule and the Spec Kit depth gate, unchanged in meaning), `mattpocock.md`, `superpowers.md`, or `none.md`, a self-contained procedure (bounded clarification, a genuine red, the smallest change, proof, review) for repositories with no workflow pack. The description is workflow-neutral, and the fallback table that pointed to skills a user might not have is gone.
 - `fnl-session-hygiene` marks the 60% compaction rule advisory unless enforced by the host or a hook, with enforcement unverified until verified. The README and `fnl-ask` contents also list session wrap-up as a trigger for `fnl-handoff`.
 - `fnl-setup-instructions` offers user, project or both scopes, with repository context sourced from `AGENTS.md`, a Claude include and private local context kept out of git. Its user contract asks for delegation and compaction preferences and distinguishes advisory rules from verified enforcement.
 - `fnl-ask` routes Start, Contents, Explain and Route questions to references, reads the target before answering and still invokes nothing; all modes share the beginner definition and register, with one question first for a bare invocation. The onboarding order is `/fnl-ask`, Quick setup, a first task, user instructions (immediately after setup on Codex), and the dashboard later.
 - The README opens in plain words, with a three-minute start and a glossary, and teaches the same onboarding order to users and agents.
 - `fnl-setup` offers a beginner path before the mode choice and uses it only for users who say they are new to coding or accept the offer. Its closing handover lists user instructions (immediately on Codex, after the first result elsewhere), matching companion suggestions and the skipped sections to revisit later.
+
+### What to do
+
+- Update the plugin through your host's plugin update (the new update check, on by default, will tell you from now on; type `/fnl-update`, `$fnl-update` on Codex), or on Antigravity reinstall with `agy plugin install https://github.com/finolabs/finolabs-vibecode`. Claude Code needs a restart; Codex hooks need your trust again.
+- Delegation mode defaults to `suggest` (the agent names who could take a task and waits for your yes). To change it, or to turn Routing off, run setup (`/fnl-setup`, `$fnl-setup` on Codex) or add `## Delegation mode` and `## Routing` to your host config.
+- The update check makes one GitHub request every 24 hours. Set `FNL_UPDATE_CHECK=off` to stop it; see `PRIVACY.md`.
+- Run `/fnl-setup` and choose Check to see what runs on its own on your host and what is unverified.
 
 ## [0.1.6] - 2026-11-04
 
@@ -208,7 +219,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.3...v0.1.4
