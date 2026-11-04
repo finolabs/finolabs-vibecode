@@ -7,6 +7,6 @@
 - `hard-grade`: graded hard or above, which load sharing leaves on its route, and the route landed here.
 - `no-delegate`: no delegate is reachable, allowed by the project rules, left with quota, or allowed to receive these files.
 - `never-delegated`: the work is on the "Never delegated" list.
-- `user-choice`: the user said to keep it, with `--route-by user`.
+- `user-choice`: the user said to keep it, declined the offer, or set the delegation mode to `manual`, with `--route-by user`.
 
 `--route-by` says who settled it, as on `start`: `table` on a host whose config names a route judge shows the judge was not asked.

@@ -83,7 +83,7 @@ More routing rules:
 
 ### Keep or hand off
 
-The moment you hold two or more independent tasks with clear acceptance tests, before you start the first, run load sharing and the route over them. Each task you dispatch gets its `start` line in the ledger; for the tasks you keep, run `python3 -I <this skill's folder>/scripts/record.py keep --tasks <count> --reason <reason>` once per reason ([references/keep-receipt.md](references/keep-receipt.md) lists the reasons). The command prints one line; when the user has turned usage metrics on, the plugin's hook records it with the session. A delegated run reports these tasks to its coordinator instead of dispatching them. Done when those lines account for every task.
+The moment you hold two or more independent tasks with clear acceptance tests, before you start the first, run load sharing and the route over them. Each task you dispatch gets its `start` line in the ledger; for the tasks you keep, run `python3 -I <this skill's folder>/scripts/record.py keep --tasks <count> --reason <reason>` once per reason ([references/keep-receipt.md](references/keep-receipt.md) lists the reasons). The command prints one line; when the user has turned usage metrics on, the plugin's hook records it with the session. "Delegation mode" still applies: under `suggest`, ask before you start the first, and a task the user declines is kept as `user-choice`; under `manual`, make no offer and keep them as `user-choice`. A delegated run reports these tasks to its coordinator instead of dispatching them. Done when those lines account for every task.
 
 ### Quota fallback
 
