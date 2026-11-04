@@ -17,4 +17,4 @@ Editable sources are icon.svg and icon-dark.svg. The two PNG files are transpare
 
 ## Social preview
 
-`.github/social-preview.png` (1280×640) is rendered from `.github/social-preview.json` with the FINOLABS social-preview template and `social-mark-dark.svg`: the dark icon above three plain bricks. The bricks are original flat shapes drawn for this project; no third-party artwork, logo or wordmark is used. The renderer drops `width` and `height` attributes, so the file draws every shape as a path. GitHub has no API for it: upload it under the repository's Settings, General, Social preview.
+`.github/social-preview.png` (1280×640) is rendered from `.github/social-preview.json` with the FINOLABS social-preview template and `social-mark-dark.svg`: the robot face built from three white bricks between the icon's brackets, with two loose bricks beside it. The bricks are original flat shapes drawn for this project; no third-party artwork, logo or wordmark is used. The renderer drops `width` and `height` attributes, so the file draws every shape as a path. GitHub has no API for it: upload it under the repository's Settings, General, Social preview.
