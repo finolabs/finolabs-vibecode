@@ -4,12 +4,14 @@
 
 ## Start in 3 minutes (you)
 
+On Codex, use `$` instead of `/` for every skill command below. Claude Code and Antigravity use `/`.
+
 1. **Ask your AI assistant to install it.** Paste this into your assistant's chat: "Install https://github.com/finolabs/finolabs-vibecode for me, and explain each step before you do it."
 2. **Open a new chat.** Plugins load when a chat starts.
-3. **Type `/fnl-ask`.** (Codex: `$fnl-ask`; Claude Code may show it as `/finolabs-vibecode:fnl-ask`.) It tells you in plain words where to start, and you can ask it anything about the plugin.
+3. **Type `/fnl-ask`.** (Claude Code may show it as `/finolabs-vibecode:fnl-ask`.) It tells you in plain words where to start, and you can ask it anything about the plugin.
 4. **Type `/fnl-setup` and choose Quick.** It asks a few plain questions and changes nothing without your yes.
 5. **Say what you want to build, in your own words.** For example: "I run a small shop and want a page that tracks my stock and turns red when an item runs low." The assistant plans it, builds it, checks it and tells you where to see it.
-6. **Later, once you have a first result:** type `/fnl-setup-instructions` to teach your assistants how you like to work (on Codex, do this right after step 4), and `/fnl-status` after a few chats to see how it is going.
+6. **Later, once you have a first result:** type `/fnl-setup-instructions` to teach your assistants how you like to work (on Codex, type `$fnl-setup-instructions` right after step 4), and `/fnl-status` after a few chats to see how it is going.
 
 ## Words you may see
 
@@ -165,7 +167,7 @@ The short version is "Start in 3 minutes" above; the order is `/fnl-ask`, `/fnl-
 1. **Install** for your host (above), then open a new session: plugins load when a session starts.
 2. **Type `/fnl-ask`** (`$fnl-ask` on Codex). It explains where to begin. For a beginner, it loads plain-language guidance that the agent follows for the conversation.
 3. **Run setup once**: `/fnl-setup` (Claude Code, Antigravity) or `$fnl-setup` (Codex). Choose Quick for recommended defaults and a confirmation before writing, or Detailed to decide each part. The beginner path asks at most three plain questions and defers technical choices. Setup installs nothing; usage recording needs its own consent. On Codex, type `$fnl-setup-instructions` next so your instructions point coding work at the router from the first task.
-4. **Give it a first real task.** Ask for a change; the agent starts coding work by loading `fnl-coding-router`. It chooses a workflow and depth (MIN, NORMAL or DEEP), checks the result, and explains what happened in your register. On Claude Code a session-start reminder prompts the router and on Antigravity an always-on rule does.
+4. **Give it a first real task.** Ask for a change; the agent starts coding work by loading `fnl-coding-router`. It chooses a workflow and depth (MIN, NORMAL or DEEP), checks the result, and explains what happened in your register within the same chat. On Claude Code a session-start reminder prompts the router and on Antigravity an always-on rule does.
 5. **What you should see:** a stated depth and reason, expressed in everyday words for a beginner; commits written as `fnl-commit-messages` says; pull requests held for a posted code review and, at sensitive boundaries, a security review; and, if delegation is set up, bounded tasks whose results are checked before acceptance.
 6. **After your first result**, type `/fnl-setup-instructions` to set how your assistants work with you (already done after setup on Codex). After a few sessions, type `/fnl-status` to see how the practice is working, if you consented to usage metrics. Return to `/fnl-ask` whenever you need help with a skill.
 7. **Go further** when you need it: [Host configuration](#host-configuration) for delegation, [Usage metrics](#usage-metrics) for what is recorded and where, and [Works well with](#works-well-with) for companion skills.

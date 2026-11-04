@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Ask: where do I start, what is here, which skill next?
 
-Pick the mode that fits the user's question and read its reference:
+Read [references/plain-language.md](references/plain-language.md) first to decide whether to use the beginner register in any mode, including how to handle a bare invocation. Then pick the mode that fits the user's question and read its reference:
 
 | Mode | When | Read |
 | --- | --- | --- |
@@ -15,4 +15,4 @@ Pick the mode that fits the user's question and read its reference:
 | Explain | How a named skill, agent or script works | [references/explain.md](references/explain.md) |
 | Route | Which skill fits a situation | [references/map.md](references/map.md) |
 
-For a beginner in any mode, also read [references/plain-language.md](references/plain-language.md) and keep its register for this conversation. Read the target file before describing it so the answer is current. Answer and stop: invoke nothing; leave the how-to to the target skill when it runs. On Codex the user types `$fnl-ask` and `$fnl-setup`; elsewhere `/fnl-ask` and `/fnl-setup`.
+Read the target file before describing it so the answer is current. Answer and stop: invoke nothing; leave the how-to to the target skill when it runs. On Codex the user types `$` instead of `/` for skill commands; Claude Code and Antigravity use `/`.
