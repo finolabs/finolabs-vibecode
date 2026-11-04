@@ -238,11 +238,17 @@ def collect():
             "agy": "agent judgment; no enforcement hook relied on; static always-on rule ignores Routing",
         }[host]
         hosts[host].append(item("mode enforcement", "unverified", enforcement + "; auto is never 100%"))
-    config = Path(os.path.expanduser(os.environ.get("ORCHESTRATION_HOST_CONFIG", str(home / ".finolabs/vibecode/host.md"))))
+    explicit = os.environ.get("ORCHESTRATION_HOST_CONFIG")
+    config = Path(os.path.expanduser(explicit or str(home / ".finolabs/vibecode/host.md")))
     if config.suffix.lower() != ".md":
         host_config = item("host config", "unverified", "only Markdown host config is inspected")
     else:
         status, text = read(config)
+        if status != "ok" and not explicit:
+            # The older location counts only while the new file is absent, as fnl-delegate reads it.
+            xdg = os.environ.get("XDG_CONFIG_HOME") or str(home / ".config")
+            legacy = Path(os.path.abspath(os.path.expanduser(xdg))) / "finolabs-vibecode/host.md"
+            status, text = read(legacy) if not os.path.lexists(config) else (status, text)
         missing = sorted(HEADINGS - set(re.findall(r"^## (.+?)\s*$", text, re.M)))
         host_config = item("host config", status if status != "ok" else ("missing" if missing else "ok"),
                            ("required headings present; values not validated" if not missing else
@@ -267,7 +273,7 @@ def collect():
         text_check("agent skills", context, lambda t: bool(re.search(r"^## Agent skills\s*$", t, re.M)),
                    "Agent skills heading present", "Agent skills block absent"),
         text_check("review adoption", context,
-                   lambda t: bool(re.search(r"^Pull requests (?:follow `fnl-review-gate`|merge only after a code review and a security review are posted on them, as `fnl-review-gate` says)", t, re.M)),
+                   lambda t: bool(re.search(r"(?:^|[.>]\s+)Pull requests (?:follow `fnl-review-gate`|merge only after a code review and a security review are posted on them, as `fnl-review-gate` says)", t, re.M)),
                    "review-gate adoption line present", "review-gate adoption line absent"),
         item("workflow", "unverified", "files cannot prove agents follow routing or review gates"),
     ]
