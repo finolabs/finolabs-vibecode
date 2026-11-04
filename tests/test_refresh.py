@@ -161,6 +161,20 @@ class RefreshTest(unittest.TestCase):
             {"coordinator": "codex", "reason": "needs-context", "route_by": "table", "receipts": 2, "tasks": 5},
             {"coordinator": "unknown", "reason": "user-choice", "route_by": "user", "receipts": 1, "tasks": 2}])
 
+    def test_the_hand_off_count_leaves_out_subagents_and_reroutes_after_a_failure(self):
+        self.consent()
+        base = ["start", "--project", "demo", "--task", "t", "--kind", "implement", "--grade", "easy", "--model", "m", "--budget", "20"]
+        for extra in (["--agent", "codex"], ["--agent", "codex", "--reason", "fallback-quota"],
+                      ["--agent", "codex", "--reason", "fallback-failure"], ["--agent", "subagent"]):
+            subprocess.run([sys.executable, "-I", str(LEDGER), *base, *extra], check=True, env=self.env, capture_output=True)
+        self.refresh("run")
+        self.assertEqual(self.data()["kept"]["handed_off"], 2)
+
+    def test_without_consent_no_zero_is_shown_for_kept_work(self):
+        self.fixture_ledger()
+        self.refresh("run")
+        self.assertIsNone(self.data()["kept"])
+
     def test_purge_removes_kept_work_with_the_other_events(self):
         self.consent()
         self.write_events([self.event(8, "k", X, "kept", tasks=2, reason="no-delegate", route_by="table")])
