@@ -43,7 +43,7 @@ Done when the plugin is listed by your host and the user knows to run setup in a
 
 ## Skills
 
-Every skill carries the `fnl-` prefix. The user types four of them, `fnl-setup`, `fnl-setup-instructions`, `fnl-status` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); the agent loads the others when the situation calls for them.
+Every skill carries the `fnl-` prefix. The user types five of them, `fnl-setup`, `fnl-setup-instructions`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); the agent loads the others when the situation calls for them.
 
 | Skill | Use it when |
 | --- | --- |
@@ -64,6 +64,7 @@ Every skill carries the `fnl-` prefix. The user types four of them, `fnl-setup`,
 | `fnl-setup` | First run on a machine or repository: host config, local file placement, the agent-skills block in `CLAUDE.md` or `AGENTS.md`. |
 | `fnl-setup-instructions` | Writing your user-scoped instructions: it interviews you and writes them for Claude Code, Codex and Antigravity from one shared source. |
 | `fnl-status` | Opening the usage dashboard: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, from the usage events (after you consent in setup) and the dispatch ledger. It also lists delegated runs still open. |
+| `fnl-update` | Showing installed and cached available versions, updating through the host after a clear yes, skipping a release, or stopping update notices. |
 | `fnl-ask` | You are new and do not know where to start, want to know what the plugin holds, or have a question about a skill, agent or script: it gives the first steps, lists the contents, explains the piece you name, or maps your situation to the next command, including companion skills from other packs. |
 | `fnl-open-source-review` | Before a repository goes public, and after: license, secrets in tree and history, internal leaks, clean payload, community files, repository settings, identity, data flow, plugin checks. |
 
@@ -104,7 +105,7 @@ codex plugin marketplace add finolabs/plugins
 codex plugin add finolabs-vibecode@finolabs
 ```
 
-Codex runs a plugin's hooks only after you trust them: open `/hooks` once in a new session. Until then the usage metrics stay off.
+Codex runs a plugin's hooks only after you trust them: open `/hooks` once in a new session. Until then the usage metrics and update notice hooks do not run. Trust the hooks again after a plugin update.
 
 ### Antigravity
 
@@ -159,7 +160,13 @@ Off until you say yes in `fnl-setup` (section F), where you also pick how long e
 
 Events are best effort: they are read from tool calls and command text, so they can miss an action. Stop recording with `FNL_METRICS=off` or `refresh.py consent --revoke`; delete what was recorded with `fnl-status purge`.
 
-### Where the plugin keeps its files
+## Update check
+
+On by default on Claude Code and Codex, independently of usage metrics consent. A startup hook reads a local cache and starts a detached worker when it is missing or at least 24 hours old. The worker makes the plugin's only network call: one HTTPS GET to `https://api.github.com/repos/finolabs/finolabs-vibecode/releases/latest` with generic User-Agent `finolabs-vibecode-update-check`. It sends nothing about the user, repository, session or installed version. GitHub sees the connection's source IP. Only a timestamp and validated stable release tag are cached; no response text is displayed. Failures stay silent and the session continues.
+
+A newer stable version prompts the agent to ask once per session about `fnl-update`. That skill shows the installed and cached available versions, asks for a clear yes before a native update, and records “skip this version” or “never ask” when requested. Claude Code needs a restart after updating; Codex hooks need trust again through `/hooks`. Codex and Antigravity update procedures are currently unverified; the skill explains that limit. The first carrying stable release gives no notice of itself. Set `FNL_UPDATE_CHECK=off` to stop requests and notices; “never ask” suppresses notices only. Antigravity has the skill but no automatic update hook. See [PRIVACY.md](PRIVACY.md) and the [spec](docs/specs/update-check.md).
+
+## Where the plugin keeps its files
 
 | Path | Holds |
 | --- | --- |
@@ -182,7 +189,7 @@ The route judge is optional. Without one, the agent's own model makes the grade,
 .claude-plugin/hooks.json         Claude Code hooks: the session reminder and the usage-metrics hooks
 .claude-plugin/marketplace.json   Claude Code marketplace listing this repository
 .codex-plugin/plugin.json         Codex manifest, version kept equal
-.codex-plugin/hooks.json          Codex hooks for the usage metrics (named by the manifest)
+.codex-plugin/hooks.json          Codex hooks for usage metrics and update notices (named by the manifest)
 .antigravity-plugin/plugin.json   Antigravity manifest, version kept equal
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 agents/fnl-*.md                   read-only reviewer, security reviewer and verifier subagents
