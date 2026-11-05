@@ -59,5 +59,5 @@ Each rule line says who enforces it: a host setting, a hook, the review gate, or
 ## 9. Host section (one per host)
 
 - Session titles: when and how to name or rename the session.
-- Context pressure: when to compact or start fresh (`fnl-session-hygiene` "Context pressure"); for Claude Code, ask the user's threshold (recommended: about 60% at a safe idle boundary) and record it in one line. Enforcement belongs to host settings or hooks written by `fnl-setup`; a contract line alone is advisory, and no enforcement is claimed until verified.
+- Context pressure: when to compact or start fresh (`fnl-session-hygiene` "Context pressure"); the host owns the compaction threshold; about 60% is advisory (agent judgment), not a prescribed host setting. Enforcement belongs to host settings or hooks written by `fnl-setup`; a contract line alone is advisory, and no enforcement is claimed until verified.
 - Host quirks: model selection, review commands, tools that need care.
