@@ -13,6 +13,7 @@ The 19 skill folders and their purposes match the README.
 | `fnl-advisor` | Getting one second opinion from another model family, or convening two contrasting families for root-cause analysis and a plan when stuck or looping; both are read-only and spend quota, with approval governed by their procedure. |
 | `fnl-versioning` | Bumping a version, tagging a release, or writing the changelog and release notes: SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog. |
 | `fnl-commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports). |
+| `fnl-restore-point` | Saving the working tree to a private git ref before the agent edits, listing restore points and restoring one after a preview and a yes. User-invoked, git repositories only. |
 | `fnl-review-gate` | A user story is done or a pull request is about to merge: an independent code review, a disposition for every finding, a regression test per runtime fix. |
 | `fnl-security-review-gate` | A change touches auth, permissions, private data, untrusted input or payments: a permission-boundary review, with negative tests proving that not even a record's existence leaks. |
 | `fnl-verification` | Choosing targeted tests, reading the evidence, accepting someone else's work, claiming done. |
@@ -35,6 +36,7 @@ The 19 skill folders and their purposes match the README.
 | First time in this repository or on this machine | `/fnl-setup` | `/setup-matt-pocock-skills` if that pack is installed |
 | Writing or revising your own instructions for every agent and repository | `/fnl-setup-instructions` | |
 | Adding or removing an agent, or refreshing allowed models | `/fnl-scan-agents` | |
+| Saving the working tree before the agent edits, or going back to a saved point | `/fnl-restore-point` | |
 | Showing or changing Delegation mode or Routing, including environment overrides | `/fnl-set-mode` | |
 | Starting, resuming or redirecting coding work | `fnl-coding-router` | |
 | Requirements unclear | `fnl-coding-router` (workflow adapter's clarification step) | `/grill-me`, or `/grill-with-docs` to keep a glossary and ADRs |
