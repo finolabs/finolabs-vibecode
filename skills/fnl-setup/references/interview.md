@@ -26,6 +26,12 @@ Recommended: <your answer, with one line of reason>
 - A question that depends on another one still open in this round waits for a later round.
 - After the user answers, update the map: settled decisions make new ones ready. Ask the next round.
 
+## Use the host's native question form
+
+When the session has a native question tool (`AskUserQuestion` on Claude Code, `request_user_input` on Codex, `ask_question` on Antigravity), put the round's questions into it instead of the text format above: the decision as the question, the options as choices with the recommended one first, and a free-text answer through the tool's own "Other" where it has one. Claude Code marks the recommended choice "(Recommended)" and adds "Other" itself; do not assume the other hosts do. Send as many questions per call as the tool takes (Claude Code takes up to four, each with two to four options) and the rest in the next call. The read-back and the final yes go through it too, as neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes.
+
+Ask in text, in the format above, when the session has no such tool, the tool is refused or fails, nobody can answer (a delegated or headless run never waits on a question: it records the open decision and never assumes or invents an answer), or the decision is free text such as a list of model IDs. Codex may expose its tool only in some modes, and Antigravity's is not exercised here; the names come from each host's CLI. The enforcer is agent judgment, so this is advisory.
+
 ## Push on vague answers
 
 An answer such as "be careful" or "use best practices" settles nothing. Ask the follow-up that turns it into a rule an agent can follow and someone can check, or offer two concrete readings and ask which one is meant.
