@@ -341,12 +341,21 @@ def publish(folder, args):
 
 def cmd_consent(args):
     if args.revoke:
-        (fm.state_dir() / "consent.json").unlink(missing_ok=True)
+        try:
+            with fm.dr.data_folder("state") as folder:
+                os.unlink("consent.json", dir_fd=folder)
+        except FileNotFoundError:
+            pass
+        except ValueError:
+            sys.exit("consent: invalid data root; nothing recorded")
         print("consent withdrawn: nothing is recorded until consent is given again")
         return
     if args.retention is None:
         sys.exit("consent: pass --retention DAYS, or --revoke")
-    fm.write_consent(args.retention)
+    try:
+        fm.write_consent(args.retention)
+    except ValueError:
+        sys.exit("consent: invalid data root; nothing recorded")
     print("consent recorded: events kept %d days" % args.retention)
 
 

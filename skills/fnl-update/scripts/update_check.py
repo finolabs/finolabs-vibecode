@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # also works with python -I
 import fnl_metrics as fm  # noqa: E402
+import data_root as dr
 
 URL = "https://api.github.com/repos/finolabs/finolabs-vibecode/releases/latest"
 USER_AGENT = "finolabs-vibecode-update-check"
@@ -58,7 +59,7 @@ def installed_version():
 
 def read_json(name, default):
     try:
-        return json.loads(fm.read_small(fm.state_dir() / name))
+        return json.loads(dr.read_data(Path("state") / name, 4096))
     except FileNotFoundError:
         return default
     except (OSError, ValueError):
@@ -93,8 +94,7 @@ def choices():
 
 
 def write_json(name, data):
-    folder = fm.ensure_dir(fm.state_dir(), follow=True)
-    fm.atomic_write(folder / name, json.dumps(data, separators=(",", ":")) + "\n")
+    dr.write_data(Path("state") / name, (json.dumps(data, separators=(",", ":")) + "\n").encode())
 
 
 def fetch():
@@ -126,7 +126,7 @@ def start_fetch():
 
 
 def run(argv):
-    if os.environ.get("FNL_UPDATE_CHECK", "").lower() == "off":
+    if os.environ.get("FNL_UPDATE_CHECK", "").lower() == "off" or dr.consent_root() is None:
         return
     if argv == ["--fetch"]:
         fetch()

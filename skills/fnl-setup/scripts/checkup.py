@@ -9,6 +9,10 @@ import stat
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import data_root as dr
+
 PLUGIN = "finolabs-vibecode"
 PRINCIPLE = "A file that says something is on is not proof that it runs."
 # Required sections; Effort preference, Delegation mode and Routing are optional.
@@ -825,16 +829,17 @@ def instruction_lines(block):
 
 
 def host_config_text(home):
+    # The override still serves non-consent diagnostics, never payload permission.
     explicit = os.environ.get("ORCHESTRATION_HOST_CONFIG")
-    config = Path(os.path.expanduser(explicit or str(home / ".finolabs/vibecode/host.md")))
-    if config.suffix.lower() != ".md":
+    if explicit:
+        config = Path(os.path.abspath(os.path.expanduser(explicit)))
+        return read(config) if config.suffix.lower() == ".md" else ("unverified", "")
+    try:
+        return "ok", dr.read_data("host.md").decode("utf-8")
+    except FileNotFoundError:
+        return "missing", ""
+    except (OSError, ValueError, UnicodeError):
         return "unverified", ""
-    status, text = read(config)
-    if status != "ok" and not explicit and not os.path.lexists(config):
-        xdg = os.environ.get("XDG_CONFIG_HOME") or str(home / ".config")
-        legacy = Path(os.path.abspath(os.path.expanduser(xdg))) / "finolabs-vibecode/host.md"
-        return read(legacy)
-    return status, text
 
 
 def collect(payload=False):
@@ -843,12 +848,17 @@ def collect(payload=False):
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from mode import effective
     settings = effective()
-    home = Path(os.path.abspath(os.environ.get("HOME", "~")))
+    home = dr.account_home()
     configured = os.environ.get("CODEX_HOME", "")
     codex = Path(configured) if os.path.isabs(configured) else home / ".codex"
     config_status, config_text = host_config_text(home)
-    if payload and (config_status != "ok" or not instruction_consent(config_text)):
-        return ""
+    if payload:
+        try:
+            consent_text = dr.read_data("host.md").decode("utf-8")
+        except (OSError, ValueError, UnicodeError):
+            return ""
+        if not instruction_consent(consent_text):
+            return ""
     cwd = Path.cwd()
     root = next((p for p in (cwd, *cwd.parents) if os.path.lexists(p / ".git")), cwd)
     git = root / ".git"
@@ -905,7 +915,9 @@ def collect(payload=False):
                    "review-gate adoption line present", "review-gate adoption line absent", reader=context_read),
         item("workflow", "unverified", "files cannot prove agents follow routing or review gates"),
     ]
-    return {"principle": PRINCIPLE, "hosts": hosts, "instructions": instruction_block, "setup": [host_config, inventory,
+    data_path, data_source = dr.data_root()
+    return {"principle": PRINCIPLE, "hosts": hosts, "instructions": instruction_block, "setup": [
+            item("data root", data_source, str(data_path)), host_config, inventory,
             retired_evidence([*user_context, *context], reader=context_read),
             item("effective settings", "ok", "delegation mode=" + settings["delegation_mode"] +
                  "; routing=" + settings["routing"] + "; auto gate=" + settings["auto_gate"] + "; selected values only, not runtime proof"), *repository]}

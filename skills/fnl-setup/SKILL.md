@@ -22,15 +22,21 @@ Report only what you observe:
 - **Route judge**: whether a semantic evaluator skill such as `typesafe-ai` is installed (skill listing only; never look for its credentials).
 - **Review tools**: which review instruments each installed host has, from the skill listing and `--help` only: Claude Code `/code-review` and `/security-review`, Codex `codex review`, and the `security-audit` skill from Cloudflare. Antigravity has none.
 - **Companion skills**: which skills in [references/companions.md](references/companions.md) are installed, from the skill and plugin listings.
-- **Host config**: the file at `$ORCHESTRATION_HOST_CONFIG`, else `~/.finolabs/vibecode/host.md` (or the older `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md` while only that file exists). Present, missing, or still holding template placeholders.
+- **Host config**: `host.md` under the root resolved by `scripts/data_root.py`; environment overrides never supply opt-ins. Present, missing, or still holding template placeholders.
 - **Repository**: the git root; whether it uses Spec Kit (`.specify/` plus installed `speckit-*` skills); which of `CLAUDE.md` and `AGENTS.md` exist and whether one already has an `## Agent skills` section; whether `.finolabs/` is excluded in `.git/info/exclude`.
 - **Knowledge base**: where the user keeps durable decisions that agents write to: a notes vault or knowledge-base server their user-scoped instructions name, with the access those instructions approve.
-- **Usage metrics**: whether the plugin's hooks are installed (the whole plugin, on Claude Code, Codex or Antigravity; a single skill installed alone has none) and whether `consent.json` already exists in the state folder (`${FNL_STATE_DIR:-~/.finolabs/vibecode/state}`; a machine that still has `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` and no new folder keeps using the old one). Read only its date and retention.
+- **Usage metrics**: whether the plugin's hooks are installed (the whole plugin, on Claude Code, Codex or Antigravity; a single skill installed alone has none) and whether `consent.json` already exists in the resolved data root's `state/` folder, with no environment redirect. Read only its date and retention.
 - **User-scoped instructions**: whether `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` (or `$CODEX_HOME/AGENTS.md`) and `~/.gemini/GEMINI.md` (or `~/.gemini/AGENTS.md`) exist, and whether they already point coding work at `fnl-coding-router`.
 
 A check that cannot run here (a command or path is unavailable) is listed as **unverified** in one line, and the interview goes on.
 
 Done when the findings are listed for the user.
+
+## Data location
+
+Before writing setup data, show the effective root and its source from `scripts/data_root.py`. Offer to keep the default (recommended) or move to an absolute local folder the user names, outside every git work tree. Run `python3 -I <this skill folder>/scripts/data_location.py preview --to <path>` and show the file list and `Digest:`. It copies only regular `host.md`, `ledger.jsonl` and files under `state/`, `logs/` and `bin/`; it skips `tmp/` and symlinks.
+
+Ask separately whether to copy to that target, through the host's native question tool when the session has one, otherwise in text. Offer neutral Yes and No choices, with none preselected or marked recommended; a default or timeout never counts as consent (agent judgment, advisory). Only after a clear yes run `python3 -I <this skill folder>/scripts/data_location.py apply --to <path> --yes --digest <full 64-hex preview digest>`. The script requires the full 64-hex digest (prefixes are refused), checks it again, refuses a non-empty target, copies into private folders and writes the pointer last and atomically. The old folder stays untouched; the user removes it. An invalid pointer disables opt-ins; report it and resolve it with the user before any consent-bearing setup write.
 
 ## 2. Grill
 

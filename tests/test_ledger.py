@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from tests.data_root_fixture import account
 from unittest import mock
 
 LEDGER = Path(__file__).resolve().parent.parent / "skills/fnl-delegate/scripts/ledger.py"
@@ -18,7 +19,9 @@ START = ["start", "--project", "demo", "--task", "add parser", "--kind", "implem
 class LedgerTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
-        self.path = Path(self.dir.name) / "ledger.jsonl"
+        self.home = account(self, Path(self.dir.name) / "home")
+        self.path = self.home / ".finolabs/vibecode/ledger.jsonl"
+        self.path.parent.mkdir(parents=True)
         self.env = {**os.environ, "ORCHESTRATION_LEDGER": str(self.path)}
 
     def tearDown(self):
@@ -145,6 +148,7 @@ class LedgerLocationTest(unittest.TestCase):
         self.home = Path(self.dir.name) / "home"
         self.xdg = Path(self.dir.name) / "xdg"
         self.home.mkdir()
+        account(self, self.home)
         env = {k: v for k, v in os.environ.items() if k != "ORCHESTRATION_LEDGER"}
         self.env = {**env, "HOME": str(self.home), "XDG_STATE_HOME": str(self.xdg)}
 
@@ -159,19 +163,19 @@ class LedgerLocationTest(unittest.TestCase):
         for folder in (self.home / ".finolabs", self.home / ".finolabs/vibecode"):
             self.assertEqual(folder.stat().st_mode & 0o777, 0o700, folder)
 
-    def test_an_existing_older_ledger_keeps_being_used_until_a_new_one_exists(self):
+    def test_an_existing_older_ledger_cannot_redirect_storage(self):
         old = self.xdg / "finolabs-vibecode/ledger.jsonl"
         old.parent.mkdir(parents=True)
         old.write_text("")
         self.start()
-        self.assertEqual(len(old.read_text().splitlines()), 1)
-        self.assertFalse((self.home / ".finolabs").exists())
+        self.assertEqual(old.read_text(), "")
+        self.assertTrue((self.home / ".finolabs").exists())
         new = self.home / ".finolabs/vibecode/ledger.jsonl"
-        new.parent.mkdir(parents=True)
+        new.parent.mkdir(parents=True, exist_ok=True)
         new.write_text("")
         self.start()
         self.assertEqual(len(new.read_text().splitlines()), 1)
-        self.assertEqual(len(old.read_text().splitlines()), 1)
+        self.assertEqual(old.read_text(), "")
 
 
 if __name__ == "__main__":

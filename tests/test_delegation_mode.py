@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,7 +21,7 @@ class DelegationModeTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.home = Path(self.tmp.name).resolve()
+        self.home = account(self, Path(self.tmp.name))
         self.config = self.home / ".finolabs/vibecode/host.md"
         self.config.parent.mkdir(parents=True)
         self.env = {"HOME": str(self.home), "PATH": os.environ.get("PATH", "")}
@@ -118,21 +119,28 @@ class DelegationModeTest(unittest.TestCase):
         self.env.update(FNL_DELEGATION_MODE="auto", FNL_ROUTING="on")
         self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "on", "auto_gate": "off"})
 
-    def test_legacy_config_counts_only_while_the_new_file_is_absent(self):
+    def test_legacy_config_does_not_supply_settings(self):
         legacy = self.home / ".config/finolabs-vibecode/host.md"
         legacy.parent.mkdir(parents=True)
         legacy.write_text("## Delegation mode\nauto\n## Routing\noff\n")
-        self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "off", "auto_gate": "off"})
-        self.env["XDG_CONFIG_HOME"] = str(self.home / "xdg")
-        self.assertEqual(self.values(), DEFAULTS)
-        del self.env["XDG_CONFIG_HOME"]
-        self.config.write_text("## Limits\n")
         self.assertEqual(self.values(), DEFAULTS)
 
     def test_override_path(self):
         custom = self.home / "custom.md"
         custom.write_text("## Delegation mode\nauto\n## Routing\noff\n")
         self.env["ORCHESTRATION_HOST_CONFIG"] = str(custom)
+        self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "on", "auto_gate": "off"})
+
+    def test_mixed_destination_settings_refuse_before_writing(self):
+        custom = self.home / "custom.md"
+        custom.write_text("## Delegation mode\nsuggest\n")
+        self.env["ORCHESTRATION_HOST_CONFIG"] = str(custom)
+        output = self.mode_action("set", "--delegation-mode", "auto", "--routing", "off", "--yes")
+        self.assertIn("set Delegation mode separately", output)
+        self.assertEqual(custom.read_text(), "## Delegation mode\nsuggest\n")
+        self.assertFalse(self.config.exists())
+        self.mode_action("set", "--delegation-mode", "auto", "--yes")
+        self.mode_action("set", "--routing", "off", "--yes")
         self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "off", "auto_gate": "off"})
 
     def test_invalid_values_default_without_falling_through(self):

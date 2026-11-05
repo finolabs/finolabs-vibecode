@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -22,7 +23,7 @@ class AgentScanTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.home = Path(self.tmp.name).resolve()
+        self.home = account(self, Path(self.tmp.name))
         self.bin = self.home / "bin"
         self.bin.mkdir()
         self.config = self.home / ".finolabs/vibecode/host.md"

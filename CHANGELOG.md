@@ -6,12 +6,16 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- One account-owned data root, with checked relocation through `fnl-setup` and digest-confirmed copying that preserves the old folder. Consent and opt-ins ignore environment redirects; only usage events and the dashboard retain the documented state override and legacy compatibility paths.
+
 - Judge receipts and a conditional Judge pane in `fnl-status`: use, usable answers, followed decisions and outcome association by routing source, with metadata only and no cost, latency or accuracy measurement.
 - `fnl-restore-point` (user-invoked, git repositories only) saves the working tree to a private ref `refs/finolabs/restore/<timestamp>` without touching the index, the branch or the files, lists the saved points and restores one only after a preview and a clear yes, taking a pre-restore point first; it never pushes. `fnl-ask` Start offers a guided "try it now" first result in a new empty folder outside any repository.
 - `fnl-setup-instructions` states a researched standard (add only what the agent cannot infer, verifiable lines with reasons, text is not enforcement, detail on demand), per-host limits and mechanics, and a pre-write measure step; `fnl-setup` Check gains a 20-item instruction checklist. `checkup.py` measures length, the Codex 32 KiB chain, the Antigravity 24,000-byte limit, includes, duplicates, secret-looking strings, machine paths, the local file, emphasis, layout and age offline and read-only, reporting file, line and pattern name only. The judgment items go to the route judge first (only with the separate `Instruction check` consent, through one payload builder that drops secret and path lines) and to the agent as fallback.
 - A task-lifecycle state diagram (inspect, path, depth, red, change, proof, review, merge, release, with the checkpoint after two failed fixes) in the README, with the HTML sources of both diagrams in `docs/diagrams/`.
 
 ### Changed
+
+- Stop reading the `ORCHESTRATION_LEDGER` override, the legacy XDG ledger, the legacy `host.md` for Check, Routing mode and Delegation mode, and the legacy consent location. Use the data root for these files; data-location changes require the full 64-hex preview digest.
 
 - A Claude Code hook of this plugin may now deny the first file write in a repository without a decision in the last 8 hours when Delegation mode is `auto` and the opt-in auto gate is on; subsequent writes in the window allow, and `FNL_AUTO_GATE=off` disables it.
 - Clarify host-owned compaction thresholds and advisory writeback; setup only suggests settings, Claude Code and Codex gain a non-blocking `PreCompact` reminder, and Check reports declarations with delivery unverified.

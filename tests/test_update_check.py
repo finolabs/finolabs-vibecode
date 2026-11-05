@@ -6,6 +6,7 @@ import io
 import json
 import os
 from pathlib import Path
+from tests.data_root_fixture import account
 import stat
 import subprocess
 import sys
@@ -27,7 +28,9 @@ class UpdateTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.folder = Path(self.tmp.name)
+        self.home = account(self, Path(self.tmp.name) / "home")
+        self.folder = self.home / ".finolabs/vibecode/state"
+        self.folder.mkdir(parents=True)
         env = mock.patch.dict(os.environ, {'FNL_STATE_DIR': str(self.folder), 'FNL_UPDATE_CHECK': '', 'FNL_METRICS': 'off'})
         env.start()
         self.addCleanup(env.stop)
@@ -250,7 +253,7 @@ class UpdateTest(unittest.TestCase):
         for error in [TimeoutError(), urllib.error.URLError('private text'), OSError('private text')]:
             self.transport.return_value.open.side_effect = error
             self.assertEqual(self.call('--fetch'), '')
-        with mock.patch.object(u.fm, 'state_dir', side_effect=PermissionError):
+        with mock.patch.object(u.dr, 'read_data', side_effect=PermissionError):
             self.assertEqual(self.call(), '')
         self.assertEqual(self.call('unknown'), '')
 

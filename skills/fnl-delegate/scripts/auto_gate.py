@@ -17,6 +17,11 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import data_root as dr
+
 OFF_VALUES = {"off", "0", "false", "no"}
 WINDOW = timedelta(hours=8)
 MAX_BYTES = 4096
@@ -43,24 +48,7 @@ def enabled(effective):
 
 @contextmanager
 def state_folder(*, writer=False):
-    home = pwd.getpwuid(os.getuid()).pw_dir
-    if not os.path.isabs(home):
-        raise ValueError("home must be absolute")
-    fd = os.open(home, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        for part in (".finolabs", "vibecode", "state", "auto-gate"):
-            try:
-                os.mkdir(part, 0o700, dir_fd=fd)
-            except FileExistsError:
-                pass
-            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
-            os.close(fd)
-            fd = child
-            info = os.fstat(fd)
-            if info.st_uid != os.getuid():
-                raise ValueError("foreign folder")
-        if stat.S_IMODE(info.st_mode) != 0o700:
-            raise ValueError("state folder must be private")
+    with dr.data_folder("state/auto-gate", create=True, private=True) as fd:
         # Serialize merges and stale-file retirement without another state file.
         # Only writers retry contention; the hook always allows immediately.
         for attempt in range(3 if writer else 1):
@@ -72,8 +60,6 @@ def state_folder(*, writer=False):
                     raise
                 time.sleep(0.05)
         yield fd
-    finally:
-        os.close(fd)
 
 
 def filename(key):

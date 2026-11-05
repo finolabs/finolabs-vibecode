@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -29,7 +30,8 @@ SID = "sess-1"
 class MetricsTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.dir = Path(self.tmp.name) / "state"
+        self.home = account(self, Path(self.tmp.name) / "home")
+        self.dir = self.home / ".finolabs/vibecode/state"
         self.repo = Path(self.tmp.name) / "repo"
         (self.repo / ".git").mkdir(parents=True)
         patcher = mock.patch.dict(os.environ, {"FNL_STATE_DIR": str(self.dir)})
@@ -134,8 +136,9 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(list(self.dir.glob("events-*")), [])
 
     def home_env(self, **extra):
-        home = Path(self.tmp.name) / "home"
+        home = (Path(self.tmp.name) / "home").resolve()
         home.mkdir(exist_ok=True)
+        account(self, home)
         env = {"HOME": str(home), **extra}
         patcher = mock.patch.dict(os.environ, env)
         patcher.start()
@@ -259,7 +262,7 @@ class MetricsTest(unittest.TestCase):
         self.assertNotEqual(m.repo_code(self.repo), m.repo_code(other))
 
     def test_invalid_consent_is_ignored(self):
-        self.dir.mkdir()
+        self.dir.mkdir(parents=True)
         for text in ('{"date": "2026-11-03", "retention_days": 7}', "not json", "[]"):
             (self.dir / "consent.json").write_text(text)
             self.assertIsNone(m.read_consent())

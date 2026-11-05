@@ -26,7 +26,7 @@ One plugin with a skill set that gives AI coding agents a single engineering pra
   - Execution: each executable is resolved once at setup to an owner-checked absolute path the user confirmed, run with a fixed argv, no shell, an allowlisted environment, a neutral empty working folder, a 30-second limit with its whole process group killed, and a 64 KiB output cap.
   - Data: the cache, the single in-flight worker marker (a nonce a hook must match before it exits early) and the backoff times live in the data root's private state folder, never in a location a repository can redirect; the plugin stores only group names, windows, remaining fractions, reset times, the source, the time of the reading, the next allowed attempt and error class, and the user's own labels.
   - Network: those programs contact their providers with the user's own accounts; the plugin makes no network call and sends nothing about the user. `FNL_QUOTA_PROBE=off` stops the probe. No other command is run, no other network call is added, and no code for the probe lands before this rule is merged.
-- The plugin's own data and config live under `~/.finolabs/vibecode/` (see `README.md`); a skill never hard-codes another location.
+- The plugin's own data and config live under the data root, `~/.finolabs/vibecode/` by default, which only `fnl-setup` changes (see `README.md`); a skill never hard-codes another location.
 
 ## Reviews
 

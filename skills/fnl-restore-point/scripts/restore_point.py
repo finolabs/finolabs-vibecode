@@ -9,10 +9,13 @@ import shutil
 import stat
 import subprocess
 import sys
-import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import data_root as dr  # noqa: E402
 
 REF_PREFIX = "refs/finolabs/restore/"
 NAME_RE = re.compile(r"^[0-9]{8}T[0-9]{6}Z(-[a-z0-9-]{1,20})?$")
@@ -183,9 +186,15 @@ def run_git(repo_root, args, extra_env=None, check=True):
 @contextmanager
 def temp_index_env(repo_root, seed_from_real=True):
     """Provide a GIT_INDEX_FILE in a private 0700 temp directory removed on exit."""
-    tmpdir = tempfile.mkdtemp(prefix="fnl-restore-")
+    # The plugin's private temporary folder under the data root, never the system one.
+    with dr.data_folder("tmp", create=True, private=True):
+        pass
+    root, source = dr.data_root()
+    if source == "invalid":
+        raise ValueError("The plugin data folder is not usable; run the setup check.")
+    tmpdir = str(root / "tmp" / ("fnl-restore-" + os.urandom(8).hex()))
+    os.mkdir(tmpdir, 0o700)
     try:
-        os.chmod(tmpdir, 0o700)
         temp_index = os.path.join(tmpdir, "index")
         env = {"GIT_INDEX_FILE": temp_index}
         real_index = check_git_dir_and_refs(repo_root) / "index"
