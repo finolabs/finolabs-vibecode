@@ -19,7 +19,7 @@ One standard for every repository: applications, libraries, CLIs, services, plug
 ## Cadence
 
 - One bump per release, never per commit, PR, task or amendment. Unreleased changes accumulate into one pending bump, and its release notes (or a Sync Impact Report for a governance document) list every change in it.
-- An agent never cuts a release on its own. A release usually follows each finished spec: propose one when a spec is merged, summarizing what has accumulated, and let the owner decide. In phase 0 a spec's compatible changes bump the last digit; MINOR only when something breaks.
+- An agent never cuts a release on its own. A release usually follows each finished spec: propose one when a spec is merged, summarizing what has accumulated, and let the owner decide. In phase 0 a spec's compatible changes bump the last digit; MINOR only when something breaks. **Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
 - A product release is a tag. A governance document is released when it merges to the default branch. A release is two pull requests: the release (version and dated changelog), then the bump to the next `-dev`, so the default branch never carries a released version as its build.
 - Between releases, builds report the next expected version with `-dev` (`0.4.0-dev`); build metadata such as `+<short-sha>` may follow and never affects precedence.
 - Pre-releases use `-alpha.N`, `-beta.N`, `-rc.N`, N from 1. A release candidate is the final bytes except the version string; any other change makes a new candidate.

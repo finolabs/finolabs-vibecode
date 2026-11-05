@@ -17,6 +17,8 @@ One agent reads the situation and gives a judgement. You stay the decider; the a
 
 Propose an advisor and wait for the user's yes, because each run spends quota. Propose it when the decision cannot be undone or changes a contract, or when your own analysis leaves you unsure. A user who asks for one needs no proposal. When the user is away, run one without the yes when a decision would otherwise wait for them, as `fnl-delegate` says for an absent user, and record who settled it.
 
+**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
+
 ## Picking the advisor
 
 1. An agent the user names wins.

@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- Ask questions and show option labels in the user's language, preserving technical names and reporting English script output in that language (advisory, agent judgment).
+
 ## [0.1.8] - 2026-11-05
 
 ### Added

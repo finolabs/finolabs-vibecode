@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 Read [references/plain-language.md](references/plain-language.md) first to decide whether to use the beginner register in any mode, including how to handle a bare invocation. Then pick the mode that fits the user's question and read its reference:
 
+**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
+
 | Mode | When | Read |
 | --- | --- | --- |
 | Start | New to the plugin or unsure how to begin | [references/start.md](references/start.md) |
