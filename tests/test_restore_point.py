@@ -300,6 +300,23 @@ class RestorePointTest(unittest.TestCase):
         self.assertNotIn("urllib", source)
         self.assertNotIn("socket", source)
 
+    def test_skill_frontmatter_and_try_it_now_demo_step(self):
+        skill_text = (ROOT / "skills/fnl-restore-point/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("name: fnl-restore-point", skill_text)
+        self.assertIn("disable-model-invocation: true", skill_text)
+        self.assertIn('argument-hint: "[list|create|restore <name>]"', skill_text)
+        self.assertIn("Run only when the user asks.", skill_text)
+
+        start_text = (ROOT / "skills/fnl-ask/references/start.md").read_text(encoding="utf-8")
+        demo_lines = [line for line in start_text.splitlines() if line.startswith("4. **Try it now**")]
+        self.assertEqual(len(demo_lines), 1)
+        demo = demo_lines[0].lower()
+        self.assertIn("new empty folder", demo)
+        self.assertIn("never inside an existing repository", demo)
+        self.assertIn("one tiny thing", demo)
+        for internal in ("router", "gate", "depth", "ledger", "handoff"):
+            self.assertNotIn(internal, demo)
+
 
 if __name__ == "__main__":
     unittest.main()
