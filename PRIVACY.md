@@ -20,6 +20,14 @@ The resolved data root's `state/` folder (normally `~/.finolabs/vibecode/state/`
 
 The first stable release carrying the checker gives no notice of itself: older installs have no checker, and an equal version produces no notice. Missing caches initialize silently; failures print nothing and never stop a session. See the [update-check spec](docs/specs/update-check.md) for the exact data and limits.
 
+## Quota probe
+
+For the quota probe, the plugin itself makes no network call. The user's own `agy`, `claude` and `codex` programs contact their providers with the user's own accounts; the plugin sends nothing about the user. This is separate from the update check above.
+
+The probe stays off until setup records the dated opt-in in the canonical `<data root>/host.md`, under `## Quota probe`. That section lists selected agents, confirmed absolute executable and interpreter paths, and labelled Claude config folders. Each Claude install starts with its usual configuration, including hooks, plugins and servers. `FNL_QUOTA_PROBE=off` stops probing; metrics consent neither enables nor disables it.
+
+`<data root>/state/quota/quota.json` stores, per agent and user-chosen label, only `measured`, `source` and groups with `name`, `window`, `remaining_fraction` and `reset_time`. It contains no account, identity, email, path, plan, credit or token fields. `backoff.json` stores only `retry_after` and an error class per agent and label; `worker.json` holds a random nonce and heartbeat while a worker runs. Files are private (0600) in a private folder (0700). No raw program output is saved. Successful readings wait 4 hours; failures wait at least 30 minutes, changed formats 24 hours, and Claude replies treated as prompts 7 days. The commands run from an empty private folder under `<data root>/tmp/`, removed afterwards. Turning probing off leaves cached files unchanged; delete the quota state to clear it. Hook-started worker survival after session end, other Claude text formats and Windows remain unverified.
+
 ## What the plugin stores on your machine
 
 - With the auto gate enabled, `<data root>/state/auto-gate/<key>.json`: a repository key in the filename (the first 12 hex characters of SHA-256 of the normalized repository root), `decision` (`handoff` or `keep`) with `decided`, and optionally `denied`, both ISO timestamps. Before a decision, the file can contain only `denied`. The script stores no path, task label or session id and sends nothing over the network. This local-only state is independent of usage metrics. The account home comes from the operating system, never `HOME`, `FNL_STATE_DIR` or `XDG_STATE_HOME`. The hook uses an 8-hour window; stale state can be replaced on the next write, not automatically purged. Turning the gate off leaves existing files unchanged; delete them to clear the state.

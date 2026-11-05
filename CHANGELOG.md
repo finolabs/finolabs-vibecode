@@ -6,6 +6,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add an optional quota probe for Antigravity, Claude Code (up to four labelled installs) and Codex, with canonical consent, confirmed executable paths, bounded detached reads and private usage-only cache. Setup previews before digest-confirmed apply; Scan and Check show measured pools, and delegation uses fresh readings as advisory evidence.
+
 - One account-owned data root, with checked relocation through `fnl-setup` and digest-confirmed copying that preserves the old folder. Consent and opt-ins ignore environment redirects; only usage events and the dashboard retain the documented state override and legacy compatibility paths.
 
 - Judge receipts and a conditional Judge pane in `fnl-status`: use, usable answers, followed decisions and outcome association by routing source, with metadata only and no cost, latency or accuracy measurement.
