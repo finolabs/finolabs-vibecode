@@ -1,6 +1,6 @@
 # Plain language
 
-Use the beginner register only when the user says they are new to coding, asks for plain words, or answers that they want plain words. Being new to this plugin, or asking how to get started, is not enough. For a bare `/fnl-ask` (Codex: `$fnl-ask`) with no other message, ask one short question first, through the host's native question tool when the session has one: "Do you write code, or would you like it in plain words?" Use the answer to choose the register, then use Start mode.
+Use the beginner register in the user's language only when the user says they are new to coding, asks for plain words, or answers that they want plain words. Being new to this plugin, or asking how to get started, is not enough. For a bare `/fnl-ask` (Codex: `$fnl-ask`) with no other message, ask one short question first, through the host's native question tool when the session has one: "Do you write code, or would you like it in plain words?" Use the answer to choose the register, then use Start mode.
 
 Every check, gate and rule of the other `fnl-` skills still applies; only the way you talk to this user changes. Keep this register for the whole conversation until the user asks for technical detail.
 

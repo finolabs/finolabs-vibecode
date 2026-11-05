@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- Ask questions and show option labels in the user's language, preserving technical names and reporting English script output in that language (advisory, agent judgment); the beginner-register reference says it applies in the user's language, and CI checks its two copies match.
+
 ### Fixed
 
 - Restore Claude quota readings by supplying the account database username to probe children and leaving `CLAUDE_CONFIG_DIR` unset for the default install while retaining it for listed extra folders.

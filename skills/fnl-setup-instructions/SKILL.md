@@ -12,6 +12,8 @@ Project-scoped instructions hold only repository-specific build and test command
 
 Start with one question: "Which scope: user, project, or both?" Add one concrete recommendation: user for a bare invocation or preferences across repositories, project for repository context, both when the request covers both. Ask it through the host's native question tool when the session has one (`references/interview.md` says how). Wait for the answer before scope-dependent exploration.
 
+**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
+
 The user-contract skeleton and question bank are in [references/contract-template.md](references/contract-template.md). File locations and include syntax per host are in [references/hosts.md](references/hosts.md); recheck them against each host's docs before writing.
 
 ## 1. Explore

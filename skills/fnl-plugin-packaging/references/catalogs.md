@@ -40,6 +40,8 @@ On macOS, Codex keeps one plugin cache folder per catalog name without regard to
 
 ## Installing on a user's behalf
 
+**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
+
 The catalog README tells an agent installing on a user's behalf to:
 
 1. Show the plugin list and what an install does.
