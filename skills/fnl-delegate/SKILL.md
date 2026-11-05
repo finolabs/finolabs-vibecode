@@ -1,6 +1,6 @@
 ---
 name: fnl-delegate
-description: Coordinate other coding agents (Claude Code, Codex, Antigravity) from whichever one you run in. Use whenever work is delegated to another agent or split across agents: choosing the agent and model for each task, dispatching independent tasks in parallel, an agent's quota runs out, a delegated run stalls, times out or is interrupted, or to run a spec as a coordinator with one session per task.
+description: Coordinate other coding agents (Claude Code, Codex, Antigravity) from whichever one you run in. Use whenever work is split across agents or needs a routing decision: choosing the agent and model for each of several tasks, dispatching independent tasks in parallel, an agent's quota running out, a delegated run you are watching that stalls, times out or is interrupted, or running a spec as a coordinator with one session per task. Writing the brief for a single task, or saving a handover, belongs to fnl-handoff.
 ---
 
 # Delegate
