@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check that cross-references in the skills, agents and docs still resolve.
 
-- README and the ask map list exactly the skill folders; retired names occur only in the changelog migration mapping.
+- README and the ask map list exactly the skill folders; retired names occur only in dated changelog releases or the Unreleased migration mapping.
 - Every `fnl-<name>` in backticks names a skill, an agent or the review marker.
 - Every `fnl-<name>` "Heading" names a heading in that skill or agent.
 - Every `file.md` "Heading" or [file.md](file.md) "Heading" names a heading in that file, in the same skill.
@@ -21,6 +21,11 @@ from pathlib import Path
 
 # Names in backticks that are neither skills nor agents.
 OTHER_NAMES = {"fnl-review"}  # the review marker in pull request comments
+# Spell retired names only in the changelog, not in this source.
+RETIRED = {"fnl-" + old: "fnl-" + new for old, new in (
+    ("committee", "advisor"), ("coordinator-sessions", "delegate"),
+    ("knowledge", "session-hygiene"))}
+RELEASED = re.compile(r"^## \[\d[^\]]*\] - \d{4}-\d{2}-\d{2}$")
 # Agent CLI flags that fnl-delegate cites beside the ledger's.
 AGENT_FLAGS = {"print-timeout", "timeout", "max-turns"}
 # Files whose inline `--flag` spans are ledger flags.
@@ -46,9 +51,12 @@ def headings(path):
 
 
 def documents(root):
-    paths = [*root.glob("skills/*/**/*.md"), *root.glob("agents/*.md"), *root.glob("rules/*.md"),
-             *root.glob("*.md"), *root.glob("docs/**/*.md")]
-    return sorted(set(paths))
+    result = subprocess.run(["git", "ls-files", "--cached", "-z", "--",
+                             ":(glob)skills/*/**/*.md", ":(glob)agents/*.md", ":(glob)rules/*.md",
+                             ":(glob)*.md", ":(glob)docs/**/*.md"], cwd=root,
+                            capture_output=True, check=True)
+    return sorted(root / name for name in result.stdout.decode().split("\0")
+                  if name and (root / name).is_file())
 
 
 def strip_frontmatter(text):
@@ -85,6 +93,9 @@ def check_names_and_sections(root, docs, problems):
         for n, line in lines(path):
             for name in NAME.findall(line):
                 if name not in known and name not in OTHER_NAMES:
+                    if (path == root / "CHANGELOG.md" and name in RETIRED
+                            and f"`{name}` → `{RETIRED[name]}`" in line):
+                        continue  # the inventory check enforces the mapping's section
                     problems.append(f"{rel}:{n}: unknown skill or agent `{name}`")
             for name, title in SECTION.findall(line):
                 if name in known and title not in headings(known[name]):
@@ -242,10 +253,6 @@ def check_skill_inventory(root, problems):
         for name in sorted(listed - folders):
             problems.append(f"{relative}: listed skill {name} has no folder")
 
-    # Keep retired names out of this source too: only the changelog spells them out.
-    retired = {"fnl-" + old: "fnl-" + new for old, new in (
-        ("committee", "advisor"), ("coordinator-sessions", "delegate"),
-        ("knowledge", "session-hygiene"))}
     result = subprocess.run(["git", "ls-files", "--cached", "-z"], cwd=root,
                             capture_output=True, check=False)
     if result.returncode:
@@ -261,12 +268,13 @@ def check_skill_inventory(root, problems):
                 version, heading = line, ""
             elif line.startswith("### "):
                 heading = line
-            for old, new in retired.items():
+            for old, new in RETIRED.items():
                 if old not in line:
                     continue
-                mapping = (relative == "CHANGELOG.md" and version.startswith("## [0.1.7]")
+                released = relative == "CHANGELOG.md" and RELEASED.fullmatch(version)
+                mapping = (relative == "CHANGELOG.md" and version == "## [Unreleased]"
                            and heading == "### Changed" and f"`{old}` → `{new}`" in line)
-                if not mapping:
+                if not released and not mapping:
                     problems.append(f"{relative}:{n}: retired skill name {old}")
 
 

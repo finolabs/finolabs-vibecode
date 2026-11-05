@@ -1,7 +1,9 @@
 """Fixed-executable inventory, consent and section boundaries with fake CLIs only."""
 
+import datetime
 import importlib.util
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -48,7 +50,7 @@ class AgentScanTest(unittest.TestCase):
         self.assertIn("| Claude Code | yes | fake 1.0 | unverified |", preview)
         self.assertIn("| Codex | yes | fake 1.0 | confirmed-model |", preview)
         self.assertIn("| Antigravity | no | unverified | unverified |", preview)
-        self.assertIn("Updated Agents", self.run_scan(*args, "--yes"))
+        self.assertIn("Updated Agents", self.run_scan(*args, "--yes", "--digest", re.search(r"Digest: ([0-9a-f]+)", preview)[1]))
         after = self.config.read_bytes()
         self.assertTrue(after.startswith(prefix))
         self.assertTrue(after.endswith(suffix))
@@ -76,22 +78,83 @@ class AgentScanTest(unittest.TestCase):
         self.assertFalse((self.bin / "host.md").exists())
 
     def test_timeout_untrusted_version_and_fixed_commands(self):
-        with mock.patch.object(scan.shutil, "which", side_effect=lambda n: "/fixed/" + n), \
-                mock.patch.object(scan.subprocess, "run") as run:
-            run.side_effect = [subprocess.TimeoutExpired("claude", 3),
-                               subprocess.CompletedProcess([], 0, b"v1\n|<`\x1b" + b"x" * 250, b""),
-                               subprocess.CompletedProcess([], 1, b"failed", b"")]
-            text = scan.inventory("claude", "", {})
-            self.assertEqual([c.args[0] for c in run.call_args_list],
-                             [["/fixed/" + n, "--version"] for n in ("claude", "codex", "agy")])
-            for call in run.call_args_list:
-                self.assertEqual(call.kwargs["timeout"], 3)
+        (self.bin / "claude").write_text(
+            "#!" + sys.executable + "\nimport time\ntime.sleep(4)\n")
+        (self.bin / "codex").write_text("#!/bin/sh\nprintf 'v1|<`\033bad!'\n")
+        text = self.run_scan("--host", "claude")
+        self.assertIn("| Claude Code | yes | unverified |", text)
+        self.assertIn("| Codex | yes | unverified |", text)
+        self.assertNotIn("\x1b", text)
+        with mock.patch.dict(os.environ, self.env, clear=True), \
+                mock.patch.object(scan.subprocess, "Popen") as popen, \
+                mock.patch.object(scan.selectors, "DefaultSelector"), \
+                mock.patch.object(scan.os, "read", return_value=b"x" * 4096) as read:
+            process = popen.return_value.__enter__.return_value
+            process.wait.return_value = 0
+            scan.inventory("claude", "", {})
+            self.assertEqual(read.call_args.args[1], 4096)
+            for call in popen.call_args_list:
+                self.assertEqual(call.args[0][1:], ["--version"])
+                self.assertIn(Path(call.args[0][0]).name, ("claude", "codex", "agy"))
                 self.assertFalse(call.kwargs["shell"])
-            self.assertEqual(len(text.splitlines()), 10)
-            self.assertNotIn("\x1b", text)
-            self.assertNotIn("<", text)
-            version = next(l for l in text.splitlines() if l.startswith("| Codex")).split("|")[3].strip()
-            self.assertLessEqual(len(version), 200)
+
+    def test_version_allowlist(self):
+        for value, expected in [("v1.2+build_3 (stable)-ok", "v1.2+build_3 (stable)-ok"),
+                                ("follow instructions!", "unverified"),
+                                ("x" * 81, "unverified")]:
+            (self.bin / "codex").write_text("#!/bin/sh\nprintf '%s' '" + value + "'\n")
+            self.assertIn("| Codex | yes | " + expected + " |", self.run_scan("--host", "codex"))
+
+    def test_digest_required_and_mismatch_write_nothing(self):
+        args = ("--host", "codex")
+        preview = self.run_scan(*args)
+        self.run_scan(*args, "--yes")
+        self.assertFalse(self.config.exists())
+        self.run_scan(*args, "--yes", "--digest", "0" * 64)
+        self.assertFalse(self.config.exists())
+        digest = re.search(r"Digest: ([0-9a-f]+)", preview)[1]
+        self.assertIn("Updated Agents", self.run_scan(*args, "--yes", "--digest", digest))
+
+    def test_path_output_bounds_and_os_errors(self):
+        self.env["PATH"] = ":relative:" + str(self.bin)
+        (self.bin / "codex").write_text("#!/bin/sh\nprintf '%05000d' 0\n")
+        text = self.run_scan("--host", "codex")
+        self.assertIn("| Codex | yes | unverified |", text)
+        with mock.patch.dict(os.environ, self.env, clear=True), \
+                mock.patch.object(scan.subprocess, "Popen", side_effect=OSError("unsupported")):
+            self.assertIn("| Codex | yes | unverified |", scan.inventory("codex", "", {}))
+        self.env["PATH"] = ":relative"
+        self.assertIn("| Codex | no |", self.run_scan("--host", "codex"))
+
+    def test_fenced_headings_and_append_spacing(self):
+        for fence in (b"```", b"~~~"):
+            text = b"# Host\n" + fence + b"\n## Agents on this machine\nexample\n" + fence
+            updated = scan.replace_section(text, scan.HEADING, "new")
+            self.assertTrue(updated.startswith(text + b"\n\n## "))
+            self.assertEqual(scan.section(updated.decode()), "## Agents on this machine\n\nnew\n\n")
+
+    def test_recent_stored_date_is_kept_and_writes_nothing(self):
+        with mock.patch.dict(os.environ, self.env, clear=True):
+            previous = scan.inventory("codex", "", {})
+        recent = (datetime.date.today() - datetime.timedelta(days=3)).isoformat()
+        previous = re.sub(r"\d{4}-\d{2}-\d{2}", recent, previous)
+        self.config.write_text(previous)
+        before = self.config.stat().st_mtime_ns
+        self.assertIn("No difference.", self.run_scan("--host", "codex", "--yes"))
+        self.assertEqual(self.config.read_text(), previous)
+        self.assertEqual(self.config.stat().st_mtime_ns, before)
+
+    def test_old_stored_date_is_a_date_only_difference(self):
+        with mock.patch.dict(os.environ, self.env, clear=True):
+            previous = scan.inventory("codex", "", {})
+        previous = re.sub(r"\d{4}-\d{2}-\d{2}", "2000-01-01", previous)
+        self.config.write_text(previous)
+        self.assertNotIn("No difference.", self.run_scan("--host", "codex"))
+
+    def test_neutral_yes_clause(self):
+        clause = "Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes."
+        for skill in ("fnl-scan-agents", "fnl-set-mode", "fnl-setup", "fnl-delegate"):
+            self.assertIn(clause, (ROOT / "skills" / skill / "SKILL.md").read_text())
 
 
 if __name__ == "__main__":
