@@ -34,6 +34,16 @@ class LedgerTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
         return result
 
+    def test_low_oversized_ledger_has_one_error_line(self):
+        with self.path.open("wb") as stream:
+            stream.truncate(16 * 1024 * 1024 + 1)
+        for args in (("summary",), ("finish", "missing", "--outcome", "accepted"), ("open",)):
+            with self.subTest(command=args[0]):
+                result = self.run_ledger(*args, check=False)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stderr, "ledger: unsafe file\n")
+                self.assertEqual(result.stdout, "")
+
     def records(self):
         return [json.loads(line) for line in self.path.read_text().splitlines()]
 
