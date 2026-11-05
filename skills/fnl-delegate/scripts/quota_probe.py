@@ -5,6 +5,7 @@ import fcntl
 import json
 import math
 import os
+import pwd
 import re
 import selectors
 import shutil
@@ -474,6 +475,7 @@ def environment(entry, nonce, config_path=None):
     folders = [str(Path(entry["interpreter"]).parent)] if entry.get("interpreter") else []
     folders.append(str(Path(entry.get("resolved", entry["executable"])).parent))
     env = {"HOME": str(dr.account_home()), "PATH": ":".join(dict.fromkeys([*folders, *SYSTEM_PATH.split(":")])),
+           "USER": pwd.getpwuid(os.getuid()).pw_name,
            "LANG": "C.UTF-8", "FNL_QUOTA_WORKER": nonce, "FNL_METRICS": "off"}
     if config_path is not None:
         env["CLAUDE_CONFIG_DIR"] = config_path
@@ -498,6 +500,8 @@ def command(agent, entry, label, nonce):
     if agent == "claude":
         validate_configs(entry["configs"])
         folder = entry["configs"][label]
+        if Path(folder) == dr.account_home() / ".claude":
+            folder = None
     argv += ["app-server"] if agent == "codex" else ["-p", "/usage", "--output-format", "json"]
     with working_folder() as cwd:
         process = subprocess.Popen(argv, stdin=subprocess.PIPE if agent == "codex" else subprocess.DEVNULL,

@@ -243,13 +243,16 @@ class QuotaTest(unittest.TestCase):
         sentinel = planted / "ran"
         (planted / "claude").write_text("#!/bin/sh\ntouch " + str(sentinel))
         (planted / "claude").chmod(0o700)
-        decoys = {k: "decoy" for k in ("ANTHROPIC_BASE_URL", "NODE_OPTIONS", "CODEX_HOME", "CLAUDE_CONFIG_DIR")}
+        decoys = {k: "decoy" for k in ("ANTHROPIC_BASE_URL", "NODE_OPTIONS", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "USER", "HOME")}
         decoys["PATH"] = str(planted)
         with mock.patch.dict(os.environ, decoys), mock.patch.object(qp.subprocess, "Popen", wraps=subprocess.Popen) as spawn:
             data = json.loads(qp.command("claude", entry, "default", "a" * 48))
         # macOS Python may add its own runtime variables after exec. Pin the
         # exact environment supplied at the process boundary, and parent drops.
-        expected = qp.environment(entry, "a" * 48, str(self.config_dir))
+        self.assertNotIn("CLAUDE_CONFIG_DIR", data["env"])
+        self.assertEqual(data["env"]["USER"], "quota-test-user")
+        self.assertEqual(data["env"]["HOME"], str(self.home))
+        expected = qp.environment(entry, "a" * 48)
         self.assertEqual(spawn.call_args.kwargs["env"], expected)
         for key, value in expected.items():
             self.assertEqual(data["env"][key], value)
@@ -260,6 +263,28 @@ class QuotaTest(unittest.TestCase):
         self.assertEqual(Path(data["cwd"]).parent, self.root / "tmp")
         self.assertFalse(Path(data["cwd"]).exists())
         self.assertFalse(sentinel.exists())
+
+    def test_child_extra_claude_folder_and_account_environment(self):
+        entry = self.fake("claude", "import os,json\nprint(json.dumps(dict(os.environ)))\n")
+        extra = self.home / ".claude-work"
+        extra.mkdir(mode=0o700)
+        entry["configs"] = {"renamed": str(self.config_dir), "work": str(extra)}
+        self.configure({"claude": entry})
+        entry = qp.config()["claude"]
+        self.assertEqual(entry["configs"]["renamed"], str(self.config_dir))
+        with mock.patch.dict(os.environ, {"USER": "decoy", "HOME": "decoy",
+                                          "CLAUDE_CONFIG_DIR": "decoy"}):
+            data = json.loads(qp.command("claude", entry, "work", "a" * 48))
+            self.assertEqual(data["CLAUDE_CONFIG_DIR"], str(extra))
+            self.assertEqual(data["HOME"], str(self.home))
+            self.assertEqual(data.get("USER"), "quota-test-user")
+            default = json.loads(qp.command("claude", entry, "renamed", "a" * 48))
+            self.assertNotIn("CLAUDE_CONFIG_DIR", default)
+            for agent in ("agy", "codex"):
+                env = qp.environment(self.fake(agent), "a" * 48)
+                self.assertEqual(env["USER"], "quota-test-user")
+                self.assertEqual(env["HOME"], str(self.home))
+                self.assertNotIn("CLAUDE_CONFIG_DIR", env)
 
     def test_runtime_changed_mode_owner_and_symlink_refused(self):
         entry = self.fake("agy")
