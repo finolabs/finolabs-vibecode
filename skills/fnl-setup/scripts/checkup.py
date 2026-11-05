@@ -848,7 +848,7 @@ def collect(payload=False):
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from mode import effective
     settings = effective()
-    home = Path(os.path.abspath(os.environ.get("HOME", "~")))
+    home = dr.account_home()
     configured = os.environ.get("CODEX_HOME", "")
     codex = Path(configured) if os.path.isabs(configured) else home / ".codex"
     config_status, config_text = host_config_text(home)

@@ -300,6 +300,16 @@ class CheckupTest(unittest.TestCase):
         return [r for r in rows if (ident is None or r["id"] == ident)
                 and (pattern is None or r["pattern"] == pattern)]
 
+    def test_payload_instruction_files_use_account_home_not_environment(self):
+        self.consent()
+        self.write(self.home / ".claude/CLAUDE.md", "ACCOUNT INSTRUCTION\n")
+        decoy = self.base / "decoy"
+        self.write(decoy / ".claude/CLAUDE.md", "DECOY INSTRUCTION\n")
+        self.env["HOME"] = str(decoy)
+        payload = self.run_check("--judge-payload")
+        self.assertIn("ACCOUNT INSTRUCTION", payload)
+        self.assertNotIn("DECOY INSTRUCTION", payload)
+
     def consent(self, text="## Route judgment\n- Instruction check: on\n"):
         return self.write(self.home / ".finolabs/vibecode/host.md", text)
 
