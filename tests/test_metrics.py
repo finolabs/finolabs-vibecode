@@ -1,8 +1,10 @@
 """Tests for scripts/fnl_metrics.py: consent gating, event validation, retention and the shared copies."""
 
 import importlib.util
+import itertools
 import json
 import os
+import re
 import stat
 import sys
 import tempfile
@@ -82,6 +84,33 @@ class MetricsTest(unittest.TestCase):
         self.assertFalse(m.record("skill", "../escape", self.repo, name="fnl-x"))
         with self.assertRaises(ValueError):
             m.first_edit("../escape")
+
+    def test_judge_enumerations_pairs_and_exact_fields(self):
+        self.consent()
+        self.assertEqual(set(m.SCHEMA.get("judge", {})), {"site", "grader", "result", "followed"})
+        accepted = 0
+        for site, grader, result, followed in itertools.product(
+                ("route", "depth", "activity", "instruction"), ("judge", "agent"),
+                ("validated", "unverified"), ("yes", "no", "na")):
+            fields = dict(site=site, grader=grader, result=result, followed=followed)
+            valid = (grader == "judge" and (result == "validated" or followed == "na")
+                     or grader == "agent" and result == "validated" and followed == "na")
+            raw = dict(ts=m.now().isoformat(timespec="milliseconds"), sid=SID, repo="12345678", event="judge", **fields)
+            with self.subTest(**fields):
+                self.assertEqual(m.valid_event(raw), valid)
+                self.assertEqual(m.record("judge", SID, self.repo, **fields), valid)
+            accepted += valid
+        self.assertEqual(len(self.events()), accepted)
+        good = dict(site="route", grader="judge", result="validated", followed="yes")
+        bad = [{**good, key: "free text"} for key in good]
+        bad += [{**good, key: "private"} for key in ("question", "answer", "cost", "file", "path", "repository")]
+        bad += [{k: v for k, v in good.items() if k != key} for key in good]
+        for fields in bad:
+            raw = dict(ts=m.now().isoformat(timespec="milliseconds"), sid=SID, repo="12345678", event="judge", **fields)
+            self.assertFalse(m.valid_event(raw))
+            self.assertFalse(m.record("judge", SID, self.repo, **fields))
+        self.assertEqual(len(self.events()), accepted)
+        self.assertEqual(set(self.events()[0]), {"ts", "sid", "repo", "event", *good})
 
     def test_every_event_kind_validates(self):
         self.consent()
@@ -318,6 +347,24 @@ class MetricsTest(unittest.TestCase):
         [thread.join() for thread in threads]
         self.assertEqual(errors, [])
         self.assertTrue(target.is_dir())
+
+    def test_judge_privacy_and_spec_pin_the_exact_field_list(self):
+        expected = {"site", "grader", "result", "followed"}
+        for path in ("PRIVACY.md", "docs/specs/usage-metrics.md"):
+            text = (ROOT / path).read_text()
+            fields = re.search(r"Judge receipts hold only (.*?);", text).group(1)
+            self.assertEqual(set(re.findall(r"`([^`]+)`", fields)), expected)
+            self.assertIn("never hold a question, an answer, a cost, a file name or a path", text)
+        spec = (ROOT / "docs/specs/usage-metrics.md").read_text()
+        row = next(line for line in spec.splitlines() if line.startswith("| `judge` |"))
+        self.assertEqual(set(re.findall(r"`([^`]+)` \(", row.split("|")[2])), expected)
+        self.assertEqual(set(m.SCHEMA["judge"]), expected)
+
+    def test_metrics_copy_list_covers_all_copies_and_ci(self):
+        self.assertEqual(set(COPIES), set(ROOT.glob("skills/*/scripts/fnl_metrics.py")))
+        ci = (ROOT / ".github/workflows/validate.yml").read_text()
+        for path in [CORE, *COPIES]:
+            self.assertIn(str(path.relative_to(ROOT)), ci)
 
     def test_shared_copies_equal_their_source(self):
         groups = [
