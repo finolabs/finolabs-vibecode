@@ -279,6 +279,8 @@ A home folder that other users can write to lets them swap folders under it, so 
 
 ## Host configuration
 
+Optional quota probing is configured in `fnl-setup` section A, off by default and independent of metrics. After a confirmed path preview, existing hooks start a detached read of the selected programs' own usage commands at most every four hours, with failure backoff. The programs contact their providers; the probe itself makes no network call. `FNL_QUOTA_PROBE=off` disables it. Scan and Check show measured times and pools; routing treats the cache as advisory, excludes nothing older than eight hours, and defers to the user. See [privacy](PRIVACY.md#quota-probe) for the stored fields, Claude configuration behavior and verification limits.
+
 The orchestration skills keep machine facts (agent commands, allowed models, reachable delegates, the route judge, allow-rules, lock path and parallel limit) in `host.md` under the data root. Start from `skills/fnl-delegate/references/host-template.md`. Opt-ins and Routing always come from that canonical file; `ORCHESTRATION_HOST_CONFIG` applies only to non-consent settings. Put the data root where every coordinator's sandbox can read and write it, using setup's relocation step when needed.
 
 The route judge is optional. Without one, the agent's own model makes the grade, route, depth and activity calls. With one configured, such as TypeSafe's Jev called through its own `typesafe-ai` skill, `fnl-delegate` and `fnl-coding-router` ask it first, which saves their own reasoning; the plugin holds no key for it.

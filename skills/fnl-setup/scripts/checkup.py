@@ -916,8 +916,10 @@ def collect(payload=False):
         item("workflow", "unverified", "files cannot prove agents follow routing or review gates"),
     ]
     data_path, data_source = dr.data_root()
+    from quota_probe import status_lines
+    quota = item("quota", "unverified", "advisory cache; " + " | ".join(status_lines()))
     return {"principle": PRINCIPLE, "hosts": hosts, "instructions": instruction_block, "setup": [
-            item("data root", data_source, str(data_path)), host_config, inventory,
+            item("data root", data_source, str(data_path)), host_config, inventory, quota,
             retired_evidence([*user_context, *context], reader=context_read),
             item("effective settings", "ok", "delegation mode=" + settings["delegation_mode"] +
                  "; routing=" + settings["routing"] + "; auto gate=" + settings["auto_gate"] + "; selected values only, not runtime proof"), *repository]}

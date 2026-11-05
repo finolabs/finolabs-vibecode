@@ -254,15 +254,56 @@ def post_tool_use(sid, cwd, tool, data):
                     continue  # malformed commands never record or block the host
 
 
+def bounded_payload(raw):
+    """Keep complete top-level fields from a capped JSON object, never its tail."""
+    if len(raw) < 65536:
+        return json.loads(raw)
+    text = raw.decode("utf-8", "ignore").lstrip()
+    if not text.startswith("{"):
+        return {}
+    decoder, payload, index = json.JSONDecoder(), {}, 1
+    try:
+        while True:
+            index += len(text[index:]) - len(text[index:].lstrip())
+            key, index = decoder.raw_decode(text, index)
+            if not isinstance(key, str):
+                break
+            index += len(text[index:]) - len(text[index:].lstrip())
+            if text[index:index + 1] != ":":
+                break
+            index += 1
+            index += len(text[index:]) - len(text[index:].lstrip())
+            value, index = decoder.raw_decode(text, index)
+            payload[key] = value
+            index += len(text[index:]) - len(text[index:].lstrip())
+            if text[index:index + 1] != ",":
+                break
+            index += 1
+    except ValueError:
+        pass  # The final field may be cut anywhere, including within UTF-8.
+    return payload
+
+
 def main():
     host, hook_event = options(sys.argv[1:])
     try:
-        if not fm.enabled():
-            return  # off and not consented means nothing is read, parsed or written
-        payload = json.load(sys.stdin)
+        from quota_probe import worker_guard, trigger, config
+        if worker_guard():
+            return
+        metrics = fm.enabled()
+        # Quota consent lives in canonical host.md; config checks its off switch
+        # before opening it. Neither consent means no stdin read or state writes.
+        if not metrics and not config():
+            return
+        raw = sys.stdin.buffer.read(65536)
+        payload = bounded_payload(raw)
         if not isinstance(payload, dict):
             return
         event, sid, cwd, source, tool, data = read_payload(payload, host, hook_event)
+        if event in {"SessionStart", "PostToolUse"} or len(raw) == 65536:
+            trigger()
+        if not metrics:
+            return
         if not fm.valid_id(sid) or not isinstance(cwd, str):
             return
         if event == "SessionStart":

@@ -56,3 +56,7 @@ Grade the `J` items (I15 to I19) in this order, and name the grader in each resu
 Advisory (agent judgment): after each judge decision in step 1, the coordinator runs `python3 -I <fnl-coding-router folder>/scripts/record.py judge --site instruction --grader judge --result <validated|unverified> --followed <yes|no|na>`. Use `yes` or `no` only for a validated judge answer, otherwise `na`; unavailable or invalid answers are `unverified`. A fallback agent grade after that attempt gets `--grader agent --result validated --followed na`. With no judge or no instruction-check consent, run no receipt. The command writes nothing; only the hook records the fixed fields with metrics consent, never instruction text or answers.
 
 A judge result informs; a `fail` is shown to the user with its evidence line numbers. Grading is judgment (advisory). Report counts: items ok, warn, fail, unverified.
+
+## Quota probe
+
+Check prints the last measured UTC time and pools from the canonical `state/quota/quota.json` through `quota_probe.py`; it never starts a usage command. Enforcer: the script. Missing, unsafe or invalid state is unverified. Advisory (agent judgment): show these readings with their age; older than 8 hours excludes nothing, and the user's statement wins. Setup section A offers the separate consent and digest-bound path preview; metrics consent does not enable probing. `FNL_QUOTA_PROBE=off` is enforced by the probe. Native worker survival after a host session ends and Claude formats beyond the recorded fixture remain unverified.
