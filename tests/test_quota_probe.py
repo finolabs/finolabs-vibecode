@@ -347,16 +347,20 @@ class QuotaTest(unittest.TestCase):
         dr.write_data("host.md", b"## Delegation mode\nauto\n## Auto gate\non\n")
         with qp.state_folder(create=True) as folder:
             nonce = qp.claim_marker(folder, qp.now())
-        boot = ("import pwd,runpy,sys,subprocess; from types import SimpleNamespace; "
-                f"pwd.getpwuid=lambda uid: SimpleNamespace(pw_dir={str(self.home)!r}); "
+        boot = ("import runpy,sys,subprocess,unittest; "
+                f"sys.path.insert(0,{str(ROOT)!r}); "
+                "from tests.data_root_fixture import account; "
+                f"account(unittest.TestCase(), {str(self.home)!r}); "
                 f"sys.path.insert(0,{str(ROOT / 'scripts')!r}); "
                 "import quota_probe,fnl_metrics; "
                 "quota_probe.trigger=lambda: print('TRIGGER'); "
                 "subprocess.Popen=lambda *a,**k: print('SPAWN'); "
+                "subprocess.run=lambda *a,**k: print('RUN'); "
                 "fnl_metrics.enabled=lambda: True; fnl_metrics.valid_id=lambda x: True; "
                 "fnl_metrics.record=lambda *a,**k: print('METRIC'); "
                 "sys.argv=sys.argv[1:]; runpy.run_path(sys.argv[0],run_name='__main__')")
         seen = set()
+        invocation = 0
         for manifest in (".claude-plugin/hooks.json", ".codex-plugin/hooks.json"):
             hooks = json.loads((ROOT / manifest).read_text())["hooks"]
             for event, entries in hooks.items():
@@ -367,7 +371,9 @@ class QuotaTest(unittest.TestCase):
                         command = command.replace("python3 -I ", shlex.join([sys.executable, "-I", "-c", boot]) + " ")
                         env = {"PATH": os.defpath, "CLAUDE_PLUGIN_ROOT": str(ROOT), "PLUGIN_ROOT": str(ROOT),
                                "FNL_QUOTA_WORKER": nonce, "FNL_UPDATE_CHECK": "on"}
-                        payload = json.dumps({"hook_event_name": event, "tool_name": "Write", "cwd": str(repo), "session_id": "test"})
+                        invocation += 1
+                        data = {"hook_event_name": event, "tool_name": "Write", "cwd": str(repo), "session_id": f"hook-{invocation}"}
+                        payload = json.dumps(data)
                         with self.subTest(manifest=manifest, event=event, command=hook["command"]):
                             result = subprocess.run(["sh", "-c", command], input=payload, env=env, text=True, capture_output=True, timeout=5)
                             self.assertEqual(result.returncode, 0)
@@ -383,6 +389,23 @@ class QuotaTest(unittest.TestCase):
                             self.assertEqual(result.returncode, 0)
                             if "metrics_hook" not in hook["command"] or event == "SessionStart":
                                 self.assertTrue(result.stdout, result.stderr)
+                            expected = result.stdout
+                            try:
+                                with qp.state_folder() as folder:
+                                    qp.write_json(folder, "worker.json", {"nonce": nonce, "heartbeat": qp.stamp(qp.now() - qp.timedelta(minutes=5))})
+                                if gate.exists():
+                                    for file in gate.glob("*.json"):
+                                        file.unlink()
+                                env["FNL_QUOTA_WORKER"] = nonce
+                                # Each comparison starts before its own first edit.
+                                data["session_id"] += "-stale"
+                                stale = subprocess.run(["sh", "-c", command], input=json.dumps(data), env=env, text=True, capture_output=True, timeout=5)
+                                self.assertEqual(stale.returncode, 0)
+                                self.assertEqual(stale.stderr, "")
+                                self.assertEqual(stale.stdout, expected)
+                            finally:
+                                with qp.state_folder() as folder:
+                                    qp.write_json(folder, "worker.json", {"nonce": nonce, "heartbeat": qp.stamp(qp.now())})
         self.assertEqual(seen, {"session_start", "metrics_hook", "auto_gate_hook", "update_check", "precompact"})
 
     def test_metrics_consent_does_not_select_probe(self):
@@ -473,6 +496,42 @@ class QuotaTest(unittest.TestCase):
         result = setup.replace_section(original, "## Quota probe\n\n- Quota probe: off\n\n")
         self.assertTrue(result.startswith(original))
         self.assertEqual(qp.section(result).strip(), "- Quota probe: off")
+
+
+    def test_account_fixture_blocks_real_quota_anchor(self):
+        from tests.data_root_fixture import REAL_HOME
+        # The assertion must fire before the OS is asked to open either path.
+        for path in (REAL_HOME, REAL_HOME / ".finolabs/vibecode/state/quota"):
+            with self.subTest(path_kind=path.name), self.assertRaisesRegex(AssertionError, "real account state"):
+                os.open(path, os.O_RDONLY)
+        self.assertEqual(dr.account_home(), self.home)
+        self.ready()
+        self.assertEqual(qp.status_lines(), ["Quota: unverified (no reading)."])
+
+
+    def test_account_fixture_reaches_dashboard_and_nested_subprocess(self):
+        import shlex
+        from tests.data_root_fixture import REAL_HOME
+        leaf = self.base / "dashboard.py"
+        leaf.write_text(
+            "import os,pwd\n"
+            f"assert pwd.getpwuid(os.getuid()).pw_dir == {str(self.home)!r}\n"
+            "print('synthetic-home')\n"
+            "try:\n"
+            f" os.open({str(REAL_HOME / '.finolabs/vibecode/state/quota')!r}, os.O_RDONLY)\n"
+            "except AssertionError:\n print('guarded')\n"
+            "else:\n raise AssertionError('guard missing')\n")
+        parent = self.base / "refresh.py"
+        parent.write_text(
+            "import subprocess,sys\n"
+            f"subprocess.run([sys.executable, '-I', {str(leaf)!r}], check=True)\n")
+        commands = ([sys.executable, "-I", str(parent)],
+                    ["sh", "-c", "python3 -I " + shlex.quote(str(parent))])
+        for command in commands:
+            with self.subTest(command=command[0]):
+                result = subprocess.run(command, capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "synthetic-home\nguarded\n")
 
 
 class CopiesTest(unittest.TestCase):
