@@ -83,6 +83,76 @@ class RefreshTest(unittest.TestCase):
         for dispatch_id, outcome in zip(ids, ("accepted", "quota")):
             subprocess.run([sys.executable, "-I", str(LEDGER), "finish", dispatch_id, "--outcome", outcome], check=True, env=env)
 
+    def judge_ledger(self, rows):
+        lines = []
+        for i, (route_by, outcome, rework) in enumerate(rows):
+            started = dict(event="start", id="j%d" % i, ts=self.at.isoformat(), project="demo", task="t",
+                           kind="implement", grade="medium", agent="codex", model="m", reason="routing")
+            if route_by is not None:
+                started["route_by"] = route_by
+            lines.append(started)
+            if outcome:
+                lines.append(dict(event="finish", id=started["id"], ts=self.at.isoformat(),
+                                  outcome=outcome, rework_rounds=rework))
+        self.ledger.write_text("".join(json.dumps(line) + "\n" for line in lines))
+
+    def test_judge_block_is_absent_without_receipts_or_judge_routes(self):
+        for rows in ([], [("table", "accepted", 0)], [(None, "accepted", 0)]):
+            self.judge_ledger(rows)
+            self.refresh("run")
+            self.assertIsNone(self.data()["judge"])
+
+    def test_judge_shares_and_site_counts_are_separate_from_ledger_outcomes(self):
+        cases = [("route", "judge", "validated", "yes"), ("route", "judge", "validated", "no"),
+                 ("depth", "judge", "validated", "na"), ("activity", "judge", "unverified", "na"),
+                 ("instruction", "agent", "validated", "na"), ("route", "agent", "validated", "na")]
+        self.write_events([self.event(i, "s", X if i % 2 else Y, "judge", site=site, grader=grader,
+                                     result=result, followed=followed)
+                           for i, (site, grader, result, followed) in enumerate(cases)])
+        self.judge_ledger([("judge", "accepted", 0), ("judge", "accepted", 1), ("judge", "error", 0),
+                           ("table", "accepted", 0)] + [("table", "quota", 0)] * 4 + [("user", "accepted", 0)])
+        self.refresh("run")
+        block = self.data()["judge"]
+        self.assertEqual(block["receipts"], 6)
+        self.assertEqual(block["usable_answers"], dict(validated=3, calls=4, share=.75))
+        self.assertEqual(block["followed"], dict(yes=1, validated=3, share=1/3))
+        self.assertEqual({(r["site"], r["grader"]): r["count"] for r in block["use"]},
+                         {("route", "judge"): 2, ("depth", "judge"): 1, ("activity", "judge"): 1,
+                          ("instruction", "agent"): 1, ("route", "agent"): 1})
+        self.assertEqual(block["outcome_association"], [dict(route_by="judge", runs=3, first_pass=1/3, small=True),
+                                                       dict(route_by="table", runs=5, first_pass=.2, small=False)])
+        self.assertNotIn(X, json.dumps(block))
+        self.assertNotIn(Y, json.dumps(block))
+
+    def test_judge_ledger_without_receipts_or_consent_shows_only_association(self):
+        self.judge_ledger([("judge", "accepted", 0), ("table", "rejected", 0), (None, "accepted", 0)])
+        self.refresh("run")
+        block = self.data()["judge"]
+        self.assertEqual(block["receipts"], 0)
+        self.assertEqual(block["note"], "No receipts were recorded.")
+        for key in ("use", "usable_answers", "followed"):
+            self.assertNotIn(key, block)
+        self.assertEqual(len(block["outcome_association"]), 2)
+        self.assertTrue(all(r["small"] for r in block["outcome_association"]))
+        self.judge_ledger([("judge", None, 0)])
+        self.refresh("run")
+        self.assertEqual(self.data()["judge"]["outcome_association"], [])
+        self.assertEqual(self.data()["judge"]["outcome_note"], "no finished runs in this period")
+
+    def test_judge_empty_denominators_are_unknown_and_old_data_is_excluded(self):
+        self.write_events([self.event(0, "s", X, "judge", site="route", grader="agent", result="validated", followed="na"),
+                           self.days_ago(100, "s", X, "judge", site="route", grader="judge", result="validated", followed="yes")])
+        self.refresh("run")
+        block = self.data()["judge"]
+        self.assertEqual(block["receipts"], 1)
+        self.assertIsNone(block["usable_answers"]["share"])
+        self.assertIsNone(block["followed"]["share"])
+        self.write_events([self.event(0, "s", X, "judge", site="route", grader="judge", result="unverified", followed="na")])
+        self.refresh("run")
+        block = self.data()["judge"]
+        self.assertEqual(block["usable_answers"]["share"], 0)
+        self.assertIsNone(block["followed"]["share"])
+
     def test_the_metrics_match_a_hand_computation(self):
         self.consent()
         self.fixture_store()

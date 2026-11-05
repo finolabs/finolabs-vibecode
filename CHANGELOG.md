@@ -6,6 +6,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Judge receipts and a conditional Judge pane in `fnl-status`: use, usable answers, followed decisions and outcome association by routing source, with metadata only and no cost, latency or accuracy measurement.
+
 - `fnl-setup-instructions` states a researched standard (add only what the agent cannot infer, verifiable lines with reasons, text is not enforcement, detail on demand), per-host limits and mechanics, and a pre-write measure step; `fnl-setup` Check gains a 20-item instruction checklist. `checkup.py` measures length, the Codex 32 KiB chain, the Antigravity 24,000-byte limit, includes, duplicates, secret-looking strings, machine paths, the local file, emphasis, layout and age offline and read-only, reporting file, line and pattern name only. The judgment items go to the route judge first (only with the separate `Instruction check` consent, through one payload builder that drops secret and path lines) and to the agent as fallback.
 - A task-lifecycle state diagram (inspect, path, depth, red, change, proof, review, merge, release, with the checkpoint after two failed fixes) in the README, with the HTML sources of both diagrams in `docs/diagrams/`.
 
