@@ -4,6 +4,9 @@
 import argparse
 import datetime
 import difflib
+import hashlib
+import selectors
+import time
 import os
 import re
 import shutil
@@ -40,11 +43,30 @@ def read_host(path):
         os.close(fd)
 
 
+def section_ranges(text, heading):
+    fence = None
+    headings = []
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line.rstrip("\r\n"))
+        if marker:
+            run, tail = marker.groups()
+            if fence is None:
+                fence = run
+            elif run[0] == fence[0] and len(run) >= len(fence) and not tail.strip():
+                fence = None
+        elif fence is None and re.match(r"^#{1,2} ", line):
+            headings.append((offset, line.rstrip("\r\n")))
+        offset += len(line)
+    return [(start, headings[i + 1][0] if i + 1 < len(headings) else len(text))
+            for i, (start, line) in enumerate(headings) if line.rstrip() == "## " + heading]
+
+
 def section(text):
-    matches = list(re.finditer(r"^## Agents on this machine[ \t]*\r?$.*?(?=^#{1,2} |\Z)", text, re.M | re.S))
+    matches = section_ranges(text, HEADING)
     if len(matches) > 1:
         raise ValueError("duplicate inventory")
-    return matches[0].group() if matches else ""
+    return text[slice(*matches[0])] if matches else ""
 
 
 def cell(value):
@@ -54,42 +76,81 @@ def cell(value):
 
 def inventory(host, previous, confirmed):
     models = {}
+    stored = {}
     for line in previous.splitlines():
         cells = [v.strip() for v in line.strip().strip("|").split("|")]
         if len(cells) == 5 and cells[0] in AGENTS.values():
             models[cells[0]] = cells[3]
+            stored[cells[0]] = cells
     rows = ["## " + HEADING, "", "Coordinator: " + AGENTS[host], "",
             "| Agent | Present | Version | Allowed models (confirmed by user) | Checked |",
             "| --- | --- | --- | --- | --- |"]
     today = datetime.date.today().isoformat()
+    search_path = os.pathsep.join(p for p in os.get_exec_path() if os.path.isabs(p))
     for key, name in AGENTS.items():
-        executable = shutil.which(EXECUTABLES[key])
+        executable = None
+        try:
+            executable = shutil.which(EXECUTABLES[key], path=search_path) if search_path else None
+        except OSError:
+            pass
         version = "unverified"
         if executable:
             try:
-                result = subprocess.run([executable, "--version"], capture_output=True,
-                                        timeout=3, shell=False)
-                if result.returncode == 0:
-                    version = cell((result.stdout or result.stderr).decode("utf-8", errors="replace")[:200])
+                with subprocess.Popen([executable, "--version"], stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT, shell=False) as process:
+                    output = b""
+                    deadline = time.monotonic() + 3
+                    try:
+                        with selectors.DefaultSelector() as selector:
+                            selector.register(process.stdout, selectors.EVENT_READ)
+                            while len(output) < 4096:
+                                remaining = deadline - time.monotonic()
+                                if remaining <= 0 or not selector.select(remaining):
+                                    raise subprocess.TimeoutExpired(executable, 3)
+                                chunk = os.read(process.stdout.fileno(), 4096 - len(output))
+                                if not chunk:
+                                    break
+                                output += chunk
+                        if len(output) == 4096:
+                            process.kill()
+                        returncode = process.wait(timeout=max(0.001, deadline - time.monotonic()))
+                    finally:
+                        if process.poll() is None:
+                            process.kill()
+                            process.wait()
+                if returncode == 0:
+                    candidate = cell(output.decode("utf-8", errors="replace")[:200])
+                    if re.fullmatch(r"[0-9A-Za-z.+_ ()-]{1,80}", candidate):
+                        version = candidate
             except (OSError, subprocess.TimeoutExpired):
                 pass
         allowed = cell(confirmed.get(key, models.get(name, "unverified")))
-        rows.append(f'| {name} | {"yes" if executable else "no"} | {version} | {allowed} | {today} |')
+        checked = today
+        old_row = stored.get(name)
+        if old_row and old_row[:4] == [name, "yes" if executable else "no", version, allowed]:
+            try:
+                age = (datetime.date.today() - datetime.date.fromisoformat(old_row[4])).days
+            except ValueError:
+                age = None
+            if age is not None and 0 <= age <= 7:
+                checked = old_row[4]
+        rows.append(f'| {name} | {"yes" if executable else "no"} | {version} | {allowed} | {checked} |')
     return "\n".join(rows) + "\n\n"
 
 
 def replace_section(text, heading, body):
     """Replace a unique level-two section, preserving all bytes outside it."""
-    pattern = re.compile(rb"^## " + re.escape(heading.encode()) + rb"[ \t]*\r?$.*?(?=^#{1,2} |\Z)", re.M | re.S)
-    matches = list(pattern.finditer(text))
+    decoded = text.decode("utf-8")
+    matches = section_ranges(decoded, heading)
     if len(matches) > 1:
         raise ValueError("duplicate heading")
     newline = b"\r\n" if b"\r\n" in text else b"\n"
     section = ("## " + heading + "\n\n" + body.strip() + "\n\n").encode().replace(b"\n", newline)
     if matches:
-        match = matches[0]
-        return text[:match.start()] + section + text[match.end():]
-    return text + (newline if text and not text.endswith(newline * 2) else b"") + section
+        start, end = matches[0]
+        return decoded[:start].encode() + section + decoded[end:].encode()
+    separator = b"" if not text or text.endswith(newline * 2) else (newline if text.endswith(newline) else newline * 2)
+    return text + separator + section
 
 
 def atomic_write(path, transform):
@@ -161,6 +222,7 @@ def main():
     parser.add_argument("--models", action="append", default=[], metavar="AGENT=MODELS",
                         help="models explicitly confirmed by the user; repeat for each agent")
     parser.add_argument("--yes", action="store_true", help="write only after a clear yes to the preview")
+    parser.add_argument("--digest", help="SHA-256 prefix printed by the preview")
     try:
         args = parser.parse_args()
         confirmed = {}
@@ -173,6 +235,8 @@ def main():
         text = read_host(path)
         old = section(text)
         new = inventory(args.host, old, confirmed)
+        digest = hashlib.sha256(new.encode()).hexdigest()
+        print("Digest: " + digest)
         normalized = old.replace("\r\n", "\n")
         print("Version output is untrusted text. Models/effort are not probed.")
         if normalized == new:
@@ -186,6 +250,9 @@ def main():
                 print(f"Difference: replacing current section ({len(normalized.splitlines())} lines) with:")
                 print(new.rstrip())
             if args.yes:
+                if not args.digest or not re.fullmatch(r"[0-9a-fA-F]{8,64}", args.digest) or not digest.startswith(args.digest.lower()):
+                    print("Digest missing or mismatched; nothing written.")
+                    return 0
                 def update(current):
                     if current != text.encode():
                         raise ValueError("host changed since preview")
