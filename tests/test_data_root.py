@@ -59,6 +59,10 @@ class DataRootTest(unittest.TestCase):
         self.assertEqual(dr.data_root(), (self.default, "default"))
         self.assertEqual(dr.consent_root(), self.default)
 
+    def test_group_writable_home_without_pointer(self):
+        self.home.chmod(0o775)
+        self.assertEqual(dr.data_root(), (self.default, "default"))
+
     def test_valid_pointer(self):
         self.pointer_to()
         self.assertEqual(dr.data_root(), (self.target, "relocated"))

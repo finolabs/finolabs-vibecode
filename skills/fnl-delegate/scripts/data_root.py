@@ -62,7 +62,8 @@ def anchor_folder(*, create=False):
     # Account home is the fixed anchor, not HOME or an XDG override.
     fd = os.open(account_home(), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
-        _directory(fd)
+        if os.fstat(fd).st_uid != os.getuid():
+            raise ValueError("unsafe home owner")
         with descend(fd, ".finolabs/vibecode", create=create) as folder:
             yield folder
     finally:
