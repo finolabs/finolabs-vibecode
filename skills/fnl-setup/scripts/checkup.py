@@ -277,13 +277,13 @@ SECRET_PATTERNS = [(name, re.compile(pattern)) for name, pattern in (
     ("stripe-key", r"\b[rs]k_live_[A-Za-z0-9]{20,}"),
     ("jwt", r"\beyJ[A-Za-z0-9_-]{7,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
     ("slack-token", r"\bxox[bp]-[A-Za-z0-9-]+"),
-    ("secret-assignment", r'''(?i)\b\w{0,40}(?:password|passwd|secret|token|api_key|apikey|credential|_pass)\w{0,40}["']?\s*[:=]\s*["']?[^\s"']{8,}'''),
+    ("secret-assignment", r'''(?i)\b\w*(?:password|passwd|secret|token|api_key|apikey|credential|_pass)\w{0,40}["']?\s*[:=]\s*["']?[^\s"']{8,}'''),
     ("bearer-token", r"(?i)\bAuthorization:\s*Bearer\s+[^\s]{20,}"),
     ("url-credentials", r"\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]+:[^\s/@]+@[^\s/]+"),
     ("hex-assignment", r"""\b[A-Za-z_]\w*["']?\s*[:="']\s*["']?([A-Fa-f0-9]{32,})\b"""),
     ("encoded-assignment", r"[:=]\s*[\"']?[A-Za-z0-9+/]{40,}={0,2}"),
 )]
-MACHINE_PATH = re.compile(r"""/Users/|(?<![A-Za-z0-9.-])/home/|(?<![A-Za-z])[A-Za-z]:[\\/]""")
+MACHINE_PATH = re.compile(r"""/Users/|(?<![A-Za-z0-9.-])/home/|(?<![A-Za-z0-9./-])/(?:var/home|usr/home|root)(?=/|\b)|(?<![\w/~])~[A-Za-z_][\w.-]*(?=/|\b)|(?<![A-Za-z])[A-Za-z]:[\\/]""")
 
 
 def unfenced(text):

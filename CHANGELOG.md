@@ -32,6 +32,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Tighten consent withdrawal, instruction checks, judge receipt recognition, restore validation and ledger error reporting.
+
 - Allow retired skill names in dated changelog releases and the Unreleased migration mapping, preserving released history while rejecting other uses.
 - Check tracked documents with Git so untracked and git-ignored local context files cannot fail reference validation.
 - Remove the unused argument placeholder from the advisor's committee instructions.

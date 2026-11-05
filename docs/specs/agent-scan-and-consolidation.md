@@ -77,7 +77,7 @@ Every surface that tells a person or an agent what the plugin contains or how to
 | `CONTRIBUTING.md`, `PRIVACY.md`, `CHANGELOG.md`, `docs/specs/` | removed names, the scan's data boundary, the mapping from old to new names |
 | `evals/` and `tests/fixtures/` | renamed or removed cases and fixtures |
 
-**Mechanical check, not memory.** `scripts/check-references.py` gains one rule with a unit test: every skill folder is listed in the `README.md` skill list and in `fnl-ask` `references/map.md`, and each of those lists names no skill that has no folder. A removed name found in any tracked file other than the changelog mapping fails the check. The two packages each leave this check green; package 2 does not inherit a red check from package 1.
+**Mechanical check, not memory.** `scripts/check-references.py` gains one rule with a unit test: every skill folder is listed in the `README.md` skill list and in `fnl-ask` `references/map.md`, and each of those lists names no skill that has no folder. A removed name found in any tracked file outside dated changelog releases and the Unreleased migration mapping fails the check. The two packages each leave this check green; package 2 does not inherit a red check from package 1.
 
 ## Acceptance
 
