@@ -1,6 +1,6 @@
 # Release 0.1.8: spec and plan
 
-Status: scope and plan settled by the owner on 2026-11-05 (the open decisions are recorded under "Decisions settled"). Merged: packages 1 (pull request 58), 2 (61), 3 (62), 5 (60), 9 (63) and 10 (64). Not started: 4, 6, 7, 8 and the native sweep follow-up. Release 0.1.7 is tagged; `main` is `0.1.8-dev`.
+Status: scope and plan settled by the owner on 2026-11-05 (the open decisions are recorded under "Decisions settled"). Merged: packages 1 (pull request 58), 2 (61), 3 (62), 5 (60), 9 (63) and 10 (64). Added later: 11 (instruction standard). Not started: 4, 6, 7, 8, 11 and the native sweep follow-up. Release 0.1.7 is tagged; `main` is `0.1.8-dev`.
 
 ## Why
 
@@ -26,6 +26,7 @@ In, by package (Plan below gives order and dependencies):
 | 8 | Restore point and "try it now" demo | feature |
 | 9 | Decisions asked, not listed | merged (pull request 63) |
 | 10 | Name every background run by its runner and what it does | merged (pull request 64) |
+| 11 | Instruction files to a researched standard, with an instruction checklist in Check | feature |
 
 Out of 0.1.8, recorded so it is not lost: **multiple accounts** per host (needs each host's real support and a second account to verify; the open points are what each host supports, how quota fallback picks an account since quota is per account, where account facts live (host config, never skill bodies), and that any metrics field stays metadata with no identity and goes through `SCHEMA` and `PRIVACY.md`). A research spike may start it later; it is not scheduled.
 
@@ -148,6 +149,23 @@ Rule, in `fnl-session-hygiene` "Titles" with a per-host paragraph in `references
 
 Acceptance: a unit test pins the rule and its enforcer in `fnl-session-hygiene` and the pointers in the three skills.
 
+## Package 11: instruction standard and Check checklist
+
+Problem: `fnl-setup-instructions` guides one house layout and `fnl-setup` Check never measures an instruction file, so neither meets what the vendors and the evidence recommend. Research (2026-11-05, 17 sources: Anthropic, OpenAI and Google documentation, two studies, practitioners) found:
+
+- **Evidence:** the strongest controlled study finds context files do not raise task success and raise cost by over 20%; an observational study finds lower runtime with an `AGENTS.md`, without causation. Keep only what the agent cannot infer from the repository, and add a line after an observed failure.
+- **Limits that differ per host:** Claude Code targets under 200 lines per file; Codex stops adding files at 32 KiB for the whole chain (`project_doc_max_bytes`) and drops the rest silently; Antigravity truncates a file at 24,000 bytes after includes and demotes the largest files when always-on rules pass 20,000 tokens. The plugin's 150-line soft limit has no source.
+- **Mechanics missing from `hosts.md`:** Claude Code 2.1.277 and later reads `AGENTS.md` natively only when no `CLAUDE.md` or `CLAUDE.local.md` exists, so a `CLAUDE.local.md` suppresses it; Antigravity rule files need a valid `trigger` or are dropped, and it loads no rules from subfolders; Gemini CLI was superseded by Antigravity CLI on 2026-06-18; the Codex documentation links redirect.
+- **Anthropic practice:** verifiable lines, a reason behind non-obvious rules, no shouting on current models, zero-exception rules in hooks or permissions (text is not enforcement), `/doctor prompt-audit` for stale or contradicting lines.
+
+Changes:
+
+1. `fnl-setup-instructions`: a short "Standard" section (principles above, each with its host source), the length thresholds below, per-host limits and mechanics in `references/hosts.md` (also the native `AGENTS.md` read and its suppression, the Codex and Antigravity limits, the Antigravity `trigger` rule, updated links), and a pre-write measure step: the draft's line and byte counts are shown against the limits before the user's yes. Reasons and no-shouting guidance go in the contract template.
+2. `fnl-setup` Check: `references/check.md` gains an **Instructions** checklist of at most 20 items, each marked script (`S`) or judgment (`J`) with a stated criterion, and each reported pass, fail or `unverified`. `scripts/checkup.py` computes the `S` items offline and read-only, inside its existing output budget: line and byte counts (warn above 150 lines, fail above 200; Codex chain above 32 KiB; Antigravity file above 24,000 bytes after includes), include paths and syntax, duplicated lines across files, secret-looking strings (in the files and their `.bak-*` backups), machine paths in tracked files, `CLAUDE.local.md` ignored by git, and file age. `J` items (inferable content, contradictions, reasons given, scope conflicts, detail that belongs in a skill) go to the route judge first, as bounded judgments over the supplied lines and the stated criterion (`fnl-setup` `references/route-judge.md`, through the user's own `typesafe-ai` skill, only when host config records the judge and the user's consent; the plugin ships no key or script, and only the lines the judgment needs are sent, never secrets, which `checkup.py` redacts first). With no judge, no consent or an inconclusive answer, the agent grades the item itself from the same criterion. Each result says which grader produced it (`judge` or `agent`); a judge answer informs and never decides alone, and a fail is shown to the user with its evidence. On Claude Code the report also suggests `/doctor prompt-audit`.
+3. Enforcement: the script items are enforced by `checkup.py`; the `J` items are the judge's or the agent's judgment, marked advisory. Nothing blocks a write; the owner's yes for each file stays the gate.
+
+Acceptance: unit tests for each script item with synthetic files (a clean file passes, each defect is reported once, nothing is written, output stays within budget) and for the grader order (judge first when recorded with consent, agent fallback otherwise, grader named in the result, secrets never in the payload); `check-references.py` green; the Check reference lists exactly the checklist items; limits and links in `hosts.md` carry the source named above. Not verified: runtime loading and truncation on any host (no host was run); host limits are as documented on 2026-11-05.
+
 ## Plan
 
 Writers: one writer and one worktree per package; coordinator merges. Effort `medium` except package 7's design and package 8's restore design (`high`). Every pull request gets a posted code review and security review (`fnl-review-gate`); packages 3 and 5 touch only documents and the checker and may take the low-risk lane only where `merge_check.py --lane` says so (the checker script is not a lane path, so package 3 goes to both reviewers).
@@ -161,11 +179,12 @@ Writers: one writer and one worktree per package; coordinator merges. Effort `me
 | 4 | 6 | 3 (both edit `fnl-session-hygiene`) | `skills/fnl-session-hygiene`, `skills/fnl-setup`, `.claude-plugin`/`.codex-plugin` hooks |
 | 5 | 7 design note, then code | 4 (both touch the hooks) | hooks, `CLAUDE.md`, `fnl-delegate` |
 | 6 | 8 restore point, then demo | 0 | new skill folder, `fnl-ask`, README, file tree |
-| 7 | Release 0.1.8 | all merged, full suite and evals run once | manifests, CHANGELOG |
+| 7 | 11 instruction standard and Check checklist | 0 | `skills/fnl-setup-instructions`, `skills/fnl-setup` (`check.md`, `checkup.py`) |
+| 8 | Release 0.1.8 | all merged, full suite and evals run once | manifests, CHANGELOG |
 
 Release 0.1.8 follows `fnl-versioning`: a release pull request (manifest versions and CHANGELOG), an annotated tag after CI, a GitHub release, the catalog pin pull request (package 5), then the bump to `0.1.9-dev`. Pushes, merges, the catalog pull request and the release each need the owner's go.
 
-Budget guide (`fnl-delegate`): packages 2, 3, 5: medium, 30 to 45 minutes each; 9 and 10: easy, written by the coordinator; 4: medium, 45 minutes plus the owner's quota for eval reruns; 6: hard, 60 minutes; 7: very hard, a session; 8: hard for the restore script, medium for the demo.
+Budget guide (`fnl-delegate`): packages 2, 3, 5: medium, 30 to 45 minutes each; 9 and 10: easy, written by the coordinator; 4: medium, 45 minutes plus the owner's quota for eval reruns; 6: hard, 60 minutes; 7: very hard, a session; 8: hard for the restore script, medium for the demo; 11: medium, 45 minutes (skill text and `hosts.md` by the coordinator, `checkup.py` and tests by a delegate).
 
 ## Risks
 
@@ -183,6 +202,7 @@ Asked of the owner through the native question form on 2026-11-05; each took the
 3. **`auto` gate:** a recorded decision is a ledger `start` line or a keep receipt; blocks are not counted in usage metrics.
 4. **Native form sweep:** the remaining text questions move to the native form (follow-up to package 2).
 5. **Package 10 (run names):** added at the owner's go on 2026-11-05, after a proposal that the rule live in `fnl-session-hygiene` "Titles" and not in the user contract.
+6. **Package 11 (instruction standard):** added at the owner's request on 2026-11-05. Scope full (guidance and script checks); lengths warn at 150 lines and fail at 200, plus the Codex and Antigravity byte limits; non-script items are a checklist with stated criteria, graded by the route judge (Jev through `typesafe-ai`) first and by the agent as fallback, with `/doctor prompt-audit` suggested on Claude Code.
 
 ## Verification and limits
 
