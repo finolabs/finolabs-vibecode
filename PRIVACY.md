@@ -2,7 +2,7 @@
 
 `finolabs-vibecode` is a set of Agent Skills: Markdown instructions plus small local Python scripts. It has no server. Its only network call is the update check described below; it sends nothing about you or your sessions. If you choose, it records usage metadata on your machine so you can see how the practice performs; that record never leaves the machine, and it is off until you consent.
 
-The agent scan runs `--version` on three fixed executables (`claude`, `codex`, `agy`) and reads `host.md`; it uses no network and stores nothing outside `host.md`.
+The agent scan script itself uses no network and runs `--version` only on three fixed executables (`claude`, `codex`, `agy`) without a shell and reads `host.md`; it stores nothing outside `host.md`.
 
 ## Where your data goes
 
