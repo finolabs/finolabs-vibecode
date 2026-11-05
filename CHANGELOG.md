@@ -11,6 +11,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Read agent versions from stdout only, count each include cycle once, and preserve section ranges across Unicode line separators.
 - Clarify neutral setup approvals, question-tool fallbacks and default preferences. Keep language guidance outside lists, mark compaction advice explicitly, and align privacy and reference-check documentation with the existing rules.
 - Restore Claude quota readings by supplying the account database username to probe children and leaving `CLAUDE_CONFIG_DIR` unset for the default install while retaining it for listed extra folders.
 
