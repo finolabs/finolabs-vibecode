@@ -206,3 +206,57 @@ class AutoGateHookTest(unittest.TestCase):
             proc.stdin.close()
             proc.stdout.close()
             proc.stderr.close()
+
+    def run_writer(self, kind="keep", setup=""):
+        folder = ROOT / "skills/fnl-delegate/scripts"
+        if kind == "keep":
+            script = folder / "record.py"
+            args = ["keep", "--tasks", "1", "--reason", "needs-context"]
+        else:
+            script = folder / "ledger.py"
+            args = ["start", "--project", "fixture", "--task", "fixture", "--kind", kind,
+                    "--grade", "easy", "--agent", "subagent", "--budget", "5"]
+        setup = 'sys.path.insert(0, ' + repr(str(folder)) + ')\n' + setup
+        result = subprocess.run([sys.executable, "-I", "-c", BOOT.format(setup=setup),
+                                 str(self.home), str(script), *args], cwd=self.repo,
+                                env={**self.env, "ORCHESTRATION_LEDGER": str(self.home / "ledger.jsonl")},
+                                capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        if kind == "keep":
+            self.assertEqual(result.stdout, "keep receipt: tasks=1 reason=needs-context route_by=table\n")
+        else:
+            self.assertRegex(result.stdout, r"^d\d{8}-\d{6}-[0-9a-f]{4}\n$")
+        return result.stdout
+
+    def test_writers_record_decisions_and_allow_hook(self):
+        for kind, decision in (("implement", "handoff"), ("keep", "keep")):
+            with self.subTest(kind=kind):
+                self.state.unlink(missing_ok=True)
+                self.run_writer(kind)
+                self.assertTrue(self.state.exists(), "writer must record the enabled decision")
+                state = json.loads(self.state.read_text())
+                self.assertEqual(state["decision"], decision)
+                self.assertIn("decided", state)
+                self.assertEqual(self.run_hook(), "")
+
+    def test_review_dispatch_writes_no_decision(self):
+        self.run_writer("review")
+        self.assertFalse(self.state.exists())
+        self.assert_deny(self.run_hook())
+
+    def test_writer_failures_preserve_output_and_exit(self):
+        setup = 'import auto_gate\ndef fail(*a): raise PermissionError()\nauto_gate.write_decision = fail'
+        self.run_writer("keep", setup)
+        self.run_writer("implement", setup)
+        self.assertFalse(self.state.exists())
+
+    def test_writers_only_write_when_gate_enabled(self):
+        for config, env in (("## Delegation mode\nauto\n", {}),
+                            ("## Delegation mode\nmanual\n## Auto gate\non\n", {}),
+                            ("## Delegation mode\nauto\n## Auto gate\non\n", {"FNL_AUTO_GATE": "off"})):
+            self.config.write_text(config)
+            self.env.update(env)
+            self.run_writer("keep")
+            self.run_writer("implement")
+            self.assertFalse(self.state.exists())

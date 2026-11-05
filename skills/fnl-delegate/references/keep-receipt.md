@@ -1,6 +1,6 @@
 # Keep receipt
 
-`scripts/record.py keep` is `SKILL.md` "Keep or hand off" for tasks you keep. It writes nothing to the ledger: it prints one line, and with usage metrics on the hook stores the count, the reason and who settled it as a `kept` event, under the same consent, retention and purge as other events. `--tasks` is how many tasks you kept for this reason, and `--reason` is one of:
+`scripts/record.py keep` is `SKILL.md` "Keep or hand off" for tasks you keep. It writes nothing to the ledger: it prints one line, and with usage metrics on the hook stores the count, the reason and who settled it as a `kept` event, under the same consent, retention and purge as other events. When the auto gate is enabled, the command also writes `decision=keep` and a timestamp to its local repository decision file, independently of usage metrics. The script preserves any prior denial; a failed decision write never changes the receipt output or exit code. `--tasks` is how many tasks you kept for this reason, and `--reason` is one of:
 
 - `needs-context`: finishing needs this conversation's context.
 - `brief-costs-more`: writing and checking the brief would cost more than the work.

@@ -94,6 +94,18 @@ def cmd_start(args):
         "model": args.model, "reason": args.reason, "route_by": args.route_by,
         "budget_min": args.budget,
     })
+    if args.kind == "implement":
+        try:
+            sys.dont_write_bytecode = True
+            sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
+            from mode import effective
+            from auto_gate import enabled, repository_key, write_decision
+            if enabled(effective):
+                key = repository_key(os.getcwd())
+                if key:
+                    write_decision(key, "handoff")
+        except Exception:
+            pass  # gate state must never change this command's output or exit code
     print(dispatch_id)
 
 
