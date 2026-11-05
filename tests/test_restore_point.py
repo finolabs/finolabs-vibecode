@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,16 +25,17 @@ class RestorePointTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.base = Path(self.tmp.name).resolve()
+        self.home = account(self, self.base / "home")
         self.repo = self.base / "repo"
         self.repo.mkdir()
         self.env = {
-            "HOME": str(self.base),
+            "HOME": str(self.home),
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "GIT_CONFIG_NOSYSTEM": "1",
         }
         self.git("init", "-q")
         self.git("config", "user.name", "Test User")
-        self.git("config", "user.email", "tester@localhost")
+        self.git("config", "user.email", "tester" + "@" + "localhost")
 
     def git(self, *args, cwd=None):
         result = subprocess.run(
@@ -75,6 +77,42 @@ class RestorePointTest(unittest.TestCase):
         match = re.search(r"^Digest: ([0-9a-f]{64})$", output, re.M)
         self.assertIsNotNone(match, output)
         return match.group(1)
+
+    def test_temporary_index_is_private_under_synthetic_root_and_removed(self):
+        self.assertEqual(restore_point.dr.account_home(), self.home)
+        self.home.chmod(0o775)
+        root = self.home / ".finolabs/vibecode"
+        observed = []
+        original = restore_point.run_git
+
+        def inspect(root_path, args, **kwargs):
+            index = kwargs.get("extra_env", {}).get("GIT_INDEX_FILE")
+            if index:
+                folder = Path(index).parent
+                self.assertEqual(folder.parent, root / "tmp")
+                self.assertEqual(folder.stat().st_mode & 0o777, 0o700)
+                self.assertEqual(folder.parent.stat().st_mode & 0o777, 0o700)
+                observed.append(folder)
+            return original(root_path, args, **kwargs)
+
+        with mock.patch.object(restore_point, "run_git", side_effect=inspect), redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(restore_point.main(["create"], cwd=self.repo), 0)
+        self.parse_created_name(output.getvalue())
+        self.assertTrue(observed)
+        self.assertTrue(all(not folder.exists() for folder in observed))
+        self.assertEqual(list((root / "tmp").iterdir()), [])
+        self.parse_created_name(self.run_cli("create"))
+        self.assertEqual(list((root / "tmp").iterdir()), [])
+
+    def test_invalid_root_refuses_without_creating_anything(self):
+        root = self.home / ".finolabs/vibecode"
+        root.mkdir(parents=True)
+        (root / "root.json").write_text("invalid")
+        before = {p.relative_to(self.base) for p in self.base.rglob("*")}
+        output = self.run_cli("create")
+        self.assertEqual(output, "invalid data root\n")
+        self.assertEqual(before, {p.relative_to(self.base) for p in self.base.rglob("*")})
+        self.assertFalse((root / "tmp").exists())
 
     def test_create_leaves_index_branch_and_working_tree_untouched(self):
         (self.repo / "tracked.txt").write_text("v1\n", encoding="utf-8")
