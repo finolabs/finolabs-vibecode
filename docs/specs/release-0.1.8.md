@@ -1,6 +1,6 @@
 # Release 0.1.8: spec and plan
 
-Status: scope and plan settled by the owner on 2026-11-05 (the open decisions are recorded under "Decisions settled"). Merged: packages 1 (pull request 58), 2 (61), 3 (62), 5 (60), 9 (63), 10 (64), 7 (72, with the exception rule in 71), 11 (73), 12 (76) and 14 (78). Added later: 13 (quota probe) and 14 (data root). In review: 8 (77). Package 13 implemented locally on `quota-probe`, with local verification recorded in the implementation report; independent security review pending; native worker survival remains unverified. Not started: 4, 6 and the native sweep follow-up. Release 0.1.7 is tagged; `main` is `0.1.8-dev`.
+Status: released as 0.1.8 on 2026-11-05. Scope and plan were settled by the owner on 2026-11-05 (the open decisions are recorded under "Decisions settled"). Merged: packages 1 (pull request 58), 2 (61), 3 (62), 5 (60), 9 (63), 10 (64), 6 (66), 7 (72, with the exception rule in 71), 11 (73), 12 (76), 8 (77), 14 (78), 4 (79 and 82), the native question sweep (83), 13 (81 and 84), and one cleanup of accumulated LOW findings (80). Open for 0.1.9: `keep-manual` still offers a hand-off in about one trial in six under manual mode, the `-dev` follow-ups listed in the release notes, and verification on each host of the native question form, the hook delivery of the compaction reminder and the auto gate. Release 0.1.7 is tagged; the build after this release is `0.1.9-dev`.
 
 ## Why
 

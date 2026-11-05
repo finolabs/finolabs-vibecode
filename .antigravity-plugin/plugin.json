@@ -3,7 +3,7 @@
   "name": "finolabs-vibecode",
   "displayName": "Finolabs Vibecode",
   "description": "Engineering practice for AI coding agents: routing, delegation, review and security gates, verification, versioning, agent scans and mode settings.",
-  "version": "0.1.8-dev",
+  "version": "0.1.8",
   "logo": "assets/icon.svg",
   "author": {
     "name": "FINOLABS",
