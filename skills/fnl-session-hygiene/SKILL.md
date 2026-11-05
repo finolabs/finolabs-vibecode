@@ -1,21 +1,33 @@
 ---
 name: fnl-session-hygiene
-description: Keep agent sessions healthy across long work. Use when a session's context passes about 60%, a phase or task changes, a session needs a name or its title is stale, work moves to a fresh session or another writer, the task ends with decisions and evidence to preserve, or the user asks to remember something or recall earlier decisions, lessons or project state.
+description: Keep agent sessions healthy across long work. Use when a session's context passes about 60% (advisory, agent judgment), a phase or task changes, a session needs a name or its title is stale, work moves to a fresh session or another writer, the task ends with decisions and evidence to preserve, or the user asks to remember something or recall earlier decisions, lessons or project state.
 ---
 
 # Session hygiene
 
 ## Context pressure
 
-Before assigning new work, inspect actual context usage where the surface exposes it.
+The **host** compacts at its own threshold: a host setting, not this plugin. The skill adds what the host cannot know: which decisions and next action to write back before compaction. The **agent** performs that writeback; it is advisory, not automatically enforced.
 
-- Above about **60%**, at a safe idle boundary, compact the session for the same workstream. When the agent cannot compact itself, ask the user to, or propose a fresh session with a handover. This is advisory unless the host's own threshold or a hook enforces it; no host signal this pack relies on gives exact usage, so check at task boundaries and when the host shows usage. `/fnl-setup` Check reports compaction enforcement as unverified until verified.
+An agent cannot see its own context percentage. **About 60% is advisory (agent judgment)** wherever it is not backed by a host setting; never invent a percentage. At task boundaries, use host-exposed usage if available and judge pressure from the work. The following choices are advisory, enforced by agent judgment:
+
+- At a safe idle boundary, use supported compaction for the same workstream when context pressure warrants it. When the agent cannot compact itself, ask the user to, or propose a fresh session with a handover.
 - A wholly new, independent task starts in a fresh, correctly named session in the matching checkout, with a short verified handover.
 - A finished user story, with its review gate closed, is a natural boundary: prefer a fresh session for the next story with a short handover. A coordinator session whose context is still light may continue (`fnl-delegate`).
 - Delegated agents follow the same rule: start a fresh run with a short handover brief rather than resuming a run that has used much of its window.
 - Without usage telemetry, say so; never invent a percentage or interrupt active work.
 
 Before a compaction, a fresh session or the end of the work, write back a decision or lesson that would change what an agent does next time, through the knowledge-base procedure below. A compaction with nothing new to keep carries only the handover.
+
+**Native settings, presence only.** Read-only binary checks on 2026-11-05 found these names in the installed hosts; their behavior is **unverified**, so no value is prescribed:
+
+- Claude Code 2.1.318: `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`, `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, `DISABLE_AUTO_COMPACT`.
+- Codex 0.166.0: `model_auto_compact_token_limit`, `model_post_turn_compact_threshold_percent`.
+- Antigravity 1.5.0: no native threshold setting found in the inspected help and binary; this is not proof that none exists.
+
+The agent rechecks the installed host's help, docs listing or binary before suggesting a setting; this is advisory (agent judgment). `/fnl-setup` offers guidance only after the user's yes. The user makes or confirms any shared-setting change; neither skill writes these settings.
+
+**Reminder hook.** Claude Code and Codex declare `PreCompact`; the plugin's hook prints one plain-text reminder to write back decisions and the next action. The script enforces constant output, no input or file reads, no network or metrics, and exit 0 with exceptions silenced. It never blocks compaction. Antigravity has no `PreCompact` declaration. Delivery of the reminder to the model is **unverified on every host**; agent judgment must not rely on it until a real compaction demonstrates delivery. `/fnl-setup` Check reports declarations only and keeps delivery unverified.
 
 ## Remember or recall
 

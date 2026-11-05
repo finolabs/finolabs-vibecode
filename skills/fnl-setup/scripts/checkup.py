@@ -199,8 +199,11 @@ def hooks_evidence(host, home, found):
     reason += "; missing: " + ", ".join(absent) if absent else "; declarations only"
     if host == "agy":
         reason += "; Stop/PreCompact support unverified"
-    elif "PreCompact" not in declared:
+    if "PreCompact" in declared:
+        reason += "; PreCompact declared"
+    else:
         reason += "; PreCompact not declared (optional)"
+    reason += "; delivery unverified"
     return item("hooks", "missing" if absent else "unverified" if host == "agy" else "ok", reason)
 
 
