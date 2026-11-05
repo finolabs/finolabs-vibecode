@@ -368,7 +368,7 @@ COPIES = ["scripts/data_root.py",
           "skills/fnl-set-mode/scripts/data_root.py",
           "skills/fnl-setup/scripts/data_root.py",
           "skills/fnl-status/scripts/data_root.py",
-          "skills/fnl-update/scripts/data_root.py"]
+          "skills/fnl-restore-point/scripts/data_root.py", "skills/fnl-update/scripts/data_root.py"]
 
 
 class DataRootCopiesTest(unittest.TestCase):
