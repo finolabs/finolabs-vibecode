@@ -9,6 +9,11 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - The skills named here now ask through the host's native question tool when the session has one (`AskUserQuestion` on Claude Code, `request_user_input` on Codex, `ask_question` on Antigravity): the setup interviews, the setup preferences and scope questions, the plain-language opening question, the yes of `fnl-scan-agents` (model lists stay free text) and the confirmation of `fnl-set-mode`, the router's bounded clarification and the `suggest` hand-off offer. Text stays the fallback when there is no tool, it fails, nobody can answer (delegated or headless runs) or the answer is free text. Agent judgment enforces it, so it is advisory; verified only that each host's CLI contains the tool, not how Codex and Antigravity expose it.
 - Shortened the plugin description to 147 characters, identical in the three manifests, to meet the catalog's 120-160 character standard (the 0.1.7 manifests carry a 199-character one). A unit test now pins both the length and the match across hosts.
 
+### Fixed
+
+- Allow retired skill names in dated changelog releases and the Unreleased migration mapping, preserving released history while rejecting other uses.
+- Check tracked documents with Git so untracked and git-ignored local context files cannot fail reference validation.
+
 ## [0.1.7] - 2026-11-05
 
 ### Added
