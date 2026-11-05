@@ -1,6 +1,6 @@
 ---
 name: fnl-handoff
-description: Write a self-contained brief and either dispatch one task to Claude Code, Codex or Antigravity under a hard time budget, or save a handover so a later session or another agent continues the work. Use when handing a task or half-finished work to another agent, restarting a stalled or timed-out run, sending review findings back for a fix, or wrapping up a session to resume it later.
+description: Write a self-contained brief and either dispatch one task to Claude Code, Codex or Antigravity under a hard time budget, or save a handover so a later session or another agent continues the work. Use whenever a user asks to hand one task or half-finished work to an agent (named or not) or to write the brief for it, to restart a timed-out or stalled run with a fresh brief, to send review findings back for a fix, or to wrap up a session to resume it later. Choosing among agents, parallel dispatch and quota belong to fnl-delegate.
 user-invocable: true
 argument-hint: "[--agent claude|codex|antigravity] [--model <id>] [--worktree] <task>"
 ---
