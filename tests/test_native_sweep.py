@@ -45,6 +45,7 @@ class NativeSweepTest(unittest.TestCase):
         for path, start in (
             ("fnl-setup/SKILL.md", "**Beginner path.**"),
             ("fnl-setup/SKILL.md", "**Preferences**"),
+            ("fnl-setup/SKILL.md", "Antigravity records the same events as Codex"),
             ("fnl-setup/references/check.md", "4. Offer one small smoke task"),
             ("fnl-setup/references/route-judge.md", "Ask"),
             ("fnl-setup/references/route-judge.md", "Ask a second, separate question"),
