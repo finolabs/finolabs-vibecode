@@ -1,6 +1,7 @@
 """Tests for scripts/metrics_hook.py, run as a subprocess the way Claude Code runs it."""
 
 import importlib.util
+import itertools
 import json
 import os
 import subprocess
@@ -304,6 +305,71 @@ class HookTest(unittest.TestCase):
                 self.post("Bash", {"command": keep + "--route-by " + value})
                 self.post("Bash", {"command": keep + "--route-by=" + value})
                 self.assertEqual(self.events(), [])
+
+    def test_judge_receipts_record_on_each_host_and_respect_consent(self):
+        command = "python3 -I skills/fnl-delegate/scripts/record.py judge --site route --grader judge --result validated --followed yes"
+        self.post("Bash", {"command": command})
+        self.assertEqual(self.events(), [])
+        self.consent()
+        self.post("Bash", {"command": command})
+        self.run_hook({"hook_event_name": "PostToolUse", "session_id": "s1", "cwd": str(self.repo),
+                       "tool_name": "Bash", "tool_input": {"command": command.split()}}, args=("--host", "codex"))
+        self.agy("post_tool_use", {"name": "run_command", "args": {"CommandLine": command}})
+        self.assertEqual(len(self.events()), 3)
+        for event in self.events():
+            self.assertEqual({k: event[k] for k in ("event", "site", "grader", "result", "followed")},
+                             dict(event="judge", site="route", grader="judge", result="validated", followed="yes"))
+        self.run_hook({"hook_event_name": "PostToolUse", "session_id": "s1", "tool_name": "Bash",
+                       "tool_input": {"command": command}}, env={**self.env, "FNL_METRICS": "off"})
+        self.assertEqual(len(self.events()), 3)
+
+    def test_judge_malformed_and_quoted_commands_never_record(self):
+        self.consent()
+        command = "python3 -I record.py judge --site route --grader judge --result validated --followed yes"
+        bad = [command.replace("--site route", "--site free-text"), command.replace("--followed yes", ""),
+               command.replace("--grader judge", "--grader agent"),
+               command.replace("--result validated", "--result unverified"),
+               command.replace("--grader judge", "--grader agent").replace("--result validated", "--result unverified").replace("--followed yes", "--followed na"),
+               command + " --extra secret", command + " --site depth", command + " trailing",
+               command.replace("record.py", '"record.py'), command.replace("record.py", "'record.py"),
+               "# ignored; " + command, ["echo", "line; " + command],
+               command.replace("--site", "--sit"), command.replace("record.py", "myrecord.py"),
+               command + " '", "echo '" + command + "'", 'echo "' + command + '"',
+               "echo 'line; " + command + "'", "echo 'line\n" + command + "'",
+               "message='\n" + command + "'", '"' + command + '"',
+               "cat <<'EOF'\n" + command + "\nEOF"]
+        for text in bad:
+            with self.subTest(command=text):
+                self.post("Bash", {"command": text})
+                self.assertEqual(self.events(), [])
+        self.post("Bash", {"command": "cd repo && " + command + "; " + command.replace("--site route", "--site=depth")})
+        self.assertEqual([e["site"] for e in self.events()], ["route", "depth"])
+
+    def test_judge_receipt_copies_accept_the_same_values_and_pairs_without_writes(self):
+        records = [ROOT / ("skills/" + skill + "/scripts/record.py") for skill in ("fnl-delegate", "fnl-coding-router")]
+        cases = list(itertools.product(("route", "depth", "activity", "instruction"), ("judge", "agent"),
+                                       ("validated", "unverified"), ("yes", "no", "na")))
+        cases += [("free text", "judge", "validated", "yes"), ("route", "other", "validated", "yes"),
+                  ("route", "judge", "invalid", "na"), ("route", "judge", "validated", "maybe")]
+        for site, grader, result, followed in cases:
+            valid = (site in fm.JUDGE_SITES and grader in fm.JUDGE_GRADERS and result in fm.JUDGE_RESULTS
+                     and followed in fm.JUDGE_FOLLOWED and
+                     (grader == "judge" and (result == "validated" or followed == "na")
+                      or grader == "agent" and result == "validated" and followed == "na"))
+            outputs = []
+            for record in records:
+                done = subprocess.run([sys.executable, "-I", str(record), "judge", "--site", site, "--grader", grader,
+                                       "--result", result, "--followed", followed], capture_output=True, text=True,
+                                      cwd=self.repo, env={**self.env, "FNL_AUTO_GATE": "on"})
+                outputs.append((done.returncode, done.stdout))
+                self.assertEqual(done.returncode == 0, valid, (record, site, grader, result, followed))
+                if valid:
+                    self.assertEqual(done.stdout, "judge receipt: site=%s grader=%s result=%s followed=%s\n" %
+                                     (site, grader, result, followed))
+                    self.assertEqual(done.stderr, "")
+            self.assertEqual(outputs[0], outputs[1])
+        self.assertFalse(self.dir.exists())
+        self.assertEqual(list(self.repo.iterdir()), [self.repo / ".git"])
 
     def test_the_keep_receipt_is_not_recorded_without_consent(self):
         self.post("Bash", {"command": "python3 -I record.py keep --tasks 3 --reason needs-context"})

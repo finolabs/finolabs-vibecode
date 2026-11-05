@@ -30,7 +30,11 @@ Never send code, secrets, personal data or customer records. One scoped exceptio
 ## Reading the answer
 
 - A clear winner (the top answer well ahead of the next): take it and record `--route-by judge`.
-- Close answers, `need-evidence` or `none-fits`, or a judge that is unavailable: decide yourself with the fallback in `SKILL.md`, record `--route-by table`, and note the judge's answer in the ledger finish note. Never record `judge` without a validated response.
+- Close answers, `need-evidence` or `none-fits`, or a judge that is unavailable: decide yourself with the fallback in `SKILL.md`, record `--route-by table`; never store the question or answer in the ledger. Never record `judge` without a validated response.
 - Reuse an answer only for the same task and brief. A rewritten brief or changed quota is a new question.
 
 The judge advises; the coordinator decides and owns the outcome. Its answer never overrides a user's choice, a project rule or the authority limits in `SKILL.md`.
+
+## Receipt after each decision
+
+Advisory (agent judgment): after each judge decision, the coordinator runs `python3 -I <fnl-delegate folder>/scripts/record.py judge --site route --grader judge --result <validated|unverified> --followed <yes|no|na>`. Use `validated` only for a usable, validated answer; unavailable, close or invalid answers are `unverified`. For a validated judge answer use `yes` when followed, `no` when not followed, or `na` when not applicable; otherwise use `na`. If the agent then grades the fallback, record that decision with `python3 -I <fnl-delegate folder>/scripts/record.py judge --site route --grader agent --result validated --followed na`. With no judge, run no receipt. The command prints one line and writes nothing; only the hook, with metrics consent, stores its fixed fields. Never include the question or answer.

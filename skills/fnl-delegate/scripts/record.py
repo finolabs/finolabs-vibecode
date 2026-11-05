@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Print a coordinator's keep receipt.
+"""Print a coordinator's keep or judge receipt.
 
 When the user has turned usage metrics on, the plugin's hook reads this command
 after it runs and records the count, the reason and who settled it with the session.
 
-When the auto gate is enabled, this command also writes its local repository
+Only for keep, when the auto gate is enabled, this command also writes its local repository
 decision file. A failed decision write never changes the receipt or exit code.
 """
 
@@ -15,6 +15,12 @@ from pathlib import Path
 
 REASONS = ("needs-context", "brief-costs-more", "hard-grade", "no-delegate", "never-delegated", "user-choice")
 ROUTE_BY = ("table", "judge", "user")
+
+
+JUDGE_SITES = ("route", "depth", "activity", "instruction")
+JUDGE_GRADERS = ("judge", "agent")
+JUDGE_RESULTS = ("validated", "unverified")
+JUDGE_FOLLOWED = ("yes", "no", "na")
 
 
 def task_count(value):
@@ -31,7 +37,19 @@ def main():
     keep.add_argument("--tasks", required=True, type=task_count, help="how many tasks you kept for this reason")
     keep.add_argument("--reason", required=True, choices=REASONS)
     keep.add_argument("--route-by", default="table", choices=ROUTE_BY)
+    judge = sub.add_parser("judge", help="print the judge receipt", allow_abbrev=False)
+    judge.add_argument("--site", required=True, choices=JUDGE_SITES)
+    judge.add_argument("--grader", required=True, choices=JUDGE_GRADERS)
+    judge.add_argument("--result", required=True, choices=JUDGE_RESULTS)
+    judge.add_argument("--followed", required=True, choices=JUDGE_FOLLOWED)
     args = parser.parse_args()
+    if args.command == "judge":
+        if ((args.grader == "agent" and args.result != "validated")
+                or (args.followed != "na" and (args.grader != "judge" or args.result != "validated"))):
+            parser.error("invalid judge field pair")
+        print("judge receipt: site=%s grader=%s result=%s followed=%s" %
+              (args.site, args.grader, args.result, args.followed))
+        return
     try:
         sys.dont_write_bytecode = True
         sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I

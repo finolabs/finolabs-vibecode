@@ -74,7 +74,8 @@ jobs:
         run: |
           python3 - <<'PY'
           import filecmp, sys
-          groups = [["skills/fnl-setup/references/interview.md", "skills/fnl-setup-instructions/references/interview.md"],
+          groups = [["scripts/fnl_metrics.py", "skills/fnl-coding-router/scripts/fnl_metrics.py", "skills/fnl-status/scripts/fnl_metrics.py", "skills/fnl-update/scripts/fnl_metrics.py"],
+                    ["skills/fnl-setup/references/interview.md", "skills/fnl-setup-instructions/references/interview.md"],
                     ["scripts/auto_gate.py", "skills/fnl-delegate/scripts/auto_gate.py"],
                     ["scripts/mode.py", "skills/fnl-delegate/scripts/mode.py", "skills/fnl-setup/scripts/mode.py", "skills/fnl-set-mode/scripts/mode.py"]]
           bad = [g for g in groups if not all(filecmp.cmp(g[0], p, shallow=False) for p in g[1:])]

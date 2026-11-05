@@ -137,6 +137,54 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertIn("1 implementation run handed off", out["text"])
         self.assertIn("no data: no finished runs in this period", out["text"])
 
+    def judge_data(self, receipts=True):
+        data = json.loads(FIXTURE.read_text())
+        data["delegation"] = None
+        data["judge"] = {"receipts": 3 if receipts else 0, "note": "No receipts were recorded.", "outcome_note": "",
+                         "outcome_association": [dict(route_by="judge", runs=4, first_pass=.5, small=True),
+                                                 dict(route_by="table", runs=5, first_pass=.6, small=False)]}
+        if receipts:
+            data["judge"].update(use=[dict(site="route", grader="judge", count=2), dict(site="route", grader="agent", count=1)],
+                                 usable_answers=dict(validated=1, calls=2, share=.5),
+                                 followed=dict(yes=1, validated=1, share=1))
+        return data
+
+    def render_judge(self, data):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "data.json"
+            path.write_text(json.dumps(data))
+            return self.render(path)
+
+    def test_judge_pane_only_with_data_and_small_groups_are_open_rings(self):
+        self.assertNotIn("Outcome association", self.render(FIXTURE)["text"])
+        self.assertNotIn("Outcome association", self.render()["text"])
+        out = self.render_judge(self.judge_data())
+        for label in ("Judge", "Use", "Usable answers", "Followed", "Outcome association", "50% (1/2)",
+                      "100% (1/1)", "judge · n=4", "table · n=5", "Not measured: cost, latency and accuracy.",
+                      "not proof the judge was right", "not judged"):
+            self.assertIn(label, out["text"])
+        self.assertEqual(out["openRings"], 1)
+
+    def test_judge_without_receipts_shows_only_association_and_escapes_values(self):
+        data = self.judge_data(False)
+        out = self.render_judge(data)
+        self.assertIn("No receipts were recorded.", out["text"])
+        self.assertIn("Outcome association", out["text"])
+        self.assertNotIn("Usable answers", out["text"])
+        self.assertNotIn("Followed", out["text"])
+        attack = "<img src=x onerror=alert(1)>"
+        for receipts in (False, True):
+            data = self.judge_data(receipts)
+            data["judge"]["note"] = attack
+            data["judge"]["outcome_association"][0]["route_by"] = attack
+            if receipts:
+                data["judge"]["use"][0]["site"] = attack
+                data["judge"]["use"][0]["grader"] = attack
+            out = self.render_judge(data)
+            self.assertIn(attack, out["text"])
+            self.assertNotIn("img", out["tags"])
+            self.assertNotIn("script", out["tags"])
+
     def sample(self):
         return json.loads(FIXTURE.read_text(encoding="utf-8"))
 
