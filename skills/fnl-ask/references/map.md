@@ -2,7 +2,7 @@
 
 ## Skills
 
-The 19 skill folders and their purposes match the README.
+The 20 skill folders and their purposes match the README.
 
 | Skill | Use it when |
 | --- | --- |

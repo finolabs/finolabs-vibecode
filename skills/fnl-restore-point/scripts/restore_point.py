@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local working-tree restore points on private git refs; stdlib only, no network."""
+"""Local working-tree restore points on private git refs; stdlib only."""
 
 import argparse
 import hashlib
@@ -37,12 +37,12 @@ def clean_text(value):
     return "".join(c for c in value if c.isprintable())
 
 
-def check_no_symlinks(path):
-    """Traverse from root with O_NOFOLLOW so any symlinked component is refused."""
+def check_no_symlinks(path, root):
+    """Refuse symlinks from the repository root down, allowing aliased parents."""
     path = Path(os.path.abspath(path))
-    fd = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY)
+    fd = os.open(root.parent.resolve(), os.O_RDONLY | os.O_DIRECTORY)
     try:
-        for part in path.parts[1:]:
+        for part in (root.name, *path.relative_to(root).parts):
             child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
             os.close(fd)
             fd = child
@@ -59,36 +59,56 @@ def check_git_dir_and_refs(root, name=None):
         git_stat = os.lstat(dot_git)
     except OSError as exc:
         raise ValueError("Unsafe path: cannot stat .git directory.") from exc
-    if stat.S_ISLNK(git_stat.st_mode) or not stat.S_ISDIR(git_stat.st_mode):
-        raise ValueError("Unsafe path: .git must be a real directory, not a symlink.")
+    if stat.S_ISLNK(git_stat.st_mode):
+        raise ValueError("Unsafe path: .git must not be a symlink.")
+    if stat.S_ISREG(git_stat.st_mode):
+        lines = dot_git.read_text(encoding="utf-8").splitlines()
+        if len(lines) != 1 or not lines[0].startswith("gitdir: ") or not lines[0][8:]:
+            raise ValueError("Unsafe path: .git must contain one gitdir path.")
+        dot_git = (root / lines[0][8:]).resolve()
+        if not dot_git.is_dir() or dot_git.stat().st_uid != os.getuid():
+            raise ValueError("Unsafe path: gitdir must be an existing directory owned by the user.")
+    elif not stat.S_ISDIR(git_stat.st_mode):
+        raise ValueError("Unsafe path: .git must be a directory or a gitdir file.")
 
-    for entry in ("HEAD", "index", "packed-refs", "objects", "refs", "logs"):
-        candidate = dot_git / entry
-        if os.path.lexists(candidate) and os.path.islink(candidate):
-            raise ValueError("Unsafe path: symlink inside .git refused.")
+    git_dirs = [dot_git]
+    common_file = dot_git / "commondir"
+    if common_file.is_symlink():
+        raise ValueError("Unsafe path: symlink inside .git refused.")
+    if common_file.exists():
+        common_dir = (dot_git / common_file.read_text(encoding="utf-8").strip()).resolve()
+        if not common_dir.is_dir() or common_dir.stat().st_uid != os.getuid():
+            raise ValueError("Unsafe path: common gitdir must be an existing directory owned by the user.")
+        git_dirs.append(common_dir)
+    for git_dir in git_dirs:
+        for entry in ("HEAD", "index", "packed-refs", "objects", "refs", "logs"):
+            candidate = git_dir / entry
+            if os.path.lexists(candidate) and os.path.islink(candidate):
+                raise ValueError("Unsafe path: symlink inside .git refused.")
 
-    for base in (dot_git / "refs", dot_git / "logs" / "refs"):
-        if not os.path.lexists(base):
-            continue
-        if os.path.islink(base) or not stat.S_ISDIR(os.lstat(base).st_mode):
-            raise ValueError("Unsafe path: symlink in ref path refused.")
-        cur = base
-        for part in ("finolabs", "restore"):
-            cur = cur / part
-            if not os.path.lexists(cur):
-                break
-            st = os.lstat(cur)
-            if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
+        for base in (git_dir / "refs", git_dir / "logs" / "refs"):
+            if not os.path.lexists(base):
+                continue
+            if os.path.islink(base) or not stat.S_ISDIR(os.lstat(base).st_mode):
                 raise ValueError("Unsafe path: symlink in ref path refused.")
-        else:
-            with os.scandir(cur) as entries:
-                for entry in entries:
-                    if entry.is_symlink() or entry.is_dir(follow_symlinks=False):
-                        raise ValueError("Unsafe path: symlink in ref path refused.")
-            if name is not None and os.path.lexists(cur / name):
-                ref_stat = os.lstat(cur / name)
-                if stat.S_ISLNK(ref_stat.st_mode) or not stat.S_ISREG(ref_stat.st_mode):
+            cur = base
+            for part in ("finolabs", "restore"):
+                cur = cur / part
+                if not os.path.lexists(cur):
+                    break
+                st = os.lstat(cur)
+                if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
                     raise ValueError("Unsafe path: symlink in ref path refused.")
+            else:
+                with os.scandir(cur) as entries:
+                    for entry in entries:
+                        if entry.is_symlink() or entry.is_dir(follow_symlinks=False):
+                            raise ValueError("Unsafe path: symlink in ref path refused.")
+                if name is not None and os.path.lexists(cur / name):
+                    ref_stat = os.lstat(cur / name)
+                    if stat.S_ISLNK(ref_stat.st_mode) or not stat.S_ISREG(ref_stat.st_mode):
+                        raise ValueError("Unsafe path: symlink in ref path refused.")
+    return dot_git
 
 
 def find_repo_root(cwd=None):
@@ -119,8 +139,10 @@ def find_repo_root(cwd=None):
     if found is None:
         return None
 
-    check_no_symlinks(found)
-    check_no_symlinks(start)
+    check_no_symlinks(start, found)
+    found = found.resolve()
+    if not start.resolve().is_relative_to(found):
+        raise ValueError("Unsafe path: working directory is outside the repository root.")
     check_git_dir_and_refs(found)
     return found
 
@@ -143,13 +165,14 @@ def run_git(repo_root, args, extra_env=None, check=True):
     if extra_env:
         env.update(extra_env)
     result = subprocess.run(
-        ["git", "-c", "core.quotePath=false", *args],
+        ["git", "-c", "core.quotePath=false", "-c", "core.hooksPath=/dev/null",
+         "-c", "core.fsmonitor=false", *args],
         cwd=str(repo_root),
         env=env,
         shell=False,
         capture_output=True,
         check=False,
-        timeout=15,
+        timeout=120 if args and args[0] in ("add", "checkout-index") else 15,
     )
     if check and result.returncode != 0:
         msg = clean_text(result.stderr.decode("utf-8", errors="replace").strip())
@@ -165,12 +188,14 @@ def temp_index_env(repo_root, seed_from_real=True):
         os.chmod(tmpdir, 0o700)
         temp_index = os.path.join(tmpdir, "index")
         env = {"GIT_INDEX_FILE": temp_index}
-        real_index = repo_root / ".git" / "index"
+        real_index = check_git_dir_and_refs(repo_root) / "index"
         if seed_from_real and os.path.lexists(real_index):
             st = os.lstat(real_index)
             if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
                 raise ValueError("Unsafe path: .git/index must be a regular file.")
             shutil.copyfile(real_index, temp_index, follow_symlinks=False)
+            # Keep Git's racy-index timestamp so same-size edits are rehashed.
+            os.utime(temp_index, ns=(st.st_atime_ns, st.st_mtime_ns), follow_symlinks=False)
             os.chmod(temp_index, 0o600)
         else:
             run_git(repo_root, ["read-tree", "--empty"], extra_env=env)
@@ -340,14 +365,17 @@ def cmd_restore(repo_root, name, yes=False, digest_arg=None):
         print(f"Restore point {clean_text(name)} not found; nothing written.")
         return 0
 
+    point_oid = verify.stdout.decode("utf-8").strip()
+    if not OID_RE.fullmatch(point_oid):
+        raise RuntimeError("Invalid restore point commit object.")
     current_tree, _ = build_working_tree(repo_root)
     stat_raw = run_git(
-        repo_root, ["diff", "--no-renames", "--stat", current_tree, ref]
+        repo_root, ["diff", "--no-renames", "--stat", "--stat-width=120", "--stat-name-width=80", current_tree, point_oid]
     ).stdout.decode("utf-8", errors="replace")
     stat_lines = [clean_text(line) for line in stat_raw.splitlines() if line.strip()]
 
     ns_raw = run_git(
-        repo_root, ["diff", "--no-renames", "--name-status", "-z", current_tree, ref]
+        repo_root, ["diff", "--no-renames", "--name-status", "-z", current_tree, point_oid]
     ).stdout
     tokens = [tok.decode("utf-8", errors="replace") for tok in ns_raw.split(b"\0") if tok]
     changes = []
@@ -356,6 +384,8 @@ def cmd_restore(repo_root, name, yes=False, digest_arg=None):
     for i in range(0, len(tokens) - 1, 2):
         status = clean_text(tokens[i])
         filepath = clean_text(tokens[i + 1])
+        if len(filepath) > 80:
+            filepath = filepath[:77] + "..."
         changes.append((status, filepath))
         if status.startswith(("M", "T")):
             overwritten.append(filepath)
@@ -388,7 +418,7 @@ def cmd_restore(repo_root, name, yes=False, digest_arg=None):
     )
 
     preview_text = "\n".join(preview_lines)
-    digest = hashlib.sha256(preview_text.encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{point_oid}\n{current_tree}\n{preview_text}".encode("utf-8")).hexdigest()
     print(preview_text)
     print(f"Digest: {digest}")
 
@@ -400,11 +430,18 @@ def cmd_restore(repo_root, name, yes=False, digest_arg=None):
         print("Digest missing or mismatched; nothing written.")
         return 0
 
-    check_target_paths_no_symlinks(repo_root, ref)
+    check_target_paths_no_symlinks(repo_root, point_oid)
     _, pre_ref, _, _ = create_point(repo_root, suffix="pre-restore")
-    with temp_index_env(repo_root, seed_from_real=False) as env:
-        run_git(repo_root, ["read-tree", ref], extra_env=env)
-        run_git(repo_root, ["checkout-index", "-a", "-f", "--prefix="], extra_env=env)
+    try:
+        with temp_index_env(repo_root, seed_from_real=False) as env:
+            run_git(repo_root, ["read-tree", point_oid], extra_env=env)
+            run_git(repo_root, ["checkout-index", "-a", "-f", "--prefix="], extra_env=env)
+    except (subprocess.SubprocessError, OSError, RuntimeError, UnicodeError, ValueError) as exc:
+        raise RuntimeError(
+            f"Restore failed: {clean_text(str(exc))}; saved pre-restore point {pre_ref}; "
+            "the tree may be partly restored; restoring that point undoes changes to captured files. "
+            "Extra files are kept; symlinked paths require manual review."
+        ) from exc
     print(f"Saved pre-restore point {pre_ref} and restored {ref}.")
     return 0
 
@@ -438,7 +475,7 @@ def main(argv=None, cwd=None):
             return cmd_list(repo_root)
         if args.action == "restore":
             return cmd_restore(repo_root, args.name, yes=args.yes, digest_arg=args.digest)
-    except (OSError, RuntimeError, UnicodeError, ValueError) as exc:
+    except (subprocess.SubprocessError, OSError, RuntimeError, UnicodeError, ValueError) as exc:
         line = clean_text(str(exc)).splitlines()[0] if str(exc) else "Restore point unavailable; nothing written."
         print(line)
         return 0

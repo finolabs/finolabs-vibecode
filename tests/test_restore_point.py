@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "skills/fnl-restore-point/scripts/restore_point.py"
@@ -292,6 +293,265 @@ class RestorePointTest(unittest.TestCase):
                 self.assertFalse(restore_point.validate_name(invalid))
                 out = self.run_cli("restore", invalid)
                 self.assertIn("Invalid restore point name; nothing written.", out)
+
+    def test_action_errors_are_plain_lines_with_success_exit(self):
+        for action in ("create", "list", "restore"):
+            args = [action] + (["20261105T120000Z"] if action == "restore" else [])
+            for error in (subprocess.TimeoutExpired("git", 15),
+                          subprocess.SubprocessError("failed\nsecond line"),
+                          OSError("unavailable\nsecond line"), RuntimeError("git failed")):
+                with self.subTest(action=action, error=type(error).__name__):
+                    buf = io.StringIO()
+                    with mock.patch.object(restore_point, "run_git", side_effect=error), redirect_stdout(buf):
+                        self.assertEqual(restore_point.main(args, cwd=self.repo), 0)
+                    self.assertEqual(len(buf.getvalue().splitlines()), 1)
+                    self.assertNotIn("Traceback", buf.getvalue())
+        self.run_cli("unknown-action", expected_rc=2)
+
+    def test_temporary_index_preserves_racy_timestamp(self):
+        self.git("config", "core.trustctime", "false")
+        file = self.repo / "file.txt"
+        file.write_text("first\n")
+        stamp = 1700000000
+        os.utime(file, (stamp, stamp))
+        self.git("add", ".")
+        index = self.repo / ".git" / "index"
+        os.utime(index, (stamp, stamp))
+        index_before = index.read_bytes()
+        file.write_text("other\n")
+        os.utime(file, (stamp, stamp))
+        point = self.parse_created_name(self.run_cli("create"))
+        self.assertEqual(self.git("show", restore_point.REF_PREFIX + point + ":file.txt"), "other\n")
+        self.assertEqual(index.read_bytes(), index_before)
+        self.assertEqual(index.stat().st_mtime, stamp)
+
+    def test_git_call_limits_and_hardening(self):
+        result = subprocess.CompletedProcess([], 0, stdout=b"", stderr=b"")
+        for args, timeout in ((["add", "-A", "--", "."], 120),
+                              (["checkout-index", "-a", "-f"], 120),
+                              (["write-tree"], 15), (["for-each-ref"], 15)):
+            with self.subTest(args=args), mock.patch.object(restore_point.subprocess, "run", return_value=result) as run:
+                restore_point.run_git(self.repo, args)
+                self.assertEqual(run.call_args.kwargs["timeout"], timeout)
+                argv = run.call_args.args[0]
+                for setting in ("core.hooksPath=/dev/null", "core.fsmonitor=false"):
+                    self.assertIn(setting, argv)
+                    self.assertEqual(argv[argv.index(setting) - 1], "-c")
+        failed = subprocess.CompletedProcess([], 1, stdout=b"", stderr=b"git failed\n")
+        with mock.patch.object(restore_point.subprocess, "run", return_value=failed):
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                self.assertEqual(restore_point.main(["create"], cwd=self.repo), 0)
+            self.assertEqual(buf.getvalue(), "git failed\n")
+
+    def test_failures_after_pre_restore_report_recovery_point(self):
+        (self.repo / "file.txt").write_text("saved\n")
+        added_file = self.repo / "target-only.txt"
+        added_file.write_text("added by checkout\n")
+        point = self.parse_created_name(self.run_cli("create"))
+        real_run_git = restore_point.run_git
+        for command in ("read-tree", "checkout-index"):
+            for error in (subprocess.TimeoutExpired("git", 120),
+                          subprocess.SubprocessError("git failed"), OSError("disk failed"),
+                          RuntimeError("git command failed")):
+                with self.subTest(command=command, error=type(error).__name__):
+                    added_file.unlink(missing_ok=True)
+                    (self.repo / "file.txt").write_text("before\n")
+                    digest = self.parse_digest(self.run_cli("restore", point))
+                    refs_before = self.git("for-each-ref", "--format=%(refname)", "refs/finolabs/restore").splitlines()
+                    def fail_after_snapshot(root, args, **kwargs):
+                        if args[0] == command and (command != "read-tree" or args[1] != "--empty"):
+                            if command == "checkout-index":
+                                (self.repo / "file.txt").write_text("partly restored\n")
+                                added_file.write_text("added by checkout\n")
+                            raise error
+                        return real_run_git(root, args, **kwargs)
+                    buf = io.StringIO()
+                    with mock.patch.object(restore_point, "run_git", side_effect=fail_after_snapshot), redirect_stdout(buf):
+                        rc = restore_point.main(["restore", point, "--yes", "--digest", digest], cwd=self.repo)
+                    self.assertEqual(rc, 0)
+                    refs_after = self.git("for-each-ref", "--format=%(refname)", "refs/finolabs/restore").splitlines()
+                    added = set(refs_after) - set(refs_before)
+                    self.assertEqual(len(added), 1)
+                    pre_ref = added.pop()
+                    line = buf.getvalue().splitlines()[-1]
+                    self.assertIn(pre_ref, line)
+                    self.assertIn("may be partly restored", line)
+                    self.assertIn("restoring that point undoes", line)
+                    self.assertIn("Extra files are kept; symlinked paths require manual review.", line)
+                    self.assertNotIn("Traceback", buf.getvalue())
+                    pre_name = pre_ref.removeprefix(restore_point.REF_PREFIX)
+                    recovery_digest = self.parse_digest(self.run_cli("restore", pre_name))
+                    self.run_cli("restore", pre_name, "--yes", "--digest", recovery_digest)
+                    self.assertEqual((self.repo / "file.txt").read_text(), "before\n")
+                    self.assertEqual(added_file.exists(), command == "checkout-index")
+
+    def test_linked_worktree_create_list_restore_preserves_index(self):
+        (self.repo / "file.txt").write_text("saved\n")
+        (self.repo / "tracked.log").write_text("tracked despite ignore\n")
+        self.git("add", ".")
+        self.git("commit", "-qm", "initial")
+        linked = self.base / "worktree"
+        self.git("worktree", "add", "-qb", "linked", str(linked))
+        (linked / ".gitignore").write_text("*.log\n")
+        index = Path(self.git("rev-parse", "--git-path", "index", cwd=linked).strip())
+        index_before = index.read_bytes()
+        head_before = self.git("rev-parse", "HEAD", cwd=linked)
+        point = self.parse_created_name(self.run_cli("create", cwd=linked))
+        self.assertIn(point, self.run_cli("list", cwd=linked))
+        self.assertEqual(self.git("show", restore_point.REF_PREFIX + point + ":tracked.log"), "tracked despite ignore\n")
+        (linked / "file.txt").write_text("changed\n")
+        digest = self.parse_digest(self.run_cli("restore", point, cwd=linked))
+        output = self.run_cli("restore", point, "--yes", "--digest", digest, cwd=linked)
+        self.assertIn("-pre-restore", output)
+        self.assertEqual((linked / "file.txt").read_text(), "saved\n")
+        self.assertEqual(index.read_bytes(), index_before)
+        self.assertEqual(self.git("rev-parse", "HEAD", cwd=linked), head_before)
+        # Shared refs must receive the same symlink checks as an ordinary repository.
+        refs = self.repo / ".git" / "refs" / "finolabs" / "restore"
+        (refs / "20200101T000000Z").symlink_to(self.base / "missing")
+        self.assertIn("Unsafe path", self.run_cli("create", cwd=linked))
+
+    def test_submodule_git_file_works(self):
+        (self.repo / "file.txt").write_text("saved\n")
+        self.git("add", ".")
+        self.git("commit", "-qm", "initial")
+        parent = self.base / "parent"
+        parent.mkdir()
+        self.git("init", "-q", cwd=parent)
+        self.git("-c", "protocol.file.allow=always", "submodule", "add", "-q", str(self.repo), "child", cwd=parent)
+        child = parent / "child"
+        self.assertTrue((child / ".git").is_file())
+        point = self.parse_created_name(self.run_cli("create", cwd=child))
+        self.assertIn(point, self.run_cli("list", cwd=child))
+        (child / "file.txt").write_text("changed\n")
+        digest = self.parse_digest(self.run_cli("restore", point, cwd=child))
+        self.run_cli("restore", point, "--yes", "--digest", digest, cwd=child)
+        self.assertEqual((child / "file.txt").read_text(), "saved\n")
+
+    def test_symlinked_parent_allowed_but_descendant_refused(self):
+        parent_link = self.base / "parent-link"
+        parent_link.symlink_to(self.base, target_is_directory=True)
+        alias = parent_link / "repo"
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.assertEqual(restore_point.main(["create"], cwd=alias), 0)
+        self.parse_created_name(buf.getvalue())
+        self.parse_created_name(self.run_cli("create", cwd=alias, extra_env={"PWD": str(alias)}))
+        (self.repo / "real").mkdir()
+        (self.repo / "alias").symlink_to(self.repo / "real", target_is_directory=True)
+        self.assertIn("Unsafe path", self.run_cli("create", cwd=self.repo / "alias", extra_env={"PWD": str(self.repo / "alias")}))
+
+    def test_invalid_git_files_are_refused(self):
+        fake = self.base / "fake"
+        fake.mkdir()
+        for content in ("invalid\n", "gitdir: missing\n", "gitdir: \n",
+                        "gitdir: " + str(self.repo / ".git") + "\nextra\n",
+                        "gitdir: " + str(self.repo / ".git" / "HEAD") + "\n"):
+            with self.subTest(content=content):
+                (fake / ".git").write_text(content)
+                self.assertIn("Unsafe path", self.run_cli("create", cwd=fake))
+        (fake / ".git").write_text("gitdir: " + str(self.repo / ".git") + "\n")
+        with mock.patch.object(restore_point.os, "getuid", return_value=os.getuid() + 1):
+            with self.assertRaisesRegex(ValueError, "owned"):
+                restore_point.check_git_dir_and_refs(fake)
+
+    def test_digest_binds_content_even_when_preview_is_identical(self):
+        file = self.repo / "file.txt"
+        file.write_text("saved\n")
+        point = self.parse_created_name(self.run_cli("create"))
+        file.write_text("first\n")
+        preview = self.run_cli("restore", point)
+        digest = self.parse_digest(preview)
+        file.write_text("other\n")
+        next_preview = self.run_cli("restore", point)
+        self.assertEqual(preview.split("Digest:")[0], next_preview.split("Digest:")[0])
+        self.assertNotEqual(digest, self.parse_digest(next_preview))
+        refs_before = self.git("for-each-ref")
+        output = self.run_cli("restore", point, "--yes", "--digest", digest)
+        self.assertIn("Digest missing or mismatched; nothing written.", output)
+        self.assertEqual(file.read_text(), "other\n")
+        self.assertEqual(self.git("for-each-ref"), refs_before)
+
+    def test_digest_binds_restore_commit(self):
+        (self.repo / "file.txt").write_text("saved\n")
+        point = self.parse_created_name(self.run_cli("create"))
+        ref = restore_point.REF_PREFIX + point
+        digest = self.parse_digest(self.run_cli("restore", point))
+        tree = self.git("rev-parse", ref + "^{tree}").strip()
+        replacement = self.git("commit-tree", tree, "-m", "replacement commit").strip()
+        self.git("update-ref", ref, replacement)
+        output = self.run_cli("restore", point, "--yes", "--digest", digest)
+        self.assertIn("Digest missing or mismatched; nothing written.", output)
+        self.assertEqual(len(self.run_cli("list").splitlines()), 1)
+
+    def test_repository_fsmonitor_and_reference_hook_do_not_run(self):
+        (self.repo / "file.txt").write_text("saved\n")
+        monitor = self.repo / ".git" / "monitor"
+        hook = self.repo / ".git" / "hooks" / "reference-transaction"
+        for script, marker in ((monitor, "monitor-ran"), (hook, "hook-ran")):
+            script.write_text("#!/bin/sh\ntouch .git/" + marker + "\n")
+            script.chmod(0o700)
+        self.git("config", "core.fsmonitor", str(monitor))
+        point = self.parse_created_name(self.run_cli("create"))
+        self.assertIn(point, self.run_cli("list"))
+        (self.repo / "file.txt").write_text("changed\n")
+        digest = self.parse_digest(self.run_cli("restore", point))
+        self.run_cli("restore", point, "--yes", "--digest", digest)
+        for marker in ("monitor-ran", "hook-ran"):
+            self.assertFalse((self.repo / ".git" / marker).exists(), marker)
+
+    def test_long_filenames_are_bounded_in_preview(self):
+        names = [str(i) + "x" * 199 for i in range(3)]
+        for name in names:
+            (self.repo / name).write_text("saved\n")
+        point = self.parse_created_name(self.run_cli("create"))
+        for name in names:
+            (self.repo / name).write_text("changed\n")
+        preview = self.run_cli("restore", point)
+        for name in names:
+            self.assertNotIn(name, preview)
+            self.assertIn(name[:77] + "...", preview)
+        status_names = [line.split("\t", 1)[1] for line in preview.splitlines() if "\t" in line]
+        self.assertEqual([len(name) for name in status_names], [80] * 3)
+        self.assertLessEqual(max(map(len, preview.splitlines())), 300)
+
+    def test_preview_limits_more_than_ten_files(self):
+        for i in range(15):
+            (self.repo / f"file-{i:02}.txt").write_text("saved\n")
+        point = self.parse_created_name(self.run_cli("create"))
+        for i in range(15):
+            (self.repo / f"file-{i:02}.txt").write_text("changed\n")
+        preview = self.run_cli("restore", point)
+        self.assertEqual(sum("\t" in line for line in preview.splitlines()), 10)
+        self.assertIn("... (5 more files)", preview)
+        self.assertIn("... (7 more stat lines)", preview)
+        self.assertIn("(+3 more)", preview)
+
+    def test_restore_refuses_working_tree_symlink_without_touching_outside(self):
+        file = self.repo / "file.txt"
+        file.write_text("saved\n")
+        point = self.parse_created_name(self.run_cli("create"))
+        outside = self.base / "outside.txt"
+        outside.write_text("outside unchanged\n")
+        file.unlink()
+        file.symlink_to(outside)
+        digest = self.parse_digest(self.run_cli("restore", point))
+        refs_before = self.git("for-each-ref")
+        output = self.run_cli("restore", point, "--yes", "--digest", digest)
+        self.assertIn("Unsafe path: symlink in working tree refused.", output)
+        self.assertTrue(file.is_symlink())
+        self.assertEqual(outside.read_text(), "outside unchanged\n")
+        self.assertEqual(self.git("for-each-ref"), refs_before)
+
+    def test_skill_documents_config_and_local_secret_capture(self):
+        text = (ROOT / "skills/fnl-restore-point/SKILL.md").read_text()
+        self.assertIn("makes no network call itself", text)
+        self.assertIn("configuration can still make git run its filters", text)
+        self.assertIn(".env", text)
+        self.assertIn("mirror clone or bundle", text)
+        self.assertIn("never push `refs/finolabs/*`", text)
+        self.assertIn("The 20 skill folders", (ROOT / "skills/fnl-ask/references/map.md").read_text())
 
     def test_script_source_uses_no_network_push_or_fetch(self):
         source = SCRIPT.read_text(encoding="utf-8").lower()
