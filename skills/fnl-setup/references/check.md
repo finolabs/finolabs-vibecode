@@ -23,7 +23,7 @@ Basis: the research recorded in the spec for package 11 (`docs/specs/release-0.1
 | --- | --- | --- | --- |
 | I1 | Length | S | Each file at most 150 lines (warn above, house rule); fail above 200 (Anthropic's target for Claude Code). |
 | I2 | Codex chain | S | Override or user file plus project files from the root to the working folder total at most 32,768 bytes; a custom `project_doc_max_bytes` is unverified (config is not read). |
-| I3 | Antigravity size | S | Each file at most 24,000 bytes after in-root includes; global plus always-on files at most about 80,000 bytes (an estimate of 20,000 tokens, labelled so). |
+| I3 | Antigravity size | S | Each file at most 24,000 bytes after in-root includes; global rules plus rules with `trigger: always_on` at most about 80,000 bytes (an estimate of 20,000 tokens, labelled so). |
 | I4 | Includes | S | Each include names an existing instruction file inside the repository or the host's instruction folder, uses the host's syntax, is outside code fences and at most four hops deep; an absolute, `~`, `..` or outside-symlink include is reported "outside root" and never read. |
 | I5 | Duplicates | S | No line of at least 40 characters repeats across files unless a file records the other as its source. |
 | I6 | Secrets | S | No secret-looking string (key and token patterns, password assignments, private-key headers) in any instruction file or its `.bak-*` backup. |
@@ -32,7 +32,7 @@ Basis: the research recorded in the spec for package 11 (`docs/specs/release-0.1
 | I9 | Commands | S | The project file has a commands heading or code span with build, test and lint commands, including how to run one test. Presence only; existence of the commands is unverified. |
 | I10 | Vague lines | S | Count lines with phrases such as "be careful", "best practices", "properly", "clean code"; each is a candidate for I11. |
 | I11 | Emphasis | S | At most five capitalized emphasis words (CRITICAL, MUST, ALWAYS, NEVER, IMPORTANT) per file; each also needs a stated reason (judge, J). |
-| I12 | Layout | S | Report an `AGENTS.override.md`, Antigravity rule files without a valid `trigger`, and instruction files in a subfolder below the workspace that Antigravity does not load. |
+| I12 | Layout | S | Report an `AGENTS.override.md`; each Antigravity rule file in `.agents/rules/` or `~/.gemini/config/rules/` must start with YAML frontmatter whose `trigger` is one of `always_on`, `model_decision`, `glob` or `manual` (a missing or other value means the rule is silently discarded), with `description` present for `model_decision` and `globs` (or `glob`) present for `glob`; report files nested in a rules subfolder and instruction files in a subfolder below the workspace, which Antigravity does not load. |
 | I13 | Age | S | Warn when a file's last change is older than 90 days; maintainer notes belong in HTML comments (Claude Code strips them). |
 | I14 | Names | S | Skill names starting with `fnl-` resolve to a current skill; retired names are findings (existing check). |
 | I15 | Inferable content | J | Would the agent get this line from the repository or by default (directory tree, architecture tour, generic language style)? If yes, fail. |
