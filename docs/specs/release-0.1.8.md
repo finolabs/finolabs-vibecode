@@ -1,6 +1,6 @@
 # Release 0.1.8: spec and plan
 
-Status: scope and plan settled by the owner on 2026-11-05 (the open decisions are recorded under "Decisions settled"). Merged: packages 1 (pull request 58), 2 (61), 3 (62), 5 (60), 9 (63) and 10 (64). Added later: 11 (instruction standard) and 12 (judge metrics). Not started: 4, 6, 7, 8, 11, 12 and the native sweep follow-up. Release 0.1.7 is tagged; `main` is `0.1.8-dev`.
+Status: scope and plan settled by the owner on 2026-11-05 (the open decisions are recorded under "Decisions settled"). Merged: packages 1 (pull request 58), 2 (61), 3 (62), 5 (60), 9 (63) and 10 (64). Added later: 11 (instruction standard) 12 (judge metrics) and 13 (quota probe). Not started: 4, 6, 7, 8, 12, 13 and the native sweep follow-up. Release 0.1.7 is tagged; `main` is `0.1.8-dev`.
 
 ## Why
 
@@ -29,6 +29,7 @@ In, by package (Plan below gives order and dependencies):
 | 10 | Name every background run by its runner and what it does | merged (pull request 64) |
 | 11 | Instruction files to a researched standard, with an instruction checklist in Check | feature |
 | 12 | Judge metrics in the status dashboard | feature |
+| 13 | Quota probe: a cached read of each agent's usage limits every 4 hours | feature, policy change |
 
 Out of 0.1.8, recorded so it is not lost: **multiple accounts** per host (needs each host's real support and a second account to verify; the open points are what each host supports, how quota fallback picks an account since quota is per account, where account facts live (host config, never skill bodies), and that any metrics field stays metadata with no identity and goes through `SCHEMA` and `PRIVACY.md`). A research spike may start it later; it is not scheduled.
 
@@ -194,6 +195,31 @@ Not measured, said on the page: cost or spend (the `typesafe-ai` spend guard own
 
 Acceptance: `SCHEMA` and `valid_event` tests for the new event (accepts the enumerations, rejects extra fields, free text and the impossible pairs above); a hook test that a `record.py judge` command is recorded and a malformed one is not; the parity test; a test that the event carries no repository, file or path field beyond the shared `repo` code and that `site` is never joined to a file identity; the receipt command prints its line and writes nothing itself; the dashboard test shows the group only with judge receipts, computes each share from synthetic events and ledger lines, and holds the open-ring rule; `PRIVACY.md` and the usage-metrics spec updated and a test pins the field list in both. Verified on which host: the hook records receipts on Claude Code and Codex as for the router receipt; Antigravity as that receipt does.
 
+## Package 13: quota probe
+
+Problem: `fnl-delegate` routes by quota, but the only source is what the user says. Each of the three hosts has a read-only way to read its usage limits, verified on 2026-11-05 on this machine at no token cost:
+
+| Host | Command | Output |
+| --- | --- | --- |
+| Antigravity | `agy -p /usage --output-format json` | structured: per group `remaining_fraction`, `reset_time`, window |
+| Claude Code | `claude -p "/usage" --output-format json` (a second install through `CLAUDE_CONFIG_DIR=<its folder>`; the work install, `~/.claude-work`, answered with its own account's numbers) | a text `result`: "Current session: N% used, resets <time>", "Current week (all models): N% used, resets <time>" and one line per model family; no structured field |
+| Codex | `codex app-server` over stdio, JSON-RPC `initialize`, `initialized`, then `account/rateLimits/read` | structured: `rateLimits.primary` (and `secondary`) with `usedPercent`, `windowDurationMins`, `resetsAt` (epoch), plus plan and credit fields the cache must not keep |
+
+A cached reading tells the coordinator which agent and model pool still has room. Each parser accepts only the documented shape, and anything else leaves that agent `unverified`. A user with two Claude Code installs lists each config folder in the `## Quota probe` section; each is probed and cached separately under its label.
+
+Design:
+
+- **Opt-in and consent.** Off by default. Setup (`fnl-setup` section A, after the scan) offers it only for agents recorded present, in plain words: "Every 4 hours a background step runs each agent's own read-only usage command (`agy`, `claude`, `codex`) to read your usage limits; those programs contact their providers with your own accounts, and the plugin sends nothing about you." The answer is a line in host config, `- Quota probe: on` or `off`, with the date, in a new `## Quota probe` section, beside the agents to probe and, for Claude Code, the config folders (a plain list of absolute folders, each checked to be an absolute path owned by the user). `FNL_QUOTA_PROBE=off` turns it off; nothing in the environment turns it on. As with the auto gate, the opt-in is read only from the canonical `<pwd home>/.finolabs/vibecode/host.md`, opened with per-component ownership and no-follow checks, and ignores `HOME`, `ORCHESTRATION_HOST_CONFIG` and `XDG_CONFIG_HOME`, because a repository can set those through project settings.
+- **Cadence and trigger.** The session-start hook and the `PostToolUse` hook that already exist (no new hook entry, so no new Codex trust prompt) read `quota.json` in the state folder. When it is missing or its `measured` time is older than 4 hours, and no worker is in flight, the hook starts one detached worker and never waits for it; the hook exits 0 and fails closed, like the update check. A failed run backs off for 30 minutes before the next attempt and records only the error class, never its text.
+- **Worker.** Runs only the three fixed commands in the table, one after another, for each agent the user listed present in the probe section: the executable (`agy`, `claude`, `codex`) found on absolute `PATH` folders only, a fixed argv, no shell, a 30-second timeout each, output read to at most 64 KiB, parsed and validated against fixed fields. The Claude command runs once per configured config folder with that `CLAUDE_CONFIG_DIR`, and the Codex command speaks only the three JSON-RPC messages above to the child's stdio. Nothing else is run and nothing is sent. Recursion guard: the child environment sets `FNL_QUOTA_WORKER=1` and `FNL_METRICS=off`; every hook of this plugin exits at once when `FNL_QUOTA_WORKER` is set, so the Claude command's own session start can never start a worker or record a session. It writes `quota.json` atomically (mode 0600, state folder) with `measured` (UTC time) and, per agent and config label, `source` (`agy-usage`, `claude-usage`, `codex-rate-limits`) and the groups: `name` (printable, at most 60 characters), `window` (`5h`, `weekly` or `unknown`), `used_fraction` or `remaining_fraction` normalized to `remaining_fraction` (0 to 1) and `reset_time` (UTC time). No identity, account id, email, plan name, credit or token field is kept, and the Codex reply's account and credit fields are dropped before anything is stored. An in-flight marker (a timestamp file, stale after 5 minutes) keeps at most one worker running.
+- **Use by routing.** `fnl-delegate` "Route" step 4 reads `quota.json`: an agent or pool whose latest reading is below 10% remaining, with its reset time still ahead, counts as out of quota and is not offered (for Claude Code, the weekly all-models line decides, and a second install is its own entry); a reading older than 8 hours is `unverified` and excludes nothing; the user's own statement about quota wins; the file is evidence for agent judgment, so the rule is advisory and says so. The pool-to-model mapping stays in `models.md`.
+- **Visible.** `/fnl-scan-agents` and Check show the last measured time and the pools; the dashboard shows nothing new.
+- **Privacy and policy.** `PRIVACY.md` lists `quota.json` and the opt-in, and says the plugin itself makes no network call: the user's own `agy`, `claude` and `codex` programs do. `CLAUDE.md` gains a scoped exception beside the update-check rule (owner decision 05/11/2026), merged through the review gate before any code lands, saying the opt-in probe runs those three fixed read-only commands and no other.
+
+Enforcers: the opt-in, the fixed argv, the size and time limits, the validation and the 4-hour throttle are enforced by the worker's code and tests; the routing use is agent judgment (advisory).
+
+Acceptance: tests with fake `agy`, `claude` and `codex` executables on a temporary `PATH`: no run without `Quota probe: on` read from the canonical file (a decoy `HOME` and `ORCHESTRATION_HOST_CONFIG` with `on` is ignored); `FNL_QUOTA_PROBE=off` stops it; a fresh cache starts nothing; a stale cache starts exactly one worker and the hook returns without waiting; a second hook while a worker is in flight starts none; the worker rejects oversized, non-JSON and out-of-range output and writes nothing then; the 30-minute backoff; `quota.json` has exactly the listed fields and mode 0600; a relative or non-absolute `PATH` entry is ignored; the worker never runs any other argument; each parser accepts its recorded sample and rejects a changed shape (the text of the Claude output with a missing line, a Codex reply without `primary`) as `unverified`; Codex account, email and credit fields never reach `quota.json`; the child gets `FNL_QUOTA_WORKER=1` and `FNL_METRICS=off`, and a hook run with `FNL_QUOTA_WORKER` set exits at once without starting a worker or recording; two Claude config folders are cached under separate labels, and a config folder that is relative or not owned by the user is refused. A routing test pins the thresholds and that the cache is advisory. Not verified: the hook-started worker surviving each host's session end, the Claude text format across versions (the parser is tied to the recorded sample and says `unverified` otherwise), and Windows.
+
 ## Plan
 
 Writers: one writer and one worktree per package; coordinator merges. Effort `medium` except package 7's design and package 8's restore design (`high`). Every pull request gets a posted code review and security review (`fnl-review-gate`); packages 3 and 5 touch only documents and the checker and may take the low-risk lane only where `merge_check.py --lane` says so (the checker script is not a lane path, so package 3 goes to both reviewers).
@@ -208,7 +234,8 @@ Writers: one writer and one worktree per package; coordinator merges. Effort `me
 | 5 | 7 design note, then code | 4 (both touch the hooks) | hooks, `CLAUDE.md`, `fnl-delegate` |
 | 6 | 8 restore point, then demo | 0 | new skill folder, `fnl-ask`, README, file tree |
 | 7 | 11 instruction standard and Check checklist, then 12 | 3, 4 (the sweep and package 6 both edit `skills/fnl-setup`, `check.md` and `checkup.py`) | `skills/fnl-setup-instructions`, `skills/fnl-setup` (`SKILL.md`, `check.md`, `route-judge.md`, `checkup.py`), the route-judgment reference of `fnl-delegate`; package 12 adds `scripts/fnl_metrics.py` and its copies, `scripts/metrics_hook.py`, both `record.py` copies, `skills/fnl-delegate/scripts/ledger.py`, `skills/fnl-status`, `PRIVACY.md` |
-| 8 | Release 0.1.8 | all merged, full suite and evals run once | manifests, CHANGELOG |
+| 8 | 13 quota probe | 12 (it extends `metrics_hook.py`), and the `CLAUDE.md` exception merged | `scripts/metrics_hook.py`, a new worker script, `skills/fnl-delegate`, `skills/fnl-setup`, `skills/fnl-scan-agents`, `PRIVACY.md` |
+| 9 | Release 0.1.8 | all merged, full suite and evals run once | manifests, CHANGELOG |
 
 Release 0.1.8 follows `fnl-versioning`: a release pull request (manifest versions and CHANGELOG), an annotated tag after CI, a GitHub release, the catalog pin pull request (package 5), then the bump to `0.1.9-dev`. Pushes, merges, the catalog pull request and the release each need the owner's go.
 
@@ -233,6 +260,7 @@ Asked of the owner through the native question form on 2026-11-05; each took the
 5. **Package 10 (run names):** added at the owner's go on 2026-11-05, after a proposal that the rule live in `fnl-session-hygiene` "Titles" and not in the user contract.
 6. **Package 11 (instruction standard):** added at the owner's request on 2026-11-05. Scope full (guidance and script checks); lengths warn at 150 lines and fail at 200, plus the Codex and Antigravity byte limits; non-script items are a checklist with stated criteria, graded by the route judge (Jev through `typesafe-ai`) first and by the agent as fallback, with `/doctor prompt-audit` suggested on Claude Code.
 7. **Package 12 (judge metrics):** added at the owner's request on 2026-11-05; in 0.1.8 as its own package, receipt plus dashboard group, metadata only.
+8. **Package 13 (quota probe):** added at the owner's request on 2026-11-05. Opt-in, every 4 hours, started by existing hooks as a detached worker, for all three hosts and every listed Claude Code install (the work install included), commands verified on 2026-11-05, with a scoped second network exception in `CLAUDE.md`.
 
 ## Verification and limits
 
