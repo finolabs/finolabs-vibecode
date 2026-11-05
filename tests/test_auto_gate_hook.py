@@ -34,7 +34,8 @@ class AutoGateHookTest(unittest.TestCase):
         self.repo = self.home / "repo"
         self.repo.mkdir()
         (self.repo / ".git").touch()
-        self.config = self.home / "host.md"
+        self.config = self.home / ".finolabs/vibecode/host.md"
+        self.config.parent.mkdir(parents=True)
         self.config.write_text("## Delegation mode\nauto\n## Auto gate\non\n")
         self.folder = self.home / ".finolabs/vibecode/state/auto-gate"
         import hashlib
@@ -73,6 +74,60 @@ class AutoGateHookTest(unittest.TestCase):
                 self.assertEqual(self.run_hook(payload), "")
         self.assertFalse((self.home / "decoy").exists())
 
+    def decoy_config(self, source):
+        self.config.unlink()
+        decoy = self.repo / "decoy"
+        config = decoy / ".finolabs/vibecode/host.md"
+        config.parent.mkdir(parents=True)
+        config.write_text("## Delegation mode\nauto\n## Auto gate\non\n")
+        self.env["HOME"] = str(decoy)
+        if source == "override":
+            self.env["ORCHESTRATION_HOST_CONFIG"] = str(config)
+        else:
+            self.env.pop("ORCHESTRATION_HOST_CONFIG", None)
+        if source == "xdg":
+            config.rename(decoy / "host.md")
+            self.env["XDG_CONFIG_HOME"] = str(self.repo)
+            legacy = self.repo / "finolabs-vibecode"
+            legacy.mkdir()
+            (decoy / "host.md").rename(legacy / "host.md")
+
+    def test_decoy_override_cannot_opt_in_hook(self):
+        self.decoy_config("override")
+        self.assertEqual(self.run_hook(), "")
+        self.assertFalse(self.folder.exists())
+
+    def test_decoy_home_cannot_opt_in_hook(self):
+        self.decoy_config("home")
+        self.assertEqual(self.run_hook(), "")
+        self.assertFalse(self.folder.exists())
+
+    def test_decoy_xdg_cannot_opt_in_hook(self):
+        self.decoy_config("xdg")
+        self.assertEqual(self.run_hook(), "")
+        self.assertFalse(self.folder.exists())
+
+    def test_decoy_override_cannot_opt_in_writers(self):
+        self.decoy_config("override")
+        for kind in ("keep", "implement"):
+            with self.subTest(kind=kind):
+                self.run_writer(kind)
+                self.assertFalse(self.folder.exists())
+
+    def test_decoy_home_cannot_opt_in_writers(self):
+        self.decoy_config("home")
+        for kind in ("keep", "implement"):
+            with self.subTest(kind=kind):
+                self.run_writer(kind)
+                self.assertFalse(self.folder.exists())
+
+    def test_decoy_xdg_cannot_opt_in_writers(self):
+        self.decoy_config("xdg")
+        for kind in ("keep", "implement"):
+            with self.subTest(kind=kind):
+                self.run_writer(kind)
+                self.assertFalse(self.folder.exists())
+
     def test_off_values_allow_before_file_access(self):
         for value in ("off", "0", "false", "no", "OFF", "False", "NO"):
             with self.subTest(value=value):
@@ -106,6 +161,75 @@ class AutoGateHookTest(unittest.TestCase):
                 self.assertEqual(self.run_hook(), "")
                 self.assertFalse(self.folder.exists())
 
+    def test_unsafe_canonical_config_allows_without_state(self):
+        for data in (b"x" * 262145, b"\xff", b"## Auto gate\non\n## Auto gate\non\n"):
+            with self.subTest(data=data[:20]):
+                self.config.write_bytes(data)
+                self.assertEqual(self.run_hook(), "")
+                self.run_writer("keep")
+                self.run_writer("implement")
+                self.assertFalse(self.folder.exists())
+        self.config.unlink()
+        target = self.home / "target.md"
+        target.write_text("## Delegation mode\nauto\n## Auto gate\non\n")
+        self.config.symlink_to(target)
+        self.assertEqual(self.run_hook(), "")
+        self.config.unlink()
+        os.mkfifo(self.config)
+        self.assertEqual(self.run_hook(), "")
+        self.assertFalse(self.folder.exists())
+
+    def test_symlinked_canonical_config_folder_allows(self):
+        target = self.home / "config"
+        self.config.parent.rename(target)
+        self.config.parent.symlink_to(target, target_is_directory=True)
+        self.assertEqual(self.run_hook(), "")
+        self.run_writer("keep")
+        self.run_writer("implement")
+        self.assertFalse(self.folder.exists())
+
+    def test_foreign_canonical_component_allows(self):
+        for component in range(4):
+            setup = self.setup + "\n" + f'''import os
+from types import SimpleNamespace
+original = os.fstat
+calls = 0
+def foreign(fd):
+ global calls
+ info = original(fd)
+ calls += 1
+ if calls == {component + 1}:
+  return SimpleNamespace(st_uid=os.getuid() + 1, st_mode=info.st_mode, st_size=info.st_size)
+ return info
+os.fstat = foreign
+'''
+            with self.subTest(component=component):
+                self.assertEqual(self.run_hook(setup=setup), "")
+                self.assertFalse(self.folder.exists())
+
+    def test_large_first_event_does_not_consume_deny(self):
+        self.assertEqual(self.run_hook(" " * 65536 + self.payload), "")
+        self.assertFalse(self.folder.exists())
+        self.assert_deny(self.run_hook())
+
+    def test_writer_lock_contention_retries(self):
+        setup = '''import auto_gate
+original = auto_gate.fcntl.flock
+calls = 0
+def contend(*args):
+ global calls
+ calls += 1
+ if calls < 3: raise BlockingIOError()
+ return original(*args)
+auto_gate.fcntl.flock = contend
+'''
+        for kind in ("keep", "implement"):
+            with self.subTest(kind=kind):
+                self.state.unlink(missing_ok=True)
+                self.run_writer(kind, setup)
+                self.assertTrue(self.state.exists())
+                self.assertEqual(self.run_hook(), "")
+
     def test_alarm_api_failure_allows(self):
         self.assertEqual(self.run_hook(setup="import signal\ndef fail(*a): raise OSError()\nsignal.alarm = fail"), "")
 
@@ -134,7 +258,7 @@ class AutoGateHookTest(unittest.TestCase):
                 self.assertEqual(self.state.read_text(), data)
 
     def test_symlinked_folder_allows(self):
-        self.folder.parent.mkdir(parents=True)
+        self.folder.parent.mkdir(parents=True, exist_ok=True)
         self.folder.symlink_to(self.repo, target_is_directory=True)
         self.assertEqual(self.run_hook(), "")
         self.assertFalse((self.repo / self.state.name).exists())

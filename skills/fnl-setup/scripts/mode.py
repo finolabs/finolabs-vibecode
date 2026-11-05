@@ -51,12 +51,41 @@ def host_text():
         os.close(fd)
 
 
-def effective(details=False, keys=None):
+def gate_host_text():
+    """Read opt-in only from the account home, without creating any folders."""
+    import pwd
+
+    home = pwd.getpwuid(os.getuid()).pw_dir
+    if not os.path.isabs(home):
+        raise ValueError("home must be absolute")
+    fd = os.open(home, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        if os.fstat(fd).st_uid != os.getuid():
+            raise ValueError("foreign home")
+        for part in (".finolabs", "vibecode", "host.md"):
+            flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+            if part != "host.md":
+                flags |= os.O_DIRECTORY
+            child = os.open(part, flags, dir_fd=fd)
+            os.close(fd)
+            fd = child
+            info = os.fstat(fd)
+            if info.st_uid != os.getuid():
+                raise ValueError("foreign config component")
+        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_BYTES:
+            return ""
+        data = os.read(fd, MAX_BYTES + 1)
+        return data.decode("utf-8") if len(data) <= MAX_BYTES else ""
+    finally:
+        os.close(fd)
+
+
+def effective(details=False, keys=None, gate_opt_in=False):
     values = {key: DEFAULTS[key] for key in (DEFAULTS if keys is None else keys)}
     sources = {}
     overridden = {}
     try:
-        text = host_text()
+        text = gate_host_text() if gate_opt_in else host_text()
     except (OSError, UnicodeError, ValueError):
         text = ""
     # Ignore examples in fenced blocks, then collect complete second-level sections.

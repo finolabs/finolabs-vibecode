@@ -14,6 +14,10 @@ To change a preference, show the requested headings and values and write only wh
 | --- | --- |
 | `auto` | On Claude Code, the installed hook enforces the opt-in gate only with effective Delegation mode `auto`, host config `## Auto gate` set to `on`, and no environment off switch. It may deny the first file write in a repository without a decision in the last 8 hours. An implementation ledger start or keep receipt records a decision; either that decision or a prior denial allows subsequent writes within the window. Expired state can cause another single denial. Errors allow. Shell commands are not covered; this is a nudge, not an approval or security control. Elsewhere, agent judgment is advisory. |
 
+The hook and decision writers read gate opt-in only from `.finolabs/vibecode/host.md` under the account home returned by `pwd`, ignoring `HOME`, `ORCHESTRATION_HOST_CONFIG` and the legacy XDG fallback for this decision. The reader checks ownership of the home, each config folder and the regular file, refuses symlinks and caps the file at 256 KiB. Delegation mode and Routing retain the lookup above.
+
+A first hook event of 64 KiB or more is allowed without consuming the single deny. A hook killed during a state write may leave a `.auto-gate-<hex>` temporary file in the state folder. These files do not count as decisions or denials; automatic cleanup is not implemented. Stale files older than 1 hour may be removed when no writer is active.
+
 Turn the gate off with `/fnl-set-mode auto-gate off` or `FNL_AUTO_GATE=off`.
 
 ## Host limits

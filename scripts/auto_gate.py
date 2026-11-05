@@ -12,6 +12,7 @@ import os
 import pwd
 import re
 import stat
+import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -35,12 +36,13 @@ def enabled(effective):
     """Environment can disable, but only host config can opt in."""
     if os.environ.get("FNL_AUTO_GATE", "").lower() in OFF_VALUES:
         return False
-    settings = effective(keys=("delegation_mode", "auto_gate"))
-    return settings.get("delegation_mode") == "auto" and settings.get("auto_gate") == "on"
+    if effective(keys=("auto_gate",), gate_opt_in=True).get("auto_gate") != "on":
+        return False
+    return effective(keys=("delegation_mode",)).get("delegation_mode") == "auto"
 
 
 @contextmanager
-def state_folder():
+def state_folder(*, writer=False):
     home = pwd.getpwuid(os.getuid()).pw_dir
     if not os.path.isabs(home):
         raise ValueError("home must be absolute")
@@ -60,8 +62,15 @@ def state_folder():
         if stat.S_IMODE(info.st_mode) != 0o700:
             raise ValueError("state folder must be private")
         # Serialize merges and stale-file retirement without another state file.
-        # Contention fails open; os.link still exclusively claims the deny marker.
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Only writers retry contention; the hook always allows immediately.
+        for attempt in range(3 if writer else 1):
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if not writer or attempt == 2:
+                    raise
+                time.sleep(0.05)
         yield fd
     finally:
         os.close(fd)
@@ -140,7 +149,7 @@ def write_state(folder, key, state, exclusive=False):
 def write_decision(key, decision):
     if decision not in ("handoff", "keep"):
         raise ValueError("invalid decision")
-    with state_folder() as folder:
+    with state_folder(writer=True) as folder:
         state = read_state(folder, key)
         state.update(decision=decision, decided=datetime.now(timezone.utc).isoformat())
         write_state(folder, key, state)

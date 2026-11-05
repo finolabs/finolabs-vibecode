@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Print a coordinator's keep receipt.
 
-When the auto gate is enabled, this command also writes its local repository decision file.
-A failed decision write never changes the receipt or exit code. When the user has turned usage metrics on, the plugin's
-hook reads this command after it runs and records the count, the reason and who settled it
-with the session.
+When the user has turned usage metrics on, the plugin's hook reads this command
+after it runs and records the count, the reason and who settled it with the session.
+
+When the auto gate is enabled, this command also writes its local repository
+decision file. A failed decision write never changes the receipt or exit code.
 """
 
 import argparse

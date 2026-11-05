@@ -74,6 +74,27 @@ class AutoGateStateTest(unittest.TestCase):
         self.assertTrue(self.path.is_file())
         self.assertFalse((self.repo / ".finolabs").exists())
 
+    def test_writer_retries_lock_contention_only(self):
+        with mock.patch.object(self.gate.time, "sleep") as sleep, mock.patch.object(
+                self.gate.fcntl, "flock", side_effect=[BlockingIOError(), BlockingIOError(), None]) as lock:
+            self.gate.write_decision(self.key, "keep")
+        self.assertEqual(lock.call_count, 3)
+        self.assertEqual(sleep.call_args_list, [mock.call(0.05), mock.call(0.05)])
+        self.assertEqual(self.read()["decision"], "keep")
+
+    def test_lock_retry_is_bounded_and_hook_never_retries(self):
+        for writer, attempts in ((True, 3), (False, 1)):
+            with self.subTest(writer=writer), mock.patch.object(self.gate.time, "sleep") as sleep, mock.patch.object(
+                    self.gate.fcntl, "flock", side_effect=BlockingIOError()) as lock:
+                with self.assertRaises(BlockingIOError):
+                    if writer:
+                        self.gate.write_decision(self.key, "keep")
+                    else:
+                        self.gate.claim_denial(self.key)
+                self.assertEqual(lock.call_count, attempts)
+                self.assertEqual(sleep.call_args_list, [mock.call(0.05)] * (attempts - 1))
+                self.assertFalse(self.path.exists())
+
     def test_exclusive_publish_loser_preserves_winner(self):
         with self.gate.state_folder() as folder:
             state = {"denied": datetime.now(timezone.utc).isoformat()}

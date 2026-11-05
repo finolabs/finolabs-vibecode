@@ -11,7 +11,6 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Changed
 
 - A Claude Code hook of this plugin may now deny the first file write in a repository without a decision in the last 8 hours when Delegation mode is `auto` and the opt-in auto gate is on; subsequent writes in the window allow, and `FNL_AUTO_GATE=off` disables it.
-
 - Clarify host-owned compaction thresholds and advisory writeback; setup only suggests settings, Claude Code and Codex gain a non-blocking `PreCompact` reminder, and Check reports declarations with delivery unverified.
 - The remaining text questions use the host's native question tool when the session has one: the `fnl-setup` beginner-path offer, preferences confirmation and usage-metrics consent, the `fnl-setup` Check smoke task, the `fnl-status` purge confirmation and the `fnl-update` confirmation. Approvals among them offer neutral Yes and No choices and never count a default or timeout. Advisory (agent judgment).
 - Every background run or agent a coordinator starts (a headless Codex, Antigravity or Claude run, a reviewer, a subagent) is named by who runs it and what it does, `<runner>: <project> <scope> <activity>`, in the host's name field, the ledger task, the log file names and the dispatch line. The rule lives in `fnl-session-hygiene` "Titles"; `fnl-delegate`, `fnl-review-gate` and `fnl-handoff` point to it. Advisory (agent judgment).
