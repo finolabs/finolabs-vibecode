@@ -545,6 +545,43 @@ class QuotaTest(unittest.TestCase):
         trigger.assert_called_once()
         self.assertLessEqual(stream.tell(), 65536)
 
+    def test_bounded_payload_copies_only_linear_text(self):
+        module = self.metrics_module()
+        class CountedText(str):
+            copied = 0
+            def lstrip(self):
+                return self
+            def __getitem__(self, key):
+                result = super().__getitem__(key)
+                if isinstance(key, slice):
+                    self.copied += len(result)
+                return result
+        class Raw(bytes):
+            def decode(self, *args):
+                return text
+        expected = {str(i): i for i in range(500)}
+        prefix = json.dumps(expected)[:-1] + ', "tail": "'
+        raw = Raw((prefix + 'x' * 65536).encode()[:65536])
+        text = CountedText(bytes(raw).decode())
+        self.assertEqual(module.bounded_payload(raw), expected)
+        self.assertLessEqual(text.copied, 4 * len(raw))
+
+    def test_oversized_tool_input_keeps_edit_metadata(self):
+        module = self.metrics_module()
+        module.fm.write_consent(90)
+        payload = {"hook_event_name": "PostToolUse", "session_id": "large-edit",
+                   "cwd": str(self.base), "tool_name": "Write",
+                   "tool_input": {"content": "private content " * 7000}}
+        raw = json.dumps(payload).encode()[:65536]
+        self.assertNotIn("tool_input", module.bounded_payload(raw))
+        with mock.patch.object(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(raw))), \
+             mock.patch.object(qp, "trigger"), mock.patch.object(module, "refresh_if_stale"):
+            module.main()
+        events = [json.loads(line) for path in (self.root / "state").glob("events-*.jsonl")
+                  for line in path.read_text().splitlines()]
+        self.assertEqual([e["event"] for e in events], ["first_edit"])
+        self.assertNotIn("private content", json.dumps(events))
+
     def test_no_consent_hook_never_reads_stdin_or_writes(self):
         module = self.metrics_module()
         stream = mock.Mock()

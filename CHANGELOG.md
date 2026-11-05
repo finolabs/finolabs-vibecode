@@ -12,6 +12,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Parse capped hook payloads in linear time while preserving complete metadata fields and discarding truncated tool input.
+
 - Restore Claude quota readings by supplying the account database username to probe children and leaving `CLAUDE_CONFIG_DIR` unset for the default install while retaining it for listed extra folders.
 
 ## [0.1.8] - 2026-11-05
