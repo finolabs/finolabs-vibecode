@@ -265,13 +265,16 @@ INSTRUCTION_NAMES = {"CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", "AGENTS.overri
 SECRET_PATTERNS = [(name, re.compile(pattern)) for name, pattern in (
     ("private-key-header", r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----"),
     ("access-key-id", r"\bAKIA[A-Z0-9]{16}\b"),
-    ("github-token", r"\b(?:ghp_|github_pat_)[A-Za-z0-9_]+"),
+    ("github-token", r"\b(?:gh[posur]_|github_pat_)[A-Za-z0-9_]+"),
     ("api-key", r"\bsk-[A-Za-z0-9_-]{20,}"),
     ("slack-token", r"\bxox[bp]-[A-Za-z0-9-]+"),
-    ("secret-assignment", r'''(?i)\b(?:password|secret|token)["']?\s*[:=]\s*["']?[^\s"']{8,}'''),
+    ("secret-assignment", r'''(?i)\b\w*(?:password|passwd|secret|token|api_key|apikey|credential)\w*["']?\s*[:=]\s*["']?[^\s"']{8,}'''),
+    ("bearer-token", r"(?i)\bAuthorization:\s*Bearer\s+[^\s]{20,}"),
+    ("url-credentials", r"\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]+:[^\s/@]+@[^\s/]+"),
+    ("hex-assignment", r"""\b[A-Za-z_]\w*["']?\s*[:="']\s*["']?[A-Fa-f0-9]{32,}\b"""),
     ("encoded-assignment", r"[:=]\s*[\"']?[A-Za-z0-9+/]{40,}={0,2}"),
 )]
-MACHINE_PATH = re.compile(r"/(?:Users|home)/|(?<![A-Za-z])[A-Za-z]:[\\/]")
+MACHINE_PATH = re.compile(r"""(?<![^\s`"'(=\[])/(?:Users|home)/|(?<![A-Za-z])[A-Za-z]:[\\/]""")
 
 
 def unfenced(text):
@@ -292,6 +295,7 @@ def unfenced(text):
 
 def instruction_consent(text):
     sections, active = [], None
+    text = re.sub(r"<!--.*?(?:-->|\Z)", "", text, flags=re.S)
     for _, line in unfenced(text):
         if re.match(r"^#{1,2} ", line):
             active = [] if line.strip() == "## Route judgment" else None
@@ -302,12 +306,13 @@ def instruction_consent(text):
     if len(sections) != 1:
         return False
     values = [line.strip() for line in sections[0] if re.match(r"^\s*- Instruction check:", line)]
-    return values == ["- Instruction check: on"]
+    return len(values) == 1 and bool(re.fullmatch(r"- Instruction check: on(?:[ .].*)?", values[0]))
 
 
 def instruction_scan(home, codex, root, cwd, git, common_git=None):
     files, cache, results, visited = {}, {}, [], set()
-    limited = False
+    limited = directory_limited = False
+    result_keys = set()
 
     def label(path):
         if path is None:
@@ -321,14 +326,16 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         else:
             value = "<instruction file>"
         # Even a filename can be hostile. Never echo control characters or tokens.
-        if any(ord(c) < 32 for c in value) or any(rx.search(value) for _, rx in SECRET_PATTERNS):
+        if not value.isprintable() or any(rx.search(value) for _, rx in SECRET_PATTERNS):
             return "<instruction file>"
         return value
 
     def add(ident, status, path, line, pattern, reason):
         row = {"id": ident, "status": status, "file": label(path), "line": line,
                "pattern": pattern, "reason": reason}
-        if row not in results:
+        key = tuple(row.values())
+        if key not in result_keys:
+            result_keys.add(key)
             results.append(row)
 
     def load(path, boundary, host, rule=False, backup=False):
@@ -345,7 +352,7 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         if status == "missing":
             return None
         entry = {"text": text, "status": status, "boundary": boundary, "host": host,
-                 "rule": rule, "backup": backup, "edges": [], "secret": False}
+                 "rule": rule, "backup": backup, "edges": [], "secret": False, "label": label(path)}
         files[path] = entry
         if status != "ok":
             add("I6" if backup else "I4", "unverified", path, 1, "safe-read",
@@ -353,7 +360,7 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         return entry
 
     def entries(folder):
-        nonlocal limited
+        nonlocal directory_limited
         try:
             fd = open_safe(folder, directory=True)
             try:
@@ -361,7 +368,7 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
                     rows = []
                     for i, entry in enumerate(stream):
                         if i >= 128:
-                            limited = True
+                            directory_limited = True
                             break
                         rows.append((entry.name, entry.is_dir(follow_symlinks=False)))
                     return sorted(rows)
@@ -418,7 +425,10 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
                 if not nested_doc:
                     load(path, boundary, "agy" if rule else "project", rule=rule)
     if queue:
-        limited = True
+        if len(files) >= 64:
+            limited = True
+        else:
+            directory_limited = True
 
     followed = set()
 
@@ -483,10 +493,14 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
             if not directory and name.startswith(path.name + ".bak-"):
                 load(path.parent / name, entry["boundary"], entry["host"], backup=True)
     if limited:
-        add("I4", "unverified", None, 1, "discovery-limit", "bounded discovery incomplete (64 files, 128 directories/entries)")
+        add("I4", "unverified", None, 1, "discovery-limit", "bounded discovery incomplete (64 files)")
+
+    if directory_limited:
+        for ident in ("I4", "I12"):
+            add(ident, "unverified", None, 1, "discovery-limit", "directory limit")
 
     tracked = tracked_paths(git / "index")
-    seen = {}
+    seen, source_pairs = {}, {}
     for path, entry in files.items():
         if entry["status"] != "ok":
             continue
@@ -517,12 +531,18 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         emphasis = 0
         in_comment = False
         for number, line in enumerate(lines, 1):
-            if len(line.strip()) >= 40:
-                previous = seen.setdefault(line.strip(), [])
-                if any(other != path and not records_source(entry["text"], label(other), other.name)
-                       and not records_source(files[other]["text"], label(path), path.name) for other in previous):
-                    add("I5", "warn", path, number, "duplicate-line", "repeated across files without a source record")
-                previous.append(path)
+            normalized = line.strip()
+            if len(normalized) >= 40:
+                previous = seen.setdefault(normalized, set())
+                for other in previous - {path}:
+                    pair = (other, path)
+                    if pair not in source_pairs:
+                        source_pairs[pair] = (records_source(entry["text"], label(other), other.name)
+                                              or records_source(files[other]["text"], label(path), path.name))
+                    if not source_pairs[pair]:
+                        add("I5", "warn", path, number, "duplicate-line", "repeated across files without a source record")
+                        break
+                previous.add(path)
             if MACHINE_PATH.search(line) and path.is_relative_to(root):
                 is_tracked = tracked is not None and path.relative_to(root).as_posix() in tracked
                 if is_tracked or tracked is None:
@@ -554,6 +574,12 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         except OSError:
             add("I13", "unverified", path, 1, "file-age", "file mtime unavailable")
         if path.is_relative_to(root) and path.name in INSTRUCTION_NAMES - {"CLAUDE.local.md"}:
+            # A root Claude wrapper delegates shared commands to its imported source.
+            if (path == root / "CLAUDE.md" and root / "AGENTS.md" in files
+                    and any(target == root / "AGENTS.md" for _, target in entry["edges"])
+                    and all(not line.strip() or line.strip() == "@AGENTS.md"
+                            or re.search(r"\bClaude(?: Code)?\b", line, re.I) for line in lines)):
+                continue
             commands = "\n".join(line for _, line in unfenced(entry["text"]))
             has_heading = bool(re.search(r"^#{1,6}\s+.*\bcommands\b", commands, re.M | re.I))
             spans = " ".join(re.findall(r"`([^`\n]+)`", commands))
@@ -576,26 +602,48 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         "codex-chain", f"{total} bytes against default 32768-byte chain limit")
     add("I2", "unverified", codex / "AGENTS.md", 1, "custom-byte-limit", "custom project_doc_max_bytes unverified; config.toml not read")
 
-    def expanded(path, stack=frozenset()):
-        entry = files[path]
-        if path in stack:
-            return 0
-        by_line = dict(entry["edges"]) if len(stack) < 4 else {}
-        return sum(expanded(by_line[n], stack | {path}) if n in by_line else len(line.encode("utf-8"))
-                   for n, line in enumerate(entry["text"].splitlines(keepends=True), 1))
+    expansion_cache = {}
 
-    always_total = 0
+    def expanded(path, budget=4, stack=frozenset()):
+        if path in stack:
+            return 0, False
+        # Include ancestry because a cached subtree may otherwise hide a cycle.
+        key = (path, budget, stack)
+        if key in expansion_cache:
+            return expansion_cache[key]
+        entry = files[path]
+        by_line = dict(entry["edges"]) if budget else {}
+        total, capped = 0, False
+        for number, line in enumerate(entry["text"].splitlines(keepends=True), 1):
+            if number in by_line:
+                size, child_cap = expanded(by_line[number], budget - 1, stack | {path})
+                capped |= child_cap
+            else:
+                size = len(line.encode("utf-8"))
+            total += size
+            if total > MAX_BYTES or capped:
+                total, capped = MAX_BYTES, True
+                break
+        result = (total, capped)
+        expansion_cache[key] = result
+        return result
+
+    always_total, expansion_limited = 0, False
     for path, entry in files.items():
         if entry["backup"] or entry["status"] != "ok":
             continue
+        size, capped = expanded(path)
+        if capped:
+            expansion_limited = True
+            for ident in ("I3", "I4"):
+                add(ident, "unverified", path, 1, "expansion-limit", "expanded byte limit (256 KiB)")
         if entry["host"] == "agy" or (entry["host"] == "project" and path.name in {"AGENTS.md", "GEMINI.md"}):
-            size = expanded(path)
-            if size > 24000:
+            if size > 24000 and not capped:
                 add("I3", "fail", path, 1, "antigravity-file-size", "above 24000 bytes after in-root includes")
             if entry.get("always") and path.parent in {
                     root, root / ".agents", home / ".gemini", root / ".agents/rules", home / ".gemini/config/rules"}:
                 always_total += size
-    add("I3", "warn" if always_total > 80000 else "ok", None, 1, "antigravity-token-estimate",
+    add("I3", "unverified" if expansion_limited else "warn" if always_total > 80000 else "ok", None, 1, "antigravity-token-estimate",
         f"{always_total} bytes; 80000 bytes estimates 20000 tokens for global/always_on rules")
 
     local = root / "CLAUDE.local.md"
@@ -703,13 +751,14 @@ def judge_payload(files):
         if entry["status"] != "ok" or entry["backup"] or entry["secret"] or path.name == "CLAUDE.local.md":
             continue
         scan_section = False
-        for line in entry["text"].splitlines():
+        for number, line in enumerate(entry["text"].splitlines(), 1):
             if re.match(r"^#{1,2} ", line):
                 scan_section = line.strip() == "## Agents on this machine"
             if scan_section or re.match(r"^\s*@", line):
                 continue
             if MACHINE_PATH.search(line) or any(rx.search(line) for _, rx in SECRET_PATTERNS):
                 continue
+            line = f'{entry["label"]}:{number}: {line}'
             shortened = line[:287] + " [truncated]" if len(line) > 300 else line
             encoded = (shortened + "\n").encode("utf-8")
             if size + len(encoded) > 8192 - len(marker):
@@ -722,10 +771,26 @@ def judge_payload(files):
 def instruction_lines(block):
     counts = " ".join(f"{key}={value}" for key, value in block["counts"].items())
     lines = [f'instructions: {block["files"]} files; {counts}']
-    findings = [row for row in block["results"] if row["status"] != "ok"]
+    groups = {}
+    for row in block["results"]:
+        if row["status"] == "ok" or row["pattern"] in {"custom-byte-limit", "command-execution"}:
+            continue
+        key = (row["id"], row["status"], row["pattern"], row["file"])
+        if key not in groups:
+            groups[key] = dict(row, count=0)
+        groups[key]["count"] += 1
+    # Round-robin ids so even many affected files cannot consume the text budget.
+    by_id = {}
+    for row in groups.values():
+        by_id.setdefault(row["id"], []).append(row)
+    findings = []
+    while any(by_id.values()):
+        for rows in by_id.values():
+            if rows:
+                findings.append(rows.pop(0))
     shown = findings[:11] if len(findings) > 12 else findings
     for row in shown:
-        lines.append(f'{row["id"]}: {row["status"]} - {row["file"]}:{row["line"]} {row["pattern"]}; {row["reason"]}')
+        lines.append(f'{row["id"]}: {row["status"]} - {row["file"]}:{row["line"]} {row["pattern"]}; count={row["count"]}; {row["reason"]}')
     if len(findings) > 12:
         lines.append(f'{len(findings) - 11} more; use --json')
     return lines

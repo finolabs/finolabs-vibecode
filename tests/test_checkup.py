@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -566,6 +567,136 @@ class CheckupTest(unittest.TestCase):
         self.assertLessEqual(len(block), 13)
         self.assertIn("more; use --json", block[-1])
         self.assertTrue(block[1].startswith("I1: warn"))
+
+
+    def scan_direct(self):
+        return checkup.instruction_scan(self.home, self.home / ".codex", self.repo,
+                                        self.repo, self.repo / ".git")
+
+    def test_review_consent_comments_and_suffixes(self):
+        self.write(self.repo / "AGENTS.md", "SAFE LINE\n")
+        for value in ("on", "on. The user approved, on 2026-01-01, this check.", "on approved"):
+            with self.subTest(value=value):
+                self.consent("## Route judgment\n- Instruction check: " + value + "\n")
+                self.assertIn("SAFE LINE", self.run_check("--judge-payload"))
+        for content in ("- Instruction check: off", "- Instruction check: only",
+                        "<!--\n- Instruction check: on\n-->",
+                        "- Instruction check: on\n- Instruction check: on",
+                        "~~~\n- Instruction check: on\n~~~"):
+            with self.subTest(content=content):
+                self.consent("## Route judgment\n" + content + "\n")
+                self.assertEqual(self.run_check("--judge-payload"), "")
+        config = self.consent()
+        config.write_bytes(b"\xff")
+        self.assertEqual(self.run_check("--judge-payload"), "")
+
+    def test_review_directory_limit_only_affects_discovery(self):
+        self.write(self.repo / "AGENTS.md", self.clean_instruction())
+        for n in range(200):
+            (self.repo / f"dir{n:03}").mkdir()
+        rows = self.scan_direct()[0]["results"]
+        for ident in (1, 6, 7, 8, 10, 11, 13, 14):
+            with self.subTest(ident=ident):
+                self.assertTrue(all(r["status"] == "ok" for r in rows if r["id"] == f"I{ident}"))
+        self.assertEqual({r["id"] for r in rows if r["reason"] == "directory limit"}, {"I4", "I12"})
+
+    def test_review_secret_shapes_never_leave_file(self):
+        samples = [key + " = " + "x" * 8 for key in
+                   ("DB_PASSWORD", "DB_PASSWD", "client_secret", "GITHUB_TOKEN", "service_api_key",
+                    "service_apikey", "credential_value", "prefixtokensuffix")]
+        samples += ["Authorization: " + "Bearer " + "x" * 20,
+                    "https://" + "user:pass" + "@" + "host/path"]
+        samples += ["gh" + suffix + "_" + "x" * 24 for suffix in "osur"]
+        samples += ["digest" + separator + "ab" * 16 for separator in (" = ", ": ", ' "')]
+        self.consent()
+        for value in samples:
+            with self.subTest(shape=value[:12]):
+                self.write(self.repo / "AGENTS.md", "OMIT WHOLE FILE\n" + value + "\n")
+                block, files, _ = self.scan_direct()
+                self.assertTrue(any(r["id"] == "I6" and r["status"] == "fail" for r in block["results"]))
+                self.assertEqual(checkup.judge_payload(files), "")
+                for output in (json.dumps(block), "\n".join(checkup.instruction_lines(block))):
+                    self.assertNotIn(value, output)
+                    self.assertNotIn("OMIT WHOLE FILE", output)
+
+    def test_review_duplicate_performance(self):
+        text = "".join(f"Synthetic instruction number {n:04}: keep the fixture deterministic.\n" for n in range(3000))
+        self.write(self.repo / "AGENTS.md", text)
+        self.write(self.repo / "CLAUDE.md", text)
+        start = time.perf_counter()
+        block = self.scan_direct()[0]
+        elapsed = time.perf_counter() - start
+        print(f"duplicate performance: {elapsed:.3f}s")
+        self.assertLess(elapsed, 2)
+        self.assertEqual(sum(r["pattern"] == "duplicate-line" for r in block["results"]), 3000)
+
+    def test_review_expansion_performance_and_cap(self):
+        self.write(self.repo / "GEMINI.md", "@[rule](.agents/rules/r0.md)\n" * 60)
+        for n in range(4):
+            text = f"@[rule](r{n + 1}.md)\n" * 60 if n < 3 else "Leaf content.\n" * 60
+            self.write(self.repo / f".agents/rules/r{n}.md", "---\ntrigger: manual\n---\n" + text)
+        start = time.perf_counter()
+        block = self.scan_direct()[0]
+        elapsed = time.perf_counter() - start
+        print(f"expansion performance: {elapsed:.3f}s")
+        self.assertLess(elapsed, 2)
+        rows = [r for r in block["results"] if r["pattern"] == "expansion-limit"]
+        self.assertEqual({r["id"] for r in rows}, {"I3", "I4"})
+        self.assertTrue(all(r["status"] == "unverified" for r in rows))
+
+    def test_review_text_groups_counts_and_omits_permanent_rows(self):
+        self.write(self.repo / "AGENTS.md", "Be careful.\n" * 200 + "MUST " * 6)
+        block = self.scan_direct()[0]
+        lines = checkup.instruction_lines(block)
+        vague = [line for line in lines if line.startswith("I10:")]
+        self.assertEqual(len(vague), 1)
+        self.assertIn("count=200", vague[0])
+        self.assertTrue(any(line.startswith("I11:") for line in lines))
+        self.assertEqual(sum(r["id"] == "I10" for r in block["results"]), 200)
+        self.assertNotIn("custom-byte-limit", "\n".join(lines))
+        self.assertNotIn("command-execution", "\n".join(lines))
+        output = self.run_check()
+        print(f"sample output: {len(output.splitlines())} lines")
+        self.assertLessEqual(len(output.splitlines()), 40)
+
+    def test_review_i9_root_import_wrapper(self):
+        self.write(self.repo / "AGENTS.md", self.clean_instruction())
+        wrapper = self.write(self.repo / "CLAUDE.md", "\n" + "@" + "AGENTS.md\n\nClaude Code: use the configured hooks.\n")
+        self.assertFalse(self.instruction_rows("I9", "project-commands"))
+        self.write(self.repo / "AGENTS.md", "No commands here.\n")
+        self.assertEqual([r["file"] for r in self.instruction_rows("I9", "project-commands")], ["AGENTS.md"])
+        wrapper.write_text("@AGENTS.md\nAdditional project instructions.\n")
+        self.assertEqual(len(self.instruction_rows("I9", "project-commands")), 2)
+
+    def test_review_machine_path_urls(self):
+        line = "https://example.invalid" + "/home/" + "guide"
+        self.assertIsNone(checkup.MACHINE_PATH.search(line))
+        self.write(self.repo / "AGENTS.md", line + "\n")
+        self.index("AGENTS.md")
+        self.assertFalse(self.instruction_rows("I7", "machine-path"))
+        self.consent()
+        self.assertIn(line, self.run_check("--judge-payload"))
+
+    def test_review_nonprintable_labels(self):
+        for control in (chr(0x85), chr(0x7f)):
+            path = self.write(self.repo / ("bad" + control) / "AGENTS.md", "Be careful.\n")
+            self.write(self.repo / "CLAUDE.md", "@" + path.relative_to(self.repo).as_posix() + "\n")
+            block = self.scan_direct()[0]
+            nested = [r for r in block["results"] if r["pattern"] == "nested-instruction"]
+            self.assertTrue(nested)
+            self.assertTrue(all(r["file"] == "<instruction file>" for r in nested))
+
+    def test_review_payload_evidence_locations(self):
+        self.consent()
+        self.write(self.repo / "AGENTS.md", "First line\nSecond line\n" + "z" * 400 + "\n")
+        payload = self.run_check("--judge-payload")
+        self.assertTrue(payload.startswith("AGENTS.md:1: First line\nAGENTS.md:2: Second line\n"))
+        self.assertIn("AGENTS.md:3: ", payload)
+        self.assertTrue(all(len(line) <= 300 for line in payload.splitlines()))
+
+    def test_review_check_steps_are_sequential(self):
+        text = (ROOT / "skills/fnl-setup/references/check.md").read_text().split("## Settings")[0]
+        self.assertEqual(re.findall(r"^(\d+)\. ", text, re.M), ["1", "2", "3", "4", "5"])
 
 
 if __name__ == "__main__":
