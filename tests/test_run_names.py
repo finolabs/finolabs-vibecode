@@ -15,6 +15,7 @@ class RunNamesTest(unittest.TestCase):
         self.assertIn("**Background runs and agents.**", text)
         self.assertIn(FORMAT, text)
         self.assertIn("The enforcer is agent judgment", text)
+        self.assertIn("never copied from an issue or pull request title", text)
 
     def test_dispatching_skills_point_to_it(self):
         for skill in ("fnl-delegate", "fnl-handoff", "fnl-review-gate"):
