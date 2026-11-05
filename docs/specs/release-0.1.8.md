@@ -1,6 +1,6 @@
 # Release 0.1.8: spec and plan
 
-Status: scope and plan settled by the owner on 2026-11-05 (the four open decisions are recorded under "Decisions settled"). Package 1 is merged (pull request 58); packages 2, 3 and 5 are in review or in progress. Release 0.1.7 is tagged; `main` is `0.1.8-dev`.
+Status: scope and plan settled by the owner on 2026-11-05 (the four open decisions are recorded under "Decisions settled"). Merged: packages 1 (pull request 58) and 9 (pull request 63). In review: 2 (61), 3 (62), 5 (60) and 10 (64). Not started: 4, 6, 7, 8 and the native sweep follow-up. Release 0.1.7 is tagged; `main` is `0.1.8-dev`.
 
 ## Why
 
@@ -16,7 +16,7 @@ In, by package (Plan below gives order and dependencies):
 
 | # | Package | Kind |
 | --- | --- | --- |
-| 1 | Native question form for every skill that asks the user | in review (pull request 58) |
+| 1 | Native question form for every skill that asks the user | merged (pull request 58) |
 | 2 | Scan hardening | fix |
 | 3 | Reference check and CI fixes | fix |
 | 4 | Eval stability | fix |
@@ -24,7 +24,7 @@ In, by package (Plan below gives order and dependencies):
 | 6 | Compaction: advisory, host thresholds, `PreCompact` reminder | feature |
 | 7 | `auto` blocking gate | feature, policy change |
 | 8 | Restore point and "try it now" demo | feature |
-| 9 | Decisions asked, not listed | feature |
+| 9 | Decisions asked, not listed | merged (pull request 63) |
 | 10 | Name every background run by its runner and what it does | feature |
 
 Out of 0.1.8, recorded so it is not lost: **multiple accounts** per host (needs each host's real support and a second account to verify; the open points are what each host supports, how quota fallback picks an account since quota is per account, where account facts live (host config, never skill bodies), and that any metrics field stays metadata with no identity and goes through `SCHEMA` and `PRIVACY.md`). A research spike may start it later; it is not scheduled.
@@ -47,10 +47,10 @@ Still asking in text after the merge: the `fnl-setup` beginner-path and mode que
 - `--yes` requires a digest of the previewed section (`--digest <sha256 prefix>` printed by the preview); a mismatch writes nothing.
 - Ignore empty and relative `PATH` entries; cap captured output at 200 characters and 4 KiB read; catch non-POSIX errors (`OSError` families) and report `unverified`.
 - `replace_section`: ignore headings inside code fences; require a blank line before a section it appends.
-- Rows carry the check date, so "no difference" holds only on the same day: compare without the date column and keep the stored date when nothing else changed.
+- Rows carry the check date, so "no difference" would hold only on the same day: compare without the date column and keep the stored date only while it is at most seven days old. An older date is refreshed as a date-only difference the user confirms, so the 30-day staleness clock of `fnl-delegate` and `checkup.py` keeps running.
 - `PRIVACY.md`: say the script itself uses no network, and that the three fixed executables are run by the script, not by the shell.
 
-Acceptance: one unit test per bullet with synthetic executables and fixtures; the existing scan tests stay green; a second run on another day reports no difference and writes nothing. Enforcer: the script (tests).
+Acceptance: one unit test per bullet with synthetic executables and fixtures; the existing scan tests stay green; a second run within a week with nothing else changed reports no difference and writes nothing, and a run after a week shows a date-only difference. Enforcer: the script (tests).
 
 ## Package 3: reference check and CI
 
@@ -100,7 +100,7 @@ Evidence from one small test per host (04/11, temp folders): Claude Code `Stop` 
 
 Design to settle before code (a short design note in this spec, reviewed first):
 
-- What decision the gate checks (settled): a ledger `start` line for the task, or a keep receipt, recorded by the coordinator (the keep-or-hand-off check in `fnl-delegate`).
+- What decision the gate checks (settled): a ledger `start` line for the task (always written), or a keep decision. A keep receipt writes nothing when usage metrics are off (`keep-receipt.md`), so with the gate opted in the keep step also writes a small local decision file under the state folder, independent of metrics; the gate reads that file, never the metrics store.
 - The decision file's location under `~/.finolabs/vibecode/state/` and its lifetime (per session).
 - How the user turns it off at once (`FNL_AUTO_GATE=off`) and how a blocked agent is told why in one line.
 
@@ -149,12 +149,12 @@ Writers: one writer and one worktree per package; coordinator merges. Effort `me
 | 3 | 6 | 0 | `skills/fnl-session-hygiene`, `skills/fnl-setup`, `.claude-plugin`/`.codex-plugin` hooks |
 | 4 | 7 design note, then code | 3 (both touch the hooks) | hooks, `CLAUDE.md`, `fnl-delegate` |
 | 5 | 8 restore point, then demo | 0 | new skill folder, `fnl-ask`, README, file tree |
-| 6 | 9 (one router line) and the native sweep follow-up to 2 | 0, 1 | `skills/fnl-coding-router/SKILL.md`; the skills named in the sweep |
+| 6 | 10 (run names), then the native sweep follow-up to 2 | 0, 1 | `skills/fnl-session-hygiene` (titles), `fnl-delegate`, `fnl-review-gate`, `fnl-handoff`; the skills named in the sweep. Package 10 lands before package 6, which also edits `fnl-session-hygiene` |
 | 7 | Release 0.1.8 | all merged, full suite and evals run once | manifests, CHANGELOG |
 
 Release 0.1.8 follows `fnl-versioning`: a release pull request (manifest versions and CHANGELOG), an annotated tag after CI, a GitHub release, the catalog pin pull request (package 5), then the bump to `0.1.9-dev`. Pushes, merges, the catalog pull request and the release each need the owner's go.
 
-Budget guide (`fnl-delegate`): packages 2, 3, 5: medium, 30 to 45 minutes each; 4: medium, 45 minutes plus the owner's quota for eval reruns; 6: hard, 60 minutes; 7: very hard, a session; 8: hard for the restore script, medium for the demo.
+Budget guide (`fnl-delegate`): packages 2, 3, 5: medium, 30 to 45 minutes each; 9 and 10: easy, written by the coordinator; 4: medium, 45 minutes plus the owner's quota for eval reruns; 6: hard, 60 minutes; 7: very hard, a session; 8: hard for the restore script, medium for the demo.
 
 ## Risks
 
@@ -171,6 +171,7 @@ Asked of the owner through the native question form on 2026-11-05; each took the
 2. **Restore point trigger:** user-invoked only; no automatic snapshot.
 3. **`auto` gate:** a recorded decision is a ledger `start` line or a keep receipt; blocks are not counted in usage metrics.
 4. **Native form sweep:** the remaining text questions move to the native form (follow-up to package 2).
+5. **Package 10 (run names):** added at the owner's go on 2026-11-05, after a proposal that the rule live in `fnl-session-hygiene` "Titles" and not in the user contract.
 
 ## Verification and limits
 
