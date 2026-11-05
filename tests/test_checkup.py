@@ -1,6 +1,7 @@
 """Bounded, read-only evidence for setup Check mode, using only fake host data."""
 
 import datetime
+import io
 import importlib.util
 import json
 import os
@@ -595,10 +596,10 @@ class CheckupTest(unittest.TestCase):
         for n in range(200):
             (self.repo / f"dir{n:03}").mkdir()
         rows = self.scan_direct()[0]["results"]
-        for ident in (1, 6, 7, 8, 10, 11, 13, 14):
+        for ident in (1, 7, 8, 10, 11, 13, 14):
             with self.subTest(ident=ident):
                 self.assertTrue(all(r["status"] == "ok" for r in rows if r["id"] == f"I{ident}"))
-        self.assertEqual({r["id"] for r in rows if r["reason"] == "directory limit"}, {"I4", "I12"})
+        self.assertEqual({r["id"] for r in rows if r["reason"] == "directory limit"}, {"I4", "I6", "I12"})
 
     def test_review_secret_shapes_never_leave_file(self):
         samples = [key + " = " + "x" * 8 for key in
@@ -697,6 +698,122 @@ class CheckupTest(unittest.TestCase):
     def test_review_check_steps_are_sequential(self):
         text = (ROOT / "skills/fnl-setup/references/check.md").read_text().split("## Settings")[0]
         self.assertEqual(re.findall(r"^(\d+)\. ", text, re.M), ["1", "2", "3", "4", "5"])
+
+    def test_rework_machine_path_punctuation(self):
+        samples = ["file://" + "/Us" "ers/" + "fixture/x",
+                   "dir:" + "/ho" "me/" + "fixture/x",
+                   "a," + "/ho" "me/" + "fixture/y",
+                   "<code>" + "/Us" "ers/" + "fixture/</code>",
+                   "{" + "/ho" "me/" + "fixture/z}"]
+        self.consent()
+        self.index("AGENTS.md")
+        for value in samples:
+            with self.subTest(shape=samples.index(value)):
+                self.assertIsNotNone(checkup.MACHINE_PATH.search(value))
+                self.write(self.repo / "AGENTS.md", value + "\n")
+                block, files, _ = self.scan_direct()
+                self.assertTrue(any(r["id"] == "I7" and r["pattern"] == "machine-path"
+                                    for r in block["results"]))
+                self.assertEqual(checkup.judge_payload(files), "")
+                self.assertNotIn(value, json.dumps(block))
+        self.assertIsNone(checkup.MACHINE_PATH.search("https://example.org" + "/ho" "me/x"))
+
+    def test_rework_indented_consent_is_off(self):
+        self.write(self.repo / "AGENTS.md", "SAFE LINE\n")
+        for indent in (" ", "    ", "\t"):
+            self.consent("## Route judgment\n" + indent + "- Instruction check: on\n")
+            self.assertEqual(self.run_check("--judge-payload"), "")
+
+    def test_rework_additional_secret_shapes(self):
+        samples = ["np" + "m_" + "x" * 36, "gl" + "pat-" + "x" * 20,
+                   "AI" + "za" + "x" * 35,
+                   "sk_" + "live_" + "x" * 24, "rk_" + "live_" + "x" * 24,
+                   "ey" + "J" + "x" * 7 + "." + "y" * 10 + "." + "z" * 10,
+                   "DB_" + "PASS = '" + "x" * 8 + "'",
+                   "SERVICE_" + 'PASS: "' + "x" * 8 + '"']
+        for value in samples:
+            with self.subTest(shape=samples.index(value)):
+                self.write(self.repo / "AGENTS.md", "OMIT WHOLE FILE\n" + value + "\n")
+                block, files, _ = self.scan_direct()
+                self.assertTrue(any(r["id"] == "I6" and r["status"] == "fail"
+                                    for r in block["results"]))
+                self.assertEqual(checkup.judge_payload(files), "")
+                self.assertNotIn(value, json.dumps(block))
+                self.assertNotIn(value, "\n".join(checkup.instruction_lines(block)))
+
+    def test_rework_hex_revision_exclusions(self):
+        for word in ("sha", "commit", "rev", "hash"):
+            for count in (32, 40, 64):
+                with self.subTest(word=word, count=count):
+                    self.write(self.repo / "AGENTS.md", word + " api_key = " + "a" * count + "\n")
+                    rows = self.scan_direct()[0]["results"]
+                    self.assertEqual(any(r["pattern"] == "hex-assignment" for r in rows), count != 40)
+        self.write(self.repo / "AGENTS.md", "api_key = " + "a" * 40 + "\n")
+        self.assertTrue(any(r["pattern"] == "hex-assignment" for r in self.scan_direct()[0]["results"]))
+
+    def test_rework_long_line_collect_and_payload(self):
+        value = ("a_" + "password") * 26215
+        value = value[:262144]
+        self.assertEqual(len(value), 262144)
+        self.write(self.repo / "AGENTS.md", value)
+        self.consent()
+        start = time.perf_counter()
+        with mock.patch.dict(os.environ, self.env, clear=True), mock.patch.object(Path, "cwd", return_value=self.repo):
+            data = checkup.collect()
+            with mock.patch.object(sys, "argv", [str(SCRIPT), "--judge-payload"]), mock.patch("sys.stdout", new_callable=io.StringIO) as output:
+                self.assertEqual(checkup.main(), 0)
+                self.assertEqual(output.getvalue(), "")
+        elapsed = time.perf_counter() - start
+        print(f"long-line collect and payload: {elapsed:.3f}s")
+        self.assertLess(elapsed, 2)
+        rows = [r for r in data["instructions"]["results"] if r["pattern"] == "line-too-long"]
+        self.assertEqual({r["id"] for r in rows}, {"I1", "I6"})
+        self.assertTrue(all(r["status"] == "unverified" and r["reason"] == "line too long" for r in rows))
+        self.assertNotIn(value, json.dumps(data))
+
+    def test_rework_long_lines_skip_all_patterns(self):
+        shapes = {
+            "private-key-header": "-----BEGIN " + "A " * 100000,
+            "access-key-id": "AK" + "IA" + "A" * 200000,
+            "github-token": "github_" + "pat_" + "_" * 200000,
+            "api-key": "s" + "k-" + "-" * 200000,
+            "slack-token": "xo" + "xb-" + "-" * 200000,
+            "bearer-token": "Authorization: " + " " * 200000,
+            "url-credentials": "a" * 200000 + "://",
+            "hex-assignment": "a" * 200000 + "!",
+            "encoded-assignment": ": " + "A" * 200000,
+            "npm-token": "np" + "m_" + "x" * 200000,
+            "gitlab-token": "gl" + "pat-" + "x" * 200000,
+            "google-api-key": "AI" + "za" + "x" * 200000,
+            "stripe-key": "sk_" + "live_" + "x" * 200000,
+            "jwt": "ey" + "J" + "x" * 200000 + ".",
+            "machine-path": "/ho" "me/" + "x" * 200000,
+        }
+        for name, value in shapes.items():
+            with self.subTest(pattern=name):
+                self.write(self.repo / "AGENTS.md", "SAFE BUT OMIT\n" + value[:200000])
+                self.write(self.repo / "AGENTS.md.bak-test", value[:200000])
+                start = time.perf_counter()
+                block, files, _ = self.scan_direct()
+                self.assertEqual(checkup.judge_payload(files), "")
+                elapsed = time.perf_counter() - start
+                print(f"long-line {name}: {elapsed:.4f}s")
+                self.assertLess(elapsed, 0.1)
+                rows = [r for r in block["results"] if r["pattern"] == "line-too-long"]
+                self.assertEqual({(r["id"], r["file"]) for r in rows},
+                                 {("I1", "AGENTS.md"), ("I6", "AGENTS.md"), ("I6", "AGENTS.md.bak-test")})
+
+    def test_rework_dense_include_performance(self):
+        text = "---\ntrigger: manual\n---\n" + "".join(f"@[rule](r{n:02}.md)\n" for n in range(58))
+        for n in range(58):
+            self.write(self.repo / f".agents/rules/r{n:02}.md", text)
+        start = time.perf_counter()
+        block = self.scan_direct()[0]
+        elapsed = time.perf_counter() - start
+        print(f"dense include: {elapsed:.3f}s")
+        self.assertLess(elapsed, 1)
+        self.assertEqual(block["files"], 58)
+        self.assertTrue(any(r["pattern"] == "include-cycle" for r in block["results"]))
 
 
 if __name__ == "__main__":

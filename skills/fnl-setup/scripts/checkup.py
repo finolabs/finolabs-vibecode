@@ -267,14 +267,19 @@ SECRET_PATTERNS = [(name, re.compile(pattern)) for name, pattern in (
     ("access-key-id", r"\bAKIA[A-Z0-9]{16}\b"),
     ("github-token", r"\b(?:gh[posur]_|github_pat_)[A-Za-z0-9_]+"),
     ("api-key", r"\bsk-[A-Za-z0-9_-]{20,}"),
+    ("npm-token", r"\bnpm_[A-Za-z0-9]{36,}\b"),
+    ("gitlab-token", r"\bglpat-[A-Za-z0-9_-]{20,}"),
+    ("google-api-key", r"\bAIza[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-])"),
+    ("stripe-key", r"\b[rs]k_live_[A-Za-z0-9]{20,}"),
+    ("jwt", r"\beyJ[A-Za-z0-9_-]{7,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
     ("slack-token", r"\bxox[bp]-[A-Za-z0-9-]+"),
-    ("secret-assignment", r'''(?i)\b\w*(?:password|passwd|secret|token|api_key|apikey|credential)\w*["']?\s*[:=]\s*["']?[^\s"']{8,}'''),
+    ("secret-assignment", r'''(?i)\b\w{0,40}(?:password|passwd|secret|token|api_key|apikey|credential|_pass)\w{0,40}["']?\s*[:=]\s*["']?[^\s"']{8,}'''),
     ("bearer-token", r"(?i)\bAuthorization:\s*Bearer\s+[^\s]{20,}"),
     ("url-credentials", r"\b[A-Za-z][A-Za-z0-9+.-]*://[^\s/:@]+:[^\s/@]+@[^\s/]+"),
-    ("hex-assignment", r"""\b[A-Za-z_]\w*["']?\s*[:="']\s*["']?[A-Fa-f0-9]{32,}\b"""),
+    ("hex-assignment", r"""\b[A-Za-z_]\w*["']?\s*[:="']\s*["']?([A-Fa-f0-9]{32,})\b"""),
     ("encoded-assignment", r"[:=]\s*[\"']?[A-Za-z0-9+/]{40,}={0,2}"),
 )]
-MACHINE_PATH = re.compile(r"""(?<![^\s`"'(=\[])/(?:Users|home)/|(?<![A-Za-z])[A-Za-z]:[\\/]""")
+MACHINE_PATH = re.compile(r"""/Users/|(?<![A-Za-z0-9.-])/home/|(?<![A-Za-z])[A-Za-z]:[\\/]""")
 
 
 def unfenced(text):
@@ -305,13 +310,13 @@ def instruction_consent(text):
             active.append(line)
     if len(sections) != 1:
         return False
-    values = [line.strip() for line in sections[0] if re.match(r"^\s*- Instruction check:", line)]
+    values = [line.strip() for line in sections[0] if re.match(r"^- Instruction check:", line)]
     return len(values) == 1 and bool(re.fullmatch(r"- Instruction check: on(?:[ .].*)?", values[0]))
 
 
 def instruction_scan(home, codex, root, cwd, git, common_git=None):
     files, cache, results, visited = {}, {}, [], set()
-    limited = directory_limited = False
+    limited = directory_limited = backup_limited = False
     result_keys = set()
 
     def label(path):
@@ -326,7 +331,7 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         else:
             value = "<instruction file>"
         # Even a filename can be hostile. Never echo control characters or tokens.
-        if not value.isprintable() or any(rx.search(value) for _, rx in SECRET_PATTERNS):
+        if len(value) > 2000 or not value.isprintable() or any(rx.search(value) for _, rx in SECRET_PATTERNS):
             return "<instruction file>"
         return value
 
@@ -359,8 +364,8 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
                 "not a readable regular file within 256 KiB; symlinks refused")
         return entry
 
-    def entries(folder):
-        nonlocal directory_limited
+    def entries(folder, backup=False):
+        nonlocal directory_limited, backup_limited
         try:
             fd = open_safe(folder, directory=True)
             try:
@@ -369,6 +374,7 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
                     for i, entry in enumerate(stream):
                         if i >= 128:
                             directory_limited = True
+                            backup_limited |= backup
                             break
                         rows.append((entry.name, entry.is_dir(follow_symlinks=False)))
                     return sorted(rows)
@@ -387,7 +393,7 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         boundary = root if folder.is_relative_to(root) else folder
         for name in names:
             load(folder / name, boundary, host)
-        for name, directory in entries(folder):
+        for name, directory in entries(folder, backup=True):
             if not directory and any(name.startswith(base + ".bak-") for base in names):
                 load(folder / name, boundary, host, backup=True)
 
@@ -407,7 +413,7 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         if folder in visited:
             continue
         visited.add(folder)
-        for name, directory in entries(folder):
+        for name, directory in entries(folder, backup=rule):
             path = folder / name
             if directory:
                 if name in {".git", "node_modules", ".venv", "vendor", "__pycache__"} or (name.startswith(".") and name != ".agents"):
@@ -430,38 +436,45 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         else:
             directory_limited = True
 
-    followed = set()
+    followed, include_targets = set(), {}
 
     def include(path, depth, stack):
         entry = files[path]
         if entry["status"] != "ok" or entry["backup"]:
             return
         for number, line in unfenced(entry["text"]):
+            if len(line) > 2000:
+                continue
             agy = re.fullmatch(r"\s*@\[[^\]\n]*\]\(([^\n]*)\)\s*", line)
             claude = re.fullmatch(r"\s*@([^\s]+)\s*", line) if not agy else None
             if not agy and not claude:
                 continue
             target = (agy or claude)[1]
             boundary = entry["boundary"]
-            candidate = path.parent / target
-            try:
-                outside = (target.startswith(("~", "/", "\\")) or bool(re.match(r"^[A-Za-z]:", target))
-                           or ".." in target.replace("\\", "/").split("/"))
-                resolved = candidate if outside else candidate.resolve()
-                outside |= not resolved.is_relative_to(boundary)
-            except (OSError, RuntimeError, ValueError):
-                outside = True
+            key = (path.parent, target, boundary)
+            if key not in include_targets:
+                candidate = path.parent / target
+                allowed_rule = False
+                try:
+                    outside = (target.startswith(("~", "/", "\\")) or bool(re.match(r"^[A-Za-z]:", target))
+                               or ".." in target.replace("\\", "/").split("/"))
+                    candidate = candidate if outside else candidate.resolve()
+                    outside |= not candidate.is_relative_to(boundary)
+                    if not outside:
+                        allowed_rule = candidate.suffix == ".md" and any(candidate.is_relative_to(p) for p in (
+                            root / ".agents/rules", home / ".gemini/config/rules"))
+                except (OSError, RuntimeError, ValueError):
+                    outside = True
+                include_targets[key] = candidate, outside, allowed_rule
+            candidate, outside, allowed_rule = include_targets[key]
             if outside:
                 add("I4", "fail", path, number, "outside-root", "outside root")
                 continue
-            candidate = resolved
             codex_only = entry["host"] == "codex" or path.name == "AGENTS.override.md"
             wrong_syntax = codex_only or (entry["host"] == "agy" and not agy) or (path.name.startswith("CLAUDE") and not claude)
             if wrong_syntax:
                 add("I4", "warn", path, number, "include-syntax", "include syntax not supported by this host")
                 continue
-            allowed_rule = candidate.suffix == ".md" and any(candidate.is_relative_to(p) for p in (
-                root / ".agents/rules", home / ".gemini/config/rules"))
             if candidate.name not in INSTRUCTION_NAMES and not allowed_rule:
                 add("I4", "fail", path, number, "include-name", "not an instruction-file name")
                 continue
@@ -489,7 +502,7 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         include(path, 0, {path})
 
     for path, entry in list(files.items()):
-        for name, directory in entries(path.parent):
+        for name, directory in entries(path.parent, backup=True):
             if not directory and name.startswith(path.name + ".bak-"):
                 load(path.parent / name, entry["boundary"], entry["host"], backup=True)
     if limited:
@@ -499,6 +512,9 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         for ident in ("I4", "I12"):
             add(ident, "unverified", None, 1, "discovery-limit", "directory limit")
 
+    if backup_limited:
+        add("I6", "unverified", None, 1, "discovery-limit", "directory limit")
+
     tracked = tracked_paths(git / "index")
     seen, source_pairs = {}, {}
     for path, entry in files.items():
@@ -506,10 +522,19 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
             continue
         lines = entry["text"].splitlines()
         for number, line in enumerate(lines, 1):
+            if len(line) > 2000:
+                entry["secret"] = True
+                for ident in (("I6",) if entry["backup"] else ("I1", "I6")):
+                    add(ident, "unverified", path, number, "line-too-long", "line too long")
+                continue
             for name, pattern in SECRET_PATTERNS:
-                if pattern.search(line):
+                for match in pattern.finditer(line):
+                    if (name == "hex-assignment" and len(match[1]) == 40
+                            and re.search(r"\b(?:sha|commit|rev|hash)\b", line[:match.start(1)], re.I)):
+                        continue
                     entry["secret"] = True
                     add("I6", "fail", path, number, name, "secret-looking content")
+                    break
         if entry["backup"]:
             continue
         if len(lines) > 150:
@@ -531,6 +556,8 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         emphasis = 0
         in_comment = False
         for number, line in enumerate(lines, 1):
+            if len(line) > 2000:
+                continue
             normalized = line.strip()
             if len(normalized) >= 40:
                 previous = seen.setdefault(normalized, set())
@@ -602,21 +629,21 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         "codex-chain", f"{total} bytes against default 32768-byte chain limit")
     add("I2", "unverified", codex / "AGENTS.md", 1, "custom-byte-limit", "custom project_doc_max_bytes unverified; config.toml not read")
 
-    expansion_cache = {}
+    expansion_cache, in_progress = {}, set()
 
-    def expanded(path, budget=4, stack=frozenset()):
-        if path in stack:
+    def expanded(path, budget=4):
+        if path in in_progress:
             return 0, False
-        # Include ancestry because a cached subtree may otherwise hide a cycle.
-        key = (path, budget, stack)
+        key = (path, budget)
         if key in expansion_cache:
             return expansion_cache[key]
+        in_progress.add(path)
         entry = files[path]
         by_line = dict(entry["edges"]) if budget else {}
         total, capped = 0, False
         for number, line in enumerate(entry["text"].splitlines(keepends=True), 1):
             if number in by_line:
-                size, child_cap = expanded(by_line[number], budget - 1, stack | {path})
+                size, child_cap = expanded(by_line[number], budget - 1)
                 capped |= child_cap
             else:
                 size = len(line.encode("utf-8"))
@@ -624,6 +651,7 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
             if total > MAX_BYTES or capped:
                 total, capped = MAX_BYTES, True
                 break
+        in_progress.remove(path)
         result = (total, capped)
         expansion_cache[key] = result
         return result
