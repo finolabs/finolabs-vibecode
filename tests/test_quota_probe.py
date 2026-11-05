@@ -1,5 +1,6 @@
 """Quota acceptance uses synthetic account homes and fake programs only."""
 import copy
+import io
 import importlib.util
 import json
 import os
@@ -414,6 +415,7 @@ class QuotaTest(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("quota_metrics_test", ROOT / "scripts/metrics_hook.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        self.configure({"agy": self.fake("agy")})
         for metrics in (True, False):
             payload = json.dumps({"hook_event_name": "PostToolUse", "session_id": "test", "cwd": str(self.base)}).encode()
             with mock.patch.object(sys, "stdin", io.TextIOWrapper(io.BytesIO(payload))), mock.patch.object(qp, "trigger") as trigger, \
@@ -421,6 +423,37 @@ class QuotaTest(unittest.TestCase):
                 module.main()
                 trigger.assert_called_once()
 
+
+    def metrics_module(self):
+        spec = importlib.util.spec_from_file_location("quota_metrics_test", ROOT / "scripts/metrics_hook.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_large_hook_payload_records_and_triggers(self):
+        module = self.metrics_module()
+        module.fm.write_consent(90)
+        payload = json.dumps({"hook_event_name": "PostToolUse", "session_id": "large-hook",
+                              "cwd": str(self.base), "tool_name": "Skill",
+                              "tool_input": {"skill": "fnl-setup"}, "tool_response": "x" * 70000}).encode()
+        stream = io.BytesIO(payload)
+        with mock.patch.object(sys, "stdin", SimpleNamespace(buffer=stream)), \
+             mock.patch.object(qp, "trigger") as trigger, mock.patch.object(module, "refresh_if_stale"):
+            module.main()
+        events = [json.loads(line) for path in (self.root / "state").glob("events-*.jsonl")
+                  for line in path.read_text().splitlines()]
+        self.assertEqual([(e["event"], e["name"]) for e in events], [("skill", "fnl-setup")])
+        trigger.assert_called_once()
+        self.assertLessEqual(stream.tell(), 65536)
+
+    def test_no_consent_hook_never_reads_stdin_or_writes(self):
+        module = self.metrics_module()
+        stream = mock.Mock()
+        with mock.patch.object(sys, "stdin", stream), mock.patch.object(qp, "trigger") as trigger:
+            module.main()
+        stream.buffer.read.assert_not_called()
+        trigger.assert_not_called()
+        self.assertFalse(self.root.exists())
 
     def setup_module(self):
         spec = importlib.util.spec_from_file_location("quota_setup_test", ROOT / "skills/fnl-setup/scripts/quota_setup.py")
