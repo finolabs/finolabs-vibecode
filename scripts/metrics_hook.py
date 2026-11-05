@@ -27,6 +27,7 @@ COMMIT = re.compile(START + r"git(?:[ \t]+(?:-[cC][ \t]+(?:\"[^\"]*\"|'[^']*'|[^
 GH_COMMENT = re.compile(START + r"gh[ \t]+pr[ \t]+comment\b([^;&|\n]*)")
 ROUTER = re.compile(START + r"(?:python3?(?:[ \t]+-\S+)*[ \t]+)?[\"']?[^\s\"']*record\.py[\"']?[ \t]+router\b")
 KEEP = re.compile(START + r"(?:python3?(?:[ \t]+-\S+)*[ \t]+)?[\"']?(?:[^\s\"']*/)?record\.py[\"']?[ \t]+keep\b([^;&|)\n]*)")
+JUDGE = re.compile(START + r"(?:python3?(?:[ \t]+-(?:I|B|u))*[ \t]+)?[\"']?(?:[^\s\"']*/)?record\.py[\"']?[ \t]+judge\b([^;&|)\n]*)")
 MARKER_TEXT = r"<!-- fnl-review kind=(code|security) head=[0-9a-f]{7,40} verdict=(APPROVE|REWORK)(?: lane=yes)? -->"
 MARKER = re.compile("^" + MARKER_TEXT)
 MARKER_LINE = re.compile("^" + MARKER_TEXT, re.M)
@@ -202,7 +203,9 @@ def post_tool_use(sid, cwd, tool, data):
             fm.record("first_edit", sid, cwd)
     elif tool == "Bash":
         command = data.get("command")
+        judge_command = command
         if isinstance(command, list) and all(isinstance(word, str) for word in command):
+            judge_command = shlex.join(command)  # keep argv quotes for receipt recognition
             command = " ".join(command)  # an argv array, as some hosts send it
         if not isinstance(command, str) or len(command) > MAX_COMMAND:
             return
@@ -222,6 +225,31 @@ def post_tool_use(sid, cwd, tool, data):
                           "route_by": routed.group(1) if routed else "table"}
                 if all(check(fields[key]) for key, check in fm.SCHEMA["kept"].items()):
                     fm.record("kept", sid, cwd, **fields)
+        if "record.py" in judge_command and not any(x in judge_command for x in ("<<", "`", "$")):
+            try:
+                shlex.split(judge_command)  # include the script token: unmatched quotes never ran
+            except ValueError:
+                return
+            for judge in JUDGE.finditer(judge_command):
+                try:
+                    prefix = judge_command[:judge.start()]
+                    # An open quote or a comment before the match means this is text, not a command.
+                    if shlex.split(prefix) != shlex.split(prefix, comments=True):
+                        continue
+                    words = iter(shlex.split(judge.group(1)))
+                    fields = {}
+                    for word in words:
+                        flag, equal, value = word.partition("=")
+                        key = flag[2:] if flag.startswith("--") else ""
+                        if key not in fm.SCHEMA["judge"] or key in fields:
+                            raise ValueError("invalid judge argument")
+                        fields[key] = value if equal else next(words)
+                    if (set(fields) == set(fm.SCHEMA["judge"])
+                            and all(check(fields[key]) for key, check in fm.SCHEMA["judge"].items())
+                            and fm.valid_judge_pairs(fields)):
+                        fm.record("judge", sid, cwd, **fields)
+                except (ValueError, StopIteration):
+                    continue  # malformed commands never record or block the host
 
 
 def main():

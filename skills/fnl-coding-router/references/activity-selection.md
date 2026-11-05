@@ -46,3 +46,7 @@ Candidate examples, not a pipeline: a requirement gap maps to specify or clarify
 Record the state binding, eligible and excluded IDs with reasons, the response, distribution and model when called (as the adapter observed them; an agent's own "the evaluator ran" is not evidence), the disposition and the next stop condition. Permission to read a private source is not permission to send it to an evaluator. The evaluator cannot consent, prove facts, accept code or waive gates.
 
 Judge the practice by representative cases: unnecessary calls, missed useful opportunities, latency and cost, data sent. Call count alone is not a success metric.
+
+## Decision receipt
+
+Advisory (agent judgment): after each judge decision, run `python3 -I <fnl-coding-router folder>/scripts/record.py judge --site <depth|activity> --grader judge --result <validated|unverified> --followed <yes|no|na>`. Use `depth` for depth and its gate, `activity` for activity selection. A usable validated answer gets `validated` and `yes` when followed, `no` when not followed, or `na` when not applicable. Unavailable, close or invalid answers get `unverified` and `na`. An agent fallback decision gets `--grader agent --result validated --followed na`. With no judge, run no receipt. The command only prints; the hook stores its fixed fields only with metrics consent, never the state, question, response or distribution.
