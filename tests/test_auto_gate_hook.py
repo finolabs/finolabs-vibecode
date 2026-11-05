@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "scripts/auto_gate_hook.py"
 # Run the shipped script under -I, replacing only the account lookup. No production
-# state-path override exists. The enabled resolver is injected until mode ships.
+# state-path override exists; settings are resolved by the shipped mode.py.
 BOOT = '''import pwd, runpy, sys
 from types import SimpleNamespace
 account_home = sys.argv.pop(1)
@@ -43,8 +43,7 @@ class AutoGateHookTest(unittest.TestCase):
         self.env = {"HOME": str(self.home / "decoy"), "ORCHESTRATION_HOST_CONFIG": str(self.config),
                     "FNL_STATE_DIR": str(self.home / "decoy"), "XDG_STATE_HOME": str(self.home / "decoy")}
         self.payload = json.dumps({"tool_name": "Write", "cwd": str(self.repo)})
-        self.setup = ('sys.path.insert(0, ' + repr(str(ROOT / 'scripts')) + ')\n'
-                      'import mode\nmode.effective = lambda: {"delegation_mode":"auto", "auto_gate":"on"}')
+        self.setup = 'sys.path.insert(0, ' + repr(str(ROOT / 'scripts')) + ')'
 
     def run_hook(self, payload=None, setup=None):
         result = subprocess.run([sys.executable, "-I", "-c", BOOT.format(setup=self.setup if setup is None else setup),
@@ -89,6 +88,30 @@ class AutoGateHookTest(unittest.TestCase):
             with self.subTest(payload=payload[:60]):
                 self.assertEqual(self.run_hook(payload), "")
         self.assertFalse(self.folder.exists())
+
+    def test_config_opt_in_and_effective_auto_both_required(self):
+        for text, env in (
+            ("## Delegation mode\nauto\n", {}),
+            ("## Delegation mode\nauto\n## Auto gate\noff\n", {}),
+            ("## Delegation mode\nmanual\n## Auto gate\non\n", {}),
+            ("## Delegation mode\nsuggest\n## Auto gate\non\n", {}),
+            ("## Delegation mode\nauto\n", {"FNL_AUTO_GATE": "on"}),
+            ("## Delegation mode\nauto\n## Auto gate\non\n", {"FNL_DELEGATION_MODE": "manual"}),
+        ):
+            with self.subTest(text=text, env=env):
+                self.config.write_text(text)
+                self.env.pop("FNL_AUTO_GATE", None)
+                self.env.pop("FNL_DELEGATION_MODE", None)
+                self.env.update(env)
+                self.assertEqual(self.run_hook(), "")
+                self.assertFalse(self.folder.exists())
+
+    def test_alarm_api_failure_allows(self):
+        self.assertEqual(self.run_hook(setup="import signal\ndef fail(*a): raise OSError()\nsignal.alarm = fail"), "")
+
+    def test_only_gate_environment_is_resolved(self):
+        setup = self.setup + '\nimport os\noriginal = os.environ\nclass GateEnvironment(dict):\n def __contains__(self, key):\n  if key == "FNL_ROUTING": os._exit(99)\n  return super().__contains__(key)\n def get(self, key, default=None):\n  if key == "FNL_ROUTING": os._exit(99)\n  return super().get(key, default)\nos.environ = GateEnvironment(original)'
+        self.assert_deny(self.run_hook(setup=setup))
 
     def test_no_repository_allows(self):
         self.assertEqual(self.run_hook(json.dumps({"tool_name": "Write", "cwd": str(self.home)})), "")

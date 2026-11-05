@@ -333,7 +333,7 @@ def collect():
     return {"principle": PRINCIPLE, "hosts": hosts, "setup": [host_config, inventory,
             retired_evidence([*user_context, *context]),
             item("effective settings", "ok", "delegation mode=" + settings["delegation_mode"] +
-                 "; routing=" + settings["routing"] + "; selected values only, not runtime proof"), *repository]}
+                 "; routing=" + settings["routing"] + "; auto gate=" + settings["auto_gate"] + "; selected values only, not runtime proof"), *repository]}
 
 
 def main():

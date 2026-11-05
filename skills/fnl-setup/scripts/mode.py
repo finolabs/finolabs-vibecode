@@ -8,9 +8,10 @@ import re
 import stat
 from pathlib import Path
 
-DEFAULTS = {"delegation_mode": "suggest", "routing": "on"}
+DEFAULTS = {"delegation_mode": "suggest", "routing": "on", "auto_gate": "off"}
 SETTINGS = {"delegation_mode": ("Delegation mode", "FNL_DELEGATION_MODE", {"manual", "suggest", "auto"}),
-            "routing": ("Routing", "FNL_ROUTING", {"on", "off"})}
+            "routing": ("Routing", "FNL_ROUTING", {"on", "off"}),
+            "auto_gate": ("Auto gate", "FNL_AUTO_GATE", {"on", "off"})}
 MAX_BYTES = 262144
 
 
@@ -50,9 +51,10 @@ def host_text():
         os.close(fd)
 
 
-def effective(details=False):
-    values = DEFAULTS.copy()
+def effective(details=False, keys=None):
+    values = {key: DEFAULTS[key] for key in (DEFAULTS if keys is None else keys)}
     sources = {}
+    overridden = {}
     try:
         text = host_text()
     except (OSError, UnicodeError, ValueError):
@@ -60,15 +62,23 @@ def effective(details=False):
     # Ignore examples in fenced blocks, then collect complete second-level sections.
     text = re.sub(r"^```.*?^```[^\n]*$", "", text, flags=re.M | re.S)
     parts = re.split(r"^## (.+?)\s*$", text, flags=re.M)
-    for key, (heading, variable, allowed) in SETTINGS.items():
+    for key in values:
+        heading, variable, allowed = SETTINGS[key]
         sections = [parts[i + 1].strip() for i in range(1, len(parts), 2) if parts[i] == heading]
-        raw = os.environ[variable] if variable in os.environ else sections[0] if len(sections) == 1 else ""
+        override = variable in os.environ
+        env_value = os.environ.get(variable, "")
+        if key == "auto_gate":
+            # The environment is an off switch, never an opt-in.
+            override = env_value.lower() in {"off", "0", "false", "no"}
+            env_value = "off"
+        overridden[key] = override
+        raw = env_value if override else sections[0] if len(sections) == 1 else ""
         if raw in allowed:
             values[key] = raw
         sources[key] = (variable + (" (invalid; default used)" if raw not in allowed else "")
-                        if variable in os.environ else "host config" if raw in allowed else "default")
+                        if override else "host config" if raw in allowed else "default")
     return {key: {"value": value, "source": sources[key],
-                  "file_overridden": SETTINGS[key][1] in os.environ}
+                  "file_overridden": overridden[key]}
             for key, value in values.items()} if details else values
 
 
@@ -154,6 +164,7 @@ def main():
     parser.add_argument("action", choices=("show", "set"), nargs="?")
     parser.add_argument("--delegation-mode", choices=sorted(SETTINGS["delegation_mode"][2]))
     parser.add_argument("--routing", choices=("on", "off"))
+    parser.add_argument("--auto-gate", choices=("on", "off"))
     parser.add_argument("--yes", action="store_true", help="write only after the user confirmed the shown change")
     try:
         args = parser.parse_args()

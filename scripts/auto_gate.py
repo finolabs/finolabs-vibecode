@@ -35,7 +35,7 @@ def enabled(effective):
     """Environment can disable, but only host config can opt in."""
     if os.environ.get("FNL_AUTO_GATE", "").lower() in OFF_VALUES:
         return False
-    settings = effective()
+    settings = effective(keys=("delegation_mode", "auto_gate"))
     return settings.get("delegation_mode") == "auto" and settings.get("auto_gate") == "on"
 
 
