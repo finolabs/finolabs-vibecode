@@ -225,6 +225,8 @@ def config():
             raise ValueError("duplicate folder")
         result = {}
         for agent in agents:
+            if "Resolved " + agent not in values:
+                continue  # Legacy records need a new preview and confirmation.
             executable = values["Executable " + agent]
             interpreter = values.get("Interpreter " + agent)
             for path in [executable, *([interpreter] if interpreter else [])]:
@@ -284,7 +286,11 @@ def checked_path(value, *, directory=False):
 def checked_executable(agent, entry):
     if agent not in SOURCES or Path(entry["executable"]).name != agent:
         raise ValueError("executable missing or wrong name")
-    executable = entry.get("resolved", entry["executable"])
+    executable = entry.get("resolved")
+    if not executable:
+        raise ValueError("missing resolved target; preview again")
+    if str(Path(entry["executable"]).resolve(strict=True)) != executable:
+        raise ValueError("executable target changed; preview again")
     first = checked_path(executable)
     interpreter = entry.get("interpreter")
     if first.startswith(b"#!"):
@@ -367,7 +373,7 @@ def read_cache(folder):
                         raise ValueError("group")
                     group(item["name"], item["window"], item["remaining_fraction"], item["reset_time"])
         return data
-    except (OSError, ValueError, TypeError, KeyError):
+    except FileNotFoundError:
         return {}
 
 
@@ -500,7 +506,7 @@ def command(agent, entry, label, nonce):
     if agent == "claude":
         validate_configs(entry["configs"])
         folder = entry["configs"][label]
-        if Path(folder) == dr.account_home() / ".claude":
+        if os.path.samefile(folder, dr.account_home() / ".claude"):
             folder = None
     argv += ["app-server"] if agent == "codex" else ["-p", "/usage", "--output-format", "json"]
     with working_folder() as cwd:
@@ -659,7 +665,7 @@ def status_lines():
                 lines.append(f"Quota {agent}/{label}: measured {entry['measured']}; {pools}" +
                              (" (unverified: older than 8 hours)" if age > 8 * 3600 or age < 0 else ""))
         return lines or ["Quota: unverified (no reading)."]
-    except (OSError, ValueError):
+    except (OSError, ValueError, TypeError, KeyError):
         return ["Quota: unverified (no reading)."]
 
 

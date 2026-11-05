@@ -154,7 +154,7 @@ class QuotaTest(unittest.TestCase):
             body = "print(" + repr((FIXTURES / (qp.SOURCES[agent] + ".json")).read_text()) + ")\n"
         path.write_text("#!" + self.interpreter + "\n" + body)
         path.chmod(0o700)
-        return {"executable": str(path), "interpreter": self.interpreter,
+        return {"executable": str(path), "resolved": str(path), "interpreter": self.interpreter,
                 "configs": {"default": str(self.config_dir) if agent == "claude" else None}}
 
     def configure(self, entries):
@@ -162,6 +162,8 @@ class QuotaTest(unittest.TestCase):
                  "- Agents: " + ", ".join(entries)]
         for agent, entry in entries.items():
             lines += [f"- Executable {agent}: {entry['executable']}", f"- Interpreter {agent}: {entry['interpreter']}"]
+            if "resolved" in entry:
+                lines.append(f"- Resolved {agent}: {entry['resolved']}")
             if agent == "claude":
                 lines += [f"- Claude config: {label}: {path}" for label, path in entry["configs"].items()]
         dr.write_data("host.md", ("\n".join(lines) + "\n").encode())
@@ -431,12 +433,14 @@ class QuotaTest(unittest.TestCase):
         outside.write_text('{"not":"trusted"}')
         cache.symlink_to(outside)
         with qp.state_folder() as folder:
-            self.assertEqual(qp.read_cache(folder), {})
+            with self.assertRaises((OSError, ValueError)):
+                qp.read_cache(folder)
         cache.unlink()
         cache.write_text('{}')
         cache.chmod(0o666)
         with qp.state_folder() as folder:
-            self.assertEqual(qp.read_cache(folder), {})
+            with self.assertRaises((OSError, ValueError)):
+                qp.read_cache(folder)
 
 
     def test_manifest_hooks_nonce_guard_and_forgery(self):
@@ -581,6 +585,97 @@ class QuotaTest(unittest.TestCase):
                   for line in path.read_text().splitlines()]
         self.assertEqual([e["event"] for e in events], ["first_edit"])
         self.assertNotIn("private content", json.dumps(events))
+
+    def test_capped_cache_does_not_start_worker(self):
+        self.configure({"agy": self.fake("agy")})
+        self.ready()
+        path = self.root / "state/quota/quota.json"
+        path.write_bytes(b" " * (qp.LIMIT + 1))
+        path.chmod(0o600)
+        with mock.patch.object(qp.subprocess, "Popen") as spawn:
+            self.assertFalse(qp.trigger())
+            spawn.assert_not_called()
+
+    def test_runtime_resolved_target_must_match_confirmed_path(self):
+        entry = self.fake("agy")
+        entry["resolved"] = self.fake("other", "print('unused')\n")["resolved"]
+        with mock.patch.object(qp.subprocess, "Popen") as spawn:
+            with self.assertRaisesRegex(ValueError, "target changed"):
+                qp.checked_executable("agy", entry)
+            spawn.assert_not_called()
+
+    def test_setup_refuses_line_breaks_in_recorded_values(self):
+        setup = self.setup_module()
+        entry = self.fake("claude")
+        entry.pop("configs")
+        for separator in ("\n", "\r"):
+            for field in ("executable", "resolved", "interpreter", "label", "folder"):
+                with self.subTest(separator=repr(separator), field=field):
+                    changed = dict(entry)
+                    folders = {}
+                    if field in changed:
+                        path = self.bin / ("line" + separator + "break") / Path(entry[field]).name
+                        path.parent.mkdir(exist_ok=True)
+                        path.write_text("synthetic executable")
+                        path.chmod(0o700)
+                        changed[field] = str(path)
+                        if field in {"executable", "resolved"}:
+                            changed["executable"] = changed["resolved"] = str(path)
+                    elif field == "label":
+                        folders["line" + separator + "break"] = str(self.config_dir)
+                    else:
+                        path = self.home / ("line" + separator + "break")
+                        path.mkdir(mode=0o700, exist_ok=True)
+                        folders["work"] = str(path)
+                    with mock.patch.object(setup, "resolve_executable", return_value=changed), \
+                         mock.patch.object(setup, "excluded"), mock.patch.object(qp, "checked_executable"), \
+                         self.assertRaisesRegex(ValueError, "newline or carriage return"):
+                        setup.preview(["claude"], folders)
+
+    def test_folder_walk_terminates_and_refuses_writable_ancestor(self):
+        parent = self.home / "profiles"
+        folder = parent / "work"
+        folder.mkdir(parents=True, mode=0o700)
+        qp.checked_path(folder, directory=True)
+        for mode in (0o770, 0o707):
+            parent.chmod(mode)
+            with self.assertRaisesRegex(ValueError, "unsafe ancestor"):
+                qp.checked_path(folder, directory=True)
+        parent.chmod(0o700)
+        qp.checked_path(self.bin, directory=True)
+
+    def test_default_install_uses_filesystem_identity(self):
+        setup = self.setup_module()
+        entry = self.fake("claude", "import os,json\nprint(json.dumps(dict(os.environ)))\n")
+        alternate = str(self.home / ".CLAUDE")
+        real_samefile = os.path.samefile
+        def samefile(a, b):
+            return real_samefile(str(a).replace(".CLAUDE", ".claude"),
+                                 str(b).replace(".CLAUDE", ".claude"))
+        entry["configs"] = {"personal": alternate}
+        # Model case-insensitive lookup on hosts whose temporary volume is case-sensitive.
+        with mock.patch.object(os.path, "samefile", side_effect=samefile), \
+             mock.patch.object(qp, "validate_configs"), mock.patch.object(setup, "excluded"), \
+             mock.patch.dict(os.environ, {"PATH": str(self.bin)}):
+            plan, _ = setup.preview(["claude"], entry["configs"])
+            self.assertEqual(plan["configs"], entry["configs"])
+            data = json.loads(qp.command("claude", entry, "personal", "a" * 48))
+            self.assertNotIn("CLAUDE_CONFIG_DIR", data)
+
+    def test_legacy_record_requires_repreview(self):
+        setup = self.setup_module()
+        entry = self.fake("agy")
+        del entry["resolved"]
+        self.configure({"agy": entry})
+        with mock.patch.object(qp.subprocess, "Popen") as spawn:
+            self.assertNotIn("agy", qp.config())
+            self.assertFalse(qp.trigger())
+            spawn.assert_not_called()
+        with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), \
+             mock.patch.object(setup, "excluded"), mock.patch.object(sys, "stderr", new_callable=io.StringIO) as errors:
+            plan, _ = setup.preview(["agy"])
+        self.assertIn("agy needs re-preview: missing Resolved", errors.getvalue())
+        self.assertEqual(plan["agents"]["agy"]["resolved"], entry["executable"])
 
     def test_no_consent_hook_never_reads_stdin_or_writes(self):
         module = self.metrics_module()

@@ -123,9 +123,11 @@ def preview(agents, configs=None, off=False):
     if len(set(agents)) != len(agents) or set(agents) - qp.SOURCES.keys() or (not off and not agents):
         raise ValueError("agents")
     folders = dict(configs or {})
+    if any("\n" in value or "\r" in value for pair in folders.items() for value in pair):
+        raise ValueError("newline or carriage return in quota label or path")
     if "claude" in agents and not off:
         default = str(dr.account_home() / ".claude")
-        if default not in folders.values():
+        if not any(os.path.samefile(path, default) for path in folders.values()):
             if "default" in folders:
                 raise ValueError("default label names another folder")
             folders = {"default": default, **folders}
@@ -133,6 +135,11 @@ def preview(agents, configs=None, off=False):
     elif folders:
         raise ValueError("Claude not selected")
     text = read_host()
+    old = qp.section(text).splitlines()
+    for agent in agents:
+        if (any(line.startswith(f"- Executable {agent}: ") for line in old)
+                and not any(line.startswith(f"- Resolved {agent}: ") for line in old)):
+            print(f"Quota probe {agent} needs re-preview: missing Resolved record.", file=sys.stderr)
     plan = {"choice": "off" if off else "on", "date": qp.now().date().isoformat(),
             "created": qp.stamp(qp.now()), "root": str(root), "host_digest": hashlib.sha256(text.encode()).hexdigest(),
             "agents": {a: resolve_executable(a) for a in agents} if not off else {}, "configs": folders}
@@ -166,6 +173,8 @@ def validate_plan(plan):
     for agent, entry in agents.items():
         if not isinstance(entry, dict) or set(entry) != {"executable", "resolved", "interpreter"}:
             raise ValueError("executable")
+        if any("\n" in value or "\r" in value for value in entry.values() if isinstance(value, str)):
+            raise ValueError("newline or carriage return in quota path")
         path = Path(entry["executable"])
         if not path.is_absolute() or ".." in path.parts or path.name != agent:
             raise ValueError("executable missing or wrong name")
@@ -179,7 +188,7 @@ def validate_plan(plan):
         qp.checked_executable(agent, entry)
     if "claude" in agents:
         qp.validate_configs(folders)
-        if str(dr.account_home() / ".claude") not in folders.values():
+        if not any(os.path.samefile(path, dr.account_home() / ".claude") for path in folders.values()):
             raise ValueError("default install missing")
     elif folders:
         raise ValueError("Claude not selected")
