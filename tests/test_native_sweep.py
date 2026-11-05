@@ -7,9 +7,10 @@ YES = "Offer neutral Yes and No choices with none preselected or marked recommen
 QUESTIONS = {
     "fnl-setup/SKILL.md": (
         "On a bare invocation", "Before the mode choice", "**Beginner path.**",
-        "**Preferences**",
+        "**Preferences**", "**Compaction suggestion**",
     ),
     "fnl-setup/references/check.md": ("4. Offer one small smoke task",),
+    "fnl-setup/references/route-judge.md": ("Ask", "Ask a second, separate question"),
     "fnl-update/SKILL.md": ("2. If the user only asked",),
     "fnl-status/SKILL.md": ("When the argument is `purge`", "Their consent record stays"),
 }
@@ -27,6 +28,8 @@ class NativeSweepTest(unittest.TestCase):
                 with self.subTest(path=path, question=start):
                     paragraph = content.split(start, 1)[1].split("\n", 1)[0]
                     self.assertIn(NATIVE, paragraph)
+            if path.endswith("route-judge.md"):
+                continue  # loaded by fnl-setup/SKILL.md, which states the fallback
             with self.subTest(path=path, rule="fallback"):
                 self.assertIn("Ask in text", content)
                 self.assertIn("tool is refused or fails", content)
@@ -43,6 +46,9 @@ class NativeSweepTest(unittest.TestCase):
             ("fnl-setup/SKILL.md", "**Beginner path.**"),
             ("fnl-setup/SKILL.md", "**Preferences**"),
             ("fnl-setup/references/check.md", "4. Offer one small smoke task"),
+            ("fnl-setup/references/route-judge.md", "Ask"),
+            ("fnl-setup/references/route-judge.md", "Ask a second, separate question"),
+            ("fnl-setup/SKILL.md", "**Compaction suggestion**"),
             ("fnl-update/SKILL.md", "2. If the user only asked"),
             ("fnl-status/SKILL.md", "When the argument is `purge`"),
             ("fnl-status/SKILL.md", "Their consent record stays"),
