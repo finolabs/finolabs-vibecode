@@ -1,5 +1,6 @@
 """Fixed-executable inventory, consent and section boundaries with fake CLIs only."""
 
+import datetime
 import importlib.util
 import os
 import re
@@ -132,15 +133,23 @@ class AgentScanTest(unittest.TestCase):
             self.assertTrue(updated.startswith(text + b"\n\n## "))
             self.assertEqual(scan.section(updated.decode()), "## Agents on this machine\n\nnew\n\n")
 
-    def test_later_date_keeps_stored_dates_and_writes_nothing(self):
+    def test_recent_stored_date_is_kept_and_writes_nothing(self):
         with mock.patch.dict(os.environ, self.env, clear=True):
             previous = scan.inventory("codex", "", {})
-        previous = re.sub(r"\d{4}-\d{2}-\d{2}", "2000-01-01", previous)
+        recent = (datetime.date.today() - datetime.timedelta(days=3)).isoformat()
+        previous = re.sub(r"\d{4}-\d{2}-\d{2}", recent, previous)
         self.config.write_text(previous)
         before = self.config.stat().st_mtime_ns
         self.assertIn("No difference.", self.run_scan("--host", "codex", "--yes"))
         self.assertEqual(self.config.read_text(), previous)
         self.assertEqual(self.config.stat().st_mtime_ns, before)
+
+    def test_old_stored_date_is_a_date_only_difference(self):
+        with mock.patch.dict(os.environ, self.env, clear=True):
+            previous = scan.inventory("codex", "", {})
+        previous = re.sub(r"\d{4}-\d{2}-\d{2}", "2000-01-01", previous)
+        self.config.write_text(previous)
+        self.assertNotIn("No difference.", self.run_scan("--host", "codex"))
 
     def test_neutral_yes_clause(self):
         clause = "Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes."

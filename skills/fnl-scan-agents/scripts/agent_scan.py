@@ -128,7 +128,12 @@ def inventory(host, previous, confirmed):
         checked = today
         old_row = stored.get(name)
         if old_row and old_row[:4] == [name, "yes" if executable else "no", version, allowed]:
-            checked = old_row[4]
+            try:
+                age = (datetime.date.today() - datetime.date.fromisoformat(old_row[4])).days
+            except ValueError:
+                age = None
+            if age is not None and 0 <= age <= 7:
+                checked = old_row[4]
         rows.append(f'| {name} | {"yes" if executable else "no"} | {version} | {allowed} | {checked} |')
     return "\n".join(rows) + "\n\n"
 
