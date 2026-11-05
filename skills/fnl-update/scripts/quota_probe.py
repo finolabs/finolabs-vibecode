@@ -308,9 +308,18 @@ def validate_configs(folders):
 
 
 @contextmanager
-def state_folder(*, create=False):
+def state_folder(*, create=False, writer=False):
     with dr.data_folder("state/quota", create=create, private=True) as folder:
-        fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Hooks never wait. A just-spawned worker can briefly contend with its
+        # parent publishing the reservation, as in the auto-gate writer.
+        for attempt in range(3 if writer else 1):
+            try:
+                fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if not writer or attempt == 2:
+                    raise
+                time.sleep(0.05)
         yield folder
 
 
@@ -425,7 +434,7 @@ def claim_marker(folder, current):
 
 
 def heartbeat(nonce):
-    with state_folder() as folder:
+    with state_folder(writer=True) as folder:
         saved = marker(folder, now())
         if not saved or saved["nonce"] != nonce:
             raise ValueError("worker retired")
@@ -571,7 +580,7 @@ def worker(jobs):
     valid = {(a, label) for a, entry in configs.items() for label in entry["configs"]}
     if any(not isinstance(job, list) or len(job) != 2 or tuple(job) not in valid for job in jobs):
         return
-    with state_folder(create=True) as folder:
+    with state_folder(create=True, writer=True) as folder:
         nonce = claim_marker(folder, now())
     if not nonce:
         return
@@ -583,7 +592,7 @@ def worker(jobs):
                 continue
             heartbeat(nonce)
             measured = now()
-            with state_folder() as folder:
+            with state_folder(writer=True) as folder:
                 delays = backoff(folder, configs, measured)
                 delays.setdefault(agent, {})[label] = {"retry_after": stamp(measured + timedelta(minutes=30)), "error": "unfinished"}
                 write_json(folder, "backoff.json", delays)
@@ -600,7 +609,7 @@ def worker(jobs):
                 error, seconds = "output-limit", 1800
             except (OSError, ValueError, UnicodeError):
                 error, seconds = "execution", 1800
-            with state_folder() as folder:
+            with state_folder(writer=True) as folder:
                 delays = backoff(folder, configs, now())
                 delays.setdefault(agent, {})[label] = {"retry_after": stamp(now() + timedelta(seconds=seconds)), "error": error}
                 write_json(folder, "backoff.json", delays)
@@ -609,7 +618,7 @@ def worker(jobs):
                     cache.setdefault(agent, {})[label] = {"measured": stamp(measured), "source": SOURCES[agent], "groups": groups}
                     write_json(folder, "quota.json", cache)
     finally:
-        with state_folder() as folder:
+        with state_folder(writer=True) as folder:
             saved = marker(folder, now())
             if saved and saved["nonce"] == nonce:
                 os.unlink("worker.json", dir_fd=folder)

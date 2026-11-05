@@ -553,6 +553,25 @@ class QuotaTest(unittest.TestCase):
         self.assertEqual(qp.checked_executable(entry), [entry["interpreter"], entry["executable"]])
 
 
+    def test_worker_lock_contention_is_bounded_but_hook_never_waits(self):
+        self.ready()
+        with mock.patch.object(qp.fcntl, "flock", side_effect=[BlockingIOError(), None]), mock.patch.object(qp.time, "sleep") as sleep:
+            with qp.state_folder(writer=True):
+                pass
+            sleep.assert_called_once_with(.05)
+        with mock.patch.object(qp.fcntl, "flock", side_effect=BlockingIOError()), mock.patch.object(qp.time, "sleep") as sleep:
+            with self.assertRaises(BlockingIOError):
+                with qp.state_folder():
+                    pass
+            sleep.assert_not_called()
+        with mock.patch.object(qp.fcntl, "flock", side_effect=BlockingIOError()) as flock, mock.patch.object(qp.time, "sleep") as sleep:
+            with self.assertRaises(BlockingIOError):
+                with qp.state_folder(writer=True):
+                    pass
+            self.assertEqual(flock.call_count, 3)
+            self.assertEqual(sleep.call_args_list, [mock.call(.05), mock.call(.05)])
+
+
 class CopiesTest(unittest.TestCase):
     def test_all_copies_identical_and_listed(self):
         actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob("quota_probe.py")}
