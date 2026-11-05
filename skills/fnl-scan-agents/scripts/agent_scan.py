@@ -238,6 +238,8 @@ def main():
             confirmed[key] = value
         root, source = dr.data_root()
         print(f"Data root: {root} ({source})")
+        from quota_probe import status_lines
+        print("\n".join(status_lines()))
         if source == "invalid":
             raise ValueError("invalid data root")
         path = root / "host.md"

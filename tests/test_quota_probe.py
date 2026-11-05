@@ -508,7 +508,6 @@ class QuotaTest(unittest.TestCase):
         self.ready()
         self.assertEqual(qp.status_lines(), ["Quota: unverified (no reading)."])
 
-
     def test_account_fixture_reaches_dashboard_and_nested_subprocess(self):
         import shlex
         from tests.data_root_fixture import REAL_HOME
@@ -533,7 +532,6 @@ class QuotaTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "synthetic-home\nguarded\n")
 
-
     def test_env_shebang_uses_recorded_interpreter(self):
         entry = self.fake("agy", "print('ok')\n")
         Path(entry["executable"]).write_text("#!/usr/bin/env python3\nprint('ok')\n")
@@ -544,13 +542,70 @@ class QuotaTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             qp.checked_executable(entry)
 
+    def test_timeout_kills_descendants(self):
+        sentinel = self.base / "descendant-survived"
+        body = ("import os,time\n"
+                "if os.fork() == 0:\n"
+                " time.sleep(.6)\n"
+                f" open({str(sentinel)!r},'w').write('survived')\n"
+                " os._exit(0)\n"
+                "time.sleep(60)\n")
+        entry = self.fake("agy", body)
+        with mock.patch.object(qp, "TIMEOUT", .2), self.assertRaises(TimeoutError):
+            qp.command("agy", entry, "default", "a" * 48)
+        time.sleep(.7)
+        self.assertFalse(sentinel.exists())
 
-    def test_direct_shebang_symlink_keeps_recorded_real_interpreter(self):
-        entry = self.fake("agy")
-        alias = self.bin / "python-alias"
-        alias.symlink_to(entry["interpreter"])
-        Path(entry["executable"]).write_text("#!" + str(alias) + "\nprint('ok')\n")
-        self.assertEqual(qp.checked_executable(entry), [entry["interpreter"], entry["executable"]])
+    def test_cache_display_safe_and_age(self):
+        self.configure({"agy": self.fake("agy")})
+        self.ready()
+        with mock.patch.object(qp, "now", return_value=MEASURED):
+            qp.worker([["agy", "default"]])
+        with mock.patch.object(qp, "now", return_value=MEASURED + qp.timedelta(hours=9)):
+            lines = qp.status_lines()
+        self.assertIn("measured 2026-11-05T09:00:00Z", lines[0])
+        self.assertIn("gemini weekly", lines[0])
+        self.assertIn("unverified: older than 8 hours", lines[0])
+        self.assertNotIn(str(self.home), lines[0])
+
+    def test_scan_and_check_print_cached_measurement_without_probing(self):
+        self.configure({"agy": self.fake("agy")})
+        self.ready()
+        with mock.patch.object(qp, "now", return_value=MEASURED):
+            qp.worker([["agy", "default"]])
+        # Empty PATH ensures the scan can never find a real agent executable.
+        env = {"HOME": str(self.home), "PATH": ""}
+        for script, args in (("fnl-scan-agents/scripts/agent_scan.py", ["--host", "codex"]),
+                             ("fnl-setup/scripts/checkup.py", ["--json"])):
+            with self.subTest(script=script):
+                result = subprocess.run([sys.executable, "-I", str(ROOT / "skills" / script), *args],
+                                        cwd=self.base, env=env, text=True, capture_output=True, timeout=5)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("measured 2026-11-05T09:00:00Z", result.stdout)
+                self.assertIn("gemini weekly", result.stdout)
+        self.assertFalse((self.root / "state/quota/worker.json").exists())
+
+    def test_foreign_config_folder_refused(self):
+        original = os.fstat
+        inode = self.config_dir.stat().st_ino
+        def foreign(fd):
+            info = original(fd)
+            if info.st_ino == inode:
+                fields = list(info)
+                fields[4] = os.getuid() + 123
+                return os.stat_result(fields)
+            return info
+        with mock.patch.object(os, "fstat", side_effect=foreign), self.assertRaises(ValueError):
+            qp.validate_configs({"default": str(self.config_dir)})
+
+    def test_bad_pointer_and_decoy_cache_never_display(self):
+        decoy = self.base / "decoy"
+        decoy.mkdir()
+        (decoy / "quota.json").write_text('{"identity":"forged"}')
+        with mock.patch.dict(os.environ, {"HOME": str(decoy), "FNL_STATE_DIR": str(decoy), "XDG_STATE_HOME": str(decoy)}):
+            self.assertEqual(qp.status_lines(), ["Quota: unverified (no reading)."])
+        dr.write_data("root.json", b"truncated")
+        self.assertEqual(qp.status_lines(), ["Quota: unverified (no reading)."])
 
 
     def test_worker_lock_contention_is_bounded_but_hook_never_waits(self):
@@ -571,11 +626,17 @@ class QuotaTest(unittest.TestCase):
             self.assertEqual(flock.call_count, 3)
             self.assertEqual(sleep.call_args_list, [mock.call(.05), mock.call(.05)])
 
-
     def test_codex_malformed_reply_is_shape_error(self):
         entry = self.fake("codex", "import sys,time\nsys.stdin.readline()\nprint('not-json',flush=True)\ntime.sleep(60)\n")
         with self.assertRaises(qp.ShapeError):
             qp.command("codex", entry, "default", "a" * 48)
+
+    def test_direct_shebang_symlink_keeps_recorded_real_interpreter(self):
+        entry = self.fake("agy")
+        alias = self.bin / "python-alias"
+        alias.symlink_to(entry["interpreter"])
+        Path(entry["executable"]).write_text("#!" + str(alias) + "\nprint('ok')\n")
+        self.assertEqual(qp.checked_executable(entry), [entry["interpreter"], entry["executable"]])
 
 
 class CopiesTest(unittest.TestCase):
@@ -594,3 +655,27 @@ class CopiesTest(unittest.TestCase):
             self.assertNotIn("/" + "Users/", text)
             self.assertNotIn("/" + "home/", text)
             self.assertNotIn('"accountId"', text)
+
+
+class DocumentationTest(unittest.TestCase):
+    def test_routing_thresholds_and_advisory(self):
+        text = (ROOT / "skills/fnl-delegate/SKILL.md").read_text()
+        step = text.split("4. **Reachability and quota**", 1)[1].split("5. **Effort**", 1)[0]
+        for phrase in ("advisory, agent judgment", "Below 10%", "reset time still ahead", "older than 8 hours",
+                       "excludes nothing", "week-all", "user's own statement", "wins", "state/quota/quota.json"):
+            self.assertIn(phrase, step)
+
+    def test_privacy_sentences(self):
+        text = (ROOT / "PRIVACY.md").read_text()
+        for phrase in ("For the quota probe, the plugin itself makes no network call.",
+                       "The user's own `agy`, `claude` and `codex` programs contact their providers with the user's own accounts; the plugin sends nothing about the user.",
+                       "<data root>/state/quota/quota.json", "dated opt-in", "canonical `<data root>/host.md`"):
+            self.assertIn(phrase, text)
+
+    def test_setup_consent_and_displays(self):
+        text = (ROOT / "skills/fnl-setup/SKILL.md").read_text()
+        self.assertIn("Every 4 hours a background step runs each agent's own read-only usage command", text)
+        self.assertIn("its hooks, plugins and servers run", text)
+        self.assertIn("neutral Yes and No", text)
+        for file in ("skills/fnl-setup/scripts/checkup.py", "skills/fnl-scan-agents/scripts/agent_scan.py"):
+            self.assertIn("status_lines()", (ROOT / file).read_text())
