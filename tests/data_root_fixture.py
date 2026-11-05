@@ -19,7 +19,7 @@ REAL_HOME = Path(pwd.getpwuid(os.getuid()).pw_dir)
 def account(test, home):
     home = Path(home).resolve()
     home.mkdir(parents=True, exist_ok=True)
-    patch = mock.patch.object(pwd, "getpwuid", return_value=SimpleNamespace(pw_dir=str(home)))
+    patch = mock.patch.object(pwd, "getpwuid", return_value=SimpleNamespace(pw_dir=str(home), pw_name="quota-test-user"))
     patch.start()
     test.addCleanup(patch.stop)
     original_open = os.open
