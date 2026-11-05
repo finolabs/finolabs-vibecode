@@ -43,6 +43,17 @@ This pack owns the decisions between tools: routing, depth, delegation, gates an
   </picture>
 </p>
 
+### Life of a change
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/task-lifecycle-dark.png">
+    <img src="assets/task-lifecycle-light.png" alt="State diagram of a change under the coding router: inspect, pick the workflow path, choose depth, red, change, proof, review, merge and release. Blocking review findings return to change for at most two rounds; two failed fixes of one invariant stop at a checkpoint." width="920">
+  </picture>
+</p>
+
+The sources of both diagrams are in [`docs/diagrams/`](docs/diagrams/).
+
 ### Bricks, not a framework
 
 The pack is a set of small skills that each do one job, plus a guideline that shows how we combine them. Follow the guideline, or assemble your own set.
@@ -274,10 +285,11 @@ skills/fnl-advisor/references/committee.md       committee procedure, loaded onl
 skills/fnl-delegate/references/coordinator-sessions.md  spec coordinator and task sessions
 skills/fnl-session-hygiene/references/knowledge.md      remember/recall procedure; handovers live in SKILL.md
 rules/AGENTS.md                   session-start reminder: an always-on rule on Antigravity, printed by scripts/session_start.py on Claude Code and Codex
-assets/                           icons, light/dark architecture diagrams, dashboard screenshots and their NOTICE
+assets/                           icons, light/dark architecture and task-lifecycle diagrams, dashboard screenshots and their NOTICE
 evals/                            trigger, behavior and parity cases for `claude plugin eval`
 scripts/                          repository checks, the session reminder (session_start.py) with its settings reader (mode.py, copied into the skills that read it), and the usage-metrics hook (metrics_hook.py) with its shared core (fnl_metrics.py, copied into the skills that import it)
 docs/specs/                       design specs (index.md), including agent-scan-and-consolidation.md
+docs/diagrams/                    HTML sources of the architecture and task-lifecycle diagrams
 tests/                            unit tests for the repository scripts, the ledger, the metrics hook and the dashboard page (the page script runs in node when it is installed)
 CHANGELOG.md                      Keep a Changelog
 LICENSE                           MIT
