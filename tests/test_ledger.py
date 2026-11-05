@@ -1,5 +1,6 @@
 """Tests for skills/fnl-delegate/scripts/ledger.py, run through its CLI."""
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -7,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 LEDGER = Path(__file__).resolve().parent.parent / "skills/fnl-delegate/scripts/ledger.py"
 START = ["start", "--project", "demo", "--task", "add parser", "--kind", "implement",
@@ -73,6 +75,24 @@ class LedgerTest(unittest.TestCase):
     def test_start_rejects_unknown_choices(self):
         bad = self.run_ledger(*[a if a != "codex" else "nobody" for a in START], check=False)
         self.assertNotEqual(bad.returncode, 0)
+
+    def test_route_by_is_groupable_without_changing_default_summary(self):
+        for route, rework in (("judge", 0), ("judge", 1), ("table", 0)):
+            dispatch_id = self.run_ledger(*START, "--route-by", route).stdout.strip()
+            self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--rework-rounds", str(rework))
+        spec = importlib.util.spec_from_file_location("judge_ledger", LEDGER)
+        ledger = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ledger)
+        with mock.patch.dict(os.environ, self.env):
+            rows = ledger.summary_rows(keys=("route_by",))
+            self.assertEqual([(r["route_by"], r["n"], r["first_pass"]) for r in rows],
+                             [("judge", 2, .5), ("table", 1, 1)])
+            with self.assertRaises(ValueError):
+                ledger.summary_rows(keys=("task",))
+        self.assertEqual(ledger.SUMMARY_KEYS, ("agent", "model", "kind", "grade"))
+        [default] = json.loads(self.run_ledger("summary", "--json").stdout)
+        self.assertNotIn("route_by", default)
+        self.assertEqual(default["n"], 3)
 
     def test_summary_counts_first_pass_and_fallbacks(self):
         first = self.run_ledger(*START).stdout.strip()

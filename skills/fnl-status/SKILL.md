@@ -28,4 +28,4 @@ When the argument is `purge`, skip the steps above and ask the user through the 
 
 ## What is recorded
 
-Only when the user consented in `fnl-setup`: the plugin's hooks append metadata to `events-YYYY-MM.jsonl` in the state folder (a time, a session id, a short repository code, a skill or agent name, a depth, a review verdict, a kept-task count with its reason and who settled it), never prompts, code, command text or file paths. Nothing is sent anywhere.
+Only when the user consented in `fnl-setup`: the plugin's hooks append metadata to `events-YYYY-MM.jsonl` in the state folder (a time, a session id, a short repository code, a skill or agent name, a depth, a review verdict, a kept-task count with its reason and who settled it, judge receipt site, grader, result and followed status), never prompts, code, command text or file paths. Nothing is sent anywhere.

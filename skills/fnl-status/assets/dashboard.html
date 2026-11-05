@@ -531,6 +531,42 @@ td.r, th.r { text-align: right; }
   }
   app.appendChild(pane("delegation", "from the dispatch ledger", "wide", dl, missing("delegation") || "ledger is empty", "dl"));
 
+  /* Judge receipts and a separate outcome association from the ledger. */
+  if (D.judge) {
+    var j = D.judge, judgeParts = [];
+    if (j.receipts) {
+      judgeParts.push(t("h3", "", "Use"));
+      judgeParts.push(hbars(j.use.map(function (x) { return { n: x.site + " · " + x.grader, v: x.count }; }), "var(--p)"));
+      [["Usable answers", j.usable_answers.share, j.usable_answers.validated, j.usable_answers.calls],
+       ["Followed", j.followed.share, j.followed.yes, j.followed.validated]].forEach(function (x) {
+        var bar = h("i"), value = pct(x[1]) + " (" + x[2] + "/" + x[3] + ")";
+        bar.style.width = ((x[1] || 0) * 100) + "%"; bar.style.background = "var(--p)";
+        judgeParts.push(h("div", "hb", [h("div", "r", [t("span", "n", x[0]),
+          h("span", "trk", [bar, t("span", "v", x[1] == null ? "no answers" : value)])])]));
+      });
+    } else judgeParts.push(t("p", "meta", j.note));
+    judgeParts.push(t("h3", "", "Outcome association"));
+    if (j.outcome_association.length) {
+      var jax = h("div", "ax", [t("span", "", "0%"), t("span", "", "60%"), t("span", "", "100%")]);
+      jax.children[0].style.left = "0"; jax.children[1].style.left = "60%"; jax.children[2].style.left = "100%";
+      var jrows = [h("div", "r h", [h("span"), jax, t("span", "", "first pass"), h("span")])];
+      j.outcome_association.forEach(function (x) {
+        var small = x.runs < 5, col = small ? "var(--faint)" : x.first_pass < .6 ? "var(--crit)" : "var(--good)";
+        var track = h("div", "trk"), line = h("i", "th"), stem = h("i", "stem"), dot = h("i", "dot" + (small ? " open" : ""));
+        line.style.left = "60%";
+        stem.style.width = (x.first_pass * 100) + "%"; stem.style.background = col;
+        dot.style.left = (x.first_pass * 100) + "%"; dot.style.color = col;
+        tipOn(dot, "first pass " + pct(x.first_pass) + (small ? " (fewer than 5 runs, not judged)" : ""));
+        track.appendChild(line); track.appendChild(stem); track.appendChild(dot);
+        jrows.push(h("div", "r", [t("span", "who", x.route_by + " · n=" + x.runs), track, t("span", "", pct(x.first_pass)), h("span")]));
+      });
+      judgeParts.push(h("div", "dl", jrows));
+      judgeParts.push(legend([["first pass at or above 60%", "var(--good)"], ["below 60%", "var(--crit)"], ["open ring: fewer than 5 runs, not judged", "var(--faint)"]]));
+    } else judgeParts.push(t("p", "meta", j.outcome_note));
+    judgeParts.push(t("p", "meta", "Not measured: cost, latency and accuracy. The outcome is an association, not proof the judge was right."));
+    app.appendChild(pane("Judge", "receipts and dispatch ledger", "wide", stack(judgeParts)));
+  }
+
   /* Tables twin, sources and footer */
   var tabs = [];
   if (D.use) tabs.push(tableOf("use", ["name", "calls"], D.use.map(function (u) { return [u.name, u.count]; })));
@@ -538,6 +574,13 @@ td.r, th.r { text-align: right; }
   if (D.depth) tabs.push(tableOf("depth", ["depth", "receipts", "reworked"], D.depth.map(function (x) { return [x.depth, x.receipts, x.reworked]; })));
   if (D.delegation) tabs.push(tableOf("delegation", ["agent / model / grade", "runs", "first pass", "quota", "error", "median min", "rework"], D.delegation.map(function (x) { return [x.agent + " / " + x.model + " / " + x.grade, x.runs, pct(x.first_pass), x.quota, x.error, x.median_min, x.rework]; })));
   if (D.kept && D.kept.rows.length) tabs.push(tableOf("kept by the coordinator", ["coordinator / reason / settled by", "receipts", "tasks"], D.kept.rows.map(function (x) { return [x.coordinator + " / " + x.reason + " / " + x.route_by, x.receipts, x.tasks]; })));
+  if (D.judge) {
+    if (D.judge.use) tabs.push(tableOf("Judge · Use", ["site / grader", "decisions"], D.judge.use.map(function (x) { return [x.site + " / " + x.grader, x.count]; })));
+    if (D.judge.receipts) tabs.push(tableOf("Judge · answers", ["measure", "count", "total", "share"], [
+      ["Usable answers", D.judge.usable_answers.validated, D.judge.usable_answers.calls, pct(D.judge.usable_answers.share)],
+      ["Followed", D.judge.followed.yes, D.judge.followed.validated, pct(D.judge.followed.share)]]));
+    if (D.judge.outcome_association.length) tabs.push(tableOf("Judge · Outcome association", ["routed by", "runs", "first pass"], D.judge.outcome_association.map(function (x) { return [x.route_by, x.runs, pct(x.first_pass)]; })));
+  }
   if (D.reviews) tabs.push(tableOf("reviews", ["pr", "verdicts"], D.reviews.map(function (x) { return [x.repo + " #" + x.pr, x.verdicts.join(" → ")]; })));
   if (act.length) {
     var wk = [];

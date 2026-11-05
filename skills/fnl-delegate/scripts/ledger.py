@@ -137,10 +137,13 @@ def cmd_open(args):
 
 
 SUMMARY_KEYS = ("agent", "model", "kind", "grade")
+SUMMARY_GROUP_KEYS = (*SUMMARY_KEYS, "route_by")
 
 
 def summary_rows(keys=SUMMARY_KEYS, since=None, project=None):
     """One dict per group of finished dispatches: the key fields, the counts and the rates."""
+    if not keys or any(k not in SUMMARY_GROUP_KEYS for k in keys):
+        raise ValueError("invalid summary key")
     starts, finishes = load()
     groups = defaultdict(list)
     for dispatch_id, s in starts.items():
@@ -151,6 +154,8 @@ def summary_rows(keys=SUMMARY_KEYS, since=None, project=None):
         f = finishes.get(dispatch_id)
         if f is None:
             continue
+        if "route_by" in keys and s.get("route_by") not in ROUTE_BY:
+            continue  # older or malformed lines have no known routing source
         groups[tuple(s[k] for k in keys)].append((s, f))
     rows = []
     for key, pairs in sorted(groups.items()):

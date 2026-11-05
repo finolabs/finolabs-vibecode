@@ -73,6 +73,6 @@ vm.runInContext(scripts[0], sandbox, { filename: "dashboard.html" });
 const app = byId["app"];
 const first = app ? app.children[0] : null;
 if (scenarioPath) for (let i = 0; i < (scenario.ticks || 1); i++) timers.forEach((x) => x.fn());
-const out = { text: app ? app.textContent.replace(/\s+/g, " ").trim() : "", cells: 0, svg: 0, loads, poll_ms: timers.map((x) => x.ms), redrawn: !!first && app.children[0] !== first };
-(function walk(n) { out.cells += n.className.split(" ").includes("dy") ? 1 : 0; out.svg += n.tag === "svg" ? 1 : 0; n.children.forEach(walk); })(app || new Node_("x"));
+const out = { text: app ? app.textContent.replace(/\s+/g, " ").trim() : "", cells: 0, svg: 0, openRings: 0, tags: [], loads, poll_ms: timers.map((x) => x.ms), redrawn: !!first && app.children[0] !== first };
+(function walk(n) { out.tags.push(n.tag); out.openRings += n.className === "dot open" ? 1 : 0; out.cells += n.className.split(" ").includes("dy") ? 1 : 0; out.svg += n.tag === "svg" ? 1 : 0; n.children.forEach(walk); })(app || new Node_("x"));
 process.stdout.write(JSON.stringify(out));

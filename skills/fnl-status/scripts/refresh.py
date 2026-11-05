@@ -102,6 +102,29 @@ def kept_metrics(events, by_sid, handed_off):
     return {"receipts": sum(r["receipts"] for r in rows), "tasks": sum(r["tasks"] for r in rows), "handed_off": handed_off, "rows": rows}
 
 
+def judge_metrics(events, route_rows, has_judge_route, ledger_note):
+    """Closed receipt counts and a separate ledger association; never join a site to a file or run."""
+    receipts = [e for e in events if e["event"] == "judge"]
+    if not receipts and not has_judge_route:
+        return None
+    block = {"receipts": len(receipts), "outcome_association": route_rows,
+             "note": "" if receipts else "No receipts were recorded.",
+             "outcome_note": "" if route_rows else ledger_note}
+    if receipts:
+        uses = Counter((e["site"], e["grader"]) for e in receipts)
+        answers = [e for e in receipts if e["grader"] == "judge"]
+        validated = [e for e in answers if e["result"] == "validated"]
+        followed = sum(e["followed"] == "yes" for e in validated)
+        block.update({
+            "use": [{"site": site, "grader": grader, "count": count}
+                    for (site, grader), count in sorted(uses.items())],
+            "usable_answers": {"validated": len(validated), "calls": len(answers),
+                               "share": ratio(len(validated), len(answers))},
+            "followed": {"yes": followed, "validated": len(validated), "share": ratio(followed, len(validated))},
+        })
+    return block
+
+
 def build(days=WEEKS * 7):
     today = datetime.now().astimezone().date()
     start = today - timedelta(days=days - 1)
@@ -182,10 +205,18 @@ def build(days=WEEKS * 7):
 
     delegation, first_pass, fp_week, runs, handed_off = None, None, [None] * WEEKS, 0, None
     ledger_note = "fnl-delegate is not installed"
+    route_rows, has_judge_route = [], False
     if LEDGER.exists():
         try:
             usage_start = min((local_date(e["ts"]) for e in events), default=None)
-            delegation, first_pass, fp_week, runs, handed_off = ledger_metrics(load_ledger(), start, usage_start)
+            ledger = load_ledger()
+            delegation, first_pass, fp_week, runs, handed_off = ledger_metrics(ledger, start, usage_start)
+            starts, _ = ledger.load()
+            has_judge_route = any(s.get("route_by") == "judge" and s["ts"][:10] >= start.isoformat()
+                                  for s in starts.values())
+            route_rows = [{"route_by": r["route_by"], "runs": r["n"], "first_pass": r["first_pass"], "small": r["n"] < 5}
+                          for r in ledger.summary_rows(keys=("route_by",), since=start.isoformat())
+                          if r["route_by"] in ("judge", "table")]
             ledger_note = "%d runs" % runs if runs else "no finished runs in this period"
         except Exception:
             delegation, ledger_note = None, "ledger could not be read"
@@ -219,6 +250,7 @@ def build(days=WEEKS * 7):
                           "first_pass": fp_week if first_pass is not None else None}},
         "router": {"covered": covered, "missed": missed, "excluded": excluded, "unclassified": unclassified, "eligible": eligible} if eligible else None,
         "use": use or None, "load": load, "depth": depth_rows or None, "delegation": delegation or None, "kept": kept_metrics(events, by_sid, handed_off),
+        "judge": judge_metrics(events, route_rows, has_judge_route, ledger_note),
         "reviews": reviews or None, "review_stats": review_stats if groups else None, "activity": activity if events else None,
         "sources": [
             {"name": "hooks", "ok": bool(events), "note": "%d events" % len(events) if events else (why or "")},
