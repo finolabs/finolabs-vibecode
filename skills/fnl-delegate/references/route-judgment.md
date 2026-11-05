@@ -25,7 +25,7 @@ Batch both questions for one task into one call where the judge supports it.
 - **Grade question**: which grade fits, from `easy`, `medium`, `hard`, `very-hard`, `ultra-hard`, with each grade's definition from `SKILL.md`, plus `need-evidence` for "the summary does not say enough".
 - **Route question**: which candidate fits best, with each candidate's tier line and strengths from `models.md`, quota state, and whether the user is away; plus `none-fits`.
 
-Never send code, secrets, personal data or customer records.
+Never send code, secrets, personal data or customer records. One scoped exception: `/fnl-setup` Check may send lines of the user's instruction files for its judgment items, only when the host config records `Instruction check: on`, only through the payload that `checkup.py` builds (lines with a secret or machine-path hit are dropped, backups and `CLAUDE.local.md` never sent), and never as part of a routing question.
 
 ## Reading the answer
 

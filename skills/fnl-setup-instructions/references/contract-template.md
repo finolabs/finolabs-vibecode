@@ -2,7 +2,7 @@
 
 Sections marked *optional* are skipped when the user has no need. Each section lists the decisions to settle; turn each answer into one or two imperative lines.
 
-Each rule line says who enforces it: a host setting, a hook, the review gate, or agent judgment. A rule enforced only by agent judgment is advisory.
+Each rule line says who enforces it: a host setting, a hook, the review gate, or agent judgment. A rule enforced only by agent judgment is advisory. Write each line so a reviewer can decide pass or fail on it, give a short reason for any rule that is not obvious, and use plain wording rather than capitals or "must" for emphasis; a rule with no exceptions belongs in a hook or permission instead of text.
 
 ## 1. Identity and voice (required)
 
