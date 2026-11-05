@@ -1,6 +1,6 @@
 # Release 0.1.8: spec and plan
 
-Status: scope and plan settled by the owner on 2026-11-05 (the four open decisions are recorded under "Decisions settled"). Merged: packages 1 (pull request 58) and 9 (pull request 63). In review: 2 (61), 3 (62), 5 (60) and 10 (64). Not started: 4, 6, 7, 8 and the native sweep follow-up. Release 0.1.7 is tagged; `main` is `0.1.8-dev`.
+Status: scope and plan settled by the owner on 2026-11-05 (the open decisions are recorded under "Decisions settled"). Merged: packages 1 (pull request 58) and 9 (pull request 63). In review: 2 (61), 3 (62), 5 (60) and 10 (64). Not started: 4, 6, 7, 8 and the native sweep follow-up. Release 0.1.7 is tagged; `main` is `0.1.8-dev`.
 
 ## Why
 
@@ -127,7 +127,7 @@ When a spec or a plan has decisions the user can settle, the agent asks them thr
 
 Where it lives: `fnl-coding-router`, as one line in "Work, then gate" ("These hold on every path"), because the router is loaded at every coding entry and every workflow path (Spec Kit, a workflow pack, none) writes specs and plans. Not `fnl-setup-instructions`: that skill writes the user's contract once and is not loaded while a spec is written. The rule is advisory (agent judgment); a run with nobody to answer (delegated or headless) records the decisions as open and never invents an answer. Each Spec Kit, pack and none adapter keeps its own clarify step; this rule only says that the unsettled ones are asked, not listed.
 
-Acceptance: the router line exists and names its enforcer; a unit test checks the line is in `skills/fnl-coding-router/SKILL.md`; this spec is the first case (its four decisions were asked, not listed).
+Acceptance: the router line exists and names its enforcer; a unit test checks the line is in `skills/fnl-coding-router/SKILL.md`; this spec is the first case (its decisions were asked, not listed).
 
 ## Package 10: run names
 
@@ -143,13 +143,13 @@ Writers: one writer and one worktree per package; coordinator merges. Effort `me
 
 | Step | Packages | Depends on | Files at risk of overlap |
 | --- | --- | --- | --- |
-| 0 | 1 merges | reviews at the current head | none |
-| 1 | 2, 3, 5 in parallel | 0 | `CHANGELOG.md` `Unreleased` only; resolve at merge |
+| 0 | 1 and 9 merged (done) | none | none |
+| 1 | 2, 3, 5 in parallel (2 merged) | 0 | `CHANGELOG.md` `Unreleased` only; resolve at merge |
 | 2 | 4 | 1 (evals read the merged skills) | `evals/` |
-| 3 | 6 | 0 | `skills/fnl-session-hygiene`, `skills/fnl-setup`, `.claude-plugin`/`.codex-plugin` hooks |
-| 4 | 7 design note, then code | 3 (both touch the hooks) | hooks, `CLAUDE.md`, `fnl-delegate` |
-| 5 | 8 restore point, then demo | 0 | new skill folder, `fnl-ask`, README, file tree |
-| 6 | 10 (run names), then the native sweep follow-up to 2 | 0, 1 | `skills/fnl-session-hygiene` (titles), `fnl-delegate`, `fnl-review-gate`, `fnl-handoff`; the skills named in the sweep. Package 10 lands before package 6, which also edits `fnl-session-hygiene` |
+| 3 | 10 (run names), then the native sweep follow-up to 2 | 0, 1 | `skills/fnl-session-hygiene` (titles), `fnl-delegate`, `fnl-review-gate`, `fnl-handoff`; the skills named in the sweep |
+| 4 | 6 | 3 (both edit `fnl-session-hygiene`) | `skills/fnl-session-hygiene`, `skills/fnl-setup`, `.claude-plugin`/`.codex-plugin` hooks |
+| 5 | 7 design note, then code | 4 (both touch the hooks) | hooks, `CLAUDE.md`, `fnl-delegate` |
+| 6 | 8 restore point, then demo | 0 | new skill folder, `fnl-ask`, README, file tree |
 | 7 | Release 0.1.8 | all merged, full suite and evals run once | manifests, CHANGELOG |
 
 Release 0.1.8 follows `fnl-versioning`: a release pull request (manifest versions and CHANGELOG), an annotated tag after CI, a GitHub release, the catalog pin pull request (package 5), then the bump to `0.1.9-dev`. Pushes, merges, the catalog pull request and the release each need the owner's go.
