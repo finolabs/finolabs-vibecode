@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- A task-lifecycle state diagram (inspect, path, depth, red, change, proof, review, merge, release, with the checkpoint after two failed fixes) in the README, with the HTML sources of both diagrams in `docs/diagrams/`.
+
 ### Changed
 
 - Clarify host-owned compaction thresholds and advisory writeback; setup only suggests settings, Claude Code and Codex gain a non-blocking `PreCompact` reminder, and Check reports declarations with delivery unverified.
