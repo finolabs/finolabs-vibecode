@@ -229,9 +229,9 @@ class RestorePointTest(unittest.TestCase):
         digest = self.parse_digest(preview)
 
         # Missing digest or mismatched digest writes nothing.
-        no_digest_out = self.run_cli("restore", point, "--yes")
+        no_digest_out = self.run_cli("restore", point, "--yes", expected_rc=1)
         self.assertIn("Digest missing or mismatched; nothing written.", no_digest_out)
-        bad_digest_out = self.run_cli("restore", point, "--yes", "--digest", "00000000")
+        bad_digest_out = self.run_cli("restore", point, "--yes", "--digest", "00000000", expected_rc=1)
         self.assertIn("Digest missing or mismatched; nothing written.", bad_digest_out)
         self.assertEqual((self.repo / "app.txt").read_text(encoding="utf-8"), "dirty-v2\n")
         self.assertFalse((self.repo / "notes.txt").exists())
@@ -309,7 +309,7 @@ class RestorePointTest(unittest.TestCase):
         )
         for args in (("create",), ("list",), ("restore", "20261105T120000Z")):
             with self.subTest(args=args):
-                out = self.run_cli(*args, cwd=outside)
+                out = self.run_cli(*args, cwd=outside, expected_rc=int(args[0] == "restore"))
                 self.assertEqual(out, expected)
                 self.assertEqual(list(outside.iterdir()), [])
 
@@ -329,10 +329,10 @@ class RestorePointTest(unittest.TestCase):
         ):
             with self.subTest(invalid=invalid):
                 self.assertFalse(restore_point.validate_name(invalid))
-                out = self.run_cli("restore", invalid)
+                out = self.run_cli("restore", invalid, expected_rc=1)
                 self.assertIn("Invalid restore point name; nothing written.", out)
 
-    def test_action_errors_are_plain_lines_with_success_exit(self):
+    def test_action_errors_are_plain_lines_and_restore_exits_nonzero(self):
         for action in ("create", "list", "restore"):
             args = [action] + (["20261105T120000Z"] if action == "restore" else [])
             for error in (subprocess.TimeoutExpired("git", 15),
@@ -341,10 +341,35 @@ class RestorePointTest(unittest.TestCase):
                 with self.subTest(action=action, error=type(error).__name__):
                     buf = io.StringIO()
                     with mock.patch.object(restore_point, "run_git", side_effect=error), redirect_stdout(buf):
-                        self.assertEqual(restore_point.main(args, cwd=self.repo), 0)
+                        self.assertEqual(restore_point.main(args, cwd=self.repo), int(action == "restore"))
                     self.assertEqual(len(buf.getvalue().splitlines()), 1)
                     self.assertNotIn("Traceback", buf.getvalue())
         self.run_cli("unknown-action", expected_rc=2)
+
+    def test_low_gitdir_back_pointer_must_match_worktree(self):
+        self.git("commit", "--allow-empty", "-q", "-m", "initial")
+        worktree = self.base / "linked"
+        self.git("worktree", "add", "-q", "--detach", str(worktree))
+        gitdir = restore_point.check_git_dir_and_refs(worktree)
+        pointer = gitdir / "gitdir"
+        self.assertEqual(Path(pointer.read_text().strip()), worktree / ".git")
+        original = pointer.read_text()
+        for replacement in (str(self.repo / ".git"), ""):
+            pointer.write_text(replacement)
+            with self.assertRaisesRegex(ValueError, "back-pointer"):
+                restore_point.check_git_dir_and_refs(worktree)
+        pointer.unlink()
+        with self.assertRaisesRegex(ValueError, "back-pointer"):
+            restore_point.check_git_dir_and_refs(worktree)
+        other = self.base / "pointer"
+        other.write_text(original)
+        pointer.symlink_to(other)
+        with self.assertRaisesRegex(ValueError, "back-pointer"):
+            restore_point.check_git_dir_and_refs(worktree)
+
+    def test_low_missing_restore_point_exits_nonzero(self):
+        out = self.run_cli("restore", "20261105T120000Z", expected_rc=1)
+        self.assertIn("not found; nothing written", out)
 
     def test_temporary_index_preserves_racy_timestamp(self):
         self.git("config", "core.trustctime", "false")
@@ -407,7 +432,7 @@ class RestorePointTest(unittest.TestCase):
                     buf = io.StringIO()
                     with mock.patch.object(restore_point, "run_git", side_effect=fail_after_snapshot), redirect_stdout(buf):
                         rc = restore_point.main(["restore", point, "--yes", "--digest", digest], cwd=self.repo)
-                    self.assertEqual(rc, 0)
+                    self.assertEqual(rc, 1)
                     refs_after = self.git("for-each-ref", "--format=%(refname)", "refs/finolabs/restore").splitlines()
                     added = set(refs_after) - set(refs_before)
                     self.assertEqual(len(added), 1)
@@ -506,7 +531,7 @@ class RestorePointTest(unittest.TestCase):
         self.assertEqual(preview.split("Digest:")[0], next_preview.split("Digest:")[0])
         self.assertNotEqual(digest, self.parse_digest(next_preview))
         refs_before = self.git("for-each-ref")
-        output = self.run_cli("restore", point, "--yes", "--digest", digest)
+        output = self.run_cli("restore", point, "--yes", "--digest", digest, expected_rc=1)
         self.assertIn("Digest missing or mismatched; nothing written.", output)
         self.assertEqual(file.read_text(), "other\n")
         self.assertEqual(self.git("for-each-ref"), refs_before)
@@ -519,7 +544,7 @@ class RestorePointTest(unittest.TestCase):
         tree = self.git("rev-parse", ref + "^{tree}").strip()
         replacement = self.git("commit-tree", tree, "-m", "replacement commit").strip()
         self.git("update-ref", ref, replacement)
-        output = self.run_cli("restore", point, "--yes", "--digest", digest)
+        output = self.run_cli("restore", point, "--yes", "--digest", digest, expected_rc=1)
         self.assertIn("Digest missing or mismatched; nothing written.", output)
         self.assertEqual(len(self.run_cli("list").splitlines()), 1)
 
@@ -576,7 +601,7 @@ class RestorePointTest(unittest.TestCase):
         file.symlink_to(outside)
         digest = self.parse_digest(self.run_cli("restore", point))
         refs_before = self.git("for-each-ref")
-        output = self.run_cli("restore", point, "--yes", "--digest", digest)
+        output = self.run_cli("restore", point, "--yes", "--digest", digest, expected_rc=1)
         self.assertIn("Unsafe path: symlink in working tree refused.", output)
         self.assertTrue(file.is_symlink())
         self.assertEqual(outside.read_text(), "outside unchanged\n")

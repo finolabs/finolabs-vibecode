@@ -314,7 +314,7 @@ class DataRootTest(unittest.TestCase):
         refresh = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(refresh)
         with mock.patch.dict(os.environ, {"FNL_STATE_DIR": str(decoy)}), mock.patch("builtins.print"):
-            refresh.cmd_consent(SimpleNamespace(revoke=True))
+            refresh.cmd_consent(SimpleNamespace(revoke=True, yes=True))
         self.assertIsNone(fm.read_consent())
         self.assertEqual((decoy / "consent.json").read_text(), "keep decoy unchanged")
 
@@ -327,7 +327,7 @@ class DataRootTest(unittest.TestCase):
         for revoke in (True, False):
             with self.subTest(revoke=revoke), mock.patch("builtins.print") as output:
                 with self.assertRaises(SystemExit) as error:
-                    refresh.cmd_consent(SimpleNamespace(revoke=revoke, retention=30))
+                    refresh.cmd_consent(SimpleNamespace(revoke=revoke, retention=30, yes=True))
                 self.assertEqual(str(error.exception), "consent: invalid data root; nothing recorded")
                 output.assert_not_called()
             self.assertEqual(before, {p.relative_to(self.home): p.read_bytes() for p in self.home.rglob("*") if p.is_file()})
@@ -337,8 +337,8 @@ class DataRootTest(unittest.TestCase):
         refresh = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(refresh)
         with mock.patch("builtins.print"):
-            refresh.cmd_consent(SimpleNamespace(revoke=True))
-            refresh.cmd_consent(SimpleNamespace(revoke=True))
+            refresh.cmd_consent(SimpleNamespace(revoke=True, yes=True))
+            refresh.cmd_consent(SimpleNamespace(revoke=True, yes=True))
         self.assertFalse(self.default.exists())
 
     def test_move_makes_existing_empty_target_private(self):

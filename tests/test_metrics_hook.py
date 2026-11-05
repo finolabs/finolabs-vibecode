@@ -325,6 +325,15 @@ class HookTest(unittest.TestCase):
                        "tool_input": {"command": command}}, env={**self.env, "FNL_METRICS": "off"})
         self.assertEqual(len(self.events()), 3)
 
+    def test_low_dollar_in_unrelated_command_keeps_judge_receipt(self):
+        self.consent()
+        command = "python3 -I record.py judge --site route --grader judge --result validated --followed yes"
+        self.post("Bash", {"command": 'printf "%s" "$PWD"; ' + command})
+        self.assertEqual([e["event"] for e in self.events()], ["judge"])
+        self.post("Bash", {"command": command.replace("--site route", "--site $SITE")})
+        self.post("Bash", {"command": 'echo "$(' + command + ')"'})
+        self.assertEqual(len(self.events()), 1)
+
     def test_judge_malformed_and_quoted_commands_never_record(self):
         self.consent()
         command = "python3 -I record.py judge --site route --grader judge --result validated --followed yes"

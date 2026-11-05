@@ -273,6 +273,8 @@ In setup's **Data location** step, keep the default (recommended) or name an abs
 
 The fixed anchor `~/.finolabs/vibecode/root.json` contains the new absolute `root` and a random `id` matching the new folder's `.root-id`. A present but invalid pointer turns consent-bearing reads off; the default's old opt-ins cannot reactivate them. The root, pointer and each opened component must pass ownership and no-follow checks; relocated roots and their ancestors cannot be group- or world-writable. Network file systems and Windows are unverified and unsupported for relocation.
 
+A home folder that other users can write to lets them swap folders under it, so keep your home folder private.
+
 `HOME`, `XDG_*`, `FNL_STATE_DIR` and `ORCHESTRATION_HOST_CONFIG` cannot redirect consent, opt-ins, auto gate or quota files. The absolute `FNL_STATE_DIR` override and the older `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` folder remain compatibility paths only for usage events and the dashboard; the older folder is used only before relocation, while the default state folder is absent. Metrics atomic-write temporary files stay beside their destination, including on these compatibility paths. `ORCHESTRATION_HOST_CONFIG` still selects non-consent settings such as Delegation mode. The ledger no longer follows environment overrides. Each host's own configuration and project-local briefs stay in their existing locations.
 
 ## Host configuration

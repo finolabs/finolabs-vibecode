@@ -341,6 +341,8 @@ def publish(folder, args):
 
 def cmd_consent(args):
     if args.revoke:
+        if not args.yes:
+            sys.exit("consent: pass --yes once the user has confirmed")
         try:
             with fm.dr.data_folder("state") as folder:
                 os.unlink("consent.json", dir_fd=folder)
@@ -437,6 +439,7 @@ def main():
     consent = sub.add_parser("consent", help="record consent and retention")
     consent.add_argument("--retention", type=int, choices=fm.RETENTIONS)
     consent.add_argument("--revoke", action="store_true", help="withdraw consent; recording stops, recorded events stay until purge")
+    consent.add_argument("--yes", action="store_true", help="confirm consent withdrawal")
     consent.set_defaults(func=cmd_consent)
     purge = sub.add_parser("purge", help="delete recorded events and the dashboard files")
     purge.add_argument("--yes", action="store_true")

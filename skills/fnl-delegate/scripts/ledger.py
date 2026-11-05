@@ -225,7 +225,10 @@ def build_parser():
 
 def main():
     args = build_parser().parse_args()
-    args.func(args)
+    try:
+        args.func(args)
+    except ValueError as error:
+        sys.exit("ledger: " + str(error).splitlines()[0])
 
 
 if __name__ == "__main__":

@@ -40,6 +40,16 @@ class RefreshTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
         return result
 
+    def test_low_revoke_requires_explicit_yes_flag(self):
+        self.consent()
+        before = (self.dir / "consent.json").read_bytes()
+        result = self.refresh("consent", "--revoke", check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "consent: pass --yes once the user has confirmed\n")
+        self.assertEqual((self.dir / "consent.json").read_bytes(), before)
+        self.refresh("consent", "--revoke", "--yes")
+        self.assertFalse((self.dir / "consent.json").exists())
+
     def consent(self, days="90"):
         self.refresh("consent", "--retention", days)
 
@@ -459,7 +469,7 @@ class RefreshTest(unittest.TestCase):
     def test_consent_can_be_withdrawn_and_recorded_events_stay_until_purge(self):
         self.consent()
         self.refresh("run")
-        self.refresh("consent", "--revoke")
+        self.refresh("consent", "--revoke", "--yes")
         self.assertFalse((self.dir / "consent.json").exists())
         self.assertNotEqual(self.refresh("consent", check=False).returncode, 0)
 
