@@ -15,6 +15,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Narrow the `fnl-handoff` and `fnl-delegate` descriptions so a request to hand one task to an agent with a brief goes to `fnl-handoff`, and routing among agents, parallel dispatch, quota and watched runs go to `fnl-delegate`.
 - Stop reading the `ORCHESTRATION_LEDGER` override, the legacy XDG ledger, the legacy `host.md` for Check, Routing mode and Delegation mode, and the legacy consent location. Use the data root for these files; data-location changes require the full 64-hex preview digest.
 
 - A Claude Code hook of this plugin may now deny the first file write in a repository without a decision in the last 8 hours when Delegation mode is `auto` and the opt-in auto gate is on; subsequent writes in the window allow, and `FNL_AUTO_GATE=off` disables it.

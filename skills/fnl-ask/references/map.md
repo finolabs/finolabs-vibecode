@@ -43,7 +43,8 @@ The 20 skill folders and their purposes match the README.
 | A design question only code can answer | `fnl-coding-router` | `prototype` |
 | Ready to implement one seam | `fnl-coding-router` (depth, gates) | `tdd` for the red-green loop |
 | Bug, failing CI, unexplained behavior | `fnl-coding-router` (workflow adapter's debug path, router checkpoint) | `diagnosing-bugs` |
-| Handing work to another agent (Claude Code, Codex, Antigravity) | `fnl-delegate`, then `fnl-handoff` | `/handoff` for a portable handoff document |
+| Handing one task to another agent (Claude Code, Codex, Antigravity) with a brief, or restarting a timed-out run | `fnl-handoff`, which loads `fnl-delegate` for the route and gates | `/handoff` for a portable handoff document |
+| Splitting work across agents, choosing an agent and model, parallel dispatch, quota, a watched run that stalls | `fnl-delegate` | |
 | Stopping or switching and wanting the work continued later by a new session or another agent | `fnl-handoff` (Resume mode: writes a handover note and launches nothing) | |
 | How the practice is working for you: router coverage, skill use, load cost, delegated runs, review outcomes | `/fnl-status` (opens the usage dashboard) | |
 | Deleting the recorded usage data, or stopping the recording | `/fnl-status purge` (asks before deleting) | |
