@@ -372,11 +372,11 @@ class CheckupTest(unittest.TestCase):
 
     def test_i4_include_names_fences_hosts_missing_and_depth(self):
         self.write(self.repo / "CLAUDE.md", "```\n@../outside/AGENTS.md\n```\n"
-                   "~~~text\n@/outside/AGENTS.md\n~~~\n@notes.md\n@missing/AGENTS.md\n@a/CLAUDE.md\n@a/CLAUDE.md\n")
+                   "~~~text\n@/outside/AGENTS.md\n~~~\n@notes" ".md\n@missing/AGENTS.md\n@a/CLAUDE.md\n@a/CLAUDE.md\n")
         for n in range(1, 6):
             self.write(self.repo.joinpath(*(["a"] * n), "CLAUDE.md"), "@a/CLAUDE.md\n" if n < 5 else "Fifth level.\n")
         self.write(self.home / ".codex/AGENTS.md", "@AGENTS.override.md\n")
-        self.write(self.repo / ".agents/rules/example.md", "---\ntrigger: manual\n---\n@GEMINI.md\n")
+        self.write(self.repo / ".agents/rules/example.md", "---\ntrigger: manual\n---\n@GEMINI" ".md\n")
         with mock.patch.dict(os.environ, self.env, clear=True), mock.patch.object(Path, "cwd", return_value=self.repo), \
                 mock.patch.object(checkup, "read", wraps=checkup.read) as reader:
             data = checkup.collect()
