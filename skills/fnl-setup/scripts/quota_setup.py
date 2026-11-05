@@ -40,10 +40,6 @@ def resolve_executable(agent):
     excluded(Path(found).absolute())
     path = Path(found).resolve(strict=True)
     excluded(path)
-    # The confirmed path is the resolved path printed in preview, not the PATH
-    # alias. Both the lookup name and that confirmed filename must name the agent.
-    if path.name != agent:
-        raise ValueError("executable missing or wrong name")
     first = qp.checked_path(path)
     interpreter = None
     if first.startswith(b"#!"):
@@ -64,8 +60,8 @@ def resolve_executable(agent):
         interpreter = str(Path(candidate).resolve(strict=True))
         excluded(Path(interpreter))
         qp.checked_path(interpreter)
-    entry = {"executable": str(path), "interpreter": interpreter}
-    qp.checked_executable(entry)
+    entry = {"executable": str(Path(found).absolute()), "resolved": str(path), "interpreter": interpreter}
+    qp.checked_executable(agent, entry)
     return entry
 
 
@@ -82,6 +78,7 @@ def render(plan):
         lines.append("- Agents: " + ", ".join(plan["agents"]))
         for agent, entry in plan["agents"].items():
             lines.append(f"- Executable {agent}: {entry['executable']}")
+            lines.append(f"- Resolved {agent}: {entry['resolved']}")
             if entry["interpreter"]:
                 lines.append(f"- Interpreter {agent}: {entry['interpreter']}")
         for label, path in plan["configs"].items():
@@ -137,7 +134,7 @@ def preview(agents, configs=None, off=False):
         raise ValueError("Claude not selected")
     text = read_host()
     plan = {"choice": "off" if off else "on", "date": qp.now().date().isoformat(),
-            "root": str(root), "host_digest": hashlib.sha256(text.encode()).hexdigest(),
+            "created": qp.stamp(qp.now()), "root": str(root), "host_digest": hashlib.sha256(text.encode()).hexdigest(),
             "agents": {a: resolve_executable(a) for a in agents} if not off else {}, "configs": folders}
     validate_plan(plan)
     replace_section(text, render(plan))
@@ -148,13 +145,15 @@ def preview(agents, configs=None, off=False):
 
 
 def validate_plan(plan):
-    if not isinstance(plan, dict) or set(plan) != {"choice", "date", "root", "host_digest", "agents", "configs"}:
+    if not isinstance(plan, dict) or set(plan) != {"choice", "date", "created", "root", "host_digest", "agents", "configs"}:
         raise ValueError("plan")
     if plan["choice"] not in {"on", "off"} or plan["root"] != str(dr.consent_root()):
         raise ValueError("choice or root changed")
     if not re.fullmatch(r"[0-9a-f]{64}", plan["host_digest"]):
         raise ValueError("host digest")
     qp.datetime.strptime(plan["date"], "%Y-%m-%d")
+    if not qp.timedelta(0) <= qp.now() - qp.timestamp(plan["created"]) <= qp.timedelta(minutes=60):
+        raise ValueError("preview expired; preview again")
     agents, folders = plan["agents"], plan["configs"]
     if not isinstance(agents, dict) or set(agents) - qp.SOURCES.keys() or not isinstance(folders, dict):
         raise ValueError("agents")
@@ -165,15 +164,19 @@ def validate_plan(plan):
     if not agents:
         raise ValueError("agents")
     for agent, entry in agents.items():
-        if not isinstance(entry, dict) or set(entry) != {"executable", "interpreter"}:
+        if not isinstance(entry, dict) or set(entry) != {"executable", "resolved", "interpreter"}:
             raise ValueError("executable")
         path = Path(entry["executable"])
-        if path.name != agent or path.resolve(strict=True).name != agent:
+        if not path.is_absolute() or ".." in path.parts or path.name != agent:
             raise ValueError("executable missing or wrong name")
         excluded(path)
+        resolved = path.resolve(strict=True)
+        if str(resolved) != entry["resolved"]:
+            raise ValueError("executable target changed; preview again")
+        excluded(resolved)
         if entry["interpreter"]:
             excluded(Path(entry["interpreter"]))
-        qp.checked_executable(entry)
+        qp.checked_executable(agent, entry)
     if "claude" in agents:
         qp.validate_configs(folders)
         if str(dr.account_home() / ".claude") not in folders.values():

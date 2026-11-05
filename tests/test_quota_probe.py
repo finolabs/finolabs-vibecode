@@ -265,7 +265,7 @@ class QuotaTest(unittest.TestCase):
         entry = self.fake("agy")
         Path(entry["executable"]).chmod(0o777)
         with self.assertRaises(ValueError):
-            qp.checked_executable(entry)
+            qp.checked_executable("agy", entry)
         Path(entry["executable"]).chmod(0o700)
         link = self.bin / "link"
         link.symlink_to(entry["executable"])
@@ -282,7 +282,7 @@ class QuotaTest(unittest.TestCase):
             return info
         with mock.patch.object(os, "fstat", side_effect=foreign):
             with self.assertRaises(ValueError):
-                qp.checked_executable(entry)
+                qp.checked_executable("agy", entry)
 
     def test_config_folder_rejections(self):
         qp.validate_configs({"default": str(self.config_dir)})
@@ -533,21 +533,22 @@ class QuotaTest(unittest.TestCase):
         setup = self.setup_module()
         entry = self.fake("other", "print('unused')\n")
         entry.pop("configs")
+        entry["resolved"] = entry["executable"]
         with mock.patch.object(setup, "excluded"), \
              mock.patch.object(setup, "resolve_executable", return_value=entry):
             with self.assertRaises(ValueError):
                 setup.preview(["agy"])
-            plan = {"choice": "on", "date": "2026-11-05", "root": str(self.root),
+            plan = {"choice": "on", "date": "2026-11-05", "created": qp.stamp(qp.now()), "root": str(self.root),
                     "host_digest": setup.hashlib.sha256(b"").hexdigest(),
                     "agents": {"agy": entry}, "configs": {}}
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(ValueError, "wrong name"):
                 setup.validate_plan(plan)
 
     def test_setup_apply_requires_issued_preview(self):
         setup = self.setup_module()
         entry = self.fake("agy")
         entry.pop("configs")
-        plan = {"choice": "on", "date": "2026-11-05", "root": str(self.root),
+        plan = {"choice": "on", "date": "2026-11-05", "created": qp.stamp(qp.now()), "root": str(self.root),
                 "host_digest": setup.hashlib.sha256(b"").hexdigest(),
                 "agents": {"agy": entry}, "configs": {}}
         with mock.patch.object(setup, "excluded"), self.assertRaises((OSError, ValueError)):
@@ -628,6 +629,7 @@ class QuotaTest(unittest.TestCase):
         self.fake("agy")
         wrong = self.fake("other", "print('unused')\n")
         wrong.pop("configs")
+        wrong["resolved"] = wrong["executable"]
         with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
             plan, value = setup.preview(["agy"])
             plan["agents"]["agy"] = wrong
@@ -639,13 +641,72 @@ class QuotaTest(unittest.TestCase):
                 setup.apply(None, value, True)
             self.assertFalse((self.root / "host.md").exists())
 
-    def test_setup_symlink_name_must_match_confirmed_resolved_name(self):
+    def test_setup_versioned_target_is_recorded_and_used(self):
         setup = self.setup_module()
-        entry = self.fake("other", "print('unused')\n")
-        (self.bin / "agy").symlink_to(entry["executable"])
+        entry = self.fake("2.1.318", "print('versioned')\n")
+        target = entry["executable"]
+        alias = self.bin / "claude"
+        alias.symlink_to(target)
         with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
+            plan, value = setup.preview(["claude"])
+            self.assertEqual(plan["agents"]["claude"]["executable"], str(alias))
+            self.assertEqual(plan["agents"]["claude"]["resolved"], target)
+            self.assertIn(str(alias), setup.render(plan))
+            self.assertIn(target, setup.render(plan))
+            setup.apply(None, value, True)
+        recorded = qp.config()["claude"]
+        self.assertEqual(recorded["resolved"], target)
+        self.assertEqual(qp.checked_executable("claude", recorded), [self.interpreter, target])
+        self.assertEqual(qp.command("claude", recorded, "default", "a" * 48).strip(), b"versioned")
+
+    def test_setup_versioned_target_safety_checks(self):
+        setup = self.setup_module()
+        entry = self.fake("2.1.318", "print('unused')\n")
+        target = Path(entry["executable"])
+        alias = self.bin / "claude"
+        alias.symlink_to(target)
+        with mock.patch.dict(os.environ, {"PATH": str(self.bin)}):
+            for unsafe in ("repository", "group-writable", "temporary"):
+                with self.subTest(unsafe=unsafe):
+                    if unsafe == "repository":
+                        (self.bin / ".git").mkdir()
+                    elif unsafe == "group-writable":
+                        target.chmod(0o720)
+                    # Allow only the fixture's temporary alias/interpreter;
+                    # exercise real exclusion on the target for the temp case.
+                    excluded = setup.excluded
+                    def check(path):
+                        if unsafe == "temporary" and path == target:
+                            excluded(path)
+                    with mock.patch.object(setup, "excluded", side_effect=check):
+                        with self.assertRaises(ValueError):
+                            setup.preview(["claude"])
+                    if unsafe == "repository":
+                        (self.bin / ".git").rmdir()
+                    target.chmod(0o700)
+
+    def test_runtime_wrong_recorded_name_is_refused(self):
+        entry = self.fake("sh", "print('unused')\n")
+        self.configure({"codex": entry})
+        with mock.patch.object(qp.subprocess, "Popen", side_effect=AssertionError("must not spawn")) as spawn:
             with self.assertRaisesRegex(ValueError, "wrong name"):
-                setup.preview(["agy"])
+                qp.command("codex", qp.config()["codex"], "default", "a" * 48)
+            spawn.assert_not_called()
+
+    def test_setup_preview_expires_after_sixty_minutes(self):
+        setup = self.setup_module()
+        for seconds, accepted in ((3600, True), (3601, False)):
+            with self.subTest(seconds=seconds):
+                with mock.patch.object(qp, "now", return_value=MEASURED):
+                    plan, value = setup.preview([], off=True)
+                before = setup.read_host()
+                with mock.patch.object(qp, "now", return_value=MEASURED + qp.timedelta(seconds=seconds)):
+                    if accepted:
+                        setup.apply(None, value, True)
+                    else:
+                        with self.assertRaisesRegex(ValueError, "expired"):
+                            setup.apply(None, value, True)
+                        self.assertEqual(setup.read_host(), before)
 
     def test_setup_unsafe_preview_is_refused(self):
         setup = self.setup_module()
@@ -754,12 +815,12 @@ class QuotaTest(unittest.TestCase):
     def test_env_shebang_uses_recorded_interpreter(self):
         entry = self.fake("agy", "print('ok')\n")
         Path(entry["executable"]).write_text("#!/usr/bin/env " + Path(self.interpreter).name + "\nprint('ok')\n")
-        self.assertEqual(qp.checked_executable(entry), [entry["interpreter"], entry["executable"]])
+        self.assertEqual(qp.checked_executable("agy", entry), [entry["interpreter"], entry["executable"]])
         with mock.patch.dict(os.environ, {"PATH": str(self.base / "decoy")}):
             self.assertEqual(qp.command("agy", entry, "default", "a" * 48).strip(), b"ok")
         Path(entry["executable"]).write_text("#!/usr/bin/env -S python3\n")
         with self.assertRaises(ValueError):
-            qp.checked_executable(entry)
+            qp.checked_executable("agy", entry)
 
     def test_timeout_kills_descendants(self):
         sentinel = self.base / "descendant-survived"
@@ -855,7 +916,7 @@ class QuotaTest(unittest.TestCase):
         alias = self.bin / "python-alias"
         alias.symlink_to(entry["interpreter"])
         Path(entry["executable"]).write_text("#!" + str(alias) + "\nprint('ok')\n")
-        self.assertEqual(qp.checked_executable(entry), [entry["interpreter"], entry["executable"]])
+        self.assertEqual(qp.checked_executable("agy", entry), [entry["interpreter"], entry["executable"]])
 
 
 class AccountCommandTest(unittest.TestCase):
