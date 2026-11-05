@@ -32,17 +32,27 @@ Interview by the rules in [references/interview.md](references/interview.md): ma
 
 Done when the chosen scope's decisions are confirmed or explicitly left pending, and each optional section is confirmed or skipped. Record unresolved decisions before dependent drafting.
 
+## The standard
+
+What the research of 2026-11-05 (vendor documentation, two studies, practitioners) supports; `references/hosts.md` has the per-host limits and mechanics. Enforcers: agent judgment while drafting (advisory), then `/fnl-setup` Check measures the written files.
+
+- **Add only what the agent cannot infer from the repository**: exact build, test and lint commands (with the single-test form), misleading spots, decisions made outside the repository, anything the user corrected twice. A controlled study found context files raise cost by over 20% without raising task success, and repository overviews did not help. Add a line after an observed failure, not in advance.
+- **Make each line verifiable** ("use 2-space indentation", not "format code properly") and give the reason behind a rule that is not obvious. Plain wording over capitals: on current models "CRITICAL" and "MUST" over-trigger.
+- **Text is not enforcement.** A rule with no exceptions belongs in a hook or a deny permission; a rule that stays text names its enforcer or is marked advisory.
+- **Keep detail where it loads on demand**: skills, path-scoped rules or referenced documents, each pointer with one line saying when it matters.
+- **Stay inside each host's limit** and one source of truth per fact (`references/hosts.md`).
+
 ## 3. Draft
 
 - **User scope:** one shared body with the host-neutral sections, plus a short host section per host (session naming, compaction, tool quirks).
 - **Project scope:** `AGENTS.md` is the source; `CLAUDE.md` holds an `@AGENTS.md` include line plus only Claude-specific lines. Antigravity reads `AGENTS.md` directly where its docs confirm support. Consolidate existing repository rules without losing them; move the setup-owned block and adoption line intact into the source only in the confirmed migration, never leaving a second copy. Resolve conflicts with the user first.
 - Point to skills by name for practice the plugin already covers: coding entry (`fnl-coding-router`), delegation (`fnl-delegate`), commits (`fnl-commit-messages`), versions (`fnl-versioning`), proof (`fnl-verification`), one opinion or a committee (`fnl-advisor`), knowledge and saved handovers (`fnl-session-hygiene`).
-- Keep it short: every line loads on every turn of every session. Cut any line the agent would follow by default. Treat about 150 lines in the shared body as a soft limit: beyond it, offer to move detail into a skill or a reference the contract points to, rather than cut lines blindly.
+- Keep it short: every line loads on every turn of every session. Cut any line the agent would follow by default. About 150 lines in the shared body is the house soft limit (no vendor source) and 200 lines is Anthropic's target for Claude Code: beyond 150, offer to move detail into a skill or a reference the contract points to, rather than cut lines blindly.
 - Committed context contains no personal, customer or organization names or machine paths. Personal project context goes in Claude Code's untracked `CLAUDE.local.md`; tell the user to keep it out of git. Do not copy it into other hosts' tracked files or commit backups; unverified local-file support is listed in `hosts.md`.
 
 ## 4. Confirm and write
 
-1. Show the full draft, then a diff for every proposed file (against empty content for a new file), including any migration or local file.
+1. Count each proposed file's lines and bytes and show them against the host limits in `references/hosts.md` (Claude Code 200 lines, Codex 32 KiB for the whole chain, Antigravity 24,000 bytes per file after includes), flagging any file over a limit or the 150-line house limit. Agent judgment, advisory. Then show the full draft and a diff for every proposed file (against empty content for a new file), including any migration or local file.
 2. For user scope, recommend a layout with one source of truth (`hosts.md` lists supported includes); for project scope, confirm the `AGENTS.md` source and Claude include layout above.
 3. After an explicit yes for each file: back up the existing file beside it (`<file>.bak-YYYYMMDD`), write, then read it back.
 
