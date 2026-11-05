@@ -4,6 +4,9 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+- Harden agent scans with validated versions, bounded output, absolute PATH entries, digest-bound writes, fence-aware sections and stable check dates.
+- Require neutral explicit Yes/No approval in scan, mode, setup preferences and delegation offers; remove recommended approval answers from plain-language guidance.
+
 ### Changed
 
 - The skills named here now ask through the host's native question tool when the session has one (`AskUserQuestion` on Claude Code, `request_user_input` on Codex, `ask_question` on Antigravity): the setup interviews, the setup preferences and scope questions, the plain-language opening question, the yes of `fnl-scan-agents` (model lists stay free text) and the confirmation of `fnl-set-mode`, the router's bounded clarification and the `suggest` hand-off offer. Text stays the fallback when there is no tool, it fails, nobody can answer (delegated or headless runs) or the answer is free text. Agent judgment enforces it, so it is advisory; verified only that each host's CLI contains the tool, not how Codex and Antigravity expose it.
