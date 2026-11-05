@@ -6,6 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Every background run or agent a coordinator starts (a headless Codex, Antigravity or Claude run, a reviewer, a subagent) is named by who runs it and what it does, `<runner>: <project> <scope> <activity>`, in the host's name field, the ledger task, the log file names and the dispatch line. The rule lives in `fnl-session-hygiene` "Titles"; `fnl-delegate`, `fnl-review-gate` and `fnl-handoff` point to it. Advisory (agent judgment).
 - Add an advisory release step to update the marketplace catalog pin and metadata after a release.
 - Harden agent scans with validated versions, bounded output, absolute PATH entries, digest-bound writes, fence-aware sections and stable check dates.
 - Require neutral explicit Yes/No approval in scan, mode, setup preferences and delegation offers; remove recommended approval answers from plain-language guidance.

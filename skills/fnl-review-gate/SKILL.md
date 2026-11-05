@@ -40,7 +40,7 @@ Self-contained, no whole-history fork:
 - tests and configuration run, with their results and limits;
 - the requested coverage (correctness, security, performance) and the report format: each finding with file, line, severity and a concrete failure scenario.
 
-Give the reviewer a time budget and a check deadline (`fnl-delegate`).
+Give the reviewer a time budget and a check deadline (`fnl-delegate`), and start it under a name that says its role and the pull request (`code review: <project> PR <n>`, `sec review: <project> PR <n>`; `fnl-session-hygiene` "Titles").
 
 ## Review scope
 
