@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-11-05
+
 ### Added
 
 - Add an optional quota probe for Antigravity, Claude Code (up to four labelled installs) and Codex, with canonical consent, confirmed executable paths, bounded detached reads and private usage-only cache. Setup previews before digest-confirmed apply; Scan and Check show measured pools, and delegation uses fresh readings as advisory evidence.
@@ -262,7 +264,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.4...v0.1.5
