@@ -455,6 +455,41 @@ class QuotaTest(unittest.TestCase):
         trigger.assert_not_called()
         self.assertFalse(self.root.exists())
 
+    def test_setup_wrong_filename_refused_by_preview_and_validation(self):
+        setup = self.setup_module()
+        entry = self.fake("other", "print('unused')\n")
+        entry.pop("configs")
+        with mock.patch.object(setup, "excluded"), \
+             mock.patch.object(setup, "resolve_executable", return_value=entry):
+            with self.assertRaises(ValueError):
+                setup.preview(["agy"])
+            plan = {"choice": "on", "date": "2026-11-05", "root": str(self.root),
+                    "host_digest": setup.hashlib.sha256(b"").hexdigest(),
+                    "agents": {"agy": entry}, "configs": {}}
+            with self.assertRaises(ValueError):
+                setup.validate_plan(plan)
+
+    def test_setup_apply_requires_issued_preview(self):
+        setup = self.setup_module()
+        entry = self.fake("agy")
+        entry.pop("configs")
+        plan = {"choice": "on", "date": "2026-11-05", "root": str(self.root),
+                "host_digest": setup.hashlib.sha256(b"").hexdigest(),
+                "agents": {"agy": entry}, "configs": {}}
+        with mock.patch.object(setup, "excluded"), self.assertRaises((OSError, ValueError)):
+            setup.apply(plan, setup.digest(plan), True)
+        self.assertFalse(self.root.exists())
+
+    def test_setup_edited_plan_is_not_a_preview(self):
+        setup = self.setup_module()
+        self.fake("agy")
+        with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
+            plan, value = setup.preview(["agy"])
+            plan["date"] = "2026-11-06"
+            with self.assertRaises(ValueError):
+                setup.apply(plan, setup.digest(plan), True)
+        self.assertFalse((self.root / "host.md").exists())
+
     def setup_module(self):
         spec = importlib.util.spec_from_file_location("quota_setup_test", ROOT / "skills/fnl-setup/scripts/quota_setup.py")
         module = importlib.util.module_from_spec(spec)
@@ -478,6 +513,83 @@ class QuotaTest(unittest.TestCase):
         self.assertTrue(dr.read_data("host.md").decode().startswith(original))
         self.assertEqual(qp.config()["agy"]["executable"], str(self.bin / "agy"))
         self.assertEqual(stat.S_IMODE((self.root / "host.md").stat().st_mode), 0o600)
+
+    def test_setup_stored_preview_is_private_consumed_and_not_replayable(self):
+        setup = self.setup_module()
+        self.fake("agy")
+        with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
+            plan, value = setup.preview(["agy"])
+            saved = self.root / "state/quota/preview.json"
+            self.assertEqual(stat.S_IMODE(saved.stat().st_mode), 0o600)
+            self.assertEqual(json.loads(saved.read_text()), {"plan": plan, "digest": value})
+            with self.assertRaises(ValueError):
+                setup.apply(None, "0" * 64, True)
+            self.assertFalse((self.root / "host.md").exists())
+            setup.apply(None, value, True)
+            self.assertFalse(saved.exists())
+            original = dr.read_data("host.md")
+            with self.assertRaises(FileNotFoundError):
+                setup.apply(None, value, True)
+            self.assertEqual(dr.read_data("host.md"), original)
+
+    def test_setup_edited_stored_plan_and_changed_executable_refused(self):
+        setup = self.setup_module()
+        self.fake("agy")
+        with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
+            plan, value = setup.preview(["agy"])
+            edited = copy.deepcopy(plan)
+            edited["date"] = "2026-11-06"
+            with qp.state_folder() as folder:
+                qp.write_json(folder, "preview.json", {"plan": edited, "digest": value})
+            with self.assertRaisesRegex(ValueError, "digest mismatch"):
+                setup.apply(None, value, True)
+            plan, value = setup.preview(["agy"])
+            (self.bin / "agy").chmod(0o777)
+            with self.assertRaisesRegex(ValueError, "unsafe"):
+                setup.apply(None, value, True)
+            self.assertFalse((self.root / "host.md").exists())
+
+    def test_setup_wrong_filename_refused_at_apply(self):
+        setup = self.setup_module()
+        self.fake("agy")
+        wrong = self.fake("other", "print('unused')\n")
+        wrong.pop("configs")
+        with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
+            plan, value = setup.preview(["agy"])
+            plan["agents"]["agy"] = wrong
+            # Exercise re-validation independently of digest mismatch rejection.
+            value = setup.digest(plan)
+            with qp.state_folder() as folder:
+                qp.write_json(folder, "preview.json", {"plan": plan, "digest": value})
+            with self.assertRaisesRegex(ValueError, "wrong name"):
+                setup.apply(None, value, True)
+            self.assertFalse((self.root / "host.md").exists())
+
+    def test_setup_symlink_name_must_match_confirmed_resolved_name(self):
+        setup = self.setup_module()
+        entry = self.fake("other", "print('unused')\n")
+        (self.bin / "agy").symlink_to(entry["executable"])
+        with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
+            with self.assertRaisesRegex(ValueError, "wrong name"):
+                setup.preview(["agy"])
+
+    def test_setup_unsafe_preview_is_refused(self):
+        setup = self.setup_module()
+        plan, value = setup.preview([], off=True)
+        saved = self.root / "state/quota/preview.json"
+        outside = self.base / "outside-preview"
+        outside.write_bytes(saved.read_bytes())
+        outside.chmod(0o600)
+        saved.unlink()
+        saved.symlink_to(outside)
+        with self.assertRaises((OSError, ValueError)):
+            setup.apply(None, value, True)
+        saved.unlink()
+        saved.write_bytes(outside.read_bytes())
+        saved.chmod(0o644)
+        with self.assertRaises(ValueError):
+            setup.apply(None, value, True)
+        self.assertFalse((self.root / "host.md").exists())
 
     def test_setup_host_change_and_off(self):
         setup = self.setup_module()

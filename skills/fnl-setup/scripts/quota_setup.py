@@ -40,6 +40,10 @@ def resolve_executable(agent):
     excluded(Path(found).absolute())
     path = Path(found).resolve(strict=True)
     excluded(path)
+    # The confirmed path is the resolved path printed in preview, not the PATH
+    # alias. Both the lookup name and that confirmed filename must name the agent.
+    if path.name != agent:
+        raise ValueError("executable missing or wrong name")
     first = qp.checked_path(path)
     interpreter = None
     if first.startswith(b"#!"):
@@ -135,8 +139,12 @@ def preview(agents, configs=None, off=False):
     plan = {"choice": "off" if off else "on", "date": qp.now().date().isoformat(),
             "root": str(root), "host_digest": hashlib.sha256(text.encode()).hexdigest(),
             "agents": {a: resolve_executable(a) for a in agents} if not off else {}, "configs": folders}
+    validate_plan(plan)
     replace_section(text, render(plan))
-    return plan, digest(plan)
+    value = digest(plan)
+    with qp.state_folder(create=True) as folder:
+        qp.write_json(folder, "preview.json", {"plan": plan, "digest": value})
+    return plan, value
 
 
 def validate_plan(plan):
@@ -156,10 +164,13 @@ def validate_plan(plan):
         return
     if not agents:
         raise ValueError("agents")
-    for entry in agents.values():
+    for agent, entry in agents.items():
         if not isinstance(entry, dict) or set(entry) != {"executable", "interpreter"}:
             raise ValueError("executable")
-        excluded(Path(entry["executable"]))
+        path = Path(entry["executable"])
+        if path.name != agent or path.resolve(strict=True).name != agent:
+            raise ValueError("executable missing or wrong name")
+        excluded(path)
         if entry["interpreter"]:
             excluded(Path(entry["interpreter"]))
         qp.checked_executable(entry)
@@ -174,21 +185,29 @@ def validate_plan(plan):
 def apply(plan, supplied_digest, yes=False):
     if not yes or not isinstance(supplied_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", supplied_digest):
         raise ValueError("clear yes and full preview digest required")
-    if digest(plan) != supplied_digest:
-        raise ValueError("digest mismatch")
-    validate_plan(plan)
-    with dr.root_folder(create=True) as folder:
-        fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        try:
-            text = dr.read_file(folder, "host.md", 262144).decode()
-        except FileNotFoundError:
-            text = ""
-        if hashlib.sha256(text.encode()).hexdigest() != plan["host_digest"]:
-            raise ValueError("host changed; preview again")
-        result = replace_section(text, render(plan)).encode()
-        if len(result) > 262144:
-            raise ValueError("host too large")
-        dr.atomic_write(folder, "host.md", result)
+    # The caller's JSON is only an optional consistency check; never authority.
+    # No create here: a missing preview must leave even the state tree untouched.
+    with qp.state_folder() as state:
+        saved = qp.read_json(state, "preview.json")
+        if (not isinstance(saved, dict) or set(saved) != {"plan", "digest"}
+                or saved["digest"] != supplied_digest or digest(saved["plan"]) != supplied_digest
+                or (plan is not None and plan != saved["plan"])):
+            raise ValueError("digest mismatch; preview again")
+        plan = saved["plan"]
+        validate_plan(plan)
+        with dr.root_folder(create=True) as folder:
+            fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try:
+                text = dr.read_file(folder, "host.md", 262144).decode()
+            except FileNotFoundError:
+                text = ""
+            if hashlib.sha256(text.encode()).hexdigest() != plan["host_digest"]:
+                raise ValueError("host changed; preview again")
+            result = replace_section(text, render(plan)).encode()
+            if len(result) > 262144:
+                raise ValueError("host too large")
+            dr.atomic_write(folder, "host.md", result)
+        os.unlink("preview.json", dir_fd=state)
 
 
 def main():
@@ -197,7 +216,7 @@ def main():
     parser.add_argument("--agents", nargs="*", choices=tuple(qp.SOURCES), default=[])
     parser.add_argument("--claude-config", action="append", default=[], metavar="LABEL:/ABS/PATH")
     parser.add_argument("--off", action="store_true")
-    parser.add_argument("--plan", help="exact JSON Plan from preview; no PATH lookup on apply")
+    parser.add_argument("--plan", help="optional consistency check against the stored preview; never applied directly")
     parser.add_argument("--digest")
     parser.add_argument("--yes", action="store_true")
     args = parser.parse_args()
@@ -213,7 +232,7 @@ def main():
             print(render(plan), end="")
             print("Plan: " + json.dumps(plan, separators=(",", ":")))
             print("Digest: " + value)
-            print("Preview only; nothing written.")
+            print("Preview saved privately; host configuration unchanged.")
         else:
             apply(json.loads(args.plan or "null"), args.digest, args.yes)
             print("Quota probe section saved; no usage command was run.")
