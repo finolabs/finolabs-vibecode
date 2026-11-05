@@ -256,17 +256,25 @@ A newer stable version prompts the agent to let the user know they can type `/fn
 
 ## Where the plugin keeps its files
 
-| Path | Holds |
-| --- | --- |
-| `~/.finolabs/vibecode/host.md` | host config for delegation (`ORCHESTRATION_HOST_CONFIG` overrides) |
-| `~/.finolabs/vibecode/ledger.jsonl` | dispatch ledger (`ORCHESTRATION_LEDGER` overrides) |
-| `~/.finolabs/vibecode/state/` | consent, usage events, the dashboard (`FNL_STATE_DIR` overrides) |
+The data root defaults to `~/.finolabs/vibecode/`, using the account home from the operating system. Only `fnl-setup` changes it.
 
-Folders it creates are private (mode `0700`). A machine that already keeps these in `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` or `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode` and has nothing in the new place keeps using the old files; nothing is moved. Each host's own configuration stays where that host keeps it.
+| Path under the data root | Holds |
+| --- | --- |
+| `host.md` | host settings and opt-ins |
+| `ledger.jsonl` | dispatch ledger |
+| `state/` | consent, usage events, dashboard, update checks, auto gate and quota state |
+| `logs/`, `bin/` | plugin logs and helpers |
+| `tmp/` | private transient files |
+
+In setup's **Data location** step, keep the default (recommended) or name an absolute local folder outside every git work tree. Setup previews the regular files to copy and a digest binding their contents and the target. After a separate clear yes, it copies into an empty folder, with folders mode `0700` and files mode `0600`, then publishes the pointer atomically. It skips symlinks, special files and `tmp/`, leaves the old folder untouched, and asks you to remove it yourself when ready. Check and the agent scan report the effective root and its source.
+
+The fixed anchor `~/.finolabs/vibecode/root.json` contains the new absolute `root` and a random `id` matching the new folder's `.root-id`. A present but invalid pointer turns consent-bearing reads off; the default's old opt-ins cannot reactivate them. The root, pointer and each opened component must pass ownership and no-follow checks; relocated roots and their ancestors cannot be group- or world-writable. Network file systems and Windows are unverified and unsupported for relocation.
+
+`HOME`, `XDG_*`, `FNL_STATE_DIR` and `ORCHESTRATION_HOST_CONFIG` cannot redirect consent, opt-ins, auto gate or quota files. The absolute `FNL_STATE_DIR` override and the older `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` folder remain compatibility paths only for usage events and the dashboard; the older folder is used only before relocation, while the default state folder is absent. Metrics atomic-write temporary files stay beside their destination, including on these compatibility paths. `ORCHESTRATION_HOST_CONFIG` still selects non-consent settings such as Delegation mode. The ledger no longer follows environment overrides. Each host's own configuration and project-local briefs stay in their existing locations.
 
 ## Host configuration
 
-The orchestration skills keep machine facts (agent commands, allowed models, which delegates each coordinator can reach, the route judge, allow-rules, lock path, parallel limit, an optional effort preference, and the `## Agents on this machine`, `## Delegation mode` and `## Routing` settings) outside the plugin, in a host config file: the path in `ORCHESTRATION_HOST_CONFIG`, or else `~/.finolabs/vibecode/host.md` (or the older `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode/host.md` while only that file exists). Start from `skills/fnl-delegate/references/host-template.md`. The dispatch ledger defaults to `~/.finolabs/vibecode/ledger.jsonl` (`ORCHESTRATION_LEDGER` overrides it; an older ledger in `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` is used while there is no new one). When Codex or Antigravity also coordinates, put both files where every coordinator's sandbox can read and write them.
+The orchestration skills keep machine facts (agent commands, allowed models, reachable delegates, the route judge, allow-rules, lock path and parallel limit) in `host.md` under the data root. Start from `skills/fnl-delegate/references/host-template.md`. Opt-ins and Routing always come from that canonical file; `ORCHESTRATION_HOST_CONFIG` applies only to non-consent settings. Put the data root where every coordinator's sandbox can read and write it, using setup's relocation step when needed.
 
 The route judge is optional. Without one, the agent's own model makes the grade, route, depth and activity calls. With one configured, such as TypeSafe's Jev called through its own `typesafe-ai` skill, `fnl-delegate` and `fnl-coding-router` ask it first, which saves their own reasoning; the plugin holds no key for it.
 

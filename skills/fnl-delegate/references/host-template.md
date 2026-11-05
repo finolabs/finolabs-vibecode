@@ -1,6 +1,6 @@
 # Delegation host config: <machine name>
 
-Machine-specific facts for the `fnl-delegate` skills. The skills hold what is true on any host; this file holds paths, commands and permission rules for one machine. Keep it outside the plugin (default `~/.finolabs/vibecode/host.md`, or the path in `ORCHESTRATION_HOST_CONFIG`) so plugin updates never overwrite it. When more than one agent coordinates, keep this file and the ledger (`ORCHESTRATION_LEDGER`) where every coordinator's sandbox can read and write them. Changing an allow-rule or a shared setting listed here needs the owner's approval.
+Machine-specific facts for the `fnl-delegate` skills. The skills hold what is true on any host; this file holds paths, commands and permission rules for one machine. Keep it as `host.md` under the resolved data root so plugin updates never overwrite it. `ORCHESTRATION_HOST_CONFIG` may supply non-consent settings only; opt-ins and Routing always use the canonical file. When more than one agent coordinates, use `fnl-setup` to locate the data root where every coordinator's sandbox can read and write it and its `ledger.jsonl`. Changing an allow-rule or a shared setting listed here needs the owner's approval.
 
 ## Delegation mode
 
@@ -25,7 +25,7 @@ Coordinator: unverified
 - Parallel dispatches: at most <N> at one time (5 or fewer).
 - Machine role: <daily workstation | CI box>. Heavy jobs at one time: <1>.
 - Heavy jobs: <container-backed suites, scale measurements, end-to-end suites>.
-- Heavy-job lock: `<absolute path, e.g. ~/.finolabs/vibecode/state/heavy.lock>`.
+- Heavy-job lock: `<absolute path under the resolved data root, e.g. state/heavy.lock>`.
 - Fixture size for local tests and measurements: <e.g. about 1,000 items unless the owner asks for more>.
 
 ## Effort preference
