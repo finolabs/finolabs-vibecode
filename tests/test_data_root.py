@@ -205,7 +205,7 @@ class DataRootTest(unittest.TestCase):
         target, files, digest = move.preview(self.target)
         self.assertEqual(before, sorted(str(p) for p in self.home.rglob("*")))
         self.assertEqual(set(files), {"host.md", "ledger.jsonl", "state/consent.json", "state/deep/item", "logs/run", "bin/tool"})
-        move.apply(target, digest[:8], yes=True)
+        move.apply(target, digest, yes=True)
         self.assertEqual(dr.data_root(), (target, "relocated"))
         for name in files:
             self.assertEqual((target / name).read_bytes(), (self.default / name).read_bytes())
@@ -220,7 +220,8 @@ class DataRootTest(unittest.TestCase):
     def test_move_requires_yes_and_digest_without_writes(self):
         self.seed_move()
         move = self.location()
-        for digest, yes in ((None, True), ("a" * 8, True), ("bad", True), ("a" * 64, False)):
+        _, _, expected = move.preview(self.target)
+        for digest, yes in ((expected[:8], True), (expected[:63], True), (expected + "a", True), ("g" * 64, True), (None, True), ("a" * 8, True), ("bad", True), ("a" * 64, False)):
             with self.subTest(digest=digest, yes=yes), self.assertRaises(ValueError):
                 move.apply(self.target, digest, yes)
             self.assertFalse(self.target.exists())

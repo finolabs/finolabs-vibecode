@@ -85,10 +85,10 @@ def preview(target):
 
 
 def apply(target, digest, yes=False):
-    if not yes or not digest or not re.fullmatch(r"[0-9a-fA-F]{8,64}", digest):
-        raise ValueError("a clear yes and preview digest are required")
+    if not yes or not digest or not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
+        raise ValueError("a clear yes and full 64-hex preview digest are required")
     target, files, expected = preview(target)
-    if not expected.startswith(digest.lower()):
+    if expected != digest.lower():
         raise ValueError("digest mismatch")
     # Validate the pointer size before creating or copying anything.
     identity = os.urandom(24).hex()
