@@ -71,6 +71,10 @@ def check_git_dir_and_refs(root, name=None):
         dot_git = (root / lines[0][8:]).resolve()
         if not dot_git.is_dir() or dot_git.stat().st_uid != os.getuid():
             raise ValueError("Unsafe path: gitdir must be an existing directory owned by the user.")
+        back_pointer = dot_git / "gitdir"
+        if (dot_git / "commondir").exists() and (back_pointer.is_symlink() or not back_pointer.is_file()
+                or Path(back_pointer.read_text(encoding="utf-8").strip()).resolve() != root / ".git"):
+            raise ValueError("Unsafe path: gitdir back-pointer does not match this worktree.")
     elif not stat.S_ISDIR(git_stat.st_mode):
         raise ValueError("Unsafe path: .git must be a directory or a gitdir file.")
 
@@ -372,7 +376,7 @@ def cmd_restore(repo_root, name, yes=False, digest_arg=None):
     verify = run_git(repo_root, ["rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], check=False)
     if verify.returncode != 0:
         print(f"Restore point {clean_text(name)} not found; nothing written.")
-        return 0
+        return 1
 
     point_oid = verify.stdout.decode("utf-8").strip()
     if not OID_RE.fullmatch(point_oid):
@@ -437,7 +441,7 @@ def cmd_restore(repo_root, name, yes=False, digest_arg=None):
 
     if not digest_arg or not DIGEST_RE.fullmatch(digest_arg) or not digest.startswith(digest_arg.lower()):
         print("Digest missing or mismatched; nothing written.")
-        return 0
+        return 1
 
     check_target_paths_no_symlinks(repo_root, point_oid)
     _, pre_ref, _, _ = create_point(repo_root, suffix="pre-restore")
@@ -473,11 +477,11 @@ def main(argv=None, cwd=None):
     try:
         if args.action == "restore" and not validate_name(args.name):
             print("Invalid restore point name; nothing written.")
-            return 0
+            return 1
         repo_root = find_repo_root(cwd)
         if repo_root is None:
             print(OUTSIDE_GIT_MSG)
-            return 0
+            return int(args.action == "restore")
         if args.action == "create":
             return cmd_create(repo_root)
         if args.action == "list":
@@ -487,7 +491,7 @@ def main(argv=None, cwd=None):
     except (subprocess.SubprocessError, OSError, RuntimeError, UnicodeError, ValueError) as exc:
         line = clean_text(str(exc)).splitlines()[0] if str(exc) else "Restore point unavailable; nothing written."
         print(line)
-        return 0
+        return int(args.action == "restore")
     return 0
 
 
