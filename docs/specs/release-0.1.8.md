@@ -1,6 +1,6 @@
 # Release 0.1.8: spec and plan
 
-Status: draft for owner review. Nothing here is implemented except package 1 (pull request 58, in review). Owner decisions: 2026-11-05 (scope below). Release 0.1.7 is tagged; `main` is `0.1.8-dev`.
+Status: scope and plan settled by the owner on 2026-11-05 (the four open decisions are recorded under "Decisions settled"). Package 1 is merged (pull request 58); packages 2, 3 and 5 are in review or in progress. Release 0.1.7 is tagged; `main` is `0.1.8-dev`.
 
 ## Why
 
@@ -24,6 +24,7 @@ In, by package (Plan below gives order and dependencies):
 | 6 | Compaction: advisory, host thresholds, `PreCompact` reminder | feature |
 | 7 | `auto` blocking gate | feature, policy change |
 | 8 | Restore point and "try it now" demo | feature |
+| 9 | Decisions asked, not listed | feature |
 
 Out of 0.1.8, recorded so it is not lost: **multiple accounts** per host (needs each host's real support and a second account to verify; the open points are what each host supports, how quota fallback picks an account since quota is per account, where account facts live (host config, never skill bodies), and that any metrics field stays metadata with no identity and goes through `SCHEMA` and `PRIVACY.md`). A research spike may start it later; it is not scheduled.
 
@@ -31,11 +32,11 @@ Every rule a package adds names its enforcer (host setting, hook, review gate or
 
 ## Package 1: native question form
 
-Pull request 58. Skills ask through the host's native question tool when the session has one (`AskUserQuestion` on Claude Code, `request_user_input` on Codex, `ask_question` on Antigravity); text is the fallback. Approvals use neutral Yes and No choices and never count a default or timeout.
+Merged (pull request 58). Skills ask through the host's native question tool when the session has one (`AskUserQuestion` on Claude Code, `request_user_input` on Codex, `ask_question` on Antigravity); text is the fallback. Approvals use neutral Yes and No choices and never count a default or timeout.
 
 Open LOW findings from the last security review, carried into package 2's pass: the "neutral Yes and No, no default counts" clause appears only in the setup `interview.md`; add it to `fnl-scan-agents` step 3, `fnl-set-mode` step 2 and the `fnl-delegate` suggest offer, with a grep test, and drop "recommended answer first" from approval questions in both `plain-language.md` copies.
 
-Remaining after the merge: `fnl-setup` beginner-path and mode questions, `references/check.md`, `fnl-update` and `fnl-status` still ask in text. Decide in package 2's pass whether to sweep them or leave them; the CHANGELOG states which skills are covered. No eval can exercise the native path (the parity evals allow no question tool), so verification stays manual per host.
+Still asking in text after the merge: the `fnl-setup` beginner-path and mode questions, `references/check.md`, `fnl-update` and `fnl-status`. The owner chose to sweep them: a follow-up to package 2 moves them to the native form and updates the CHANGELOG line that lists the covered skills. No eval can exercise the native path (the parity evals allow no question tool), so verification stays manual per host.
 
 ## Package 2: scan hardening
 
@@ -98,26 +99,34 @@ Evidence from one small test per host (04/11, temp folders): Claude Code `Stop` 
 
 Design to settle before code (a short design note in this spec, reviewed first):
 
-- What decision the gate checks: a ledger `start` line for the task, or a keep reason, recorded by the coordinator (the keep-or-hand-off check in `fnl-delegate`).
+- What decision the gate checks (settled): a ledger `start` line for the task, or a keep receipt, recorded by the coordinator (the keep-or-hand-off check in `fnl-delegate`).
 - The decision file's location under `~/.finolabs/vibecode/state/` and its lifetime (per session).
 - How the user turns it off at once (`FNL_AUTO_GATE=off`) and how a blocked agent is told why in one line.
 
 Hosts: Claude Code and Antigravity first; Codex stays unverified until a trusted hook fires in a real session.
 
-Acceptance: a unit test per branch (mode not `auto`, no opt-in, decision present, decision missing, malformed state, hook error), each exiting 0 except the one named block; a real-session check per host that the block fires and that turning the gate off removes it. Security review is mandatory (permission boundary). Metrics: a new event field only through `SCHEMA` and `PRIVACY.md`, and only if the owner wants the gate counted.
+Acceptance: a unit test per branch (mode not `auto`, no opt-in, decision present, decision missing, malformed state, hook error), each exiting 0 except the one named block; a real-session check per host that the block fires and that turning the gate off removes it. Security review is mandatory (permission boundary). The gate is not counted in usage metrics (settled): no new event field.
 
 ## Package 8: restore point and "try it now" demo
 
 **Restore point** ("save before the AI edits").
 
 - A new user-invoked restore-point skill (name settled when it is built), in git repositories only: it records the working tree as a commit object on a private ref (`refs/finolabs/restore/<timestamp>`) without touching the index, the branch or the working tree, never pushes, and lists restore points. Restoring shows the difference first and writes only after a clear yes.
-- Not a hook by default: an automatic snapshot before the first edit of a session would write into the user's repository without a request. Whether to offer an opt-in `PreToolUse` snapshot (Claude Code, Antigravity) is an owner decision (below); it must be non-blocking and fail closed.
+- User-invoked only (settled): an automatic snapshot before the first edit would write into the user's repository without a request, so there is no hook.
 - Outside git: say that it cannot help and name `git init` as the user's step. Nothing is installed or created.
 - Enforcer: the script (symlink refusal, preview before write, no network); the user's yes for a restore.
 
 **"Try it now" demo.** `fnl-ask` Start mode offers, once, a guided first result in a new empty folder the user names (never inside an existing repository): the agent builds one tiny thing from the user's own idea with the pack's gates in plain words, then shows how to continue. Done when a newcomer reaches a working result in about ten minutes with no internal word.
 
 Acceptance: tests for the restore script on a synthetic repository (create, list, restore with and without a clean tree, symlinked path refused); the demo is evaluated with the persona study rerun on the final README and `fnl-ask`, reporting clarity, first-step and non-technical-fit scores against the 0.1.7 baseline. Persona runs are model role-play, not real users, and say so.
+
+## Package 9: decisions asked, not listed
+
+When a spec or a plan has decisions the user can settle, the agent asks them through the host's native question tool (text when there is none) instead of writing them as an "Open decisions" list for the user to answer later. Answers go into the document as settled decisions with the date; only a decision the user cannot make yet (it needs evidence, another person or a later step) stays listed, with its owner and what unblocks it.
+
+Where it lives: `fnl-coding-router`, as one line in "Work, then gate" ("These hold on every path"), because the router is loaded at every coding entry and every workflow path (Spec Kit, a workflow pack, none) writes specs and plans. Not `fnl-setup-instructions`: that skill writes the user's contract once and is not loaded while a spec is written. The rule is advisory (agent judgment); a run with nobody to answer (delegated or headless) records the decisions as open and never invents an answer. Each Spec Kit, pack and none adapter keeps its own clarify step; this rule only says that the unsettled ones are asked, not listed.
+
+Acceptance: the router line exists and names its enforcer; a unit test checks the line is in `skills/fnl-coding-router/SKILL.md`; this spec is the first case (its four decisions were asked, not listed).
 
 ## Plan
 
@@ -131,7 +140,8 @@ Writers: one writer and one worktree per package; coordinator merges. Effort `me
 | 3 | 6 | 0 | `skills/fnl-session-hygiene`, `skills/fnl-setup`, `.claude-plugin`/`.codex-plugin` hooks |
 | 4 | 7 design note, then code | 3 (both touch the hooks) | hooks, `CLAUDE.md`, `fnl-delegate` |
 | 5 | 8 restore point, then demo | 0 | new skill folder, `fnl-ask`, README, file tree |
-| 6 | Release 0.1.8 | all merged, full suite and evals run once | manifests, CHANGELOG |
+| 6 | 9 (one router line) and the native sweep follow-up to 2 | 0, 1 | `skills/fnl-coding-router/SKILL.md`; the skills named in the sweep |
+| 7 | Release 0.1.8 | all merged, full suite and evals run once | manifests, CHANGELOG |
 
 Release 0.1.8 follows `fnl-versioning`: a release pull request (manifest versions and CHANGELOG), an annotated tag after CI, a GitHub release, the catalog pin pull request (package 5), then the bump to `0.1.9-dev`. Pushes, merges, the catalog pull request and the release each need the owner's go.
 
@@ -144,12 +154,14 @@ Budget guide (`fnl-delegate`): packages 2, 3, 5: medium, 30 to 45 minutes each; 
 - Eval judges are noisy; a number near 0.5 to 0.75 is not a verdict until the answers are read.
 - `CHANGELOG.md` `Unreleased` is touched by every package: merge in order and resolve once.
 
-## Open decisions for the owner
+## Decisions settled
 
-1. **Release number.** Eight packages with two new skills and a policy change: stay `0.1.8`, or call it `0.2.0`. Recommended: `0.1.8` (pre-1.0, same practice as 0.1.7); `1.0.0` stays the owner's call.
-2. **Restore point trigger.** User-invoked only (recommended), or an opt-in automatic snapshot before the first edit.
-3. **`auto` gate scope.** What counts as a recorded decision, and whether the gate is counted in usage metrics.
-4. **Native form sweep.** Whether `fnl-setup` beginner path, `check.md`, `fnl-update` and `fnl-status` move to the native form in package 2's pass, or stay text.
+Asked of the owner through the native question form on 2026-11-05; each took the recommended answer.
+
+1. **Release number:** `0.1.8` (pre-1.0, same practice as 0.1.7; `1.0.0` stays the owner's call).
+2. **Restore point trigger:** user-invoked only; no automatic snapshot.
+3. **`auto` gate:** a recorded decision is a ledger `start` line or a keep receipt; blocks are not counted in usage metrics.
+4. **Native form sweep:** the remaining text questions move to the native form (follow-up to package 2).
 
 ## Verification and limits
 
