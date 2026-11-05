@@ -1,6 +1,6 @@
 # Release 0.1.8: spec and plan
 
-Status: scope and plan settled by the owner on 2026-11-05 (the open decisions are recorded under "Decisions settled"). Merged: packages 1 (pull request 58) and 9 (pull request 63). In review: 2 (61), 3 (62), 5 (60) and 10 (64). Not started: 4, 6, 7, 8 and the native sweep follow-up. Release 0.1.7 is tagged; `main` is `0.1.8-dev`.
+Status: scope and plan settled by the owner on 2026-11-05 (the open decisions are recorded under "Decisions settled"). Merged: packages 1 (pull request 58), 2 (61), 3 (62), 5 (60), 9 (63) and 10 (64). Not started: 4, 6, 7, 8 and the native sweep follow-up. Release 0.1.7 is tagged; `main` is `0.1.8-dev`.
 
 ## Why
 
@@ -17,15 +17,15 @@ In, by package (Plan below gives order and dependencies):
 | # | Package | Kind |
 | --- | --- | --- |
 | 1 | Native question form for every skill that asks the user | merged (pull request 58) |
-| 2 | Scan hardening | fix |
-| 3 | Reference check and CI fixes | fix |
+| 2 | Scan hardening | merged (pull request 61) |
+| 3 | Reference check and CI fixes | merged (pull request 62) |
 | 4 | Eval stability | fix |
-| 5 | Release checklist: catalog pin step | fix |
+| 5 | Release checklist: catalog pin step | merged (pull request 60) |
 | 6 | Compaction: advisory, host thresholds, `PreCompact` reminder | feature |
 | 7 | `auto` blocking gate | feature, policy change |
 | 8 | Restore point and "try it now" demo | feature |
 | 9 | Decisions asked, not listed | merged (pull request 63) |
-| 10 | Name every background run by its runner and what it does | feature |
+| 10 | Name every background run by its runner and what it does | merged (pull request 64) |
 
 Out of 0.1.8, recorded so it is not lost: **multiple accounts** per host (needs each host's real support and a second account to verify; the open points are what each host supports, how quota fallback picks an account since quota is per account, where account facts live (host config, never skill bodies), and that any metrics field stays metadata with no identity and goes through `SCHEMA` and `PRIVACY.md`). A research spike may start it later; it is not scheduled.
 
@@ -144,7 +144,7 @@ Writers: one writer and one worktree per package; coordinator merges. Effort `me
 | Step | Packages | Depends on | Files at risk of overlap |
 | --- | --- | --- | --- |
 | 0 | 1 and 9 merged (done) | none | none |
-| 1 | 2, 3, 5 in parallel (2 merged) | 0 | `CHANGELOG.md` `Unreleased` only; resolve at merge |
+| 1 | 2, 3, 5 in parallel (all merged, done) | 0 | `CHANGELOG.md` `Unreleased` only; resolve at merge |
 | 2 | 4 | 1 (evals read the merged skills) | `evals/` |
 | 3 | 10 (run names), then the native sweep follow-up to 2 | 0, 1 | `skills/fnl-session-hygiene` (titles), `fnl-delegate`, `fnl-review-gate`, `fnl-handoff`; the skills named in the sweep |
 | 4 | 6 | 3 (both edit `fnl-session-hygiene`) | `skills/fnl-session-hygiene`, `skills/fnl-setup`, `.claude-plugin`/`.codex-plugin` hooks |
