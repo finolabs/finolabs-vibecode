@@ -5,7 +5,7 @@ enum or name fields; no prompt, code, command text, file path or review text. No
 written until the user has consented (consent.json) and FNL_METRICS is not "off".
 
 This file is copied byte for byte into the skills that import it (fnl-coding-router,
-fnl-status); a test keeps the copies equal.
+fnl-status, fnl-update); a test keeps the copies equal.
 """
 
 import hashlib
@@ -26,6 +26,10 @@ KINDS = ("code", "security")
 VERDICTS = ("APPROVE", "REWORK")
 KEPT_REASONS = ("needs-context", "brief-costs-more", "hard-grade", "no-delegate", "never-delegated", "user-choice")
 ROUTE_BY = ("table", "judge", "user")
+JUDGE_SITES = ("route", "depth", "activity", "instruction")
+JUDGE_GRADERS = ("judge", "agent")
+JUDGE_RESULTS = ("validated", "unverified")
+JUDGE_FOLLOWED = ("yes", "no", "na")
 RETENTIONS = (30, 90, 365)
 MARKER_DAYS = 7
 NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
@@ -63,8 +67,17 @@ SCHEMA = {
     "commit": {},
     "review": {"kind": lambda v: v in KINDS, "verdict": lambda v: v in VERDICTS, "pr": _pr},
     "router": {"depth": lambda v: v in DEPTHS, "trigger": lambda v: v in TRIGGERS},
+    "judge": {"site": lambda v: v in JUDGE_SITES, "grader": lambda v: v in JUDGE_GRADERS,
+              "result": lambda v: v in JUDGE_RESULTS, "followed": lambda v: v in JUDGE_FOLLOWED},
     "kept": {"tasks": _tasks, "reason": lambda v: v in KEPT_REASONS, "route_by": lambda v: v in ROUTE_BY},
 }
+
+
+def valid_judge_pairs(fields):
+    """Cross-field constraints, in addition to the closed enumerations."""
+    return ((fields["grader"] != "agent" or fields["result"] == "validated")
+            and (fields["followed"] == "na" or
+                 fields["grader"] == "judge" and fields["result"] == "validated"))
 
 
 def state_dir():
@@ -201,6 +214,8 @@ def build_event(event, sid, repo, fields):
     for key, check in schema.items():
         if not check(fields[key]):
             raise ValueError("bad value for " + key)
+    if event == "judge" and not valid_judge_pairs(fields):
+        raise ValueError("invalid judge field pair")
     return {"ts": now().isoformat(timespec="milliseconds"), "sid": sid, "repo": repo, "event": event, **fields}
 
 
@@ -216,7 +231,8 @@ def valid_event(item):
         datetime.fromisoformat(item["ts"])  # the pattern allows 2026-13-45; a real date is needed
     except ValueError:
         return False
-    return all(check(item[key]) for key, check in schema.items())
+    return (all(check(item[key]) for key, check in schema.items())
+            and (item["event"] != "judge" or valid_judge_pairs(item)))
 
 
 def bump_errors(error=None):
