@@ -11,8 +11,13 @@ import os
 import re
 import shutil
 import stat
+import sys
 import subprocess
 from pathlib import Path
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import data_root as dr
 
 MAX_BYTES = 262144
 AGENTS = {"claude": "Claude Code", "codex": "Codex", "antigravity": "Antigravity"}
@@ -231,8 +236,15 @@ def main():
             if key not in AGENTS or not value.strip():
                 raise ValueError("invalid confirmation")
             confirmed[key] = value
-        path = Path(os.path.abspath(Path.home() / ".finolabs/vibecode/host.md"))
-        text = read_host(path)
+        root, source = dr.data_root()
+        print(f"Data root: {root} ({source})")
+        if source == "invalid":
+            raise ValueError("invalid data root")
+        path = root / "host.md"
+        try:
+            text = dr.read_data("host.md").decode("utf-8")
+        except FileNotFoundError:
+            text = ""
         old = section(text)
         new = inventory(args.host, old, confirmed)
         digest = hashlib.sha256(new.encode()).hexdigest()
@@ -257,7 +269,12 @@ def main():
                     if current != text.encode():
                         raise ValueError("host changed since preview")
                     return replace_section(current, HEADING, new.split("\n", 1)[1])
-                atomic_write(path, update)
+                with dr.data_folder(create=True) as folder:
+                    try:
+                        current = dr.read_file(folder, "host.md", 262144)
+                    except FileNotFoundError:
+                        current = b""
+                    dr.atomic_write(folder, "host.md", update(current))
                 print("Updated Agents on this machine.")
             else:
                 print("Preview only; confirm models and a clear yes before writing.")

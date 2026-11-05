@@ -8,6 +8,11 @@ import re
 import stat
 from pathlib import Path
 
+import sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import data_root as dr
+
 DEFAULTS = {"delegation_mode": "suggest", "routing": "on", "auto_gate": "off"}
 SETTINGS = {"delegation_mode": ("Delegation mode", "FNL_DELEGATION_MODE", {"manual", "suggest", "auto"}),
             "routing": ("Routing", "FNL_ROUTING", {"on", "off"}),
@@ -16,13 +21,9 @@ MAX_BYTES = 262144
 
 
 def config_path():
-    """The override, else the default file, else the older XDG file while only that one exists."""
+    """The explicit override remains available for non-consent settings only."""
     explicit = os.environ.get("ORCHESTRATION_HOST_CONFIG")
-    path = Path(os.path.abspath(os.path.expanduser(explicit or "~/.finolabs/vibecode/host.md")))
-    if not explicit and not os.path.lexists(path):
-        xdg = os.environ.get("XDG_CONFIG_HOME") or "~/.config"
-        return Path(os.path.abspath(os.path.expanduser(xdg))) / "finolabs-vibecode/host.md"
-    return path
+    return Path(os.path.abspath(os.path.expanduser(explicit))) if explicit else dr.data_root()[0] / "host.md"
 
 
 def host_text():
@@ -52,32 +53,10 @@ def host_text():
 
 
 def gate_host_text():
-    """Read opt-in only from the account home, without creating any folders."""
-    import pwd
-
-    home = pwd.getpwuid(os.getuid()).pw_dir
-    if not os.path.isabs(home):
-        raise ValueError("home must be absolute")
-    fd = os.open(home, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        if os.fstat(fd).st_uid != os.getuid():
-            raise ValueError("foreign home")
-        for part in (".finolabs", "vibecode", "host.md"):
-            flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
-            if part != "host.md":
-                flags |= os.O_DIRECTORY
-            child = os.open(part, flags, dir_fd=fd)
-            os.close(fd)
-            fd = child
-            info = os.fstat(fd)
-            if info.st_uid != os.getuid():
-                raise ValueError("foreign config component")
-        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_BYTES:
-            return ""
-        data = os.read(fd, MAX_BYTES + 1)
-        return data.decode("utf-8") if len(data) <= MAX_BYTES else ""
-    finally:
-        os.close(fd)
+    """Read consent-bearing settings only from the resolved root."""
+    if dr.consent_root() is None:
+        return ""
+    return dr.read_data("host.md", MAX_BYTES).decode("utf-8")
 
 
 def effective(details=False, keys=None, gate_opt_in=False):
@@ -88,10 +67,15 @@ def effective(details=False, keys=None, gate_opt_in=False):
         text = gate_host_text() if gate_opt_in else host_text()
     except (OSError, UnicodeError, ValueError):
         text = ""
+    try:
+        consent_text = gate_host_text()
+    except (OSError, UnicodeError, ValueError):
+        consent_text = ""
     # Ignore examples in fenced blocks, then collect complete second-level sections.
-    text = re.sub(r"^```.*?^```[^\n]*$", "", text, flags=re.M | re.S)
-    parts = re.split(r"^## (.+?)\s*$", text, flags=re.M)
     for key in values:
+        selected = consent_text if key in {"auto_gate", "routing"} else text
+        selected = re.sub(r"^```.*?^```[^\n]*$", "", selected, flags=re.M | re.S)
+        parts = re.split(r"^## (.+?)\s*$", selected, flags=re.M)
         heading, variable, allowed = SETTINGS[key]
         sections = [parts[i + 1].strip() for i in range(1, len(parts), 2) if parts[i] == heading]
         override = variable in os.environ
@@ -215,13 +199,28 @@ def main():
                     print("Preview only; a clear yes is required before writing.")
                 else:
                     path = config_path()
-                    if not os.path.lexists(path) and "ORCHESTRATION_HOST_CONFIG" not in os.environ:
-                        path = Path(os.path.abspath(os.path.expanduser("~/.finolabs/vibecode/host.md")))
+                    if (os.environ.get("ORCHESTRATION_HOST_CONFIG") and "delegation_mode" in changes
+                            and set(changes) & {"auto_gate", "routing"}
+                            and path != dr.data_root()[0] / "host.md"):
+                        print("Settings use different files; set Delegation mode separately; nothing written.")
+                        return 0
                     def update(text):
                         for key, value in changes.items():
                             text = replace_section(text, SETTINGS[key][0], value)
                         return text
-                    print("Updated host settings." if atomic_write(path, update) else "No difference.")
+                    if set(changes) & {"auto_gate", "routing"} or not os.environ.get("ORCHESTRATION_HOST_CONFIG"):
+                        with dr.data_folder(create=True) as folder:
+                            try:
+                                old = dr.read_file(folder, "host.md", MAX_BYTES)
+                            except FileNotFoundError:
+                                old = b""
+                            new = update(old)
+                            if new != old:
+                                dr.atomic_write(folder, "host.md", new)
+                            changed = new != old
+                    else:
+                        changed = atomic_write(path, update)
+                    print("Updated host settings." if changed else "No difference.")
     except SystemExit:
         pass
     except (OSError, UnicodeError, ValueError):

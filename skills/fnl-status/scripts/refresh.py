@@ -341,7 +341,11 @@ def publish(folder, args):
 
 def cmd_consent(args):
     if args.revoke:
-        (fm.state_dir() / "consent.json").unlink(missing_ok=True)
+        try:
+            with fm.dr.data_folder("state") as folder:
+                os.unlink("consent.json", dir_fd=folder)
+        except FileNotFoundError:
+            pass
         print("consent withdrawn: nothing is recorded until consent is given again")
         return
     if args.retention is None:

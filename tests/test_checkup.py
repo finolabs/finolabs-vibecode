@@ -14,6 +14,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -34,6 +35,7 @@ class CheckupTest(unittest.TestCase):
         self.bin = self.base / "bin"
         for path in (self.home, self.repo, self.bin):
             path.mkdir()
+        account(self, self.home)
         self.env = {"HOME": str(self.home), "PATH": str(self.bin)}
         self.write(self.repo / ".git/info/exclude", ".finolabs/\n")
 
@@ -239,13 +241,13 @@ class CheckupTest(unittest.TestCase):
         expected.extend(checkup.instruction_lines(data["instructions"]))
         self.assertEqual(text.splitlines(), expected)
         for rows in [*data["hosts"].values(), data["setup"]]:
-            self.assertTrue(all(r["status"] in {"ok", "missing", "unverified"} for r in rows))
+            self.assertTrue(all(r["status"] in {"ok", "missing", "unverified", "default", "relocated", "invalid"} for r in rows))
 
-    def test_legacy_host_config_counts_only_while_new_file_is_absent(self):
+    def test_legacy_host_config_does_not_supply_consent(self):
         headings = "\n".join("## " + h for h in sorted(checkup.HEADINGS))
         legacy = self.write(self.home / ".config/finolabs-vibecode/host.md", headings)
         self.env.pop("XDG_CONFIG_HOME", None)
-        self.assertEqual(self.setup_item("host config")["status"], "ok")
+        self.assertEqual(self.setup_item("host config")["status"], "missing")
         self.write(self.home / ".finolabs/vibecode/host.md", "## Limits\n")
         self.assertEqual(self.setup_item("host config")["status"], "missing")
         legacy.unlink()
@@ -526,11 +528,11 @@ class CheckupTest(unittest.TestCase):
         self.assertEqual(self.run_check("--judge-payload"), "")
         config.unlink()
         self.write(self.home / ".config/finolabs-vibecode/host.md", outside.read_text())
-        self.assertIn("SAFE LINE", self.run_check("--judge-payload"))
+        self.assertEqual(self.run_check("--judge-payload"), "")
         self.consent("## Route judgment\n- Instruction check: off\n")
         self.assertEqual(self.run_check("--judge-payload"), "")
         self.env["ORCHESTRATION_HOST_CONFIG"] = str(outside)
-        self.assertIn("SAFE LINE", self.run_check("--judge-payload"))
+        self.assertEqual(self.run_check("--judge-payload"), "")
 
     def test_payload_filters_whole_secret_file_paths_backups_local_and_scan(self):
         self.consent()

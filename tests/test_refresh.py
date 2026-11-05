@@ -12,6 +12,7 @@ import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,8 +26,10 @@ class RefreshTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.dir = Path(self.tmp.name) / "state"
-        self.ledger = Path(self.tmp.name) / "ledger.jsonl"
+        self.home = account(self, Path(self.tmp.name) / "home")
+        self.dir = self.home / ".finolabs/vibecode/state"
+        self.ledger = self.home / ".finolabs/vibecode/ledger.jsonl"
+        self.ledger.parent.mkdir(parents=True)
         self.env = {**os.environ, "FNL_STATE_DIR": str(self.dir), "ORCHESTRATION_LEDGER": str(self.ledger)}
         self.env.pop("FNL_METRICS", None)
         self.at = datetime.now(timezone.utc)

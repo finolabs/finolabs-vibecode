@@ -185,20 +185,19 @@ class AutoGateHookTest(unittest.TestCase):
         self.config.parent.symlink_to(target, target_is_directory=True)
         self.assertEqual(self.run_hook(), "")
         self.run_writer("keep")
-        self.run_writer("implement")
+        self.run_writer("implement", rejected=True)
         self.assertFalse(self.folder.exists())
 
     def test_foreign_canonical_component_allows(self):
-        for component in range(4):
+        components = (self.home, self.home / ".finolabs", self.config.parent, self.config)
+        for component in components:
             setup = self.setup + "\n" + f'''import os
 from types import SimpleNamespace
 original = os.fstat
-calls = 0
+inode = os.stat({str(component)!r}).st_ino
 def foreign(fd):
- global calls
  info = original(fd)
- calls += 1
- if calls == {component + 1}:
+ if info.st_ino == inode:
   return SimpleNamespace(st_uid=os.getuid() + 1, st_mode=info.st_mode, st_size=info.st_size)
  return info
 os.fstat = foreign
@@ -331,7 +330,7 @@ auto_gate.fcntl.flock = contend
             proc.stdout.close()
             proc.stderr.close()
 
-    def run_writer(self, kind="keep", setup=""):
+    def run_writer(self, kind="keep", setup="", rejected=False):
         folder = ROOT / "skills/fnl-delegate/scripts"
         if kind == "keep":
             script = folder / "record.py"
@@ -345,6 +344,10 @@ auto_gate.fcntl.flock = contend
                                  str(self.home), str(script), *args], cwd=self.repo,
                                 env={**self.env, "ORCHESTRATION_LEDGER": str(self.home / "ledger.jsonl")},
                                 capture_output=True, text=True, timeout=5)
+        if rejected:
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("invalid data root", result.stderr)
+            return
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "")
         if kind == "keep":

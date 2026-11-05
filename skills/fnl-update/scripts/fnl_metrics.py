@@ -17,6 +17,11 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import data_root as dr
+
 HOSTS = ("claude", "codex", "antigravity", "other")
 SOURCES = ("startup", "resume", "clear", "compact")
 DEPTHS = ("MIN", "NORMAL", "DEEP")
@@ -81,7 +86,7 @@ def valid_judge_pairs(fields):
 
 
 def state_dir():
-    """FNL_STATE_DIR when it is an absolute path, else ~/.finolabs/vibecode/state.
+    """FNL_STATE_DIR when it is an absolute path, else the resolved data root state folder.
 
     A relative override is ignored, as is a relative XDG_STATE_HOME. A machine that already
     keeps its state in the older folder (${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode)
@@ -90,10 +95,11 @@ def state_dir():
     override = os.environ.get("FNL_STATE_DIR")
     if override and os.path.isabs(override):
         return Path(override)
-    new = Path.home() / ".finolabs/vibecode/state"
+    root, source = dr.data_root()
+    new = root / "state"
     xdg = os.environ.get("XDG_STATE_HOME")
-    old = Path(xdg if xdg and os.path.isabs(xdg) else Path.home() / ".local/state") / "finolabs-vibecode"
-    return old if old.is_dir() and not new.exists() else new
+    old = Path(xdg if xdg and os.path.isabs(xdg) else dr.account_home() / ".local/state") / "finolabs-vibecode"
+    return old if source != "relocated" and old.is_dir() and not new.exists() else new
 
 
 def now():
@@ -145,7 +151,9 @@ def ensure_dir(path, follow=False):
 def read_consent():
     """The consent record, or None when missing or not valid."""
     try:
-        data = json.loads((state_dir() / "consent.json").read_text(encoding="utf-8"))
+        if dr.consent_root() is None:
+            return None
+        data = json.loads(dr.read_data("state/consent.json", 4096))
     except (OSError, ValueError):
         return None
     if isinstance(data, dict) and data.get("retention_days") in RETENTIONS and isinstance(data.get("date"), str):
@@ -156,9 +164,8 @@ def read_consent():
 def write_consent(retention_days):
     if retention_days not in RETENTIONS:
         raise ValueError("retention must be one of %s days" % (RETENTIONS,))
-    folder = ensure_dir(state_dir(), follow=True)
-    atomic_write(folder / "consent.json",
-                 json.dumps({"date": now().date().isoformat(), "retention_days": retention_days}) + "\n")
+    dr.write_data("state/consent.json",
+                  (json.dumps({"date": now().date().isoformat(), "retention_days": retention_days}) + "\n").encode())
 
 
 def enabled():

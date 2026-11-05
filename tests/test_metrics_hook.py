@@ -10,6 +10,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -27,7 +28,8 @@ class HookTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.dir = Path(self.tmp.name) / "state"
+        self.home = account(self, Path(self.tmp.name) / "home")
+        self.dir = self.home / ".finolabs/vibecode/state"
         self.repo = Path(self.tmp.name) / "repo"
         (self.repo / ".git").mkdir(parents=True)
         patcher = mock.patch.dict(os.environ, {"FNL_STATE_DIR": str(self.dir)})  # in-process calls must never reach the real state

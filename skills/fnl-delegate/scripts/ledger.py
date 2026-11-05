@@ -2,11 +2,7 @@
 """Append-only dispatch ledger for the delegation skills.
 
 Each dispatch writes a `start` line and later a `finish` line to a JSONL file
-(default ~/.finolabs/vibecode/ledger.jsonl; override with ORCHESTRATION_LEDGER).
-A machine whose ledger is still in ${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode and has
-none in the new place keeps using the old file; nothing is moved.
-`summary` joins them to measure routing: first-pass acceptance, timeouts,
-fallbacks and duration per agent, model, kind and grade.
+in the resolved data root. Environment variables cannot redirect the ledger.
 """
 
 import argparse
@@ -18,6 +14,10 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import data_root as dr
 
 KINDS = ["implement", "review", "advise", "committee"]
 GRADES = ["easy", "medium", "hard", "very-hard", "ultra-hard"]
@@ -38,13 +38,10 @@ REQUIRED = {
 
 
 def ledger_path():
-    override = os.environ.get("ORCHESTRATION_LEDGER")
-    if override:
-        return Path(override)
-    new = Path.home() / ".finolabs/vibecode/ledger.jsonl"
-    xdg = os.environ.get("XDG_STATE_HOME")
-    old = Path(xdg if xdg and os.path.isabs(xdg) else Path.home() / ".local/state") / "finolabs-vibecode/ledger.jsonl"
-    return old if old.is_file() and not new.exists() else new
+    root = dr.consent_root()
+    if root is None:
+        raise ValueError("invalid data root")
+    return root / "ledger.jsonl"
 
 
 def now():
@@ -52,24 +49,24 @@ def now():
 
 
 def append(record):
-    path = ledger_path()
-    missing, folder = [], path.parent
-    while not folder.exists() and folder != folder.parent:
-        missing.append(folder)
-        folder = folder.parent
-    for new in reversed(missing):  # a folder made here is private
-        new.mkdir(mode=0o700, exist_ok=True)
-        os.chmod(new, 0o700)
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    with dr.data_folder(create=True) as folder:
+        fd = os.open("ledger.jsonl", os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
+                     0o600, dir_fd=folder)
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            import stat
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022:
+                raise ValueError("unsafe ledger")
+            stream.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def load():
-    path = ledger_path()
-    if not path.exists():
+    try:
+        text = dr.read_data("ledger.jsonl", 16 * 1024 * 1024).decode("utf-8")
+    except FileNotFoundError:
         return {}, {}
     starts, finishes = {}, {}
-    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    for n, line in enumerate(text.splitlines(), 1):
         if not line.strip():
             continue
         try:
