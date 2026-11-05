@@ -520,7 +520,10 @@ def command(agent, entry, label, nonce):
                     pending.extend(chunk)
                     while b"\n" in pending:
                         line, _, pending = pending.partition(b"\n")
-                        reply = json.loads(line)
+                        try:
+                            reply = json.loads(line)
+                        except (ValueError, UnicodeError) as error:
+                            raise ShapeError("reply") from error
                         if not isinstance(reply, dict) or "method" in reply:
                             continue  # never answer a server request
                         if type(reply.get("id")) is not int:

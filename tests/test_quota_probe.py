@@ -572,6 +572,12 @@ class QuotaTest(unittest.TestCase):
             self.assertEqual(sleep.call_args_list, [mock.call(.05), mock.call(.05)])
 
 
+    def test_codex_malformed_reply_is_shape_error(self):
+        entry = self.fake("codex", "import sys,time\nsys.stdin.readline()\nprint('not-json',flush=True)\ntime.sleep(60)\n")
+        with self.assertRaises(qp.ShapeError):
+            qp.command("codex", entry, "default", "a" * 48)
+
+
 class CopiesTest(unittest.TestCase):
     def test_all_copies_identical_and_listed(self):
         actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob("quota_probe.py")}
