@@ -86,6 +86,16 @@ class DelegationModeTest(unittest.TestCase):
         self.assertFalse((self.home / "host.md").exists())
 
 
+    def test_shared_copies_match(self):
+        for name, copies in (
+            ("mode.py", ("fnl-delegate", "fnl-setup", "fnl-set-mode")),
+            ("auto_gate.py", ("fnl-delegate",)),
+        ):
+            for skill in copies:
+                with self.subTest(name=name, skill=skill):
+                    self.assertEqual((ROOT / "scripts" / name).read_bytes(),
+                                     (ROOT / "skills" / skill / "scripts" / name).read_bytes())
+
     def test_missing_file_defaults(self):
         self.assertEqual(self.values(), DEFAULTS)
 
