@@ -399,6 +399,82 @@ class QuotaTest(unittest.TestCase):
                 trigger.assert_called_once()
 
 
+    def setup_module(self):
+        spec = importlib.util.spec_from_file_location("quota_setup_test", ROOT / "skills/fnl-setup/scripts/quota_setup.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_setup_preview_digest_and_no_second_resolution(self):
+        setup = self.setup_module()
+        self.fake("agy")
+        original = "# Host\n\n## Existing\nkeep these bytes\n"
+        dr.write_data("host.md", original.encode())
+        with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
+            plan, digest = setup.preview(["agy"])
+            self.assertEqual(dr.read_data("host.md").decode(), original)
+            with self.assertRaises(ValueError):
+                setup.apply(plan, digest, False)
+            with self.assertRaises(ValueError):
+                setup.apply(plan, "0" * 64, True)
+            with mock.patch.object(setup.shutil, "which", side_effect=AssertionError("no second resolution")):
+                setup.apply(plan, digest, True)
+        self.assertTrue(dr.read_data("host.md").decode().startswith(original))
+        self.assertEqual(qp.config()["agy"]["executable"], str(self.bin / "agy"))
+        self.assertEqual(stat.S_IMODE((self.root / "host.md").stat().st_mode), 0o600)
+
+    def test_setup_host_change_and_off(self):
+        setup = self.setup_module()
+        self.configure({"agy": self.fake("agy")})
+        plan, digest = setup.preview([], off=True)
+        dr.write_data("host.md", dr.read_data("host.md") + b"\n# changed\n")
+        with self.assertRaises(ValueError):
+            setup.apply(plan, digest, True)
+        plan, digest = setup.preview([], off=True)
+        setup.apply(plan, digest, True)
+        self.assertEqual(qp.config(), {})
+        self.assertIn("- Quota probe: off", dr.read_data("host.md").decode())
+
+    def test_setup_refuses_temporary_downloads_repository_wrong_name(self):
+        setup = self.setup_module()
+        entry = self.fake("agy")
+        with self.assertRaises(ValueError):
+            setup.excluded(Path(entry["executable"]))
+        for path in (self.home / "Downloads/agy", self.home / "tmp/agy"):
+            with self.assertRaises(ValueError):
+                setup.excluded(path)
+        with mock.patch.object(setup.shutil, "which", return_value=str(self.bin / "other")):
+            with self.assertRaises(ValueError):
+                setup.resolve_executable("agy")
+        (self.bin / ".git").mkdir()
+        with self.assertRaises(ValueError):
+            qp.checked_path(entry["executable"])
+
+    def test_setup_default_counts_toward_four(self):
+        setup = self.setup_module()
+        self.fake("claude")
+        folders = {}
+        for i in range(4):
+            path = self.home / ("install" + str(i))
+            path.mkdir(mode=0o700)
+            folders["install" + str(i)] = str(path)
+        with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
+            with self.assertRaises(ValueError):
+                setup.preview(["claude"], folders)
+            folders.pop("install3")
+            plan, digest = setup.preview(["claude"], folders)
+            self.assertEqual(len(plan["configs"]), 4)
+            setup.apply(plan, digest, True)
+        self.assertEqual(len(qp.config()["claude"]["configs"]), 4)
+
+    def test_setup_fenced_example_is_preserved(self):
+        setup = self.setup_module()
+        original = "# Host\n\n```markdown\n## Quota probe\nexample\n```\n\n## Other\nkeep\n"
+        result = setup.replace_section(original, "## Quota probe\n\n- Quota probe: off\n\n")
+        self.assertTrue(result.startswith(original))
+        self.assertEqual(qp.section(result).strip(), "- Quota probe: off")
+
+
 class CopiesTest(unittest.TestCase):
     def test_all_copies_identical_and_listed(self):
         actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob("quota_probe.py")}
