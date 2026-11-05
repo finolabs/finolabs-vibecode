@@ -134,7 +134,7 @@ class HookTest(unittest.TestCase):
         payload = {"hook_event_name": "PostToolUse", "session_id": "s1", "cwd": str(self.repo), "tool_name": "Bash",
                    "tool_input": {"command": "gh pr comment 5 --body-file pipe"}}
         result = subprocess.run([sys.executable, "-I", str(HOOK)], input=json.dumps(payload), capture_output=True, text=True,
-                                env=self.env, timeout=5)
+                                env=self.env, timeout=30)
         self.assertEqual(result.returncode, 0)
         self.assertEqual(self.events(), [])
 

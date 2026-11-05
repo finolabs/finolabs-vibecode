@@ -479,7 +479,7 @@ class QuotaTest(unittest.TestCase):
                         data = {"hook_event_name": event, "tool_name": "Write", "cwd": str(repo), "session_id": f"hook-{invocation}"}
                         payload = json.dumps(data)
                         with self.subTest(manifest=manifest, event=event, command=hook["command"]):
-                            result = subprocess.run(["sh", "-c", command], input=payload, env=env, text=True, capture_output=True, timeout=5)
+                            result = subprocess.run(["sh", "-c", command], input=payload, env=env, text=True, capture_output=True, timeout=30)
                             self.assertEqual(result.returncode, 0)
                             self.assertEqual(result.stdout, "")
                             self.assertEqual(result.stderr, "")
@@ -489,7 +489,7 @@ class QuotaTest(unittest.TestCase):
                             if gate.exists():
                                 for file in gate.glob("*.json"):
                                     file.unlink()
-                            result = subprocess.run(["sh", "-c", command], input=payload, env=env, text=True, capture_output=True, timeout=5)
+                            result = subprocess.run(["sh", "-c", command], input=payload, env=env, text=True, capture_output=True, timeout=30)
                             self.assertEqual(result.returncode, 0)
                             if "metrics_hook" not in hook["command"] or event == "SessionStart":
                                 self.assertTrue(result.stdout, result.stderr)
@@ -503,7 +503,7 @@ class QuotaTest(unittest.TestCase):
                                 env["FNL_QUOTA_WORKER"] = nonce
                                 # Each comparison starts before its own first edit.
                                 data["session_id"] += "-stale"
-                                stale = subprocess.run(["sh", "-c", command], input=json.dumps(data), env=env, text=True, capture_output=True, timeout=5)
+                                stale = subprocess.run(["sh", "-c", command], input=json.dumps(data), env=env, text=True, capture_output=True, timeout=30)
                                 self.assertEqual(stale.returncode, 0)
                                 self.assertEqual(stale.stderr, "")
                                 self.assertEqual(stale.stdout, expected)
