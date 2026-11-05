@@ -10,7 +10,7 @@ User-scoped instructions load in every session the user starts, in every reposit
 
 Project-scoped instructions hold only repository-specific build and test commands, conventions, adopted gates and pointers to the `fnl-` skills. Never repeat the user-scoped contract in them.
 
-Start with one question: "Which scope: user, project, or both?" Add one concrete recommendation: user for a bare invocation or preferences across repositories, project for repository context, both when the request covers both. Wait for the answer before scope-dependent exploration.
+Start with one question: "Which scope: user, project, or both?" Add one concrete recommendation: user for a bare invocation or preferences across repositories, project for repository context, both when the request covers both. Ask it through the host's native question tool when the session has one (`references/interview.md` says how). Wait for the answer before scope-dependent exploration.
 
 The user-contract skeleton and question bank are in [references/contract-template.md](references/contract-template.md). File locations and include syntax per host are in [references/hosts.md](references/hosts.md); recheck them against each host's docs before writing.
 
