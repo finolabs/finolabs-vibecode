@@ -225,12 +225,14 @@ def post_tool_use(sid, cwd, tool, data):
                           "route_by": routed.group(1) if routed else "table"}
                 if all(check(fields[key]) for key, check in fm.SCHEMA["kept"].items()):
                     fm.record("kept", sid, cwd, **fields)
-        if "record.py" in judge_command and not any(x in judge_command for x in ("<<", "`", "$")):
+        if "record.py" in judge_command and not any(x in judge_command for x in ("<<", "`", "$(")):
             try:
                 shlex.split(judge_command)  # include the script token: unmatched quotes never ran
             except ValueError:
                 return
             for judge in JUDGE.finditer(judge_command):
+                if "$" in judge.group():
+                    continue  # expanded receipt arguments cannot be validated from command text
                 try:
                     prefix = judge_command[:judge.start()]
                     # An open quote or a comment before the match means this is text, not a command.

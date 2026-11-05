@@ -711,6 +711,26 @@ class CheckupTest(unittest.TestCase):
         text = (ROOT / "skills/fnl-setup/references/check.md").read_text().split("## Settings")[0]
         self.assertEqual(re.findall(r"^(\d+)\. ", text, re.M), ["1", "2", "3", "4", "5"])
 
+    def test_low_long_identifier_secret_is_filtered(self):
+        self.consent()
+        self.write(self.repo / "AGENTS.md", "x" * 41 + "_token = " + "q" * 8 + "\n")
+        block, files, _ = self.scan_direct()
+        self.assertTrue(any(r["pattern"] == "secret-assignment" for r in block["results"]))
+        self.assertEqual(checkup.judge_payload(files), "")
+
+    def test_low_additional_machine_homes_are_filtered(self):
+        self.consent()
+        self.index("AGENTS.md")
+        for value in ("/var/" + "home/demo/x", "/usr/" + "home/demo/x", "/" + "root/x", "~demo/x"):
+            with self.subTest(path=value):
+                self.write(self.repo / "AGENTS.md", value + "\n")
+                block, files, _ = self.scan_direct()
+                self.assertTrue(any(r["id"] == "I7" and r["pattern"] == "machine-path"
+                                    for r in block["results"]))
+                self.assertEqual(checkup.judge_payload(files), "")
+        for value in ("/rooted/x", "https://example.org/var/" + "home/x"):
+            self.assertIsNone(checkup.MACHINE_PATH.search(value))
+
     def test_rework_machine_path_punctuation(self):
         samples = ["file://" + "/Us" "ers/" + "fixture/x",
                    "dir:" + "/ho" "me/" + "fixture/x",
