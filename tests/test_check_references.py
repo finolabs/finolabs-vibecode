@@ -111,19 +111,47 @@ class CheckReferencesTest(unittest.TestCase):
                     self.assertEqual(result.returncode, 1, result.stdout)
                     self.assertIn(expected, result.stdout)
 
-    def test_retired_names_only_in_changelog_mapping(self):
+    def test_retired_names_fail_outside_released_sections_and_mapping(self):
         for suffix in ("committee", "coordinator-sessions", "knowledge"):
-            for relative in ("scripts/session_start.py", "CHANGELOG.md"):
+            for relative in ("scripts/session_start.py", "skills/fnl-advisor/SKILL.md", "CHANGELOG.md"):
                 with self.subTest(name=suffix, file=relative):
                     path = self.root / relative
                     original = path.read_text()
-                    path.write_text(original + "\n# Retired: fnl-" + suffix + "\n")
+                    line = "\nRetired: fnl-" + suffix + "\n"
+                    path.write_text(original.replace("## [Unreleased]", "## [Unreleased]" + line, 1)
+                                    if relative == "CHANGELOG.md" else original + line)
                     try:
                         result = self.check()
                     finally:
                         path.write_text(original)
                     self.assertEqual(result.returncode, 1, result.stdout)
                     self.assertIn("retired skill name fnl-" + suffix, result.stdout)
+
+    def test_retired_names_pass_in_dated_releases_only(self):
+        path = self.root / "CHANGELOG.md"
+        original = path.read_text()
+        for date, expected in ((" - 2026-11-01", 0), ("", 1)):
+            with self.subTest(date=date):
+                path.write_text(original + "\n## [0.1.4]" + date
+                                + "\n\nRetired: `fnl-" + "committee`\n")
+                result = self.check()
+                self.assertEqual(result.returncode, expected, result.stdout)
+
+    def test_retired_name_mapping_passes_in_unreleased(self):
+        path = self.root / "CHANGELOG.md"
+        text = path.read_text()
+        path.write_text(text.replace("### Changed", "### Changed\n\n- `fnl-" + "committee` → `fnl-advisor`", 1))
+        result = self.check()
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_untracked_retired_names_do_not_fail(self):
+        for ignored in (False, True):
+            with self.subTest(ignored=ignored):
+                if ignored:
+                    (self.root / ".gitignore").write_text("local-context.md\n")
+                (self.root / "local-context.md").write_text("`fnl-" + "committee`\n")
+                result = self.check()
+                self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_each_break_is_caught(self):
         for rel, old, new, message in BREAKS + [FENCED_HEADING]:

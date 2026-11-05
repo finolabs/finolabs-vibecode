@@ -2,8 +2,6 @@
 
 Two agents from different model families, fresh context, planning in parallel. Contrast is the point.
 
-**User's additional context:** $ARGUMENTS
-
 ## When to convene
 
 A committee spends two model families' quota. Convene one after the `fnl-coding-router` checkpoint leaves the cause open, or when the user asks; it needs the user's yes even when they are away, so the work that depends on it waits. For a design or planning problem, convene one only when its difficulty is very hard; otherwise use `fnl-advisor`.
