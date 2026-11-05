@@ -13,7 +13,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 READER = ROOT / "skills/fnl-delegate/scripts/mode.py"
 HOOK = ROOT / "scripts/session_start.py"
-DEFAULTS = {"delegation_mode": "suggest", "routing": "on"}
+DEFAULTS = {"delegation_mode": "suggest", "routing": "on", "auto_gate": "off"}
 
 
 class DelegationModeTest(unittest.TestCase):
@@ -67,7 +67,7 @@ class DelegationModeTest(unittest.TestCase):
         self.assertTrue(after.startswith(prefix))
         self.assertTrue(after.endswith(suffix))
         self.assertIn(middle, after)
-        self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "off"})
+        self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "off", "auto_gate": "off"})
         self.assertIn("No difference", self.mode_action(*args, "--yes"))
 
     def test_set_new_file_and_refuse_symlinks(self):
@@ -86,20 +86,43 @@ class DelegationModeTest(unittest.TestCase):
         self.assertFalse((self.home / "host.md").exists())
 
 
+    def test_auto_gate_requires_config_opt_in_and_shows_source(self):
+        self.env["FNL_AUTO_GATE"] = "on"
+        self.assertIn("Auto gate: off (source: default)", self.mode_action("show"))
+        self.assertIn("Preview only", self.mode_action("set", "--auto-gate", "on"))
+        self.assertFalse(self.config.exists())
+        self.assertIn("Updated", self.mode_action("set", "--auto-gate", "on", "--yes"))
+        self.assertIn("Auto gate: on (source: host config)", self.mode_action("show"))
+        for value in ("off", "0", "false", "no", "OFF", "False"):
+            self.env["FNL_AUTO_GATE"] = value
+            self.assertIn("Auto gate: off (source: FNL_AUTO_GATE)", self.mode_action("show"))
+        self.env["FNL_AUTO_GATE"] = "invalid"
+        self.assertEqual(self.values()["auto_gate"], "on")
+
+    def test_shared_copies_match(self):
+        for name, copies in (
+            ("mode.py", ("fnl-delegate", "fnl-setup", "fnl-set-mode")),
+            ("auto_gate.py", ("fnl-delegate",)),
+        ):
+            for skill in copies:
+                with self.subTest(name=name, skill=skill):
+                    self.assertEqual((ROOT / "scripts" / name).read_bytes(),
+                                     (ROOT / "skills" / skill / "scripts" / name).read_bytes())
+
     def test_missing_file_defaults(self):
         self.assertEqual(self.values(), DEFAULTS)
 
     def test_file_then_env_precedence(self):
         self.config.write_text("## Delegation mode\nmanual\n## Routing\noff\n")
-        self.assertEqual(self.values(), {"delegation_mode": "manual", "routing": "off"})
+        self.assertEqual(self.values(), {"delegation_mode": "manual", "routing": "off", "auto_gate": "off"})
         self.env.update(FNL_DELEGATION_MODE="auto", FNL_ROUTING="on")
-        self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "on"})
+        self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "on", "auto_gate": "off"})
 
     def test_legacy_config_counts_only_while_the_new_file_is_absent(self):
         legacy = self.home / ".config/finolabs-vibecode/host.md"
         legacy.parent.mkdir(parents=True)
         legacy.write_text("## Delegation mode\nauto\n## Routing\noff\n")
-        self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "off"})
+        self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "off", "auto_gate": "off"})
         self.env["XDG_CONFIG_HOME"] = str(self.home / "xdg")
         self.assertEqual(self.values(), DEFAULTS)
         del self.env["XDG_CONFIG_HOME"]
@@ -110,7 +133,7 @@ class DelegationModeTest(unittest.TestCase):
         custom = self.home / "custom.md"
         custom.write_text("## Delegation mode\nauto\n## Routing\noff\n")
         self.env["ORCHESTRATION_HOST_CONFIG"] = str(custom)
-        self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "off"})
+        self.assertEqual(self.values(), {"delegation_mode": "auto", "routing": "off", "auto_gate": "off"})
 
     def test_invalid_values_default_without_falling_through(self):
         self.config.write_text("## Delegation mode\nauto\n## Routing\noff\n")
