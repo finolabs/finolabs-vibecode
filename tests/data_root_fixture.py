@@ -2,6 +2,7 @@
 
 import os
 import pwd
+import re
 import shlex
 import subprocess
 import sys
@@ -45,7 +46,10 @@ def account(test, home):
         if len(command) > 2 and command[0] == sys.executable and command[1] == "-I" and command[2] != "-c":
             command[2:2] = ["-c", boot]
         elif len(command) == 3 and command[:2] == ["sh", "-c"]:
-            command[2] = command[2].replace("python3 -I ", shlex.join([sys.executable, "-I", "-c", boot]) + " ")
+            # Match a bare command only, never the suffix of an absolute
+            # interpreter path already bootstrapped by the caller.
+            command[2] = re.sub(r"(?<![\w/.'\"-])python3 -I ",
+                                lambda _: shlex.join([sys.executable, "-I", "-c", boot]) + " ", command[2])
         return original(command, *args, **kwargs)
 
     patch = mock.patch.object(subprocess, "run", side_effect=run)

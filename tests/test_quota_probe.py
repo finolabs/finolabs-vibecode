@@ -14,6 +14,7 @@ import tempfile
 import time
 from types import SimpleNamespace
 import unittest
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,12 +34,24 @@ class ParsersTest(unittest.TestCase):
         return json.loads((FIXTURES / (qp.SOURCES[agent] + ".json")).read_text())
 
     def test_fixtures_and_exact_fields(self):
-        for agent, count in (("agy", 5), ("claude", 3), ("codex", 1)):
+        for agent, count in (("agy", 5), ("codex", 1)):
             groups = qp.parse(agent, json.dumps(self.fixture(agent)), MEASURED)
             self.assertEqual(len(groups), count)
             for item in groups:
                 self.assertEqual(set(item), {"name", "window", "remaining_fraction", "reset_time"})
-        claude = qp.parse_claude(self.fixture("claude"), MEASURED)
+
+    def require_claude_zone(self):
+        try:
+            ZoneInfo("Asia/Saigon")
+        except ZoneInfoNotFoundError:
+            self.skipTest("Asia/Saigon is unavailable: no system timezone data or tzdata package")
+
+    def test_claude_fixture_and_exact_fields(self):
+        self.require_claude_zone()
+        claude = qp.parse("claude", json.dumps(self.fixture("claude")), MEASURED)
+        self.assertEqual(len(claude), 3)
+        for item in claude:
+            self.assertEqual(set(item), {"name", "window", "remaining_fraction", "reset_time"})
         self.assertEqual(claude[0]["reset_time"], "2026-11-05T10:49:00Z")
         self.assertEqual(claude[2]["name"], "week-model")
         self.assertAlmostEqual(claude[0]["remaining_fraction"], .57)
@@ -69,11 +82,17 @@ class ParsersTest(unittest.TestCase):
         bad["command"]["data"]["groups"][0]["name"] = "arbitrary provider text"
         self.assertEqual(qp.parse_agy(bad)[0]["name"], "other")
 
-    def test_zone_and_year_rollover(self):
+    def test_unresolvable_zone_is_unverified(self):
         bad = self.fixture("claude")
         bad["result"] = bad["result"].replace("Asia/Saigon", "Invalid/Zone")
-        with self.assertRaises(qp.ShapeError):
+        with self.assertRaisesRegex(qp.ShapeError, "unverified"):
             qp.parse("claude", json.dumps(bad), MEASURED)
+        with mock.patch.object(qp, "ZoneInfo", side_effect=ZoneInfoNotFoundError("no database")):
+            with self.assertRaisesRegex(qp.ShapeError, "unverified"):
+                qp.parse("claude", json.dumps(self.fixture("claude")), MEASURED)
+
+    def test_zone_and_year_rollover(self):
+        self.require_claude_zone()
         groups = qp.parse_claude(self.fixture("claude"), qp.timestamp("2026-12-31T00:00:00Z"))
         self.assertTrue(groups[0]["reset_time"].startswith("2027-11-05"))
 
@@ -115,7 +134,18 @@ class QuotaTest(unittest.TestCase):
         self.bin = self.base / "bin"
         self.bin.mkdir(mode=0o700)
         # The actual interpreter is used only for our fixed synthetic programs.
-        self.interpreter = str(Path("/usr/bin/python3").resolve())
+        self.interpreter = str(Path(sys.executable).resolve())
+        # The test runner itself may be installed under a package manager's git
+        # tree. Trust only this exact running interpreter in synthetic programs;
+        # keep every production check for fake executables and config folders.
+        checked_path = qp.checked_path
+        def test_path(value, **kwargs):
+            if str(value) == self.interpreter and not kwargs.get("directory"):
+                return b""
+            return checked_path(value, **kwargs)
+        patch = mock.patch.object(qp, "checked_path", side_effect=test_path)
+        patch.start()
+        self.addCleanup(patch.stop)
         self.addCleanup(mock.patch.stopall)
 
     def fake(self, agent, body=None):
@@ -276,7 +306,12 @@ class QuotaTest(unittest.TestCase):
         entry["configs"]["personal"] = str(second)
         self.configure({"claude": entry})
         self.ready()
-        with mock.patch.object(qp, "now", return_value=MEASURED):
+        self.assertEqual(qp.dr.account_home(), self.home)
+        self.assertEqual(qp.dr.consent_root(), self.root)
+        # This test covers worker/cache isolation. Real IANA conversion is tested
+        # separately; a fixed offset keeps the cache test independent of tzdata.
+        with mock.patch.object(qp, "now", return_value=MEASURED), \
+             mock.patch.object(qp, "ZoneInfo", return_value=qp.timezone(qp.timedelta(hours=7))):
             qp.worker([["claude", "default"], ["claude", "personal"]])
         with qp.state_folder() as folder:
             cache = qp.read_cache(folder)
@@ -679,7 +714,7 @@ class QuotaTest(unittest.TestCase):
 
     def test_env_shebang_uses_recorded_interpreter(self):
         entry = self.fake("agy", "print('ok')\n")
-        Path(entry["executable"]).write_text("#!/usr/bin/env python3\nprint('ok')\n")
+        Path(entry["executable"]).write_text("#!/usr/bin/env " + Path(self.interpreter).name + "\nprint('ok')\n")
         self.assertEqual(qp.checked_executable(entry), [entry["interpreter"], entry["executable"]])
         with mock.patch.dict(os.environ, {"PATH": str(self.base / "decoy")}):
             self.assertEqual(qp.command("agy", entry, "default", "a" * 48).strip(), b"ok")
@@ -782,6 +817,19 @@ class QuotaTest(unittest.TestCase):
         alias.symlink_to(entry["interpreter"])
         Path(entry["executable"]).write_text("#!" + str(alias) + "\nprint('ok')\n")
         self.assertEqual(qp.checked_executable(entry), [entry["interpreter"], entry["executable"]])
+
+
+class AccountCommandTest(unittest.TestCase):
+    def test_bootstrap_never_prefixes_an_absolute_interpreter(self):
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(subprocess, "run") as runner:
+            case = unittest.TestCase()
+            try:
+                account(case, Path(temporary) / "account")
+                command = ["sh", "-c", "/synthetic/bin/python3 -I -c 'pass'"]
+                subprocess.run(command)
+                runner.assert_called_once_with(command)
+            finally:
+                case.doCleanups()
 
 
 class CopiesTest(unittest.TestCase):
