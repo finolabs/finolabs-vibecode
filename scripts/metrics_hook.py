@@ -255,12 +255,21 @@ def post_tool_use(sid, cwd, tool, data):
 def main():
     host, hook_event = options(sys.argv[1:])
     try:
-        if not fm.enabled():
-            return  # off and not consented means nothing is read, parsed or written
-        payload = json.load(sys.stdin)
+        from quota_probe import worker_guard, trigger
+        if worker_guard():
+            return
+        # Probe consent is independent; inspect only the bounded hook event first.
+        raw = sys.stdin.buffer.read(65536)
+        if len(raw) == 65536:
+            return
+        payload = json.loads(raw)
         if not isinstance(payload, dict):
             return
         event, sid, cwd, source, tool, data = read_payload(payload, host, hook_event)
+        if event in {"SessionStart", "PostToolUse"}:
+            trigger()
+        if not fm.enabled():
+            return
         if not fm.valid_id(sid) or not isinstance(cwd, str):
             return
         if event == "SessionStart":

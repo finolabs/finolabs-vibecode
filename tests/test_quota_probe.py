@@ -339,6 +339,66 @@ class QuotaTest(unittest.TestCase):
             self.assertEqual(qp.read_cache(folder), {})
 
 
+    def test_manifest_hooks_nonce_guard_and_forgery(self):
+        import shlex
+        repo = self.base / "repository"
+        repo.mkdir()
+        (repo / ".git").mkdir()
+        dr.write_data("host.md", b"## Delegation mode\nauto\n## Auto gate\non\n")
+        with qp.state_folder(create=True) as folder:
+            nonce = qp.claim_marker(folder, qp.now())
+        boot = ("import pwd,runpy,sys,subprocess; from types import SimpleNamespace; "
+                f"pwd.getpwuid=lambda uid: SimpleNamespace(pw_dir={str(self.home)!r}); "
+                f"sys.path.insert(0,{str(ROOT / 'scripts')!r}); "
+                "import quota_probe,fnl_metrics; "
+                "quota_probe.trigger=lambda: print('TRIGGER'); "
+                "subprocess.Popen=lambda *a,**k: print('SPAWN'); "
+                "fnl_metrics.enabled=lambda: True; fnl_metrics.valid_id=lambda x: True; "
+                "fnl_metrics.record=lambda *a,**k: print('METRIC'); "
+                "sys.argv=sys.argv[1:]; runpy.run_path(sys.argv[0],run_name='__main__')")
+        seen = set()
+        for manifest in (".claude-plugin/hooks.json", ".codex-plugin/hooks.json"):
+            hooks = json.loads((ROOT / manifest).read_text())["hooks"]
+            for event, entries in hooks.items():
+                for entry in entries:
+                    for hook in entry["hooks"]:
+                        command = hook["command"]
+                        seen.add(command.split("/scripts/")[1].split(".py")[0])
+                        command = command.replace("python3 -I ", shlex.join([sys.executable, "-I", "-c", boot]) + " ")
+                        env = {"PATH": os.defpath, "CLAUDE_PLUGIN_ROOT": str(ROOT), "PLUGIN_ROOT": str(ROOT),
+                               "FNL_QUOTA_WORKER": nonce, "FNL_UPDATE_CHECK": "on"}
+                        payload = json.dumps({"hook_event_name": event, "tool_name": "Write", "cwd": str(repo), "session_id": "test"})
+                        with self.subTest(manifest=manifest, event=event, command=hook["command"]):
+                            result = subprocess.run(["sh", "-c", command], input=payload, env=env, text=True, capture_output=True, timeout=5)
+                            self.assertEqual(result.returncode, 0)
+                            self.assertEqual(result.stdout, "")
+                            self.assertEqual(result.stderr, "")
+                            env["FNL_QUOTA_WORKER"] = "b" * 48
+                            # Keep the first-write gate fresh for each independent command.
+                            gate = self.root / "state/auto-gate"
+                            if gate.exists():
+                                for file in gate.glob("*.json"):
+                                    file.unlink()
+                            result = subprocess.run(["sh", "-c", command], input=payload, env=env, text=True, capture_output=True, timeout=5)
+                            self.assertEqual(result.returncode, 0)
+                            if "metrics_hook" not in hook["command"] or event == "SessionStart":
+                                self.assertTrue(result.stdout, result.stderr)
+        self.assertEqual(seen, {"session_start", "metrics_hook", "auto_gate_hook", "update_check", "precompact"})
+
+    def test_metrics_consent_does_not_select_probe(self):
+        import importlib.util
+        import io
+        spec = importlib.util.spec_from_file_location("quota_metrics_test", ROOT / "scripts/metrics_hook.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for metrics in (True, False):
+            payload = json.dumps({"hook_event_name": "PostToolUse", "session_id": "test", "cwd": str(self.base)}).encode()
+            with mock.patch.object(sys, "stdin", io.TextIOWrapper(io.BytesIO(payload))), mock.patch.object(qp, "trigger") as trigger, \
+                 mock.patch.object(module.fm, "enabled", return_value=metrics), mock.patch.object(module.fm, "valid_id", return_value=False):
+                module.main()
+                trigger.assert_called_once()
+
+
 class CopiesTest(unittest.TestCase):
     def test_all_copies_identical_and_listed(self):
         actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob("quota_probe.py")}
