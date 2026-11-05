@@ -25,6 +25,7 @@ In, by package (Plan below gives order and dependencies):
 | 7 | `auto` blocking gate | feature, policy change |
 | 8 | Restore point and "try it now" demo | feature |
 | 9 | Decisions asked, not listed | feature |
+| 10 | Name every background run by its runner and what it does | feature |
 
 Out of 0.1.8, recorded so it is not lost: **multiple accounts** per host (needs each host's real support and a second account to verify; the open points are what each host supports, how quota fallback picks an account since quota is per account, where account facts live (host config, never skill bodies), and that any metrics field stays metadata with no identity and goes through `SCHEMA` and `PRIVACY.md`). A research spike may start it later; it is not scheduled.
 
@@ -127,6 +128,14 @@ When a spec or a plan has decisions the user can settle, the agent asks them thr
 Where it lives: `fnl-coding-router`, as one line in "Work, then gate" ("These hold on every path"), because the router is loaded at every coding entry and every workflow path (Spec Kit, a workflow pack, none) writes specs and plans. Not `fnl-setup-instructions`: that skill writes the user's contract once and is not loaded while a spec is written. The rule is advisory (agent judgment); a run with nobody to answer (delegated or headless) records the decisions as open and never invents an answer. Each Spec Kit, pack and none adapter keeps its own clarify step; this rule only says that the unsettled ones are asked, not listed.
 
 Acceptance: the router line exists and names its enforcer; a unit test checks the line is in `skills/fnl-coding-router/SKILL.md`; this spec is the first case (its four decisions were asked, not listed).
+
+## Package 10: run names
+
+Problem: when an agent starts a background task (a headless Codex or Antigravity run) or a reviewer or other subagent, the user cannot tell which agent is running or what it is doing.
+
+Rule, in `fnl-session-hygiene` "Titles" with a per-host paragraph in `references/titles.md`: every background run or agent gets, at the moment it starts, the label `<runner>: <project> <scope> <activity>`, where the runner is the agent family with a short model name (`codex sol`, `agy flash`, `claude sonnet`) or, for a reviewer or subagent, its role (`code review`, `sec review`). The same label goes in the host's name or description field, the ledger task, the log file names and the dispatch line. `fnl-delegate`, `fnl-review-gate` and `fnl-handoff` point to it. Advisory (agent judgment); no hook renames a tool call. Not in the user contract: the rule needs per-host fields and the contract is loaded every turn.
+
+Acceptance: a unit test pins the rule and its enforcer in `fnl-session-hygiene` and the pointers in the three skills.
 
 ## Plan
 
