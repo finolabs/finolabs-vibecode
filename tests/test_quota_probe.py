@@ -196,9 +196,13 @@ class QuotaTest(unittest.TestCase):
     def test_throttle_backoff_and_detached_spawn(self):
         self.configure({"agy": self.fake("agy")})
         with mock.patch.object(qp.subprocess, "Popen") as spawn:
-            # Missing backoff first waits 30 minutes, anchored to file/folder time.
-            self.assertFalse(qp.trigger())
-            self.ready()
+            # The first reading starts now; reserve its retry before spawning.
+            def reserved(*args, **kwargs):
+                saved = json.loads((self.root / "state/quota/backoff.json").read_text())
+                self.assertEqual(saved["agy"]["default"]["error"], "unfinished")
+                self.assertGreater(qp.timestamp(saved["agy"]["default"]["retry_after"]), qp.now())
+                return mock.Mock()
+            spawn.side_effect = reserved
             self.assertTrue(qp.trigger())
             self.assertFalse(qp.trigger())
             self.assertEqual(spawn.call_count, 1)
@@ -335,6 +339,41 @@ class QuotaTest(unittest.TestCase):
             with qp.state_folder() as folder:
                 record = qp.read_json(folder, "backoff.json")["claude"]["default"]
             self.assertEqual(record, {"retry_after": qp.stamp(MEASURED + qp.timedelta(seconds=seconds)), "error": error})
+
+    def test_codex_exit_without_reply_has_execution_backoff(self):
+        self.configure({"codex": self.fake("codex", "import sys\nsys.stdin.readline()\n")})
+        # The child exits on EOF itself. Isolate classification from platform
+        # killpg behavior (covered separately) so cleanup cannot mask the error.
+        with mock.patch.object(qp, "now", return_value=MEASURED), mock.patch.object(qp.os, "killpg"):
+            qp.worker([["codex", "default"]])
+        with qp.state_folder() as folder:
+            self.assertEqual(qp.read_json(folder, "backoff.json")["codex"]["default"],
+                             {"retry_after": qp.stamp(MEASURED + qp.timedelta(minutes=30)), "error": "execution"})
+
+    def test_exited_codex_cleanup_preserves_error_and_closes_pipes(self):
+        entry = self.fake("codex", "import sys\nsys.stdin.readline()\n")
+        processes, popen = [], subprocess.Popen
+        def spawn(*args, **kwargs):
+            process = popen(*args, **kwargs)
+            processes.append(process)
+            return process
+        def denied_group(*args):
+            processes[0].wait(timeout=5)
+            raise PermissionError("leader already exited")
+        with mock.patch.object(qp.subprocess, "Popen", side_effect=spawn), \
+             mock.patch.object(qp.os, "killpg", side_effect=denied_group):
+            with self.assertRaisesRegex(OSError, "missing reply"):
+                qp.command("codex", entry, "default", "a" * 48)
+        self.assertEqual(processes[0].returncode, 0)
+        self.assertTrue(processes[0].stdin.closed)
+        self.assertTrue(processes[0].stdout.closed)
+
+    def test_status_reads_atomic_cache_while_hook_holds_lock(self):
+        self.configure({"agy": self.fake("agy")})
+        with mock.patch.object(qp, "now", return_value=MEASURED):
+            qp.worker([["agy", "default"]])
+            with qp.state_folder() as folder:
+                self.assertIn("Quota agy/default: measured", qp.status_lines()[0])
 
     def test_codex_protocol_ignores_requests_and_kills_group(self):
         reply = (FIXTURES / "codex-rate-limits.json").read_text()

@@ -308,8 +308,13 @@ def validate_configs(folders):
 
 
 @contextmanager
-def state_folder(*, create=False, writer=False):
+def state_folder(*, create=False, writer=False, read_only=False):
     with dr.data_folder("state/quota", create=create, private=True) as folder:
+        # Cache files are atomically replaced; status can read a complete old or
+        # new snapshot without contending with a hook's exclusive writer lock.
+        if read_only:
+            yield folder
+            return
         # Hooks never wait. A just-spawned worker can briefly contend with its
         # parent publishing the reservation, as in the auto-gate writer.
         for attempt in range(3 if writer else 1):
@@ -376,11 +381,16 @@ def backoff(folder, configs, current):
                     raise ValueError("error")
         return data
     except (OSError, ValueError, TypeError, KeyError):
-        # Missing state uses the folder's time; corrupt state uses its own time.
+        # A brand-new probe has no failed attempt to back off from. Missing
+        # backoff beside an existing cache, or corrupt backoff, still waits.
         # Persist that wait, so repeated hooks never move the deadline forward.
         try:
             modified = os.stat("backoff.json", dir_fd=folder, follow_symlinks=False).st_mtime
         except FileNotFoundError:
+            try:
+                os.stat("quota.json", dir_fd=folder, follow_symlinks=False)
+            except FileNotFoundError:
+                return {}
             modified = os.fstat(folder).st_mtime
         deadline = stamp(datetime.fromtimestamp(modified, timezone.utc) + timedelta(minutes=30))
         data = {a: {label: {"retry_after": deadline, "error": "unfinished"} for label in e["configs"]}
@@ -508,7 +518,7 @@ def command(agent, entry, label, nonce):
                     chunk = os.read(key.fd, min(4096, LIMIT + 1 - len(output)))
                     if not chunk:
                         if agent == "codex":
-                            raise ShapeError("missing reply")
+                            raise OSError("missing reply")
                         if process.wait(timeout=max(0.001, TIMEOUT - (time.monotonic() - start))) != 0:
                             raise OSError("execution")
                         return bytes(output)
@@ -539,7 +549,7 @@ def command(agent, entry, label, nonce):
         finally:
             try:
                 os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
+            except (ProcessLookupError, PermissionError):
                 pass
             process.wait()
             process.stdout.close()
@@ -629,7 +639,7 @@ def worker(jobs):
 
 def status_lines():
     try:
-        with state_folder() as folder:
+        with state_folder(read_only=True) as folder:
             cache = read_cache(folder)
         lines = []
         for agent, labels in cache.items():
