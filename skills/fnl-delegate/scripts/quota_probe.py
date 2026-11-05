@@ -290,7 +290,7 @@ def checked_executable(entry):
             # No env options, assignments, or extra interpreter arguments.
             if len(words) != 2 or not re.fullmatch(r"[A-Za-z0-9._+-]+", words[1]) or Path(interpreter).name != words[1]:
                 raise ValueError("env interpreter")
-        elif len(words) != 1 or words[0] != interpreter:
+        elif len(words) != 1 or str(Path(words[0]).resolve(strict=True)) != interpreter:
             raise ValueError("interpreter changed")
         return [interpreter, entry["executable"]]
     if interpreter:

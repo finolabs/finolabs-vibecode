@@ -534,6 +534,25 @@ class QuotaTest(unittest.TestCase):
                 self.assertEqual(result.stdout, "synthetic-home\nguarded\n")
 
 
+    def test_env_shebang_uses_recorded_interpreter(self):
+        entry = self.fake("agy", "print('ok')\n")
+        Path(entry["executable"]).write_text("#!/usr/bin/env python3\nprint('ok')\n")
+        self.assertEqual(qp.checked_executable(entry), [entry["interpreter"], entry["executable"]])
+        with mock.patch.dict(os.environ, {"PATH": str(self.base / "decoy")}):
+            self.assertEqual(qp.command("agy", entry, "default", "a" * 48).strip(), b"ok")
+        Path(entry["executable"]).write_text("#!/usr/bin/env -S python3\n")
+        with self.assertRaises(ValueError):
+            qp.checked_executable(entry)
+
+
+    def test_direct_shebang_symlink_keeps_recorded_real_interpreter(self):
+        entry = self.fake("agy")
+        alias = self.bin / "python-alias"
+        alias.symlink_to(entry["interpreter"])
+        Path(entry["executable"]).write_text("#!" + str(alias) + "\nprint('ok')\n")
+        self.assertEqual(qp.checked_executable(entry), [entry["interpreter"], entry["executable"]])
+
+
 class CopiesTest(unittest.TestCase):
     def test_all_copies_identical_and_listed(self):
         actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob("quota_probe.py")}
