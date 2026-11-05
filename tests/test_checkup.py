@@ -151,6 +151,20 @@ class CheckupTest(unittest.TestCase):
         self.write(root / ".claude-plugin/hooks.json", '{"hooks":{"SessionStart":[]}}')
         self.assertEqual(self.data()["hosts"]["claude"][2]["status"], "missing")
 
+    def test_precompact_declaration_never_proves_delivery(self):
+        root = self.install_claude()
+        path = root / ".claude-plugin/hooks.json"
+        config = json.loads(path.read_text())
+        for declared in (False, True):
+            with self.subTest(declared=declared):
+                if declared:
+                    config["hooks"]["PreCompact"] = [{"hooks": [{"type": "command", "command": "never run"}]}]
+                path.write_text(json.dumps(config))
+                row = self.data()["hosts"]["claude"][2]
+                self.assertEqual(row["status"], "ok")
+                self.assertIn("PreCompact declared" if declared else "PreCompact not declared (optional)", row["reason"])
+                self.assertIn("delivery unverified", row["reason"])
+
     def test_antigravity_hook_support_stays_unverified(self):
         self.write(self.home / ".gemini/config/hooks.json", json.dumps({
             "finolabs-vibecode": {"SessionStart": [{"type": "command", "command": "never run"}]}}))
