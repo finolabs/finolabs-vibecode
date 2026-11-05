@@ -217,7 +217,7 @@ def config():
         agents = values["Agents"].split(", ")
         if not agents or len(set(agents)) != len(agents) or set(agents) - SOURCES.keys():
             raise ValueError("agents")
-        allowed = {"Quota probe", "Date", "Agents"} | {f"{kind} {a}" for a in agents for kind in ("Executable", "Interpreter")}
+        allowed = {"Quota probe", "Date", "Agents"} | {f"{kind} {a}" for a in agents for kind in ("Executable", "Resolved", "Interpreter")}
         if set(values) - allowed or ("claude" in agents and not 1 <= len(folders) <= 4) or (folders and "claude" not in agents):
             raise ValueError("config")
         if len(set(folders.values())) != len(folders):
@@ -231,6 +231,8 @@ def config():
                     raise ValueError("absolute executable")
             result[agent] = {"executable": executable, "interpreter": interpreter,
                              "configs": folders if agent == "claude" else {"default": None}}
+            if "Resolved " + agent in values:
+                result[agent]["resolved"] = values["Resolved " + agent]
         return result
     except (OSError, ValueError, KeyError, UnicodeError):
         return {}
@@ -278,8 +280,11 @@ def checked_path(value, *, directory=False):
         os.close(fd)
 
 
-def checked_executable(entry):
-    first = checked_path(entry["executable"])
+def checked_executable(agent, entry):
+    if agent not in SOURCES or Path(entry["executable"]).name != agent:
+        raise ValueError("executable missing or wrong name")
+    executable = entry.get("resolved", entry["executable"])
+    first = checked_path(executable)
     interpreter = entry.get("interpreter")
     if first.startswith(b"#!"):
         words = first[2:].decode().strip().split()
@@ -292,10 +297,10 @@ def checked_executable(entry):
                 raise ValueError("env interpreter")
         elif len(words) != 1 or str(Path(words[0]).resolve(strict=True)) != interpreter:
             raise ValueError("interpreter changed")
-        return [interpreter, entry["executable"]]
+        return [interpreter, executable]
     if interpreter:
         raise ValueError("unexpected interpreter")
-    return [entry["executable"]]
+    return [executable]
 
 
 def validate_configs(folders):
@@ -467,7 +472,7 @@ def due(configs, cache, delays, current):
 
 def environment(entry, nonce, config_path=None):
     folders = [str(Path(entry["interpreter"]).parent)] if entry.get("interpreter") else []
-    folders.append(str(Path(entry["executable"]).parent))
+    folders.append(str(Path(entry.get("resolved", entry["executable"])).parent))
     env = {"HOME": str(dr.account_home()), "PATH": ":".join(dict.fromkeys([*folders, *SYSTEM_PATH.split(":")])),
            "LANG": "C.UTF-8", "FNL_QUOTA_WORKER": nonce, "FNL_METRICS": "off"}
     if config_path is not None:
@@ -488,7 +493,7 @@ def working_folder():
 
 
 def command(agent, entry, label, nonce):
-    argv = checked_executable(entry)
+    argv = checked_executable(agent, entry)
     folder = None
     if agent == "claude":
         validate_configs(entry["configs"])
