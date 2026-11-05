@@ -60,6 +60,8 @@ When to name: at entry, on a resume whose title no longer matches the work, and 
 
 Whose: rename only this session and sessions you started; a session someone else started keeps its name unless the user asks. A delegated run takes its title, or its log file name where the host has no titles, from its ledger project and task label (`fnl-delegate`).
 
+**Background runs and agents.** Every background task or agent you start (a headless Codex, Antigravity or Claude run, a reviewer or other subagent) gets a name at the moment it starts that says who runs it and what it does: `<runner>: <project> <scope> <activity>`. The runner is the agent family and a short model name (`codex sol`, `agy flash`, `claude sonnet`) or, for a reviewer or other subagent, its role (`code review`, `sec review`). Examples: `codex sol: billing-api T044 rebuild CLI`, `code review: billing-api PR 12`. Put the same label in the host's name or description field for the run, the ledger task label, the log file names and the one line you tell the user at dispatch, so the user can tell which agent is running what. The enforcer is agent judgment, so this is advisory: no hook renames a tool call.
+
 Titles carry no secrets, customer data or private history. Use the host's supported mechanism ([references/titles.md](references/titles.md)); where a host offers none, say so in one line and carry the name in the handover and log file names instead. Pin the active session and unpin retired ones only where the host supports it and the user allows it. Session stores and app databases are never edited by hand.
 
 ## Writers and checkouts
