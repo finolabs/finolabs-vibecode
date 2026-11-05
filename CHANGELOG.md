@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- A task-lifecycle state diagram (inspect, path, depth, red, change, proof, review, merge, release, with the checkpoint after two failed fixes) in the README, with the HTML sources of both diagrams in `docs/diagrams/`.
+
 ### Changed
 
 - A Claude Code hook of this plugin may now deny the first file write in a repository without a decision in the last 8 hours when Delegation mode is `auto` and the opt-in auto gate is on; subsequent writes in the window allow, and `FNL_AUTO_GATE=off` disables it.
