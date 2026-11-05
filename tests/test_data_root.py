@@ -318,6 +318,20 @@ class DataRootTest(unittest.TestCase):
         self.assertIsNone(fm.read_consent())
         self.assertEqual((decoy / "consent.json").read_text(), "keep decoy unchanged")
 
+    def test_invalid_root_consent_commands_exit_with_one_error_and_no_writes(self):
+        self.pointer_to(identity="mismatch")
+        spec = importlib.util.spec_from_file_location("root_refresh_invalid", ROOT / "skills/fnl-status/scripts/refresh.py")
+        refresh = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(refresh)
+        before = {p.relative_to(self.home): p.read_bytes() for p in self.home.rglob("*") if p.is_file()}
+        for revoke in (True, False):
+            with self.subTest(revoke=revoke), mock.patch("builtins.print") as output:
+                with self.assertRaises(SystemExit) as error:
+                    refresh.cmd_consent(SimpleNamespace(revoke=revoke, retention=30))
+                self.assertEqual(str(error.exception), "consent: invalid data root; nothing recorded")
+                output.assert_not_called()
+            self.assertEqual(before, {p.relative_to(self.home): p.read_bytes() for p in self.home.rglob("*") if p.is_file()})
+
     def test_revoke_without_state_is_idempotent(self):
         spec = importlib.util.spec_from_file_location("root_refresh_empty", ROOT / "skills/fnl-status/scripts/refresh.py")
         refresh = importlib.util.module_from_spec(spec)
