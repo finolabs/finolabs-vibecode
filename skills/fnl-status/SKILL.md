@@ -24,7 +24,11 @@ The page marks a delegation group of fewer than five runs with an open ring and 
 
 ## Purge
 
-When the argument is `purge`, skip the steps above and ask the user through the host's native question tool when the session has one to confirm deleting the recorded events, `data.js` and `dashboard.html`. Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes. Their consent record stays, so recording continues; to stop it as well, ask separately whether to withdraw consent, and only after a second yes run `python3 -I <refresh.py> consent --revoke --yes` (or the user sets `FNL_METRICS=off`). Only after a clear yes, run `python3 -I <refresh.py> purge --yes`, and report how many files it removed. Never run it unasked.
+Ask in text when the session has no such tool, the tool is refused or fails, nobody can answer (a delegated or headless run records the open decision and never assumes or invents an answer), or the decision is free text. The enforcer is agent judgment, so this is advisory.
+
+When the argument is `purge`, skip the steps above and ask the user through the host's native question tool when the session has one to confirm deleting the recorded events, `data.js` and `dashboard.html`. Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes. Only after a clear yes, run `python3 -I <refresh.py> purge --yes`, and report how many files it removed. Never run it unasked.
+
+Their consent record stays, so recording continues; to stop it as well, ask separately whether to withdraw consent, through the host's native question tool when the session has one. Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes. Only after a second yes run `python3 -I <refresh.py> consent --revoke --yes` (or the user sets `FNL_METRICS=off`).
 
 ## What is recorded
 

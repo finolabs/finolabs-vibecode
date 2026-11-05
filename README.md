@@ -249,7 +249,7 @@ Off until you say yes in `fnl-setup` (section F), where you also pick how long e
 | Codex | the same without skill and agent use; trust the hooks once with `/hooks` |
 | Antigravity | the same as Codex; its hook is not part of the plugin, and setup adds it to your own `~/.gemini/config/hooks.json` only after a clear yes (`refresh.py antigravity-hook`, with a backup; `--remove` takes it out) |
 
-Events are best effort: they are read from tool calls and command text, so they can miss an action. Stop recording with `FNL_METRICS=off` or `refresh.py consent --revoke`; delete what was recorded with `fnl-status purge`.
+Events are best effort: they are read from tool calls and command text, so they can miss an action. Stop recording with `FNL_METRICS=off` or ask `fnl-status` to withdraw consent; it asks you first, then runs `refresh.py consent --revoke --yes`; delete what was recorded with `fnl-status purge`.
 
 ## Update check
 
