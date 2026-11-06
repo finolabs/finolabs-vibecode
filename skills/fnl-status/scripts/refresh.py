@@ -31,6 +31,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))  # -I leaves the script folder off the path
 import fnl_metrics as fm  # noqa: E402
+import agent_processes as ap  # noqa: E402
 
 SKILLS = HERE.parent.parent
 PAGE = HERE.parent / "assets/dashboard.html"
@@ -171,6 +172,82 @@ def freshness(events, generated):
     return {"built_at": generated, "latest_event": latest, "ledger_age_seconds": ledger_age, "quota_age_seconds": quota_age}
 
 
+def recent_snapshot():
+    """Reuse the page's last bounded snapshot for ten seconds, even on a ledger rebuild.
+
+    The file is data, never authority for consent or a command. Reconstruct only
+    the fixed snapshot schema so a tampered page cannot supply process names.
+    """
+    try:
+        path = fm.state_dir() / 'data.js'
+        fd = os.open(path, os.O_RDONLY | fm.NOFOLLOW | os.O_NONBLOCK)
+        try:
+            info = os.fstat(fd)
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                    or info.st_mode & 0o022 or info.st_size > 16 * 1024 * 1024):
+                return None
+            with os.fdopen(os.dup(fd), 'r') as stream:
+                raw = stream.read(16 * 1024 * 1024 + 1)
+        finally:
+            os.close(fd)
+        previous = json.loads(raw.removeprefix('window.FNL_DATA = ').removesuffix(';\n'))['running']
+        snap = previous['snapshot']
+        age = (fm.now() - datetime.fromisoformat(snap['time'])).total_seconds()
+        if not 0 <= age < 10 or snap['reason'] not in ('', 'ps unavailable', 'ps failed', 'ps timed out', 'ps output too large'):
+            return None
+        result = ap.empty(snap['reason'], snap['time'])
+        def count(value):
+            if type(value) is not int or value < 0:
+                raise ValueError('count')
+            return value
+        result['apps'] = {key: count(value) for key, value in snap['apps'].items() if key in ap.APPS}
+        for row in previous['processes']:
+            if row['family'] not in ap.ROOTS:
+                return None
+            result['processes'].append(dict(family=row['family'], elapsed_seconds=count(row['elapsed_seconds']),
+                descendants={key: count(value) for key, value in row['descendants'].items() if key in ap.CHILDREN or key == 'other'}))
+        return result
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
+def running_metrics(generated):
+    snapshot = ap.empty('snapshot off')
+    if fm.enabled() and ap.enabled():
+        snapshot = recent_snapshot() or ap.snapshot()
+    available = snapshot['reason'] == ''
+    processes = snapshot.pop('processes')
+    rows, note = [], ''
+    ledger = load_ledger()
+    if ledger is None:
+        note = 'fnl-delegate is not installed'
+    else:
+        try:
+            starts, finishes = ledger.load()
+            for dispatch_id, start in starts.items():
+                if dispatch_id in finishes:
+                    continue
+                try:
+                    age = max(0, (datetime.fromisoformat(generated) - datetime.fromisoformat(start['ts'])).total_seconds() / 60)
+                    budget = start.get('budget_min')
+                    if type(budget) is not int or budget <= 0:
+                        budget = None
+                    family = {'claude': 'claude', 'codex': 'codex', 'antigravity': 'agy'}.get(start['agent'])
+                    rows.append({**{key: start[key] for key in ('agent', 'model', 'project', 'task', 'ts')},
+                        'id': dispatch_id, 'age_min': round(age, 1), 'budget_min': budget,
+                        'check_due': budget is not None and age >= budget / 2,
+                        'liveness': 'unverified',
+                        'no_process_found': available and family is not None and not any(p['family'] == family for p in processes)})
+                except (ValueError, TypeError, KeyError):
+                    continue
+        except (OSError, ValueError, TypeError):
+            note = 'ledger could not be read'
+    families = {'antigravity': 'agy', 'claude': 'claude', 'codex': 'codex'}
+    for process in processes:
+        process['not_started_by_coordinator'] = not any(families.get(row['agent']) == process['family'] for row in rows) if not note else False
+    return {'open': rows, 'processes': processes, 'snapshot': snapshot, 'ledger_note': note}
+
+
 def build(days=WEEKS * 7):
     today = datetime.now().astimezone().date()
     start = today - timedelta(days=days - 1)
@@ -288,6 +365,7 @@ def build(days=WEEKS * 7):
     return {
         "generated": generated,
         "freshness": freshness(events, generated),
+        "running": running_metrics(generated),
         "period": {"from": start.isoformat(), "to": today.isoformat(), "days": days},
         "sessions": {"total": len(by_sid), "with_edits": with_edits, "dispatch": excluded, "unclassified": unclassified},
         "errors": fm.errors_count(), "missing": missing,
@@ -311,7 +389,7 @@ def build(days=WEEKS * 7):
 
 def js_text(data):
     """data.js: one assignment, ASCII only, with characters that could end or break a script escaped."""
-    body = json.dumps(data, separators=(",", ":")).replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+    body = json.dumps(data, separators=(",", ":")).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
     return "window.FNL_DATA = " + body + ";\n"
 
 

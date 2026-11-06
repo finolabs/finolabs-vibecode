@@ -578,6 +578,18 @@ class DetachedFreshnessTest(unittest.TestCase):
                         env={k: os.environ[k] for k in ("SYSTEMROOT",) if k in os.environ})
                     synchronous.assert_not_called()
 
+    def test_detached_refresh_preserves_only_the_snapshot_off_switch(self):
+        fm.write_consent(90)
+        for value in ('off', 'OFF', 'on', 'hostile'):
+            with self.subTest(value=value), mock.patch.dict(os.environ, {'FNL_AGENT_SNAPSHOT': value}), \
+                    mock.patch.object(subprocess, 'Popen') as start:
+                self.hook.start_detached_refresh()
+                env = start.call_args.kwargs['env']
+                expected = {k: os.environ[k] for k in ('SYSTEMROOT',) if k in os.environ}
+                if value.lower() == 'off':
+                    expected['FNL_AGENT_SNAPSHOT'] = 'off'
+                self.assertEqual(env, expected)
+
     def test_no_start_without_recorded_consent_when_off_or_lock_held(self):
         with mock.patch.object(subprocess, "Popen") as start:
             self.invoke("post_tool_use")

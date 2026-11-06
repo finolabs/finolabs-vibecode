@@ -164,6 +164,8 @@ def start_detached_refresh():
             msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
         # No host, project, Python injection or quota-worker variables are inherited.
         env = {k: os.environ[k] for k in ("SYSTEMROOT",) if k in os.environ}
+        if os.environ.get("FNL_AGENT_SNAPSHOT", "").lower() == "off":
+            env["FNL_AGENT_SNAPSHOT"] = "off"
         subprocess.Popen([sys.executable, "-I", str(REFRESH), "run", "--throttle", "10"],
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          env=env, cwd=str(REFRESH.parent), close_fds=True, start_new_session=True)
