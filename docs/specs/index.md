@@ -9,7 +9,8 @@
 | [Compaction threshold](compaction-threshold.md) | Checked setup writer; running-session effect and Codex default unverified. |
 | [Compaction steward](compaction-steward.md) | Option B: local handover storage, threshold decision and compact re-injection; real-host delivery remains unverified. |
 | [Antigravity compaction stop](compaction-stop.md) | Local size-only hook and previewed installer; user-level hooks, TUI delivery and the usefulness of a byte limit remain unverified. |
-| [Dashboard tabs](dashboard-tabs.md) | Spec; splits the status page into Overview, Agents, Project, Delegation and Reviews tabs. |
+| [Dashboard tabs](dashboard-tabs.md) | Implemented; splits the status page into Overview, Agents, Project, Delegation and Reviews tabs. |
+| [Dashboard infographics](dashboard-infographics.md) | Implemented locally: Agents KPI tiles, budget lanes and quota meters; priority-ordered unfinished projects and task cells; bounded Reviews chains and fragment navigation. Targeted fixture checks; coordinator browser screenshots at 1280 and 390 remain required. |
 | [Project progress](project-progress.md) | Implemented for 0.1.10: bounded local reader, exact identifier joins, consent/default notice and Project tab; duplicate task ids leave manual sessions unlinked. Local fixture checks only; real-host delivery remains unverified. |
 | [Release 0.1.10: spec and plan](release-0.1.10.md) | In progress; the package table lists the pull request behind each package. |
 | [Antigravity compaction stop](compaction-stop.md) | Spec; the rule is merged in `CLAUDE.md`, code running locally, no pull request yet. |

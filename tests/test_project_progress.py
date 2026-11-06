@@ -52,6 +52,7 @@ class ProgressTest(unittest.TestCase):
         task.with_name('spec.md').write_text('## User Story 1 (P1) - private heading\n'
             '### User Story 2 (P9) - <img secret>\n## User Story 3 (P10)\n')
         self.taskfile('archive/005-secret', '- [ ] T9 US9')
+        self.taskfile('archive', '- [ ] T8 US8')
         result = self.collect()
         self.assertEqual(len(result['features']), 1)
         self.assertEqual([s.get('priority') for s in result['features'][0]['stories']], [1, 9, None])
@@ -71,6 +72,32 @@ class ProgressTest(unittest.TestCase):
         # Duplicate metadata is ambiguous, not last-heading-wins.
         task.with_name('spec.md').write_text('## User Story 1 (P2)\n## User Story 1 (P3)\n')
         self.assertIsNone(self.collect()['features'][0]['stories'][0]['priority'])
+
+    def test_label_worktree_code_matches_the_metrics_repository_identity(self):
+        import hashlib
+        main = self.repo
+        metadata = main / '.git/worktrees/linked'
+        metadata.mkdir(parents=True)
+        (metadata / 'commondir').write_text('../..\n')
+        linked = main.with_name('linked')
+        linked.mkdir()
+        (linked / '.git').write_text('gitdir: ' + str(metadata) + '\n')
+        expected = hashlib.sha256(str(main).encode()).hexdigest()[:8]
+        self.assertEqual(self.pp.repository_code(linked), expected)
+        self.pp.set_label(linked, 'Shared project')
+        self.assertIn('- ' + expected + ': Shared project', self.host.read_text())
+
+    def test_documented_infographics_metadata_and_setup(self):
+        privacy = (ROOT / 'PRIVACY.md').read_text()
+        for word in ('P1', 'P9', 'spec.md', 'specs/archive', 'Project labels', 'priority number'):
+            self.assertIn(word, privacy)
+        setup = (ROOT / 'skills/fnl-setup/SKILL.md').read_text()
+        self.assertIn('project_progress.py label --set', setup)
+        self.assertIn('## Project labels', setup)
+        self.assertIn('## Project labels', (ROOT / 'skills/fnl-delegate/references/host-template.md').read_text())
+        self.assertIn('[Dashboard infographics]', (ROOT / 'docs/specs/index.md').read_text())
+        for doc in ('README.md', 'CHANGELOG.md', 'skills/fnl-status/SKILL.md'):
+            self.assertIn('quota meters', (ROOT / doc).read_text())
 
     def test_spec_uses_same_safe_read_and_twenty_file_budget(self):
         for n in range(11):

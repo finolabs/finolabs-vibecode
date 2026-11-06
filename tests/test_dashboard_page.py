@@ -255,6 +255,9 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertIn('hollow', quota[2]['cls'])
         self.assertIn('unverified', quota[2]['attrs']['data-tip'])
         self.assertTrue(any('</script>' in m['attrs'].get('data-tip', '') for m in lanes))
+        tables = self.marks(out, 'tbl', 'show the data as tables')
+        self.assertTrue(any('agent state' in row['text'] and 'past the check time' in row['text'] for row in tables))
+        self.assertTrue(any('process roots' in row['text'] and 'descendants' in row['text'] for row in tables))
         limits = self.marks(out, 'running-limits', 'limits')
         self.assertEqual(len(limits), 1)
         self.assertIn('machine-wide', limits[0]['text'])
@@ -289,6 +292,7 @@ class DashboardScriptTest(unittest.TestCase):
         tips = [p['attrs']['data-tip'] for p in self.marks(out, 'cell')]
         self.assertTrue(any(all(t in tip for t in ('T002', 'in progress', 'codex', 'session1', '</script>')) for tip in tips))
         tables = [p for p in out['picture'] if p['disclosure'] == 'show the data as tables']
+        self.assertTrue(any('project completion' in p['text'] and '43%' in p['text'] for p in tables))
         self.assertTrue(any('T090' in p['text'] for p in tables), 'finished feature remains in the data equivalent')
         self.assertTrue(any('feature 009' in p['text'] for p in tables))
         self.assertFalse(any(p['tag'] == 'table' and p['disclosure'] is None for p in out['picture']))
@@ -304,11 +308,15 @@ class DashboardScriptTest(unittest.TestCase):
         repos['aaaaaaaa']['features'][0]['stories'][0]['priority'] = 1
         out = self.render_freshness(data, {'hash': '#project'})
         self.assertEqual([p['attrs']['data-repo'] for p in self.marks(out, 'proj')], ['aaaaaaaa', 'bbbbbbbb'])
+        # A later local run wins a priority tie even when its snapshot is older.
+        repos['bbbbbbbb']['features'][0]['tasks'][1]['runs'][0]['start'] = '2026-11-06T12:00:00Z'
+        out = self.render_freshness(data, {'hash': '#project'})
+        self.assertEqual([p['attrs']['data-repo'] for p in self.marks(out, 'proj')], ['bbbbbbbb', 'aaaaaaaa'])
         data['progress']['repositories'] = {'aaaaaaaa': dict(features=[], reason='')}
         out = self.render_freshness(data, {'hash': '#project'})
         self.assertIn('No tasks.md found for this repository', out['panels'][2]['text'])
         self.assertEqual(self.marks(out, 'proj'), [])
-        self.assertFalse(any('ghost' in p['cls'] for p in out['picture'] if p['attrs'].get('id') == 'panel-project'))
+        self.assertFalse(any('ghost' in p['cls'] for p in out['picture'] if p.get('panel') == 'panel-project'))
 
     def test_motion_scoped_to_visible_tab_and_once_per_changed_data(self):
         page = PAGE.read_text()

@@ -344,30 +344,36 @@ def progress_metrics(events, running, cwd=None):
     if with_progress['reason'] == 'progress off':
         return None
     code = with_progress.pop('repo', None)
-    if code is None:
-        return {'current': None, 'repositories': {}, 'in_progress': 0, 'notice': False,
-                'reason': with_progress['reason']}
-    with_progress['running_now'] = len(running['processes']) if not running['snapshot']['reason'] else None
-    reviews = {}
-    for event in sorted(events, key=lambda e: e['ts']):
-        if event['repo'] == code and event['event'] == 'review':
-            reviews[event['kind']] = event['verdict']
-    with_progress['reviews'] = reviews
-    with_progress['version'] = pp.installed_version()
-    with_progress['updated'] = fm.now().isoformat()
     repositories = previous_projects()
-    repositories.pop(code, None)
-    repositories[code] = with_progress
-    repositories = dict(list(repositories.items())[-5:])
-    try:
-        labels = pp.project_labels(fm.dr.read_data('host.md', 262144).decode('utf-8'))
-    except (OSError, ValueError, UnicodeError):
-        labels = {}
+    notice = False
+    if code is not None:
+        with_progress['running_now'] = len(running['processes']) if not running['snapshot']['reason'] else None
+        reviews = {}
+        for event in sorted(events, key=lambda e: e['ts']):
+            if event['repo'] == code and event['event'] == 'review':
+                reviews[event['kind']] = event['verdict']
+        with_progress['reviews'] = reviews
+        with_progress['version'] = pp.installed_version()
+        with_progress['updated'] = fm.now().isoformat()
+        repositories.pop(code, None)
+        repositories[code] = with_progress
+        repositories = dict(list(repositories.items())[-5:])
+        notice = pp.notice('dashboard', with_progress['version'])
+    labels = canonical_labels()
     for key, row in repositories.items():
         row['label'] = labels.get(key, 'repo ' + key[:4])
-    return {'current': code, 'repositories': repositories,
-            'in_progress': sum(row.get('in_progress', 0) for row in repositories.values()),
-            'notice': pp.notice('dashboard', with_progress['version'])}
+    result = {'current': code, 'repositories': repositories,
+              'in_progress': sum(row.get('in_progress', 0) for row in repositories.values()), 'notice': notice}
+    if code is None:
+        result['reason'] = with_progress['reason']
+    return result
+
+
+def canonical_labels():
+    try:
+        return pp.project_labels(fm.dr.read_data('host.md', 262144).decode('utf-8'))
+    except (OSError, ValueError, UnicodeError):
+        return {}
 
 
 def build(days=WEEKS * 7, cwd=None):
@@ -432,7 +438,9 @@ def build(days=WEEKS * 7, cwd=None):
             verdicts[(e["repo"], e["pr"])].append((e["ts"], e["verdict"]))
     groups = {key: sorted(v) for key, v in verdicts.items()}
     newest = sorted(groups.items(), key=lambda x: x[1][0][0], reverse=True)
-    reviews = [{"repo": "repo-" + repo, "pr": pr, "verdicts": [v for _, v in vs]} for (repo, pr), vs in newest[:REVIEWS_SHOWN]]
+    labels = canonical_labels()
+    reviews = [{"repo": "repo-" + repo, "label": labels.get(repo, "repo " + repo[:4]),
+                "pr": pr, "verdicts": [v for _, v in vs]} for (repo, pr), vs in newest[:REVIEWS_SHOWN]]
     review_stats = {"total": len(groups), "reworked": sum(any(v == "REWORK" for _, v in vs) for vs in groups.values())}
     depth = {d: [0, 0] for d in fm.DEPTHS}
     for e in events:

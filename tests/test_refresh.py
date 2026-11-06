@@ -100,6 +100,20 @@ class RefreshTest(unittest.TestCase):
         self.assertNotIn(codes[0], block['repositories'])
         self.assertEqual(self.data()['running']['quota'][0]['remaining_fraction'], .08)
         self.assertIn('updated', block['repositories'][codes[-1]])
+        # A refresh outside a repository must not erase the other last-written projects.
+        result = subprocess.run([sys.executable, '-I', str(REFRESH), 'run', '--cwd', str(Path(self.tmp.name).resolve())],
+                                env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(set(self.data()['progress']['repositories']), set(codes[-5:]))
+
+    def test_reviews_use_canonical_labels_even_when_progress_is_off(self):
+        self.consent()
+        self.ledger.parent.joinpath('host.md').write_text('## Project progress\n- Project progress: off\n\n## Project labels\n- aaaaaaaa: My tools\n')
+        self.write_events([self.event(0, 's', X, 'review', pr=31, verdict='APPROVE', kind='code')])
+        self.refresh('run')
+        data = self.data()
+        self.assertIsNone(data['progress'])
+        self.assertEqual(data['reviews'][0].get('label'), 'My tools')
 
     # Acceptance 1: ledger writes bypass only the age throttle.
     def test_freshness_newer_ledger_bypasses_throttle_older_or_absent_does_not(self):

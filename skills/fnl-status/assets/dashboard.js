@@ -137,7 +137,7 @@
     var late = open.filter(function (run) { return run.budget_min > 0 && run.age_min >= run.budget_min / 2; }).length;
     var unowned = processes.filter(function (p) { return p.not_started_by_coordinator; }).length;
     var tiles = h("div", "kpis agent-kpis");
-    [["running now", open.length, available ? processes.length + " named processes" : "snapshot unavailable", ""],
+    [["running now", open.length, available ? processes.length + " roots · " + Object.keys(snapshot.apps || {}).reduce(function (sum, family) { return sum + snapshot.apps[family]; }, 0) + " app processes" : "snapshot unavailable", ""],
      ["past the check time", late, "half of the time budget", "var(--warn)"],
      ["not started by coordinator", unowned, available ? "family-level match only" : "snapshot unavailable", ""]].forEach(function (x) {
       var value = t("div", "v agent-value", x[1]);
@@ -201,6 +201,14 @@
         return [q.agent, pct(q.remaining_fraction), q.measured, q.unverified ? "unverified" : "verified"];
       })));
     }
+    TABS.get("agents").tableRows.push(tableOf("agent state", ["measure", "count"], [
+      ["running now", open.length], ["past the check time", late], ["not started by coordinator", unowned],
+      ["named processes", available ? processes.length : "unavailable"],
+      ["app processes", available ? Object.keys(snapshot.apps || {}).reduce(function (sum, family) { return sum + snapshot.apps[family]; }, 0) : "unavailable"]]));
+    if (available) TABS.get("agents").tableRows.push(tableOf("process roots", ["family", "elapsed seconds", "descendants", "coordinator match"], processes.map(function (p) {
+      return [p.family, p.elapsed_seconds, Object.keys(p.descendants || {}).map(function (name) { return name + ": " + p.descendants[name]; }).join(", ") || "none",
+        p.not_started_by_coordinator ? "not started by coordinator" : "family match only"];
+    })));
     TABS.get("agents").tableRows.push(tableOf("dispatch budgets", ["agent / model / task", "elapsed / budget", "check", "liveness"], open.map(function (run) {
       return [run.agent + " / " + run.model + " / " + run.task, run.age_min + "/" + run.budget_min + " min", run.check_due ? "check due" : "—", run.liveness];
     })));
@@ -210,6 +218,11 @@
   function projectData(p) {
     var lines = [];
     function line(value) { lines.push(t("div", "running-row", value)); }
+    var allTasks = [], total = 0, done = 0;
+    (p.features || []).forEach(function (f) { total += f.total; done += f.done; allTasks = allTasks.concat(f.tasks || []); });
+    var active = allTasks.filter(function (task) { return task.state === "in progress"; }).length;
+    lines.push(tableOf("project completion", ["done", "total", "completion", "an agent is on it", "to do"],
+      [[done, total, pct(total ? done / total : 0), active, total - done - active]]));
     if (p.reason) line(p.reason);
     (p.features || []).forEach(function (feature) {
       line("feature " + String(feature.feature).padStart(3, "0") + " · " + feature.done + " / " + feature.total);
@@ -263,13 +276,25 @@
       });
       return Math.min.apply(null, [10].concat(numbers));
     }
+    function activity(p) {
+      var times = [];
+      function seen(value) { var at = Date.parse(value); if (Number.isFinite(at)) times.push(at); }
+      (p.sessions_without_task || []).forEach(function (session) { seen(session.last); });
+      (p.features || []).forEach(function (feature) {
+        (feature.tasks || []).forEach(function (task) {
+          (task.sessions || []).forEach(function (session) { seen(session.last); });
+          (task.runs || []).forEach(function (run) { seen(run.start); seen(run.finish); });
+        });
+      });
+      return times.length ? Math.max.apply(null, times) : Date.parse(p.updated) || 0;
+    }
     var finished = keys.filter(function (code) {
       var fs = repositories[code].features || [];
       return fs.length && fs.every(function (f) { return f.done === f.total; });
     }).length;
     var visible = keys.filter(function (code) { return unfinishedFeatures(repositories[code]).length; }).sort(function (a, b) {
       var left = repositories[a], right = repositories[b];
-      return priority(left) - priority(right) || (Date.parse(right.updated) || 0) - (Date.parse(left.updated) || 0) || a.localeCompare(b);
+      return priority(left) - priority(right) || activity(right) - activity(left) || a.localeCompare(b);
     }).slice(0, 5);
     var content = [];
     visible.forEach(function (code) {
@@ -601,8 +626,8 @@
         seq.setAttribute("data-dots", Math.min(8, x.verdicts.length));
         if (x.verdicts.length > 8) seq.appendChild(t("span", "more-rounds", "+" + (x.verdicts.length - 8)));
         tipOn(seq, x.verdicts.length + " rounds · " + x.verdicts.join(" → "));
-        return tipOn(h("div", "r", [t("span", "meta review-label", repoLabel(x.repo) + " #" + x.pr), seq]),
-          repoLabel(x.repo) + " · PR #" + x.pr + ": " + x.verdicts.join(" → "));
+        return tipOn(h("div", "r", [t("span", "meta review-label", (x.label || repoLabel(x.repo)) + " #" + x.pr), seq]),
+          (x.label || repoLabel(x.repo)) + " · PR #" + x.pr + ": " + x.verdicts.join(" → "));
       })), legend([["approve", "var(--good)"], ["rework", "var(--warn)"]])]);
   }
   var reviewPane = pane("review gate", "pull requests", "", rv, missing("reviews") || "no review comments recorded", "rv");
@@ -714,7 +739,7 @@
       ["Followed", D.judge.followed.yes, D.judge.followed.validated, pct(D.judge.followed.share)]]));
     if (D.judge.outcome_association.length) delegationTables.push(tableOf("Judge · Outcome association", ["routed by", "runs", "first pass"], D.judge.outcome_association.map(function (x) { return [x.route_by, x.runs, pct(x.first_pass)]; })));
   }
-  if (D.reviews) TABS.get("reviews").tableRows.push(tableOf("reviews", ["pr", "verdicts"], D.reviews.map(function (x) { return [repoLabel(x.repo) + " #" + x.pr, x.verdicts.join(" → ")]; })));
+  if (D.reviews) TABS.get("reviews").tableRows.push(tableOf("reviews", ["pr", "verdicts"], D.reviews.map(function (x) { return [(x.label || repoLabel(x.repo)) + " #" + x.pr, x.verdicts.join(" → ")]; })));
   if (act.length) {
     var wk = [];
     for (var w = 0; w < act.length; w += 7) { var sum = 0; act.slice(w, w + 7).forEach(function (a) { sum += a.count; }); wk.push([act[w].date, sum]); }
