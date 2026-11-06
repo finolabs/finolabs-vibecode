@@ -40,6 +40,81 @@ class RefreshTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
         return result
 
+    # Acceptance 1: ledger writes bypass only the age throttle.
+    def test_freshness_newer_ledger_bypasses_throttle_older_or_absent_does_not(self):
+        self.consent()
+        self.refresh("run")
+        data = self.dir / "data.js"
+        original = data.read_bytes()
+        built = data.stat().st_mtime
+        self.refresh("run", "--throttle", "10")
+        self.assertEqual(data.stat().st_mtime, built)
+        self.fixture_ledger()
+        os.utime(self.ledger, (built - 1, built - 1))
+        self.refresh("run", "--throttle", "10")
+        self.assertEqual(data.stat().st_mtime, built)
+        os.utime(self.ledger, (built + 1, built + 1))
+        self.refresh("run", "--throttle", "10")
+        self.assertNotEqual(data.read_bytes(), original)
+        self.assertEqual(sum(row["runs"] for row in self.data()["delegation"]), 2)
+
+    # Acceptance 3: freshness reports source times, with null for missing sources.
+    def test_freshness_build_host_ledger_and_quota_ages(self):
+        self.consent()
+        self.write_events([
+            self.event(30, "a", X, "session_start", host="claude", dispatch=None, source="startup"),
+            self.event(2, "a", X, "first_edit"),
+            self.event(20, "b", X, "session_start", host="codex", dispatch=None, source="startup"),
+            self.event(1, "c", X, "session_start", host="antigravity", dispatch=None, source="startup")])
+        self.ledger.write_text(json.dumps({"ts": (self.at - timedelta(minutes=3)).isoformat()}) + "\n")
+        quota = self.dir / "quota"
+        quota.mkdir(mode=0o700)
+        (quota / "quota.json").write_text(json.dumps({"codex": {"default": {
+            "measured": (self.at - timedelta(hours=4)).isoformat(), "source": "app-server", "groups": []}}}))
+        self.refresh("run")
+        d = self.data()
+        fresh = d["freshness"]
+        self.assertEqual(fresh["built_at"], d["generated"])
+        self.assertEqual(fresh["latest_event"], {"claude": self.event(2, "a", X, "first_edit")["ts"],
+                         "codex": self.event(20, "b", X, "session_start")["ts"],
+                         "antigravity": self.event(1, "c", X, "session_start")["ts"]})
+        self.assertAlmostEqual(fresh["ledger_age_seconds"], 180, delta=3)
+        self.assertAlmostEqual(fresh["quota_age_seconds"], 14400, delta=3)
+
+    def test_freshness_missing_or_malformed_sources_are_not_zero_age(self):
+        self.refresh("run")
+        fresh = self.data()["freshness"]
+        self.assertEqual(fresh["latest_event"], {})
+        self.assertIsNone(fresh["ledger_age_seconds"])
+        self.assertIsNone(fresh["quota_age_seconds"])
+        self.ledger.write_text('{"ts":"invalid"}\n')
+        quota = self.dir / "quota"
+        quota.mkdir(mode=0o700)
+        (quota / "quota.json").write_text('{"bad":null}')
+        self.refresh("run")
+        self.assertIsNone(self.data()["freshness"]["ledger_age_seconds"])
+        self.assertIsNone(self.data()["freshness"]["quota_age_seconds"])
+
+    # Acceptance 2: real elapsed time, no parent timeout or shorter test cap.
+    def test_detached_run_exits_itself_at_twenty_seconds_and_releases_lock(self):
+        wrapper = Path(self.tmp.name) / "capped.py"
+        wrapper.write_text(
+            "import importlib.util, sys, time\n"
+            f"spec = importlib.util.spec_from_file_location('refresh_cap', {str(REFRESH)!r})\n"
+            "refresh = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(refresh)\n"
+            "refresh.build = lambda: time.sleep(30)\n"
+            "sys.argv = ['refresh.py', 'run']\nrefresh.main()\n")
+        before = time.monotonic()
+        done = subprocess.run([sys.executable, "-I", str(wrapper)], env=self.env, capture_output=True, timeout=25)
+        elapsed = time.monotonic() - before
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertGreaterEqual(elapsed, 19)
+        self.assertLess(elapsed, 24)
+        self.assertFalse((self.dir / "data.js").exists())
+        import fcntl
+        with (self.dir / "refresh.lock").open("r+") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
     def test_low_revoke_requires_explicit_yes_flag(self):
         self.consent()
         before = (self.dir / "consent.json").read_bytes()
@@ -484,6 +559,7 @@ class RefreshOverlapTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
+        account(self, Path(self.tmp.name) / "home")
         patcher = mock.patch.dict(os.environ, {"FNL_STATE_DIR": str(Path(self.tmp.name) / "state")})
         patcher.start()
         self.addCleanup(patcher.stop)

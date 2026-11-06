@@ -22,6 +22,7 @@ import shutil
 import stat
 import sys
 import time
+import threading
 import webbrowser
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
@@ -123,6 +124,51 @@ def judge_metrics(events, route_rows, has_judge_route, ledger_note):
             "followed": {"yes": followed, "validated": len(validated), "share": ratio(followed, len(validated))},
         })
     return block
+
+
+def newer_ledger(target):
+    """A ledger write bypasses the throttle; a missing or unreadable ledger does not."""
+    try:
+        root = fm.dr.consent_root()
+        return root is not None and (root / "ledger.jsonl").stat().st_mtime_ns > target.stat().st_mtime_ns
+    except OSError:
+        return False
+
+
+def freshness(events, generated):
+    current = datetime.fromisoformat(generated)
+
+    def age(ts):
+        try:
+            return max(0, int((current - datetime.fromisoformat(ts)).total_seconds()))
+        except (ValueError, TypeError):
+            return None
+
+    hosts = {e["sid"]: e["host"] for e in events if e["event"] == "session_start"}
+    latest = {}
+    for e in events:
+        host = hosts.get(e["sid"])
+        if host is not None and (host not in latest or datetime.fromisoformat(e["ts"]) > datetime.fromisoformat(latest[host])):
+            latest[host] = e["ts"]
+    ledger_age = quota_age = None
+    try:
+        lines = fm.dr.read_data("ledger.jsonl", 16 * 1024 * 1024).decode("utf-8").splitlines()
+        for line in reversed(lines):
+            try:
+                ledger_age = age(json.loads(line)["ts"])
+            except (ValueError, TypeError, KeyError):
+                continue
+            if ledger_age is not None:
+                break
+    except (OSError, ValueError):
+        pass
+    try:
+        cache = json.loads(fm.dr.read_data("state/quota/quota.json"))
+        ages = [age(entry["measured"]) for labels in cache.values() for entry in labels.values()]
+        quota_age = min((a for a in ages if a is not None), default=None)
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        pass
+    return {"built_at": generated, "latest_event": latest, "ledger_age_seconds": ledger_age, "quota_age_seconds": quota_age}
 
 
 def build(days=WEEKS * 7):
@@ -238,8 +284,10 @@ def build(days=WEEKS * 7):
     if not delegation:
         missing["delegation"] = ledger_note
 
+    generated = fm.now().isoformat(timespec="seconds")
     return {
-        "generated": fm.now().isoformat(timespec="seconds"),
+        "generated": generated,
+        "freshness": freshness(events, generated),
         "period": {"from": start.isoformat(), "to": today.isoformat(), "days": days},
         "sessions": {"total": len(by_sid), "with_edits": with_edits, "dispatch": excluded, "unclassified": unclassified},
         "errors": fm.errors_count(), "missing": missing,
@@ -317,7 +365,7 @@ def cmd_run(args):
         return
     try:
         if args.throttle is not None and (folder / "data.js").exists() and \
-                fm.now().timestamp() - (folder / "data.js").stat().st_mtime < args.throttle:
+                fm.now().timestamp() - (folder / "data.js").stat().st_mtime < args.throttle and not newer_ledger(folder / "data.js"):
             return
         publish(folder, args)
     finally:
@@ -450,7 +498,18 @@ def main():
     agy.add_argument("--yes", action="store_true")
     agy.set_defaults(func=cmd_antigravity_hook)
     args = parser.parse_args()
-    args.func(args)
+    if args.command == "run":
+        # Detached hooks have no parent timeout. This wall-clock watchdog also
+        # covers lock waits and blocked I/O; process exit releases the OS lock.
+        cap = threading.Timer(20, os._exit, args=(0,))
+        cap.daemon = True
+        cap.start()
+        try:
+            args.func(args)
+        finally:
+            cap.cancel()
+    else:
+        args.func(args)
 
 
 if __name__ == "__main__":
