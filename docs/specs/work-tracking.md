@@ -21,7 +21,11 @@ repository showed three gaps:
   host config under the data root (local, consent-gated, written by a script); the instruction files carry the same
   facts as short text for agents.
 - This repository stays without Spec Kit, as the standing test of the non-Spec-Kit path. No reduced Spec Kit mode
-  is invented. An optional OpenSpec adapter is a separate, later decision.
+  is invented.
+- OpenSpec (Fission-AI, openspec.dev, MIT) is recognised like Spec Kit but gets no router adapter until a repository
+  of the owner's uses it. The reason is adoption, not size: its per-change artefact count is close to Spec Kit's
+  (comparisons calling it lighter come from blogs and are unverified).
+- `fnl-setup` separates machine scope from project scope, like `fnl-setup-instructions` (section E).
 
 ## A. Per-repository settings in the host config
 
@@ -103,7 +107,32 @@ A convention, applied in this repository and offered by the interview, not impos
 ## D. Not in scope
 
 Spec Kit adoption here; the dashboard reading instruction files; any new usage event; a ledger project inferred from
-git remotes or plugin names; the OpenSpec adapter.
+git remotes or plugin names; the OpenSpec router adapter.
+
+## E. OpenSpec recognition and the `fnl-setup` scope split
+
+**Recognition (no adapter).** Where `.specify/` means Spec Kit, an `openspec/` folder means OpenSpec (layout taken from
+the official repository page and site: `openspec/specs/` current specs; `openspec/changes/<name>/` in-flight changes,
+each with `proposal.md`, `specs/`, `design.md`, `tasks.md`; `openspec/changes/archive/<date>-<name>/` finished ones).
+- `fnl-setup` Explore reports it beside the Spec Kit check and the Agent skills block gets one neutral line (OpenSpec
+  owns the development workflow), in the same way as the Spec Kit line; nothing is installed.
+- The pipeline strip gets a third source, ranked after Spec Kit and before repository state: one item per change folder
+  (cap 60), stages `proposal`, `specs`, `design`, `tasks` by file or folder presence, task counts from the checkbox
+  lines of `tasks.md`, and each archived change counted as shipped (a count, not items). The same read rules as the
+  Spec Kit reader (regular files, no symlinks, no traversal, size and time caps, ordinals only).
+- Before any code reads `tasks.md` of OpenSpec, the checkbox syntax is checked on a real OpenSpec project and recorded
+  here; the official pages do not document it. Until then the stage presence works and task counts stay hidden.
+- Not in scope: a router adapter (`fnl-coding-router` `references/workflows/openspec.md`) until a repository of the
+  owner's uses OpenSpec; installing OpenSpec; slash commands.
+
+**Scope split.** `fnl-setup` asks first, through the host's native question tool when there is one: "Which scope:
+machine, project, or both?", with a recommendation (machine on a first run on a new computer, project inside a
+repository that is not set up, both when unsure). Machine scope: data location, host config, delegation, quota,
+metrics and consent, agent snapshot, compaction. Project scope: workflow detection (Spec Kit, OpenSpec, own spec
+documents, none), the local exclude, the Agent skills block and its review line, work tracking (section B), the
+project label and project progress. There is no machine-wide default workflow: the workflow is a property of the
+repository. Check follows the same split. Skipped sections stay skippable as today. Enforcer: agent judgment
+(advisory); every write keeps its own script, preview and consent.
 
 ## Acceptance
 
@@ -120,8 +149,13 @@ git remotes or plugin names; the OpenSpec adapter.
 - `PRIVACY.md` lists the `## Project settings` section, says its values never reach `data.js`, tooltips, events or
   `checkup.py` output, and says `purge` leaves the host config as it is (the user's own file).
 - This repository's specs and index follow the vocabulary and the test above enforces it.
+- OpenSpec recognition: fixtures of a real-shaped `openspec/` folder (one in-flight change, one archived) show the
+  chain and the shipped count; a repository with both `.specify/` and `openspec/` uses Spec Kit; a symlinked or
+  oversize file is skipped; no title or file name reaches `data.js`.
+- `fnl-setup` asks the scope question first, each section sits under exactly one scope, Check mirrors it, and no
+  existing opt-in or consent step changes.
 
 ## Open decisions
 
 None blocking. Later: reading `Status:` from release-spec package tables of other repositories that do not use the
-vocabulary; an OpenSpec adapter and recognition.
+vocabulary; the OpenSpec router adapter once a repository of the owner's uses it.
