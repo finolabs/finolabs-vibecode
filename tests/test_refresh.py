@@ -126,6 +126,15 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(carried['features'], second['features'])
         self.assertNotIn('PRIVATE', (self.dir / 'data.js').read_text())
 
+    def test_previous_projects_retains_fixed_progress_failure_reasons(self):
+        self.consent()
+        self.ledger.parent.joinpath('host.md').write_text('# Host\n')
+        for reason in ('progress timed out', 'progress unavailable', 'no repository'):
+            data = {'progress': {'repositories': {'aaaaaaaa': {'features': [], 'reason': reason}}}}
+            (self.dir / 'data.js').write_text('window.FNL_DATA = ' + json.dumps(data) + ';\n')
+            self.refresh('run', '--cwd', str(Path(self.tmp.name).resolve()))
+            self.assertEqual(self.data()['progress']['repositories']['aaaaaaaa']['reason'], reason)
+
     def test_work_record_data_privacy_retention_and_closed_marks(self):
         self.consent()
         repo = Path(self.tmp.name).resolve() / 'repo'

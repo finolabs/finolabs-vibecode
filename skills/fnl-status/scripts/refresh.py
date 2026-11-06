@@ -336,7 +336,8 @@ def previous_projects():
                     return value
                 if value in (*pp.AGENTS, *pp.HOSTS, *pp.OUTCOMES, *pp.STATES, 'other', 'unknown', 'open', 'todo', 'done', 'active',
                              'in progress', 'accepted, not ticked', 'APPROVE', 'REWORK', '', 'task file skipped',
-                             'spec file skipped', 'unsafe task path', 'file limit', 'entry limit', 'feature limit', 'ledger unavailable'):
+                             'spec file skipped', 'unsafe task path', 'file limit', 'entry limit', 'feature limit', 'ledger unavailable',
+                             'progress timed out', 'progress unavailable', 'no repository'):
                     return value
             raise ValueError('metadata')
         return {code: clean(row) for code, row in list(repositories.items())[-5:]

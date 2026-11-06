@@ -364,6 +364,27 @@ class ProgressTest(unittest.TestCase):
         self.assertFalse(feature['artifacts']['design'])
         self.assertEqual(feature['review_counts']['code'], 0)
 
+    def test_package_ordinals_are_bounded_ascii_and_negations_are_unknown(self):
+        text = '| # | Package | Status |\n| --- | --- | --- |\n' + ''.join(
+            '| ' + value + ' | PRIVATE | implemented |\n' for value in ('²', '١', '1234567', '999999', '1'))
+        self.assertEqual([r['ordinal'] for r in self.pp.package_rows(text, 80)], [999999, 1])
+        for text in ('not released', 'not done', 'not yet merged', 'not implemented'):
+            with self.subTest(text=text):
+                self.assertEqual(self.pp.status_state(text), 'unknown')
+                self.document('release.md', 'Status: ' + text + '\n| # | Package | Kind |\n| --- | --- | --- |\n| 1 | PRIVATE | fix |\n')
+                got = self.collect()
+                self.assertEqual(got['features'][0]['state'], 'unknown')
+                self.assertEqual(got['features'][0]['packages'][0]['state'], 'unknown')
+
+    def test_index_status_column_header_before_second_column_fallback(self):
+        for header in ('Status', 'State'):
+            self.document('index.md', '| Spec | Type | ' + header + ' |\n| --- | --- | --- |\n'
+                          '| [PRIVATE](one.md) | implemented | in progress |\n')
+            self.document('one.md', '# PRIVATE\n')
+            self.assertEqual(self.collect()['features'][0]['state'], 'active')
+        self.document('index.md', '| [PRIVATE](one.md) | deferred | implemented |\n')
+        self.assertEqual(self.collect()['features'][0]['state'], 'deferred')
+
     def test_status_mapping_is_unknown_unless_stated_and_deferrals_remain_distinct(self):
         cases = {'Implemented for 0.1.7': 'done', 'merged; release pull request open': 'done',
                  'Released as 0.1.8': 'done', 'shipped': 'done', 'accepted': 'todo', 'done': 'done',

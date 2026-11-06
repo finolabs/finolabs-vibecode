@@ -471,6 +471,8 @@ STATUS_MARKS = ('accepted', 'status-not-updated')
 def status_state(text):
     """Specific deferral/ongoing phrases precede generic completion words."""
     text = text.lower()
+    if re.search(r'\bnot(?:\s+yet)?\s+(?:released|done|merged|implemented)\b', text):
+        return 'unknown'
     word = status_word(text)
     if word != 'unknown':
         return word_state(word)
@@ -645,10 +647,17 @@ def metadata_item(ordinal, state='unknown', status=''):
     return item
 
 
-def table_rows(text):
+def table_rows(text, with_status=False):
+    column = 1
     for _, line in reader_lines(text):
-        if line.strip().startswith('|'):
-            yield [cell.strip() for cell in line.strip().strip('|').split('|')]
+        if not line.strip().startswith('|'):
+            column = 1
+            continue
+        cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
+        header = next((i for i, cell in enumerate(cells) if cell.lower() in ('status', 'state')), None)
+        if header is not None and not index_link(cells):
+            column = header
+        yield (cells, cells[column] if column < len(cells) else '') if with_status else cells
 
 
 def package_cells(text):
@@ -664,20 +673,20 @@ def package_cells(text):
             continue
         if cells[0] == '#' and re.fullmatch(r'Package', cells[1], re.I):
             in_packages = True
-        elif in_packages and cells[0].isdigit():
+        elif in_packages and re.fullmatch(r'[0-9]{1,6}', cells[0]):
             yield cells
-        elif not all(re.fullmatch(r':?-+:?', cell.replace(' ', '')) for cell in cells):
+        elif cells[0] == '#':
             in_packages = False
 
 
 def package_rows(text, remaining):
-    released = bool(re.search(r'\breleased\b', status_line(text), re.I))
+    released = status_state(status_line(text)) == 'done' and bool(re.search(r'\breleased\b', status_line(text), re.I))
     rows = []
     for cells in package_cells(text):
         if len(rows) >= remaining:
             break
         state = 'done' if released else status_state(' '.join(cells))
-        rows.append(dict(ordinal=int(cells[0]) if len(cells[0]) <= 6 else len(rows) + 1, state=state))
+        rows.append(dict(ordinal=int(cells[0]), state=state))
     return rows
 
 
@@ -722,12 +731,12 @@ def repository_documents(fd, skipped):
         skipped.append('file limit')
     merged = set()
     for text in documents.values():
-        released = bool(re.search(r'\breleased\b', status_line(text), re.I))
+        released = status_state(status_line(text)) == 'done' and bool(re.search(r'\breleased\b', status_line(text), re.I))
         for cells in package_cells(text):
             if released or status_state(' '.join(cells)) == 'done':
                 merged.update(re.findall(r'\]\(([^()\s]+\.md)\)', ' '.join(cells)))
     items, remaining = [], 80
-    for cells in table_rows(indexes.get(selected) or ''):
+    for cells, index_status in table_rows(indexes.get(selected) or '', with_status=True):
         name = index_link(cells)
         if name is None:
             continue
@@ -736,8 +745,8 @@ def repository_documents(fd, skipped):
             break
         text = documents.get(name, '')
         own = status_state(status_line(text))
-        state = 'done' if name in merged else own if own != 'unknown' else status_state(cells[1])
-        item = metadata_item(len(items) + 1, state, status_line(text) if own != 'unknown' else cells[1])
+        state = 'done' if name in merged else own if own != 'unknown' else status_state(index_status)
+        item = metadata_item(len(items) + 1, state, status_line(text) if own != 'unknown' else index_status)
         packages = package_rows(text, remaining)
         remaining -= len(packages)
         if packages:
