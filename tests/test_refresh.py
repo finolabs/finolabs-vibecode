@@ -76,6 +76,81 @@ class RefreshTest(unittest.TestCase):
         self.refresh('purge', '--yes')
         self.assertFalse((self.dir / 'data.js').exists())
 
+    def test_pipeline_data_js_privacy_and_retained_metadata_from_real_shaped_documents(self):
+        self.consent()
+        self.ledger.parent.joinpath('host.md').write_text('## Project progress\n- Ledger project: synthetic-alias\n')
+        repo = Path(self.tmp.name).resolve() / 'synthetic-folder'
+        (repo / '.git').mkdir(parents=True)
+        docs = repo / 'docs/specs'
+        docs.mkdir(parents=True)
+        (docs / 'index.md').write_text('| Spec | Status |\n| --- | --- |\n'
+            '| [PRIVATE TITLE](alpha.md) | PRIVATE no status |\n| [PRIVATE TITLE](release.md) | In progress |\n')
+        (docs / 'alpha.md').write_text('# PRIVATE TITLE\nStatus: owner decisions settled PRIVATE\n')
+        (docs / 'release.md').write_text('# Release PRIVATE TITLE\nStatus: merged; release pull request open.\n'
+            '| # | Package | Design | Status |\n| --- | --- | --- | --- |\n'
+            '| 1 | PRIVATE TITLE | [PRIVATE](alpha.md) | merged (pull request 97) |\n'
+            '| 2 | PRIVATE TITLE | PRIVATE | moved to 0.2.0 |\n')
+        self.ledger.write_text('\n'.join(json.dumps(row) for row in [
+            dict(event='start', id='one', ts=self.at.isoformat(), project='synthetic-alias', task='PRIVATE LABEL',
+                 kind='implement', grade='hard', agent='codex', model='m', reason='routing'),
+            dict(event='finish', id='one', ts=self.at.isoformat(), outcome='accepted', rework_rounds=0)]) + '\n')
+        self.refresh('run', '--cwd', str(repo))
+        data = self.data()
+        code = data['progress']['current']
+        project = data['progress']['repositories'][code]
+        self.assertEqual((project['source'], project['recognition'], project['ledger_join']), ('docs/specs', 'index', 'configured'))
+        self.assertEqual(project['work'], {'done': 1})
+        self.assertEqual([f['state'] for f in project['features']], ['done', 'deferred'])
+        raw = (self.dir / 'data.js').read_text()
+        for private in ('PRIVATE', 'alpha.md', 'release.md', 'owner decisions', 'synthetic-alias', str(repo)):
+            self.assertNotIn(private, raw)
+        self.refresh('run', '--cwd', str(repo.parent))
+        carried = self.data()['progress']['repositories'][code]
+        self.assertEqual(carried['features'], project['features'])
+        for key in ('source', 'recognition', 'ledger_join', 'work'):
+            self.assertEqual(carried[key], project[key])
+        # A second repository's Spec Kit snapshot also retains its artefact/hint metadata.
+        other = repo.parent / 'synthetic-second'
+        (other / '.git').mkdir(parents=True)
+        feature = other / 'specs/016-synthetic'
+        feature.mkdir(parents=True)
+        (feature / 'spec.md').write_text('**Status**: Draft\nPRIVATE\n')
+        (feature / 'plan.md').write_text('PRIVATE\n')
+        (feature / 'research.md').write_text('PRIVATE\n')
+        (feature / 'review-code-final.md').write_text('PRIVATE\n')
+        self.refresh('run', '--cwd', str(other))
+        second_code = self.data()['progress']['current']
+        second = self.data()['progress']['repositories'][second_code]
+        self.refresh('run', '--cwd', str(repo.parent))
+        carried = self.data()['progress']['repositories'][second_code]
+        self.assertEqual(carried['features'], second['features'])
+        self.assertNotIn('PRIVATE', (self.dir / 'data.js').read_text())
+
+    def test_pipeline_snapshot_rejects_text_in_new_enum_fields(self):
+        self.consent()
+        self.ledger.parent.joinpath('host.md').write_text('# Host\n')
+        repo = Path(self.tmp.name).resolve() / 'synthetic'
+        (repo / '.git').mkdir(parents=True)
+        spec = repo / 'specs/001-synthetic/spec.md'
+        spec.parent.mkdir(parents=True)
+        spec.write_text('**Status**: Draft\n')
+        self.refresh('run', '--cwd', str(repo))
+        original = self.data()
+        code = original['progress']['current']
+        for field, bad in [('source', 'PRIVATE TITLE'), ('recognition', 'PRIVATE TITLE'), ('ledger_join', 'PRIVATE TITLE'),
+                           ('source', {'model': 'PRIVATE-TITLE'}), ('ledger_join', 123)]:
+            tampered = json.loads(json.dumps(original))
+            tampered['progress']['repositories'][code][field] = bad
+            (self.dir / 'data.js').write_text('window.FNL_DATA = ' + json.dumps(tampered) + ';\n')
+            self.refresh('run', '--cwd', str(repo.parent))
+            self.assertNotIn(code, self.data()['progress']['repositories'])
+            self.assertNotIn('PRIVATE', (self.dir / 'data.js').read_text())
+        tampered = json.loads(json.dumps(original))
+        tampered['progress']['repositories'][code]['features'][0]['status_hint'] = 'PRIVATE TITLE'
+        (self.dir / 'data.js').write_text('window.FNL_DATA = ' + json.dumps(tampered) + ';\n')
+        self.refresh('run', '--cwd', str(repo.parent))
+        self.assertNotIn('PRIVATE', (self.dir / 'data.js').read_text())
+
     def test_multiple_project_snapshots_and_quota_metadata(self):
         self.consent()
         self.ledger.parent.joinpath('host.md').write_text('# Host\n')

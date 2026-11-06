@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import shutil
 import stat
 import tempfile
 import time
@@ -56,7 +57,9 @@ class ProgressTest(unittest.TestCase):
         result = self.collect()
         self.assertEqual(len(result['features']), 1)
         self.assertEqual([s.get('priority') for s in result['features'][0]['stories']], [1, 9, None])
-        self.assertTrue(result['done'])
+        self.assertFalse(result['done'])  # checked tasks still need a verify artefact
+        task.with_name('quickstart-results.md').write_text('')
+        self.assertTrue(self.collect()['done'])
         self.assertEqual(result['label'], '')
         self.assertNotIn('private', json.dumps(result))
         self.assertNotIn('secret', json.dumps(result))
@@ -72,6 +75,198 @@ class ProgressTest(unittest.TestCase):
         # Duplicate metadata is ambiguous, not last-heading-wins.
         task.with_name('spec.md').write_text('## User Story 1 (P2)\n## User Story 1 (P3)\n')
         self.assertIsNone(self.collect()['features'][0]['stories'][0]['priority'])
+
+    def document(self, name, text, directory='docs/specs'):
+        path = self.repo / directory / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        return path
+
+    def test_speckit_real_shape_artifacts_gaps_phase_stories_and_stale_status(self):
+        task = self.taskfile('013-synthetic', '## Phase 2: User Story 1 - Synthetic (P1)\n- [x] T001\n- [x] T002\n'
+                             '## Phase 3: User Story 2 - Synthetic (P2)\n- [x] T003\n')
+        for name in ('spec.md', 'plan.md', 'research.md', 'data-model.md', 'quickstart-results-local.md',
+                     'review-code-us1.md', 'review-security-us1.md', 'review-final-code.md',
+                     'review-security-final.md', 'review-independent-check.md', 'review-design.md', 'release-notes-1.md'):
+            task.with_name(name).write_text('**Status**: Draft\nPRIVATE NEVER OUTPUT\n')
+        task.with_name('contracts').mkdir()
+        self.document('spec.md', '**Status**: Draft\n', 'specs/016-synthetic')
+        self.document('index.md', '| [Synthetic](elsewhere.md) | In progress |\n')
+        got = self.collect()
+        self.assertEqual(got['source'], 'speckit')
+        self.assertEqual([f['feature'] for f in got['features']], [13, 16])
+        done, new = got['features']
+        self.assertEqual(done['state'], 'done')
+        self.assertEqual(done['status_hint'], 'draft')
+        self.assertEqual([s['stage'] for s in done['stages']], ['spec', 'plan', 'design', 'tasks', 'verify', 'review', 'ship'])
+        self.assertEqual(done['review_counts'], dict(code=4, security=2, code_final=True, security_final=True))
+        self.assertEqual([(s['story'], s['priority'], s['total']) for s in done['stories']], [('US1', 1, 2), ('US2', 2, 1)])
+        self.assertEqual(new['state'], 'todo')
+        self.assertEqual([s['stage'] for s in new['stages']], ['spec'])
+        self.assertNotIn('PRIVATE', json.dumps(got))
+        self.assertNotIn('synthetic', json.dumps(got))
+
+    @unittest.skipUnless(shutil.which("node") or Path("/opt/homebrew/bin/node").exists(), "node is not installed")
+    def test_collected_artifacts_and_source_b_render_chains_not_text_lanes(self):
+        # Exercise collector output, not a hand-authored stages schema.
+        from tests.test_dashboard_page import DashboardScriptTest
+        task = self.taskfile('015-synthetic', '## Phase 1: User Story 1 - Synthetic (P1)\n- [x] T001\n- [ ] T002\n')
+        for name in ('spec.md', 'plan.md', 'research.md', 'data-model.md', 'quickstart-results-local.md',
+                     'review-code-us1.md', 'review-security-final.md', 'release-notes-1.md'):
+            task.with_name(name).write_text('**Status**: Draft\nPRIVATE NEVER OUTPUT\n')
+        self.document('spec.md', '**Status**: Draft\n', 'specs/016-synthetic')
+        speckit = self.collect()
+        shutil.rmtree(self.repo / 'specs')
+        self.document('index.md', '| Title | Status |\n| --- | --- |\n'
+                      '| [Synthetic](one.md) | In progress |\n| [Synthetic](two.md) | Released |\n')
+        self.document('one.md', '# PRIVATE NEVER OUTPUT\n')
+        self.document('two.md', '# PRIVATE NEVER OUTPUT\n')
+        source_b = self.collect()
+        data = json.loads((ROOT / 'tests/fixtures/status-sample.json').read_text())
+        data['progress'] = {'repositories': {'aaaaaaaa': speckit, 'bbbbbbbb': source_b},
+                            'active': [{'repo': code, 'label': 'Synthetic', 'hosts': ['codex'], 'sessions': 1,
+                                        'last': '2026-11-06T10:00:00Z'} for code in ('aaaaaaaa', 'bbbbbbbb')]}
+        page = DashboardScriptTest()
+        out = page.render_freshness(data, {'hash': '#now'})
+        self.assertEqual(len(page.marks(out, 'pipeline-chain')), 3)
+        self.assertEqual([m['text'] for m in page.marks(out, 'pipeline-ordinal')], ['016', '015', '#1'])
+        self.assertEqual([m['attrs']['data-stage'] for m in page.marks(out, 'pipeline-block')],
+                         ['spec', 'spec', 'plan', 'design', 'tasks', 'verify', 'review', 'ship', 'spec'])
+        self.assertEqual([m['text'] for m in page.marks(out, 'pipeline-finished')], ['✓ 1'])
+        self.assertEqual(len(page.marks(out, 'pipeline-chevron')), 9)
+        pane = ' '.join(m['text'] for m in page.marks(out, 'active-project'))
+        for forbidden in ('undefined', 'untagged', 'PRIVATE', 'Synthetic](one.md)'):
+            self.assertNotIn(forbidden, pane)
+
+    def test_speckit_task_completion_needs_verification_and_started_join(self):
+        task = self.taskfile(text='- [x] T1 US1\n')
+        self.assertEqual(self.collect()['features'][0]['state'], 'active')
+        task.with_name('quickstart-results.md').write_text('')
+        self.assertEqual(self.collect()['features'][0]['state'], 'done')
+        task.write_text('- [ ] T1 US1\n')
+        starts = {'one': dict(project=self.repo.name, task='003 T1', ts='2026-11-06T09:00:00Z')}
+        self.assertEqual(self.collect(starts=starts)['features'][0]['state'], 'active')
+        self.assertEqual(self.collect()['features'][0]['state'], 'todo')
+
+    def test_speckit_patterns_are_presence_only_and_ignore_non_regular_artifacts(self):
+        task = self.taskfile()
+        target = self.repo / 'target'
+        target.write_text('private')
+        for name in ('plan.md', 'research.md', 'quickstart-results-link.md', 'review-code-link.md', 'release-notes-link.md'):
+            task.with_name(name).symlink_to(target)
+        task.with_name('contracts').symlink_to(self.repo, target_is_directory=True)
+        task.with_name('review-security-directory.md').mkdir()
+        task.with_name('quickstart.md').write_text('')
+        feature = self.collect()['features'][0]
+        self.assertEqual([s['stage'] for s in feature['stages']], ['tasks'])
+        self.assertFalse(feature['artifacts']['design'])
+        self.assertEqual(feature['review_counts']['code'], 0)
+
+    def test_status_mapping_is_unknown_unless_stated_and_deferrals_remain_distinct(self):
+        cases = {'Implemented for 0.1.7': 'done', 'merged; release pull request open': 'done',
+                 'Released as 0.1.8': 'done', 'shipped': 'done', 'accepted': 'done', 'done': 'done',
+                 'In progress': 'active', 'In review': 'active', 'building': 'active', 'running locally': 'active',
+                 'Spec; rule is merged; no pull request yet': 'active', 'Moved to 0.2.0 after merged work': 'deferred',
+                 'deferred': 'deferred', 'See its verification and host limits': 'unknown', 'fix': 'unknown', '': 'unknown'}
+        for text, state in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(self.pp.status_state(text), state)
+
+    def test_repository_index_enriches_status_and_release_packages_without_leaking_text(self):
+        self.document('index.md', '| Spec | Status |\n| --- | --- |\n'
+            '| [PRIVATE TITLE](one.md) | See its verification and host limits |\n'
+            '| [PRIVATE TITLE](two.md) | Spec |\n| [PRIVATE TITLE](release.md) | In progress |\n'
+            '| [PRIVATE TITLE](three.md) | Nothing stated |\n')
+        self.document('one.md', '# PRIVATE\nStatus: implemented for 0.1.7\n')
+        self.document('two.md', '# PRIVATE\nStatus: owner decisions settled\n')
+        self.document('three.md', '# PRIVATE\n')
+        self.document('release.md', '# Release synthetic\nStatus: merged; release pull request open.\n'
+            '| # | Package | Design | Status |\n| --- | --- | --- | --- |\n'
+            '| 1 | PRIVATE | [PRIVATE](two.md) | Merged (pull request 97) |\n'
+            '| 2 | PRIVATE | [PRIVATE](three.md) | Moved to 0.2.0 |\n'
+            '\n| Wave | Dependencies | Files |\n| 0 | PRIVATE | PRIVATE |\n')
+        result = self.collect()
+        self.assertEqual((result['source'], result['recognition']), ('docs/specs', 'index'))
+        self.assertEqual([f['state'] for f in result['features']], ['done', 'done', 'deferred', 'unknown'])
+        release = result['features'][2]
+        self.assertEqual([p['state'] for p in release['packages']], ['done', 'deferred'])
+        self.assertEqual([s['stage'] for s in release['stages']], ['spec', 'packages'])
+        self.assertEqual(result['ledger_join'], 'none')
+        for private in ('PRIVATE', 'one.md', 'two.md', 'three.md', 'release.md', '0.2.0', 'pull request'):
+            self.assertNotIn(private, json.dumps(result))
+
+    def test_index_precedence_across_locations_and_safe_links(self):
+        self.document('loose.md', 'Status: done\n')
+        self.document('index.md', '| [A](pending.md) | In progress |\n'
+                      '| [B](../outside.md) | done |\n| [C](/absolute.md) | done |\n', 'docs/spec')
+        got = self.collect()
+        self.assertEqual(got['source'], 'docs/spec')
+        self.assertEqual(len(got['features']), 1)
+        self.assertEqual(got['features'][0]['state'], 'active')
+
+    def test_loose_documents_old_release_package_shape_and_released_floor(self):
+        path = self.document('release.md', '# Release synthetic\n'
+            '| # | Package | Kind |\n| --- | --- | --- |\n'
+            '| 1 | PRIVATE | merged (pull request 58) |\n| 2 | PRIVATE | fix |\n| 3 | PRIVATE | deferred |\n')
+        got = self.collect()
+        self.assertEqual(got['recognition'], 'status')
+        self.assertEqual([p['state'] for p in got['features'][0]['packages']], ['done', 'unknown', 'deferred'])
+        path.write_text('Status: released as 0.1.8\n' + path.read_text())
+        self.assertEqual([p['state'] for p in self.collect()['features'][0]['packages']], ['done'] * 3)
+        self.assertTrue(self.collect()['done'])
+
+    def test_ledger_exact_override_group_latest_outcome_strip_and_fallback(self):
+        labels = ['PRIVATE task', 'PRIVATE task', 'PRIVATE active', 'PRIVATE blocked', 'PRIVATE cancelled', 'PRIVATE quota']
+        starts = {str(i): dict(project='alias', task=label, ts='2026-11-06T09:%02d:00Z' % i) for i, label in enumerate(labels)}
+        finishes = {'0': dict(outcome='error'), '1': dict(outcome='accepted'), '3': dict(outcome='blocked'),
+                    '4': dict(outcome='cancelled'), '5': dict(outcome='quota')}
+        self.assertEqual(self.collect(starts=starts, finishes=finishes)['source'], 'none')
+        self.host.write_text('## Project progress\n- Ledger project: alias\n')
+        got = self.collect(starts=starts, finishes=finishes)
+        self.assertEqual(got['source'], 'ledger')
+        self.assertEqual([f['ordinal'] for f in got['features']], [1, 2, 3, 4, 5])
+        self.assertEqual(got['work'], dict(done=1, active=1, **{'needs-attention': 2}, deferred=1))
+        self.assertNotIn('PRIVATE', json.dumps(got))
+        self.assertNotIn('alias', json.dumps(got))
+        self.document('one.md', '# PRIVATE\n')
+        got = self.collect(starts=starts, finishes=finishes)
+        self.assertEqual(got['source'], 'docs/specs')
+        self.assertEqual(got['work']['done'], 1)
+        self.taskfile()
+        self.assertEqual(self.collect(starts=starts, finishes=finishes)['source'], 'speckit')
+        self.assertEqual(self.pp.ledger_items('alias', starts, {'2': dict(outcome='needs-permission')})[1]['state'], 'needs-attention')
+
+    def test_ledger_equal_timestamps_preserve_record_order_for_latest_attempt(self):
+        starts = {ident: dict(project='alias', task='PRIVATE', ts='2026-11-06T09:00:00Z') for ident in ('z', 'a')}
+        finishes = {'z': dict(outcome='error'), 'a': dict(outcome='accepted')}
+        self.assertEqual(self.pp.ledger_items('alias', starts, finishes)[0]['state'], 'done')
+
+    def test_repository_caps_oversize_symlinks_and_package_row_cap(self):
+        for n in range(45):
+            self.document('%02d.md' % n, 'Status: done\n')
+        got = self.collect()
+        self.assertEqual(len(got['features']), 40)
+        self.assertIn('file limit', got['skipped'])
+        first = self.repo / 'docs/specs/00.md'
+        first.write_bytes(b'PRIVATE' * (64 * 1024 // 7 + 1))
+        second = first.with_name('01.md')
+        second.unlink()
+        second.symlink_to(first)
+        got = self.collect()
+        self.assertEqual(len(got['features']), 39)  # next regular file fills symlink's slot
+        self.assertIn('spec file skipped', got['skipped'])
+        package = '# Release\n| # | Package | Kind |\n| --- | --- | --- |\n' + ''.join('| %d | PRIVATE | fix |\n' % n for n in range(1, 100))
+        first.write_text(package)
+        third = first.with_name('02.md')
+        third.write_text(package)
+        got = self.collect()
+        self.assertEqual(sum(len(f.get('packages', [])) for f in got['features']), 80)
+        self.assertNotIn('PRIVATE', json.dumps(got))
+
+    def test_unrecognised_source_c_and_no_guessing_ledger_project(self):
+        starts = {'one': dict(project='different', task='PRIVATE', ts='2026-11-06T09:00:00Z')}
+        got = self.collect(starts=starts)
+        self.assertEqual((got['source'], got['features'], got['work'], got['ledger_join']), ('none', [], {}, 'none'))
 
     def test_completion_percent_exact_cases(self):
         for done, total, expected in ((408, 410, 99), (56, 57, 98), (1, 3, 33),
@@ -176,16 +371,16 @@ class ProgressTest(unittest.TestCase):
             for word in ('quota', 'overview', 'now'):
                 self.assertIn(word, (ROOT / doc).read_text())
 
-    def test_spec_uses_same_safe_read_and_twenty_file_budget(self):
-        for n in range(11):
+    def test_spec_uses_same_safe_read_and_sixty_feature_cap(self):
+        for n in range(61):
             task = self.taskfile('%03d-safe' % n)
             task.with_name('spec.md').write_text('## User Story 1 (P2)\n')
         result = self.collect()
-        self.assertEqual(len(result['features']), 10)
-        self.assertIn('file limit', result['skipped'])
-        task = self.repo / 'specs/000-safe/spec.md'
+        self.assertEqual(len(result['features']), 60)
+        self.assertIn('feature limit', result['skipped'])
+        task = self.repo / 'specs/001-safe/spec.md'
         task.unlink()
-        task.symlink_to(self.repo / 'specs/001-safe/spec.md')
+        task.symlink_to(self.repo / 'specs/002-safe/spec.md')
         self.assertIsNone(self.collect()['features'][0]['stories'][0]['priority'])
 
     def test_parser_drops_everything_except_identifiers_and_numbers(self):
@@ -263,8 +458,7 @@ class ProgressTest(unittest.TestCase):
         self.host.write_text('## Project progress\n- Project progress: on\n')
         for n in range(21):
             self.taskfile('%03d-private' % n)
-        self.assertEqual(len(self.collect()['features']), 20)
-        self.assertIn('file limit', self.collect()['skipped'])
+        self.assertEqual(len(self.collect()['features']), 21)
         for n in range(201):
             (self.repo / 'specs' / ('junk%d' % n)).mkdir()
         self.assertIn('entry limit', self.collect()['skipped'])

@@ -160,10 +160,10 @@ def priorities(text):
     for line in text.splitlines():
         if len(line) > 4096:
             continue
-        match = re.match(r'^#{1,6} User Story ([0-9]{1,3}) \(P([1-9])\)(?:[ \t].*)?$', line)
+        match = re.match(r'^#{1,6} User Story ([0-9]{1,3})(?: \(P([1-9])\)(?:[ \t].*)?| - .{0,4000}\(Priority: P([1-9])\))$', line)
         if match:
             story = 'US' + str(int(match[1]))
-            values[story] = None if story in seen else int(match[2])
+            values[story] = None if story in seen else int(match[2] or match[3])
             seen.add(story)
     return values
 
@@ -293,7 +293,7 @@ def safe_parts(relative):
     return path.parts
 
 
-def read_task(root_fd, relative):
+def read_task(root_fd, relative, limit=LIMIT):
     parts = safe_parts(relative)
     fd = os.dup(root_fd)
     try:
@@ -305,11 +305,11 @@ def read_task(root_fd, relative):
             os.close(fd)
             fd = child
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_size > LIMIT:
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_size > limit:
             raise ValueError('task file skipped')
         chunks, size = [], 0
-        while size <= LIMIT:
-            chunk = os.read(fd, min(65536, LIMIT + 1 - size))
+        while size <= limit:
+            chunk = os.read(fd, min(65536, limit + 1 - size))
             if not chunk:
                 return b''.join(chunks).decode('utf-8', 'replace')
             chunks.append(chunk)
@@ -320,13 +320,20 @@ def read_task(root_fd, relative):
 
 
 def parse(text, feature):
-    tasks, phase, seen = [], None, set()
+    tasks, phase, phase_story, phase_priority, seen = [], None, None, None, set()
+    story_priorities = {}
     for line in text.splitlines():
         if len(line) > 4096:
             continue
         heading = re.match(r'^#{2,3} Phase ([0-9]{1,2})\b', line)
         if heading:
             phase = int(heading[1])
+            story_heading = re.search(r'\bUser Story ([0-9]{1,3})\b', line)
+            priority = re.search(r'\(P([1-9])\)', line)
+            phase_story = 'US' + str(int(story_heading[1])) if story_heading else None
+            phase_priority = int(priority[1]) if priority else None
+            if phase_story:
+                story_priorities[phase_story] = phase_priority
         box = re.match(r'^\s*- \[( |x|X)\] ', line)
         if not box:
             continue
@@ -336,7 +343,7 @@ def parse(text, feature):
         if not ident or ident.end() > 80 or int(ident[1]) in seen:
             continue
         seen.add(int(ident[1]))
-        tasks.append({'id': ident[0], 'story': story[0] if story and story.end() <= 80 else None, 'phase': phase,
+        tasks.append({'id': ident[0], 'story': story[0] if story and story.end() <= 80 else phase_story, 'phase': phase,
                       'state': 'done' if box[1] != ' ' else 'todo', 'runs': [], 'sessions': []})
         if len(tasks) == 200:
             break
@@ -345,7 +352,289 @@ def parse(text, feature):
         return [{key: value, 'done': sum(r['state'] == 'done' for r in tasks if r[key] == value),
                  'total': sum(r[key] == value for r in tasks)} for value in values]
     return {'feature': feature, 'tasks': tasks, 'total': len(tasks),
-            'done': sum(r['state'] == 'done' for r in tasks), 'phases': counts('phase'), 'stories': counts('story')}
+            'done': sum(r['state'] == 'done' for r in tasks), 'phases': counts('phase'),
+            'stories': [dict(row, priority=story_priorities[row['story']]) if row['story'] in story_priorities else row
+                        for row in counts('story')]}
+
+
+# Closed metadata only: document text, names and links never leave this reader.
+SOURCES = ('speckit', 'checkbox', 'docs/specs', 'docs/spec', 'specs', 'ledger', 'none')
+STAGES = ('spec', 'plan', 'design', 'tasks', 'verify', 'review', 'ship', 'packages', 'work')
+STATES = ('done', 'active', 'todo', 'unknown', 'deferred', 'needs-attention')
+HINTS = ('draft', 'accepted', 'done', 'active', 'deferred', 'unknown')
+DOC_LIMIT = 64 * 1024
+
+
+def status_state(text):
+    """Specific deferral/ongoing phrases precede generic completion words."""
+    text = text.lower()
+    if re.search(r'\b(?:deferred|moved to)\b', text):
+        return 'deferred'
+    if re.search(r'\b(?:in progress|in review|building|running locally|no pull request yet)\b', text):
+        return 'active'
+    if re.search(r'\b(?:implemented|merged|released|shipped|accepted|done)\b', text):
+        return 'done'
+    return 'unknown'
+
+
+def status_line(text):
+    return next((m[1] for line in text.splitlines() if len(line) <= 4096
+                 and (m := re.match(r'^\s*(?:\*\*)?Status(?:\*\*)?:(?:\*\*)?\s*(.*)$', line, re.I))), '')
+
+
+def stage(name, state, done=0, total=0):
+    return dict(stage=name, state=state, done=done, total=total)
+
+
+def directory_entries(fd, relative, skipped):
+    """Bound enumeration and refuse links at every directory component."""
+    child = os.dup(fd)
+    try:
+        for part in safe_parts(relative):
+            new = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=child)
+            os.close(child)
+            child = new
+        entries = []
+        with os.scandir(child) as scan:
+            for entry in scan:
+                if len(entries) == 200:
+                    skipped.append('entry limit')
+                    break
+                entries.append((entry.name, entry.is_dir(follow_symlinks=False), entry.is_file(follow_symlinks=False)))
+        return sorted(entries)
+    except FileNotFoundError:
+        return []
+    except OSError:
+        skipped.append('task file skipped')
+        return []
+    finally:
+        os.close(child)
+
+
+def metadata_item(ordinal, state='unknown'):
+    return dict(ordinal=ordinal, state=state, tasks=[], stories=[], phases=[], total=1,
+                done=int(state == 'done'), stages=[stage('spec', state, int(state == 'done'), 1)])
+
+
+def table_rows(text):
+    for line in text.splitlines():
+        if len(line) <= 4096 and line.strip().startswith('|'):
+            yield [cell.strip() for cell in line.strip().strip('|').split('|')]
+
+
+def package_cells(text):
+    """Only package tables, not numeric schedules elsewhere in release documents."""
+    in_packages = False
+    for line in text.splitlines():
+        if len(line) > 4096 or not line.strip().startswith('|'):
+            in_packages = False
+            continue
+        cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
+        if len(cells) < 3:
+            in_packages = False
+            continue
+        if cells[0] == '#' and re.fullmatch(r'Package', cells[1], re.I):
+            in_packages = True
+        elif in_packages and cells[0].isdigit():
+            yield cells
+        elif not all(re.fullmatch(r':?-+:?', cell.replace(' ', '')) for cell in cells):
+            in_packages = False
+
+
+def package_rows(text, remaining):
+    released = bool(re.search(r'\breleased\b', status_line(text), re.I))
+    rows = []
+    for cells in package_cells(text):
+        if len(rows) >= remaining:
+            break
+        state = 'done' if released else status_state(' '.join(cells))
+        rows.append(dict(ordinal=int(cells[0]) if len(cells[0]) <= 6 else len(rows) + 1, state=state))
+    return rows
+
+
+def repository_documents(fd, skipped):
+    """All candidate indexes precede loose docs; bounded links enrich metadata."""
+    directories = ('docs/specs', 'docs/spec', 'specs')
+    listings = {directory: [name for name, _, regular in directory_entries(fd, directory, skipped)
+                           if regular and name.lower().endswith('.md')] for directory in directories}
+    def read(directory, name):
+        try:
+            return read_task(fd, directory + '/' + name, DOC_LIMIT)
+        except (OSError, ValueError):
+            skipped.append('spec file skipped')
+            return None
+    indexes = {}
+    selected = None
+    for directory in directories:
+        if 'index.md' not in listings[directory]:
+            continue
+        text = read(directory, 'index.md')
+        indexes[directory] = text
+        if text and any(index_link(cells) for cells in table_rows(text)):
+            selected = directory
+            break
+    if selected is None:
+        selected = next((d for d in directories if any(n != 'index.md' for n in listings[d])), None)
+    if selected is None:
+        return 'none', 'none', []
+    names = [n for n in listings[selected] if n != 'index.md']
+    documents = {}
+    for name in names[:40]:
+        text = read(selected, name)
+        if text is not None:
+            documents[name] = text
+    if len(names) > 40:
+        skipped.append('file limit')
+    merged = set()
+    for text in documents.values():
+        released = bool(re.search(r'\breleased\b', status_line(text), re.I))
+        for cells in package_cells(text):
+            if released or status_state(' '.join(cells)) == 'done':
+                merged.update(re.findall(r'\]\(([^()\s]+\.md)\)', ' '.join(cells)))
+    items, remaining = [], 80
+    for cells in table_rows(indexes.get(selected) or ''):
+        name = index_link(cells)
+        if name is None:
+            continue
+        if len(items) >= 40:
+            skipped.append('file limit')
+            break
+        text = documents.get(name, '')
+        own = status_state(status_line(text))
+        state = 'done' if name in merged else own if own != 'unknown' else status_state(cells[1])
+        item = metadata_item(len(items) + 1, state)
+        packages = package_rows(text, remaining)
+        remaining -= len(packages)
+        if packages:
+            add_packages(item, packages)
+        items.append(item)
+    if items:
+        return selected, 'index', items
+    for name, text in documents.items():
+        item = metadata_item(len(items) + 1, 'done' if name in merged else status_state(status_line(text)))
+        packages = package_rows(text, remaining)
+        remaining -= len(packages)
+        if packages:
+            add_packages(item, packages)
+        items.append(item)
+    return (selected, 'status', items) if items else ('none', 'none', [])
+
+
+def index_link(cells):
+    if len(cells) < 2:
+        return None
+    match = re.search(r'\]\(([^()\s]+\.md)\)', cells[0])
+    if not match or '/' in match[1] or match[1] in ('.', '..', 'index.md'):
+        return None
+    return match[1]
+
+
+def add_packages(item, packages):
+    done = sum(row['state'] == 'done' for row in packages)
+    state = ('done' if done == len(packages) else 'active' if any(row['state'] == 'active' for row in packages) else
+             'deferred' if all(row['state'] in ('done', 'deferred') for row in packages) else 'active' if done else 'unknown')
+    item['packages'] = packages
+    item['stages'].append(stage('packages', state, done, len(packages)))
+    # A stated release/spec status remains its own stage; unfinished packages stay visible.
+    item['state'] = state
+    item['total'], item['done'] = len(packages), done
+
+
+def ledger_items(project, starts, finishes):
+    """Group exact transient task labels in start order; latest attempt sets state."""
+    groups = {}
+    ordered = sorted(((timestamp(run.get('ts')), ident, run) for ident, run in starts.items()
+                      if isinstance(run, dict) and run.get('project') == project and timestamp(run.get('ts'))),
+                     key=lambda row: row[0])
+    for _, ident, run in ordered:
+        label = run.get('task')
+        if not isinstance(label, str) or not label.strip() or len(label) > 4096:
+            continue
+        if label not in groups:
+            if len(groups) >= 80:
+                continue
+            groups[label] = metadata_item(len(groups) + 1)
+        item = groups[label]
+        finish = finishes.get(ident)
+        outcome = finish.get('outcome') if isinstance(finish, dict) else 'open'
+        state = ('done' if outcome == 'accepted' else 'active' if outcome == 'open' else
+                 'deferred' if outcome == 'cancelled' else 'needs-attention' if outcome in
+                 ('rejected', 'timeout', 'stalled', 'needs-permission', 'blocked', 'error', 'quota') else 'unknown')
+        item.update(state=state, done=int(state == 'done'), stages=[stage('work', state, int(state == 'done'), 1)])
+    return list(groups.values())
+
+
+def speckit_items(fd, skipped):
+    items = []
+    folders = [(name, int(name[:3])) for name, folder, _ in directory_entries(fd, 'specs', skipped)
+               if folder and re.fullmatch(r'[0-9]{3}-.+', name)]
+    for name, number in folders[-60:]:
+        base = 'specs/' + name
+        entries = directory_entries(fd, base, skipped)
+        files = {name for name, _, regular in entries if regular}
+        dirs = {name for name, folder, _ in entries if folder}
+        if not files.intersection(('spec.md', 'plan.md', 'tasks.md')):
+            continue
+        texts = {}
+        for kind in ('spec', 'tasks'):
+            if kind + '.md' not in files:
+                continue
+            try:
+                texts[kind] = read_task(fd, base + '/' + kind + '.md')
+            except (OSError, ValueError):
+                skipped.append('spec file skipped' if kind == 'spec' else 'task file skipped')
+        # Unsafe/oversized task-only files must not yield a phantom feature.
+        if not texts and 'plan.md' not in files:
+            continue
+        item = parse(texts.get('tasks', ''), number)
+        tags = priorities(texts.get('spec', ''))
+        for story in item['stories']:
+            story['priority'] = story.get('priority') or tags.get(story['story'])
+        line = status_line(texts.get('spec', ''))
+        if line:
+            keyword = re.match(r'[A-Za-z]+', line)
+            hint = keyword[0].lower() if keyword else 'unknown'
+            item['status_hint'] = hint if hint in HINTS else status_state(line)
+        item['artifacts'] = dict(spec='spec' in texts, plan='plan.md' in files,
+            design=bool(files.intersection(('research.md', 'data-model.md')) or 'contracts' in dirs),
+            tasks='tasks' in texts, verify=any(re.fullmatch(r'quickstart-results.*\.md', n) for n in files),
+            ship=any(re.fullmatch(r'release-notes-.*\.md', n) for n in files))
+        reviews = []
+        for n in files:
+            if re.fullmatch(r'review-(?:code|security|final-code|final-security|independent|design).*', n):
+                reviews.append(n)
+        item['review_counts'] = {
+            'code': sum('security' not in n for n in reviews),
+            'security': sum('security' in n for n in reviews),
+            'code_final': any('final' in n and 'security' not in n for n in reviews),
+            'security_final': any('final' in n and 'security' in n for n in reviews)}
+        items.append(item)
+    if len(folders) > 60:
+        skipped.append('feature limit')
+    return items
+
+
+def feature_stages(item):
+    artifacts = item['artifacts']
+    started = item['done'] > 0 or any(t['state'] in ('in progress', 'accepted, not ticked') for t in item['tasks'])
+    item['state'] = 'done' if item['total'] > 0 and item['done'] == item['total'] and artifacts['verify'] else 'active' if started else 'todo'
+    rows = []
+    for name in ('spec', 'plan', 'design', 'tasks', 'verify', 'review', 'ship'):
+        if name == 'review':
+            count = item['review_counts']['code'] + item['review_counts']['security']
+            if count:
+                rows.append(stage(name, 'done', count, count))
+        elif artifacts[name]:
+            if name == 'tasks':
+                state = 'done' if item['total'] > 0 and item['done'] == item['total'] else 'active' if started else 'todo'
+                rows.append(stage(name, state, item['done'], item['total']))
+            else:
+                rows.append(stage(name, 'done', 1, 1))
+    item['stages'] = rows
+
+
+def item_done(item):
+    return item.get('state') == 'done'
 
 
 def label_ids(label):
@@ -376,7 +665,7 @@ def join(features, project, repo, starts, finishes, events, now):
     for feature in features:
         for task in feature['tasks']:
             number = int(task['id'][1:])
-            index[(feature['feature'], number)] = task
+            index[(feature.get('feature'), number)] = task
             by_task.setdefault(number, []).append(task)
     sessions = {}
     for event in events:
@@ -514,74 +803,41 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
                         starts, finishes = ledger.load()
                     except (OSError, ValueError, TypeError):
                         result['skipped'].append('ledger unavailable')
-            paths = []
             with open_dir(root) as fd:
-                try:
-                    specs = os.open('specs', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
-                    try:
-                        with os.scandir(specs) as entries:
-                            names = []
-                            for entry in entries:
-                                if len(names) == 200:
-                                    result['skipped'].append('entry limit')
-                                    break
-                                names.append(entry.name)
-                        for name in sorted(names):
-                            if name == 'archive':
-                                continue
-                            paths.append(('specs/' + name + '/tasks.md', int(name[:3]) if re.match(r'^[0-9]{3}-', name) else len(paths) + 1))
-                    finally:
-                        os.close(specs)
-                except FileNotFoundError:
-                    pass
-                except OSError:
-                    result['skipped'].append('task file skipped')
+                result['features'] = speckit_items(fd, result['skipped'])
+                result['source'], result['recognition'] = ('speckit', 'artifacts') if result['features'] else ('none', 'none')
                 custom = settings.get('Task file')
                 if custom:
                     try:
                         parts = safe_parts(custom)
-                        if len(parts) >= 2 and parts[:2] == ('specs', 'archive'):
+                        if parts[:2] == ('specs', 'archive'):
                             raise ValueError('unsafe task path')
-                        custom = str(Path(custom))
-                        if os.path.commonpath((os.path.realpath(root), os.path.realpath(root / custom))) != os.path.realpath(root):
-                            raise ValueError('unsafe task path')
-                        if custom not in [path for path, _ in paths]:
-                            name = Path(custom).parent.name
-                            feature = int(name[:3]) if re.match(r'^[0-9]{3}-', name) else len(paths) + 1
-                            paths.insert(0, (custom, feature))
-                    except ValueError:
-                        result['skipped'].append('unsafe task path')
-                files = 0
-                for relative, feature in paths:
-                    if files >= 20:
-                        result['skipped'].append('file limit')
-                        break
-                    try:
-                        parsed = parse(read_task(fd, relative), feature)
-                        files += 1
+                        if not result['features']:
+                            parent = Path(custom).parent.name
+                            number = int(parent[:3]) if re.match(r'^[0-9]{3}-', parent) else 1
+                            item = parse(read_task(fd, custom), number)
+                            result['features'] = [item]
+                            result['source'], result['recognition'] = 'checkbox', 'checkbox'
                     except (OSError, ValueError):
-                        result['skipped'].append('task file skipped')
-                        continue
-                    tags = {}
-                    sibling = str(Path(relative).with_name('spec.md'))
-                    if sibling != relative:
-                        if files < 20:
-                            try:
-                                tags = priorities(read_task(fd, sibling))
-                                files += 1
-                            except FileNotFoundError:
-                                pass
-                            except (OSError, ValueError):
-                                result['skipped'].append('spec file skipped')
-                        else:
-                            result['skipped'].append('file limit')
-                    for story in parsed['stories']:
-                        story['priority'] = tags.get(story['story'])
-                    result['features'].append(parsed)
+                        result['skipped'].append('unsafe task path')
+                if not result['features']:
+                    result['source'], result['recognition'], result['features'] = repository_documents(fd, result['skipped'])
+                ledger_rows = ledger_items(settings.get('Ledger project', root.name), starts or {}, finishes or {})
+                result['ledger_join'] = ('configured' if ledger_rows else 'configured-empty') if 'Ledger project' in settings else 'folder' if ledger_rows else 'none'
+                result['work'] = dict(Counter(item['state'] for item in ledger_rows))
+                if not result['features'] and ledger_rows:
+                    result['features'], result['source'], result['recognition'] = ledger_rows, 'ledger', 'ledger'
             result.update(join(result['features'], settings.get('Ledger project', root.name), repo,
                                starts or {}, finishes or {}, events, now or datetime.now(timezone.utc)))
+            for feature in result['features']:
+                if 'artifacts' in feature:
+                    feature_stages(feature)
+                elif result['source'] == 'checkbox':
+                    started = feature['done'] or any(t['state'] != 'todo' for t in feature['tasks'])
+                    feature['state'] = 'done' if feature['total'] and feature['done'] == feature['total'] else 'active' if started else 'todo'
+                    feature['stages'] = [stage('tasks', feature['state'], feature['done'], feature['total'])]
             result['in_progress'] = sum(t['state'] == 'in progress' for f in result['features'] for t in f['tasks'])
-            result['done'] = bool(result['features']) and all(f['done'] == f['total'] for f in result['features'])
+            result['done'] = bool(result['features']) and all(item_done(f) for f in result['features'])
             result['skipped'] = sorted(set(result['skipped']))
             return result
     except ProgressTimeout:

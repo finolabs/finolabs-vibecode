@@ -18,6 +18,34 @@ counts, Judge receipts and full Reviews become tables only in Overview's bottom 
 Legacy fragments redirect through literal maps as specified in the tab spec. Historical references
 to Agents and Project tabs below describe the unchanged panes now stacked inside `now`.
 
+## Project pipeline decision (owner, 2026-11-06; 0.1.11)
+
+This section supersedes the historical story-only project layout and 0.1.10 release target below.
+The project pane recognises Spec Kit, repository indexes/status lines/packages, then exact-project
+ledger runs, in the order and caps defined in [Project progress](project-progress.md). Only when none
+yields items does it keep the simple identity row; its tooltip lists what was searched.
+
+Beside the identity on desktop (below it on narrow screens), each item is a compact SVG chevron chain:
+`spec ▸ plan ▸ design ▸ tasks ▸ verify ▸ review ▸ ship`, omitting stages without evidence. Repository items
+show only known stages, with small package bricks where present. Review holds two tiny code/security chips and a final-presence mark;
+file presence never implies an approved review. Tooltips show source, ordinal, state and counts, never
+file text. A stale Spec Kit status keyword remains a tooltip hint; artefacts determine the item state.
+
+Use existing tokens: solid teal (`--good`) for done, striped active, outlined todo, neutral dashed unknown
+(“no status stated”), muted deferred, amber needs-attention. Tasks contain a thin segmented bar with
+adjacent segments in a shared rounded clip, no gaps, and floored completion (100 only when all checked).
+For one active item keep the existing story lanes and small task bricks below its chain, merging bounded
+groups. Untagged tasks use a 14 px dashed tag-outline SVG with a rich “no story tag” tooltip and done/total
+counts; story ids retain their text. Clip each brick to its own SVG viewport so hatch paint cannot escape
+into the label column. Lego studs belong only on small task/package blocks. A ledger work strip shows
+latest grouped task outcomes as done/amber/active/deferred/unknown counts; it never renders one block per run.
+
+Newest ordinals first, at most five unfinished items, then `+n more` with a rich ordinal/state tooltip.
+Finished items collapse into one count, with full tables retained. One-item rows target about 56 px,
+growing with items and wrapping compactly at 375 px. Reuse the current tooltip component, tokens and
+page typography in dark/light themes; no new colour family, remote resource, inline script or markup
+injection. The coordinator checks both themes at 1280 and 375 with real-shaped synthetic data.
+
 ## Why
 
 The owner reviewed the shipped tabs: both are dense text and a seven-column table, not a data visualisation. `fnl-status` exists to follow the present state so the coordinator can steer, not to manage projects. Each tab must answer one question at a glance, show it as a picture, and keep rarely needed explanations behind a small info button in the pane header.
