@@ -1,6 +1,6 @@
 # Agent scan, mode command and skill consolidation
 
-Status: implemented for 0.1.7 (Parts A–E). Verified with local Python tests and plugin validation on macOS from a Codex coordinator; PATH, consent, section preservation and symlink cases use synthetic fixtures. Live slash-command execution on Claude Code, Codex and Antigravity and behavior eval results remain unverified; the coordinator runs the supplied eval cases. `codex --help` exposes no offline model-list command; `agy --help` advertises `models`, whose offline behavior is unverified and is not used by the scan.
+Status: implemented; for 0.1.7 (Parts A–E). Verified with local Python tests and plugin validation on macOS from a Codex coordinator; PATH, consent, section preservation and symlink cases use synthetic fixtures. Live slash-command execution on Claude Code, Codex and Antigravity and behavior eval results remain unverified; the coordinator runs the supplied eval cases. `codex --help` exposes no offline model-list command; `agy --help` advertises `models`, whose offline behavior is unverified and is not used by the scan.
 Owner decisions: 2026-11-04. All of it ships in 0.1.7 (a large upgrade); the manifest version does not change.
 
 ## Why

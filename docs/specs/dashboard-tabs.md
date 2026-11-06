@@ -1,5 +1,7 @@
 # Dashboard tabs
 
+Status: implemented; splits the status page into two tabs, Overview and Now.
+
 ## Owner decisions (2026-11-06)
 
 The static dashboard has exactly two tabs, `overview` and `now`. This decision replaces the

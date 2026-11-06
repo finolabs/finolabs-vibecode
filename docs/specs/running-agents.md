@@ -1,5 +1,7 @@
 # Running agents on the dashboard
 
+Status: implemented; phase 1: ledger and opt-in process snapshot in Running now; liveness remains advisory, CLI name observations and real-host UI verification remain open.
+
 Idea: owner, 2026-11-06. Agents now start sub-agents of their own family and the coordinator delegates
 to other families, so a user often cannot tell how many agents and background processes are alive.
 `fnl-status` should show it. Phase 1 only; phase 2 is listed so the design does not close it off.

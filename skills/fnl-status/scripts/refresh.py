@@ -292,19 +292,25 @@ def previous_projects():
             os.close(fd)
         repositories = json.loads(raw.removeprefix('window.FNL_DATA = ').removesuffix(';\n'))['progress']['repositories']
         keys = {'source', 'recognition', 'ledger_join', 'work', 'ordinal', 'stages', 'stage', 'artifacts',
-                'spec', 'plan', 'design', 'verify', 'ship', 'status_hint', 'review_counts', 'code_final',
+                'spec', 'plan', 'design', 'verify', 'ship', 'status_hint', 'status_mark', 'work_records', 'review_counts', 'code_final',
                 'security_final', 'packages', *pp.STATES, 'features', 'feature', 'tasks', 'total', 'done',
                 'phases', 'phase', 'stories', 'story', 'priority',
                 'state', 'runs', 'sessions', 'id', 'host', 'first', 'last', 'agent', 'model', 'start', 'finish',
                 'outcome', 'rework_rounds', 'elapsed_seconds', 'in_progress', 'labels_without_feature',
                 'unlinked_runs', 'outcomes', 'sessions_without_task', 'active_24h', 'idle', 'running_now',
                 'reviews', 'code', 'security', 'version', 'updated', 'reason', 'skipped', *pp.OUTCOMES, 'open', 'other'}
-        enums = {'source': pp.SOURCES, 'stage': pp.STAGES, 'status_hint': pp.HINTS,
-                 'recognition': ('index', 'status', 'artifacts', 'checkbox', 'ledger', 'none'),
+        enums = {'source': pp.SOURCES, 'stage': pp.STAGES, 'status_hint': pp.HINTS, 'status_mark': pp.STATUS_MARKS,
+                 'state': (*pp.STATES, 'in progress', 'accepted, not ticked'),
+                 'recognition': ('work-record', 'index', 'status', 'artifacts', 'checkbox', 'ledger', 'none'),
                  'ledger_join': ('configured', 'configured-empty', 'folder', 'none')}
         def clean(value, key='', depth=0):
             if depth > 9:
                 raise ValueError('depth')
+            if key == 'work_records':
+                if (not isinstance(value, dict) or set(value) != {'skipped'}
+                        or type(value['skipped']) is not int or not 0 <= value['skipped'] <= 10**12):
+                    raise ValueError('record counts')
+                return {'skipped': value['skipped']}
             if key in enums:
                 if isinstance(value, str) and value in enums[key]:
                     return value
@@ -330,7 +336,8 @@ def previous_projects():
                     return value
                 if value in (*pp.AGENTS, *pp.HOSTS, *pp.OUTCOMES, *pp.STATES, 'other', 'unknown', 'open', 'todo', 'done', 'active',
                              'in progress', 'accepted, not ticked', 'APPROVE', 'REWORK', '', 'task file skipped',
-                             'spec file skipped', 'unsafe task path', 'file limit', 'entry limit', 'feature limit', 'ledger unavailable'):
+                             'spec file skipped', 'unsafe task path', 'file limit', 'entry limit', 'feature limit', 'ledger unavailable',
+                             'progress timed out', 'progress unavailable', 'no repository'):
                     return value
             raise ValueError('metadata')
         return {code: clean(row) for code, row in list(repositories.items())[-5:]

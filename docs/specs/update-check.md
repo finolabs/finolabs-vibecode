@@ -1,6 +1,6 @@
 # Plugin update check
 
-Status: implemented for package D of 0.1.7; check and notice verified on Claude Code, unverified on Codex and Antigravity; no live network or host update validation.
+Status: implemented; for package D of 0.1.7; check and notice verified on Claude Code, unverified on Codex and Antigravity; no live network or host update validation.
 Owner decisions: 2026-11-04. The check is on by default, independent of usage metrics consent. `FNL_UPDATE_CHECK=off` stops every helper action. It is the one allowed network call made by the plugin itself. Updating through a host is a separate, explicitly authorized native operation.
 
 ## What and why

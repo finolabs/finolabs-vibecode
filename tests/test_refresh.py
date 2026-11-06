@@ -126,6 +126,87 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(carried['features'], second['features'])
         self.assertNotIn('PRIVATE', (self.dir / 'data.js').read_text())
 
+    def test_previous_projects_retains_fixed_progress_failure_reasons(self):
+        self.consent()
+        self.ledger.parent.joinpath('host.md').write_text('# Host\n')
+        for reason in ('progress timed out', 'progress unavailable', 'no repository'):
+            data = {'progress': {'repositories': {'aaaaaaaa': {'features': [], 'reason': reason}}}}
+            (self.dir / 'data.js').write_text('window.FNL_DATA = ' + json.dumps(data) + ';\n')
+            self.refresh('run', '--cwd', str(Path(self.tmp.name).resolve()))
+            self.assertEqual(self.data()['progress']['repositories']['aaaaaaaa']['reason'], reason)
+
+    def test_work_record_data_privacy_retention_and_closed_marks(self):
+        self.consent()
+        repo = Path(self.tmp.name).resolve() / 'repo'
+        (repo / '.git').mkdir(parents=True)
+        docs = repo / 'docs/specs'
+        docs.mkdir(parents=True)
+        (docs / 'PRIVATE.md').write_text('# PRIVATE title\nStatus: in progress; PRIVATE\n'
+            '## Goal and acceptance\n- [x] AC1 PRIVATE\n## Plan\nPRIVATE\n'
+            '## Tasks\n- [x] T1 PRIVATE\n## Evidence\nPRIVATE command\n')
+        code = __import__('hashlib').sha256(str(repo).encode()).hexdigest()[:8]
+        self.ledger.parent.joinpath('host.md').write_text('## Project settings\n- ' + code + ' ledger: PRIVATE alias\n'
+                                                       '- ' + code + ' tasks: PRIVATE.md\n')
+        self.write_events([self.event(0, 's', X, 'session_start', host='codex')])
+        events_before = {path: path.read_bytes() for path in self.dir.glob('events-*.jsonl')}
+        self.refresh('run', '--cwd', str(repo))
+        original = self.data()
+        project = original['progress']['repositories'][code]
+        self.assertEqual(project['source'], 'work-record')
+        self.assertEqual(project['features'][0]['status_mark'], 'status-not-updated')
+        self.assertNotIn('PRIVATE', (self.dir / 'data.js').read_text())
+        self.refresh('run', '--cwd', str(repo.parent))
+        self.assertEqual(self.data()['progress']['repositories'][code]['features'], project['features'])
+        for bad in ('PRIVATE', {'model': 'PRIVATE'}, 123, True):
+            tampered = json.loads(json.dumps(original))
+            tampered['progress']['repositories'][code]['features'][0]['status_mark'] = bad
+            (self.dir / 'data.js').write_text('window.FNL_DATA = ' + json.dumps(tampered) + ';\n')
+            self.refresh('run', '--cwd', str(repo.parent))
+            self.assertNotIn(code, self.data()['progress']['repositories'])
+        for bad in ('PRIVATE', {'skipped': 'PRIVATE'}, {'skipped': True}, {'skipped': -1}):
+            tampered = json.loads(json.dumps(original))
+            tampered['progress']['repositories'][code]['work_records'] = bad
+            (self.dir / 'data.js').write_text('window.FNL_DATA = ' + json.dumps(tampered) + ';\n')
+            self.refresh('run', '--cwd', str(repo.parent))
+            self.assertNotIn(code, self.data()['progress']['repositories'])
+        self.assertEqual(events_before, {path: path.read_bytes() for path in self.dir.glob('events-*.jsonl')})
+        host = self.ledger.parent / 'host.md'
+        host_before = host.read_bytes()
+        self.refresh('purge', '--yes')
+        self.assertEqual(host.read_bytes(), host_before)
+
+    def test_progress_builders_never_open_repository_instruction_files(self):
+        self.consent()
+        self.ledger.parent.joinpath('host.md').write_text('# Host\n')
+        repo = Path(self.tmp.name).resolve() / 'repo'
+        (repo / '.git').mkdir(parents=True)
+        (repo / 'docs/specs').mkdir(parents=True)
+        (repo / 'docs/specs/work.md').write_text('Status: draft\n## Plan\nx\n## Tasks\n- [ ] T1\n')
+        for folder in (repo, repo / 'docs/specs'):
+            for name in ('CLAUDE.md', 'AGENTS.md'):
+                (folder / name).write_text('PRIVATE instructions\n')
+        spec = importlib.util.spec_from_file_location('refresh_guard', REFRESH)
+        refresh = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(refresh)
+        original = os.open
+        def guarded(path, *args, **kwargs):
+            if isinstance(path, (str, bytes, os.PathLike)):
+                self.assertNotIn(os.fsdecode(path).split('/')[-1], ('CLAUDE.md', 'AGENTS.md'))
+            return original(path, *args, **kwargs)
+        with mock.patch('os.open', side_effect=guarded):
+            for path in (ROOT / 'scripts/project_progress.py', ROOT / 'skills/fnl-status/scripts/project_progress.py',
+                         ROOT / 'skills/fnl-setup/scripts/project_progress.py'):
+                spec = importlib.util.spec_from_file_location('progress_guard', path)
+                pp = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(pp)
+                self.assertEqual(pp.collect(repo, 'aaaaaaaa')['source'], 'work-record')
+            self.assertIsNotNone(refresh.progress_metrics([], {'processes': [], 'snapshot': {'reason': 'off'}}, repo))
+            self.assertIsNotNone(refresh.build(cwd=repo))
+            for instruction in ('CLAUDE.md', 'AGENTS.md'):
+                self.ledger.parent.joinpath('host.md').write_text('## Project progress\n- Task file: ' + instruction + '\n')
+                with mock.patch.object(refresh.pp, 'work_records', return_value=[]), mock.patch.object(refresh.pp, 'repository_documents', return_value=('none', 'none', [])):
+                    self.assertIsNotNone(refresh.progress_metrics([], {'processes': [], 'snapshot': {'reason': 'off'}}, repo))
+
     def test_pipeline_snapshot_rejects_text_in_new_enum_fields(self):
         self.consent()
         self.ledger.parent.joinpath('host.md').write_text('# Host\n')

@@ -95,6 +95,87 @@ def project_labels(text):
     return labels
 
 
+def valid_setting(key, value):
+    if not isinstance(value, str):
+        return False
+    if key == 'ledger':
+        return bool(LABEL.fullmatch(value) and value.strip())
+    if key == 'tasks':
+        return bool(re.fullmatch(r'[A-Za-z0-9._/-]{1,120}', value) and value.endswith('.md')
+                    and all(part not in ('', '.', '..') for part in value.split('/'))
+                    and value.split('/')[:2] != ['specs', 'archive']
+                    and value.split('/')[-1].upper() not in INSTRUCTION_FILES)
+    return False
+
+
+def project_settings(text):
+    """One malformed entry invalidates the entire section, never just that key."""
+    _, body, end = host_section(text, 'Project settings')
+    entries = {}
+    lines = [line for line in text[body:end].splitlines() if line.strip()]
+    if len(lines) > 100:
+        raise ValueError('invalid project settings')
+    for line in lines:
+        match = re.fullmatch(r'- ([0-9a-f]{8}) (ledger|tasks): (.*)', line)
+        if not match or not valid_setting(match[2], match[3]) or (match[1], match[2]) in entries:
+            raise ValueError('invalid project settings')
+        entries[(match[1], match[2])] = match[3]
+    return entries
+
+
+def repository_settings(values, root):
+    """Host entries win over deprecated globals; no repository instruction reads."""
+    result = dict(values)
+    try:
+        entries = project_settings(dr.read_data('host.md', 262144).decode('utf-8'))
+    except (OSError, ValueError, UnicodeError):
+        entries = {}
+    code = repository_code(root)
+    for key, old in (('ledger', 'Ledger project'), ('tasks', 'Task file')):
+        if (code, key) in entries:
+            result[old] = entries[(code, key)]
+    return result
+
+
+def set_setting(cwd, key, value):
+    if key not in ('ledger', 'tasks') or value is not None and not valid_setting(key, value):
+        raise ValueError('invalid project setting')
+    # Keep the consent schema shared with metrics, without a cross-skill import.
+    try:
+        consent = json.loads(dr.read_data('state/consent.json', 4096))
+    except (OSError, ValueError):
+        raise ValueError('metrics consent required') from None
+    if (not isinstance(consent, dict) or consent.get('retention_days') not in (30, 90, 365)
+            or not isinstance(consent.get('date'), str)):
+        raise ValueError('metrics consent required')
+    root = find_root(cwd)
+    if root is None:
+        raise ValueError('no repository')
+    code = repository_code(root)
+    with dr.root_folder() as folder:
+        fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        text = dr.read_file(folder, 'host.md', 262144).decode('utf-8')
+        entries = project_settings(text)
+        if entries.get((code, key)) == value:
+            return False
+        if value is None:
+            entries.pop((code, key), None)
+        else:
+            entries[(code, key)] = value
+        if len(entries) > 100:
+            raise ValueError('project settings cap')
+        start, _, end = host_section(text, 'Project settings')
+        newline = '\r\n' if '\r\n' in text else '\n'
+        section = '## Project settings\n\n' + ''.join(
+            '- ' + c + ' ' + k + ': ' + v + '\n' for (c, k), v in sorted(entries.items())) + '\n'
+        text = text[:start] + (newline if start == end and text and not text.endswith(newline * 2) else '') + section.replace('\n', newline) + text[end:]
+        raw = text.encode('utf-8')
+        if len(raw) > 262144:
+            raise ValueError('host cap')
+        dr.atomic_write(folder, 'host.md', raw)
+    return True
+
+
 def registered_projects(folder=None):
     """Read a bounded closed code-to-name map; unsafe or malformed state names nothing."""
     try:
@@ -154,12 +235,32 @@ def set_label(cwd, label):
     return label
 
 
+def reader_lines(text, include_fenced=False):
+    """Shared bounded Markdown view; fenced examples never supply structure."""
+    fence = None
+    for number, line in enumerate(text.splitlines(), 1):
+        if len(line) > 4096:
+            continue
+        match = re.match(r'^ {0,3}(`{3,}|~{3,})(.*)$', line)
+        if match:
+            token, tail = match.groups()
+            if fence is None:
+                fence = token
+            elif token[0] == fence[0] and len(token) >= len(fence) and not tail.strip():
+                fence = None
+            if include_fenced:
+                yield number, line, False
+            continue
+        if include_fenced:
+            yield number, line, fence is None
+        elif fence is None:
+            yield number, line
+
+
 def priorities(text):
     """Keep a priority number only; no part of the heading text escapes."""
     values, seen = {}, set()
-    for line in text.splitlines():
-        if len(line) > 4096:
-            continue
+    for _, line in reader_lines(text):
         match = re.match(r'^#{1,6} User Story ([0-9]{1,3})(?: \(P([1-9])\)(?:[ \t].*)?| - .{0,4000}\(Priority: P([1-9])\))$', line)
         if match:
             story = 'US' + str(int(match[1]))
@@ -249,8 +350,13 @@ def budget():
     try:
         yield
     finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous)
+        try:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+        except ProgressTimeout:
+            # A pending alarm can interrupt cancellation; cancel it once more.
+            signal.setitimer(signal.ITIMER_REAL, 0)
+        finally:
+            signal.signal(signal.SIGALRM, previous)
 
 
 @contextmanager
@@ -295,6 +401,8 @@ def safe_parts(relative):
 
 def read_task(root_fd, relative, limit=LIMIT):
     parts = safe_parts(relative)
+    if parts[-1].upper() in INSTRUCTION_FILES:
+        raise ValueError('instruction file skipped')
     fd = os.dup(root_fd)
     try:
         for index, part in enumerate(parts):
@@ -322,9 +430,7 @@ def read_task(root_fd, relative, limit=LIMIT):
 def parse(text, feature):
     tasks, phase, phase_story, phase_priority, seen = [], None, None, None, set()
     story_priorities = {}
-    for line in text.splitlines():
-        if len(line) > 4096:
-            continue
+    for _, line in reader_lines(text):
         heading = re.match(r'^#{2,3} Phase ([0-9]{1,2})\b', line)
         if heading:
             phase = int(heading[1])
@@ -358,16 +464,25 @@ def parse(text, feature):
 
 
 # Closed metadata only: document text, names and links never leave this reader.
-SOURCES = ('speckit', 'checkbox', 'docs/specs', 'docs/spec', 'specs', 'ledger', 'none')
+SOURCES = ('work-record', 'speckit', 'checkbox', 'docs/specs', 'docs/spec', 'specs', 'ledger', 'none')
 STAGES = ('spec', 'plan', 'design', 'tasks', 'verify', 'review', 'ship', 'packages', 'work')
 STATES = ('done', 'active', 'todo', 'unknown', 'deferred', 'needs-attention')
 HINTS = ('draft', 'accepted', 'done', 'active', 'deferred', 'unknown')
 DOC_LIMIT = 64 * 1024
+INSTRUCTION_FILES = ('CLAUDE.MD', 'CLAUDE.LOCAL.MD', 'AGENTS.MD', 'AGENTS.OVERRIDE.MD', 'GEMINI.MD',
+                     'COPILOT-INSTRUCTIONS.MD', 'CONVENTIONS.MD', '.CURSORRULES', '.WINDSURFRULES', '.CLINERULES')
+STATUS_WORDS = ('draft', 'accepted', 'in progress', 'implemented', 'released', 'deferred')
+STATUS_MARKS = ('accepted', 'status-not-updated')
 
 
 def status_state(text):
     """Specific deferral/ongoing phrases precede generic completion words."""
     text = text.lower()
+    if negated_completion(text):
+        return 'unknown'
+    word = status_word(text)
+    if word != 'unknown':
+        return word_state(word)
     if re.search(r'\b(?:deferred|moved to)\b', text):
         return 'deferred'
     if re.search(r'\b(?:in progress|in review|building|running locally|no pull request yet)\b', text):
@@ -377,16 +492,147 @@ def status_state(text):
     return 'unknown'
 
 
-def status_line(text):
-    return next((m[1] for line in text.splitlines() if len(line) <= 4096
-                 and (m := re.match(r'^\s*(?:\*\*)?Status(?:\*\*)?:(?:\*\*)?\s*(.*)$', line, re.I))), '')
+def negated_completion(text):
+    return re.search(r'\bnot(?:\s+yet)?\s+(?:released|done|merged|implemented)\b', text, re.I) is not None
+
+
+def status_word(text):
+    if negated_completion(text):
+        return 'unknown'
+    match = re.fullmatch(r'(draft|accepted|in progress|implemented|released|deferred)(?:\s*;.*)?', text.strip(), re.I)
+    return match[1].lower() if match else 'unknown'
+
+
+def word_state(word):
+    return {'draft': 'todo', 'accepted': 'todo', 'in progress': 'active', 'implemented': 'done',
+            'released': 'done', 'deferred': 'deferred'}.get(word, 'unknown')
+
+
+def status_line(text, default=''):
+    for number, line in reader_lines(text):
+        if number > 40:
+            break
+        match = re.match(r'^\s*(?:\*\*)?Status(?:\*\*)?:(?:\*\*)?\s*(.*)$', line, re.I)
+        if match:
+            return match[1]
+    return default
+
+
+def placeholder_only(text):
+    return re.fullmatch(r'\s*(?:(?:AC|T)[0-9]+\s+)?<[^<>]*>\s*', text) is not None
+
+
+def work_record(text, ordinal):
+    """Recognise shape, emit only closed states, numeric tags and checkbox counts."""
+    status = status_line(text, default=None)
+    if status is None:
+        return None
+    sections, current = {}, None
+    for _, line, visible in reader_lines(text, include_fenced=True):
+        heading = re.fullmatch(r'## (Goal and acceptance|Plan|Tasks|Evidence)\s*', line) if visible else None
+        if heading:
+            current = heading[1]
+            sections.setdefault(current, [])
+        elif visible and re.match(r'^#{1,2} ', line):
+            current = None
+        elif current and (visible or current in ('Plan', 'Evidence')):
+            sections[current].append(line)
+    if len(sections) < 2:
+        return None
+    word = status_word(status)
+    item = dict(ordinal=ordinal, state=word_state(word), tasks=[], stories=[], phases=[], total=0, done=0, stages=[])
+    criteria = [re.match(r'^\s*- \[( |x|X)\] ', line) for line in sections.get('Goal and acceptance', [])]
+    criteria = [box for box, line in zip(criteria, sections.get('Goal and acceptance', []))
+                if box and not placeholder_only(line[box.end():])]
+    if criteria:
+        done = sum(box[1] != ' ' for box in criteria)
+        item['stages'].append(stage('spec', 'done' if done == len(criteria) else 'active' if done else 'todo', done, len(criteria)))
+    if any(line.strip() and not placeholder_only(line) for line in sections.get('Plan', [])):
+        item['stages'].append(stage('plan', 'done', 1, 1))
+    story, used = None, set()
+    for line in sections.get('Tasks', []):
+        heading = re.match(r'^### (US[0-9]{1,3})(?![A-Za-z0-9])', line)
+        if re.match(r'^### ', line):
+            story = heading[1] if heading else None
+        box = re.match(r'^\s*- \[( |x|X)\] ', line)
+        if not box or placeholder_only(line[box.end():]) or len(item['tasks']) >= 200:
+            continue
+        match = TASK.search(line[box.end():box.end() + 85])
+        ident = match[0] if match and match.end() <= 80 else None
+        # Untagged checkboxes still count, without inventing a joinable task id.
+        row = dict(story=story, phase=None, state='done' if box[1] != ' ' else 'todo', runs=[], sessions=[])
+        if ident and int(ident[1:]) not in used:
+            row['id'] = ident
+            used.add(int(ident[1:]))
+        item['tasks'].append(row)
+    item['total'] = len(item['tasks'])
+    item['done'] = sum(task['state'] == 'done' for task in item['tasks'])
+    for tag in sorted({t['story'] for t in item['tasks'] if t['story']}):
+        rows = [t for t in item['tasks'] if t['story'] == tag]
+        item['stories'].append(dict(story=tag, done=sum(t['state'] == 'done' for t in rows), total=len(rows)))
+    if item['total']:
+        state = 'done' if item['done'] == item['total'] else 'active' if item['done'] else 'todo'
+        item['stages'].append(stage('tasks', state, item['done'], item['total']))
+    if any(line.strip() and not placeholder_only(line) for line in sections.get('Evidence', [])):
+        item['stages'].append(stage('verify', 'done', 1, 1))
+    if word == 'accepted':
+        item['status_mark'] = 'accepted'
+    if word == 'in progress' and item['total'] and item['done'] == item['total']:
+        item['status_mark'] = 'status-not-updated'
+    return item
+
+
+def work_records(fd, skipped, counts):
+    """Keep forty records; discard finished ones first, then descending names.
+
+    Candidate inspection is bounded by 200 directory entries and the collect timer.
+    Names/text exist only while selecting the retained records.
+    """
+    remaining, selected = 200, []
+    for directory in ('docs/specs', 'docs/spec', 'specs'):
+        before = len(skipped)
+        entries = directory_entries(fd, directory, skipped, cap=remaining)
+        remaining -= len(entries)
+        if len(skipped) > before:
+            counts['skipped'] += 1  # Lower bound when enumeration/descent is incomplete.
+        if directory == 'specs' and (len(skipped) > before or any(
+                folder and re.fullmatch(r'[0-9]{3}-.+', name) for name, folder, _ in entries)):
+            continue
+        names = [(name, regular) for name, _, regular in entries if name.lower().endswith('.md') and name != 'index.md' and name.upper() not in INSTRUCTION_FILES]
+        for name, regular in names:
+            if not regular:
+                counts['skipped'] += 1
+                continue
+            try:
+                text = read_task(fd, directory + '/' + name, DOC_LIMIT)
+            except (OSError, ValueError):
+                counts['skipped'] += 1
+                skipped.append('spec file skipped')
+                continue
+            item = work_record(text, 1)
+            if item:
+                selected.append((name, item))
+                selected.sort(key=lambda row: (row[1]['state'] == 'done', row[0]))
+                if len(selected) > 40:
+                    selected.pop()
+                    counts['skipped'] += 1
+                    if 'file limit' not in skipped:
+                        skipped.append('file limit')
+        if selected or names:
+            break
+        if remaining <= 0:
+            break
+    selected.sort(key=lambda row: row[0])
+    for ordinal, (_, item) in enumerate(selected, 1):
+        item['ordinal'] = ordinal
+    return [item for _, item in selected]
 
 
 def stage(name, state, done=0, total=0):
     return dict(stage=name, state=state, done=done, total=total)
 
 
-def directory_entries(fd, relative, skipped):
+def directory_entries(fd, relative, skipped, cap=200):
     """Bound enumeration and refuse links at every directory component."""
     child = os.dup(fd)
     try:
@@ -397,7 +643,7 @@ def directory_entries(fd, relative, skipped):
         entries = []
         with os.scandir(child) as scan:
             for entry in scan:
-                if len(entries) == 200:
+                if len(entries) == cap:
                     skipped.append('entry limit')
                     break
                 entries.append((entry.name, entry.is_dir(follow_symlinks=False), entry.is_file(follow_symlinks=False)))
@@ -411,22 +657,32 @@ def directory_entries(fd, relative, skipped):
         os.close(child)
 
 
-def metadata_item(ordinal, state='unknown'):
-    return dict(ordinal=ordinal, state=state, tasks=[], stories=[], phases=[], total=1,
+def metadata_item(ordinal, state='unknown', status=''):
+    item = dict(ordinal=ordinal, state=state, tasks=[], stories=[], phases=[], total=1,
                 done=int(state == 'done'), stages=[stage('spec', state, int(state == 'done'), 1)])
+    if status_word(status) == 'accepted':
+        item['status_mark'] = 'accepted'
+    return item
 
 
-def table_rows(text):
-    for line in text.splitlines():
-        if len(line) <= 4096 and line.strip().startswith('|'):
-            yield [cell.strip() for cell in line.strip().strip('|').split('|')]
+def table_rows(text, with_status=False):
+    column = 1
+    for _, line in reader_lines(text):
+        if not line.strip().startswith('|'):
+            column = 1
+            continue
+        cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
+        header = next((i for i, cell in enumerate(cells) if cell.lower() in ('status', 'state')), None)
+        if header is not None and not index_link(cells):
+            column = header
+        yield (cells, cells[column] if column < len(cells) else '') if with_status else cells
 
 
 def package_cells(text):
     """Only package tables, not numeric schedules elsewhere in release documents."""
     in_packages = False
-    for line in text.splitlines():
-        if len(line) > 4096 or not line.strip().startswith('|'):
+    for _, line in reader_lines(text):
+        if not line.strip().startswith('|'):
             in_packages = False
             continue
         cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
@@ -435,28 +691,34 @@ def package_cells(text):
             continue
         if cells[0] == '#' and re.fullmatch(r'Package', cells[1], re.I):
             in_packages = True
-        elif in_packages and cells[0].isdigit():
+        elif in_packages and re.fullmatch(r'[0-9]{1,6}', cells[0]):
             yield cells
-        elif not all(re.fullmatch(r':?-+:?', cell.replace(' ', '')) for cell in cells):
+        elif cells[0] == '#':
             in_packages = False
 
 
 def package_rows(text, remaining):
-    released = bool(re.search(r'\breleased\b', status_line(text), re.I))
+    released = status_state(status_line(text)) == 'done' and bool(re.search(r'\breleased\b', status_line(text), re.I))
     rows = []
     for cells in package_cells(text):
         if len(rows) >= remaining:
             break
         state = 'done' if released else status_state(' '.join(cells))
-        rows.append(dict(ordinal=int(cells[0]) if len(cells[0]) <= 6 else len(rows) + 1, state=state))
+        rows.append(dict(ordinal=int(cells[0]), state=state))
     return rows
 
 
 def repository_documents(fd, skipped):
     """All candidate indexes precede loose docs; bounded links enrich metadata."""
     directories = ('docs/specs', 'docs/spec', 'specs')
-    listings = {directory: [name for name, _, regular in directory_entries(fd, directory, skipped)
-                           if regular and name.lower().endswith('.md')] for directory in directories}
+    listings = {}
+    for directory in directories:
+        before = len(skipped)
+        entries = directory_entries(fd, directory, skipped)
+        numbered = directory == 'specs' and (len(skipped) > before or any(
+            folder and re.fullmatch(r'[0-9]{3}-.+', name) for name, folder, _ in entries))
+        listings[directory] = [] if numbered else [name for name, _, regular in entries
+                                                    if regular and name.lower().endswith('.md') and name.upper() not in INSTRUCTION_FILES]
     def read(directory, name):
         try:
             return read_task(fd, directory + '/' + name, DOC_LIMIT)
@@ -487,12 +749,12 @@ def repository_documents(fd, skipped):
         skipped.append('file limit')
     merged = set()
     for text in documents.values():
-        released = bool(re.search(r'\breleased\b', status_line(text), re.I))
+        released = status_state(status_line(text)) == 'done' and bool(re.search(r'\breleased\b', status_line(text), re.I))
         for cells in package_cells(text):
             if released or status_state(' '.join(cells)) == 'done':
                 merged.update(re.findall(r'\]\(([^()\s]+\.md)\)', ' '.join(cells)))
     items, remaining = [], 80
-    for cells in table_rows(indexes.get(selected) or ''):
+    for cells, index_status in table_rows(indexes.get(selected) or '', with_status=True):
         name = index_link(cells)
         if name is None:
             continue
@@ -501,8 +763,8 @@ def repository_documents(fd, skipped):
             break
         text = documents.get(name, '')
         own = status_state(status_line(text))
-        state = 'done' if name in merged else own if own != 'unknown' else status_state(cells[1])
-        item = metadata_item(len(items) + 1, state)
+        state = 'done' if name in merged else own if own != 'unknown' else status_state(index_status)
+        item = metadata_item(len(items) + 1, state, status_line(text) if own != 'unknown' else index_status)
         packages = package_rows(text, remaining)
         remaining -= len(packages)
         if packages:
@@ -511,7 +773,7 @@ def repository_documents(fd, skipped):
     if items:
         return selected, 'index', items
     for name, text in documents.items():
-        item = metadata_item(len(items) + 1, 'done' if name in merged else status_state(status_line(text)))
+        item = metadata_item(len(items) + 1, 'done' if name in merged else status_state(status_line(text)), status_line(text))
         packages = package_rows(text, remaining)
         remaining -= len(packages)
         if packages:
@@ -664,6 +926,8 @@ def join(features, project, repo, starts, finishes, events, now):
     index, by_task = {}, {}
     for feature in features:
         for task in feature['tasks']:
+            if 'id' not in task:
+                continue
             number = int(task['id'][1:])
             index[(feature.get('feature'), number)] = task
             by_task.setdefault(number, []).append(task)
@@ -775,7 +1039,7 @@ def active_projects(events, repositories, labels, now):
 
 
 def empty(reason=''):
-    return {'features': [], 'reason': reason, 'skipped': [], 'in_progress': 0}
+    return {'features': [], 'reason': reason, 'skipped': [], 'work_records': {'skipped': 0}, 'in_progress': 0}
 
 
 def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=None, repo_code=None):
@@ -788,6 +1052,7 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
             root = find_root(cwd)
             if root is None:
                 return empty('no repository')
+            settings = repository_settings(settings, root)
             result = empty()
             repo = repo_code(cwd) if repo_code else repo
             result['repo'] = repo
@@ -806,6 +1071,10 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
             with open_dir(root) as fd:
                 result['features'] = speckit_items(fd, result['skipped'])
                 result['source'], result['recognition'] = ('speckit', 'artifacts') if result['features'] else ('none', 'none')
+                if not result['features']:
+                    result['features'] = work_records(fd, result['skipped'], result['work_records'])
+                    if result['features']:
+                        result['source'], result['recognition'] = 'work-record', 'work-record'
                 custom = settings.get('Task file')
                 if custom:
                     try:
@@ -841,7 +1110,9 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
             result['skipped'] = sorted(set(result['skipped']))
             return result
     except ProgressTimeout:
-        return empty('progress timed out')
+        result = empty('progress timed out')
+        result['work_records']['skipped'] = 1
+        return result
     except (OSError, ValueError, TypeError, KeyError, AttributeError, OverflowError):
         return empty('progress unavailable')
 
@@ -889,12 +1160,25 @@ def installed_version():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('choice', choices=('on', 'off', 'label'))
+    parser.add_argument('choice', choices=('on', 'off', 'label', 'settings'))
     parser.add_argument('--set', dest='label')
+    parser.add_argument('--clear', choices=('ledger', 'tasks'))
     parser.add_argument('--yes', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args(argv)
     try:
+        if args.choice == 'settings':
+            if bool(args.label is not None) == bool(args.clear is not None):
+                raise ValueError('one setting required')
+            if args.clear is not None:
+                key, value = args.clear, None
+            else:
+                key, separator, value = args.label.partition('=')
+                if not separator:
+                    raise ValueError('setting requires equals')
+            changed = set_setting(os.getcwd(), key, value)
+            print(key + (' changed' if changed else ' not changed'))
+            return 0
         if args.choice == 'label':
             set_label(os.getcwd(), args.label)
             print('Project label saved.')
@@ -903,7 +1187,9 @@ def main(argv=None):
         print(result if args.dry_run else 'Project progress preference saved.')
         return 0
     except (OSError, ValueError, UnicodeError):
-        print('Project progress setup refused; no preference saved.', file=sys.stderr)
+        message = ('Project settings refused; no setting changed.' if args.choice == 'settings'
+                   else 'Project progress setup refused; no preference saved.')
+        print(message, file=sys.stderr)
         return 1
 
 
