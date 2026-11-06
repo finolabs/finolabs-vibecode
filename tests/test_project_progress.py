@@ -680,6 +680,13 @@ class ProgressTest(unittest.TestCase):
             for word in ('quota', 'overview', 'now'):
                 self.assertIn(word, (ROOT / doc).read_text())
 
+    def test_work_tracking_spec_documents_shipped_reader_limits(self):
+        text = (ROOT / 'docs/specs/work-tracking.md').read_text().split('## E.')[1].split('## F.')[0]
+        self.assertIn('(60 features, 200 entries)', text)
+        self.assertIn('40 retained records', text)
+        self.assertIn('200 surveyed directory entries', text)
+        self.assertNotIn('20 features', text)
+
     def test_spec_uses_same_safe_read_and_sixty_feature_cap(self):
         for n in range(61):
             task = self.taskfile('%03d-safe' % n)

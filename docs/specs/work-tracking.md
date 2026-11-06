@@ -163,10 +163,11 @@ shipped signal: `specs/NNN-*/tasks.md`), then work records, then index and statu
 no traversal, `O_NOFOLLOW` per component, directories opened with `O_DIRECTORY`, non-regular entries skipped, files
 opened `O_NONBLOCK`, lines capped at 4096 characters, headings inside fenced code blocks ignored). Only one source
 yields items per repository, so there is no ordering across mixed sources. The shipped Spec Kit limits are unchanged
-(20 features, 200 entries); the work-record source adds its own limits: at most 40 documents, 64 KiB per file, the same
+(60 features, 200 entries); the work-record source adds its own limits: at most 40 documents, 64 KiB per file, the same
 200 entries counted over directory entries listed, and one second per repository in total. The reader enforces that deadline with the existing single
 `ITIMER_REAL` budget around the whole `collect`, including settings, all recognition sources and joins; the work-record
-source never starts or resets a second timer. Within the work-record
+source never starts or resets a second timer. The work-record limits distinguish 40 retained records from
+200 surveyed directory entries; the entry survey is not a retention limit. Within the work-record
 source, when exceeded, documents with a finished state (`implemented`, `released`) are dropped first, then the rest in
 descending file-name order, and the overflow is reported as a `skipped` count, never silently. The flat `specs/*.md`
 rule applies only when `specs/` contains no `NNN-*` directory. The `Status:` word is mapped through the closed
