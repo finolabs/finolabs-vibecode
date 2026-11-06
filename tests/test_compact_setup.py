@@ -129,6 +129,16 @@ class CompactSetupTest(unittest.TestCase):
         self.apply(self.preview("codex"))
         self.assertEqual(target.read_bytes(), b'model = "example"\nmodel_auto_compact_token_limit = 150000\n')
 
+    def test_codex_replacement_preserves_trailing_comment(self):
+        target = self.codex / "config.toml"
+        for parser in (cs.tomllib, None):
+            for ending in (b"\n", b"\r\n", b""):
+                with self.subTest(parser=parser, ending=ending), mock.patch.object(cs, "tomllib", parser):
+                    original = b'# before\nmodel_auto_compact_token_limit = 200000 \t# keep # comment' + ending
+                    target.write_bytes(original)
+                    self.apply(self.preview("codex"))
+                    self.assertEqual(target.read_bytes(), original.replace(b'200000', b'150000'))
+
     def test_off_and_no_difference(self):
         self.apply(self.preview("claude", "--off"))
         self.assertEqual(json.loads(self.target.read_bytes()), {"first": 1, "last": True})
@@ -137,6 +147,26 @@ class CompactSetupTest(unittest.TestCase):
             out = self.apply(self.preview(host, "--off"))
             self.assertIn("No difference.", out)
             self.assertEqual(before, self.snapshot())
+
+    def test_same_value_does_not_rewrite_or_create_backup(self):
+        cases = (("claude", self.target, b'{"autoCompactWindow":200000,"other":true}'),
+                 ("codex", self.codex / "config.toml",
+                  b'"model_auto_compact_token_limit"=200_000 \t# keep\r\n'))
+        for host, target, raw in cases:
+            with self.subTest(host=host):
+                target.write_bytes(raw)
+                before = self.snapshot()
+                info = target.stat()
+                code, out, err = self.run_cli("preview", "--host", host, "--tokens", "200000")
+                self.assertEqual(code, 0, err)
+                self.assertIn("No difference.", out)
+                self.assertIn("(not needed)", out)
+                digest = out.split("Digest: ")[1].splitlines()[0]
+                with mock.patch.object(cs, "write_target", side_effect=AssertionError("unexpected write")):
+                    self.assertIn("No difference.", self.apply(digest))
+                self.assertEqual(self.snapshot(), before)
+                self.assertEqual((target.stat().st_ino, target.stat().st_mtime_ns),
+                                 (info.st_ino, info.st_mtime_ns))
 
     def test_prefix_digest(self):
         digest = self.preview()
@@ -228,6 +258,40 @@ class CompactSetupTest(unittest.TestCase):
         self.assertNotIn("private-env-value", out)
         self.assertNotIn('"first"', out)
         self.assertIn("sessions started afterwards", out)
+
+    def test_claude_per_model_override_warns_without_exposing_contents(self):
+        warning = "Warning: modelSettings contains a per-model autoCompactWindow that overrides the top-level setting."
+        for tokens in (("--tokens", "150000"), ("--tokens", "200000"), ("--off",)):
+            with self.subTest(tokens=tokens):
+                models = {"other-model": {"other": True},
+                          "private-model": {"autoCompactWindow": "private-value", "other": True},
+                          "another-model": {"autoCompactWindow": 987654}}
+                self.target.write_text(json.dumps({"autoCompactWindow": 200000, "modelSettings": models}))
+                before = self.target.read_bytes()
+                code, out, err = self.run_cli("preview", "--host", "claude", *tokens)
+                self.assertEqual(code, 0, err)
+                self.assertIn(warning, out)
+                self.assertEqual(self.target.read_bytes(), before)
+                digest = out.split("Digest: ")[1].splitlines()[0]
+                applied = self.apply(digest)
+                self.assertIn(warning, applied)
+                for output in (out, applied):
+                    self.assertNotIn("private-model", output)
+                    self.assertNotIn("private-value", output)
+                    self.assertNotIn("987654", output)
+                expected = {"modelSettings": models}
+                if tokens[0] == "--tokens":
+                    expected["autoCompactWindow"] = int(tokens[1])
+                self.assertEqual(json.loads(self.target.read_bytes()), expected)
+
+    def test_claude_only_per_model_threshold_keys_warn(self):
+        for models in (None, [], "private-value", {"private-model": None},
+                       {"private-model": {"other": {"autoCompactWindow": 123456}}}):
+            with self.subTest(models=models):
+                self.target.write_text(json.dumps({"modelSettings": models}))
+                code, out, err = self.run_cli("preview", "--host", "claude", "--tokens", "150000")
+                self.assertEqual(code, 0, err)
+                self.assertNotIn("Warning:", out)
 
     def test_multiple_folders_preflight_all_before_writing(self):
         extra = self.home / "extra"
