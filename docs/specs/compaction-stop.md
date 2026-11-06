@@ -57,7 +57,7 @@ Decision, in this order; any failure allows:
 
 The hook never denies a tool call, a prompt, a session start or the user's own stop,
 never opens the transcript, and sends nothing anywhere. At most 200 mark files are
-kept (oldest by mtime removed on write, matching only names `^[0-9a-f]{16}\.json$` and checked with `lstat`).
+kept (oldest by mtime removed on write, excluding the current conversation's mark, matching only names `^[0-9a-f]{16}\.json$` and checked with `lstat`).
 
 ### 2. Installer `skills/fnl-setup/scripts/compact_stop_setup.py` (stdlib)
 
@@ -65,7 +65,7 @@ Pattern: `quota_setup.py` and `compact_setup.py` (stored private preview, digest
 expiry 60 minutes, owner and mode checks, refusal of symlinks and git work trees for
 the data root).
 - `preview --limit <bytes>` | `preview --remove`: prints the exact change to
-  `host.md` (`## Compaction stop` section) and to the user's Antigravity hooks file, which is fixed at
+  `host.md` (`## Compaction stop` section) and only its own pretty-printed group plus other group names in the user's Antigravity hooks file, which is fixed at
   `~/.gemini/config/hooks.json` under the account home (there is no `--config` option; the hooks file
   must be owned by the user, not a symlink, not group- or world-writable, and outside every git work tree,
   as must its folder), the group name, the
@@ -74,12 +74,15 @@ the data root).
 - `apply --digest <64 hex> --yes`: applies only the stored preview. Writes the
   section atomically, then the hooks file: its own group `finolabs-vibecode-compact-stop`
   (never the metrics group, which `refresh.py antigravity-hook` owns and must not touch
-  this one), timestamped backup, atomic write, mode preserved, every other group
+  this one), timestamped backup (created 0600, narrowed to the previous mode & 0o600), atomic write, target mode preserved, every other group
   byte-for-byte, JSON object required, duplicate keys and non-finite numbers refused.
 - `--remove` deletes the group and sets `Enabled: no`.
 - Limit bounds: 50,000 to 20,000,000 bytes (integer). The hook command is built with
   `shlex.quote` from a path that passes the same plugin-root check as `refresh.py`
-  (the file is inside a `finolabs-vibecode` plugin).
+  (the file is inside a `finolabs-vibecode` plugin), with the plugin root additionally
+  checked like the hooks folder: outside git work trees and not group- or world-writable.
+  The stored shell command prints `{}` if the script is missing or fails; Antigravity
+  shell execution of hook commands remains unverified.
 - Refuses to run for any host but Antigravity; mentions Claude Code and Codex use
   `compact_setup.py`.
 
