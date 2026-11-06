@@ -13,8 +13,8 @@ short session ids, times. Headings, task descriptions, file names, paths, links,
 task wording are read at most to extract an identifier and are not stored. So the existing metrics consent
 keeps within the repository's metadata-only rule. A panel that needed free text would need its own
 consent and a convention change first; this one does not. The data comes from project files and the
-ledger, not from usage events, so people who consented earlier are not covered by implication: see
-"Consent".
+ledger, not from usage events; the owner decided on 2026-11-06 that it is on by default (see "Consent"), which
+reverses the earlier disposition that people who had already consented would not be switched on.
 
 ## Sources (local only; no network, no GitHub calls)
 
@@ -47,7 +47,8 @@ elapsed time. Sessions the user started by hand carry no `dispatch` and no task 
 under "Sessions without a task" with host and last activity unless they recorded a `task` event; work the
 coordinator keeps for itself is linked the same way when it records one. The `task` event closes that (in scope for 0.1.10): the coordinator or router records `task` with the id when it
 starts a task (a new metrics event field limited to `^T[0-9]{1,4}$`, through `SCHEMA` in
-`scripts/fnl_metrics.py` and `PRIVACY.md`). Sessions that record nothing remain unlinked, and the page says so.
+`scripts/fnl_metrics.py` and `PRIVACY.md`). Sessions that record nothing remain unlinked, and the page says so. `task` events are dashboard data only: they never
+feed autopilot's task choice or any gate, because any session can record one.
 
 Task states: `done` (checked), `in progress` (unchecked and a ledger run for it is open), `accepted, not
 ticked` (unchecked and its run finished `accepted`), `todo`. Agent family and outcome are rendered from
@@ -106,7 +107,8 @@ rounds) and corrects the description of `dispatch`, which is an id.
 
 ## The `task` event
 
-`scripts/record.py task --id T012` (a record only the plugin's hook turns into an event, as for the keep receipt)
+`task` is a new subcommand of the existing `record.py` (the router's copy and `fnl-delegate`'s copy stay byte-identical, as CI checks); it prints a receipt that only the plugin's hook turns into an event, as for the keep receipt:
+`record.py task --id T012`
 adds one event type, `task`, with the single field `id` matching `^T[0-9]{1,4}$`, through `SCHEMA` in
 `scripts/fnl_metrics.py`, `docs/specs/usage-metrics.md` and `PRIVACY.md`. The coordinator or router runs it
 when it starts work on a task in a session the user started by hand, so such a session is linked to the task
@@ -138,7 +140,7 @@ assignment; free text of any kind; linking sessions without a `dispatch` or a re
    with one field; a text or a long id is refused; a hand-started session with a `task` event links to its task.
 5. The Project tab renders with `textContent`, the empty state (no `tasks.md`) and the limits line; page
    tests with fake timers.
-6. `fnl-setup` metrics text mentions project progress; the one-time dashboard notice shows once; `fnl-delegate` ledger guidance asks for `<feature> T<id>` labels;
+6. `fnl-setup` metrics text mentions project progress; the one-time notice shows once (kept as a flag in `<data root>/state/notices.json`) and is also printed once per version by the session-start hook line, so users who rarely open the dashboard see it; `fnl-delegate` ledger guidance asks for `<feature> T<id>` labels;
    `PRIVACY.md` (progress block, ledger fields, `dispatch` as an id), README, CHANGELOG, `docs/specs/index.md` updated; `check-references.py`,
    `claude plugin validate .` and targeted tests pass under a world-writable `/tmp`; no hook file changed.
 

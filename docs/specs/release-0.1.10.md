@@ -33,15 +33,16 @@ where only advice exists.
 | 5 | Merge prompt through host permission rules | [merge-guard.md](merge-guard.md) | Moved to 0.2.0 with autopilot (owner, 2026-11-06): hosts already ask in their default modes |
 | 6 | Running agents on the dashboard (phase 1: ledger plus a `ps` snapshot); the page becomes tabs (see package 8) | [running-agents.md](running-agents.md); needs its own `CLAUDE.md` exception for the `ps` command first | Spec only |
 | 7 | Backlog and spec corrections | below | Not started |
+| 8 | Project progress panel on the dashboard, with the `task` event that links hand-started sessions to tasks | [project-progress.md](project-progress.md) and [dashboard-tabs.md](dashboard-tabs.md); builds on package 6 | Specs merged; code not started |
 | 9 | Dashboard freshness: ledger and Antigravity trigger a rebuild, a freshness line per host | [dashboard-freshness.md](dashboard-freshness.md) | Spec only |
 | 10 | Ask in the host's native question form: always-loaded rule, interview rules for rounds larger than the tool allows, router and map wording | none (text only; see "Package 10") | In progress |
-| 8 | Project progress panel on the dashboard, with the `task` event that links hand-started sessions to tasks | [project-progress.md](project-progress.md) and [dashboard-tabs.md](dashboard-tabs.md); builds on package 6 | Specs merged; code not started |
 
-Order of work: 4, then 9 (small, and the other dashboard packages rely on it), then 6, then 8 (it shares the page and the refresh with 6), then 7. Package 5 is not in this release. Packages 4 to 6 all edit `fnl-setup`, the README and the
+Order of work: 4, then 9 (small, and the other dashboard packages rely on it), then 6, then 8 (it shares the page and the refresh with 6), then 10 (text only, any time), then 7. Package 5 is not in this release. Packages 4 to 6 all edit `fnl-setup`, the README and the
 changelog, so they run one at a time, each through its own pull request with both reviews.
 
 ## Decisions settled (owner, 2026-11-06)
 
+- Audit correction: a ledger write by a hooked coordinator already triggers a rebuild (see `dashboard-freshness.md`); the real gaps are Antigravity, writes outside a hooked session, idle periods, and untrusted Codex hooks.
 - All four dashboard packages (tabs and progress in 8, running agents in 6, freshness in 9) ship in 0.1.10: a release should carry features users notice, and time is not the constraint.
 - The `ps` exception for the process snapshot is approved. The snapshot is the last piece of package 6 and is
   off until `fnl-setup` turns it on; the exception text merges into `CLAUDE.md` only when that code is about to land.
@@ -81,18 +82,28 @@ changelog, so they run one at a time, each through its own pull request with bot
 
 ## Package 10: ask in the native question form
 
-Owner request, 2026-11-06. The pack already asks through the host's native question tool when a skill of the
-pack asks (0.1.8, package 1) and says so for specs and plans (`fnl-coding-router` section 4). Two gaps: an agent
-that needs a decision outside those skills asks in text, and a round of more questions than the tool takes
-(four on Claude Code) falls back to a numbered text list. Changes, all text and advisory (agent judgment; no
-host mechanism can force an agent to use a tool): one line in the always-loaded rule (`rules/AGENTS.md`) telling
-the agent to ask the user's decisions through the native tool, the recommended option first, free text only when
-there is no tool, it fails, nobody can answer, or the answer is free text; the shared `interview.md` copies
-say how to stage a larger round (blocking questions first, at most the tool's limit per call, the rest in the
-next call, a numbered text list only as the last resort); `fnl-coding-router` and `fnl-ask` map name it. The pack
-has no brainstorming skill of its own: it composes with `grilling` (mattpocock/skills), `brainstorming`
-(superpowers) or Spec Kit's clarify step, whichever the repository adopts, and the interview rules stay the
-fallback.
+Owner request, 2026-11-06, clarified: whichever skill an agent uses to brainstorm or clarify with the user
+(`grilling` from mattpocock/skills, `brainstorming` from superpowers, Spec Kit's clarify step, or the pack's own
+interview rules), the agent should put the user's decisions through the host's native question tool, not plain text.
+The pack already does this for its own skills (0.1.8, package 1) and for specs and plans (`fnl-coding-router`
+section 4). Gaps: an agent that needs a decision outside those skills asks in text, a third-party skill's own
+instructions may say "ask the user" without naming the tool, and a round larger than the tool takes (four on Claude
+Code) falls back to a numbered text list.
+
+Changes, all text and advisory (agent judgment; no host mechanism can force an agent to use a tool):
+
+- One line in the always-loaded rule (`rules/AGENTS.md`), which applies on top of any skill: ask the user's decisions
+  through the native tool (`AskUserQuestion` on Claude Code, `request_user_input` on Codex, `ask_question` on
+  Antigravity), the recommended option first, even when another skill's text only says "ask"; use free text only
+  when there is no tool, it fails, nobody can answer, or the answer is free text.
+- Each router workflow adapter that points to a clarify skill (Matt Pocock's, superpowers, Spec Kit) gets one
+  sentence: run that skill's interview, but put its questions through the native tool.
+- The shared `interview.md` copies say how to stage a larger round: blocking questions first, at most the tool's
+  limit per call, the rest in the next call, a numbered text list only as the last resort.
+- `fnl-ask` map names the behaviour in its "Requirements unclear" row.
+
+The pack has no brainstorming skill of its own and builds none (compose before build); it composes with whichever the
+repository adopts, and the interview rules stay the fallback.
 
 ## Package 7: backlog and spec corrections
 
