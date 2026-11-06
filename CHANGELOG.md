@@ -14,6 +14,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Use the shared done theme token for pipeline package bricks in dark and light themes.
 - Match pipeline stages to theme-aware task colours, back striped labels with solid chips, and use compact review glyphs and icon-first ledger/summary counts.
 
 - Replace dense Agents and Project text with KPI tiles, dispatch budget lanes, cached quota meters and unfinished project/task graphics; retain data tables and collapsed limits. Keep up to five local project snapshots, read only story priority numbers from `spec.md`, skip `specs/archive`, and offer user-set local project labels through setup.

@@ -946,6 +946,20 @@ class DashboardScriptTest(unittest.TestCase):
         for text in ('Spec Kit', 'status line says draft', 'plan · done', 'package 2 · unknown', 'docs/specs index', 'ledger'):
             self.assertIn(text, table_text)
 
+    def test_pipeline_brick_and_chevron_fills_use_theme_tokens_not_literal_green(self):
+        js = (PAGE.parent / 'dashboard.js').read_text()
+        for fill in re.findall(r'\bfill\s*:\s*([^,;}\n]+)', PAGE.read_text() + js):
+            self.assertNotRegex(fill, r'#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\(|\b\w*green\b')
+        out = self.render_freshness(self.pipeline_sample())
+        done_packages = [m for m in self.marks(out, 'package-brick') if 'done' in m['cls'].split()]
+        self.assertTrue(done_packages)
+        for mark in done_packages:
+            pos = out['picture'].index(mark)
+            fills = [m['attrs']['fill'] for m in out['picture'][pos + 1:pos + 5]
+                     if m['cls'] in ('brick-stud', 'brick-body')]
+            self.assertEqual(fills, ['var(--h2)'] * 3)
+        self.assertIn('.pipeline-block.done .pipeline-face { fill: var(--h2)', PAGE.read_text())
+
     def test_pipeline_new_shapes_reuse_tokens_and_fit_narrow_container_rules(self):
         css = PAGE.read_text()
         self.assertIn('.pipeline-project .project-detail { grid-column: 1 / -1; grid-row: 2; }', css)

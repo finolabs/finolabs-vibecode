@@ -170,7 +170,7 @@
   function brick(state, width, height, cls) {
     var svg = s("svg", {width: width, height: height + 3, viewBox: "0 0 " + width + " " + (height + 3),
       "class": "lego-brick " + state + (cls ? " " + cls : ""), "aria-hidden": "true"});
-    var ink = {done: cls && cls.indexOf("package-brick") !== -1 ? "var(--good)" : "var(--h2)", active: "var(--p)", accepted: "var(--warn)", low: "var(--crit)", todo: "none"}[state] || "none";
+    var ink = {done: "var(--h2)", active: "var(--p)", accepted: "var(--warn)", low: "var(--crit)", todo: "none"}[state] || "none";
     var group = s("g", {"class": "brick-ink"});
     [0.22, 0.58].forEach(function (x) {
       group.appendChild(s("rect", {x: width * x, y: 0, width: width * .2, height: 3, rx: 1,
