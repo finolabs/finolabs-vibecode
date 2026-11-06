@@ -11,6 +11,14 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Remind agents to rename their session at the start, on a phase change and after every compaction, in the always-loaded rule and in the Titles section of `fnl-session-hygiene`.
 - Correct host instruction mechanics for Claude Code and Codex, note Codex `spawn_agent` hook matching in usage metrics, clarify compaction threshold settings and writer bounds, and document privacy boundaries for judge instruction checks.
 
+### Fixed
+
+- Bind each quota executable target to its confirmed digest and reject excluded resolved paths at probe time; older records need a new setup preview.
+- Retry quota cache write failures after 30 minutes instead of saving a successful backoff.
+- Reject line breaks in quota configuration paths and labels during plan validation.
+- Deduplicate Claude configuration folders by filesystem identity and clearly refuse missing folders.
+- Apply the agent version output limit to stdout independently of stderr.
+
 ### Added
 
 - Let the Antigravity compaction stop install from Antigravity's own installed copy of the plugin, which keeps the repository's `.git` entry; any other plugin folder inside a git work tree is still refused.
@@ -31,7 +39,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Fixed
 
 - Parse capped hook payloads in linear time while preserving complete metadata fields and discarding truncated tool input.
-- Treat a quota cache that is unsafe, capped, unparsable or fails validation as no reading: status shows no reading, and the next scheduled reading, limited by the 30-minute backoff, replaces the file atomically without writing through a symlink and legacy records missing a resolved target; require a fresh setup preview for those records and verify the confirmed executable still resolves to its recorded target before running.
+- Treat a quota cache that is unsafe, capped, unparsable or fails validation as no reading: status shows no reading, and the next scheduled reading, limited by the 30-minute backoff, replaces the file atomically without writing through a symlink. Legacy records missing a resolved target require a fresh setup preview, and the confirmed executable must still resolve to its recorded target before running.
 - Refuse line breaks in quota setup paths and labels, and recognize the default Claude folder by filesystem identity, including case variants on case-insensitive volumes.
 - Read agent versions from stdout only, count each include cycle once, and preserve section ranges across Unicode line separators.
 - Clarify neutral setup approvals, question-tool fallbacks and default preferences. Keep language guidance outside lists, mark compaction advice explicitly, and align privacy and reference-check documentation with the existing rules.

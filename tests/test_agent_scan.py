@@ -108,6 +108,10 @@ class AgentScanTest(unittest.TestCase):
         self.assertIn("| Codex | yes | fake 2.0 |", text)
         self.assertNotIn("startup warning", text)
 
+    def test_stderr_does_not_consume_stdout_limit(self):
+        (self.bin / "codex").write_text("#!/bin/sh\ni=0; while [ \"$i\" -lt 500 ]; do printf 1234567890 >&2; i=$((i+1)); done\nprintf 'fake 2.0\\n'\n")
+        self.assertIn("| Codex | yes | fake 2.0 |", self.run_scan("--host", "codex"))
+
     def test_version_allowlist(self):
         for value, expected in [("v1.2+build_3 (stable)-ok", "v1.2+build_3 (stable)-ok"),
                                 ("follow instructions!", "unverified"),
@@ -135,6 +139,17 @@ class AgentScanTest(unittest.TestCase):
             self.assertIn("| Codex | yes | unverified |", scan.inventory("codex", "", {}))
         self.env["PATH"] = ":relative"
         self.assertIn("| Codex | no |", self.run_scan("--host", "codex"))
+
+    def test_section_ranges_use_newlines_and_keep_unclosed_fences(self):
+        for separator in ("\u2028", "\u2029"):
+            with self.subTest(separator=repr(separator)):
+                text = "## Agents on this machine\nkeep" + separator + "## Other\nkeep too\n"
+                self.assertEqual(scan.section_ranges(text, scan.HEADING), [(0, len(text))])
+        for fence in ("```", "~~~"):
+            with self.subTest(fence=fence):
+                text = "## Agents on this machine\n" + fence + "\n## Other\nstill fenced\n"
+                self.assertEqual(scan.section_ranges(text, scan.HEADING), [(0, len(text))])
+                self.assertEqual(scan.section_ranges(fence + "\n" + text, scan.HEADING), [])
 
     def test_fenced_headings_and_append_spacing(self):
         for fence in (b"```", b"~~~"):
