@@ -34,6 +34,12 @@ One engineering practice for AI coding agents, packaged as a single plugin with 
 
 This pack owns the decisions between tools: routing, depth, delegation, gates and conventions. For the work itself it points to trusted skills and native commands from known publishers (Matt Pocock's skills, Cloudflare's security audit, Spec Kit, each host's own review commands) instead of rewriting them, and every such pointer carries a fallback that keeps the skill working when the companion is not installed.
 
+### Compaction steward
+
+After `fnl-setup` records your chosen native threshold, the plugin's `fnl-steward` can check supplied token usage with `scripts/context_steward.py`. The script returns `ok` below 80% of that threshold and `prepare` from 80% to below it. At the threshold it returns `wait` while a unit of work is unfinished, otherwise `compact`: ask you to compact, or propose a fresh session with a handover after the story closes. The host enforces its threshold; the model judges the safe boundary, with one bounded Jev question when needed and authorized. No threshold is invented, no session is started and no compaction command is sent automatically.
+
+On `prepare`, the working agent writes its handover through `python3 -I <plugin root>/scripts/handover_state.py write --session <id>` (optional `--repo <code>`), with UTF-8 text on stdin. `read --session <id>` returns only safe text younger than 24 hours. The local file is private (0600 in a 0700 folder), limited to 8 KiB, and never sent by these scripts or included in metrics; at most 20 files are kept. The existing session-start hook appends it on source `compact`. Writing the handover and consulting the steward are advisory agent actions; the scripts enforce the limits and action table. Hook delivery is unverified on every host. Standalone skills keep the manual handover procedure; the steward agent and scripts require the plugin. See the [design and acceptance criteria](docs/specs/compaction-steward.md) and [privacy details](PRIVACY.md#compaction-handover).
+
 ### How the skills fit together
 
 <p align="center">

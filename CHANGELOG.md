@@ -6,6 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add the advisory compaction steward, a deterministic threshold check and private local handovers re-injected on compact session starts; hook delivery remains unverified, and no hook declarations change.
 - Let setup write a user-chosen Claude Code or Codex compaction threshold after separate approval of a checked, digest-bound preview, with local backups.
 
 ## [0.1.9] - 2026-11-06
