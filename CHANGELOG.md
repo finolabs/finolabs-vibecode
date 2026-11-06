@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Fixed
+
+- Warn about Claude per-model compaction overrides, preserve Codex threshold comments, and skip same-value threshold writes.
+
 ### Changed
 
 - Split the status dashboard into Overview, Agents, Project, Delegation and Reviews tabs, preserving the selected tab, panel scroll and open tables on data reload. Agents and Project show placeholders until their sources are available.
