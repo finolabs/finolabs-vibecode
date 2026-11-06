@@ -221,6 +221,24 @@ td.r, th.r { text-align: right; }
 .limits .body { font-size: var(--t-xs); color: var(--muted); overflow-wrap: anywhere; }
 .running-row { overflow-wrap: anywhere; min-width: 0; }
 .project-table { overflow-x: auto; max-width: 100%; }
+/* Project blocks are ruled rows, not filled cards inside a pane. */
+.proj { display: grid; gap: 10px; padding-bottom: 16px; border-bottom: 1px solid var(--line); min-width: 0; }
+.project-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-width: 0; }
+.project-label { font-size: var(--t-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.project-percent { font-size: var(--t-kpi); line-height: 1; font-variant-numeric: tabular-nums; }
+.project-segments { height: 10px; transform-origin: left; }
+.feature { display: grid; gap: 8px; }
+.story { display: grid; grid-template-columns: 9em minmax(0, 1fr) 4em; align-items: center; gap: 10px; font-size: var(--t-xs); }
+.cells { display: flex; gap: 3px; flex-wrap: wrap; min-width: 0; }
+.cell { display: block; width: 9px; height: 9px; border-radius: 2px; box-sizing: border-box; flex: none; }
+.cell.done { background: var(--p); }
+.cell.active { background: var(--h2); border: 1px solid var(--p); }
+.cell.accepted { border: 1px solid var(--p); background: linear-gradient(135deg, transparent 40%, var(--p) 40%, var(--p) 60%, transparent 60%); }
+.cell.todo { background: var(--h0); border: 1px solid var(--line); }
+.chip { width: fit-content; font-size: var(--t-xs); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
+.tabpanel:not([hidden])[data-enter="true"] .project-segments { animation: amount-grow .7s ease-out; }
+.tabpanel:not([hidden]) .cell.active { animation: cell-breathe 2s ease-in-out infinite; }
+@media (max-width: 560px) { .story { grid-template-columns: 7em minmax(0, 1fr) 3em; gap: 6px; } }
 @keyframes amount-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes lane-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 @keyframes cell-breathe { 50% { opacity: .45; } }
@@ -395,8 +413,10 @@ td.r, th.r { text-align: right; }
     line("Liveness verdicts are advisory agent judgment from artifacts; a process name does not prove a dispatch is running.");
     return stack(lines);
   }
-  function limits(content) {
-    return h("details", "limits", [t("summary", "", "limits"), h("div", "body", [content])]);
+  function limits(content, name) {
+    var disclosure = h("details", "limits", [t("summary", "", "limits"), h("div", "body", [content])]);
+    var tab = TABS.get(name); disclosure.open = !!tab.limitsOpen; tab.limits = disclosure;
+    return disclosure;
   }
   function runningPanel() {
     if (!D.running) return null;
@@ -472,33 +492,19 @@ td.r, th.r { text-align: right; }
     TABS.get("agents").tableRows.push(tableOf("dispatch budgets", ["agent / model / task", "elapsed / budget", "check", "liveness"], open.map(function (run) {
       return [run.agent + " / " + run.model + " / " + run.task, run.age_min + "/" + run.budget_min + " min", run.check_due ? "check due" : "—", run.liveness];
     })));
-    var notes = runningLimits(); notes.classList.add("running-limits"); content.push(limits(notes));
+    var notes = runningLimits(); notes.classList.add("running-limits"); content.push(limits(notes, "agents"));
     return stack(content);
   }
-  function projectPanel() {
-    if (!D.progress) return null;
-    var block = D.progress, repositories = block.repositories || {}, p = Object.prototype.hasOwnProperty.call(repositories, block.current) ? repositories[block.current] : null;
+  function projectData(p) {
     var lines = [];
-    function line(value) {
-      var el = h("div", "running-row"); el.textContent = value; lines.push(el);
-    }
-    if (block.notice) line("Project progress now reads this repository's task list and the ledger; nothing leaves your machine; turn off with Project progress: off in host.md under ## Project progress, or FNL_PROGRESS=off.");
-    line("Limits: derived from files and local records, not from a tracker; done means the box is ticked. Linked through delegated runs or recorded task ids only; sessions that record neither remain unlinked. Task receipts are advisory, never a gate.");
-    if (!p) { line(block.reason || "not available yet"); return stack(lines); }
+    function line(value) { lines.push(t("div", "running-row", value)); }
     if (p.reason) line(p.reason);
-    if (!(p.features || []).length) line("No tasks.md or configured task file found");
     (p.features || []).forEach(function (feature) {
       line("feature " + String(feature.feature).padStart(3, "0") + " · " + feature.done + " / " + feature.total);
       [ ["phases", "phase", "Phase "], ["stories", "story", ""] ].forEach(function (group) {
         (feature[group[0]] || []).forEach(function (row) {
-          line(group[2] + row[group[1]] + " · " + row.done + " / " + row.total);
-          var track = h("div", "project-bar"), bar = h("i");
-          track.setAttribute("role", "progressbar");
-          track.setAttribute("aria-label", "Task progress");
-          track.setAttribute("aria-valuenow", row.done); track.setAttribute("aria-valuemin", "0");
-          track.setAttribute("aria-valuemax", row.total);
-          bar.style.width = (row.total > 0 ? Math.max(0, Math.min(100, row.done / row.total * 100)) : 0) + "%";
-          bar.style.background = "var(--p)"; track.appendChild(bar); lines.push(track);
+          line(group[2] + row[group[1]] + (row.priority ? " · P" + row.priority : "") + " · " + row.done + " / " + row.total);
+
         });
       });
       var table = h("table", "tbl"), head = h("tr");
@@ -506,7 +512,7 @@ td.r, th.r { text-align: right; }
         var cell = h("th"); cell.textContent = name; head.appendChild(cell);
       });
       table.appendChild(head);
-      (feature.tasks || []).filter(function (task) { return task.state !== "todo" || (task.sessions || []).length || (task.runs || []).length; }).forEach(function (task) {
+      (feature.tasks || []).forEach(function (task) {
         var row = h("tr"), runs = task.runs || [], sessions = task.sessions || [];
         [task.id, task.story || "—", task.phase == null ? "—" : task.phase, task.state,
           runs.map(function (run) { return run.agent + " / " + run.model; }).join(", ") || "—",
@@ -527,6 +533,90 @@ td.r, th.r { text-align: right; }
     line("Last reviews · " + Object.keys(p.reviews || {}).map(function (kind) { return kind + ": " + p.reviews[kind]; }).join(" · ") + " · manifest " + (p.version || "unknown"));
     (p.skipped || []).forEach(function (reason) { line(reason); });
     return stack(lines);
+  }
+  function repoLabel(code) {
+    var repos = D.progress && D.progress.repositories || {}, key = String(code).replace(/^repo-/, "");
+    var project = Object.prototype.hasOwnProperty.call(repos, key) ? repos[key] : null;
+    return project && project.label || "repo " + key.slice(0, 4);
+  }
+  function storyPriority(story) { return story.priority >= 1 && story.priority <= 9 ? story.priority : 10; }
+  function unfinishedFeatures(p) { return (p.features || []).filter(function (f) { return f.total > f.done; }); }
+  function projectPanel() {
+    if (!D.progress) return null;
+    var block = D.progress, repositories = block.repositories || {}, keys = Object.keys(repositories);
+    function priority(p) {
+      var numbers = [];
+      unfinishedFeatures(p).forEach(function (f) {
+        (f.stories || []).forEach(function (story) { if (story.total > story.done) numbers.push(storyPriority(story)); });
+      });
+      return Math.min.apply(null, [10].concat(numbers));
+    }
+    var finished = keys.filter(function (code) {
+      var fs = repositories[code].features || [];
+      return fs.length && fs.every(function (f) { return f.done === f.total; });
+    }).length;
+    var visible = keys.filter(function (code) { return unfinishedFeatures(repositories[code]).length; }).sort(function (a, b) {
+      var left = repositories[a], right = repositories[b];
+      return priority(left) - priority(right) || (Date.parse(right.updated) || 0) - (Date.parse(left.updated) || 0) || a.localeCompare(b);
+    }).slice(0, 5);
+    var content = [];
+    visible.forEach(function (code) {
+      var p = repositories[code], fs = p.features || [], total = 0, done = 0, active = 0;
+      fs.forEach(function (f) { total += f.total; done += f.done; active += (f.tasks || []).filter(function (task) { return task.state === "in progress"; }).length; });
+      var seg = h("div", "seg project-segments");
+      [["done", done, "var(--p)"], ["an agent is on it", active, "var(--h2)"], ["to do", total - done - active, "var(--h0)"]].forEach(function (part) {
+        if (part[1] <= 0) return;
+        var mark = h("i"); mark.style.flex = String(part[1]); mark.style.background = part[2];
+        seg.appendChild(tipOn(mark, part[0] + ": " + part[1] + "/" + total));
+      });
+      seg.setAttribute("role", "img"); seg.setAttribute("aria-label", done + " done, " + active + " an agent is on it, " + (total - done - active) + " to do");
+      var header = h("div", "project-head", [tipOn(t("strong", "project-label", repoLabel(code)), repoLabel(code)),
+        t("strong", "project-percent", pct(total ? done / total : 0))]);
+      var card = h("div", "proj", [header, seg]); card.setAttribute("data-repo", code);
+      unfinishedFeatures(p).forEach(function (feature) {
+        var featureBody = h("div", "feature", [t("div", "meta", "feature " + String(feature.feature).padStart(3, "0"))]);
+        var stories = (feature.stories || []).slice(), tasks = feature.tasks || [], complete = stories.filter(function (story) { return story.done === story.total; }).length;
+        if (tasks.some(function (task) { return !task.story; })) {
+          var untagged = tasks.filter(function (task) { return !task.story; });
+          stories.push({story: null, priority: null, total: untagged.length, done: untagged.filter(function (task) { return task.state === "done"; }).length});
+        }
+        stories.filter(function (story) { return story.total > story.done; }).sort(function (a, b) {
+          return storyPriority(a) - storyPriority(b) || (parseInt(String(a.story).slice(2), 10) || 0) - (parseInt(String(b.story).slice(2), 10) || 0);
+        }).forEach(function (story) {
+          var cells = h("div", "cells");
+          tasks.filter(function (task) { return (task.story || null) === story.story; }).sort(function (a, b) {
+            return (a.phase == null ? 100 : a.phase) - (b.phase == null ? 100 : b.phase);
+          }).forEach(function (task) {
+            var state = task.state === "done" ? "done" : task.state === "in progress" ? "active" : task.state === "accepted, not ticked" ? "accepted" : "todo";
+            var mark = h("i", "cell " + state), runs = task.runs || [], sessions = task.sessions || [];
+            mark.setAttribute("data-task", task.id); mark.setAttribute("data-state", task.state);
+            tipOn(mark, task.id + " · " + task.state + " · phase " + (task.phase == null ? "—" : task.phase) +
+              " · " + (runs.map(function (run) { return run.agent + " / " + run.model + " · " + run.id + " · " + run.elapsed_seconds + " seconds"; }).join(", ") || "no linked run") +
+              " · " + (sessions.map(function (session) { return session.id + " / " + session.host; }).join(", ") || "no linked session"));
+            cells.appendChild(mark);
+          });
+          var row = h("div", "story", [t("span", "story-label", (story.story || "untagged") + (storyPriority(story) < 10 ? " · P" + story.priority : "")), cells,
+            t("span", "lane-value", story.done + "/" + story.total)]);
+          row.setAttribute("data-story", story.story || "untagged"); featureBody.appendChild(row);
+        });
+        if (complete) featureBody.appendChild(t("span", "chip finished-stories", complete + " stories done"));
+        card.appendChild(featureBody);
+      });
+      var unlinked = (p.sessions_without_task || []).length;
+      if (unlinked) card.appendChild(tipOn(t("span", "chip unlinked-sessions", unlinked + " sessions without a task"), "Sessions without a task; details in the data tables"));
+      content.push(card);
+    });
+    if (finished) content.push(t("div", "meta finished-projects", finished + " projects done, hidden"));
+    if (!visible.length && !finished) content.push(t("div", "nodata", "No tasks.md found for this repository"));
+    keys.forEach(function (code) {
+      TABS.get("project").tableRows.push(h("div", "tbl", [t("h3", "", repoLabel(code)), projectData(repositories[code])]));
+    });
+    var notes = [t("div", "", "Derived from files and local records, not from a tracker; done means the box is ticked. Linked through delegated runs or recorded task ids only; sessions that record neither remain unlinked. Task receipts are advisory, never a gate.")];
+    if (block.notice) notes.push(t("div", "", "Project progress now reads this repository's task list and the ledger; nothing leaves your machine; turn off with Project progress: off in host.md under ## Project progress, or FNL_PROGRESS=off."));
+    if (block.reason) notes.push(t("div", "", block.reason));
+    notes.push(t("div", "", "Up to five last-written repository snapshots. Features under specs/archive are not read or counted; finished features and stories are hidden. Accepted, not ticked remains unfinished."));
+    content.push(limits(h("div", "project-limits", notes), "project"));
+    return stack(content);
   }
   function signed(n) { return (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n); }
 
@@ -676,6 +766,8 @@ td.r, th.r { text-align: right; }
     if (tab.button === document.activeElement) focusedTab = tab;
     if (tab.panel && !tab.panel.hidden) { tab.scrollTop = tab.panel.scrollTop; tab.scrollLeft = tab.panel.scrollLeft; }
     if (tab.tables) tab.tablesOpen = tab.tables.open;
+    if (tab.limits) tab.limitsOpen = tab.limits.open;
+    tab.limits = null;
     tab.tables = null;
   });
   app.replaceChildren();
@@ -716,7 +808,7 @@ td.r, th.r { text-align: right; }
   drawTabs();
   var overview = TABS.get("overview").panel, delegation = TABS.get("delegation").panel;
   TABS.get("agents").panel.appendChild(pane("running now", "", "", runningPanel(), "not available yet"));
-  TABS.get("project").panel.appendChild(pane("Project progress", "", "", projectPanel(), "not available yet"));
+  TABS.get("project").panel.appendChild(pane("project progress", "", "", projectPanel(), "not available yet"));
 
   /* Overview: activity and router composition beside depth and load cost. */
   var band1 = h("div", "g2");
