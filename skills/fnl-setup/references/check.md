@@ -2,6 +2,8 @@
 
 Questions below ask through the host's native question tool when the session has one. Ask in text when the session has no such tool, the tool is refused or fails, nobody can answer (a delegated or headless run records the open decision and never assumes or invents an answer), or the decision is free text. The enforcer is agent judgment, so this is advisory.
 
+After the scope answer, run the existing checks below and report only the chosen scope, using the two groups below (both lists each once). Reading prerequisites does not opt in or authorise fixes. Grouping and comparison are advisory (agent judgment).
+
 1. Run `python3 -I <this skill folder>/scripts/checkup.py` from the repository being checked; `--json` gives the same evidence as JSON. Read every result. The script inspects files and PATH entries only, changes nothing, calls no host CLI and does not run the smoke task. A refused symlink or unknown installation layout stays unverified. An `ok` means that the named file evidence exists, not that the host obeys it.
 2. Report the effective delegation mode and Routing value from the script. Defaults are suggest/on; environment overrides take precedence. Report mode enforcement as agent judgment, with only the host support observed below. For each host whose CLI is `ok` (or a PATH link is unverified), print a short table with these columns: **runs on its own / asks you first / does not happen here**. Put only observed facts in it. For example, say “SessionStart is declared; execution unverified”, never “the reminder runs”. If a column has no evidence, write “unverified”. An absent CLI or hook declaration proves only that specific absence. Cached versions do not prove an active installation. Neither a coding-router pointer nor a review line proves automatic enforcement. Hook trust, approval policy and compaction thresholds stay unverified until observed in that host. Do not infer consent to metrics, automatic delegation, reviews, commits or permission grants.
 3. List each missing item with one next action. A missing or older-than-30-days `Agents on this machine` section goes to `/fnl-scan-agents`; invalid or missing dates stay unverified. References to retired skills in user or repository context files are findings: replace each with its current home from the changelog after user approval. The check reads known instruction files only, including Codex overrides; unreadable files and runtime loading remain unverified. Use `/fnl-setup` section A for host config, B for local exclude, C for the Agent skills block or review adoption, and `/fnl-setup-instructions` for user instructions or their router pointer. For a missing CLI or plugin, use `/fnl-setup` Explore to obtain the host's current install command; do not invent one. For missing hook declarations, use `/fnl-setup` section F to inspect the installation and show any proposed change before consent. Use the skill command convention already stated by the host. List unverified items separately as limits, not failures; a file-only check cannot fix runtime uncertainty.
@@ -10,6 +12,18 @@ Questions below ask through the host's native question tool when the session has
 5. Report the **instruction checklist** below: the script's results for the `S` items, then your grading of the `J` items. Findings go to `/fnl-setup-instructions` after the user's approval; never edit an instruction file from Check.
 
 End plainly: “Auto is never 100%. Files show what is configured; a task you watch shows what actually runs.”
+
+## Report groups
+
+### Machine scope
+
+Data location and its source; section A host config, delegation preferences, agent inventory and cached quota probe; section D user-scoped instructions; section E review tools; section G companion installations; section F metrics consent, retention and hooks, project progress on/off preference, agent snapshot consent; compaction threshold, plan approval, stop and steward limits. Keep every existing opt-in separate. Report file evidence and runtime limits separately.
+
+### Project scope
+
+Local exclude (section B), Agent skills block and review line (section C), repository workflow detection (Spec Kit, work records, none), project label, ledger project name and separate task file. Project progress depends on the machine preference and metrics consent; report missing prerequisites without changing them.
+
+Compare the agent-context Work tracking block with this repository's host-config settings and effective fallbacks: the host config wins for the dashboard. List a difference and each side's age, using the last change time when available, otherwise age unverified (a file timestamp is only a proxy, not a fact-level history). Do not echo ledger names, task paths or repository prose into Check output; identify the differing keys and sources. Flag unmapped ledger runs when authorised local evidence shows runs for this repository under a project name neither its entry nor folder name maps to; similarity alone stays unverified. Report deprecated globals and point to the separately approved project-settings conversion. If the script supplies no comparison or age evidence, perform only authorised bounded local reads and label those findings agent observations, never script results.
 
 ## Settings
 

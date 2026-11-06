@@ -78,6 +78,7 @@ jobs:
                     ["scripts/fnl_metrics.py", "skills/fnl-coding-router/scripts/fnl_metrics.py", "skills/fnl-status/scripts/fnl_metrics.py", "skills/fnl-update/scripts/fnl_metrics.py"],
                     ["skills/fnl-ask/references/plain-language.md", "skills/fnl-setup/references/plain-language.md"],
                     ["skills/fnl-setup/references/interview.md", "skills/fnl-setup-instructions/references/interview.md"],
+                    ["skills/fnl-setup/references/work-tracking.md", "skills/fnl-setup-instructions/references/work-tracking.md"],
                     ["scripts/quota_probe.py", "skills/fnl-setup/scripts/quota_probe.py", "skills/fnl-delegate/scripts/quota_probe.py", "skills/fnl-scan-agents/scripts/quota_probe.py", "skills/fnl-update/scripts/quota_probe.py"],
                     ["scripts/project_progress.py", "skills/fnl-status/scripts/project_progress.py", "skills/fnl-setup/scripts/project_progress.py"],
                     ["scripts/agent_processes.py", "skills/fnl-status/scripts/agent_processes.py", "skills/fnl-setup/scripts/agent_processes.py"],
