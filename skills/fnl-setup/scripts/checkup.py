@@ -869,7 +869,6 @@ def project_tracking(text, root):
         if len(matches) == 1:
             globals_[key] = matches[0]
     code = pp.repository_code(root)
-    project = entries.get((code, 'ledger'), globals_.get('ledger', root.name))
     try:
         raw = dr.read_data('ledger.jsonl', 16 * 1024 * 1024).decode('utf-8')
         names = set()
@@ -882,9 +881,12 @@ def project_tracking(text, root):
                 continue
             if isinstance(row, dict) and row.get('event') == 'start' and isinstance(row.get('project'), str):
                 names.add(row['project'])
-        if names and project not in names:
+        folder = root.name.lower()
+        resembles = any(min(len(folder), len(name)) >= 4 and
+                        (folder in name.lower() or name.lower() in folder) for name in names)
+        if (code, 'ledger') not in entries and root.name not in names and resembles:
             rows.append(item('ledger-project mismatch', 'unverified',
-                             'no ledger runs match this repository mapping; other projects exist; repository association unverified'))
+                             'no ledger runs match the folder name; similar project names exist; set a ledger entry to confirm association'))
     except (OSError, ValueError, UnicodeError):
         pass
     return rows
