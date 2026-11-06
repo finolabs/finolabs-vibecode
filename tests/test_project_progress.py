@@ -47,6 +47,77 @@ class ProgressTest(unittest.TestCase):
     def collect(self, **kwargs):
         return self.pp.collect(self.repo, 'aaaaaaaa', **kwargs)
 
+    def consent(self):
+        state = self.data / 'state'
+        state.mkdir(exist_ok=True)
+        (state / 'consent.json').write_text(json.dumps(dict(date='2026-11-06', retention_days=30)))
+
+    def test_settings_strict_section_fail_closed(self):
+        good = '- aaaaaaaa ledger: Alias\n- aaaaaaaa tasks: docs/tasks.md\n'
+        self.assertEqual(self.pp.project_settings('## Project settings\n' + good)[('aaaaaaaa', 'ledger')], 'Alias')
+        bad_values = [('ledger', v) for v in ('', ' ', 'x' * 41, 'a;', 'a=b', 'a\nb', 'a\x00b', 'a\\b', 'é')]
+        bad_values += [('tasks', v) for v in ('', '/a.md', '../a.md', 'a/../b.md', './a.md', 'a//b.md',
+                       'specs/archive/a.md', 'a.txt', 'a b.md', 'a\\b.md', 'a;.md', 'a=.md', 'a\x00.md', 'x' * 118 + '.md')]
+        bad_lines = [f'- aaaaaaaa {key}: {value}\n' for key, value in bad_values]
+        bad_lines += [good, '- AAAAAAAA ledger: x\n', '- aaaaaaaa unknown: x\n', 'comment\n',
+                      ''.join(f'- {i:08x} ledger: x\n' for i in range(101))]
+        self.document('one.md', 'Status: implemented\n')
+        before = self.collect()
+        for bad in bad_lines:
+            with self.subTest(bad=repr(bad)):
+                self.host.write_text('## Project settings\n' + good + bad)
+                with self.assertRaises(ValueError):
+                    self.pp.project_settings(self.host.read_text())
+                self.assertEqual(self.collect(), before)
+
+    def test_settings_consent_atomic_private_and_cli_output(self):
+        import io
+        before = self.host.read_bytes()
+        with self.assertRaises(ValueError):
+            self.pp.set_setting(self.repo, 'ledger', 'PRIVATE')
+        self.assertEqual(self.host.read_bytes(), before)
+        self.consent()
+        with mock.patch.object(self.pp, 'repository_code', return_value='aaaaaaaa'):
+            with mock.patch.object(self.pp.dr, 'atomic_write', wraps=self.pp.dr.atomic_write) as write:
+                self.assertTrue(self.pp.set_setting(self.repo, 'ledger', 'PRIVATE'))
+                self.assertEqual(write.call_count, 1)
+            self.assertFalse(self.pp.set_setting(self.repo, 'ledger', 'PRIVATE'))
+            with mock.patch('os.getcwd', return_value=str(self.repo)), mock.patch('sys.stdout', new_callable=io.StringIO) as out:
+                self.assertEqual(self.pp.main(['settings', '--set', 'tasks=docs/private.md']), 0)
+                self.assertIn('tasks changed', out.getvalue())
+                self.assertNotIn('private', out.getvalue())
+            with self.assertRaises(ValueError):
+                self.pp.set_setting(self.repo, 'ledger', 'first=second')
+            with mock.patch.object(self.pp.dr, 'atomic_write', side_effect=OSError('interrupted')):
+                saved = self.host.read_bytes()
+                with self.assertRaises(OSError):
+                    self.pp.set_setting(self.repo, 'ledger', 'other')
+                self.assertEqual(saved, self.host.read_bytes())
+            self.assertTrue(self.pp.set_setting(self.repo, 'tasks', None))
+            self.assertFalse(self.pp.set_setting(self.repo, 'tasks', None))
+        self.assertEqual(stat.S_IMODE(self.host.stat().st_mode), 0o600)
+        self.assertFalse(list(self.data.glob('.write-*')))
+
+    def test_settings_two_repositories_override_deprecated_globals(self):
+        self.consent()
+        other = self.repo.with_name('other')
+        other.mkdir()
+        (other / '.git').mkdir()
+        self.host.write_text('## Project progress\n- Ledger project: old\n- Task file: missing.md\n')
+        self.pp.set_setting(self.repo, 'ledger', 'PRIVATE one')
+        self.pp.set_setting(other, 'ledger', 'PRIVATE two')
+        self.pp.set_setting(self.repo, 'tasks', 'tasks.md')
+        (self.repo / 'tasks.md').write_text('- [ ] T1\n')
+        starts = {str(i): dict(project=name, task='001 T1', ts='2026-11-06T00:00:00Z')
+                  for i, name in enumerate(('PRIVATE one', 'PRIVATE two', 'old'))}
+        one = self.collect(starts=starts)
+        two = self.pp.collect(other, 'bbbbbbbb', starts=starts)
+        self.assertEqual(one['features'][0]['tasks'][0]['runs'][0]['id'], '0')
+        self.assertEqual(two['work'], {'active': 1})
+        self.assertNotIn('PRIVATE', json.dumps([one, two]))
+        self.pp.set_setting(self.repo, 'ledger', None)
+        self.assertEqual(self.pp.repository_settings(self.pp.config(), self.repo)['Ledger project'], 'old')
+
     # Infographics acceptance 3: new metadata only, same safe reader.
     def test_priorities_archive_labels_and_finished_project(self):
         task = self.taskfile(text='- [x] T1 US1\n- [x] T2 US2\n- [x] T3 US3\n')

@@ -846,6 +846,46 @@ def host_config_text(home):
         return "unverified", ""
 
 
+def project_tracking(text, root):
+    """Diagnose host-only joins without exporting values or changing configuration."""
+    import project_progress as pp
+    rows = []
+    try:
+        entries = pp.project_settings(text)
+    except ValueError:
+        entries = {}
+        rows.append(item('project settings', 'unverified', 'invalid Project settings section; all entries ignored'))
+    _, body, end = pp.host_section(text)
+    globals_ = {}
+    for key, old in (('ledger', 'Ledger project'), ('tasks', 'Task file')):
+        matches = re.findall(r'^(?:- )?' + old + r': (.*)$', text[body:end], re.M)
+        if matches:
+            rows.append(item('deprecated ' + key, 'unverified',
+                             key + ': convert for this repository with project_progress.py settings --set ' + key + '=<value>'))
+        if len(matches) == 1:
+            globals_[key] = matches[0]
+    code = pp.repository_code(root)
+    project = entries.get((code, 'ledger'), globals_.get('ledger', root.name))
+    try:
+        raw = dr.read_data('ledger.jsonl', 16 * 1024 * 1024).decode('utf-8')
+        names = set()
+        for line in raw.splitlines():
+            if len(line) > 4096:
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(row, dict) and row.get('event') == 'start' and isinstance(row.get('project'), str):
+                names.add(row['project'])
+        if names and project not in names:
+            rows.append(item('ledger-project mismatch', 'unverified',
+                             'no ledger runs match this repository mapping; other projects exist; repository association unverified'))
+    except (OSError, ValueError, UnicodeError):
+        pass
+    return rows
+
+
 def collect(payload=False):
     # A local copy keeps this skill usable when installed alone, including under -I.
     sys.dont_write_bytecode = True
@@ -919,6 +959,7 @@ def collect(payload=False):
                    "review-gate adoption line present", "review-gate adoption line absent", reader=context_read),
         item("workflow", "unverified", "files cannot prove agents follow routing or review gates"),
     ]
+    repository.extend(project_tracking(config_text, root))
     data_path, data_source = dr.data_root()
     from quota_probe import status_lines
     quota = item("quota", "unverified", "advisory cache; " + " | ".join(status_lines()))

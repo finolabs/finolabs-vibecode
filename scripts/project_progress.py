@@ -95,6 +95,86 @@ def project_labels(text):
     return labels
 
 
+def valid_setting(key, value):
+    if not isinstance(value, str):
+        return False
+    if key == 'ledger':
+        return bool(LABEL.fullmatch(value) and value.strip())
+    if key == 'tasks':
+        return bool(re.fullmatch(r'[A-Za-z0-9._/-]{1,120}', value) and value.endswith('.md')
+                    and all(part not in ('', '.', '..') for part in value.split('/'))
+                    and value.split('/')[:2] != ['specs', 'archive'])
+    return False
+
+
+def project_settings(text):
+    """One malformed entry invalidates the entire section, never just that key."""
+    _, body, end = host_section(text, 'Project settings')
+    entries = {}
+    lines = [line for line in text[body:end].splitlines() if line.strip()]
+    if len(lines) > 100:
+        raise ValueError('invalid project settings')
+    for line in lines:
+        match = re.fullmatch(r'- ([0-9a-f]{8}) (ledger|tasks): (.*)', line)
+        if not match or not valid_setting(match[2], match[3]) or (match[1], match[2]) in entries:
+            raise ValueError('invalid project settings')
+        entries[(match[1], match[2])] = match[3]
+    return entries
+
+
+def repository_settings(values, root):
+    """Host entries win over deprecated globals; no repository instruction reads."""
+    result = dict(values)
+    try:
+        entries = project_settings(dr.read_data('host.md', 262144).decode('utf-8'))
+    except (OSError, ValueError, UnicodeError):
+        entries = {}
+    code = repository_code(root)
+    for key, old in (('ledger', 'Ledger project'), ('tasks', 'Task file')):
+        if (code, key) in entries:
+            result[old] = entries[(code, key)]
+    return result
+
+
+def set_setting(cwd, key, value):
+    if key not in ('ledger', 'tasks') or value is not None and not valid_setting(key, value):
+        raise ValueError('invalid project setting')
+    # Keep the consent schema shared with metrics, without a cross-skill import.
+    try:
+        consent = json.loads(dr.read_data('state/consent.json', 4096))
+    except (OSError, ValueError):
+        raise ValueError('metrics consent required') from None
+    if (not isinstance(consent, dict) or consent.get('retention_days') not in (30, 90, 365)
+            or not isinstance(consent.get('date'), str)):
+        raise ValueError('metrics consent required')
+    root = find_root(cwd)
+    if root is None:
+        raise ValueError('no repository')
+    code = repository_code(root)
+    with dr.root_folder() as folder:
+        fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        text = dr.read_file(folder, 'host.md', 262144).decode('utf-8')
+        entries = project_settings(text)
+        if entries.get((code, key)) == value:
+            return False
+        if value is None:
+            entries.pop((code, key), None)
+        else:
+            entries[(code, key)] = value
+        if len(entries) > 100:
+            raise ValueError('project settings cap')
+        start, _, end = host_section(text, 'Project settings')
+        newline = '\r\n' if '\r\n' in text else '\n'
+        section = '## Project settings\n\n' + ''.join(
+            '- ' + c + ' ' + k + ': ' + v + '\n' for (c, k), v in sorted(entries.items())) + '\n'
+        text = text[:start] + (newline if start == end and text and not text.endswith(newline * 2) else '') + section.replace('\n', newline) + text[end:]
+        raw = text.encode('utf-8')
+        if len(raw) > 262144:
+            raise ValueError('host cap')
+        dr.atomic_write(folder, 'host.md', raw)
+    return True
+
+
 def registered_projects(folder=None):
     """Read a bounded closed code-to-name map; unsafe or malformed state names nothing."""
     try:
@@ -788,6 +868,7 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
             root = find_root(cwd)
             if root is None:
                 return empty('no repository')
+            settings = repository_settings(settings, root)
             result = empty()
             repo = repo_code(cwd) if repo_code else repo
             result['repo'] = repo
@@ -889,12 +970,25 @@ def installed_version():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('choice', choices=('on', 'off', 'label'))
+    parser.add_argument('choice', choices=('on', 'off', 'label', 'settings'))
     parser.add_argument('--set', dest='label')
+    parser.add_argument('--clear', choices=('ledger', 'tasks'))
     parser.add_argument('--yes', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args(argv)
     try:
+        if args.choice == 'settings':
+            if bool(args.label is not None) == bool(args.clear is not None):
+                raise ValueError('one setting required')
+            if args.clear is not None:
+                key, value = args.clear, None
+            else:
+                key, separator, value = args.label.partition('=')
+                if not separator:
+                    raise ValueError('setting requires equals')
+            changed = set_setting(os.getcwd(), key, value)
+            print(key + (' changed' if changed else ' not changed'))
+            return 0
         if args.choice == 'label':
             set_label(os.getcwd(), args.label)
             print('Project label saved.')

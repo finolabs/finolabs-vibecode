@@ -82,6 +82,23 @@ class CheckupTest(unittest.TestCase):
             f"| {name} | yes | fake | unverified | {date} |"
             for name in ("Claude Code", "Codex", "Antigravity")) + "\n"
 
+    def test_project_settings_invalid_deprecated_and_ledger_mismatch_never_show_values(self):
+        host = self.home / '.finolabs/vibecode/host.md'
+        self.write(host, '## Project progress\n- Ledger project: PRIVATE alias\n- Task file: PRIVATE.md\n'
+                        '## Project settings\n- aaaaaaaa unknown: PRIVATE\n')
+        self.write(host.with_name('ledger.jsonl'), json.dumps(dict(event='start', project='PRIVATE other')) + '\n')
+        output = self.run_check('--json')
+        self.assertNotIn('PRIVATE', output)
+        rows = json.loads(output)['setup']
+        self.assertTrue(any(r['check'] == 'project settings' and 'invalid' in r['reason'] for r in rows))
+        self.assertTrue(any(r['check'] == 'ledger-project mismatch' for r in rows))
+        for key in ('ledger', 'tasks'):
+            self.assertTrue(any('settings --set ' + key + '=<value>' in r['reason'] for r in rows))
+        import project_progress as pp
+        host.write_text('## Project progress\n- Ledger project: PRIVATE alias\n## Project settings\n- ' +
+                        pp.repository_code(self.repo) + ' ledger: PRIVATE other\n')
+        self.assertFalse(any(r['check'] == 'ledger-project mismatch' for r in self.data()['setup']))
+
     def test_missing_stale_recent_and_invalid_inventory(self):
         self.assertEqual(self.setup_item("agents inventory")["status"], "missing")
         config = self.home / ".finolabs/vibecode/host.md"
