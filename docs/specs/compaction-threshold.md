@@ -11,9 +11,15 @@ reference and 0.166 binary, and Antigravity changelog and installed binary:
 - Claude: `autoCompactWindow`, integer 100000–1000000 tokens, capped by the
   model window, in a config folder's `settings.json`; default account `.claude`.
   `/autocompact`, `--autocompact` and `CLAUDE_CODE_AUTO_COMPACT_WINDOW` override
-  it; the variable wins over all. Native 1M models compact late by default.
+  it; the variable wins over all. `/autocompact` (since 2.1.288) saves a per-model
+  value `modelSettings.<model>.autoCompactWindow` that overrides the top-level
+  `autoCompactWindow` in the same file, so a writer that edits only the top-level
+  key can be silently overridden. Native 1M models compact late by default.
 - Codex: top-level `model_auto_compact_token_limit` in `config.toml`, under
-  absolute `CODEX_HOME`, otherwise account `.codex`; writer range 1000–10000000.
+  absolute `CODEX_HOME`, otherwise account `.codex`, alongside keys
+  `model_auto_compact_token_limit_scope` and
+  `model_post_turn_compact_threshold_percent`; the range 1000 to 10000000 is the
+  writer's own bound, not a host range.
 - Antigravity: refuse with “no documented setting; /compact only”.
 These sources were named in the supplied evidence, not fetched for this change.
 Codex default and effect on a running session remain unverified.
