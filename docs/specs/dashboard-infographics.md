@@ -1,6 +1,6 @@
 # Dashboard infographics (running and project panes)
 
-Status: owner decisions settled on 2026-11-06 (see "Decisions settled"). Replaces the text-line rendering of the Agents and Project tabs that `running-agents.md` and `project-progress.md` specified. The data rules of those specs (metadata only, consent, safe reading, `textContent` only) are unchanged except where this document says so.
+Status: owner decisions settled on 2026-11-06 (see "Decisions settled"). Replaces the text-line rendering of the former Agents and Project tabs (now the Now tab) that `running-agents.md` and `project-progress.md` specified. The data rules of those specs (metadata only, consent, safe reading, `textContent` only) are unchanged except where this document says so.
 
 ## Two-tab owner decision (2026-11-06)
 
@@ -41,13 +41,13 @@ The approved visual reference is [`assets/dashboard-lego-prototype.html`](assets
 - Motion is CSS only: task bricks snap from translateY(-6px) to 0 in 280 ms, staggered 10 ms per brick up to 500 ms, once on first tab view or changed data. Agent bricks breathe from opacity 1 to 0.5 over 2 s; lanes grow from the left in 0.7 s. All motion is off under `prefers-reduced-motion: reduce`; nothing animates in a hidden tab. At 375 px, task runs wrap within their available width and lane labels sit above their tracks, without horizontal page scroll.
 - Rendering stays `textContent` and `setAttribute` only, no `innerHTML`, no inline script, no remote resource; hostile names are tested.
 
-## Agents tab: who is working, is it healthy
+## Now tab, agents: who is working, is it healthy
 
 One pane, `running now`, with no KPI tiles. Each open dispatch is a flat 8 px bar with 4 px rounded outer ends, urgency first (least time left to hard cap). The neutral track has no outline, studs or brick body: `--line` in dark, very pale neutral lavender-grey in light. It ends at `max(budget * 4 / 3, budget + 10)` minutes. A shared rounded clip contains exactly two adjacent, square-ended fill rects: `--p` up to budget, `--crit` beyond. Their shared edge is half-pixel aligned with crisp edges, with no seam or rounded inner ends. Half-budget and budget ticks sit above the fill: 1 px wide, 14 px tall, `--faint`, centred on the bar. Left: family/model and task label in two short ellipsised lines with full tooltips. Right: `used/budget m`. A budget is unknown unless it is a finite positive number of at most 1,000,000 minutes. No process found gets the existing small outlined brick with a rich `no process` tooltip and accessible label `no process found`. Empty state: three ghost bricks and the muted line `No agents running`.
 
 Below: `slots (5)` and five small bricks, one lit per open dispatch (use a supplied parallel limit if present). Each cached agent-family quota gets a caption such as `claude quota` and ten bricks. Lit count is remaining fraction rounded to tens of percent, with a minimum of one lit brick for every positive verified fraction (including below 5%); lit bricks are teal, red at or below 10%. Zero quota has no lit bricks. An unverified reading uses dashed hollow bricks and `?`. Remaining percent is rounded with `Math.round` in its tooltip and accessible label. Slots have an accessible label giving the lit count and total. The header info tooltip gives short reading guidance; process counts, limits and mismatch flags stay in the bottom tables.
 
-## Project tab: named activity as lego runs
+## Now tab, projects: named activity as lego runs
 
 One block per named active project, newest activity first, at most 12; named-only selection and all activity data rules remain unchanged. Header: bold project name, host marks and faint `last 12 min ago` underneath, a 22 px tabular floored percentage at the right while unfinished (never 100). When every task is done, replace the large percentage with a small teal studded check brick with accessible label `done`; absent task lists do not imply completion. A project without a task list or unfinished work shows only this header.
 
@@ -75,7 +75,7 @@ Editing anything from the page, dependencies between tasks, estimates. The two-t
 2. Page tests also cover both badges, active rows with and without task lists, host tooltips, recency, empty state, and completion values 408/410, 56/57, 1/3, 2/3, 0/5, 5/5. Reader/refresh tests cover deduplication, the 24-hour boundary, ordering, the 12-row cap, labels, closed schema, carry-over validation and purge. Track scale tests cover both branches of the hard-cap formula. Page tests (fake DOM): the lane order, the tick position, the two flush lane colours, the empty states, the project order by latest activity, hidden finished detail, the tooltip content, the quota brick lit counts, slots, merged brick states/counts, the info tooltip content; no `innerHTML` anywhere in the file; the hostile names stay inert.
 3. Reader tests: the `P1` to `P9` tag only, a heading with markup or control characters yields no text, an `archive` folder is skipped, a label with a disallowed character is refused, a missing name hides the repository, a project with 100 percent is flagged done.
 4. Motion: a test asserts the reduced-motion media query disables every animation and no animation name is applied to an element in a hidden tab.
-5. Visual check (owner rule, not skippable): the coordinator serves the page from a localhost server with the rich fixture, screenshots the Agents and Project tabs at 1280 wide and at 390 wide, and attaches them to the pull request.
+5. Visual check (owner rule, not skippable): the coordinator serves the page from a localhost server with the rich fixture, screenshots the Overview and Now tabs at 1280 wide and at 390 wide, and attaches them to the pull request.
 6. `PRIVACY.md` (priority tag, labels), README row, CHANGELOG, `docs/specs/index.md`, `fnl-setup` and `fnl-status` text updated; `check-references.py`, `claude plugin validate .` and targeted tests pass under a world-writable `/tmp`; no hook declaration and no `CLAUDE.md` change.
 
 ## Decisions settled (owner, 2026-11-06)
