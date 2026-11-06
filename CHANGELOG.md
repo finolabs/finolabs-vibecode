@@ -12,6 +12,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Under `manual` delegation mode, `fnl-delegate` now says to mention no possible hand-off, name no other agent as an option and mark nothing recommended, until the user asks (advisory, agent judgment).
 - Restore Claude quota readings by supplying the account database username to probe children and leaving `CLAUDE_CONFIG_DIR` unset for the default install while retaining it for listed extra folders.
 
 ## [0.1.8] - 2026-11-05
