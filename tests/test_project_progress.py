@@ -173,7 +173,8 @@ class ProgressTest(unittest.TestCase):
         self.assertIn('## Project labels', (ROOT / 'skills/fnl-delegate/references/host-template.md').read_text())
         self.assertIn('[Dashboard infographics]', (ROOT / 'docs/specs/index.md').read_text())
         for doc in ('README.md', 'CHANGELOG.md', 'skills/fnl-status/SKILL.md'):
-            self.assertIn('quota meters', (ROOT / doc).read_text())
+            for word in ('quota', 'overview', 'now'):
+                self.assertIn(word, (ROOT / doc).read_text())
 
     def test_spec_uses_same_safe_read_and_twenty_file_budget(self):
         for n in range(11):

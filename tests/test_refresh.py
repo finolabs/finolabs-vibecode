@@ -550,18 +550,18 @@ class RefreshTest(unittest.TestCase):
         spark = self.data()["kpi"]["spark"]
         self.assertEqual((spark["sessions"], spark["calls"], spark["router_coverage"]), (None, None, None))
 
-    def test_the_rework_share_counts_every_pull_request_not_only_the_newest_eight(self):
+    def test_the_rework_share_counts_every_pull_request_not_only_the_newest_twelve(self):
         self.consent()
         events = []
-        for pr in range(1, 11):
+        for pr in range(1, 15):
             if pr % 2 == 0:
                 events.append(self.event(100 - pr, "a", X, "review", kind="code", verdict="REWORK", pr=pr))
             events.append(self.event(50 - pr, "a", X, "review", kind="code", verdict="APPROVE", pr=pr))
         self.write_events(events)
         self.refresh("run")
         d = self.data()
-        self.assertEqual(len(d["reviews"]), 8)
-        self.assertEqual(d["review_stats"], {"total": 10, "reworked": 5})
+        self.assertEqual(len(d["reviews"]), 12)
+        self.assertEqual(d["review_stats"], {"total": 14, "reworked": 7})
 
     def test_events_without_skills_say_so_instead_of_blaming_the_hooks(self):
         self.consent()

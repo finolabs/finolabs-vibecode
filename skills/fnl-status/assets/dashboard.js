@@ -45,7 +45,7 @@
   function tipSentence(spec) {
     if (typeof spec === "string") return spec;
     return [spec.title, spec.sub].concat((spec.rows || []).map(function (row) { return row[0] + ": " + row[1]; }),
-      spec.items || [], (spec.chips || []).map(function (chip) { return chip.label; })).filter(Boolean).map(function (part) { return String(part).replace(/[.!?]+$/, ""); }).join("; ").replace(/\s+/g, " ") + ".";
+      spec.items || [], (spec.reviewChains || []).map(function (vs) { return vs.length + " rounds: " + vs.join(" → "); }), (spec.chips || []).map(function (chip) { return chip.label; })).filter(Boolean).map(function (part) { return String(part).replace(/[.!?]+$/, ""); }).join("; ").replace(/\s+/g, " ") + ".";
   }
   function tipOn(el, spec) {
     tips.set(el, spec); el.setAttribute("data-tip", "");
@@ -74,6 +74,20 @@
         chips.appendChild(h("span", "tip-chip " + state, [h("i", "tip-dot"), String(chip.label)]));
       });
       tip.appendChild(chips);
+    }
+    if (spec.reviewChains) {
+      var chains = h("div", "tip-review-chains");
+      spec.reviewChains.forEach(function (verdicts) {
+        var chain = h("div", "tip-review-chain");
+        chain.setAttribute("aria-label", verdicts.length + " rounds: " + verdicts.join(" → "));
+        verdicts.slice(0, 8).forEach(function (verdict) {
+          var dot = h("i", "review-dot " + (verdict === "APPROVE" ? "approve" : "rework"));
+          dot.setAttribute("aria-label", verdict); chain.appendChild(dot);
+        });
+        if (verdicts.length > 8) chain.appendChild(t("span", "more-rounds", "+" + (verdicts.length - 8)));
+        chains.appendChild(chain);
+      });
+      tip.appendChild(chains);
     }
     if (spec.bar && Number.isFinite(spec.bar.max) && spec.bar.max > 0) {
       var bar = h("div", "tip-bar"), ink = h("i", "tip-bar-fill");
@@ -257,19 +271,19 @@
           rows: [["remaining", Math.round(fraction * 100) + "%"], ["measured", q.measured]], bar: {value: fraction, max: 1, marks: [.1]}});
         capacity.appendChild(h("div", "quota-block capacity-block", [t("div", "capacity-caption", q.agent + " quota"), meter]));
       });
-      TABS.get("agents").tableRows.push(tableOf("quota", ["family", "remaining", "measured", "state"], quota.map(function (q) {
+      TABS.get("now").tableRows.push(tableOf("quota", ["family", "remaining", "measured", "state"], quota.map(function (q) {
         return [q.agent, pct(q.remaining_fraction), q.measured, q.unverified ? "unverified" : "verified"];
       })));
     }
-    TABS.get("agents").tableRows.push(tableOf("agent state", ["measure", "count"], [
+    TABS.get("now").tableRows.push(tableOf("agent state", ["measure", "count"], [
       ["running now", open.length], ["parallel slots", limit], ["past the check time", late], ["not started by coordinator", unowned],
       ["named processes", available ? processes.length : "unavailable"],
       ["app processes", available ? Object.keys(snapshot.apps || {}).reduce(function (sum, family) { return sum + snapshot.apps[family]; }, 0) : "unavailable"]]));
-    if (available) TABS.get("agents").tableRows.push(tableOf("process roots", ["family", "elapsed seconds", "descendants", "coordinator match"], processes.map(function (p) {
+    if (available) TABS.get("now").tableRows.push(tableOf("process roots", ["family", "elapsed seconds", "descendants", "coordinator match"], processes.map(function (p) {
       return [p.family, p.elapsed_seconds, Object.keys(p.descendants || {}).map(function (name) { return name + ": " + p.descendants[name]; }).join(", ") || "none",
         p.not_started_by_coordinator ? "not started by coordinator" : "family match only"];
     })));
-    TABS.get("agents").tableRows.push(tableOf("dispatch budgets", ["agent / model / task", "elapsed / budget", "check", "liveness"], open.map(function (run) {
+    TABS.get("now").tableRows.push(tableOf("dispatch budgets", ["agent / model / task", "elapsed / budget", "check", "liveness"], open.map(function (run) {
       return [run.agent + " / " + run.model + " / " + run.task, run.age_min + "/" + run.budget_min + " min", run.check_due ? "check due" : "—", run.liveness];
     })));
     return stack([lanes, capacity]);
@@ -394,7 +408,7 @@
       list.appendChild(row);
     });
     list.appendChild(taskLegend());
-    TABS.get("project").tableRows.push(tableOf("active projects", ["project", "hosts", "sessions · 24h", "last", "done"], rows.map(function (row) {
+    TABS.get("now").tableRows.push(tableOf("active projects", ["project", "hosts", "sessions · 24h", "last", "done"], rows.map(function (row) {
       var percent = Number(row.percent);
       return [row.label, activityHosts(row.hosts).join(", "), row.sessions, activityTime(row.last) ? String(row.last) : "unavailable",
         row.percent == null || !Number.isFinite(percent) ? "—" : Math.max(0, Math.min(100, Math.floor(percent))) + "%"];
@@ -457,7 +471,7 @@
     var keys = Object.keys(repositories).filter(function (code) { return repositories[code].label || activeNames[code]; });
     var content = [activeProjects(block)];
     keys.forEach(function (code) {
-      TABS.get("project").tableRows.push(h("div", "tbl", [t("h3", "", repositories[code].label || activeNames[code]), projectData(repositories[code])]));
+      TABS.get("now").tableRows.push(h("div", "tbl", [t("h3", "", repositories[code].label || activeNames[code]), projectData(repositories[code])]));
     });
     return stack(content);
   }
@@ -502,12 +516,6 @@
     svg.appendChild(s("path", Object.assign({ d: "M72 64 H92" }, stroke)));
     return svg;
   }
-  function glyph(kind) {
-    var svg = s("svg", { viewBox: "0 0 18 18", "aria-hidden": "true" });
-    if (kind === "APPROVE") svg.appendChild(s("circle", { cx: 9, cy: 9, r: 7, fill: "var(--good)" }));
-    else svg.appendChild(s("rect", { x: 3.5, y: 3.5, width: 11, height: 11, rx: 1.5, fill: "var(--warn)", transform: "rotate(45 9 9)" }));
-    return svg;
-  }
   function tableOf(title, head, rows) {
     return h("div", "tbl", [t("h3", "", title), h("table", "", [
       h("thead", "", [h("tr", "", head.map(function (c, i) { return t("th", i ? "r" : "", c); }))]),
@@ -519,21 +527,21 @@
   /* Only these literal names can select a panel or become a fragment. */
   var TABS = new Map([
     ["overview", { label: "Overview", id: "panel-overview", buttonId: "tab-overview" }],
-    ["agents", { label: "Agents", id: "panel-agents", buttonId: "tab-agents" }],
-    ["project", { label: "Project", id: "panel-project", buttonId: "tab-project" }],
-    ["delegation", { label: "Delegation", id: "panel-delegation", buttonId: "tab-delegation" }],
-    ["reviews", { label: "Reviews", id: "panel-reviews", buttonId: "tab-reviews" }]
+    ["now", { label: "Now", id: "panel-now", buttonId: "tab-now" }]
   ]);
+  var TAB_LINKS = new Map([["overview", "overview"], ["now", "now"],
+    ["agents", "now"], ["project", "now"], ["delegation", "overview"], ["reviews", "overview"]]);
+  function resolveTab(value) { return TAB_LINKS.get(value) || "overview"; }
   var selected = "overview";
   function hashTab() { return window.location.hash.slice(1); }
   function initialTab() {
-    if (window.location.hash) return TABS.has(hashTab()) ? hashTab() : "overview";
-    try { var value = localStorage.getItem("fnl-tab"); if (TABS.has(value)) return value; } catch (e) { /* storage can be blocked */ }
+    if (window.location.hash) return resolveTab(hashTab());
+    try { var value = localStorage.getItem("fnl-tab"); if (TAB_LINKS.has(value)) return resolveTab(value); } catch (e) { /* storage can be blocked */ }
     return "overview";
   }
   selected = initialTab();
   function selectTab(name, remember) {
-    selected = TABS.has(name) ? name : "overview";
+    selected = resolveTab(name);
     TABS.forEach(function (tab, key) {
       var active = key === selected;
       tab.button.setAttribute("aria-selected", String(active));
@@ -555,7 +563,8 @@
   }
   window.addEventListener("hashchange", function () { selectTab(hashTab(), false); });
   function drawTabs() {
-    var strip = h("div", "tablist"), names = Array.from(TABS.keys());
+    var strip = document.getElementById("tabs"), names = Array.from(TABS.keys());
+    strip.replaceChildren();
     strip.setAttribute("role", "tablist"); strip.setAttribute("aria-label", "Dashboard sections");
     TABS.forEach(function (tab, name) {
       var button = t("button", "", tab.label), panel = h("div", "tabpanel");
@@ -565,8 +574,8 @@
       panel.setAttribute("role", "tabpanel"); panel.setAttribute("id", tab.id);
       panel.setAttribute("aria-labelledby", tab.buttonId); panel.tabIndex = 0; panel.hidden = true;
       var count = null;
-      if (name === "agents" && D.running) count = (D.running.open || []).length;
-      if (name === "project" && D.progress) count = namedActivity(D.progress).length;
+      if (name === "now" && (D.running || D.progress))
+        count = (D.running ? (D.running.open || []).length : 0) + (D.progress ? namedActivity(D.progress).length : 0);
       if (count != null) { var badge = h("span", "count"); badge.textContent = String(count); button.appendChild(badge); }
       button.addEventListener("click", function () { selectTab(name, true); });
       button.addEventListener("keydown", function (e) {
@@ -581,13 +590,12 @@
           TABS.get(target).button.focus();
         } else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectTab(name, true); }
       });
-      var signature = name === "agents" ? JSON.stringify(D.running) : name === "project" ? JSON.stringify(D.progress) : "";
+      var signature = name === "now" ? JSON.stringify([D.running, D.progress]) : "";
       if (signature !== tab.signature) tab.pendingAnimation = true;
       tab.signature = signature;
       tab.button = button; tab.panel = panel; tab.tableRows = [];
       strip.appendChild(button);
     });
-    app.appendChild(strip);
     TABS.forEach(function (tab) { app.appendChild(tab.panel); });
   }
   function placeFooter() {
@@ -652,12 +660,11 @@
       t("span", "", "Usage events need your consent in fnl-setup and a session started after it.")])]);
   }
 
-  document.getElementById("wtitle").textContent = "~/finolabs-vibecode — fnl-status";
   var sess = D.sessions || {}, k = D.kpi || {}, sp = k.spark || {};
-  app.appendChild(h("div", "cmd", [
+  app.appendChild(tipOn(h("div", "cmd", [
     t("span", "ps", "$"), t("span", "", "fnl-status" + (D.period ? " --since " + D.period.days + "d" : "")), h("span", "cursor"),
     t("span", "meta", D.period ? D.period.from + " → " + D.period.to : "")
-  ]));
+  ]), {title: "~/finolabs-vibecode — fnl-status", items: ["Local usage metadata and dispatch ledger."]}));
   if (emptyNotice) app.appendChild(emptyNotice);
 
   /* KPI strip */
@@ -677,9 +684,9 @@
   app.appendChild(kp);
 
   drawTabs();
-  var overview = TABS.get("overview").panel, delegation = TABS.get("delegation").panel;
-  TABS.get("agents").panel.appendChild(pane("running now", infoButton(runningLimits() || "not available yet"), "", runningPanel(), "not available yet"));
-  TABS.get("project").panel.appendChild(pane("project progress", infoButton(projectLimits()), "", projectPanel(), "not available yet"));
+  var overview = TABS.get("overview").panel;
+  TABS.get("now").panel.appendChild(pane("running now", infoButton(runningLimits() || "not available yet"), "", runningPanel(), "not available yet"));
+  TABS.get("now").panel.appendChild(pane("projects, last 24 h", infoButton(projectLimits()), "", projectPanel(), "not available yet"));
 
   /* Overview: activity and router composition beside depth and load cost. */
   var band1 = h("div", "g2");
@@ -748,23 +755,36 @@
     rt = stack([sg, brk, t("div", "meta", "eligible " + r.eligible + " · " + pct(r.covered / ((r.covered + r.missed) || 1)) + " covered"),
       legend(parts.map(function (p) { return [p[0] + " " + p[1], p[2]]; }))]);
   }
-  band1.appendChild(pane("router coverage", "sessions", "", rt, missing("router") || "hooks not installed or consent not given", "stack"));
+  var coverageRow = h("div", "g2 coverage-row");
+  coverageRow.appendChild(pane("router coverage", "sessions", "", rt, missing("router") || "hooks not installed or consent not given", "stack"));
 
   var rv = null;
   if (D.reviews && D.reviews.length) {
-    var rs = D.review_stats || { total: D.reviews.length, reworked: D.reviews.filter(function (x) { return x.verdicts.indexOf("REWORK") > -1; }).length };
-    rv = stack([h("div", "stat", [t("strong", "", pct(rs.total ? rs.reworked / rs.total : null)), t("span", "", "of " + rs.total + " pull requests needed rework")]),
-      h("div", "rv", D.reviews.map(function (x) {
-        var seq = h("div", "seq");
-        x.verdicts.slice(0, 8).forEach(function (v, i) { if (i) seq.appendChild(h("span", "ln")); seq.appendChild(tipOn(glyph(v), v)); });
-        seq.setAttribute("data-dots", Math.min(8, x.verdicts.length));
-        if (x.verdicts.length > 8) seq.appendChild(t("span", "more-rounds", "+" + (x.verdicts.length - 8)));
-        tipOn(seq, x.verdicts.length + " rounds · " + x.verdicts.join(" → "));
-        return tipOn(h("div", "r", [t("span", "meta review-label", (x.label || repoLabel(x.repo)) + " #" + x.pr), seq]),
-          (x.label || repoLabel(x.repo)) + " · PR #" + x.pr + ": " + x.verdicts.join(" → "));
-      })), legend([["approve", "var(--good)"], ["rework", "var(--warn)"]])]);
+    var rs = D.review_stats || {total: D.reviews.length,
+      reworked: D.reviews.filter(function (x) { return x.verdicts.indexOf("REWORK") !== -1; }).length};
+    var rounds = [0, 0, 0];
+    D.reviews.forEach(function (x) { if (x.verdicts.length) rounds[Math.min(3, x.verdicts.length) - 1]++; });
+    var distribution = h("div", "seg review-distribution");
+    distribution.setAttribute("role", "img");
+    distribution.setAttribute("aria-label", rounds.map(function (n, i) { return ["1 round", "2 rounds", "3 or more rounds"][i] + ": " + n; }).join(", "));
+    rounds.forEach(function (n, i) {
+      var part = t("i", "review-round round-" + (i + 1), "");
+      part.style.flex = String(n); part.setAttribute("data-count", String(n));
+      distribution.appendChild(part);
+    });
+    var rate = rs.total ? Math.floor((rs.total - rs.reworked) / rs.total * 100) + "%" : "—";
+    rv = tipOn(stack([h("div", "stat review-figure", [t("strong", "", rate), t("span", "", "first-pass approve")]),
+      distribution, t("div", "meta", "review rounds · 1 / 2 / 3+")]), {
+      title: "Review gate", sub: "Last " + Math.min(12, D.reviews.length) + " pull requests · approve teal, rework amber",
+      rows: [["first-pass approve", rate], ["pull requests", String(rs.total)],
+        ["1 / 2 / 3+ rounds (shown)", rounds.join(" / ")]],
+      reviewChains: D.reviews.slice(0, 12).map(function (x) { return x.verdicts; })
+    });
+    rv.classList.add("review-summary");
   }
-  var reviewPane = pane("review gate", "pull requests", "", rv, missing("reviews") || "no review comments recorded", "rv");
+  coverageRow.appendChild(pane("review gate", "pull requests", "", rv, missing("reviews") || "no review comments recorded", "rv"));
+
+  band1.appendChild(coverageRow);
 
   /* Band 2: skill and agent use (tall) beside depth and load cost */
   var band2 = h("div", "g2");
@@ -791,89 +811,28 @@
     ld = hbars(D.load.top.map(function (x) { return { n: x.name, v: x.tokens, label: "~" + tok(x.tokens), tip: x.name + ": ~" + x.tokens + " tokens, loaded " + x.loads + " times (estimate)" }; }), "var(--p)");
   }
   band2.appendChild(pane("load cost", D.load ? "tokens, ~" + tok(D.load.avg_tokens_per_session) + " per session" : "", "", ld, missing("load") || "hooks not installed or consent not given", "bars4"));
-  TABS.get("reviews").panel.appendChild(reviewPane);
   overview.appendChild(band2);
 
-  /* Delegation lollipop */
-  var dl = null;
-  if (D.delegation && D.delegation.length) {
-    var ax = h("div", "ax", [t("span", "", "0%"), t("span", "", "60%"), t("span", "", "100%")]);
-    ax.children[0].style.left = "0"; ax.children[1].style.left = "60%"; ax.children[2].style.left = "100%";
-    var rows = [h("div", "r h", [h("span"), ax, t("span", "", "quota"), t("span", "", "error")])];
-    D.delegation.forEach(function (x) {
-      var small = x.runs < 5, fp = x.first_pass, trk = h("div", "trk"), th = h("i", "th");
-      th.style.left = "60%"; trk.appendChild(th);
-      if (fp != null) {
-        var col = small ? "var(--faint)" : fp < .6 ? "var(--crit)" : "var(--good)", st = h("i", "stem"), dot = h("i", "dot" + (small ? " open" : ""));
-        st.style.width = (fp * 100) + "%"; st.style.background = col;
-        dot.style.left = (fp * 100) + "%"; dot.style.color = col;
-        tipOn(dot, "first pass " + pct(fp) + (small ? " (fewer than 5 runs, not judged)" : ""));
-        trk.appendChild(st); trk.appendChild(dot);
-      } else trk.appendChild(t("span", "na", "no judged run"));
-      function cnt(n, c) { var e = t("span", "c" + (n ? "" : " z"), n); e.style.setProperty("--c", c); return e; }
-      rows.push(tipOn(h("div", "r", [h("div", "who", [t("span", "", x.agent + " · " + x.grade + " · n=" + x.runs), t("span", "meta", x.model)]), trk, cnt(x.quota, "var(--warn-text, var(--warn))"), cnt(x.error, "var(--crit)")]),
-        x.agent + " " + x.model + " (" + x.grade + "): " + x.runs + " runs, first pass " + pct(fp) + ", quota " + x.quota + ", error " + x.error + ", median " + x.median_min + " min"));
-    });
-    dl = stack([h("div", "dl", rows), legend([["first pass at or above 60%", "var(--good)"], ["below 60%", "var(--crit)"], ["open ring: fewer than 5 runs", "var(--faint)"]])]);
-  }
-  if (D.kept) {
-    var plural = function (n, word) { return n + " " + word + (n === 1 ? "" : "s"); };
-    var keptLine = t("p", "meta", plural(D.kept.tasks, "task") + " kept by the coordinator in " + plural(D.kept.receipts, "receipt") + (D.kept.handed_off == null ? "" : "; " + plural(D.kept.handed_off, "implementation run") + " handed off"));
-    dl = stack([keptLine, dl || t("div", "nodata", "no data: " + (missing("delegation") || "ledger is empty"))]);
-  }
-  delegation.appendChild(pane("delegation", "from the dispatch ledger", "wide", dl, missing("delegation") || "ledger is empty", "dl"));
-
-  /* Judge receipts and a separate outcome association from the ledger. */
-  if (D.judge) {
-    var j = D.judge, judgeParts = [];
-    if (j.receipts) {
-      judgeParts.push(t("h3", "", "Use"));
-      judgeParts.push(hbars(j.use.map(function (x) { return { n: x.site + " · " + x.grader, v: x.count }; }), "var(--p)"));
-      [["Usable answers", j.usable_answers.share, j.usable_answers.validated, j.usable_answers.calls],
-       ["Followed", j.followed.share, j.followed.yes, j.followed.validated]].forEach(function (x) {
-        var bar = h("i"), value = pct(x[1]) + " (" + x[2] + "/" + x[3] + ")";
-        bar.style.width = ((x[1] || 0) * 100) + "%"; bar.style.background = "var(--p)";
-        judgeParts.push(h("div", "hb", [h("div", "r", [t("span", "n", x[0]),
-          h("span", "trk", [bar, t("span", "v", x[1] == null ? "no answers" : value)])])]));
-      });
-    } else judgeParts.push(t("p", "meta", j.note));
-    judgeParts.push(t("h3", "", "Outcome association"));
-    if (j.outcome_association.length) {
-      var jax = h("div", "ax", [t("span", "", "0%"), t("span", "", "60%"), t("span", "", "100%")]);
-      jax.children[0].style.left = "0"; jax.children[1].style.left = "60%"; jax.children[2].style.left = "100%";
-      var jrows = [h("div", "r h", [h("span"), jax, t("span", "", "first pass"), h("span")])];
-      j.outcome_association.forEach(function (x) {
-        var small = x.runs < 5, col = small ? "var(--faint)" : x.first_pass < .6 ? "var(--crit)" : "var(--good)";
-        var track = h("div", "trk"), line = h("i", "th"), stem = h("i", "stem"), dot = h("i", "dot" + (small ? " open" : ""));
-        line.style.left = "60%";
-        stem.style.width = (x.first_pass * 100) + "%"; stem.style.background = col;
-        dot.style.left = (x.first_pass * 100) + "%"; dot.style.color = col;
-        tipOn(dot, "first pass " + pct(x.first_pass) + (small ? " (fewer than 5 runs, not judged)" : ""));
-        track.appendChild(line); track.appendChild(stem); track.appendChild(dot);
-        jrows.push(h("div", "r", [t("span", "who", x.route_by + " · n=" + x.runs), track, t("span", "", pct(x.first_pass)), h("span")]));
-      });
-      judgeParts.push(h("div", "dl", jrows));
-      judgeParts.push(legend([["first pass at or above 60%", "var(--good)"], ["below 60%", "var(--crit)"], ["open ring: fewer than 5 runs, not judged", "var(--faint)"]]));
-    } else judgeParts.push(t("p", "meta", j.outcome_note));
-    judgeParts.push(t("p", "meta", "Not measured: cost, latency and accuracy. The outcome is an association, not proof the judge was right."));
-    delegation.appendChild(pane("Judge", "receipts and dispatch ledger", "wide", stack(judgeParts)));
-  } else delegation.appendChild(pane("Judge", "receipts and dispatch ledger", "wide", null, missing("judge") || "not available yet"));
-
   /* Tables follow their panes; sources and footer stay shared. */
-  var tabs = TABS.get("overview").tableRows, delegationTables = TABS.get("delegation").tableRows;
+  var tabs = TABS.get("overview").tableRows, delegationTables = tabs;
   if (D.use) tabs.push(tableOf("use", ["name", "calls"], D.use.map(function (u) { return [u.name, u.count]; })));
   if (D.load && D.load.top) tabs.push(tableOf("load (estimate)", ["skill", "tokens", "loads"], D.load.top.map(function (x) { return [x.name, x.tokens, x.loads]; })));
   if (D.depth) tabs.push(tableOf("depth", ["depth", "receipts", "reworked"], D.depth.map(function (x) { return [x.depth, x.receipts, x.reworked]; })));
   if (D.delegation) delegationTables.push(tableOf("delegation", ["agent / model / grade", "runs", "first pass", "quota", "error", "median min", "rework"], D.delegation.map(function (x) { return [x.agent + " / " + x.model + " / " + x.grade, x.runs, pct(x.first_pass), x.quota, x.error, x.median_min, x.rework]; })));
+  if (!D.delegation) delegationTables.push(tableOf("delegation", ["status"], [["no data: " + (missing("delegation") || "ledger is empty")]]));
+  if (D.kept) delegationTables.push(tableOf("kept and handed off", ["tasks kept", "receipts", "implementation runs handed off"],
+    [[D.kept.tasks, D.kept.receipts, num(D.kept.handed_off)]]));
   if (D.kept && D.kept.rows.length) delegationTables.push(tableOf("kept by the coordinator", ["coordinator / reason / settled by", "receipts", "tasks"], D.kept.rows.map(function (x) { return [x.coordinator + " / " + x.reason + " / " + x.route_by, x.receipts, x.tasks]; })));
   if (D.judge) {
+    if (!D.judge.receipts) delegationTables.push(tableOf("Judge · receipts", ["note"], [[D.judge.note]]));
+    delegationTables.push(tableOf("Judge · limits", ["note"], [["Not measured: cost, latency and accuracy. The outcome is an association, not proof the judge was right."]]));
     if (D.judge.use) delegationTables.push(tableOf("Judge · Use", ["site / grader", "decisions"], D.judge.use.map(function (x) { return [x.site + " / " + x.grader, x.count]; })));
     if (D.judge.receipts) delegationTables.push(tableOf("Judge · answers", ["measure", "count", "total", "share"], [
       ["Usable answers", D.judge.usable_answers.validated, D.judge.usable_answers.calls, pct(D.judge.usable_answers.share)],
       ["Followed", D.judge.followed.yes, D.judge.followed.validated, pct(D.judge.followed.share)]]));
     if (D.judge.outcome_association.length) delegationTables.push(tableOf("Judge · Outcome association", ["routed by", "runs", "first pass"], D.judge.outcome_association.map(function (x) { return [x.route_by, x.runs, pct(x.first_pass)]; })));
   }
-  if (D.reviews) TABS.get("reviews").tableRows.push(tableOf("reviews", ["pr", "verdicts"], D.reviews.map(function (x) { return [(x.label || repoLabel(x.repo)) + " #" + x.pr, x.verdicts.join(" → ")]; })));
+  if (D.reviews) tabs.push(tableOf("reviews", ["pr", "verdicts"], D.reviews.map(function (x) { return [(x.label || repoLabel(x.repo)) + " #" + x.pr, x.verdicts.join(" → ")]; })));
   if (act.length) {
     var wk = [];
     for (var w = 0; w < act.length; w += 7) { var sum = 0; act.slice(w, w + 7).forEach(function (a) { sum += a.count; }); wk.push([act[w].date, sum]); }

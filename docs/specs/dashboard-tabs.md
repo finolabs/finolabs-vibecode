@@ -1,52 +1,46 @@
 # Dashboard tabs
 
-Idea: owner, 2026-11-06. The status dashboard is one long page and is about to gain two panels
-(`running-agents.md`, `project-progress.md`). Split it into tabs so each audience finds its part.
-Design only; code follows the specs it serves. The page stays one static file with no build step.
+## Owner decisions (2026-11-06)
 
-## Tabs and where today's panes go
+The static dashboard has exactly two tabs, `overview` and `now`. This decision replaces the
+five-tab layout. Both buttons live in the terminal window title bar immediately after its three
+dots; there is no separate tab row. Use small monospace terminal tabs, muted when inactive,
+with a 2 px teal underline when active. The dark/light control stays at the right end. At 375 px
+the title bar does not wrap: tab padding shrinks and the count badge stays visible.
 
-| Tab | Holds | Source |
+| Tab | Panes | Bottom tables |
 | --- | --- | --- |
-| Overview (default) | activity, router coverage, skill and agent use, depth vs outcome, load cost | existing panes |
-| Agents | Running now: command-line agent processes, open delegated runs, app-process summary | `running-agents.md` |
-| Project | task progress by feature, phase and story; which agent and which session works on which task | `project-progress.md` |
-| Delegation | the delegation pane and the Judge pane | existing panes |
-| Reviews | the review gate pane | existing pane |
+| overview (default) | all existing Overview panes, plus a small review gate beside router coverage | existing Overview tables, delegation by agent/model/grade, kept and handed-off counts, Judge receipts and outcome association, full Reviews table |
+| now | `running now`, then `projects, last 24 h`, stacked vertically, retaining the existing lanes, slots, quota and project graphics | existing running and project tables |
 
-A tab whose sources are missing shows the existing "missing" message for each pane, not an empty tab.
+Delegation and full Reviews are tables only, each in the existing `show the data as tables`
+disclosure at the bottom of Overview. The first-pass KPI stays. The review gate shows a large
+floored first-pass approve percentage and a thin distribution of PRs with 1, 2 and 3 or more
+review rounds (the newest 12 in `D.reviews`; `D.review_stats` retains the whole-period totals).
+The reader supplies up to 12 recent PRs. Its rich tooltip shows them as dot chains:
+approve teal, rework amber,
+without repository names or hashes. Long chains retain the eight-dot cap and remaining count.
+The centred path title moves into the prompt line's rich tooltip.
 
 ## Behaviour
 
-- Markup: `role="tablist"`, `role="tab"` buttons with `aria-selected` and `aria-controls`, one
-  `role="tabpanel"` per tab; arrow keys, Home and End move between tabs; Enter and Space select.
-- The location hash selects a tab (`#agents`, `#project`, ...) by lookup in a fixed own-property table (a
-  `Map`) of the five names; an unknown hash falls back to Overview, and the hash is never put into a
-  selector, `innerHTML` or an attribute. Panel ids differ from the hash names (`panel-agents` for
-  `#agents`), so the browser's fragment scroll cannot target an arbitrary element. The last tab is
-  remembered in `localStorage` inside try/catch and checked against the same table when read; with
-  storage blocked or throwing, the page renders normally.
-- Above the tab strip and shown on every tab: the prompt line, the KPI strip, the theme switch and the
-  empty-state veil (when there is no data at all).
-- The existing 5-second reload of `data.js` re-renders panes but keeps the selected tab, the scroll position
-  of the panel and every open table; a reload never switches tabs.
-- Tab labels carry a small count where it means something: Agents shows running processes plus open
-  runs; Project shows tasks in progress. No count when its source is missing.
-- Narrow width: the tab strip scrolls horizontally inside itself; the page gets no horizontal scroll.
-  Colours come from the existing theme tokens in light and dark; no remote font, script or stylesheet; no
-  inline event handlers; all dynamic text through `textContent`.
-- `fnl-status` SKILL names the tabs and which command rebuilds the data; its step order is unchanged.
-
-## Not in scope
-
-Per-tab refresh intervals; saved layouts; printing; a second page file.
+- Use `role="tablist"`, `role="tab"`, `aria-selected`, `aria-controls`, and one
+  `role="tabpanel"` per tab. Arrow keys, Home and End move focus; Enter and Space select.
+- Only literal maps resolve fragments and remembered storage: `#agents` and `#project` select
+  `now`; `#delegation` and `#reviews` select `overview`; unknown fragments select `overview`.
+  Keep `hashchange`. Never write fragment input to the DOM, a selector or an attribute.
+  Panel ids differ from fragment names. Storage is guarded by try/catch.
+- The prompt, KPI strip and empty-state veil remain shared. `overview` has no badge; `now` has
+  open dispatches plus named active projects (existing source counts). Omit the badge only when
+  both sources are missing.
+- The five-second local `data.js` reload preserves selection, keyboard focus, panel scroll and
+  open tables. The compact freshness footer and tables remain last on the selected tab.
+- Keep theme tokens, rich tooltips, local resources, safe text builders and reduced-motion rules.
 
 ## Acceptance
 
-1. Existing page tests (fake timers) keep passing with every current pane reachable in its tab.
-2. New tests: tab switching by click and keyboard; hash selection, unknown hash, hostile hash values
-   (`__proto__`, `constructor`, markup, selector characters) and a hostile stored value; storage that throws;
-   a `data.js` reload keeps the tab; counts present only with sources; empty and missing-source states;
-   narrow-width strip does not widen the page.
-3. No new network request, script, stylesheet or inline handler; `check-references.py`,
-   `claude plugin validate .` and the page tests pass.
+Tests cover exactly two title-bar tabs with labels and roles; pane order and moved tables; badge
+counts; all four old links, unknown/hostile fragments and hostile storage; hashchange, keyboard
+navigation, blocked storage, reload state and missing sources; the review figure, distribution and
+bounded tooltip dots; no obsolete tab/panel ids; the 375 px no-wrap rule. The coordinator checks
+both themes in a real browser. No new data collection, hook declaration or remote resource.

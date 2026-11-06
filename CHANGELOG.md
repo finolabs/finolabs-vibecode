@@ -27,6 +27,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Consolidate the dashboard into title-bar `overview` and `now` tabs, add a compact review gate, and move delegation, Judge receipts and full Reviews into Overview tables.
+
 - Flatten dashboard lanes into two flush colours, add structured tooltips, and refine light warning colours, freshness thresholds and story spacing.
 
 - Move dashboard limits and footer details behind accessible info buttons, show compact freshness and finished-project check bricks, and bound lane/quota marks while separating wrapped story runs.

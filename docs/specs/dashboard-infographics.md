@@ -1,6 +1,22 @@
-# Dashboard infographics (Agents and Project tabs)
+# Dashboard infographics (running and project panes)
 
 Status: owner decisions settled on 2026-11-06 (see "Decisions settled"). Replaces the text-line rendering of the Agents and Project tabs that `running-agents.md` and `project-progress.md` specified. The data rules of those specs (metadata only, consent, safe reading, `textContent` only) are unchanged except where this document says so.
+
+## Two-tab owner decision (2026-11-06)
+
+The owner supersedes the former five-tab structure with [`dashboard-tabs.md`](dashboard-tabs.md):
+`overview` and `now` buttons sit immediately after the terminal dots in the title bar, with a
+2 px teal active underline and no separate tab row. `now` stacks `running now` over
+`projects, last 24 h`, preserving the graphics described below. Its badge sums open dispatches
+and named active projects. Move the path title to the prompt's rich tooltip; keep the theme
+switch at the right and the bar on one line at 375 px with smaller tab padding.
+
+Overview keeps its panes and first-pass KPI, adds a compact review gate beside router coverage
+(floored first-pass approve rate, thin 1/2/3+ round distribution, last 12 PR dot chains in its rich
+tooltip, teal approve and amber rework, no repository labels or hashes). Delegation, kept/handed-off
+counts, Judge receipts and full Reviews become tables only in Overview's bottom disclosure.
+Legacy fragments redirect through literal maps as specified in the tab spec. Historical references
+to Agents and Project tabs below describe the unchanged panes now stacked inside `now`.
 
 ## Why
 
@@ -18,7 +34,7 @@ The approved visual reference is [`assets/dashboard-lego-prototype.html`](assets
 
 ## Rules for every tab
 
-- One question per tab. Agents uses plain budget lanes and quota bricks; Project uses visible story brick runs.
+- One question per pane. Agents uses plain budget lanes and quota bricks; Project uses visible story brick runs.
 - At most 6 lines of body text above the fold at 1280 by 800; explanations of limits live in a 14 px `ⓘ` info button in the pane header aside, not in disclosures or body text.
 - Colour carries state, never decoration: the page's single teal ramp for progress and amount, `--warn` and `--crit` only for state, never reused for series. Every colour-coded mark also has a shape, label or tooltip (no colour-only meaning).
 - Every figure has the text equivalent in the existing "show the data as tables" disclosure; the seven-column task table moves there.
@@ -51,7 +67,7 @@ Only named repositories appear: an explicit host-config label wins over a regist
 
 ## Not in scope
 
-The Delegation tab (its lollipop and threshold view already fits the page) and any Reviews redesign beyond the defects above; editing anything from the page, dependencies between tasks, estimates.
+Editing anything from the page, dependencies between tasks, estimates. The two-tab owner decision above governs the review gate and bottom tables.
 
 ## Acceptance
 
