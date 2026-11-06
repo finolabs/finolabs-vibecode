@@ -10,6 +10,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Compose the none workflow's existing planning steps with work records; Spec Kit keeps its own artifacts and installed phase tools fill the record.
+
 - Show recent usage-session counts beside slots and every cached quota pool by family, with unread placeholders and per-pool reset/freshness details.
 
 - Draw project stages as SVG chevron chains beside identity, keep story lanes for one active item, and replace the truncated storyless label with a dashed tag icon.

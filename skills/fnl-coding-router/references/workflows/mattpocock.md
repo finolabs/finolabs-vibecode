@@ -17,6 +17,8 @@ The pack's skills are installed for this repository (for example under `.claude/
 | 6. Review | `fnl-review-gate`, with `code-review` as the reviewer's instrument, plus `fnl-security-review-gate` when its triggers hit. |
 | Pull request, handover | `pr` for the description, `handoff` for a portable handover. |
 
+Advisory (agent judgment): when none.md calls for a work record, `grilling` fills Goal and acceptance; `to-spec` and `to-tickets` feed Plan and Tasks when the repository also uses an issue tracker; `tdd` and `implement` carry the work; `code-review` and `pr` fill Evidence; a missing tool falls back to none.md.
+
 At MIN, go straight to step 3 with the criteria already clear: no grilling, spec or tickets.
 
 ## What yields
