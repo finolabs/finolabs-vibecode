@@ -30,15 +30,30 @@ where only advice exists.
 | 2 | Compaction steward: local handover, threshold decision, re-injection after compact, read-only agent | [compaction-steward.md](compaction-steward.md) | Merged (pull request 99) |
 | 3 | Session-title reminder in the always-loaded rule and the Titles section | none (one line of text) | Merged (pull request 98) |
 | 4 | Owner exception and code for an opt-in Antigravity compaction stop | [compaction-stop.md](compaction-stop.md); rule in `CLAUDE.md` (pull requests 100 and 101) | Rule merged; code running locally, no pull request yet |
-| 5 | Merge prompt through host permission rules (Claude Code, Codex): common commands only | [merge-guard.md](merge-guard.md) | Spec only |
+| 5 | Merge prompt through host permission rules | [merge-guard.md](merge-guard.md) | Moved to 0.2.0 with autopilot (owner, 2026-11-06): hosts already ask in their default modes |
 | 6 | Running agents on the dashboard (phase 1: ledger plus a `ps` snapshot); the page becomes tabs (see package 8) | [running-agents.md](running-agents.md); needs its own `CLAUDE.md` exception for the `ps` command first | Spec only |
 | 7 | Backlog and spec corrections | below | Not started |
-| 8 | Project progress panel on the dashboard (Spec Kit `tasks.md`, ledger, usage events) | spec in its own pull request (project progress and dashboard tabs); builds on package 6 | Spec in review |
+| 8 | Project progress panel on the dashboard, with the `task` event that links hand-started sessions to tasks | [project-progress.md](project-progress.md) and [dashboard-tabs.md](dashboard-tabs.md); builds on package 6 | Specs merged; code not started |
+| 9 | Dashboard freshness: ledger and Antigravity trigger a rebuild, a freshness line per host | [dashboard-freshness.md](dashboard-freshness.md) | Spec only |
+| 10 | Ask in the host's native question form: always-loaded rule, interview rules for rounds larger than the tool allows, router and map wording | none (text only; see "Package 10") | In progress |
 
-Order of work: 4, then 5, then 6, then 8 (it shares the page and the refresh with 6), then 7. Packages 4 to 6 all edit `fnl-setup`, the README and the
+Order of work: 4, then 9 (small, and the other dashboard packages rely on it), then 6, then 8 (it shares the page and the refresh with 6), then 10 (text only, any time), then 7. Package 5 is not in this release. Packages 4 to 6 all edit `fnl-setup`, the README and the
 changelog, so they run one at a time, each through its own pull request with both reviews.
 
 ## Decisions settled (owner, 2026-11-06)
+
+- Audit correction: a ledger write by a hooked coordinator already triggers a rebuild (see `dashboard-freshness.md`); the real gaps are Antigravity, writes outside a hooked session, idle periods, and untrusted Codex hooks.
+- All four dashboard packages (tabs and progress in 8, running agents in 6, freshness in 9) ship in 0.1.10: a release should carry features users notice, and time is not the constraint.
+- The `ps` exception for the process snapshot is approved. The snapshot is the last piece of package 6 and is
+  off until `fnl-setup` turns it on; the exception text merges into `CLAUDE.md` only when that code is about to land.
+- Project progress is on by default (it keeps identifiers and counts only, and needs metrics consent); the
+  dashboard shows a one-time notice of what it reads and how to switch it off. The `task` event is in this
+  release.
+- Codex no longer follows `main` on this machine: it installs from the `finolabs` catalog and is refreshed on
+  purpose after a release; Claude Code and Antigravity follow `main`. Cause: any reinstall (remove and add)
+  of Codex makes it ask to trust the hooks again, tested on 2026-11-06.
+- The release procedure (release pull request, tag, GitHub release, catalog pin) runs as one package after every
+  package is merged, stopping at the tag and the release for the owner's go.
 
 - Compaction design is option B (thin steward, host thresholds, local handover, fresh sessions at story
   boundaries); a central orchestrator that every session must ask (option A) is not built.
@@ -55,6 +70,7 @@ changelog, so they run one at a time, each through its own pull request with bot
 
 ## Not in this release
 
+- Autopilot, live dashboard mode, and the merge prompt (package 5) are release 0.2.0: [autopilot.md](autopilot.md).
 - A hook that forces the router to load before the first edit, and a Stop-hook review reminder: each
   needs another blocking exception, and the cost is a gate that also blocks work that needs no router.
   Alternative to measure first: inject the reminder and read the skip rate from the existing metrics.
@@ -63,6 +79,31 @@ changelog, so they run one at a time, each through its own pull request with bot
   other hosts: candidate for 0.1.11.
 - Antigravity permission rules (storage unverified).
 - Multi-account support (spec first), the beginner screenshot, instruction hygiene on the owner's machine.
+
+## Package 10: ask in the native question form
+
+Owner request, 2026-11-06, clarified: whichever skill an agent uses to brainstorm or clarify with the user
+(`grilling` from mattpocock/skills, `brainstorming` from superpowers, Spec Kit's clarify step, or the pack's own
+interview rules), the agent should put the user's decisions through the host's native question tool, not plain text.
+The pack already does this for its own skills (0.1.8, package 1) and for specs and plans (`fnl-coding-router`
+section 4). Gaps: an agent that needs a decision outside those skills asks in text, a third-party skill's own
+instructions may say "ask the user" without naming the tool, and a round larger than the tool takes (four on Claude
+Code) falls back to a numbered text list.
+
+Changes, all text and advisory (agent judgment; no host mechanism can force an agent to use a tool):
+
+- One line in the always-loaded rule (`rules/AGENTS.md`), which applies on top of any skill: ask the user's decisions
+  through the native tool (`AskUserQuestion` on Claude Code, `request_user_input` on Codex, `ask_question` on
+  Antigravity), the recommended option first, even when another skill's text only says "ask"; use free text only
+  when there is no tool, it fails, nobody can answer, or the answer is free text.
+- Each router workflow adapter that points to a clarify skill (Matt Pocock's, superpowers, Spec Kit) gets one
+  sentence: run that skill's interview, but put its questions through the native tool.
+- The shared `interview.md` copies say how to stage a larger round: blocking questions first, at most the tool's
+  limit per call, the rest in the next call, a numbered text list only as the last resort.
+- `fnl-ask` map names the behaviour in its "Requirements unclear" row.
+
+The pack has no brainstorming skill of its own and builds none (compose before build); it composes with whichever the
+repository adopts, and the interview rules stay the fallback.
 
 ## Package 7: backlog and spec corrections
 
