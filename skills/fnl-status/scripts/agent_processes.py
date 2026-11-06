@@ -8,10 +8,14 @@ import signal
 import stat
 import subprocess
 import tempfile
+import sys
 import time
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import data_root as dr
 
 ROOTS = ('claude', 'codex', 'agy')
 APPS = ('Claude', 'Codex', 'Antigravity')
@@ -19,6 +23,33 @@ CHILDREN = frozenset(('node', 'python', 'python3', 'bash', 'zsh', 'sh', 'git', '
                       'npx', 'pytest', 'cargo', 'go', 'make', 'docker', 'ssh', 'rg', 'grep'))
 LIMIT = 256 * 1024
 SECONDS = 2
+
+
+def section(text):
+    """Only one real heading is authoritative; fenced examples never opt in."""
+    lines, fence = [], None
+    for line in text.splitlines():
+        match = re.match(r"^\s*(`{3,}|~{3,})", line)
+        if match:
+            token = match[1]
+            if fence is None:
+                fence = token
+            elif token[0] == fence[0] and len(token) >= len(fence):
+                fence = None
+        elif fence is None:
+            lines.append(line)
+    parts = re.split(r"^#{1,2} (.+?)\s*$", "\n".join(lines), flags=re.M)
+    found = [parts[i+1].strip() for i in range(1, len(parts), 2) if parts[i] == 'Agent snapshot']
+    return found[0] if len(found) == 1 else ''
+
+
+def enabled():
+    if os.environ.get('FNL_AGENT_SNAPSHOT', '').lower() == 'off':
+        return False
+    try:
+        return section(dr.read_data('host.md').decode()) == '- Snapshot: on'
+    except (OSError, ValueError, UnicodeError):
+        return False
 
 
 def empty(reason='', at=None):
