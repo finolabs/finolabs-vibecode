@@ -133,14 +133,27 @@ class ProgressTest(unittest.TestCase):
         self.assertIsNotNone(item)
         self.assertEqual(item['state'], 'todo')
         self.assertEqual([(s['stage'], s['done'], s['total']) for s in item['stages']],
-                         [('spec', 0, 1), ('plan', 1, 1), ('tasks', 0, 1), ('verify', 1, 1)])
-        self.assertEqual(item['tasks'][0]['id'], 'T1')
-        self.assertEqual(item['stories'][0]['story'], 'US1')
+                         [])
+        self.assertEqual((item['done'], item['total']), (0, 0))
+        self.assertEqual(item['tasks'], [])
+        self.assertEqual(item['stories'], [])
         self.assertNotIn('<', json.dumps(item))
         text = template.read_text()
         self.assertIn('MIN depth creates no work record', text)
         for tool in ('grilling', 'to-spec', 'to-tickets', 'tdd', 'implement', 'code-review', 'pr'):
             self.assertIn('`' + tool + '`', text)
+
+    def test_filled_work_record_template_counts(self):
+        import re
+        template = (ROOT / 'skills/fnl-coding-router/references/work-record.md').read_text()
+        text = re.search(r'```markdown\n(.*?)\n```', template, re.S)[1]
+        text = re.sub(r'<[^>]*>', 'Filled content', text).replace('- [ ]', '- [x]')
+        item = self.pp.work_record(text, 1)
+        self.assertEqual(item['state'], 'todo')
+        self.assertEqual([(s['stage'], s['done'], s['total']) for s in item['stages']],
+                         [('spec', 1, 1), ('plan', 1, 1), ('tasks', 1, 1), ('verify', 1, 1)])
+        self.assertEqual(item['tasks'][0]['id'], 'T1')
+        self.assertEqual(item['stories'][0]['story'], 'US1')
 
     def record(self, status='in progress', tasks='- [x] T1 PRIVATE\n', directory='docs/specs', name='work.md'):
         return self.document(name, '# PRIVATE title\nStatus: ' + status + '; PRIVATE\n'

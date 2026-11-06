@@ -40,6 +40,8 @@ The project progress reader enforces recognition and metadata extraction:
 - Goal and acceptance checkboxes supply the `spec` stage and its done/total counts. A non-empty Plan
   line supplies `plan`; Tasks checkboxes supply `tasks` counts. Optional `### US1` subheadings group
   tasks by numeric story tag. A non-empty Evidence line supplies `verify`, as presence only.
+- Whole-line `<...>` placeholders do not supply Plan or Evidence content. Checkboxes whose text
+  is only a placeholder, optionally after an AC or T numeric tag, do not count.
 - Status sets item state: draft and accepted are `todo` (accepted has a mark), in progress is `active`,
   implemented and released are `done`, deferred is `deferred`. All Tasks checked with Status still
   in progress adds an amber “status not updated” mark; it does not change the item state.

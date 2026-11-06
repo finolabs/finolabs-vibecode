@@ -505,6 +505,10 @@ def status_line(text, default=''):
     return default
 
 
+def placeholder_only(text):
+    return re.fullmatch(r'\s*(?:(?:AC|T)[0-9]+\s+)?<[^<>]*>\s*', text) is not None
+
+
 def work_record(text, ordinal):
     """Recognise shape, emit only closed states, numeric tags and checkbox counts."""
     status = status_line(text, default=None)
@@ -525,11 +529,12 @@ def work_record(text, ordinal):
     word = status_word(status)
     item = dict(ordinal=ordinal, state=word_state(word), tasks=[], stories=[], phases=[], total=0, done=0, stages=[])
     criteria = [re.match(r'^\s*- \[( |x|X)\] ', line) for line in sections.get('Goal and acceptance', [])]
-    criteria = [box for box in criteria if box]
+    criteria = [box for box, line in zip(criteria, sections.get('Goal and acceptance', []))
+                if box and not placeholder_only(line[box.end():])]
     if criteria:
         done = sum(box[1] != ' ' for box in criteria)
         item['stages'].append(stage('spec', 'done' if done == len(criteria) else 'active' if done else 'todo', done, len(criteria)))
-    if any(line.strip() for line in sections.get('Plan', [])):
+    if any(line.strip() and not placeholder_only(line) for line in sections.get('Plan', [])):
         item['stages'].append(stage('plan', 'done', 1, 1))
     story, used = None, set()
     for line in sections.get('Tasks', []):
@@ -537,7 +542,7 @@ def work_record(text, ordinal):
         if re.match(r'^### ', line):
             story = heading[1] if heading else None
         box = re.match(r'^\s*- \[( |x|X)\] ', line)
-        if not box or len(item['tasks']) >= 200:
+        if not box or placeholder_only(line[box.end():]) or len(item['tasks']) >= 200:
             continue
         match = TASK.search(line[box.end():box.end() + 85])
         ident = match[0] if match and match.end() <= 80 else None
@@ -555,7 +560,7 @@ def work_record(text, ordinal):
     if item['total']:
         state = 'done' if item['done'] == item['total'] else 'active' if item['done'] else 'todo'
         item['stages'].append(stage('tasks', state, item['done'], item['total']))
-    if any(line.strip() for line in sections.get('Evidence', [])):
+    if any(line.strip() and not placeholder_only(line) for line in sections.get('Evidence', [])):
         item['stages'].append(stage('verify', 'done', 1, 1))
     if word == 'accepted':
         item['status_mark'] = 'accepted'
