@@ -352,13 +352,14 @@ def write_json(folder, name, value):
 
 
 def read_cache(folder, repair=False):
-    # Unsafe, capped or unparsable files raise (hooks fail closed); only the worker
-    # passes repair=True, because its atomic write replaces such a file.
+    # Status reads raise on an unsafe, capped or unparsable file. Spawning and the worker
+    # pass repair=True: nothing here trusts the content, cadence comes from backoff.json,
+    # and the worker's atomic write replaces the file.
     try:
         data = read_json(folder, "quota.json")
     except FileNotFoundError:
         return {}
-    except (ValueError, OverflowError):
+    except (OSError, ValueError, OverflowError):
         if repair:
             return {}
         raise
@@ -591,7 +592,7 @@ def trigger():
         current = now()
         with state_folder(create=True) as folder:
             delays = backoff(folder, configs, current)
-            jobs = due(configs, read_cache(folder), delays, current)
+            jobs = due(configs, read_cache(folder, repair=True), delays, current)
             if not jobs or marker(folder, current):
                 return False
             for agent, label in jobs:

@@ -605,15 +605,34 @@ class QuotaTest(unittest.TestCase):
                     qp.read_cache(folder)
                 self.assertEqual(qp.read_cache(folder, repair=True), {})
 
-    def test_capped_cache_does_not_start_worker(self):
+    def test_capped_cache_schedules_one_repair_then_backs_off(self):
         self.configure({"agy": self.fake("agy")})
         self.ready()
         path = self.root / "state/quota/quota.json"
         path.write_bytes(b" " * (qp.LIMIT + 1))
         path.chmod(0o600)
         with mock.patch.object(qp.subprocess, "Popen") as spawn:
+            self.assertTrue(qp.trigger())
+            self.assertEqual(spawn.call_count, 1)
             self.assertFalse(qp.trigger())
-            spawn.assert_not_called()
+            self.assertEqual(spawn.call_count, 1)
+
+    def test_corrupt_cache_is_replaced_by_the_next_reading(self):
+        entry = self.fake("claude")
+        self.configure({"claude": entry})
+        self.ready()
+        path = self.root / "state/quota/quota.json"
+        outside = self.base / "outside-cache"
+        outside.write_text("untouched")
+        path.symlink_to(outside)
+        with mock.patch.object(qp, "now", return_value=MEASURED), \
+             mock.patch.object(qp, "ZoneInfo", return_value=qp.timezone(qp.timedelta(hours=7))):
+            qp.worker([["claude", "default"]])
+        self.assertFalse(path.is_symlink())
+        self.assertEqual(outside.read_text(), "untouched")
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        with qp.state_folder() as folder:
+            self.assertIn("default", qp.read_cache(folder)["claude"])
 
     def test_runtime_resolved_target_must_match_confirmed_path(self):
         entry = self.fake("agy")
