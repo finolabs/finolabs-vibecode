@@ -40,6 +40,7 @@ MARKER_DAYS = 7
 NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 
 ID = re.compile(r"^[A-Za-z0-9_-]{1,64}\Z")
+TASK_ID = re.compile(r"^T[0-9]{1,4}\Z")
 NAME = re.compile(r"^fnl-[a-z][a-z-]{0,39}\Z")
 REPO = re.compile(r"^[0-9a-f]{8}\Z")
 TS = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+00:00\Z")
@@ -71,6 +72,7 @@ SCHEMA = {
     "first_edit": {},
     "commit": {},
     "review": {"kind": lambda v: v in KINDS, "verdict": lambda v: v in VERDICTS, "pr": _pr},
+    "task": {"id": lambda v: isinstance(v, str) and TASK_ID.fullmatch(v) is not None},
     "router": {"depth": lambda v: v in DEPTHS, "trigger": lambda v: v in TRIGGERS},
     "judge": {"site": lambda v: v in JUDGE_SITES, "grader": lambda v: v in JUDGE_GRADERS,
               "result": lambda v: v in JUDGE_RESULTS, "followed": lambda v: v in JUDGE_FOLLOWED},

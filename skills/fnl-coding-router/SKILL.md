@@ -7,6 +7,8 @@ description: Route coding work in a repository before the first substantive chan
 
 The entry point for coding work in any repository. It sets the depth, the gates and the proof the work needs, and picks the workflow path that carries it: Spec Kit, another workflow skill pack, or none, which has a procedure of its own. The other skills in this plugin own the details it points to. Work that is not code but carries comparable risk (queries on live data, infrastructure configuration, dashboards and reports, predictions and forecasts) reads [references/non-code-work.md](references/non-code-work.md) beside this skill.
 
+**Advisory (agent judgment):** When the coordinator starts work on a task in a session the user started by hand, run `python3 -I <this skill folder>/scripts/record.py task --id <id>`; the script validates the task id.
+
 ## 1. Inspect before acting
 
 Read the goal and acceptance criteria, the scoped instructions (`AGENTS.md`, `CLAUDE.md`, a constitution), ownership and the current diff, accepted artifacts and decisions, open failures and findings, and the proof already gathered. Expose conflicts between sources; a newer source does not win by being newer. A missing source pauses only the work that depends on it.
