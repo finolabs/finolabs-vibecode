@@ -8,7 +8,7 @@ The repository has installed `speckit-*` skills that work. Check the setup and t
 
 ## Steps
 
-Spec Kit's installed `speckit-*` skills own the development workflow: specify, clarify, plan, tasks, implement, converge. Resume from accepted artifacts and the current phase; never restart a completed phase to satisfy a generic skill trigger. Use clarify, checklist and analyze for real ambiguity or where the installed workflow or repository requires them; use convergence only where the installed version supports it, after implementation on the tasks path. Evidence of a requirement or design change can send work back to its owning phase; a generic skill trigger cannot.
+Spec Kit's installed `speckit-*` skills own the development workflow: specify, clarify, plan, tasks, implement, converge. Resume from accepted artifacts and the current phase; never restart a completed phase to satisfy a generic skill trigger. Use clarify, checklist and analyze for real ambiguity or where the installed workflow or repository requires them; use convergence only where the installed version supports it, after implementation on the tasks path. When clarify runs, run that skill's interview, but put its questions through the host's native question tool (advisory, agent judgment). Evidence of a requirement or design change can send work back to its owning phase; a generic skill trigger cannot.
 
 ## Spec Kit depth gate
 

@@ -32,6 +32,8 @@ When the session has a native question tool (`AskUserQuestion` on Claude Code, `
 
 Ask in text, in the format above, when the session has no such tool, the tool is refused or fails, nobody can answer (a delegated or headless run never waits on a question: it records the open decision and never assumes or invents an answer), or the decision is free text such as a list of model IDs. Codex may expose its tool only in some modes, and Antigravity's is not exercised here; the names come from each host's CLI. The enforcer is agent judgment, so this is advisory.
 
+When a round has more ready questions than one call takes, stage it across calls rather than dropping to text: ask the blocking questions first, at most the tool's limit per call (four on Claude Code), then the rest in the next call, using a numbered text list only as the last resort (advisory, agent judgment).
+
 ## Push on vague answers
 
 An answer such as "be careful" or "use best practices" settles nothing. Ask the follow-up that turns it into a rule an agent can follow and someone can check, or offer two concrete readings and ask which one is meant.
