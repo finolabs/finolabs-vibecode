@@ -12,8 +12,7 @@
 | [Dashboard tabs](dashboard-tabs.md) | implemented; splits the status page into two tabs, Overview and Now. |
 | [Dashboard infographics](dashboard-infographics.md) | implemented; locally: Agents KPI tiles, budget lanes and quota meters; priority-ordered unfinished projects and task cells; bounded Reviews chains and fragment navigation. Targeted fixture checks; coordinator browser screenshots at 1280 and 390 remain required. |
 | [Project progress](project-progress.md) | implemented; for 0.1.10: bounded local reader, exact identifier joins, consent/default notice and Project tab; duplicate task ids leave manual sessions unlinked. Local fixture checks only; real-host delivery remains unverified. |
-| [Release 0.1.10: spec and plan](release-0.1.10.md) | implemented; merged; release pull request open; the package table lists the pull request behind each package. |
-| [Antigravity compaction stop](compaction-stop.md) | implemented; Spec; the rule is merged in `CLAUDE.md`, code running locally, no pull request yet. |
+| [Release 0.1.10: spec and plan](release-0.1.10.md) | released; the package table lists the pull request behind each package. |
 | [Merge guard](merge-guard.md) | deferred; to 0.2.0 (autopilot's backstop); permission rules written by setup for Claude Code and Codex. |
 | [Running agents](running-agents.md) | implemented; phase 1: ledger and opt-in process snapshot in Running now; liveness remains advisory, CLI name observations and real-host UI verification remain open. |
 | [Dashboard freshness](dashboard-freshness.md) | implemented; audit of what is current and the rebuild triggers that fix the gaps. |

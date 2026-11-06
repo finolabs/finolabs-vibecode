@@ -48,6 +48,7 @@ class SpecStatusTest(unittest.TestCase):
                     link = re.search(r"\]\(([^)]+\.md)\)", row[0])
                     self.assertIsNotNone(link, "Spec row must link to a document")
                     filename = link.group(1)
+                    self.assertNotIn(filename, seen, "Duplicate index row")
                     seen.add(filename)
                     if filename not in UNRESOLVED:
                         self.assert_status(row[header.index("Status")])
