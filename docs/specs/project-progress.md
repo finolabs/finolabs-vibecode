@@ -135,8 +135,8 @@ assignment; free text of any kind; linking sessions without a `dispatch` or a re
    the four task states, including `accepted, not ticked`, from a fake ledger and fake events.
 3. `refresh.py` writes `progress` keyed by repository code (five at most), leaves the events files
    untouched, does nothing without recorded metrics consent, with `Project progress: off`, with an unreadable or
-   ambiguous host config (off when it cannot be resolved; on by default when it can, owner decision 2026-11-06), or with
-   `FNL_PROGRESS=off`, and `purge` removes it; no `git` is run; the repository is found by walking up.
+   ambiguous host config, or with `FNL_PROGRESS=off`. Progress is on by default when the host config can
+   be read (owner decision 2026-11-06) and off when it cannot be resolved, and `purge` removes it; no `git` is run; the repository is found by walking up.
 4. `record.py task` accepts only the id pattern and prints the receipt; the hook records exactly one `task` event
    with one field; a text or a long id is refused; a hand-started session with a `task` event links to its task.
 5. The Project tab renders with `textContent`, the empty state (no `tasks.md`) and the limits line; page

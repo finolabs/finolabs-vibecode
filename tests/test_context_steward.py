@@ -95,6 +95,6 @@ class ContextStewardTest(unittest.TestCase):
         for phrase in ("0600", "0700", "user's own text", "never sent", "24-hour", "20", "8 KiB"):
             self.assertIn(phrase, paragraph)
         self.assertIn("fnl-steward", (ROOT / "README.md").read_text())
-        unreleased = (ROOT / "CHANGELOG.md").read_text().split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
-        self.assertIn("steward", unreleased)
+        changelog = (ROOT / "CHANGELOG.md").read_text().split("## [Unreleased]", 1)[1]
+        self.assertIn("steward", changelog)
         self.assertIn("compaction-steward.md", (ROOT / "docs/specs/index.md").read_text())
