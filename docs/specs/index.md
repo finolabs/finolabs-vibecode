@@ -10,3 +10,7 @@
 | [Compaction steward](compaction-steward.md) | Option B: local handover storage, threshold decision and compact re-injection; real-host delivery remains unverified. |
 | [Dashboard tabs](dashboard-tabs.md) | Spec; splits the status page into Overview, Agents, Project, Delegation and Reviews tabs. |
 | [Project progress](project-progress.md) | Spec; task progress and which agent and session works on which task, identifiers only. |
+| [Release 0.1.10: spec and plan](release-0.1.10.md) | In progress; the package table lists the pull request behind each package. |
+| [Antigravity compaction stop](compaction-stop.md) | Spec; the rule is merged in `CLAUDE.md`, code running locally, no pull request yet. |
+| [Merge guard](merge-guard.md) | Spec; permission rules written by setup for Claude Code and Codex. |
+| [Running agents](running-agents.md) | Spec; phase 1 is the ledger plus a process snapshot on the dashboard. |
