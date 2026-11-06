@@ -40,6 +40,10 @@ After `fnl-setup` records your chosen native threshold, the plugin's `fnl-stewar
 
 On `prepare`, the working agent writes its handover through `python3 -I <plugin root>/scripts/handover_state.py write --session <id>` (optional `--repo <code>`), with UTF-8 text on stdin. `read --session <id>` returns only safe text younger than 24 hours. The local file is private (0600 in a 0700 folder), limited to 8 KiB, and never sent by these scripts or included in metrics; at most 20 files are kept. The existing session-start hook appends it on source `compact`. Writing the handover and consulting the steward are advisory agent actions; the scripts enforce the limits and action table. Hook delivery is unverified on every host. Standalone skills keep the manual handover procedure; the steward agent and scripts require the plugin. See the [design and acceptance criteria](docs/specs/compaction-steward.md) and [privacy details](PRIVACY.md#compaction-handover).
 
+| Optional compaction control | Behavior and limits |
+| --- | --- |
+| [Antigravity compaction stop](docs/specs/compaction-stop.md) | Separate opt-in and preview in `fnl-setup`; a user-chosen 50000–20000000 byte limit can stop the start of a turn and ask for `/compact` or a fresh session. Bytes exclude the system prompt and are only a rough proxy; no default is recommended. The local hook never reads transcript content or sends data, allows on errors, and stops again only after both 10% and 20000 bytes of growth. `FNL_COMPACT_STOP=off` disables it; previewed `--remove` removes its own group. User-level hooks and TUI delivery remain unverified. See [privacy](PRIVACY.md#compaction-stop). |
+
 ### How the skills fit together
 
 <p align="center">
