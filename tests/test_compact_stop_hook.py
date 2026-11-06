@@ -1,4 +1,5 @@
 """Compaction stop acceptance using only a synthetic account."""
+import builtins
 import contextlib
 import hashlib
 import importlib.util
@@ -56,6 +57,33 @@ class CompactStopHookTest(unittest.TestCase):
         result = out.getvalue()
         self.assertIn(result, ('{}\n', json.dumps(STOP, separators=(',', ':')) + '\n'))
         return json.loads(result)
+
+    def test_import_and_script_resolution_failures_allow(self):
+        original = builtins.__import__
+        for module in ('data_root', 'fcntl', 'json'):
+            def unavailable(name, *args, **kwargs):
+                if name == module:
+                    raise ImportError('simulated unavailable module')
+                return original(name, *args, **kwargs)
+            with self.subTest(module=module), mock.patch.object(builtins, '__import__', side_effect=unavailable):
+                self.assertEqual(self.run_hook(), {})
+        with mock.patch.object(Path, 'resolve', side_effect=OSError('script disappeared')):
+            self.assertEqual(self.run_hook(), {})
+        self.assertFalse(self.mark.exists())
+
+    def test_eviction_keeps_current_mark_despite_future_mtimes(self):
+        self.mark.parent.mkdir(parents=True, mode=0o700)
+        for i in range(200):
+            mark = self.mark.parent / f'{i:016x}.json'
+            mark.write_text('50001')
+            mark.chmod(0o600)
+            os.utime(mark, (4102444800 + i, 4102444800 + i))
+        self.assertEqual(self.run_hook(), STOP)
+        self.assertTrue(self.mark.exists())
+        self.assertEqual(self.mark.read_text(), '60000')
+        self.assertEqual(len(list(self.mark.parent.glob('*.json'))), 200)
+        self.assertFalse((self.mark.parent / ('0' * 16 + '.json')).exists())
+        self.assertEqual(self.run_hook(), {})
 
     def test_acceptance_1_stop_shape_and_private_integer_mark(self):
         self.assertEqual(self.run_hook(), STOP)

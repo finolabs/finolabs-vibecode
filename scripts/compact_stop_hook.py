@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
 """Opt-in Antigravity PreInvocation stop; size only, local, fail open."""
-import fcntl
-import hashlib
-import json
-import os
-from pathlib import Path
-import re
-import select
-import stat
-import sys
-import time
-
-sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import data_root as dr
 
 MESSAGE = 'The conversation is large. Run /compact, or start a fresh session with a short handover, then continue.'
 STOP = {'injectSteps': [{'errorMessage': {'userMessage': MESSAGE}}], 'terminationBehavior': 'terminate'}
@@ -128,8 +114,8 @@ def decide(event):
                 if entry != name:
                     files.append((info.st_mtime, entry))
         dr.atomic_write(folder, name, str(size).encode('ascii'))
-        files.append((os.lstat(name, dir_fd=folder).st_mtime, name))
-        for _, entry in sorted(files)[:max(0, len(files) - 200)]:
+        # Reserve one slot for the current mark regardless of other mtimes.
+        for _, entry in sorted(files)[:max(0, len(files) - 199)]:
             if not safe_mark(os.lstat(entry, dir_fd=folder)):
                 return {}
             os.unlink(entry, dir_fd=folder)
@@ -137,14 +123,30 @@ def decide(event):
 
 
 def main():
-    result = {}
+    global fcntl, hashlib, json, os, Path, re, select, stat, sys, time, dr
+    output = '{}'
     try:
+        # Imports and path resolution must fail open during plugin updates too.
+        import sys
+        sys.dont_write_bytecode = True
+        import fcntl
+        import hashlib
+        import json
+        import os
+        from pathlib import Path
+        import re
+        import select
+        import stat
+        import time
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import data_root as dr
+
         if sys.argv[1:] == ['--host', 'antigravity', '--event', 'PreInvocation']:
-            result = decide(read_event())
+            output = json.dumps(decide(read_event()), separators=(',', ':'))
     except Exception:
         pass
     try:
-        print(json.dumps(result, separators=(',', ':')))
+        print(output)
     except Exception:
         pass
     return 0

@@ -51,6 +51,16 @@ class CompactStopSetupTest(unittest.TestCase):
         self.other = '"other" : { "SessionStart" : [], "literal": "} , {", "number": 1e2 }'
         self.metrics = '"finolabs-vibecode" : {"SessionStart": [ {"type":"command", "command":"example"} ]}'
         self.config.write_text('{\n ' + self.other + ',\n ' + self.metrics + '\n}\n')
+        # An installed plugin must live outside any git work tree.
+        self.plugin = self.home / "plugin with ' quote"
+        (self.plugin / '.claude-plugin').mkdir(parents=True)
+        (self.plugin / '.claude-plugin/plugin.json').write_text('{"name":"finolabs-vibecode"}')
+        (self.plugin / 'scripts').mkdir()
+        for name in ('metrics_hook.py', 'compact_stop_hook.py', 'data_root.py'):
+            (self.plugin / 'scripts' / name).write_bytes((ROOT / 'scripts' / name).read_bytes())
+        patch = mock.patch.object(cs, '__file__', str(self.plugin / 'skills/fnl-setup/scripts/compact_stop_setup.py'))
+        patch.start()
+        self.addCleanup(patch.stop)
         self.plan = self.root / 'state/compact-stop-setup/preview.json'
         env = mock.patch.dict(os.environ, {}, clear=True)
         env.start()
@@ -67,7 +77,7 @@ class CompactStopSetupTest(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertIn(cs.GROUP, out)
         self.assertIn('system prompt is not counted', out)
-        self.assertIn('Command: python3 -I ', out)
+        self.assertIn('python3 -I ', out)
         return out.split('Digest: ')[1].splitlines()[0]
 
     def apply(self, value):
@@ -103,7 +113,9 @@ class CompactStopSetupTest(unittest.TestCase):
         self.assertIn(self.metrics, text)
         data = json.loads(text)
         command = data[cs.GROUP]['PreInvocation'][0]['command']
-        self.assertEqual(shlex.split(command), ['python3', '-I', str(ROOT / 'scripts/compact_stop_hook.py'), '--host', 'antigravity', '--event', 'PreInvocation'])
+        script = str(self.plugin / 'scripts/compact_stop_hook.py')
+        self.assertEqual(shlex.split(command), ['[', '-f', script, ']', '&&', 'python3', '-I', script,
+                                               '--host', 'antigravity', '--event', 'PreInvocation', '||', 'echo', '{}'])
         self.assertTrue(self.host.read_bytes().startswith(old_host))
         self.assertIn(b'Enabled: yes\r\nLimit bytes: 50000', self.host.read_bytes())
         backup, = self.config.parent.glob('hooks.json.bak-*')
@@ -111,6 +123,65 @@ class CompactStopSetupTest(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.config.stat().st_mode), 0o640)
         self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
         self.assertRegex(backup.name, r'^hooks\.json\.bak-[0-9]{8}-[0-9]{6}-[1-9][0-9]*$')
+
+    def test_stored_command_allows_when_script_disappears(self):
+        self.apply(self.preview())
+        command = json.loads(self.config.read_bytes())[cs.GROUP]['PreInvocation'][0]['command']
+        # The fixture bootstraps shell Python with the synthetic account.
+        for missing in (False, True):
+            if missing:
+                (self.plugin / 'scripts/compact_stop_hook.py').unlink()
+            result = subprocess.run(['sh', '-c', command], input='{}', capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, '{}\n')
+            self.assertEqual(result.stderr, '')
+
+    def test_preview_never_prints_other_group_contents(self):
+        secret = 'FAKE_SECRET_DO_NOT_PRINT'
+        other = {'other': {'SessionStart': [{'command': 'example --token ' + secret}]}}
+        self.config.write_text(json.dumps(other))
+        for args in (('--limit', '50000'), ('--remove',)):
+            code, out, err = self.run_cli('preview', *args)
+            self.assertEqual(code, 0, err)
+            self.assertNotIn(secret, out + err)
+            self.assertNotIn('example --token', out + err)
+            self.assertIn('other', out)
+            self.assertIn(cs.GROUP, out)
+            if args[0] == '--limit':
+                self.assertIn('  "PreInvocation": [', out)
+
+    def test_plugin_root_git_and_writable_paths_refused(self):
+        for parent in (self.plugin, self.plugin.parent):
+            for directory in (False, True):
+                value = self.preview()
+                marker = parent / '.git'
+                if directory:
+                    marker.mkdir()
+                else:
+                    marker.write_text('gitdir: elsewhere')
+                before = self.snapshot()
+                self.refuse('preview', '--limit', '50000')
+                self.refuse('apply', '--digest', value, '--yes')
+                self.assertEqual(before, self.snapshot())
+                marker.rmdir() if directory else marker.unlink()
+            for mode in (0o720, 0o702):
+                value = self.preview()
+                original = stat.S_IMODE(parent.stat().st_mode)
+                parent.chmod(mode)
+                try:
+                    before = self.snapshot()
+                    self.refuse('preview', '--limit', '50000')
+                    self.refuse('apply', '--digest', value, '--yes')
+                    self.assertEqual(before, self.snapshot())
+                finally:
+                    parent.chmod(original)
+
+    def test_backup_permissions_are_intersection_with_owner_read_write(self):
+        self.config.chmod(0o440)
+        self.apply(self.preview())
+        backup, = self.config.parent.glob('hooks.json.bak-*')
+        self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o400)
+        self.assertEqual(stat.S_IMODE(self.config.stat().st_mode), 0o440)
 
     def test_remove_and_missing_group_preserve_metrics(self):
         self.apply(self.preview())
@@ -215,15 +286,8 @@ class CompactStopSetupTest(unittest.TestCase):
     def test_plugin_root_check_and_quoted_command(self):
         with mock.patch.object(cs, '__file__', str(self.home / 'skills/fnl-setup/scripts/compact_stop_setup.py')):
             self.refuse('preview', '--limit', '50000')
-        # A synthetic plugin exercises shell quoting without touching host config.
-        root = self.home / "plugin with ' quote"
-        (root / '.claude-plugin').mkdir(parents=True)
-        (root / '.claude-plugin/plugin.json').write_text('{"name":"finolabs-vibecode"}')
-        (root / 'scripts').mkdir()
-        for name in ('metrics_hook.py', 'compact_stop_hook.py'):
-            (root / 'scripts' / name).write_text('')
-        with mock.patch.object(cs, '__file__', str(root / 'skills/fnl-setup/scripts/compact_stop_setup.py')):
-            self.assertEqual(shlex.split(cs.hook_command())[2], str(root / 'scripts/compact_stop_hook.py'))
+        self.assertEqual(shlex.split(cs.hook_command())[2],
+                         str(self.plugin / 'scripts/compact_stop_hook.py'))
 
     def test_acceptance_3_installers_coexist_in_both_orders(self):
         refresh = ROOT / 'skills/fnl-status/scripts/refresh.py'

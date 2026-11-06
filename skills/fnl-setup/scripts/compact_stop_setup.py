@@ -29,6 +29,8 @@ def validate_choice(host, limit):
 
 def hook_command():
     root = Path(__file__).resolve().parents[3]
+    with dr.relocated_folder(root):
+        pass
     try:
         manifest = json.loads((root / '.claude-plugin/plugin.json').read_bytes())
     except (OSError, ValueError):
@@ -38,7 +40,10 @@ def hook_command():
             or not (root / 'scripts/metrics_hook.py').is_file() or not script.is_file()
             or script.resolve().parent != root / 'scripts'):
         raise cs.Refusal('install the whole finolabs-vibecode plugin')
-    return 'python3 -I ' + shlex.quote(str(script.resolve())) + ' --host antigravity --event PreInvocation'
+    quoted = shlex.quote(str(script.resolve()))
+    # Antigravity shell execution of hook commands remains unverified.
+    return (f'[ -f {quoted} ] && python3 -I {quoted} --host antigravity --event PreInvocation'
+            + " || echo '{}'")
 
 
 def group(command):
@@ -186,8 +191,15 @@ def preview(host, limit):
         except FileNotFoundError:
             pass
         dr.atomic_write(state, 'preview.json', json.dumps({'plan': plan, 'digest': value}).encode())
-    # Zero-context diffs show the exact edits, without dumping unrelated groups.
-    for label, before, after in ((str(root / 'host.md'), old_host, new_host), (str(path), raw, new_hooks)):
+    # Show only our hooks group: a changed line may contain other groups' secrets.
+    print('Target: ' + str(path))
+    for label, content in (('Before', raw), ('After', new_hooks)):
+        data = json.loads(content) if content is not None else {}
+        print(label + ' group: ' + GROUP)
+        print(json.dumps(data.get(GROUP), indent=2, ensure_ascii=True))
+    print('Other groups (unchanged): ' + json.dumps(
+        [name for name in data if name != GROUP], ensure_ascii=True))
+    for label, before, after in ((str(root / 'host.md'), old_host, new_host),):
         print('Target: ' + label)
         if before == after:
             print('No difference.')
