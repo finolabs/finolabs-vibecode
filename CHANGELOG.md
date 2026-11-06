@@ -10,6 +10,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Ask user decisions through the host's native question tool across any clarify or brainstorming skill, stage rounds larger than the tool's per-call limit across calls with blocking questions first, and note how a parent session can read its own id from a child's `startedBy` when renaming (advisory, agent judgment).
 - Add the advisory compaction steward, a deterministic threshold check and private local handovers re-injected on compact session starts; hook delivery remains unverified, and no hook declarations change.
 - Let setup write a user-chosen Claude Code or Codex compaction threshold after separate approval of a checked, digest-bound preview, with local backups.
 
