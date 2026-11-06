@@ -28,33 +28,36 @@ def validate_choice(host, limit):
         raise cs.Refusal('limit must be an integer from 50000 to 20000000 bytes')
 
 
-GIT_TREE_ERRORS = ('root is a git work tree', 'root is inside a git work tree')
+INSTALLED_COPY = '.gemini/config/plugins/finolabs-vibecode'
 
 
 def check_plugin_root(root):
-    """The folder holding the hook script must be safe; a git work tree is refused except Antigravity's own
-    installed copy, which keeps the repository's .git entry under the user's config folder."""
+    """The folder holding the hook script must be safe. A git work tree is refused, except the plugin's own
+    entry in Antigravity's installed copy, which keeps the repository's .git directory: only that exact
+    unresolved path, reached without a symlink, with a clean parent chain and a real .git directory."""
     try:
         with dr.relocated_folder(root):
             return
     except ValueError as error:
-        if str(error) not in GIT_TREE_ERRORS:
-            raise
-    home = dr.account_home()
-    if root != (home / '.gemini/config/plugins/finolabs-vibecode').resolve():
+        if str(error) != 'root is a git work tree':
+            raise  # a .git in any folder above, a symlink, a wrong owner or a writable folder
+    if root != dr.account_home() / INSTALLED_COPY:
         raise cs.Refusal('plugin folder is inside a git work tree; use the installed copy of the plugin')
-    for path in (root, *root.parents):
-        info = path.lstat()
-        if (not stat.S_ISDIR(info.st_mode) or info.st_uid not in (0, os.getuid()) or info.st_mode & 0o022):
+    with dr.relocated_folder(root.parent):
+        pass  # every level above is a real folder, safely owned, writable only by the user, and has no .git
+    fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(fd)
+        if info.st_uid != os.getuid() or info.st_mode & 0o022:
             raise cs.Refusal('plugin folder is not private enough')
-        if path == home:
-            break
-    else:
-        raise cs.Refusal('plugin folder is not under the account home')
+        if not stat.S_ISDIR(os.lstat('.git', dir_fd=fd).st_mode):
+            raise cs.Refusal('plugin folder .git is not a directory')
+    finally:
+        os.close(fd)
 
 
 def hook_command():
-    root = Path(__file__).resolve().parents[3]
+    root = Path(os.path.abspath(__file__)).parents[3]  # not resolved: a symlinked folder must be seen
     check_plugin_root(root)
     try:
         manifest = json.loads((root / '.claude-plugin/plugin.json').read_bytes())
@@ -198,7 +201,7 @@ def read_host():
 def preview(host, limit):
     validate_choice(host, limit)
     root = checked_root()
-    command = hook_command()
+    command = hook_command() if limit is not None else None  # removal needs no script, so a missing folder cannot block it
     path = hooks_path()
     with dr.relocated_folder(path.parent) as folder:
         raw, mode = cs.read_target(folder, path.name)
@@ -232,7 +235,7 @@ def preview(host, limit):
             print(''.join(difflib.unified_diff((before or b'').decode().splitlines(keepends=True),
                                              (after or b'').decode().splitlines(keepends=True),
                                              fromfile='before', tofile='after', n=0)), end='\n')
-    print('Group: ' + GROUP + '\nCommand: ' + command)
+    print('Group: ' + GROUP + '\nCommand: ' + (command if command is not None else '(removal)'))
     print('Limit bytes: ' + (str(limit) if limit is not None else 'removed'))
     print('A byte proxy only; the system prompt is not counted. No default is recommended.')
     print('Backup: ' + str(path.parent / backup))
@@ -254,7 +257,7 @@ def apply(value, yes):
         if not isinstance(plan, dict) or set(plan) != {'host', 'limit', 'created', 'root', 'path', 'sha256', 'mode', 'backup', 'host_sha256', 'host_mode', 'command'}:
             raise cs.Refusal('invalid plan')
         validate_choice(plan['host'], plan['limit'])
-        if plan['root'] != str(checked_root()) or plan['command'] != hook_command():
+        if plan['root'] != str(checked_root()) or plan['command'] != (hook_command() if plan['limit'] is not None else None):
             raise cs.Refusal('root or command changed; preview again')
         if type(plan['created']) not in (int, float) or not 0 <= time.time() - plan['created'] <= 3600:
             raise cs.Refusal('preview expired; preview again')
