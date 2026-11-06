@@ -83,7 +83,7 @@ const document = {
   createElementNS: (ns, t) => new Node_(t),
   createTextNode: (s) => { const n = new Node_("#text"); n._text = String(s); return n; },
   getElementById: (id) => byId[id] || (byId[id] = new Node_("div")),
-  querySelector: () => new Node_("div"),
+  querySelector: (selector) => all(document.body).find((n) => selector.startsWith(".") && n.classList.contains(selector.slice(1))) || new Node_("div"),
   addEventListener(type, fn) { handlers[type] = fn; },
 };
 const tipValues = new WeakMap();
@@ -101,6 +101,22 @@ const sandbox = {
   localStorage: { getItem(k) { if (scenario.storageThrows) throw new Error("blocked"); return stored[k] || null; },
     setItem(k, v) { if (scenario.storageThrows) throw new Error("blocked"); stored[k] = String(v); } },
 };
+// Parse the real static shell so title-bar placement is tested, not invented by the runner.
+const shell = html.split("<body>")[1].split("</body>")[0];
+const parents = [document.body];
+for (const token of shell.match(/<[^>]+>|[^<]+/g)) {
+  if (token.startsWith("</")) { parents.pop(); continue; }
+  if (token.startsWith("<")) {
+    const tag = token.match(/^<([a-z0-9]+)/i)[1];
+    const node = new Node_(tag);
+    for (const attr of token.matchAll(/([a-z-]+)="([^"]*)"/g)) node.setAttribute(attr[1], attr[2]);
+    const id = node.getAttribute("id"); if (id) byId[id] = node;
+    node.hidden = /\shidden(?:\s|>)/.test(token);
+    parents[parents.length - 1].appendChild(node);
+    parents.push(node);
+  } else if (token.trim()) parents[parents.length - 1].appendChild(document.createTextNode(token.trim()));
+}
+
 document.activeElement = document.body;
 sandbox.window.document = document;
 if (dataPath) sandbox.window.FNL_DATA = JSON.parse(fs.readFileSync(dataPath, "utf8"));
@@ -113,7 +129,7 @@ vm.runInContext(scripts[0], sandbox, { filename: "dashboard.html" });
 const app = byId["app"];
 const first = app ? app.children[0] : null;
 function all(n) { return [n, ...n.children.flatMap(all)]; }
-function role(value) { return all(app).filter((n) => n.getAttribute("role") === value); }
+function role(value) { return all(document.body).filter((n) => n.getAttribute("role") === value); }
 function namedTab(name) { return role("tab").find((n) => n.textContent.startsWith(name)); }
 function namedPanel(name) { return role("tabpanel").find((n) => n.getAttribute("id") === "panel-" + name); }
 function fire(n, type, key) {
@@ -129,10 +145,12 @@ function tooltipState() {
 }
 function tooltipAction(action) {
   if (!action.tooltip) return;
-  const scope = action.scope === "footer" ? all(app).find((n) => n.className === "status") : namedPanel(action.scope || "agents");
+  const legacyPane = action.scope === "project" ? "projects, last 24 h" : "running now";
+  const scope = action.scope === "prompt" ? all(app).find((n) => n.className === "cmd") : action.scope === "footer" ? all(app).find((n) => n.className === "status") : ["agents", "project"].includes(action.scope || "agents") ?
+    all(namedPanel("now")).find((n) => n.tag === "section" && n.children[0].textContent.startsWith(legacyPane)) : namedPanel(action.scope);
   const target = all(scope).find((n) => action.target === "merged" ?
     n.classList.contains("task-brick") && Number(n.getAttribute("data-count")) > 1 :
-    n.classList.contains(action.target || "info-button"));
+    action.scope === "prompt" ? n === scope : n.classList.contains(action.target || "info-button"));
   switch (action.tooltip) {
     case "focus": target.focus(); break;
     case "hover": fire(target, "pointermove"); break;
@@ -183,13 +201,15 @@ function picture(n, disclosure, hidden, panel) {
     disclosure, panel, open: !!n.open, hidden: !!hidden }, ...n.children.flatMap((child) => picture(child, disclosure, hidden, panel))];
 }
 out.picture = picture(app);
+out.chrome = picture(document.querySelector(".bar"));
+out.dom = picture(document.body).map((n) => ({tag: n.tag, attrs: n.attrs}));
 out.states = states;
 out.tip = tooltipState(); out.tipStates = tipStates;
 out.panelChildren = role("tabpanel").map((n) => n.children.map((c) => ({tag: c.tag, cls: c.className, text: c.textContent})));
 out.focused = document.activeElement ? document.activeElement.textContent.split(" ")[0] : null;
 out.stored = stored;
 out.hash = sandbox.window.location.hash;
-out.tabs = role("tab").map((n) => ({ text: n.textContent, attrs: n.attrs, tabIndex: n.tabIndex }));
+out.tabs = role("tab").map((n) => ({ text: n.textContent, attrs: n.attrs, tabIndex: n.tabIndex, inTitleBar: !!n.closest(".bar") }));
 out.panels = role("tabpanel").map((n) => ({ attrs: n.attrs, hidden: n.hidden, text: n.textContent,
   scrollTop: n.scrollTop, scrollLeft: n.scrollLeft, open: all(n).filter((x) => x.tag === "details").map((x) => !!x.open) }));
 out.shared = app.children.filter((n) => !["tablist", "tabpanel"].includes(n.getAttribute("role"))).map((n) => n.className);

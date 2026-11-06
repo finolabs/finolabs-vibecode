@@ -66,16 +66,19 @@ class DashboardPageTest(unittest.TestCase):
         self.assertIn('new Map([', self.text)
         self.assertNotRegex(self.text, r'querySelector(?:All)?\([^"\']')
 
-    def test_narrow_tab_strip_is_bounded_and_scrolls_inside_the_page(self):
-        # CSS contract: a shrinkable grid track bounds the flex strip; labels do
-        # not shrink, so only the strip scrolls when their total width exceeds it.
+    def test_title_bar_tabs_fit_375px_without_wrapping(self):
         def rule(selector):
             return re.search(re.escape(selector) + r" \{([^}]+)\}", self.text).group(1)
         self.assertIn("grid-template-columns: minmax(0, 1fr)", rule(".screen"))
-        for declaration in ("min-width: 0", "max-width: 100%", "overflow-x: auto"):
-            self.assertIn(declaration, rule(".tablist"))
-        self.assertIn("flex: 0 0 auto", rule(".tablist button"))
+        self.assertIn("flex-wrap: nowrap", rule(".bar"))
+        self.assertIn("min-width: 0", rule(".tablist"))
+        self.assertIn("white-space: nowrap", rule(".tablist button"))
+        self.assertIn("border-bottom: 2px solid transparent", rule(".tablist button"))
+        self.assertIn("border-bottom-color: var(--good)", rule('.tablist button[aria-selected="true"]'))
         self.assertIn("min-width: 0", rule(".tabpanel"))
+        mobile = self.text[self.text.index('@media (max-width: 375px)'):]
+        self.assertIn('.tablist button { padding: 6px 5px; }', mobile)
+        self.assertIn('.tablist .count { margin-left: 3px; }', mobile)
 
     def test_the_sample_data_has_exactly_the_keys_refresh_writes(self):
         spec = importlib.util.spec_from_file_location("fnl_refresh", REFRESH)
@@ -140,47 +143,57 @@ class DashboardScriptTest(unittest.TestCase):
 
     def test_tabs_map_every_pane_and_share_the_header(self):
         out = self.render(FIXTURE)
-        names = ["overview", "agents", "project", "delegation", "reviews"]
-        self.assertEqual([t["text"].split()[0] for t in out["tabs"]], [n.title() for n in names])
-        expected = [["activity", "router coverage", "skill and agent use", "depth vs outcome", "load cost"],
-                    ["running now"], ["project progress"],
-                    ["delegation", "Judge"], ["review gate"]]
-        for index, (tab, panel, panes) in enumerate(zip(out["tabs"], out["panels"], expected)):
-            self.assertEqual(tab["attrs"]["aria-controls"], panel["attrs"]["id"])
-            self.assertEqual(panel["attrs"]["id"], "panel-" + names[index])
-            self.assertEqual(panel["attrs"]["aria-labelledby"], tab["attrs"]["id"])
-            self.assertEqual(panel["hidden"], index != 0)
-            self.assertEqual(tab["attrs"]["aria-selected"], str(index == 0).lower())
-            self.assertEqual(tab["tabIndex"], 0 if index == 0 else -1)
-            for pane in panes:
-                self.assertIn(pane, panel["text"])
-        self.assertIn("cmd", out["shared"])
-        self.assertIn("kpis", out["shared"])
-        for panel in out["panels"]:
-            self.assertNotIn("Router coverage", panel["text"])
-        self.assertIn("veil", self.render()["shared"])
+        self.assertEqual([t['text'] for t in out['tabs']], ['Overview', 'Now 7'])
+        expected = [['activity', 'router coverage', 'review gate', 'skill and agent use', 'depth vs outcome', 'load cost'],
+                    ['running now', 'projects, last 24 h']]
+        for index, (tab, panel, panes) in enumerate(zip(out['tabs'], out['panels'], expected)):
+            self.assertEqual(tab['attrs']['role'], 'tab')
+            self.assertTrue(tab['inTitleBar'])
+            self.assertEqual(tab['attrs']['aria-controls'], panel['attrs']['id'])
+            self.assertEqual(panel['attrs']['id'], 'panel-' + ['overview', 'now'][index])
+            self.assertEqual(panel['attrs']['role'], 'tabpanel')
+            self.assertEqual(panel['attrs']['aria-labelledby'], tab['attrs']['id'])
+            self.assertEqual(panel['hidden'], index != 0)
+            self.assertEqual(tab['attrs']['aria-selected'], str(index == 0).lower())
+            self.assertEqual(tab['tabIndex'], 0 if index == 0 else -1)
+            for pane in panes: self.assertIn(pane, panel['text'])
+        headers = [m['text'].split(' ⓘ')[0] for m in out['picture'] if m['tag'] == 'h2' and m['panel'] == 'panel-now']
+        self.assertEqual(headers, ['running now', 'projects, last 24 h'])
+        ids = [n['attrs'].get('id') for n in out['dom']]
+        for old in ('agents', 'project', 'delegation', 'reviews'):
+            self.assertNotIn('panel-' + old, ids)
+            self.assertNotIn('tab-' + old, ids)
+        self.assertNotIn('wtitle', ids)
+        self.assertRegex(PAGE.read_text(), r'class="dots"[^<]*>.*?</span><div class="tablist".*?</div><div class="theme"')
+        coverage = self.marks(out, 'coverage-row')[0]['text']
+        self.assertTrue(coverage.startswith('router coverage'))
+        self.assertIn('review gate', coverage)
+        self.assertFalse(any(m['attrs'].get('role') == 'tablist' for m in out['picture']))
+        self.assertIn('cmd', out['shared']); self.assertIn('kpis', out['shared'])
+        self.assertIn('veil', self.render()['shared'])
+        prompt = self.render(FIXTURE, {'actions': [dict(scope='prompt', tooltip='focus')]})
+        self.assertIn('~/finolabs-vibecode — fnl-status', prompt['tipStates'][0]['text'])
 
     def test_click_keyboard_and_hash_navigation(self):
-        actions = [{"click": "Agents"}, {"tab": "Agents", "key": "ArrowRight"},
-                   {"tab": "Project", "key": "Enter"}, {"tab": "Project", "key": "End"},
-                   {"tab": "Reviews", "key": " "}, {"tab": "Reviews", "key": "ArrowRight"},
-                   {"tab": "Overview", "key": "Home"}, {"tab": "Overview", "key": "ArrowLeft"},
-                   {"hash": "#delegation"}]
-        out = self.render(FIXTURE, {"actions": actions})
-        self.assertEqual([s["selected"] for s in out["states"]],
-                         [["Agents"], ["Agents"], ["Project"], ["Project"], ["Reviews"],
-                          ["Reviews"], ["Reviews"], ["Reviews"], ["Delegation"]])
-        self.assertEqual([s["focused"] for s in out["states"]][1:8],
-                         ["Project", "Project", "Reviews", "Reviews", "Overview", "Overview", "Reviews"])
-        self.assertEqual(out["stored"]["fnl-tab"], "delegation")
+        actions = [{'click': 'Now'}, {'tab': 'Now', 'key': 'ArrowRight'},
+                   {'tab': 'Overview', 'key': 'Enter'}, {'tab': 'Overview', 'key': 'End'},
+                   {'tab': 'Now', 'key': ' '}, {'tab': 'Now', 'key': 'Home'},
+                   {'tab': 'Overview', 'key': 'ArrowLeft'}, {'hash': '#delegation'}]
+        out = self.render(FIXTURE, {'actions': actions})
+        self.assertEqual([x['selected'] for x in out['states']],
+                         [['Now'], ['Now'], ['Overview'], ['Overview'], ['Now'], ['Now'], ['Now'], ['Overview']])
+        self.assertEqual([x['focused'] for x in out['states']][1:7],
+                         ['Overview', 'Overview', 'Now', 'Now', 'Overview', 'Now'])
+        self.assertEqual(out['stored']['fnl-tab'], 'overview')
 
     def test_hash_storage_validation_and_blocked_storage(self):
-        for name in ("overview", "agents", "project", "delegation", "reviews"):
+        for name in ("overview", "now", "agents", "project", "delegation", "reviews"):
             for scenario in ({"hash": "#" + name, "stored": {"fnl-tab": "reviews"}},
-                             {"stored": {"fnl-tab": name}}, {"hash": "#" + name, "storageThrows": True}):
+                             {"stored": {"fnl-tab": name}}, {"hash": "#" + name, "storageThrows": True},
+                             {"actions": [{"hash": "#" + name}]}):
                 with self.subTest(scenario=scenario):
                     out = self.render(FIXTURE, scenario)
-                    self.assertEqual([t["text"].split()[0] for t in out["tabs"] if t["attrs"]["aria-selected"] == "true"], [name.title()])
+                    self.assertEqual([t["text"].split()[0] for t in out["tabs"] if t["attrs"]["aria-selected"] == "true"], ["Now" if name in ("now", "agents", "project") else "Overview"])
         for bad in ("unknown", "__proto__", "constructor", "<img src=hash onerror=alert(2)>", "'][role=tab]", "%3Csvg%3E"):
             for scenario in ({"hash": "#" + bad, "stored": {"fnl-tab": "agents"}},
                              {"stored": {"fnl-tab": bad}}, {"actions": [{"hash": "#" + bad}]}):
@@ -188,22 +201,22 @@ class DashboardScriptTest(unittest.TestCase):
                     out = self.render(FIXTURE, scenario)
                     self.assertEqual([t["text"].split()[0] for t in out["tabs"] if t["attrs"]["aria-selected"] == "true"], ["Overview"])
                     self.assertNotIn(bad, " ".join(t["text"] for t in out["tabs"]))
-                    self.assertNotIn(bad, json.dumps([t["attrs"] for t in out["tabs"]] + [p["attrs"] for p in out["panels"]]))
-        out = self.render(FIXTURE, {"storageThrows": True, "actions": [{"click": "Reviews"}]})
-        self.assertFalse(out["panels"][4]["hidden"])
+                    self.assertNotIn(bad, json.dumps(out["dom"]))
+        out = self.render(FIXTURE, {"storageThrows": True, "actions": [{"click": "Now"}]})
+        self.assertFalse(out["panels"][1]["hidden"])
 
     def test_reload_preserves_tab_panel_scroll_and_each_open_table(self):
         changed = self.sample()
         changed["sessions"]["with_edits"] = 98765
-        out = self.render(FIXTURE, {"next": changed, "ticks": 2, "after": [{"click": "Overview"}, {"click": "Delegation"}], "actions": [
-            {"panel": "overview", "scrollTop": 160, "open": True}, {"click": "Delegation"},
-            {"panel": "delegation", "scrollTop": 240, "scrollLeft": 12, "open": True}]})
-        self.assertFalse(out["panels"][3]["hidden"])
+        out = self.render(FIXTURE, {"next": changed, "ticks": 2, "after": [{"click": "Overview"}, {"click": "Now"}], "actions": [
+            {"panel": "overview", "scrollTop": 160, "open": True}, {"click": "Now"},
+            {"panel": "now", "scrollTop": 240, "scrollLeft": 12, "open": True}]})
+        self.assertFalse(out["panels"][1]["hidden"])
         self.assertEqual(out["panels"][0]["scrollTop"], 160)
-        self.assertEqual(out["panels"][3]["scrollTop"], 240)
-        self.assertEqual(out["panels"][3]["scrollLeft"], 12)
+        self.assertEqual(out["panels"][1]["scrollTop"], 240)
+        self.assertEqual(out["panels"][1]["scrollLeft"], 12)
         self.assertEqual(out["panels"][0]["open"], [True])
-        self.assertEqual(out["panels"][3]["open"], [True])
+        self.assertEqual(out["panels"][1]["open"], [True])
         self.assertIn("with edits 98765", self.footer_text(out))
         self.assertEqual(out["poll_ms"], [5000])
 
@@ -211,22 +224,23 @@ class DashboardScriptTest(unittest.TestCase):
         changed = self.sample()
         changed["sessions"]["with_edits"] = 98765
         out = self.render(FIXTURE, {"next": changed, "actions": [{"tab": "Overview", "key": "ArrowRight"}]})
-        self.assertEqual(out["focused"], "Agents")
-        self.assertEqual([tab["tabIndex"] for tab in out["tabs"]], [-1, 0, -1, -1, -1])
+        self.assertEqual(out["focused"], "Now")
+        self.assertEqual([tab["tabIndex"] for tab in out["tabs"]], [-1, 0])
         self.assertFalse(out["panels"][0]["hidden"])
 
     def test_placeholder_counts_only_when_sources_exist(self):
         data = self.sample()
         data.update(running={"processes": [{}, {}], "open": [{}]}, progress={"in_progress": 0, "active": [dict(repo="aaaaaaaa", label="Active", hosts=["codex"], sessions=1, last="2026-11-06T10:00:00Z", percent=None)]})
-        out = self.render_freshness(data)
-        self.assertEqual([t["text"] for t in out["tabs"]], ["Overview", "Agents 1", "Project 1", "Delegation", "Reviews"])
-        data.update(running={"processes": [], "open": []}, progress={"in_progress": 0})
-        self.assertEqual([t["text"] for t in self.render_freshness(data)["tabs"]][1:3], ["Agents 0", "Project 0"])
-        for source in (None,):
-            out = self.render(source)
-            self.assertEqual([t["text"] for t in out["tabs"]][1:3], ["Agents", "Project"])
-            self.assertIn("no data: not available yet", out["panels"][1]["text"])
-            self.assertIn("no data: not available yet", out["panels"][2]["text"])
+        self.assertEqual([t['text'] for t in self.render_freshness(data)['tabs']], ['Overview', 'Now 2'])
+        data.update(running={"open": []}, progress={"in_progress": 0})
+        self.assertEqual(self.render_freshness(data)['tabs'][1]['text'], 'Now 0')
+        data['running'] = None
+        self.assertEqual(self.render_freshness(data)['tabs'][1]['text'], 'Now 0')
+        data['progress'] = None
+        self.assertEqual(self.render_freshness(data)['tabs'][1]['text'], 'Now')
+        out = self.render()
+        self.assertEqual([t['text'] for t in out['tabs']], ['Overview', 'Now'])
+        self.assertEqual(out['panels'][1]['text'].count('no data: not available yet'), 2)
 
     @staticmethod
     def marks(out, cls, disclosure=None):
@@ -237,7 +251,8 @@ class DashboardScriptTest(unittest.TestCase):
     @classmethod
     def info_text(cls, out, tab):
         return next(m['tooltip'] for m in cls.marks(out, 'info-button')
-                    if m['panel'] == 'panel-' + tab and not m['tooltip'].startswith('sources '))
+                    if m['panel'] == 'panel-' + ('now' if tab in ('agents', 'project') else tab) and
+                    ('Lanes' if tab == 'agents' else 'not accepted') in m['tooltip'])
 
     @classmethod
     def footer_text(cls, out):
@@ -258,14 +273,14 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertIn('liveness is advisory', self.info_text(out, 'agents'))
         self.assertIn('not accepted remains unfinished', self.info_text(out, 'project'))
         for tab in ('agents', 'project'):
-            button = next(m for m in buttons if m['panel'] == 'panel-' + tab)
+            button = next(m for m in buttons if m['tooltip'] == self.info_text(out, tab))
             self.assertEqual(button['spec']['title'], 'How to read this')
             self.assertLessEqual(len(button['spec']['items']), 5)
             self.assertTrue(all(len(item) < 100 for item in button['spec']['items']))
             self.assertNotIn(button['spec']['items'][0], out['text'])
         self.assertFalse(any(p['tag'] == 'details' and 'limits' in p['cls'].split() for p in out['picture']))
         self.assertNotIn('.limits', PAGE.read_text())
-        for text in ('indicative', 'events per day', 'from the dispatch ledger'):
+        for text in ('indicative', 'events per day'):
             self.assertIn(text, out['text'])
         css = PAGE.read_text()
         self.assertRegex(css, r'\.info-button \{[^}]*width: 14px; height: 14px;')
@@ -553,9 +568,9 @@ class DashboardScriptTest(unittest.TestCase):
                                 ('.status-dot[data-state="stale"]', '--crit')):
             rule = re.search(re.escape(selector) + r' \{([^}]+)', css)[1]
             self.assertIn('background: var(' + color + ')', rule)
-        for tab in ('overview', 'agents', 'project', 'delegation', 'reviews'):
+        for tab in ('overview', 'now'):
             out = self.render(FIXTURE, {'actions': [{'click': tab.title()}]})
-            index = ('overview', 'agents', 'project', 'delegation', 'reviews').index(tab)
+            index = ('overview', 'now').index(tab)
             children = out['panelChildren'][index]
             self.assertEqual(children[-2]['cls'], 'status')
             self.assertEqual(children[-1]['tag'], 'details')
@@ -625,19 +640,32 @@ class DashboardScriptTest(unittest.TestCase):
             self.assertEqual(self.marks(out, 'lane-stud'), [])
             self.assertEqual(self.marks(out, 'lane')[0]['attrs']['data-state'], 'cap' if age > cap else 'over')
 
-    def test_reviews_cap_chains_project_labels_and_live_hash_changes(self):
-        out = self.render(FIXTURE, {'hash': '#agents', 'actions': [{'hash': '#reviews'}, {'hash': '#project'}, {'hash': '#__proto__'}, {'hash': '#reviews'}]})
-        self.assertEqual([state['selected'] for state in out['states']], [['Reviews'], ['Project'], ['Overview'], ['Reviews']])
-        chains = self.marks(out, 'seq')
-        self.assertEqual(chains[0]['attrs']['data-dots'], '8')
-        self.assertEqual(self.marks(out, 'more-rounds')[0]['text'], '+6')
-        labels = self.marks(out, 'review-label')
-        self.assertTrue(labels[0]['text'].startswith('Fino tools '))
-        self.assertNotIn('aaaaaaaa', labels[0]['text'])
-        self.assertIn('white-space: nowrap', re.search(r'\.rv \.review-label \{([^}]+)', PAGE.read_text())[1])
-        self.assertIn('14 rounds', chains[0]['tooltip'])
-        table = self.marks(out, 'tbl', 'show the data as tables')
-        self.assertTrue(any('REWORK → REWORK' in row['text'] for row in table))
+    def test_review_gate_and_moved_tables(self):
+        out = self.render(FIXTURE, {'hash': '#agents', 'actions': [{'hash': '#reviews'}, {'hash': '#project'}, {'hash': '#__proto__'}, {'hash': '#reviews'}, dict(scope='overview', tooltip='focus', target='review-summary')]})
+        self.assertEqual([x['selected'] for x in out['states'][:4]], [['Overview'], ['Now'], ['Overview'], ['Overview']])
+        self.assertIn('25%', self.marks(out, 'review-figure')[0]['text'])
+        distribution = self.marks(out, 'review-distribution')[0]
+        self.assertEqual(distribution['attrs']['role'], 'img')
+        self.assertEqual([m['attrs']['data-count'] for m in self.marks(out, 'review-round')], ['1', '1', '2'])
+        tip = out['tipStates'][0]
+        chains = [m for m in tip['picture'] if m['cls'] == 'tip-review-chain']
+        self.assertEqual(len(chains), 4)
+        dots = [m for m in tip['picture'] if 'review-dot' in m['cls']]
+        self.assertEqual(len(dots), 14)
+        self.assertEqual(sum('approve' in m['cls'] for m in dots), 3)
+        self.assertIn('+6', tip['text'])
+        self.assertNotIn('aaaaaaaa', tip['text']); self.assertNotIn('Fino tools', tip['text'])
+        self.assertNotIn('repo-3f2a', tip['text']); self.assertNotIn('#31', tip['text'])
+        tables = self.marks(out, 'tbl', 'show the data as tables')
+        for title in ('delegation', 'kept and handed off', 'kept by the coordinator', 'reviews'):
+            self.assertTrue(any(row['panel'] == 'panel-overview' and row['text'].startswith(title) for row in tables), title)
+        self.assertTrue(any('REWORK → REWORK' in row['text'] for row in tables))
+        self.assertFalse(any(m['tag'] == 'h2' and ('delegation' in m['text'] or 'Judge' in m['text']) for m in out['picture']))
+        data = self.sample(); data['review_stats'] = dict(total=3, reworked=1)
+        self.assertIn('66%', self.marks(self.render_freshness(data), 'review-figure')[0]['text'])
+        data['reviews'] = data['reviews'] * 4
+        capped = self.render_freshness(data, {'actions': [dict(scope='overview', tooltip='focus', target='review-summary')]})
+        self.assertEqual(sum(m['cls'] == 'tip-review-chain' for m in capped['tipStates'][0]['picture']), 12)
 
     def test_agents_lego_lanes_slots_quota_and_hostile_values(self):
         out = self.render(FIXTURE, {'hash': '#agents', 'now': '2026-11-06T10:00:00Z'})
@@ -700,7 +728,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertIn('align-items: start', rule('.story'))
         self.assertIn('margin-top: 8px', rule('.story + .story'))
         self.assertNotIn('position: sticky', rule('.story-label'))
-        self.assertIn('@media (max-width: 375px) {\n  .story + .story { margin-top: 6px; }', css)
+        self.assertIn('.story + .story { margin-top: 6px; }', css[css.index('@media (max-width: 375px)'):])
         self.assertGreater(css.index('@media (max-width: 375px)'), css.index('.story + .story { margin-top: 8px; }'))
         self.assertIn('align-self: start', rule('.story-label'))
         self.assertIn('flex-wrap: wrap', rule('.cells'))
@@ -708,8 +736,8 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertIn('stroke-dasharray: 2 2', rule('.quota-bricks.unverified .brick-body'))
         self.assertIn('font-size: 22px', rule('.active-percent'))
         self.assertIn('font-variant-numeric: tabular-nums', rule('.active-percent'))
-        mobile = css[css.index('@media (max-width: 560px) {\n  #panel-agents'):]
-        self.assertIn('#panel-agents, #panel-project { max-height: none; overflow: visible; }', mobile)
+        mobile = css[css.index('@media (max-width: 560px) {\n  #panel-now'):]
+        self.assertIn('#panel-now { max-height: none; overflow: visible; }', mobile)
         self.assertIn('.lane { grid-template-columns: minmax(0, 1fr) 64px;', mobile)
         self.assertIn('.lane-label { grid-column: 1 / -1; }', mobile)
         self.assertIn('.project-detail { grid-column: 1 / -1; grid-row: 2; }', mobile)
@@ -753,9 +781,9 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render(FIXTURE, {'hash': '#project', 'now': '2026-11-06T10:00:00Z'})
         rows = self.marks(out, 'active-project')
         self.assertEqual([p['attrs']['data-repo'] for p in rows], ['aaaaaaaa', 'cccccccc', 'eeeeeeee'])
-        self.assertEqual(out['tabs'][2]['text'], 'Project 3')
-        self.assertNotIn('repo bbbb', out['panels'][2]['text'])
-        self.assertNotIn('repo dddd', out['panels'][2]['text'])
+        self.assertEqual(out['tabs'][1]['text'], 'Now 7')
+        self.assertNotIn('repo bbbb', out['panels'][1]['text'])
+        self.assertNotIn('repo dddd', out['panels'][1]['text'])
         self.assertEqual(self.marks(out, 'project-disclosure'), [])
         self.assertTrue(all(r['tag'] == 'div' for r in rows))
         self.assertEqual([p['text'] for p in self.marks(out, 'active-percent')], ['46%', ''])
@@ -790,7 +818,7 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render(FIXTURE, {'hash': '#project', 'next': changed})
         self.assertEqual(self.marks(out, 'project-disclosure'), [])
         self.assertEqual(len(self.marks(out, 'task-brick')), 40)
-        self.assertEqual(out['panels'][2]['attrs']['data-enter'], 'true')
+        self.assertEqual(out['panels'][1]['attrs']['data-enter'], 'true')
 
     def test_long_story_merges_consecutive_tasks_with_state_precedence(self):
         out = self.render(FIXTURE, {'hash': '#project'})
@@ -858,11 +886,11 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual([p['attrs']['data-repo'] for p in self.marks(out, 'active-project')], ['cccccccc', 'aaaaaaaa', 'eeeeeeee'])
         data['progress']['active'] = [dict(repo='bbbbbbbb', label='', hosts=[], sessions=1, last='2026-11-06T10:00:00Z')]
         out = self.render_freshness(data, {'hash': '#project'})
-        self.assertIn('No named project active in the last 24 hours. Run fnl-status inside a repository to add it.', out['panels'][2]['text'])
+        self.assertIn('No named project active in the last 24 hours. Run fnl-status inside a repository to add it.', out['panels'][1]['text'])
         self.assertEqual(self.marks(out, 'active-project'), [])
         self.assertEqual(self.marks(out, 'project-disclosure'), [])
-        self.assertEqual(out['tabs'][2]['text'], 'Project 0')
-        self.assertFalse(any('ghost' in p['cls'] for p in out['picture'] if p.get('panel') == 'panel-project'))
+        self.assertEqual(out['tabs'][1]['text'], 'Now 4')
+        self.assertFalse(any('ghost' in p['cls'] for p in out['picture'] if p.get('panel') == 'panel-now'))
 
     def test_activity_input_coercion_and_named_cap(self):
         data = self.sample()
@@ -876,11 +904,11 @@ class DashboardScriptTest(unittest.TestCase):
             row.update(hosts=bad, percent=bad, last=bad)
             out = self.render_freshness(data)
             self.assertEqual(self.marks(out, 'active-percent')[-1]['text'], '')
-            self.assertNotIn('NaN', out['panels'][2]['text'])
+            self.assertNotIn('NaN', out['panels'][1]['text'])
         data['progress']['active'] = [dict(repo=str(n), label='Named', hosts=[], sessions=1, last='2026-11-06T10:00:00Z') for n in range(20)]
         out = self.render_freshness(data)
         self.assertEqual(len(self.marks(out, 'active-project')), 12)
-        self.assertEqual(out['tabs'][2]['text'], 'Project 12')
+        self.assertEqual(out['tabs'][1]['text'], 'Now 16')
 
     def test_motion_scoped_to_visible_tab_and_once_per_changed_data(self):
         page = PAGE.read_text()
@@ -888,9 +916,9 @@ class DashboardScriptTest(unittest.TestCase):
         for selector, body in re.findall(r'([^{}]+)\{([^{}]+)\}', page.split('</style>')[0]):
             if 'animation:' in body and any(name in body for name in ('amount-grow', 'brick-snap', 'brick-breathe')):
                 self.assertTrue(all('.tabpanel:not([hidden])' in part for part in selector.split(',')))
-        out = self.render(FIXTURE, {'actions': [{'click': 'Agents'}, {'click': 'Project'}]})
+        out = self.render(FIXTURE, {'actions': [{'click': 'Now'}, {'click': 'Overview'}]})
         self.assertTrue(all(p['attrs'].get('data-enter') != 'true' for p in out['panels'] if p['hidden']))
-        again = self.render(FIXTURE, {'actions': [{'click': 'Agents'}, {'click': 'Overview'}, {'click': 'Agents'}]})
+        again = self.render(FIXTURE, {'actions': [{'click': 'Now'}, {'click': 'Overview'}, {'click': 'Now'}]})
         self.assertEqual(again['panels'][1]['attrs'].get('data-enter'), 'false')
         self.assertTrue(any('active' in p['cls'].split() for p in self.marks(out, 'task-brick')))
 
@@ -906,7 +934,7 @@ class DashboardScriptTest(unittest.TestCase):
     def test_the_sample_data_draws_every_chart_without_an_error(self):
         out = self.render(FIXTURE)
         for expected in ("Router coverage", "events per day", "October 2026", "skill and agent use", "fnl-coding-router",
-                         "7 tasks kept by the coordinator in 3 receipts; 14 implementation runs handed off",
+                         "kept and handed off tasks kept receipts implementation runs handed off 7 3 14",
                          "claude / needs-context / table"):
             self.assertIn(expected, out["text"])
         self.assertNotIn("No data yet", out["text"])
@@ -939,8 +967,7 @@ class DashboardScriptTest(unittest.TestCase):
             path = Path(folder) / "data.json"
             path.write_text(json.dumps(data), encoding="utf-8")
             out = self.render(path)
-        self.assertIn("7 tasks kept", out["text"])
-        self.assertIn("1 implementation run handed off", out["text"])
+        self.assertIn("kept and handed off tasks kept receipts implementation runs handed off 7 3 1", out["text"])
         self.assertIn("no data: no finished runs in this period", out["text"])
 
     def judge_data(self, receipts=True):
@@ -961,15 +988,18 @@ class DashboardScriptTest(unittest.TestCase):
             path.write_text(json.dumps(data))
             return self.render(path)
 
-    def test_judge_pane_only_with_data_and_small_groups_are_open_rings(self):
+    def test_judge_receipts_only_in_overview_tables(self):
         self.assertNotIn("Outcome association", self.render(FIXTURE)["text"])
         self.assertNotIn("Outcome association", self.render()["text"])
         out = self.render_judge(self.judge_data())
-        for label in ("Judge", "Use", "Usable answers", "Followed", "Outcome association", "50% (1/2)",
-                      "100% (1/1)", "judge · n=4", "table · n=5", "Not measured: cost, latency and accuracy.",
-                      "not proof the judge was right", "not judged"):
+        for label in ("Judge", "Use", "Usable answers", "Followed", "Outcome association", "Usable answers 1 2 50%",
+                      "Followed 1 1 100%", "judge 4 50%", "table 5 60%", "Not measured: cost, latency and accuracy.",
+                      "not proof the judge was right"):
             self.assertIn(label, out["text"])
-        self.assertEqual(out["openRings"], 1)
+        self.assertEqual(out["openRings"], 0)
+        judge_tables = [m for m in self.marks(out, 'tbl', 'show the data as tables') if m['text'].startswith('Judge')]
+        self.assertEqual(len(judge_tables), 4)
+        self.assertTrue(all(m['panel'] == 'panel-overview' for m in judge_tables))
 
     def test_judge_without_receipts_shows_only_association_and_escapes_values(self):
         data = self.judge_data(False)
