@@ -48,7 +48,11 @@ falls back as if the section were absent, and `checkup.py` reports the section a
   (the label rule). It is a join key into the ledger, not an access boundary.
 - `tasks`: 1 to 120 characters from ASCII letters, digits, dot, dash, underscore and `/`; relative; no empty or `.`
   or `..` component; ends in `.md`; not under `specs/archive`. These are early checks. The reader's existing
-  `read_task` (per-component `O_NOFOLLOW`, regular file, owner, size cap) stays the real enforcer and is unchanged.
+  `read_task` (per-component `O_NOFOLLOW`, regular file, owner, size cap) stays the real enforcer.
+  Both validation and the reader deny a closed, named set of instruction files, matched case-insensitively
+  on the final component under any folder: `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`,
+  `AGENTS.override.md`, `GEMINI.md`, `copilot-instructions.md` (including `.github/copilot-instructions.md`),
+  `CONVENTIONS.md`, `.cursorrules`, `.windsurfrules`, `.clinerules`.
 
 `project_progress.py` gains `settings --set ledger=<name>` and `settings --set tasks=<path>` (run from inside the
 repository; one argument; validated by the grammar above; only this repository's entry changed) and `settings --clear

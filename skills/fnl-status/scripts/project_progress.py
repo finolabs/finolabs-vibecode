@@ -103,7 +103,8 @@ def valid_setting(key, value):
     if key == 'tasks':
         return bool(re.fullmatch(r'[A-Za-z0-9._/-]{1,120}', value) and value.endswith('.md')
                     and all(part not in ('', '.', '..') for part in value.split('/'))
-                    and value.split('/')[:2] != ['specs', 'archive'])
+                    and value.split('/')[:2] != ['specs', 'archive']
+                    and value.split('/')[-1].upper() not in INSTRUCTION_FILES)
     return False
 
 
@@ -463,7 +464,8 @@ STAGES = ('spec', 'plan', 'design', 'tasks', 'verify', 'review', 'ship', 'packag
 STATES = ('done', 'active', 'todo', 'unknown', 'deferred', 'needs-attention')
 HINTS = ('draft', 'accepted', 'done', 'active', 'deferred', 'unknown')
 DOC_LIMIT = 64 * 1024
-INSTRUCTION_FILES = ('CLAUDE.MD', 'CLAUDE.LOCAL.MD', 'AGENTS.MD', 'AGENTS.OVERRIDE.MD', 'GEMINI.MD')
+INSTRUCTION_FILES = ('CLAUDE.MD', 'CLAUDE.LOCAL.MD', 'AGENTS.MD', 'AGENTS.OVERRIDE.MD', 'GEMINI.MD',
+                     'COPILOT-INSTRUCTIONS.MD', 'CONVENTIONS.MD', '.CURSORRULES', '.WINDSURFRULES', '.CLINERULES')
 STATUS_WORDS = ('draft', 'accepted', 'in progress', 'implemented', 'released', 'deferred')
 STATUS_MARKS = ('accepted', 'status-not-updated')
 

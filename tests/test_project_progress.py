@@ -103,6 +103,26 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.host.stat().st_mode), 0o600)
         self.assertFalse(list(self.data.glob('.write-*')))
 
+    def test_task_instruction_denylist_is_closed_and_case_insensitive(self):
+        names = ('CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', 'AGENTS.override.md',
+                 'GEMINI.md', 'copilot-instructions.md', 'CONVENTIONS.md',
+                 '.cursorrules', '.windsurfrules', '.clinerules')
+        for name in names:
+            for folder in ('', '.github/', 'nested/'):
+                relative = folder + name.swapcase()
+                self.assertFalse(self.pp.valid_setting('tasks', folder + name))
+                with self.subTest(relative=relative):
+                    self.assertFalse(self.pp.valid_setting('tasks', relative))
+                    with mock.patch.object(self.pp.os, 'dup') as dup:
+                        with self.assertRaisesRegex(ValueError, 'instruction file skipped'):
+                            self.pp.read_task(-1, relative)
+                        dup.assert_not_called()
+        self.assertTrue(self.pp.valid_setting('tasks', 'docs/my-conventions.md'))
+        spec = (ROOT / 'docs/specs/work-tracking.md').read_text().split('## B.')[0]
+        self.assertIn('closed, named set', spec)
+        for name in names:
+            self.assertIn('`' + name + '`', spec)
+
     def test_settings_missing_host_refuses_without_echoing_value(self):
         import io
         self.consent()
