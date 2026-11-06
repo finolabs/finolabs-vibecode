@@ -25,7 +25,7 @@ separate consent, a stored preview and a digest, like `compaction-threshold.md`.
 
 Pattern: `compact_setup.py` (stored private preview 0600 at `<data root>/state/merge-guard/preview.json`,
 digest, 60-minute expiry, owner/mode/symlink/git-work-tree refusals, backups
-`<file>.bak-YYYYMMDD`, atomic writes, fixed content-free errors).
+unique backups (below), atomic writes, fixed content-free errors).
 
 - `preview --host claude|codex [--folder <abs>]... [--rules <names>] | --remove`: shows, per target,
   the exact lines to add or remove and the digest. Writes only the preview.
@@ -63,7 +63,7 @@ digest, 60-minute expiry, owner/mode/symlink/git-work-tree refusals, backups
 (agent judgment) that the question is asked and the preview shown; the script enforces digest,
 expiry and file safety; the host enforces the prompt. State that a prompt asks the human, that
 it applies to the agent's own merges too, and that matching is best-effort. `fnl-review-gate` "Pull
-requests" and `fnl-delegate` say the merge prompt is the user's authority made real where the guard
+requests" and `fnl-delegate` say the merge prompt is a prompt on those commands where the guard
 is installed, and still advisory where it is not. `PRIVACY.md`: the script writes only to the
 named settings/rules files and the private preview; nothing is sent. README row, CHANGELOG
 `Unreleased`, `docs/specs/index.md`.
@@ -90,7 +90,7 @@ repository's server-side rules. The skill text says all of this.
 2. Claude: entries added once (idempotent), other keys and other `ask`/`allow`/`deny` entries unchanged,
    duplicate keys refused, `--remove` removes only ours, multiple folders, dedupe by identity.
 3. Codex: dedicated file created 0600, `default.rules` never touched, content exactly the selected
-   `prefix_rule` lines, `--remove` deletes only that file.
+   `prefix_rule` lines, `--remove` deletes it only when its marker and recorded hash match.
 4. Antigravity refused; unknown rule names refused; no free-text pattern accepted.
 5. Verification before the recommended set ships, recorded in this spec: Claude with a throwaway config
    folder (`claude -p` asked to run `gh pr merge --help` prompts), Codex with `codex execpolicy check`.

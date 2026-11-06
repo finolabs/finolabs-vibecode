@@ -9,7 +9,6 @@
 | [Compaction threshold](compaction-threshold.md) | Checked setup writer; running-session effect and Codex default unverified. |
 | [Compaction steward](compaction-steward.md) | Option B: local handover storage, threshold decision and compact re-injection; real-host delivery remains unverified. |
 | [Release 0.1.10: spec and plan](release-0.1.10.md) | In progress; the package table lists the pull request behind each package. |
-| [Antigravity compaction stop](compaction-stop.md) | Spec; the rule is merged in `CLAUDE.md`, code in progress. |
+| [Antigravity compaction stop](compaction-stop.md) | Spec; the rule is merged in `CLAUDE.md`, code running locally, no pull request yet. |
 | [Merge guard](merge-guard.md) | Spec; permission rules written by setup for Claude Code and Codex. |
 | [Running agents](running-agents.md) | Spec; phase 1 is the ledger plus a process snapshot on the dashboard. |
-| [Project progress](project-progress.md) | Spec; task progress from `tasks.md`, ledger and usage events on the dashboard. |

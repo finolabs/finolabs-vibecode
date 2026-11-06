@@ -21,7 +21,7 @@ before any code (owner approval for the exception is part of approving this spec
 dashboard refresh may run `ps` once per refresh, read-only, as the current user, to count
 command-line agent processes; fixed argv, absolute owner-checked path, no shell, allowlisted
 environment, neutral working folder, 2-second limit with the process group killed, 256 KiB output cap;
-it keeps only fixed family names and counts, never arguments, paths, environment or user-chosen names;
+it keeps only fixed family names, counts and elapsed seconds, never arguments, paths, environment or user-chosen names;
 it runs only when metrics consent is recorded; `FNL_AGENT_SNAPSHOT=off` stops it; no other command and
 no network. No code lands before that rule is merged.
 

@@ -31,9 +31,9 @@ where only advice exists.
 | 3 | Session-title reminder in the always-loaded rule and the Titles section | none (one line of text) | Merged (pull request 98) |
 | 4 | Owner exception and code for an opt-in Antigravity compaction stop | [compaction-stop.md](compaction-stop.md); rule in `CLAUDE.md` (pull requests 100 and 101) | Rule merged; code running locally, no pull request yet |
 | 5 | Merge prompt through host permission rules (Claude Code, Codex): common commands only | [merge-guard.md](merge-guard.md) | Spec only |
-| 6 | Running agents on the dashboard (phase 1: ledger plus a `ps` snapshot) | [running-agents.md](running-agents.md); needs its own `CLAUDE.md` exception for the `ps` command first | Spec only |
+| 6 | Running agents on the dashboard (phase 1: ledger plus a `ps` snapshot); the page becomes tabs (see package 8) | [running-agents.md](running-agents.md); needs its own `CLAUDE.md` exception for the `ps` command first | Spec only |
 | 7 | Backlog and spec corrections | below | Not started |
-| 8 | Project progress panel on the dashboard (Spec Kit `tasks.md`, ledger, usage events) | [project-progress.md](project-progress.md); builds on package 6 | Spec only |
+| 8 | Project progress panel on the dashboard (Spec Kit `tasks.md`, ledger, usage events) | spec in its own pull request (project progress and dashboard tabs); builds on package 6 | Spec in review |
 
 Order of work: 4, then 5, then 6, then 8 (it shares the page and the refresh with 6), then 7. Packages 4 to 6 all edit `fnl-setup`, the README and the
 changelog, so they run one at a time, each through its own pull request with both reviews.

@@ -14,6 +14,8 @@ thresholds written by `fnl-setup` (`compaction-threshold.md`); Antigravity has n
 - `transcriptPath` was a regular file under
   `~/.gemini/antigravity-cli/brain/<conversationId>/.system_generated/logs/`, and
   its size grew with each turn (588, then 777 bytes).
+- The conversation id was a 36-character lower-case hex-and-dash UUID, and the transcript file was named
+  `transcript_full.jsonl`.
 - A `PreInvocation` hook answering
   `{"injectSteps":[{"errorMessage":{"userMessage":"…"}}],"terminationBehavior":"terminate"}`
   ended the turn before the model ran; the user saw the message and `-p` reported
