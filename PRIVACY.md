@@ -6,6 +6,10 @@ The agent scan script itself uses no network and runs `--version` only on three 
 
 Setup may write the user's own host compaction setting only after a previewed yes, keeping a private local plan and local backups; no data leaves the machine.
 
+## Compaction handover
+
+`<data root>/state/handover/<sha256(session id)[:16]>.md` is a local handover file: the user's own text, written by their agent (goal, decisions, work in progress and next action). `handover_state.py` stores at most 8 KiB as UTF-8, atomically, mode 0600 in a 0700 folder. At most 20 files are kept, with the oldest by modification time removed first. It has a 24-hour read lifetime: expired files are not read or re-injected, but may remain on disk until replaced, evicted or deleted by the user. The text is never sent by the storage or steward scripts and never enters metrics; the optional repository code is not stored. Safe text is re-injected locally into the same session on source `compact`, where the host's conversation policy below applies. Unsafe files or storage disable this feature silently. Hook delivery to the model remains unverified on every host.
+
 ## Where your data goes
 
 The data folder can be relocated through `fnl-setup`; the fixed pointer `~/.finolabs/vibecode/root.json` contains its absolute `root` path and a random `id` matching the new folder's `.root-id`.

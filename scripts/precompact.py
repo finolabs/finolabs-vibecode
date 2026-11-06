@@ -17,7 +17,7 @@ def main():
         pass
     try:
         # Unbuffered output avoids a second flush failure at interpreter shutdown.
-        os.write(1, b"Before compaction, write back decisions and the next action.\n")
+        os.write(1, b"Before compaction, write the handover (goal, decisions, work in progress, next action) with handover_state.py write, then write back decisions.\n")
     except Exception:
         pass
 
