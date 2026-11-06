@@ -1180,7 +1180,9 @@ def main(argv=None):
         print(result if args.dry_run else 'Project progress preference saved.')
         return 0
     except (OSError, ValueError, UnicodeError):
-        print('Project progress setup refused; no preference saved.', file=sys.stderr)
+        message = ('Project settings refused; no setting changed.' if args.choice == 'settings'
+                   else 'Project progress setup refused; no preference saved.')
+        print(message, file=sys.stderr)
         return 1
 
 

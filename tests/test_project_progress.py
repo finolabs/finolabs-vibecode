@@ -103,6 +103,19 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.host.stat().st_mode), 0o600)
         self.assertFalse(list(self.data.glob('.write-*')))
 
+    def test_settings_missing_host_refuses_without_echoing_value(self):
+        import io
+        self.consent()
+        self.host.unlink()
+        with mock.patch('os.getcwd', return_value=str(self.repo)), \
+                mock.patch('sys.stdout', new_callable=io.StringIO) as out, \
+                mock.patch('sys.stderr', new_callable=io.StringIO) as err:
+            self.assertEqual(self.pp.main(['settings', '--set', 'ledger=PRIVATE']), 1)
+        self.assertEqual(out.getvalue(), '')
+        self.assertEqual(err.getvalue(), 'Project settings refused; no setting changed.\n')
+        self.assertNotIn('PRIVATE', err.getvalue())
+        self.assertFalse(self.host.exists())
+
     def test_settings_two_repositories_override_deprecated_globals(self):
         self.consent()
         other = self.repo.with_name('other')
