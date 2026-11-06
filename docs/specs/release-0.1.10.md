@@ -29,13 +29,13 @@ where only advice exists.
 | 1 | Checked compaction threshold writer (Claude Code, Codex) | [compaction-threshold.md](compaction-threshold.md) | Merged (pull request 97) |
 | 2 | Compaction steward: local handover, threshold decision, re-injection after compact, read-only agent | [compaction-steward.md](compaction-steward.md) | Merged (pull request 99) |
 | 3 | Session-title reminder in the always-loaded rule and the Titles section | none (one line of text) | Merged (pull request 98) |
-| 4 | Owner exception and code for an opt-in Antigravity compaction stop | [compaction-stop.md](compaction-stop.md); rule in `CLAUDE.md` (pull requests 100 and 101) | Rule merged; code running locally, no pull request yet |
+| 4 | Owner exception and code for an opt-in Antigravity compaction stop | [compaction-stop.md](compaction-stop.md); rule in `CLAUDE.md` (pull requests 100 and 101) | Merged (pull requests 100, 101, 105, 109) |
 | 5 | Merge prompt through host permission rules | [merge-guard.md](merge-guard.md) | Moved to 0.2.0 with autopilot (owner, 2026-11-06): hosts already ask in their default modes |
-| 6 | Running agents on the dashboard (phase 1: ledger plus a `ps` snapshot); the page becomes tabs (see package 8) | [running-agents.md](running-agents.md); needs its own `CLAUDE.md` exception for the `ps` command first | Spec only |
-| 7 | Backlog and spec corrections | below | Not started |
-| 8 | Project progress panel on the dashboard, with the `task` event that links hand-started sessions to tasks | [project-progress.md](project-progress.md) and [dashboard-tabs.md](dashboard-tabs.md); builds on package 6 | Specs merged; code not started |
-| 9 | Dashboard freshness: ledger and Antigravity trigger a rebuild, a freshness line per host | [dashboard-freshness.md](dashboard-freshness.md) | Spec only |
-| 10 | Ask in the host's native question form: always-loaded rule, interview rules for rounds larger than the tool allows, router and map wording | none (text only; see "Package 10") | In progress |
+| 6 | Running agents on the dashboard (phase 1: ledger plus a `ps` snapshot); the page becomes tabs (see package 8) | [running-agents.md](running-agents.md); needs its own `CLAUDE.md` exception for the `ps` command first | Merged (pull requests 113 and 117) |
+| 7 | Backlog and spec corrections | below | Merged (pull requests 111, 114, 115, 118); the `finolabs/plugins` catalog ref check and the keep-manual outside check move to the next release |
+| 8 | Project progress panel on the dashboard, with the `task` event that links hand-started sessions to tasks | [project-progress.md](project-progress.md) and [dashboard-tabs.md](dashboard-tabs.md); builds on package 6 | Merged (pull requests 110, 112, 119) |
+| 9 | Dashboard freshness: ledger and Antigravity trigger a rebuild, a freshness line per host | [dashboard-freshness.md](dashboard-freshness.md) | Merged (pull request 108) |
+| 10 | Ask in the host's native question form: always-loaded rule, interview rules for rounds larger than the tool allows, router and map wording | none (text only; see "Package 10") | Merged (pull request 106) |
 
 Order of work: 4, then 9 (small, and the other dashboard packages rely on it), then 6, then 8 (it shares the page and the refresh with 6), then 10 (text only, any time), then 7. Package 5 is not in this release. Packages 4 to 6 all edit `fnl-setup`, the README and the
 changelog, so they run one at a time, each through its own pull request with both reviews.

@@ -4,43 +4,37 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
-### Fixed
+## [0.1.10] - 2026-11-06
 
-- Warn about Claude per-model compaction overrides, preserve Codex threshold comments, and skip same-value threshold writes.
+### Added
+
+- Tell coordinators to start headless runs through the host's background mechanism, never a detached shell job, and to check the process table and the recorded exit status before saying a run is running.
+- Add metadata-only Project tab progress by feature, phase and story, exact identifier joins to runs and sessions, and a safe local reader with a one-second budget. With metrics consent and a resolved host config it defaults on; setup records the preference, `FNL_PROGRESS=off` disables it, page/session notices announce the change, and progress stays in overwritten dashboard data.
+- Add Running now in the Agents tab: open dispatch ages and budgets, advisory liveness checks and family mismatch flags, plus a separately opted-in, bounded process snapshot. Setup records its on/off choice in canonical host config; `FNL_AGENT_SNAPSHOT=off` disables it, and snapshots stay in the overwritten dashboard data only.
+- Add a validated `record.py task --id T012` receipt and a consent-gated `task` event holding only the task id, with advisory guidance for sessions the user started by hand.
+- Let the Antigravity compaction stop install from Antigravity's own installed copy of the plugin, which keeps the repository's `.git` entry; any other plugin folder inside a git work tree is still refused.
+- Ask user decisions through the host's native question tool across any clarify or brainstorming skill, stage rounds larger than the tool's per-call limit across calls with blocking questions first, and note how a parent session can read its own id from a child session it started when renaming (advisory, agent judgment).
+- Show dashboard freshness: build time, newest event per host, ledger and quota ages, quiet-host warnings and a visible-tab stale-data notice. A newer ledger bypasses the rebuild throttle; Antigravity events start a detached, consent-gated rebuild with a 20-second self-cap.
+- Add an opt-in Antigravity pre-invocation compaction stop with a user-chosen transcript byte limit, private size marks and a digest-bound setup preview; it keeps its own hook group and fails open. User-level hooks and interactive TUI delivery remain unverified.
+- Add the advisory compaction steward, a deterministic threshold check and private local handovers re-injected on compact session starts; hook delivery remains unverified, and no hook declarations change.
+- Let setup write a user-chosen Claude Code or Codex compaction threshold after separate approval of a checked, digest-bound preview, with local backups.
 
 ### Changed
 
 - Correct the Antigravity file-tool hook matcher and limit suggested prompts to three; an already installed Antigravity hook group keeps its old matcher until `refresh.py antigravity-hook --yes` is run again.
 - Split the status dashboard into Overview, Agents, Project, Delegation and Reviews tabs, preserving the selected tab, panel scroll and open tables on data reload. Tabs show missing-source states when their data is unavailable.
-
 - Remind agents to rename their session at the start, on a phase change and after every compaction, in the always-loaded rule and in the Titles section of `fnl-session-hygiene`.
 - Correct host instruction mechanics for Claude Code and Codex, note Codex `spawn_agent` hook matching in usage metrics, clarify compaction threshold settings and writer bounds, and document privacy boundaries for judge instruction checks.
 
 ### Fixed
 
+- Warn about Claude per-model compaction overrides, preserve Codex threshold comments, and skip same-value threshold writes.
 - Reject excluded quota interpreters and all line separators in recorded paths and labels.
 - Bind each quota executable target to its confirmed digest and reject excluded resolved paths at probe time; older records need a new setup preview.
 - Retry quota cache write failures after 30 minutes instead of saving a successful backoff.
 - Reject line breaks in quota configuration paths and labels during plan validation.
 - Deduplicate Claude configuration folders by filesystem identity and clearly refuse missing folders.
 - Apply the agent version output limit to stdout independently of stderr.
-
-### Added
-
-- Tell coordinators to start headless runs through the host's background mechanism, never a detached shell job, and to check the process table and the recorded exit status before saying a run is running.
-- Add metadata-only Project tab progress by feature, phase and story, exact identifier joins to runs and sessions, and a safe local reader with a one-second budget. With metrics consent and a resolved host config it defaults on; setup records the preference, `FNL_PROGRESS=off` disables it, page/session notices announce the change, and progress stays in overwritten dashboard data.
-
-- Add Running now in the Agents tab: open dispatch ages and budgets, advisory liveness checks and family mismatch flags, plus a separately opted-in, bounded process snapshot. Setup records its on/off choice in canonical host config; `FNL_AGENT_SNAPSHOT=off` disables it, and snapshots stay in the overwritten dashboard data only.
-
-- Add a validated `record.py task --id T012` receipt and a consent-gated `task` event holding only the task id, with advisory guidance for sessions the user started by hand.
-
-- Let the Antigravity compaction stop install from Antigravity's own installed copy of the plugin, which keeps the repository's `.git` entry; any other plugin folder inside a git work tree is still refused.
-- Ask user decisions through the host's native question tool across any clarify or brainstorming skill, stage rounds larger than the tool's per-call limit across calls with blocking questions first, and note how a parent session can read its own id from a child session it started when renaming (advisory, agent judgment).
-- Show dashboard freshness: build time, newest event per host, ledger and quota ages, quiet-host warnings and a visible-tab stale-data notice. A newer ledger bypasses the rebuild throttle; Antigravity events start a detached, consent-gated rebuild with a 20-second self-cap.
-- Add an opt-in Antigravity pre-invocation compaction stop with a user-chosen transcript byte limit, private size marks and a digest-bound setup preview; it keeps its own hook group and fails open. User-level hooks and interactive TUI delivery remain unverified.
-
-- Add the advisory compaction steward, a deterministic threshold check and private local handovers re-injected on compact session starts; hook delivery remains unverified, and no hook declarations change.
-- Let setup write a user-chosen Claude Code or Codex compaction threshold after separate approval of a checked, digest-bound preview, with local backups.
 
 ## [0.1.9] - 2026-11-06
 
@@ -311,7 +305,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.6...v0.1.7
