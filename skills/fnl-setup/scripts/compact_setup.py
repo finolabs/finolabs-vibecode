@@ -136,6 +136,8 @@ def transform(host, raw, tokens):
             raise Refusal("JSON must be an object")
         old = data.get(key)
         present = key in data
+        if type(old) is int and old == tokens:
+            return raw, "No difference."
         if tokens is None:
             if not present:
                 return raw, "No difference."
@@ -154,7 +156,7 @@ def transform(host, raw, tokens):
             fallback_keys(text)
             parsed = None
         match_line, insertion = None, len(text)
-        pattern = r'''^[ \t]*(?:model_auto_compact_token_limit|"model_auto_compact_token_limit"|'model_auto_compact_token_limit')[ \t]*=[ \t]*([^#\r\n]*?)[ \t]*(?:#[^\r\n]*)?(?:\r?\n)?$'''
+        pattern = r'''^[ \t]*(?:model_auto_compact_token_limit|"model_auto_compact_token_limit"|'model_auto_compact_token_limit')[ \t]*=[ \t]*([^#\r\n]*?)([ \t]*(?:#[^\r\n]*)?)(?:\r?\n)?$'''
         for offset, line in statements(text):
             if line.lstrip().startswith("["):
                 insertion = offset
@@ -167,20 +169,20 @@ def transform(host, raw, tokens):
                 if not re.fullmatch(r"(?:[+-]?(?:0|[1-9](?:_?[0-9])*)|0x[0-9A-Fa-f](?:_?[0-9A-Fa-f])*|0o[0-7](?:_?[0-7])*|0b[01](?:_?[01])*)", literal):
                     raise Refusal("threshold must be a single integer line")
                 integer = int(literal.replace("_", ""), 0 if literal.startswith(("0x", "0o", "0b")) else 10)
-                match_line = (offset, line, integer)
+                match_line = (offset, line, integer, match[2])
         present = match_line is not None
         if parsed is not None and (key in parsed) != present:
             raise Refusal("threshold must be a single integer line")
         old = match_line[2] if present else None
-        if tokens is None and not present:
+        if (tokens is None and not present) or (present and old == tokens):
             return raw, "No difference."
         newline = "\r\n" if "\r\n" in text else "\n"
         replacement = f"{key} = {tokens}{newline}" if tokens is not None else ""
         if present:
-            offset, line, _ = match_line
+            offset, line, _, suffix = match_line
             # A replacement retains the old line's terminator, including none.
             ending = "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
-            replacement = f"{key} = {tokens}{ending}" if tokens is not None else ""
+            replacement = f"{key} = {tokens}{suffix}{ending}" if tokens is not None else ""
             result = (text[:offset] + replacement + text[offset + len(line):]).encode()
         else:
             prefix = text[:insertion]
@@ -235,6 +237,15 @@ def notices(host):
     print("The new value applies to sessions started afterwards; a running session is unverified.")
 
 
+def target_notice(host, raw):
+    # Called only after transform has validated the target JSON.
+    if host == "claude" and raw is not None:
+        models = json.loads(raw).get("modelSettings")
+        if isinstance(models, dict) and any(isinstance(settings, dict) and "autoCompactWindow" in settings
+                                            for settings in models.values()):
+            print("Warning: modelSettings contains a per-model autoCompactWindow that overrides the top-level setting.")
+
+
 def preview(host, folders, tokens):
     validate_choice(host, tokens)
     if host == "codex":
@@ -260,6 +271,7 @@ def preview(host, folders, tokens):
             identities.add(identity)
             raw, mode = read_target(folder, path.name)
             result, change = transform(host, raw, tokens)
+            target_notice(host, raw)
             backup = backup_name(folder, path.name)
             targets.append({"path": str(path), "sha256": content_hash(raw), "mode": mode, "backup": backup})
             displays.append((path, raw is not None, change, backup, result != raw))
@@ -344,6 +356,7 @@ def apply(value, yes):
                     raise Refusal("previewed backup exists; preview again")
             ready.append((folder, path, target, raw, mode, result))
         for folder, path, target, raw, mode, result in ready:
+            target_notice(plan["host"], raw)
             if result == raw:
                 print("No difference.")
                 continue
