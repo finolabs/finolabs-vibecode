@@ -10,7 +10,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
-- Correct the Antigravity file-tool hook matcher and limit suggested prompts to three.
+- Correct the Antigravity file-tool hook matcher and limit suggested prompts to three; an already installed Antigravity hook group keeps its old matcher until `refresh.py antigravity-hook --yes` is run again.
 - Split the status dashboard into Overview, Agents, Project, Delegation and Reviews tabs, preserving the selected tab, panel scroll and open tables on data reload. Agents and Project show placeholders until their sources are available.
 
 - Remind agents to rename their session at the start, on a phase change and after every compaction, in the always-loaded rule and in the Titles section of `fnl-session-hygiene`.
