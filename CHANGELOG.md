@@ -11,6 +11,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add an opt-in Antigravity pre-invocation compaction stop with a user-chosen transcript byte limit, private size marks and a digest-bound setup preview; it keeps its own hook group and fails open. User-level hooks and interactive TUI delivery remain unverified.
+
 - Add the advisory compaction steward, a deterministic threshold check and private local handovers re-injected on compact session starts; hook delivery remains unverified, and no hook declarations change.
 - Let setup write a user-chosen Claude Code or Codex compaction threshold after separate approval of a checked, digest-bound preview, with local backups.
 
