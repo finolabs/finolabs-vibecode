@@ -34,6 +34,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Correct Project and Agents badge counts, floor unfinished task completion below 100%, show recent repository sessions in a metadata-only active projects strip, and scale dispatch lanes to the budget plus a third or at least 10 extra minutes.
+
 - Warn about Claude per-model compaction overrides, preserve Codex threshold comments, and skip same-value threshold writes.
 - Reject excluded quota interpreters and all line separators in recorded paths and labels.
 - Bind each quota executable target to its confirmed digest and reject excluded resolved paths at probe time; older records need a new setup preview.

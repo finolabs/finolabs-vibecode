@@ -149,12 +149,12 @@
     }).join(" · ")));
     var lanes = h("div", "lanes");
     open.slice().sort(function (a, b) {
-      var ar = a.budget_min > 0 ? a.budget_min - a.age_min : Infinity;
-      var br = b.budget_min > 0 ? b.budget_min - b.age_min : Infinity;
+      var ar = a.budget_min > 0 ? Math.max(a.budget_min * 4 / 3, a.budget_min + 10) - a.age_min : Infinity;
+      var br = b.budget_min > 0 ? Math.max(b.budget_min * 4 / 3, b.budget_min + 10) - b.age_min : Infinity;
       return ar - br;
     }).forEach(function (run) {
       var budget = run.budget_min, age = Number(run.age_min) || 0;
-      var cap = budget > 0 ? budget * 4 / 3 : null;
+      var cap = budget > 0 ? Math.max(budget * 4 / 3, budget + 10) : null;
       var state = cap && age > cap ? "cap" : budget > 0 ? age > budget ? "over" : age >= budget / 2 ? "check" : "within" : "unknown";
       var bar = h("i", "lane-bar"), track = h("div", "lane-track");
       var width = cap ? Math.max(0, Math.min(100, age / cap * 100)) : 0;
@@ -162,10 +162,10 @@
       // Stops are relative to the filled length so both deadlines stay fixed on the track.
       var halfStop = age > 0 ? Math.min(100, budget / 2 / age * 100) : 100;
       var budgetStop = age > 0 ? Math.min(100, budget / age * 100) : 100;
-      if (age > cap && cap) { halfStop = 37.5; budgetStop = 75; }
+      if (age > cap && cap) { halfStop = budget / 2 / cap * 100; budgetStop = budget / cap * 100; }
       bar.style.background = "linear-gradient(to right, var(--good) 0% " + halfStop + "%, var(--warn) " + halfStop + "% " + budgetStop + "%, var(--crit) " + budgetStop + "% 100%)";
       track.appendChild(bar);
-      if (cap) [["check", "37.5%", "check deadline: half budget"], ["budget", "75%", "budget"]].forEach(function (item) {
+      if (cap) [["check", budget / 2 / cap * 100 + "%", "check deadline: half budget"], ["budget", budget / cap * 100 + "%", "budget"]].forEach(function (item) {
         var tick = h("i", "lane-tick " + item[0] + "-tick"); tick.style.left = item[1]; track.appendChild(tipOn(tick, item[2]));
       });
       if (state === "cap") track.appendChild(tipOn(t("span", "lane-overflow", ">"), "past hard cap"));
@@ -225,7 +225,7 @@
     (p.features || []).forEach(function (f) { total += f.total; done += f.done; allTasks = allTasks.concat(f.tasks || []); });
     var active = allTasks.filter(function (task) { return task.state === "in progress"; }).length;
     lines.push(tableOf("project completion", ["done", "total", "completion", "an agent is on it", "to do"],
-      [[done, total, pct(total ? done / total : 0), active, total - done - active]]));
+      [[done, total, completionPercent(done, total) + "%", active, total - done - active]]));
     if (p.reason) line(p.reason);
     (p.features || []).forEach(function (feature) {
       line("feature " + String(feature.feature).padStart(3, "0") + " · " + feature.done + " / " + feature.total);
@@ -286,6 +286,40 @@
     });
     return legend;
   }
+  function completionPercent(done, total) {
+    return total ? Math.min(done === total ? 100 : 99, Math.floor(done / total * 100)) : 0;
+  }
+  function activeProjects(block) {
+    var rows = block.active || [], strip = h("div", "active-projects");
+    if (!rows.length) strip.appendChild(t("div", "meta", "No recorded sessions in the last 24 hours"));
+    rows.forEach(function (project) {
+      var hosts = h("span", "active-hosts");
+      project.hosts.forEach(function (host) {
+        var shape = {claude: "●", codex: "◆", antigravity: "▲"}[host];
+        if (shape) hosts.appendChild(tipOn(t("span", "active-host", shape), host));
+      });
+      var age = Math.max(0, Math.floor((Date.now() - Date.parse(project.last)) / 60000));
+      var last = age < 60 ? age + " min" : age < 1440 ? Math.floor(age / 60) + " hr" : Math.floor(age / 1440) + " d";
+      var row = h("div", "active-project", [t("strong", "active-label", project.label), hosts,
+        t("span", "meta active-sessions", project.sessions + (project.sessions === 1 ? " session today" : " sessions today")),
+        t("span", "meta active-last", "last " + last + " ago")]);
+      row.setAttribute("data-repo", project.repo);
+      var snapshot = (block.repositories || {})[project.repo];
+      var hasTasks = snapshot && (snapshot.features || []).some(function (feature) { return feature.total > 0; });
+      tipOn(row, project.label + " · " + project.last + (!hasTasks && project.percent == null ? " · no task list" : ""));
+      if (project.percent != null) {
+        var bar = h("div", "feature-bar active-progress", [h("i")]);
+        bar.children[0].style.width = project.percent + "%";
+        bar.setAttribute("role", "img"); bar.setAttribute("aria-label", project.percent + "% done");
+        row.appendChild(bar);
+      }
+      strip.appendChild(row);
+    });
+    TABS.get("project").tableRows.push(tableOf("active projects", ["project", "hosts", "sessions today", "last", "done"], rows.map(function (row) {
+      return [row.label, row.hosts.join(", "), row.sessions, row.last, row.percent == null ? "—" : row.percent + "%"];
+    })));
+    return strip;
+  }
   function projectPanel() {
     if (!D.progress) return null;
     var block = D.progress, repositories = block.repositories || {}, keys = Object.keys(repositories);
@@ -316,7 +350,7 @@
       var left = repositories[a], right = repositories[b];
       return priority(left) - priority(right) || activity(right) - activity(left) || a.localeCompare(b);
     }).slice(0, 5);
-    var content = [];
+    var content = [activeProjects(block)];
     visible.forEach(function (code, projectIndex) {
       var p = repositories[code], fs = p.features || [], total = 0, done = 0, active = 0;
       fs.forEach(function (f) { total += f.total; done += f.done; active += (f.tasks || []).filter(function (task) { return task.state === "in progress"; }).length; });
@@ -336,16 +370,16 @@
         });
       });
       candidates.sort(storyOrder);
-      var status = h("div", "project-status", [t("strong", "project-percent", pct(total ? done / total : 0))]);
+      var status = h("div", "project-status", [t("strong", "project-percent", completionPercent(done, total) + "%")]);
       if (candidates.length) status.appendChild(t("span", "project-next", "next " + candidates[0].story + " · " + candidates[0].task.id));
       var header = h("div", "project-head", [tipOn(t("strong", "project-label", repoLabel(code)), repoLabel(code)), status]);
       var card = h("div", "proj", [header, seg]); card.setAttribute("data-repo", code);
       if (!projectIndex) card.appendChild(taskLegend());
       unfinishedFeatures(p).forEach(function (feature) {
         var featureBar = h("div", "feature-bar", [h("i")]);
-        featureBar.children[0].style.width = (feature.total ? feature.done / feature.total * 100 : 0) + "%";
-        featureBar.setAttribute("role", "img"); featureBar.setAttribute("aria-label", "spec completion " + pct(feature.total ? feature.done / feature.total : 0));
-        var featureBody = h("div", "feature", [h("div", "feature-head", [t("span", "meta", "spec " + String(feature.feature).padStart(3, "0") + " · " + pct(feature.total ? feature.done / feature.total : 0)), featureBar])]);
+        featureBar.children[0].style.width = completionPercent(feature.done, feature.total) + "%";
+        featureBar.setAttribute("role", "img"); featureBar.setAttribute("aria-label", "spec completion " + (completionPercent(feature.done, feature.total) + "%"));
+        var featureBody = h("div", "feature", [h("div", "feature-head", [t("span", "meta", "spec " + String(feature.feature).padStart(3, "0") + " · " + (completionPercent(feature.done, feature.total) + "%")), featureBar])]);
         var tree = h("div", "story-tree");
         var stories = (feature.stories || []).slice(), tasks = feature.tasks || [], complete = stories.filter(function (story) { return story.done === story.total; }).length;
         if (tasks.some(function (task) { return !task.story; })) {
@@ -365,7 +399,8 @@
           });
           var row = h("div", "story", [t("span", "story-label", (story.story || "untagged") + (storyPriority(story) < 10 ? " · P" + story.priority : "")), cells,
             t("span", "lane-value", story.done + "/" + story.total)]);
-          row.setAttribute("data-story", story.story || "untagged"); tree.appendChild(row);
+          row.setAttribute("data-story", story.story || "untagged");
+          tipOn(row, story.done + "/" + story.total + " · " + completionPercent(story.done, story.total) + "% done"); tree.appendChild(row);
         });
         featureBody.appendChild(tree);
         if (complete) featureBody.appendChild(t("span", "chip finished-stories", complete + (complete === 1 ? " story done" : " stories done")));
@@ -483,8 +518,8 @@
       panel.setAttribute("role", "tabpanel"); panel.setAttribute("id", tab.id);
       panel.setAttribute("aria-labelledby", tab.buttonId); panel.tabIndex = 0; panel.hidden = true;
       var count = null;
-      if (name === "agents" && D.running) count = (D.running.processes || []).length + (D.running.open || []).length;
-      if (name === "project" && D.progress) count = D.progress.in_progress;
+      if (name === "agents" && D.running) count = (D.running.open || []).length;
+      if (name === "project" && D.progress) count = (D.progress.active || []).length;
       if (count != null) { var badge = h("span", "count"); badge.textContent = String(count); button.appendChild(badge); }
       button.addEventListener("click", function () { selectTab(name, true); });
       button.addEventListener("keydown", function (e) {

@@ -215,9 +215,9 @@ class DashboardScriptTest(unittest.TestCase):
 
     def test_placeholder_counts_only_when_sources_exist(self):
         data = self.sample()
-        data.update(running={"processes": [{}, {}], "open": [{}]}, progress={"in_progress": 4})
+        data.update(running={"processes": [{}, {}], "open": [{}]}, progress={"in_progress": 0, "active": [dict(repo="aaaaaaaa", label="Active", hosts=["codex"], sessions=1, last="2026-11-06T10:00:00Z", percent=None)]})
         out = self.render_freshness(data)
-        self.assertEqual([t["text"] for t in out["tabs"]], ["Overview", "Agents 3", "Project 4", "Delegation", "Reviews"])
+        self.assertEqual([t["text"] for t in out["tabs"]], ["Overview", "Agents 1", "Project 1", "Delegation", "Reviews"])
         data.update(running={"processes": [], "open": []}, progress={"in_progress": 0})
         self.assertEqual([t["text"] for t in self.render_freshness(data)["tabs"]][1:3], ["Agents 0", "Project 0"])
         for source in (None,):
@@ -229,6 +229,61 @@ class DashboardScriptTest(unittest.TestCase):
     @staticmethod
     def marks(out, cls, disclosure=None):
         return [m for m in out['picture'] if cls in m['cls'].split() and m['disclosure'] == disclosure]
+
+    def test_completion_is_floored_for_project_spec_and_story(self):
+        for done, total, percent in ((408, 410, 99), (56, 57, 98), (1, 3, 33),
+                                     (2, 3, 66), (0, 5, 0), (5, 5, 100)):
+            with self.subTest(done=done, total=total):
+                data = self.sample()
+                feature = dict(feature=1, done=done, total=total, tasks=[],
+                               stories=[dict(story='US1', done=done, total=total)])
+                data['progress']['repositories'] = {'aaaaaaaa': dict(features=[feature])}
+                data['progress']['active'] = [dict(repo='aaaaaaaa', label='A', hosts=['codex'],
+                    sessions=2, last='2026-11-06T09:48:00Z', percent=percent if done < total else None)]
+                out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
+                if done == total:
+                    self.assertEqual(self.marks(out, 'active-progress'), [])
+                    self.assertNotIn('no task list', self.marks(out, 'active-project')[0]['attrs']['data-tip'])
+                    self.assertTrue(any('100%' in m['text'] for m in self.marks(out, 'tbl', 'show the data as tables')))
+                if done < total:
+                    self.assertEqual(self.marks(out, 'active-progress')[0]['attrs']['aria-label'], str(percent) + '% done')
+                    self.assertEqual(self.marks(out, 'project-percent')[0]['text'], str(percent) + '%')
+                    self.assertIn(str(percent) + '%', self.marks(out, 'feature-head')[0]['text'])
+                    self.assertIn(str(percent) + '%', self.marks(out, 'story')[0]['attrs']['data-tip'])
+
+    def test_active_strip_hosts_relative_time_and_no_task_list(self):
+        data = self.sample()
+        attack = '<img src=x onerror=alert(1)>'
+        data['progress']['active'] = [dict(repo='aaaaaaaa', label=attack, hosts=['claude', 'codex', 'antigravity'],
+            sessions=3, last='2026-11-06T09:48:00Z', percent=66),
+            dict(repo='eeeeeeee', label='repo eeee', hosts=['codex'], sessions=1,
+                 last='2026-11-06T09:00:00Z', percent=None)]
+        out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z', 'hash': '#project'})
+        rows = self.marks(out, 'active-project')
+        self.assertEqual([r['attrs']['data-repo'] for r in rows], ['aaaaaaaa', 'eeeeeeee'])
+        self.assertIn(attack, rows[0]['text'])
+        self.assertIn('3 sessions today', rows[0]['text'])
+        self.assertIn('last 12 min ago', rows[0]['text'])
+        self.assertNotIn('no task list', rows[1]['text'])
+        self.assertIn('no task list', rows[1]['attrs']['data-tip'])
+        self.assertEqual(len(self.marks(out, 'active-progress')), 1)
+        self.assertEqual([m['attrs']['data-tip'] for m in self.marks(out, 'active-host')],
+                         ['claude', 'codex', 'antigravity', 'codex'])
+        self.assertEqual(len({m['text'] for m in self.marks(out, 'active-host')}), 3)
+        self.assertNotIn('img', out['tags'])
+        data['progress']['active'] = []
+        self.assertIn('No recorded sessions in the last 24 hours', self.render_freshness(data)['text'])
+
+    def test_short_and_long_budget_track_uses_hard_cap(self):
+        data = self.sample()
+        template = data['running']['open'][0]
+        for budget, age, cap in ((15, 24, 25), (60, 85, 80)):
+            data['running']['open'] = [dict(template, budget_min=budget, age_min=age)]
+            out = self.render_freshness(data)
+            self.assertAlmostEqual(float(self.marks(out, 'lane-bar')[0]['style']['width'][:-1]), min(100, age / cap * 100))
+            self.assertAlmostEqual(float(self.marks(out, 'check-tick')[0]['style']['left'][:-1]), budget / 2 / cap * 100)
+            self.assertAlmostEqual(float(self.marks(out, 'budget-tick')[0]['style']['left'][:-1]), budget / cap * 100)
+            self.assertEqual(self.marks(out, 'lane')[0]['attrs']['data-state'], 'cap' if age > cap else 'over')
 
     def test_reviews_cap_chains_project_labels_and_live_hash_changes(self):
         out = self.render(FIXTURE, {'hash': '#agents', 'actions': [{'hash': '#reviews'}, {'hash': '#project'}, {'hash': '#__proto__'}, {'hash': '#reviews'}]})
@@ -357,7 +412,7 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render(FIXTURE, {'hash': '#project'})
         projects = self.marks(out, 'proj')
         self.assertEqual([p['attrs']['data-repo'] for p in projects], ['bbbbbbbb', 'aaaaaaaa'])
-        self.assertEqual([p['text'] for p in self.marks(out, 'project-percent')], ['33%', '29%'])
+        self.assertEqual([p['text'] for p in self.marks(out, 'project-percent')], ['33%', '28%'])
         self.assertEqual([p['attrs']['data-story'] for p in self.marks(out, 'story')], ['US1', 'US2', 'US1', 'US4', 'US3'])
         self.assertEqual([p['text'] for p in self.marks(out, 'story-label')], ['US1 · P1', 'US2 · P3', 'US1 · P2', 'US4 · P3', 'US3'])
         cells = [p for p in self.marks(out, 'cell') if 'data-task' in p['attrs']]
@@ -369,7 +424,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(len(legend), 1)
         self.assertEqual(legend[0]['text'].replace('  ', ' '), ' done · agent on it · done, not accepted · to do')
         self.assertEqual([p['text'] for p in self.marks(out, 'feature-head')], ['spec 004 · 33% ', 'spec 003 · 25% '])
-        self.assertEqual(len(self.marks(out, 'feature-bar')), 2)
+        self.assertEqual(len([m for m in self.marks(out, 'feature-bar') if 'active-progress' not in m['cls'].split()]), 2)
         self.assertEqual(len(self.marks(out, 'story-tree')), 2)
         self.assertEqual([p['text'] for p in self.marks(out, 'finished-projects')], ['2 projects done, hidden'])
         self.assertEqual([p['text'] for p in self.marks(out, 'finished-stories')], ['1 story done'])

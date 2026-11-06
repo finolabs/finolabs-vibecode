@@ -235,6 +235,17 @@ td.r, th.r { text-align: right; }
 .project-segments { height: 10px; transform-origin: left; }
 .feature { display: grid; gap: 8px; min-width: 0; }
 .feature-head { display: grid; gap: 5px; }
+.active-projects { display: grid; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 14px; }
+.active-project { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 6px 12px; align-items: center; }
+.active-label { min-width: 0; overflow-wrap: anywhere; }
+.active-hosts { display: flex; gap: 5px; color: var(--p); }
+.active-host { font-size: 10px; }
+.active-progress { grid-column: 1 / -1; }
+@media (max-width: 560px) {
+  .active-project { grid-template-columns: minmax(0, 1fr) auto; }
+  .active-sessions, .active-last { font-size: var(--t-xs); }
+  .active-last { text-align: right; }
+}
 .feature-bar { height: 3px; background: var(--h0); }
 .feature-bar i { display: block; height: 100%; background: var(--p); }
 .story-tree { display: grid; gap: 10px; border-left: 1px solid var(--line); padding-left: 10px; min-width: 0; }

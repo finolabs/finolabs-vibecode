@@ -410,6 +410,46 @@ def join(features, project, repo, starts, finishes, events, now):
                          'idle': sum((now - r['last']).total_seconds() >= 86400 for r in sessions.values())}}
 
 
+def completion_percent(done, total):
+    """Unfinished work never rounds up to complete."""
+    return min(100 if done == total else 99, done * 100 // total) if total else 0
+
+
+def active_projects(events, repositories, labels, now):
+    """Rebuild bounded repository activity from existing receipts, never keep session ids."""
+    sessions = {}
+    for event in events:
+        repo, sid = event.get('repo'), event.get('sid')
+        if (not isinstance(repo, str) or not re.fullmatch(r'[0-9a-f]{8}', repo)
+                or not isinstance(sid, str) or not IDENT.fullmatch(sid)):
+            continue
+        at = timestamp(event.get('ts'))
+        if at is None or at > now:
+            continue
+        row = sessions.setdefault((repo, sid), {'last': at, 'hosts': set()})
+        row['last'] = max(row['last'], at)
+        if event.get('event') == 'session_start' and event.get('host') in HOSTS:
+            row['hosts'].add(event['host'])
+    projects = {}
+    today = now.astimezone().date()
+    for (repo, _), session in sessions.items():
+        if not 0 <= (now - session['last']).total_seconds() < 86400:
+            continue
+        row = projects.setdefault(repo, {'last': session['last'], 'hosts': set(), 'sessions': 0})
+        row['last'] = max(row['last'], session['last'])
+        row['hosts'].update(session['hosts'])
+        row['sessions'] += session['last'].astimezone().date() == today
+    result = []
+    for repo, row in sorted(projects.items(), key=lambda item: (-item[1]['last'].timestamp(), item[0]))[:12]:
+        features = repositories.get(repo, {}).get('features', [])
+        total, done = sum(f['total'] for f in features), sum(f['done'] for f in features)
+        result.append({'repo': repo, 'label': labels.get(repo, 'repo ' + repo[:4]),
+                       'hosts': [host for host in HOSTS if host in row['hosts']],
+                       'sessions': row['sessions'], 'last': row['last'].isoformat(),
+                       'percent': completion_percent(done, total) if total > done else None})
+    return result
+
+
 def empty(reason=''):
     return {'features': [], 'reason': reason, 'skipped': [], 'in_progress': 0}
 

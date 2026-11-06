@@ -246,6 +246,8 @@ def previous_projects():
 
     Closed metadata keys and leaf values prevent a tampered file carrying free text
     forward. Labels are always resolved again from canonical host configuration.
+    The active strip is never carried over: each refresh reconstructs its closed
+    schema from validated events, even when repository snapshots are retained.
     """
     try:
         path = fm.state_dir() / 'data.js'
@@ -363,6 +365,7 @@ def progress_metrics(events, running, cwd=None):
     for key, row in repositories.items():
         row['label'] = labels.get(key, 'repo ' + key[:4])
     result = {'current': code, 'repositories': repositories,
+              'active': pp.active_projects(events, repositories, labels, fm.now()),
               'in_progress': sum(row.get('in_progress', 0) for row in repositories.values()), 'notice': notice}
     if code is None:
         result['reason'] = with_progress['reason']

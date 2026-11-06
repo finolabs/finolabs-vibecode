@@ -73,6 +73,42 @@ class ProgressTest(unittest.TestCase):
         task.with_name('spec.md').write_text('## User Story 1 (P2)\n## User Story 1 (P3)\n')
         self.assertIsNone(self.collect()['features'][0]['stories'][0]['priority'])
 
+    def test_completion_percent_exact_cases(self):
+        for done, total, expected in ((408, 410, 99), (56, 57, 98), (1, 3, 33),
+                                      (2, 3, 66), (0, 5, 0), (5, 5, 100)):
+            with self.subTest(done=done, total=total):
+                self.assertEqual(self.pp.completion_percent(done, total), expected)
+
+    def test_active_projects_deduplicate_and_count_today_with_closed_metadata(self):
+        from datetime import datetime, timedelta
+        now = datetime(2026, 11, 6, 10).astimezone()
+        def event(repo, sid, hours, host=None):
+            row = dict(repo=repo, sid=sid, ts=(now - timedelta(hours=hours)).isoformat(), event='skill', name='private')
+            if host:
+                row.update(event='session_start', host=host)
+            return row
+        events = [event('aaaaaaaa', 'one', 1, 'codex'), event('aaaaaaaa', 'one', .2),
+                  event('aaaaaaaa', 'two', 2, 'claude'), event('aaaaaaaa', 'yesterday', 12, 'antigravity'),
+                  event('bbbbbbbb', 'one', 3, 'antigravity'), event('cccccccc', 'old', 24, 'codex'),
+                  event('dddddddd', 'future', -1, 'codex'), event('eeeeeeee', 'unknown', 1, 'hostile')]
+        repos = {'aaaaaaaa': dict(features=[dict(done=408, total=410)])}
+        result = self.pp.active_projects(events, repos, {'aaaaaaaa': 'Tools'}, now)
+        self.assertEqual([r['repo'] for r in result], ['aaaaaaaa', 'eeeeeeee', 'bbbbbbbb'])
+        row = result[0]
+        self.assertEqual(set(row), {'repo', 'label', 'hosts', 'sessions', 'last', 'percent'})
+        self.assertEqual(row['label'], 'Tools')
+        self.assertEqual(row['sessions'], 2)
+        self.assertEqual(row['hosts'], ['claude', 'codex', 'antigravity'])
+        self.assertEqual(row['percent'], 99)
+        self.assertEqual(result[1]['hosts'], [])
+        self.assertIsNone(result[-1]['percent'])
+        self.assertEqual(result[-1]['label'], 'repo bbbb')
+        repos['aaaaaaaa']['features'][0]['done'] = 410
+        self.assertIsNone(self.pp.active_projects(events, repos, {}, now)[0]['percent'])
+        self.assertNotIn('private', json.dumps(result))
+        many = [event('%08x' % n, 'same', n / 100, 'codex') for n in range(20)]
+        self.assertEqual([r['repo'] for r in self.pp.active_projects(many, {}, {}, now)], ['%08x' % n for n in range(12)])
+
     def test_label_worktree_code_matches_the_metrics_repository_identity(self):
         import hashlib
         main = self.repo
