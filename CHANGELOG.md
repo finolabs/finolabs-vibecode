@@ -8,27 +8,22 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - Add consent-gated per-repository ledger/task settings and bounded one-file work-record pipelines with a shared reader and parser-checked template.
 - Add a project Work tracking interview to `fnl-setup-instructions`, writing only a confirmed agent-context block; `/fnl-setup` separately confirms repository ledger and task-file settings for the dashboard.
-
 - Show delivery pipelines in the Now project pane from Spec Kit artefacts, repository specs/packages and exact-project ledger outcomes, with metadata-only states and a searched-sources fallback tooltip.
 
 ### Changed
 
 - Document host-only project settings, recent live activity counts and per-pool quota reset details; show an amber mark when completed tasks outpace the work-record status.
 - Split setup and Check into machine and project scopes while preserving separate opt-ins.
-
 - Compose the none workflow's existing planning steps with work records; Spec Kit keeps its own artifacts and installed phase tools fill the record.
 
 - Show recent usage-session counts beside slots and every cached quota pool by family, with unread placeholders and per-pool reset/freshness details.
-
 - Draw project stages as SVG chevron chains beside identity, keep story lanes for one active item, and replace the truncated storyless label with a dashed tag icon.
 
 ### Fixed
 
 - Reject non-ASCII package ordinals and negated completion wording, resolve index status headers, retain progress failure reasons and use “pool” for unnamed quota tooltips.
-
 - Use the shared done theme token for pipeline package bricks in dark and light themes.
 - Match pipeline stages to theme-aware task colours, back striped labels with solid chips, and use compact review glyphs and icon-first ledger/summary counts.
-
 - Replace dense Agents and Project text with KPI tiles, dispatch budget lanes, cached quota meters and unfinished project/task graphics; retain data tables and collapsed limits. Keep up to five local project snapshots, read only story priority numbers from `spec.md`, skip `specs/archive`, and offer user-set local project labels through setup.
 - Keep Reviews labels on one line, use project labels, and cap dot chains at eight plus a remaining-round count. Cover fragment-only navigation and ship the page code as a local script with no inline handlers or scripts; reduced-motion mode disables all animation.
 
@@ -51,11 +46,9 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Changed
 
 - Consolidate the dashboard into title-bar `overview` and `now` tabs, add a compact review gate, and move delegation, Judge receipts and full Reviews into Overview tables.
-
 - Flatten dashboard lanes into two flush colours, add structured tooltips, and refine light warning colours, freshness thresholds and story spacing.
 
 - Move dashboard limits and footer details behind accessible info buttons, show compact freshness and finished-project check bricks, and bound lane/quota marks while separating wrapped story runs.
-
 - Replace Agents tiles and Project text rows with lego budget lanes, slot/quota bricks and visible story runs, following the approved prototype; retain tables behind the existing disclosure.
 - Make Project a compact list of named repositories active in the last 24 hours, register local folder names only when status is run there with consent, and move unfinished task detail into closed disclosures.
 - Correct the Antigravity file-tool hook matcher and limit suggested prompts to three; an already installed Antigravity hook group keeps its old matcher until `refresh.py antigravity-hook --yes` is run again.
@@ -66,7 +59,6 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Fixed
 
 - Correct Project and Agents badge counts, floor unfinished task completion below 100%, show recent repository sessions in a metadata-only active projects strip, and scale dispatch lanes to the budget plus a third or at least 10 extra minutes.
-
 - Warn about Claude per-model compaction overrides, preserve Codex threshold comments, and skip same-value threshold writes.
 - Reject excluded quota interpreters and all line separators in recorded paths and labels.
 - Bind each quota executable target to its confirmed digest and reject excluded resolved paths at probe time; older records need a new setup preview.
