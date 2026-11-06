@@ -4,6 +4,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 from pathlib import Path
 import shlex
 import stat
@@ -66,6 +67,66 @@ class CompactStopSetupTest(unittest.TestCase):
         env.start()
         self.addCleanup(env.stop)
 
+    def installed_copy(self, git=True, mode=0o755):
+        """Antigravity's own installed copy: under the account's config folder, with the repository's .git entry."""
+        installed = self.home / '.gemini/config/plugins/finolabs-vibecode'
+        shutil.copytree(self.plugin, installed)
+        if git:
+            (installed / '.git').mkdir()
+        installed.chmod(mode)
+        patch = mock.patch.object(cs, '__file__', str(installed / 'skills/fnl-setup/scripts/compact_stop_setup.py'))
+        patch.start()
+        self.addCleanup(patch.stop)
+        return installed
+
+    def test_installed_antigravity_copy_with_git_entry_is_accepted(self):
+        self.installed_copy()
+        code, out, err = self.run_cli('preview', '--host', 'antigravity', '--limit', '50000')
+        self.assertEqual(code, 0, err)
+        self.assertIn('Digest: ', out)
+
+    def test_other_git_work_tree_is_still_refused(self):
+        (self.plugin / '.git').mkdir()
+        code, out, err = self.run_cli('preview', '--host', 'antigravity', '--limit', '50000')
+        self.assertEqual(code, 1)
+        self.assertIn('git work tree', err)
+
+    def test_git_directory_in_an_ancestor_is_still_refused(self):
+        self.installed_copy()
+        (self.home / '.gemini/.git').mkdir()
+        code, out, err = self.run_cli('preview', '--host', 'antigravity', '--limit', '50000')
+        self.assertEqual(code, 1)
+
+    def test_symlinked_installed_copy_is_refused(self):
+        installed = self.home / '.gemini/config/plugins/finolabs-vibecode'
+        installed.parent.mkdir(parents=True)
+        (self.plugin / '.git').mkdir()
+        installed.symlink_to(self.plugin)
+        patch = mock.patch.object(cs, '__file__', str(installed / 'skills/fnl-setup/scripts/compact_stop_setup.py'))
+        patch.start()
+        self.addCleanup(patch.stop)
+        code, out, err = self.run_cli('preview', '--host', 'antigravity', '--limit', '50000')
+        self.assertEqual(code, 1)
+
+    def test_installed_copy_needs_a_real_git_directory(self):
+        installed = self.installed_copy(git=False)
+        (installed / '.git').write_text('gitdir: elsewhere\n')
+        code, out, err = self.run_cli('preview', '--host', 'antigravity', '--limit', '50000')
+        self.assertEqual(code, 1)
+        self.assertIn('.git', err)
+
+    def test_removal_preview_needs_no_plugin_folder(self):
+        code, out, err = self.run_cli('preview', '--host', 'antigravity', '--remove')
+        self.assertEqual(code, 0, err)
+        shutil.rmtree(self.plugin)
+        code, out, err = self.run_cli('preview', '--host', 'antigravity', '--remove')
+        self.assertEqual(code, 0, err)
+
+    def test_installed_copy_must_not_be_group_writable(self):
+        self.installed_copy(mode=0o775)
+        code, out, err = self.run_cli('preview', '--host', 'antigravity', '--limit', '50000')
+        self.assertEqual(code, 1)
+
     def run_cli(self, *args):
         out, err = io.StringIO(), io.StringIO()
         with mock.patch.object(sys, 'argv', [str(SCRIPT), *args]), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -77,7 +138,7 @@ class CompactStopSetupTest(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertIn(cs.GROUP, out)
         self.assertIn('system prompt is not counted', out)
-        self.assertIn('python3 -I ', out)
+        self.assertIn('(removal)' if '--remove' in args else 'python3 -I ', out)
         return out.split('Digest: ')[1].splitlines()[0]
 
     def apply(self, value):
