@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- Let setup write a user-chosen Claude Code or Codex compaction threshold after separate approval of a checked, digest-bound preview, with local backups.
+
 ## [0.1.9] - 2026-11-06
 
 ### Changed
