@@ -27,7 +27,7 @@ def filename(session):
 
 def safe_file(info):
     return (stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
-            and not info.st_mode & 0o022 and info.st_size <= LIMIT)
+            and not info.st_mode & 0o077 and info.st_size <= LIMIT)
 
 
 def read(session):
