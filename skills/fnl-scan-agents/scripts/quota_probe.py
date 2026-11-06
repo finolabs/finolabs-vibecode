@@ -2,6 +2,7 @@
 """Opt-in, bounded usage reads. Provider output is never persisted verbatim."""
 
 import fcntl
+import hashlib
 import json
 import math
 import os
@@ -218,7 +219,7 @@ def config():
         agents = values["Agents"].split(", ")
         if not agents or len(set(agents)) != len(agents) or set(agents) - SOURCES.keys():
             raise ValueError("agents")
-        allowed = {"Quota probe", "Date", "Agents"} | {f"{kind} {a}" for a in agents for kind in ("Executable", "Resolved", "Interpreter")}
+        allowed = {"Quota probe", "Date", "Agents"} | {f"{kind} {a}" for a in agents for kind in ("Executable", "Resolved", "Resolved digest", "Interpreter")}
         if set(values) - allowed or ("claude" in agents and not 1 <= len(folders) <= 4) or (folders and "claude" not in agents):
             raise ValueError("config")
         if len(set(folders.values())) != len(folders):
@@ -227,6 +228,10 @@ def config():
         for agent in agents:
             if "Resolved " + agent not in values:
                 continue  # Legacy records need a new preview and confirmation.
+            resolved = values["Resolved " + agent]
+            confirmed = values.get("Resolved digest " + agent, "")
+            if confirmed != hashlib.sha256(resolved.encode()).hexdigest():
+                continue  # Missing or changed confirmation requires a new preview.
             executable = values["Executable " + agent]
             interpreter = values.get("Interpreter " + agent)
             for path in [executable, *([interpreter] if interpreter else [])]:
@@ -282,6 +287,17 @@ def checked_path(value, *, directory=False):
         os.close(fd)
 
 
+def excluded(path):
+    path = Path(path)
+    roots = [Path(p).resolve() for p in ("/tmp", "/var/tmp", "/var/folders")]
+    roots += [dr.account_home() / "Downloads", dr.account_home() / "tmp"]
+    root = dr.consent_root()
+    if root is not None:
+        roots.append(root / "tmp")
+    if any(path == base or base in path.parents for base in roots) or any(p.lower() == "downloads" for p in path.parts):
+        raise ValueError("temporary or downloads path")
+
+
 def checked_executable(agent, entry):
     if agent not in SOURCES or Path(entry["executable"]).name != agent:
         raise ValueError("executable missing or wrong name")
@@ -290,6 +306,7 @@ def checked_executable(agent, entry):
         raise ValueError("missing resolved target; preview again")
     if str(Path(entry["executable"]).resolve(strict=True)) != executable:
         raise ValueError("executable target changed; preview again")
+    excluded(Path(executable))
     first = checked_path(executable)
     interpreter = entry.get("interpreter")
     if first.startswith(b"#!"):
@@ -648,12 +665,15 @@ def worker(jobs):
                 error, seconds = "execution", 1800
             with state_folder(writer=True) as folder:
                 delays = backoff(folder, configs, now())
+                if groups is not None:
+                    try:
+                        cache = read_cache(folder, repair=True)
+                        cache.setdefault(agent, {})[label] = {"measured": stamp(measured), "source": SOURCES[agent], "groups": groups}
+                        write_json(folder, "quota.json", cache)
+                    except (OSError, ValueError):
+                        error, seconds = "execution", 1800
                 delays.setdefault(agent, {})[label] = {"retry_after": stamp(now() + timedelta(seconds=seconds)), "error": error}
                 write_json(folder, "backoff.json", delays)
-                if groups is not None:
-                    cache = read_cache(folder, repair=True)
-                    cache.setdefault(agent, {})[label] = {"measured": stamp(measured), "source": SOURCES[agent], "groups": groups}
-                    write_json(folder, "quota.json", cache)
     finally:
         with state_folder(writer=True) as folder:
             saved = marker(folder, now())

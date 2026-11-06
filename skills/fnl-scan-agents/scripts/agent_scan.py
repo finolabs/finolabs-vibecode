@@ -118,11 +118,11 @@ def inventory(host, previous, confirmed):
                                 if not ready:
                                     raise subprocess.TimeoutExpired(executable, 3)
                                 for event, _ in ready:
-                                    chunk = os.read(event.fileobj.fileno(), 4096 - captured)
+                                    chunk = os.read(event.fileobj.fileno(), 4096 - captured if event.fileobj is process.stdout else 4096)
                                     if not chunk:
                                         selector.unregister(event.fileobj)
-                                    captured += len(chunk)
                                     if event.fileobj is process.stdout:
+                                        captured += len(chunk)
                                         output += chunk
                                     if captured == 4096:
                                         break
