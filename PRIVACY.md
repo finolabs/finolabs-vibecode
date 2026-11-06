@@ -16,6 +16,8 @@ The data folder can be relocated through `fnl-setup`; the fixed pointer `~/.fino
 
 The skills run inside a host agent such as Claude Code or Codex, which processes your conversation under its provider's policy. When you follow the delegation skills and delegate work to another agent (for example Codex or Antigravity), the brief, the files that agent reads and anything it produces are processed by that agent's provider under that provider's terms. Delegate only work over files you are allowed to share with that provider.
 
+When the user has recorded a judge and the instruction check is on, `fnl-setup` Check can send instruction-file lines to the judge through the user's own evaluator skill: line text only, with a size cap, lines with a secret or machine-path hit dropped, nothing from a file with a secret finding, and never `.bak-*` backups, scan results or `CLAUDE.local.md`; the user consented to the judge separately.
+
 ## Update check
 
 The update check is **on by default**, separate from usage metrics and their consent. At startup on Claude Code and Codex, a detached worker makes one HTTPS GET to `https://api.github.com/repos/finolabs/finolabs-vibecode/releases/latest` when the cache is missing or at least 24 hours old. It uses only the generic User-Agent `finolabs-vibecode-update-check`: no request body, credentials, cookies, username, machine, repository, session, installed version, prompts, code, paths or usage events. It sends nothing about the user. GitHub necessarily sees your connection's source IP. There are no redirects, proxies or retries.
