@@ -103,6 +103,37 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.host.stat().st_mode), 0o600)
         self.assertFalse(list(self.data.glob('.write-*')))
 
+    def test_budget_restores_alarm_after_timeout_during_cancel(self):
+        signal = self.pp.signal
+        for body_timeout in (False, True):
+            with self.subTest(body_timeout=body_timeout):
+                calls = []
+                previous = object()
+                cancel_attempts = 0
+                def timer(kind, seconds):
+                    nonlocal cancel_attempts
+                    calls.append(('timer', seconds))
+                    if seconds == 0:
+                        cancel_attempts += 1
+                        if cancel_attempts == 1:
+                            raise self.pp.ProgressTimeout()
+                def handler(kind, value):
+                    calls.append(('handler', value))
+                    return previous
+                with mock.patch.object(signal, 'getitimer', return_value=(0, 0)), \
+                        mock.patch.object(signal, 'setitimer', side_effect=timer), \
+                        mock.patch.object(signal, 'signal', side_effect=handler):
+                    def run():
+                        with self.pp.budget():
+                            if body_timeout:
+                                raise self.pp.ProgressTimeout('body')
+                    if body_timeout:
+                        with self.assertRaisesRegex(self.pp.ProgressTimeout, 'body'):
+                            run()
+                    else:
+                        run()
+                self.assertEqual(calls[-3:], [('timer', 0), ('timer', 0), ('handler', previous)])
+
     def test_task_instruction_denylist_is_closed_and_case_insensitive(self):
         names = ('CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', 'AGENTS.override.md',
                  'GEMINI.md', 'copilot-instructions.md', 'CONVENTIONS.md',

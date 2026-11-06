@@ -350,8 +350,13 @@ def budget():
     try:
         yield
     finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous)
+        try:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+        except ProgressTimeout:
+            # A pending alarm can interrupt cancellation; cancel it once more.
+            signal.setitimer(signal.ITIMER_REAL, 0)
+        finally:
+            signal.signal(signal.SIGALRM, previous)
 
 
 @contextmanager
