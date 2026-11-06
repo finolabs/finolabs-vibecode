@@ -33,8 +33,9 @@ where only advice exists.
 | 5 | Merge prompt through host permission rules (Claude Code, Codex): common commands only | [merge-guard.md](merge-guard.md) | Spec only |
 | 6 | Running agents on the dashboard (phase 1: ledger plus a `ps` snapshot) | [running-agents.md](running-agents.md); needs its own `CLAUDE.md` exception for the `ps` command first | Spec only |
 | 7 | Backlog and spec corrections | below | Not started |
+| 8 | Project progress panel on the dashboard (Spec Kit `tasks.md`, ledger, usage events) | [project-progress.md](project-progress.md); builds on package 6 | Spec only |
 
-Order of work: 4, then 5, then 6, then 7. Packages 4 to 6 all edit `fnl-setup`, the README and the
+Order of work: 4, then 5, then 6, then 8 (it shares the page and the refresh with 6), then 7. Packages 4 to 6 all edit `fnl-setup`, the README and the
 changelog, so they run one at a time, each through its own pull request with both reviews.
 
 ## Decisions settled (owner, 2026-11-06)
@@ -45,6 +46,8 @@ changelog, so they run one at a time, each through its own pull request with bot
   second exception in `CLAUDE.md`.
 - A prompt on the common merge and publish commands goes through permission rules written by
   `fnl-setup` after a separate consent (package 5), not through a plugin hook. It is not a complete guard.
+- The dashboard also becomes a project view (package 8): task progress from Spec Kit `tasks.md` or a
+  configured task file, joined with delegated runs and sessions; local files and records only.
 - Running agents: phase 1 now; hook-reported sub-agents (phase 2) wait until phase 1 shows what users
   cannot see.
 - The sync of the dev build to Codex is throttled to once per six hours (local script) because every

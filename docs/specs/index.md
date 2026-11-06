@@ -12,3 +12,4 @@
 | [Antigravity compaction stop](compaction-stop.md) | Spec; the rule is merged in `CLAUDE.md`, code in progress. |
 | [Merge guard](merge-guard.md) | Spec; permission rules written by setup for Claude Code and Codex. |
 | [Running agents](running-agents.md) | Spec; phase 1 is the ledger plus a process snapshot on the dashboard. |
+| [Project progress](project-progress.md) | Spec; task progress from `tasks.md`, ledger and usage events on the dashboard. |
