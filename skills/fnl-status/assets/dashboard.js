@@ -486,10 +486,18 @@
     ["done", "active", "accepted", "todo"].forEach(function (state) {
       var width = counts[state] / total * 42;
       if (width) group.appendChild(s("rect", {x: offset, y: 0, width: width, height: 3,
-        fill: {done: "var(--good)", active: "var(--p)", accepted: "var(--warn)", todo: "var(--line)"}[state], "class": "pipeline-segment " + state}));
+        fill: {done: "var(--h2)", active: "var(--p)", accepted: "var(--warn)", todo: "var(--line)"}[state], "class": "pipeline-segment " + state}));
       offset += width;
     });
     svg.appendChild(group); return svg;
+  }
+  function pipelineText(cls, value) { var el = h("span", cls); el.textContent = String(value); return el; }
+  function pipelineIcon(kind) {
+    var icon = s("svg", {width: 12, height: 12, viewBox: "0 0 16 16", "class": "pipeline-icon pipeline-icon-" + kind, "aria-hidden": "true"});
+    icon.appendChild(s("path", {d: {code: "M5 4L1 8L5 12M11 4L15 8L11 12M9.5 2L6.5 14",
+      security: "M8 1L14 3V7C14 11 11 14 8 15C5 14 2 11 2 7V3Z", run: "M4 2L13 8L4 14Z"}[kind],
+      fill: "none", stroke: "currentColor", "stroke-width": 1.5, "stroke-linejoin": "round", "stroke-linecap": "round"}));
+    return icon;
   }
   function pipelineBlock(p, f, row) {
     var block = h("span", "pipeline-block " + row.state);
@@ -506,16 +514,18 @@
     if (row.stage === "review") {
       var reviews = f.review_counts || {};
       ["code", "security"].forEach(function (kind) {
-        var chip = t("span", "pipeline-review " + (reviews[kind] ? "done" : "unknown"), kind === "code" ? "code" : "sec");
-        if (reviews[kind + "_final"]) chip.appendChild(t("b", "review-final", "✓"));
+        var chip = h("span", "pipeline-review " + (reviews[kind] ? "done" : "unknown"), [pipelineIcon(kind)]);
+        chip.setAttribute("data-review", kind);
+        if (reviews[kind + "_final"]) chip.appendChild(pipelineText("review-final", "✓"));
         tipOn(chip, {title: kind + " review artefacts", sub: sourceName(p), rows: [["files", reviews[kind] || 0], ["final", reviews[kind + "_final"] ? "present" : "absent"]],
           items: ["File presence only; no approval inferred."]});
         block.appendChild(chip);
       });
     } else {
-      block.appendChild(t("span", "pipeline-stage-label", row.stage));
+      var label = h("span", "pipeline-label", [pipelineText("pipeline-stage-label", row.stage)]);
+      block.appendChild(label);
       if (row.stage === "tasks") {
-        block.appendChild(t("span", "pipeline-percent", completionPercent(row.done, row.total) + "%"));
+        label.appendChild(pipelineText("pipeline-percent", completionPercent(row.done, row.total) + "%"));
         block.appendChild(progressSegments(f));
       }
     }
@@ -523,12 +533,17 @@
   }
   function workStrip(p) {
     var strip = h("div", "work-strip"), counts = p.work || {};
-    strip.appendChild(t("span", "work-label", "work"));
+    strip.appendChild(pipelineIcon("run"));
+    var summary = "ledger runs: " + (counts.done || 0) + " accepted, " + (counts["needs-attention"] || 0) + " need attention";
+    var items = ["Exact project join; repeated task labels share their latest outcome."];
+    tipOn(strip, {title: summary, rows: ["active", "deferred", "unknown"].filter(function (state) { return counts[state]; }).map(function (state) {
+      return [state, counts[state]];
+    }), items: items});
     ["done", "needs-attention", "active", "deferred", "unknown"].forEach(function (state) {
       if (!counts[state]) return;
-      var chip = t("span", "work-chip " + state, String(counts[state]));
-      tipOn(chip, {title: "ledger · " + state, rows: [["latest task outcomes", counts[state]]],
-        items: ["Exact project join; repeated task labels share their latest outcome."].concat(state === "unknown" ? ["no status stated"] : [])}); strip.appendChild(chip);
+      var chip = pipelineText("work-chip " + state, String(counts[state]));
+      tipOn(chip, {title: summary, sub: state, rows: [["latest task outcomes", counts[state]]],
+        items: items.concat(state === "unknown" ? ["no status stated"] : [])}); strip.appendChild(chip);
     });
     return strip;
   }
@@ -538,7 +553,7 @@
     });
     var finished = (p.features || []).length - unfinished.length, taskItem = null;
     if (p.source !== "ledger") unfinished.slice(0, 5).forEach(function (feature) {
-      var line = h("div", "pipeline-item", [tipOn(t("span", "pipeline-ordinal", feature.feature != null ? String(feature.feature).padStart(3, "0") : "#" + feature.ordinal),
+      var line = h("div", "pipeline-item", [tipOn(pipelineText("pipeline-ordinal", feature.feature != null ? String(feature.feature).padStart(3, "0") : "#" + feature.ordinal),
         {title: itemLabel(feature), sub: sourceName(p), rows: [["state", feature.state]], items: feature.status_hint ? ["status line says " + feature.status_hint] : []})]);
       var chain = h("div", "pipeline-chain");
       (feature.stages || []).forEach(function (row) { chain.appendChild(pipelineBlock(p, feature, row)); });
@@ -551,9 +566,9 @@
       if (!taskItem && feature.state === "active" && (feature.tasks || []).length) { taskItem = feature; line.appendChild(projectDetail({features: [feature]}, motion, true)); }
       card.appendChild(line);
     });
-    if (p.source !== "ledger" && unfinished.length > 5) card.appendChild(tipOn(t("span", "pipeline-more", "+" + (unfinished.length - 5) + " more"),
+    if (p.source !== "ledger" && unfinished.length > 5) card.appendChild(tipOn(pipelineText("pipeline-more", "+" + (unfinished.length - 5)),
       {title: sourceName(p), rows: [["unfinished items", unfinished.length]], items: unfinished.slice(5, 10).map(function (f) { return itemLabel(f) + " · " + f.state; })}));
-    if (p.source !== "ledger" && finished) card.appendChild(tipOn(t("span", "pipeline-finished", finished + " done"),
+    if (p.source !== "ledger" && finished) card.appendChild(tipOn(pipelineText("pipeline-finished", "✓ " + finished),
       {title: sourceName(p), rows: [["finished items", finished]], items: (p.features || []).filter(function (f) { return f.state === "done"; }).slice(-5).reverse().map(function (f) { return itemLabel(f) + " · done" + (f.status_hint ? " · status line says " + f.status_hint : ""); })}));
     if (Object.keys(p.work || {}).length) card.appendChild(workStrip(p));
     return card;

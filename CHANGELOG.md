@@ -14,6 +14,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Match pipeline stages to theme-aware task colours, back striped labels with solid chips, and use compact review glyphs and icon-first ledger/summary counts.
+
 - Replace dense Agents and Project text with KPI tiles, dispatch budget lanes, cached quota meters and unfinished project/task graphics; retain data tables and collapsed limits. Keep up to five local project snapshots, read only story priority numbers from `spec.md`, skip `specs/archive`, and offer user-set local project labels through setup.
 - Keep Reviews labels on one line, use project labels, and cap dot chains at eight plus a remaining-round count. Cover fragment-only navigation and ship the page code as a local script with no inline handlers or scripts; reduced-motion mode disables all animation.
 

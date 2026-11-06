@@ -132,7 +132,7 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual([m['text'] for m in page.marks(out, 'pipeline-ordinal')], ['016', '015', '#1'])
         self.assertEqual([m['attrs']['data-stage'] for m in page.marks(out, 'pipeline-block')],
                          ['spec', 'spec', 'plan', 'design', 'tasks', 'verify', 'review', 'ship', 'spec'])
-        self.assertEqual([m['text'] for m in page.marks(out, 'pipeline-finished')], ['1 done'])
+        self.assertEqual([m['text'] for m in page.marks(out, 'pipeline-finished')], ['✓ 1'])
         self.assertEqual(len(page.marks(out, 'pipeline-chevron')), 9)
         pane = ' '.join(m['text'] for m in page.marks(out, 'active-project'))
         for forbidden in ('undefined', 'untagged', 'PRIVATE', 'Synthetic](one.md)'):

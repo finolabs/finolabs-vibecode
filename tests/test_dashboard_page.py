@@ -833,14 +833,14 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(len(self.marks(out, 'pipeline-tasks')), 1)
         self.assertEqual(len(self.marks(out, 'task-brick')), 4)
         self.assertEqual(len(self.marks(out, 'work-strip')), 2)
-        self.assertEqual([m['text'] for m in self.marks(out, 'pipeline-finished')], ['1 done', '1 done'])
+        self.assertEqual([m['text'] for m in self.marks(out, 'pipeline-finished')], ['✓ 1', '✓ 1'])
         self.assertIn('spec 013 · done · status line says draft', self.marks(out, 'pipeline-finished')[0]['tooltip'])
         self.assertTrue(all(m['tag'] == 'span' for m in blocks))
         self.assertTrue(all(m['tag'] == 'svg' for m in self.marks(out, 'task-brick') + self.marks(out, 'package-brick')))
 
     def test_pipeline_review_chips_final_presence_and_flush_progress_segments(self):
         out = self.render_freshness(self.pipeline_sample())
-        self.assertEqual([m['text'] for m in self.marks(out, 'pipeline-review')], ['code ✓', 'sec'])
+        self.assertEqual([m['text'].strip() for m in self.marks(out, 'pipeline-review')], ['✓', ''])
         self.assertEqual(self.marks(out, 'pipeline-review')[0]['spec']['rows'], [['files', 2], ['final', 'present']])
         self.assertIn('no approval inferred', self.marks(out, 'pipeline-review')[0]['tooltip'])
         self.assertEqual(len(self.marks(out, 'review-final')), 1)
@@ -852,6 +852,52 @@ class DashboardScriptTest(unittest.TestCase):
         clips = [m['attrs']['id'] for m in out['picture'] if m['tag'] == 'clipPath']
         self.assertEqual(len(clips), len(set(clips)))
 
+    def test_pipeline_review_glyphs_and_solid_labels(self):
+        data = self.pipeline_sample()
+        feature = data['progress']['repositories']['aaaaaaaa']['features'][1]
+        feature['stages'].append(dict(stage='ship', state='active', done=0, total=1))
+        out = self.render_freshness(data)
+        chips = self.marks(out, 'pipeline-review')
+        self.assertEqual([m['attrs']['data-review'] for m in chips], ['code', 'security'])
+        self.assertEqual([m['spec']['title'] for m in chips], ['code review artefacts', 'security review artefacts'])
+        for chip in chips:
+            self.assertNotRegex(chip['text'], r'code|sec')
+        for chain in self.marks(out, 'pipeline-chain'):
+            self.assertNotRegex(chain['text'], r'\b(?:code|sec|security)\b')
+        self.assertEqual(len(self.marks(out, 'pipeline-icon-code')), 1)
+        self.assertEqual(len(self.marks(out, 'pipeline-icon-security')), 1)
+        self.assertTrue(all(m['tag'] == 'svg' and m['attrs']['aria-hidden'] == 'true'
+                            for m in self.marks(out, 'pipeline-icon')))
+        labels = [m['text'] for m in self.marks(out, 'pipeline-label')]
+        self.assertIn('tasks 50%', labels)
+        self.assertIn('verify', labels)
+        self.assertIn('ship', labels)
+        self.assertNotIn('undefined', out['text'])
+        segments = self.marks(out, 'pipeline-segment')
+        self.assertEqual(segments[0]['attrs']['fill'], 'var(--h2)')
+        self.assertIn('.pipeline-block.done { color: var(--on2); }', PAGE.read_text())
+        self.assertIn('.pipeline-block.todo .pipeline-face { fill: none; stroke: var(--line); }', PAGE.read_text())
+
+    def test_pipeline_trailing_chips_are_icon_first_with_rich_counts(self):
+        data = self.pipeline_sample()
+        p = data['progress']['repositories']['bbbbbbbb']
+        p['work'] = {'done': 78, 'needs-attention': 2}
+        out = self.render_freshness(data)
+        strip = self.marks(out, 'work-strip')[0]
+        self.assertEqual(strip['text'].strip(), '78 2')
+        self.assertEqual(strip['spec']['title'], 'ledger runs: 78 accepted, 2 need attention')
+        self.assertEqual(len(self.marks(out, 'pipeline-icon-run')), 2)
+        first_strip = next(i for i, m in enumerate(out['picture']) if 'work-strip' in m['cls'].split())
+        self.assertIn('pipeline-icon-run', out['picture'][first_strip + 1]['cls'].split())
+        self.assertEqual(self.marks(out, 'work-label'), [])
+        for mark in self.marks(out, 'pipeline-finished'):
+            self.assertRegex(mark['text'], r'^✓ \d+$')
+            self.assertIn('finished items', mark['tooltip'])
+        for chip in self.marks(out, 'work-chip'):
+            self.assertIn('ledger runs:', chip['tooltip'])
+        self.assertIn('.work-chip.done { background: var(--h2); border-color: var(--h2); color: var(--on2); }', PAGE.read_text())
+        self.assertIn('.work-chip.needs-attention { background: var(--warn); border-color: var(--warn); color: var(--on2); }', PAGE.read_text())
+
     def test_pipeline_unfinished_cap_newest_order_finished_collapse_and_single_active_bricks(self):
         data = self.pipeline_sample()
         p = data['progress']['repositories']['aaaaaaaa']
@@ -859,11 +905,11 @@ class DashboardScriptTest(unittest.TestCase):
         p['features'] += [dict(active, feature=n) for n in range(17, 24)]
         out = self.render_freshness(data)
         self.assertEqual([m['text'] for m in self.marks(out, 'pipeline-ordinal')][:5], ['023', '022', '021', '020', '019'])
-        self.assertEqual(self.marks(out, 'pipeline-more')[0]['text'], '+4 more')
+        self.assertEqual(self.marks(out, 'pipeline-more')[0]['text'], '+4')
         self.assertIn('spec 018', self.marks(out, 'pipeline-more')[0]['tooltip'])
         self.assertEqual(len(self.marks(out, 'pipeline-tasks')), 1)
         self.assertEqual(len(self.marks(out, 'task-brick')), 4)
-        self.assertEqual(self.marks(out, 'pipeline-finished')[0]['text'], '1 done')
+        self.assertEqual(self.marks(out, 'pipeline-finished')[0]['text'], '✓ 1')
         tables = [m for m in out['picture'] if m['disclosure'] == 'show the data as tables']
         self.assertTrue(any('spec 017' in m['text'] for m in tables))
 
@@ -905,9 +951,10 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertIn('.pipeline-project .project-detail { grid-column: 1 / -1; grid-row: 2; }', css)
         self.assertIn('.pipeline-chain { display: flex;', css)
         self.assertIn('.pipeline-block.unknown .pipeline-face { stroke-dasharray: 3 2;', css)
-        self.assertIn('background: repeating-linear-gradient(135deg, var(--p)', css)
-        self.assertIn('.pipeline-block.done .pipeline-face { fill: var(--good)', css)
-        self.assertIn('.pipeline-chain { flex-wrap: wrap; max-width: calc(100% - 24px); }', css)
+        self.assertIn('.pipeline-label { position: relative; display: inline-flex;', css)
+        self.assertIn('.pipeline-block.active .pipeline-label { background: var(--raised); color: var(--fg);', css)
+        self.assertIn('.pipeline-block.done .pipeline-face { fill: var(--h2)', css)
+        self.assertIn('.pipeline-chain { display: flex; flex: none; flex-wrap: nowrap;', css)
         out = self.render_freshness(self.pipeline_sample())
         self.assertNotIn('img', out['tags'])
         self.assertNotIn('script', out['tags'])
