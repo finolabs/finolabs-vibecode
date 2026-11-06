@@ -11,7 +11,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Changed
 
 - Correct the Antigravity file-tool hook matcher and limit suggested prompts to three; an already installed Antigravity hook group keeps its old matcher until `refresh.py antigravity-hook --yes` is run again.
-- Split the status dashboard into Overview, Agents, Project, Delegation and Reviews tabs, preserving the selected tab, panel scroll and open tables on data reload. Agents and Project show placeholders until their sources are available.
+- Split the status dashboard into Overview, Agents, Project, Delegation and Reviews tabs, preserving the selected tab, panel scroll and open tables on data reload. Tabs show missing-source states when their data is unavailable.
 
 - Remind agents to rename their session at the start, on a phase change and after every compaction, in the always-loaded rule and in the Titles section of `fnl-session-hygiene`.
 - Correct host instruction mechanics for Claude Code and Codex, note Codex `spawn_agent` hook matching in usage metrics, clarify compaction threshold settings and writer bounds, and document privacy boundaries for judge instruction checks.
@@ -26,6 +26,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Apply the agent version output limit to stdout independently of stderr.
 
 ### Added
+
+- Add metadata-only Project tab progress by feature, phase and story, exact identifier joins to runs and sessions, and a safe local reader with a one-second budget. With metrics consent and a resolved host config it defaults on; setup records the preference, `FNL_PROGRESS=off` disables it, page/session notices announce the change, and progress stays in overwritten dashboard data.
 
 - Add Running now in the Agents tab: open dispatch ages and budgets, advisory liveness checks and family mismatch flags, plus a separately opted-in, bounded process snapshot. Setup records its on/off choice in canonical host config; `FNL_AGENT_SNAPSHOT=off` disables it, and snapshots stay in the overwritten dashboard data only.
 

@@ -130,18 +130,18 @@ def reviews_from(command, cwd):
     return found
 
 
-def refresh_dashboard(seconds=REFRESH_SECONDS, extra=()):
+def refresh_dashboard(seconds=REFRESH_SECONDS, extra=(), cwd=None):
     """Rebuild the dashboard data. A slow or missing refresh is not an error."""
     if not REFRESH.is_file():
         return
     try:
-        subprocess.run([sys.executable, "-I", str(REFRESH), "run", *extra],
+        subprocess.run([sys.executable, "-I", str(REFRESH), "run", *extra, *(["--cwd", cwd] if cwd else [])],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=seconds)
     except subprocess.TimeoutExpired:
         pass
 
 
-def start_detached_refresh():
+def start_detached_refresh(cwd=None):
     """Antigravity cannot wait for a rebuild. Probe the OS lock before starting one."""
     if not fm.enabled() or not REFRESH.is_file():
         return
@@ -164,9 +164,10 @@ def start_detached_refresh():
             msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
         # No host, project, Python injection or quota-worker variables are inherited.
         env = {k: os.environ[k] for k in ("SYSTEMROOT",) if k in os.environ}
-        if os.environ.get("FNL_AGENT_SNAPSHOT", "").lower() == "off":
-            env["FNL_AGENT_SNAPSHOT"] = "off"
-        subprocess.Popen([sys.executable, "-I", str(REFRESH), "run", "--throttle", "10"],
+        for switch in ("FNL_AGENT_SNAPSHOT", "FNL_PROGRESS"):
+            if os.environ.get(switch, "").lower() == "off":
+                env[switch] = "off"
+        subprocess.Popen([sys.executable, "-I", str(REFRESH), "run", "--throttle", "10", *(["--cwd", cwd] if cwd else [])],
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          env=env, cwd=str(REFRESH.parent), close_fds=True, start_new_session=True)
     except (OSError, ValueError):
@@ -176,7 +177,7 @@ def start_detached_refresh():
             os.close(fd)
 
 
-def refresh_if_stale():
+def refresh_if_stale(cwd=None):
     """Rebuild at most once per REFRESH_EVERY seconds. The stat here spares most tool calls a process; the script
     checks again under its lock, so two hooks that both pass the stat still rebuild once."""
     try:
@@ -184,7 +185,7 @@ def refresh_if_stale():
             return
     except OSError:
         pass  # no data.js yet
-    refresh_dashboard(REFRESH_AFTER_TOOL_SECONDS, ("--throttle", str(REFRESH_EVERY)))
+    refresh_dashboard(REFRESH_AFTER_TOOL_SECONDS, ("--throttle", str(REFRESH_EVERY)), cwd=cwd)
 
 
 def options(argv):
@@ -221,10 +222,13 @@ def session_start(sid, cwd, source, host):
     consent = fm.read_consent()
     if consent:
         fm.prune(consent["retention_days"])
+        import project_progress as pp
+        if pp.enabled() and pp.notice('session', pp.installed_version()):
+            print(pp.NOTICE, file=sys.stderr if host == 'antigravity' else sys.stdout)
         if host != "antigravity":
-            refresh_dashboard()
+            refresh_dashboard(cwd=cwd)
         else:
-            start_detached_refresh()
+            start_detached_refresh(cwd=cwd)
 
 
 def post_tool_use(sid, cwd, tool, data):
@@ -352,11 +356,11 @@ def main():
         elif event == "PostToolUse":
             post_tool_use(sid, cwd, tool, data)
             if host != "antigravity":
-                refresh_if_stale()
+                refresh_if_stale(cwd=cwd)
             else:
-                start_detached_refresh()
+                start_detached_refresh(cwd=cwd)
         elif event == "Stop" and host != "antigravity":
-            refresh_dashboard()
+            refresh_dashboard(cwd=cwd)
     except Exception as error:
         fm.bump_errors(error)
     finally:

@@ -195,6 +195,10 @@ td.r, th.r { text-align: right; }
 .grow { display: grid; grid-template-columns: minmax(0, 15em) minmax(0, 1fr); gap: 10px; align-items: center; }
 .skel .nodata { display: none; }
 .skel .kpi .v { color: var(--faint); text-shadow: none; }
+.project-bar { height: 8px; background: var(--surface); border-left: 1px solid var(--line); }
+.project-bar i { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+.project-table { overflow-x: auto; max-width: 100%; }
+.project-table table { width: 100%; overflow-wrap: anywhere; }
 .running-row { overflow-wrap: anywhere; min-width: 0; }
 
 /* Empty state: a veil blurs the placeholder panes and a card sits in view above it, sticky so it stays visible on a long phone page. */
@@ -351,6 +355,59 @@ td.r, th.r { text-align: right; }
            (run.no_process_found ? " · no process found" : ""));
     });
     line("Liveness verdicts are advisory agent judgment from artifacts; a process name does not prove a dispatch is running.");
+    return stack(lines);
+  }
+  function projectPanel() {
+    if (!D.progress) return null;
+    var block = D.progress, repositories = block.repositories || {}, p = Object.prototype.hasOwnProperty.call(repositories, block.current) ? repositories[block.current] : null;
+    var lines = [];
+    function line(value) {
+      var el = h("div", "running-row"); el.textContent = value; lines.push(el);
+    }
+    if (block.notice) line("Project progress now reads this repository's task list and the ledger; nothing leaves your machine; turn off with Project progress: off in host.md under ## Project progress, or FNL_PROGRESS=off.");
+    line("Limits: derived from files and local records, not from a tracker; done means the box is ticked. Linked through delegated runs or recorded task ids only; sessions that record neither remain unlinked. Task receipts are advisory, never a gate.");
+    if (!p) { line(block.reason || "not available yet"); return stack(lines); }
+    if (p.reason) line(p.reason);
+    if (!(p.features || []).length) line("No tasks.md or configured task file found");
+    (p.features || []).forEach(function (feature) {
+      line("feature " + String(feature.feature).padStart(3, "0") + " · " + feature.done + " / " + feature.total);
+      [ ["phases", "phase", "Phase "], ["stories", "story", ""] ].forEach(function (group) {
+        (feature[group[0]] || []).forEach(function (row) {
+          line(group[2] + row[group[1]] + " · " + row.done + " / " + row.total);
+          var track = h("div", "project-bar"), bar = h("i");
+          track.setAttribute("role", "progressbar");
+          track.setAttribute("aria-label", "Task progress");
+          track.setAttribute("aria-valuenow", row.done); track.setAttribute("aria-valuemin", "0");
+          track.setAttribute("aria-valuemax", row.total);
+          bar.style.width = (row.total > 0 ? Math.max(0, Math.min(100, row.done / row.total * 100)) : 0) + "%";
+          bar.style.background = "var(--p)"; track.appendChild(bar); lines.push(track);
+        });
+      });
+      var table = h("table", "tbl"), head = h("tr");
+      ["Task", "Story", "Phase", "State", "Agent / model", "Session / host", "Run / elapsed"].forEach(function (name) {
+        var cell = h("th"); cell.textContent = name; head.appendChild(cell);
+      });
+      table.appendChild(head);
+      (feature.tasks || []).filter(function (task) { return task.state !== "todo" || (task.sessions || []).length || (task.runs || []).length; }).forEach(function (task) {
+        var row = h("tr"), runs = task.runs || [], sessions = task.sessions || [];
+        [task.id, task.story || "—", task.phase == null ? "—" : task.phase, task.state,
+          runs.map(function (run) { return run.agent + " / " + run.model; }).join(", ") || "—",
+          sessions.map(function (session) { return session.id + " / " + session.host; }).join(", ") || "—",
+          runs.map(function (run) { return run.id + " / " + run.elapsed_seconds + " seconds · " + run.outcome; }).join(", ") || "—"].forEach(function (value) {
+            var cell = h("td"); cell.textContent = value; row.appendChild(cell);
+          });
+        table.appendChild(row);
+      });
+      var wrap = h("div", "project-table"); wrap.appendChild(table); lines.push(wrap);
+    });
+    var counts = p.sessions || {};
+    line("Sessions · running now: " + (p.running_now == null ? "unavailable" : p.running_now) + " (machine-wide process count, not identified sessions) · active in the last 24 hours: " + (counts.active_24h || 0) + " · idle: " + (counts.idle || 0));
+    line("Delegated runs · " + Object.keys(p.outcomes || {}).map(function (kind) { return kind + ": " + p.outcomes[kind]; }).join(" · "));
+    line("label without a feature: " + (p.labels_without_feature || 0) + " · unlinked runs: " + (p.unlinked_runs || 0));
+    line("Sessions without a task");
+    (p.sessions_without_task || []).forEach(function (session) { line(session.id + " · " + session.host + " · last activity " + session.last); });
+    line("Last reviews · " + Object.keys(p.reviews || {}).map(function (kind) { return kind + ": " + p.reviews[kind]; }).join(" · ") + " · manifest " + (p.version || "unknown"));
+    (p.skipped || []).forEach(function (reason) { line(reason); });
     return stack(lines);
   }
   function signed(n) { return (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n); }
@@ -534,7 +591,7 @@ td.r, th.r { text-align: right; }
   drawTabs();
   var overview = TABS.get("overview").panel, delegation = TABS.get("delegation").panel;
   TABS.get("agents").panel.appendChild(pane("Running now", "", "", runningPanel(), "not available yet"));
-  TABS.get("project").panel.appendChild(pane("Project progress", "", "", null, "not available yet"));
+  TABS.get("project").panel.appendChild(pane("Project progress", "", "", projectPanel(), "not available yet"));
 
   /* Overview: activity and router composition beside depth and load cost. */
   var band1 = h("div", "g2");
