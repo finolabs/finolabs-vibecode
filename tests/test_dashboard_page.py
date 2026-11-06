@@ -370,6 +370,14 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render_freshness(data)
         self.assertEqual(len(self.marks(out, 'quota-bricks')), 8)
 
+    def test_quota_tooltip_without_name_uses_pool(self):
+        data = self.sample()
+        data['running']['quota'][0]['pools'][0].pop('name')
+        out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
+        meter = self.marks(out, 'quota-bricks')[0]
+        self.assertEqual(meter['spec']['sub'], 'pool')
+        self.assertNotIn('undefined', meter['tooltip'])
+
     def test_quota_measured_age_boundary_is_hollow_after_eight_hours(self):
         data = self.sample()
         pool = data['running']['quota'][0]['pools'][0]

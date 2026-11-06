@@ -47,6 +47,294 @@ class ProgressTest(unittest.TestCase):
     def collect(self, **kwargs):
         return self.pp.collect(self.repo, 'aaaaaaaa', **kwargs)
 
+    def consent(self):
+        state = self.data / 'state'
+        state.mkdir(exist_ok=True)
+        (state / 'consent.json').write_text(json.dumps(dict(date='2026-11-06', retention_days=30)))
+
+    def test_settings_strict_section_fail_closed(self):
+        good = '- aaaaaaaa ledger: Alias\n- aaaaaaaa tasks: docs/tasks.md\n'
+        self.assertEqual(self.pp.project_settings('## Project settings\n' + good)[('aaaaaaaa', 'ledger')], 'Alias')
+        bad_values = [('ledger', v) for v in ('', ' ', 'x' * 41, 'a;', 'a=b', 'a\nb', 'a\x00b', 'a\\b', 'é')]
+        bad_values += [('tasks', v) for v in ('', '/a.md', '../a.md', 'a/../b.md', './a.md', 'a//b.md',
+                       'specs/archive/a.md', 'a.txt', 'a b.md', 'a\\b.md', 'a;.md', 'a=.md', 'a\x00.md', 'x' * 118 + '.md')]
+        bad_lines = [f'- aaaaaaaa {key}: {value}\n' for key, value in bad_values]
+        bad_lines += [good, '- AAAAAAAA ledger: x\n', '- aaaaaaaa unknown: x\n', 'comment\n',
+                      ''.join(f'- {i:08x} ledger: x\n' for i in range(101))]
+        self.document('one.md', 'Status: implemented\n')
+        before = self.collect()
+        for bad in bad_lines:
+            with self.subTest(bad=repr(bad)):
+                self.host.write_text('## Project settings\n' + good + bad)
+                with self.assertRaises(ValueError):
+                    self.pp.project_settings(self.host.read_text())
+                self.assertEqual(self.collect(), before)
+
+    def test_settings_consent_atomic_private_and_cli_output(self):
+        import io
+        before = self.host.read_bytes()
+        for value in ('PRIVATE', None):
+            with self.assertRaises(ValueError):
+                self.pp.set_setting(self.repo, 'ledger', value)
+        self.assertEqual(self.host.read_bytes(), before)
+        self.consent()
+        with mock.patch.object(self.pp, 'repository_code', return_value='aaaaaaaa'):
+            with mock.patch.object(self.pp.dr, 'atomic_write', wraps=self.pp.dr.atomic_write) as write:
+                self.assertTrue(self.pp.set_setting(self.repo, 'ledger', 'PRIVATE'))
+                self.assertEqual(write.call_count, 1)
+            self.assertFalse(self.pp.set_setting(self.repo, 'ledger', 'PRIVATE'))
+            with mock.patch('os.getcwd', return_value=str(self.repo)), mock.patch('sys.stdout', new_callable=io.StringIO) as out:
+                self.assertEqual(self.pp.main(['settings', '--set', 'tasks=docs/private.md']), 0)
+                self.assertIn('tasks changed', out.getvalue())
+                self.assertNotIn('private', out.getvalue())
+            with self.assertRaises(ValueError):
+                self.pp.set_setting(self.repo, 'ledger', 'first=second')
+            with mock.patch('os.getcwd', return_value=str(self.repo)), mock.patch.object(self.pp, 'set_setting', return_value=True) as write, mock.patch('sys.stdout', new_callable=io.StringIO) as out:
+                self.assertEqual(self.pp.main(['settings', '--set', 'ledger=first=second']), 0)
+                write.assert_called_once_with(str(self.repo), 'ledger', 'first=second')
+                self.assertEqual(out.getvalue(), 'ledger changed\n')
+            with mock.patch.object(self.pp.dr, 'atomic_write', side_effect=OSError('interrupted')):
+                saved = self.host.read_bytes()
+                with self.assertRaises(OSError):
+                    self.pp.set_setting(self.repo, 'ledger', 'other')
+                self.assertEqual(saved, self.host.read_bytes())
+            self.assertTrue(self.pp.set_setting(self.repo, 'tasks', None))
+            self.assertFalse(self.pp.set_setting(self.repo, 'tasks', None))
+        self.assertEqual(stat.S_IMODE(self.host.stat().st_mode), 0o600)
+        self.assertFalse(list(self.data.glob('.write-*')))
+
+    def test_budget_restores_alarm_after_timeout_during_cancel(self):
+        signal = self.pp.signal
+        for body_timeout in (False, True):
+            with self.subTest(body_timeout=body_timeout):
+                calls = []
+                previous = object()
+                cancel_attempts = 0
+                def timer(kind, seconds):
+                    nonlocal cancel_attempts
+                    calls.append(('timer', seconds))
+                    if seconds == 0:
+                        cancel_attempts += 1
+                        if cancel_attempts == 1:
+                            raise self.pp.ProgressTimeout()
+                def handler(kind, value):
+                    calls.append(('handler', value))
+                    return previous
+                with mock.patch.object(signal, 'getitimer', return_value=(0, 0)), \
+                        mock.patch.object(signal, 'setitimer', side_effect=timer), \
+                        mock.patch.object(signal, 'signal', side_effect=handler):
+                    def run():
+                        with self.pp.budget():
+                            if body_timeout:
+                                raise self.pp.ProgressTimeout('body')
+                    if body_timeout:
+                        with self.assertRaisesRegex(self.pp.ProgressTimeout, 'body'):
+                            run()
+                    else:
+                        run()
+                self.assertEqual(calls[-3:], [('timer', 0), ('timer', 0), ('handler', previous)])
+
+    def test_task_instruction_denylist_is_closed_and_case_insensitive(self):
+        names = ('CLAUDE.md', 'CLAUDE.local.md', 'AGENTS.md', 'AGENTS.override.md',
+                 'GEMINI.md', 'copilot-instructions.md', 'CONVENTIONS.md',
+                 '.cursorrules', '.windsurfrules', '.clinerules')
+        for name in names:
+            for folder in ('', '.github/', 'nested/'):
+                relative = folder + name.swapcase()
+                self.assertFalse(self.pp.valid_setting('tasks', folder + name))
+                with self.subTest(relative=relative):
+                    self.assertFalse(self.pp.valid_setting('tasks', relative))
+                    with mock.patch.object(self.pp.os, 'dup') as dup:
+                        with self.assertRaisesRegex(ValueError, 'instruction file skipped'):
+                            self.pp.read_task(-1, relative)
+                        dup.assert_not_called()
+        self.assertTrue(self.pp.valid_setting('tasks', 'docs/my-conventions.md'))
+        spec = (ROOT / 'docs/specs/work-tracking.md').read_text().split('## B.')[0]
+        self.assertIn('closed, named set', spec)
+        for name in names:
+            self.assertIn('`' + name + '`', spec)
+
+    def test_settings_missing_host_refuses_without_echoing_value(self):
+        import io
+        self.consent()
+        self.host.unlink()
+        with mock.patch('os.getcwd', return_value=str(self.repo)), \
+                mock.patch('sys.stdout', new_callable=io.StringIO) as out, \
+                mock.patch('sys.stderr', new_callable=io.StringIO) as err:
+            self.assertEqual(self.pp.main(['settings', '--set', 'ledger=PRIVATE']), 1)
+        self.assertEqual(out.getvalue(), '')
+        self.assertEqual(err.getvalue(), 'Project settings refused; no setting changed.\n')
+        self.assertNotIn('PRIVATE', err.getvalue())
+        self.assertFalse(self.host.exists())
+
+    def test_settings_two_repositories_override_deprecated_globals(self):
+        self.consent()
+        other = self.repo.with_name('other')
+        other.mkdir()
+        (other / '.git').mkdir()
+        self.host.write_text('## Project progress\n- Ledger project: old\n- Task file: missing.md\n')
+        self.pp.set_setting(self.repo, 'ledger', 'PRIVATE one')
+        self.pp.set_setting(other, 'ledger', 'PRIVATE two')
+        self.pp.set_setting(self.repo, 'tasks', 'tasks.md')
+        (self.repo / 'tasks.md').write_text('- [ ] T1\n')
+        starts = {str(i): dict(project=name, task='001 T1', ts='2026-11-06T00:00:00Z')
+                  for i, name in enumerate(('PRIVATE one', 'PRIVATE two', 'old'))}
+        one = self.collect(starts=starts)
+        two = self.pp.collect(other, 'bbbbbbbb', starts=starts)
+        self.assertEqual(one['features'][0]['tasks'][0]['runs'][0]['id'], '0')
+        self.assertEqual(two['work'], {'active': 1})
+        self.assertNotIn('PRIVATE', json.dumps([one, two]))
+        self.pp.set_setting(self.repo, 'ledger', None)
+        self.assertEqual(self.pp.repository_settings(self.pp.config(), self.repo)['Ledger project'], 'old')
+
+    def test_work_record_template_parses_with_status_reader(self):
+        import re
+        template = ROOT / 'skills/fnl-coding-router/references/work-record.md'
+        block = re.search(r'```markdown\n(.*?)\n```', template.read_text(), re.S)
+        self.assertIsNotNone(block, 'keep one literal parseable template block')
+        pp = module('template_status_reader', ROOT / 'skills/fnl-status/scripts/project_progress.py')
+        item = pp.work_record(block[1], 1)
+        self.assertIsNotNone(item)
+        self.assertEqual(item['state'], 'todo')
+        self.assertEqual([(s['stage'], s['done'], s['total']) for s in item['stages']],
+                         [])
+        self.assertEqual((item['done'], item['total']), (0, 0))
+        self.assertEqual(item['tasks'], [])
+        self.assertEqual(item['stories'], [])
+        self.assertNotIn('<', json.dumps(item))
+        text = template.read_text()
+        self.assertIn('MIN depth creates no work record', text)
+        for tool in ('grilling', 'to-spec', 'to-tickets', 'tdd', 'implement', 'code-review', 'pr'):
+            self.assertIn('`' + tool + '`', text)
+
+    def test_filled_work_record_template_counts(self):
+        import re
+        template = (ROOT / 'skills/fnl-coding-router/references/work-record.md').read_text()
+        text = re.search(r'```markdown\n(.*?)\n```', template, re.S)[1]
+        text = re.sub(r'<[^>]*>', 'Filled content', text).replace('- [ ]', '- [x]')
+        item = self.pp.work_record(text, 1)
+        self.assertEqual(item['state'], 'todo')
+        self.assertEqual([(s['stage'], s['done'], s['total']) for s in item['stages']],
+                         [('spec', 1, 1), ('plan', 1, 1), ('tasks', 1, 1), ('verify', 1, 1)])
+        self.assertEqual(item['tasks'][0]['id'], 'T1')
+        self.assertEqual(item['stories'][0]['story'], 'US1')
+
+    def record(self, status='in progress', tasks='- [x] T1 PRIVATE\n', directory='docs/specs', name='work.md'):
+        return self.document(name, '# PRIVATE title\nStatus: ' + status + '; PRIVATE\n'
+            '## Goal and acceptance\n- [ ] AC1 PRIVATE\n## Plan\nPRIVATE plan\n'
+            '## Tasks\n### US1 PRIVATE story\n' + tasks + '## Evidence\nPRIVATE evidence\n', directory)
+
+    def test_work_record_stages_state_marks_and_closed_output(self):
+        self.record()
+        got = self.collect()
+        self.assertEqual((got['source'], got['recognition']), ('work-record', 'work-record'))
+        item = got['features'][0]
+        self.assertEqual(item['state'], 'active')
+        self.assertEqual(item['status_mark'], 'status-not-updated')
+        self.assertEqual([(s['stage'], s['done'], s['total']) for s in item['stages']],
+                         [('spec', 0, 1), ('plan', 1, 1), ('tasks', 1, 1), ('verify', 1, 1)])
+        self.assertEqual(item['stories'], [dict(story='US1', done=1, total=1)])
+        self.assertNotIn('PRIVATE', json.dumps(got))
+        for status, state in [('draft', 'todo'), ('accepted', 'todo'), ('in progress', 'active'),
+                              ('implemented', 'done'), ('released', 'done'), ('deferred', 'deferred'), ('PRIVATE', 'unknown')]:
+            self.record(status)
+            item = self.collect()['features'][0]
+            self.assertEqual(item['state'], state)
+            if status == 'accepted':
+                self.assertEqual(item['status_mark'], 'accepted')
+        self.document('work.md', 'Status: draft\n## Goal and acceptance\n- [x] AC1\n## Tasks\n- [ ] without id\n')
+        self.assertEqual([s['stage'] for s in self.collect()['features'][0]['stages']], ['spec', 'tasks'])
+        self.document('work.md', 'Status: implemented\n## Goal and acceptance\n')
+        self.assertNotEqual(self.collect()['source'], 'work-record')
+
+    def test_work_record_negated_completion_is_unknown(self):
+        for status in ('implemented; not yet released', 'released; not done',
+                       'implemented; not yet merged', 'implemented; not implemented'):
+            with self.subTest(status=status):
+                self.record(status)
+                self.assertEqual(self.collect()['features'][0]['state'], 'unknown')
+        self.record('implemented; tested locally')
+        self.assertEqual(self.collect()['features'][0]['state'], 'done')
+
+    def test_work_record_fenced_evidence_and_empty_status(self):
+        text = 'Status: \n## Plan\n```sh\n## Tasks\n- [x] T9\n```\n## Evidence\n```sh\npython -m unittest\n```\n'
+        item = self.pp.work_record(text, 1)
+        self.assertIsNotNone(item)
+        self.assertEqual(item['state'], 'unknown')
+        self.assertEqual([(row['stage'], row['total']) for row in item['stages']], [('plan', 1), ('verify', 1)])
+        self.assertEqual(item['tasks'], [])
+
+    def test_work_record_precedence_flat_specs_and_shared_safe_parser(self):
+        self.record(directory='specs')
+        self.assertEqual(self.collect()['source'], 'work-record')
+        (self.repo / 'specs/001-empty').mkdir()
+        self.assertEqual(self.collect()['source'], 'none')
+        self.record()
+        self.taskfile()
+        self.assertEqual(self.collect()['source'], 'speckit')
+        self.assertEqual(self.pp.parse('```md\n## Phase 2\n- [x] T1\n```\n- [ ] T2\n', 1)['total'], 1)
+        self.assertEqual(self.pp.priorities('~~~\n## User Story 1 (P1)\n~~~\n'), {})
+        self.assertEqual(self.pp.status_line('```\nStatus: released\n```\nStatus: draft\n'), 'draft')
+        self.assertEqual(self.pp.status_line('\n' * 40 + 'Status: released'), '')
+        self.assertEqual(self.pp.work_record('Status: draft\n```\n## Plan\n## Tasks\n```\n', 1), None)
+
+    @unittest.skipUnless(shutil.which('node') or Path('/opt/homebrew/bin/node').exists(), 'node is not installed')
+    def test_work_record_amber_dot_renders_with_tooltip(self):
+        from tests.test_dashboard_page import DashboardScriptTest
+        self.record()
+        got = self.collect()
+        data = json.loads((ROOT / 'tests/fixtures/status-sample.json').read_text())
+        data['progress'] = {'repositories': {'aaaaaaaa': got}, 'active': [
+            {'repo': 'aaaaaaaa', 'label': 'Synthetic', 'hosts': ['codex'], 'sessions': 1, 'last': '2026-11-06T10:00:00Z'}]}
+        page = DashboardScriptTest()
+        out = page.render_freshness(data, {'hash': '#now'})
+        marks = page.marks(out, 'pipeline-status-mark')
+        self.assertEqual(len(marks), 1)
+        self.assertIn('status not updated', json.dumps(marks))
+        self.assertNotIn('PRIVATE', json.dumps(out))
+        self.assertNotIn('undefined', ' '.join(m['text'] for m in page.marks(out, 'active-project')))
+
+    def test_truncated_flat_specs_listing_cannot_prove_no_numbered_directory(self):
+        for i in range(205):
+            self.record('draft', directory='specs', name=f'{i:03d}.md')
+        (self.repo / 'specs/001-empty').mkdir()
+        original = self.pp.directory_entries
+        def truncated(fd, relative, skipped, cap=200):
+            if relative == 'specs':
+                skipped.append('entry limit')
+                return [(f'{i:03d}.md', False, True) for i in range(min(200, cap))]
+            return original(fd, relative, skipped, cap)
+        with mock.patch.object(self.pp, 'directory_entries', side_effect=truncated):
+            got = self.collect()
+        self.assertEqual(got['source'], 'none')
+        self.assertGreaterEqual(got['work_records']['skipped'], 1)
+
+    def test_work_record_caps_drop_order_and_unsafe_entries(self):
+        for i in range(41):
+            self.record('implemented' if i == 0 else 'draft', name=f'{i:03d}.md')
+        got = self.collect()
+        self.assertEqual(len(got['features']), 40)
+        self.assertTrue(all(f['state'] == 'todo' for f in got['features']))
+        self.assertEqual(got['work_records']['skipped'], 1)
+        folder = self.repo / 'docs/specs'
+        (folder / 'big.md').write_bytes(b'x' * (65536 + 1))
+        (folder / 'link.md').symlink_to(folder / '001.md')
+        os.mkfifo(folder / 'x.md')
+        self.assertEqual(self.collect()['work_records']['skipped'], 4)
+        shutil.rmtree(folder)
+        folder.symlink_to(self.repo / 'specs')
+        self.assertGreaterEqual(self.collect()['work_records']['skipped'], 1)
+        folder.unlink()
+        for i in range(205):
+            self.document(f'{i:03d}.md', 'Status: draft\n## Plan\nx\n## Tasks\n')
+        self.assertGreaterEqual(self.collect()['work_records']['skipped'], 1)
+        with mock.patch.object(self.pp, 'work_record', side_effect=lambda *a: time.sleep(2)):
+            started = time.monotonic()
+            got = self.collect()
+            self.assertEqual(got['reason'], 'progress timed out')
+            self.assertEqual(got['work_records']['skipped'], 1)
+            self.assertLess(time.monotonic() - started, 1.5)
+
     # Infographics acceptance 3: new metadata only, same safe reader.
     def test_priorities_archive_labels_and_finished_project(self):
         task = self.taskfile(text='- [x] T1 US1\n- [x] T2 US2\n- [x] T3 US3\n')
@@ -162,9 +450,30 @@ class ProgressTest(unittest.TestCase):
         self.assertFalse(feature['artifacts']['design'])
         self.assertEqual(feature['review_counts']['code'], 0)
 
+    def test_package_ordinals_are_bounded_ascii_and_negations_are_unknown(self):
+        text = '| # | Package | Status |\n| --- | --- | --- |\n' + ''.join(
+            '| ' + value + ' | PRIVATE | implemented |\n' for value in ('²', '١', '1234567', '999999', '1'))
+        self.assertEqual([r['ordinal'] for r in self.pp.package_rows(text, 80)], [999999, 1])
+        for text in ('not released', 'not done', 'not yet merged', 'not implemented'):
+            with self.subTest(text=text):
+                self.assertEqual(self.pp.status_state(text), 'unknown')
+                self.document('release.md', 'Status: ' + text + '\n| # | Package | Kind |\n| --- | --- | --- |\n| 1 | PRIVATE | fix |\n')
+                got = self.collect()
+                self.assertEqual(got['features'][0]['state'], 'unknown')
+                self.assertEqual(got['features'][0]['packages'][0]['state'], 'unknown')
+
+    def test_index_status_column_header_before_second_column_fallback(self):
+        for header in ('Status', 'State'):
+            self.document('index.md', '| Spec | Type | ' + header + ' |\n| --- | --- | --- |\n'
+                          '| [PRIVATE](one.md) | implemented | in progress |\n')
+            self.document('one.md', '# PRIVATE\n')
+            self.assertEqual(self.collect()['features'][0]['state'], 'active')
+        self.document('index.md', '| [PRIVATE](one.md) | deferred | implemented |\n')
+        self.assertEqual(self.collect()['features'][0]['state'], 'deferred')
+
     def test_status_mapping_is_unknown_unless_stated_and_deferrals_remain_distinct(self):
         cases = {'Implemented for 0.1.7': 'done', 'merged; release pull request open': 'done',
-                 'Released as 0.1.8': 'done', 'shipped': 'done', 'accepted': 'done', 'done': 'done',
+                 'Released as 0.1.8': 'done', 'shipped': 'done', 'accepted': 'todo', 'done': 'done',
                  'In progress': 'active', 'In review': 'active', 'building': 'active', 'running locally': 'active',
                  'Spec; rule is merged; no pull request yet': 'active', 'Moved to 0.2.0 after merged work': 'deferred',
                  'deferred': 'deferred', 'See its verification and host limits': 'unknown', 'fix': 'unknown', '': 'unknown'}
@@ -370,6 +679,13 @@ class ProgressTest(unittest.TestCase):
         for doc in ('README.md', 'CHANGELOG.md', 'skills/fnl-status/SKILL.md'):
             for word in ('quota', 'overview', 'now'):
                 self.assertIn(word, (ROOT / doc).read_text())
+
+    def test_work_tracking_spec_documents_shipped_reader_limits(self):
+        text = (ROOT / 'docs/specs/work-tracking.md').read_text().split('## E.')[1].split('## F.')[0]
+        self.assertIn('(60 features, 200 entries)', text)
+        self.assertIn('40 retained records', text)
+        self.assertIn('200 surveyed directory entries', text)
+        self.assertNotIn('20 features', text)
 
     def test_spec_uses_same_safe_read_and_sixty_feature_cap(self):
         for n in range(61):
