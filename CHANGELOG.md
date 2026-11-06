@@ -6,9 +6,13 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add a project Work tracking interview to `fnl-setup-instructions`, writing only a confirmed agent-context block; `/fnl-setup` separately confirms repository ledger and task-file settings for the dashboard.
+
 - Show delivery pipelines in the Now project pane from Spec Kit artefacts, repository specs/packages and exact-project ledger outcomes, with metadata-only states and a searched-sources fallback tooltip.
 
 ### Changed
+
+- Split setup and Check into machine and project scopes while preserving separate opt-ins.
 
 - Compose the none workflow's existing planning steps with work records; Spec Kit keeps its own artifacts and installed phase tools fill the record.
 
