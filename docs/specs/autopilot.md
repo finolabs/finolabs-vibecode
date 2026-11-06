@@ -11,7 +11,7 @@ waiting to be asked. The user stops it when they return. It is not on by default
   follows them exactly, while the user stays free to change the setup at any time.
 - Where a user's own instructions require authority for an action (merge, tag, publish, deploy), a durable
   authorization recorded in setup is that authority; a time-boxed or relayed yes in a conversation is not. This
-  changes the "User away" rule of `fnl-delegate` ("decisions that need the user's authority still wait") for exactly
+  changes the user-away rule in `fnl-delegate` (decisions that need the user's authority wait) for exactly
   the actions the user authorized in setup, and the change to that rule is part of this release's work. Authority
   setup does not grant stays with the user.
 - An advisor acts as the user's avatar for judgments inside the lease; only decisions of very high authority notify
