@@ -45,12 +45,20 @@ def group(command):
     return {'PreInvocation': [{'type': 'command', 'command': command, 'timeout': 5}]}
 
 
-def checked_path(value):
-    path = Path(value)
-    if (not path.is_absolute() or '..' in path.parts or not path.name
-            or any(ord(c) < 32 for c in str(path))):
-        raise cs.Refusal('invalid target path')
-    return path
+def hooks_path():
+    return dr.account_home() / '.gemini/config/hooks.json'
+
+
+def backup_name(folder, name):
+    base = name + '.bak-' + time.strftime('%Y%m%d-%H%M%S')
+    number = 1
+    while True:
+        candidate = base + f'-{number}'
+        try:
+            os.lstat(candidate, dir_fd=folder)
+        except FileNotFoundError:
+            return candidate
+        number += 1
 
 
 def hooks_change(raw, command, remove):
@@ -157,14 +165,14 @@ def read_host():
         return None, 0o600
 
 
-def preview(host, config, limit):
+def preview(host, limit):
     validate_choice(host, limit)
     root = checked_root()
     command = hook_command()
-    path = checked_path(config or dr.account_home() / '.gemini/config/hooks.json')
+    path = hooks_path()
     with dr.relocated_folder(path.parent) as folder:
         raw, mode = cs.read_target(folder, path.name)
-        backup = cs.backup_name(folder, path.name)
+        backup = backup_name(folder, path.name)
     old_host, host_mode = read_host()
     new_host = host_change(old_host, limit)
     new_hooks = hooks_change(raw, command, limit is None)
@@ -213,7 +221,9 @@ def apply(value, yes):
             raise cs.Refusal('root or command changed; preview again')
         if type(plan['created']) not in (int, float) or not 0 <= time.time() - plan['created'] <= 3600:
             raise cs.Refusal('preview expired; preview again')
-        path = checked_path(plan['path'])
+        path = hooks_path()
+        if plan['path'] != str(path):
+            raise cs.Refusal('invalid target path; preview again')
         folder = stack.enter_context(dr.relocated_folder(path.parent))
         host_folder = stack.enter_context(dr.root_folder())
         fcntl.flock(host_folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -222,7 +232,7 @@ def apply(value, yes):
         if (cs.content_hash(raw) != plan['sha256'] or mode != plan['mode']
                 or cs.content_hash(old_host) != plan['host_sha256'] or host_mode != plan['host_mode']):
             raise cs.Refusal('target changed; preview again')
-        if not re.fullmatch(re.escape(path.name) + r'\.bak-\d{8}(?:-[1-9][0-9]*)?', plan['backup']):
+        if not re.fullmatch(re.escape(path.name) + r'\.bak-[0-9]{8}-[0-9]{6}-[1-9][0-9]*', plan['backup']):
             raise cs.Refusal('invalid backup name')
         new_host = host_change(old_host, plan['limit'])
         new_hooks = hooks_change(raw, plan['command'], plan['limit'] is None)
@@ -230,7 +240,7 @@ def apply(value, yes):
             # Exclusive creation refuses an existing backup before changing host.md.
             fd = os.open(plan['backup'], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=folder)
             with os.fdopen(fd, 'wb') as stream:
-                os.fchmod(stream.fileno(), mode)
+                os.fchmod(stream.fileno(), mode & 0o600)
                 stream.write(raw)
                 stream.flush()
                 os.fsync(stream.fileno())
@@ -248,7 +258,6 @@ def main():
         commands = parser.add_subparsers(dest='action', required=True)
         pre = commands.add_parser('preview')
         pre.add_argument('--host', default='antigravity')
-        pre.add_argument('--config')
         choice = pre.add_mutually_exclusive_group(required=True)
         choice.add_argument('--limit', type=int)
         choice.add_argument('--remove', action='store_true')
@@ -257,7 +266,7 @@ def main():
         app.add_argument('--yes', action='store_true')
         args = parser.parse_args()
         if args.action == 'preview':
-            preview(args.host, args.config, args.limit)
+            preview(args.host, args.limit)
         else:
             apply(args.digest, args.yes)
         return 0

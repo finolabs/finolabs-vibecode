@@ -108,8 +108,9 @@ class CompactStopSetupTest(unittest.TestCase):
         self.assertIn(b'Enabled: yes\r\nLimit bytes: 50000', self.host.read_bytes())
         backup, = self.config.parent.glob('hooks.json.bak-*')
         self.assertEqual(backup.read_bytes(), original)
-        for path in (backup, self.config):
-            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o640)
+        self.assertEqual(stat.S_IMODE(self.config.stat().st_mode), 0o640)
+        self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
+        self.assertRegex(backup.name, r'^hooks\.json\.bak-[0-9]{8}-[0-9]{6}-[1-9][0-9]*$')
 
     def test_remove_and_missing_group_preserve_metrics(self):
         self.apply(self.preview())
@@ -169,11 +170,13 @@ class CompactStopSetupTest(unittest.TestCase):
         self.refuse('apply', '--digest', value, '--yes')
         self.config.unlink()
         original.rename(self.config)
-        self.config.chmod(0o666)
+        self.config.chmod(0o620)
         self.refuse('preview', '--remove')
+        self.refuse('apply', '--digest', value, '--yes')
         self.config.chmod(0o600)
         self.config.parent.chmod(0o777)
         self.refuse('preview', '--remove')
+        self.refuse('apply', '--digest', value, '--yes')
 
     def test_unsafe_root_and_plan(self):
         value = self.preview()
@@ -188,15 +191,15 @@ class CompactStopSetupTest(unittest.TestCase):
         (self.root / 'root.json').write_text('{}')
         self.refuse('preview', '--remove')
 
-    def test_missing_files_and_absolute_custom_config(self):
+    def test_missing_files_and_config_option_rejected(self):
         self.host.unlink()
         self.config.unlink()
         self.apply(self.preview())
         self.assertIn(cs.GROUP, json.loads(self.config.read_bytes()))
         custom = self.home / 'custom.json'
         custom.write_text('{}')
-        self.apply(self.preview('--limit', '50000', '--config', str(custom)))
-        self.assertIn(cs.GROUP, json.loads(custom.read_bytes()))
+        self.refuse('preview', '--limit', '50000', '--config', str(custom))
+        self.assertEqual(custom.read_text(), '{}')
         self.refuse('preview', '--limit', '50000', '--config', 'relative.json')
 
     def test_host_section_fences_and_other_sections_preserved(self):
@@ -251,6 +254,12 @@ class CompactStopSetupTest(unittest.TestCase):
         stop = setup.split('**Compaction stop**', 1)[1].split('**Steward explanation.**', 1)[0]
         for text in ('Advisory (agent judgment)', 'Enforcer:', 'none preselected', 'native question tool', 'system prompt', '--remove', '60-minute'):
             self.assertIn(text, stop)
+        self.assertIn('set up', stop)
+        self.assertNotIn('`--config', stop)
+        delegate = (ROOT / 'skills/fnl-delegate/SKILL.md').read_text()
+        for text in ('agy -p', 'status: ERROR', 'context limit', 'not a model failure',
+                     'The conversation is large. Run /compact, or start a fresh session with a short handover, then continue.'):
+            self.assertIn(text, delegate)
         for name, token in (('skills/fnl-session-hygiene/SKILL.md', 'Antigravity compaction stop'),
                             ('PRIVACY.md', 'state/compact-stop/'), ('README.md', 'compaction-stop.md'),
                             ('CHANGELOG.md', 'opt-in Antigravity pre-invocation compaction stop'),
@@ -260,3 +269,64 @@ class CompactStopSetupTest(unittest.TestCase):
             result = subprocess.run(['git', 'show', 'main:' + name], cwd=ROOT, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual((ROOT / name).read_bytes(), result.stdout)
+
+    def test_backups_are_unique_private_and_never_overwritten(self):
+        with mock.patch.object(cs.time, 'strftime', return_value='20261106-120000'):
+            original = self.config.read_bytes()
+            self.apply(self.preview())
+            first, = self.config.parent.glob('hooks.json.bak-*')
+            self.apply(self.preview('--remove'))
+            backups = list(self.config.parent.glob('hooks.json.bak-*'))
+            self.assertEqual(len(backups), 2)
+            self.assertEqual(first.read_bytes(), original)
+            for backup in backups:
+                self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
+            value = self.preview()
+            planned = json.loads(self.plan.read_bytes())['plan']['backup']
+            occupied = self.config.parent / planned
+            occupied.write_text('keep')
+            before = self.snapshot()
+            self.refuse('apply', '--digest', value, '--yes')
+            self.assertEqual(self.snapshot(), before)
+
+    def test_hooks_folder_symlink_git_and_wrong_owners_refused(self):
+        value = self.preview()
+        folder = self.config.parent
+        moved = folder.with_name('original-config')
+        folder.rename(moved)
+        folder.symlink_to(moved, target_is_directory=True)
+        self.refuse('preview', '--remove')
+        self.refuse('apply', '--digest', value, '--yes')
+        folder.unlink()
+        moved.rename(folder)
+        for parent in (folder, folder.parent):
+            (parent / '.git').write_text('gitdir: elsewhere')
+            self.refuse('preview', '--remove')
+            self.refuse('apply', '--digest', value, '--yes')
+            (parent / '.git').unlink()
+        original = os.fstat
+        for target in (folder, self.config):
+            inode = target.stat().st_ino
+            def wrong_owner(fd):
+                info = original(fd)
+                if info.st_ino == inode:
+                    fields = list(info)
+                    fields[4] = os.getuid() + 1
+                    return os.stat_result(fields)
+                return info
+            with mock.patch.object(os, 'fstat', side_effect=wrong_owner):
+                self.refuse('preview', '--remove')
+                self.refuse('apply', '--digest', value, '--yes')
+
+    def test_apply_rejects_stored_custom_target(self):
+        self.preview()
+        saved = json.loads(self.plan.read_bytes())
+        custom = self.home / 'custom.json'
+        custom.write_bytes(self.config.read_bytes())
+        saved['plan']['path'] = str(custom)
+        saved['plan']['backup'] = saved['plan']['backup'].replace('hooks.json', 'custom.json', 1)
+        saved['digest'] = cs.cs.digest(saved['plan'])
+        self.plan.write_text(json.dumps(saved))
+        before = self.snapshot()
+        self.refuse('apply', '--digest', saved['digest'], '--yes')
+        self.assertEqual(self.snapshot(), before)

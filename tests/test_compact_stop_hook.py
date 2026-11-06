@@ -29,11 +29,12 @@ class CompactStopHookTest(unittest.TestCase):
         self.root.mkdir(parents=True, mode=0o700)
         self.host = self.root / 'host.md'
         self.host.write_text('## Compaction stop\n\nEnabled: yes\nLimit bytes: 50000\n')
-        self.transcript = self.home / '.gemini/antigravity-cli/brain/example/.system_generated/logs/transcript.json'
+        self.session = '12345678-1234-1234-1234-123456789abc'
+        self.transcript = self.home / f'.gemini/antigravity-cli/brain/{self.session}/.system_generated/logs/transcript_full.jsonl'
         self.transcript.parent.mkdir(parents=True)
         self.resize(60000)
-        self.event = {'conversationId': 'example', 'transcriptPath': str(self.transcript), 'invocationNum': 0}
-        self.mark = self.root / ('state/compact-stop/' + hashlib.sha256(b'example').hexdigest()[:16] + '.json')
+        self.event = {'conversationId': self.session, 'transcriptPath': str(self.transcript), 'invocationNum': 0}
+        self.mark = self.root / ('state/compact-stop/' + hashlib.sha256(self.session.encode()).hexdigest()[:16] + '.json')
         self.env = mock.patch.dict(os.environ, {}, clear=True)
         self.env.start()
         self.addCleanup(self.env.stop)
@@ -188,7 +189,89 @@ class CompactStopHookTest(unittest.TestCase):
             mark.write_text('50001')
             mark.chmod(0o600)
             os.utime(mark, (i + 1, i + 1))
+        unrelated = self.mark.parent / 'unrelated.json'
+        unrelated.write_text('keep')
         self.assertEqual(self.run_hook(), STOP)
-        self.assertEqual(len(list(self.mark.parent.glob('*.json'))), 200)
+        self.assertEqual(len(list(self.mark.parent.glob('*.json'))), 201)
+        self.assertEqual(unrelated.read_text(), 'keep')
         self.assertFalse((self.mark.parent / ('0' * 16 + '.json')).exists())
         self.assertEqual(self.mark.read_text(), '60000')
+
+    def test_only_exact_conversation_transcript_is_eligible(self):
+        for session in ('example', 'A' * 36, 'a' * 35, 'a' * 37,
+                        '../' + 'a' * 33, self.session + '\n', '0' * 36):
+            with self.subTest(session=session):
+                self.assertEqual(self.run_hook(event={**self.event, 'conversationId': session}), {})
+        other = self.transcript.with_name('other.jsonl')
+        other.write_bytes(b'x' * 60000)
+        self.assertEqual(self.run_hook(event={**self.event, 'transcriptPath': str(other)}), {})
+        self.assertFalse(self.mark.exists())
+
+    def test_lstat_precedes_realpath_and_rejects_symlink_as_given(self):
+        link = self.home / 'transcript-link'
+        link.symlink_to(self.transcript)
+        original = Path.resolve
+        resolved = []
+        def resolve(path, *args, **kwargs):
+            resolved.append(path)
+            return original(path, *args, **kwargs)
+        with mock.patch.object(Path, 'resolve', resolve):
+            self.assertEqual(self.run_hook(event={**self.event, 'transcriptPath': str(link)}), {})
+        self.assertNotIn(link, resolved)
+
+    def test_state_and_mark_opens_use_nofollow_and_directory_fds(self):
+        original = os.open
+        opened = []
+        def checked(path, flags, *args, **kwargs):
+            if str(path) in ('compact-stop', self.mark.name) or str(path).startswith('.write-'):
+                self.assertTrue(flags & os.O_NOFOLLOW)
+                self.assertIsInstance(kwargs.get('dir_fd'), int)
+                opened.append(str(path))
+            return original(path, flags, *args, **kwargs)
+        with mock.patch.object(os, 'open', side_effect=checked):
+            self.assertEqual(self.run_hook(), STOP)
+            self.assertEqual(self.run_hook(), {})
+        self.assertIn('compact-stop', opened)
+        self.assertIn(self.mark.name, opened)
+        self.mark.unlink()
+        self.mark.parent.rmdir()
+        other = self.root / 'other-state'
+        other.mkdir(mode=0o700)
+        self.mark.parent.symlink_to(other, target_is_directory=True)
+        self.assertEqual(self.run_hook(), {})
+        self.assertEqual(list(other.iterdir()), [])
+
+    def test_eviction_preserves_nonmark_names_and_rechecks_before_unlink(self):
+        self.mark.parent.mkdir(parents=True, mode=0o700)
+        unrelated = self.mark.parent / 'unrelated.json'
+        unrelated.write_text('keep')
+        victim = self.mark.parent / ('0' * 16 + '.json')
+        for i in range(200):
+            path = self.mark.parent / f'{i:016x}.json'
+            path.write_text('50001')
+            path.chmod(0o600)
+            os.utime(path, (i + 1, i + 1))
+        self.run_hook(event={})
+        original = self.hook.dr.atomic_write
+        def swap(folder, name, data):
+            original(folder, name, data)
+            victim.unlink()
+            victim.symlink_to(unrelated)
+        with mock.patch.object(self.hook.dr, 'atomic_write', side_effect=swap):
+            self.assertEqual(self.run_hook(), {})
+        self.assertTrue(victim.is_symlink())
+        self.assertEqual(unrelated.read_text(), 'keep')
+
+    def test_shrink_rechecks_mark_before_removal(self):
+        self.assertEqual(self.run_hook(), STOP)
+        self.resize(100)
+        original = self.hook.dr.read_file
+        def swap(folder, name, limit):
+            raw = original(folder, name, limit)
+            if name == self.mark.name:
+                self.mark.unlink()
+                self.mark.symlink_to(self.host)
+            return raw
+        with mock.patch.object(self.hook.dr, 'read_file', side_effect=swap):
+            self.assertEqual(self.run_hook(), {})
+        self.assertTrue(self.mark.is_symlink())

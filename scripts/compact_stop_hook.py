@@ -86,21 +86,23 @@ def decide(event):
     if limit is None:
         return {}
     session, value = event.get('conversationId'), event.get('transcriptPath')
-    if not isinstance(session, str) or not session or not isinstance(value, str):
+    if (not isinstance(session, str) or not re.fullmatch(r'[0-9a-f-]{36}', session)
+            or not isinstance(value, str)):
         return {}
     path = Path(value)
-    brain = dr.account_home() / '.gemini/antigravity-cli/brain'
-    if not path.is_absolute() or not path.resolve(strict=True).is_relative_to(brain):
-        return {}
     info = path.lstat()  # Never open the transcript, even to measure it.
     if not stat.S_ISREG(info.st_mode):
+        return {}
+    expected = (dr.account_home() / '.gemini/antigravity-cli/brain' / session
+                / '.system_generated/logs/transcript_full.jsonl')
+    if not path.is_absolute() or path.resolve(strict=True) != expected:
         return {}
     size = info.st_size
     name = hashlib.sha256(session.encode('utf-8')).hexdigest()[:16] + '.json'
     with dr.data_folder('state/compact-stop', create=size > limit, private=True) as folder:
         fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
         try:
-            info = os.stat(name, dir_fd=folder, follow_symlinks=False)
+            info = os.lstat(name, dir_fd=folder)
         except FileNotFoundError:
             mark = None
         else:
@@ -110,6 +112,8 @@ def decide(event):
             if type(mark) is not int or mark < 0:
                 return {}
         if mark is not None and size < mark:
+            if not safe_mark(os.lstat(name, dir_fd=folder)):
+                return {}
             os.unlink(name, dir_fd=folder)
             os.fsync(folder)
             return {}
@@ -118,14 +122,16 @@ def decide(event):
         files = []
         for entry in os.listdir(folder):
             if re.fullmatch(r'[0-9a-f]{16}\.json', entry):
-                info = os.stat(entry, dir_fd=folder, follow_symlinks=False)
+                info = os.lstat(entry, dir_fd=folder)
                 if not safe_mark(info):
                     return {}
                 if entry != name:
                     files.append((info.st_mtime, entry))
         dr.atomic_write(folder, name, str(size).encode('ascii'))
-        files.append((os.stat(name, dir_fd=folder, follow_symlinks=False).st_mtime, name))
+        files.append((os.lstat(name, dir_fd=folder).st_mtime, name))
         for _, entry in sorted(files)[:max(0, len(files) - 200)]:
+            if not safe_mark(os.lstat(entry, dir_fd=folder)):
+                return {}
             os.unlink(entry, dir_fd=folder)
         return STOP
 
