@@ -41,7 +41,7 @@ NO_CONSENT = "consent not given (run fnl-setup)"
 NO_EVENTS = "no events recorded yet"
 ROUTER_SKILL = "fnl-coding-router"
 HOOK_GROUP = "finolabs-vibecode"
-AGY_TOOLS = "run_command|write_file|write_to_file|replace_file_content|multi_replace_file_content"
+AGY_TOOLS = "run_command|write_to_file|replace_file_content|multi_replace_file_content"
 
 
 def local_date(ts):
