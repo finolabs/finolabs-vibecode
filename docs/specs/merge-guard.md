@@ -1,8 +1,9 @@
 # Merge guard through host permission rules
 
-Decision: 2026-11-06, owner agreed (harness synthesis, step 1). Goal: make the rule
-"merge, tag and publish need the owner" a host-enforced prompt instead of advice, with no new
-blocking plugin hook, so no new `CLAUDE.md` exception. `fnl-setup` writes the rule after a
+Decision: 2026-11-06, owner agreed (harness synthesis, step 1). Goal: add a host prompt on the
+common merge and publish commands, so "merge, tag and publish need the owner" is more than advice there,
+with no new blocking plugin hook and so no new `CLAUDE.md` exception. It is a prompt, not a complete
+guard (see "What it does not cover"). `fnl-setup` writes the rule after a
 separate consent, a stored preview and a digest, like `compaction-threshold.md`.
 
 ## What the hosts document (not yet run by us; the writers must verify with the host's own checker)
@@ -32,6 +33,12 @@ digest, 60-minute expiry, owner/mode/symlink/git-work-tree refusals, backups
 - Rule set, each selectable, all recommended: `gh pr merge`, `gh release create`, `git push --force`,
   `git push -f`, `git push --delete`. Fixed list in the script (tag pushes are left out: too noisy); the
   user picks a subset; no free-text patterns.
+- Target checks, as in `compact_setup.py`: every path is absolute; each folder (`--folder`, `CODEX_HOME`
+  or the account default) and each file is owned by the user, not a symlink, not group- or
+  world-writable, and outside every git work tree; otherwise refuse.
+- Backups: a unique name per run (`<file>.bak-YYYYMMDD-HHMMSS-N`, never overwriting an existing
+  backup), created with the source file's mode and never wider than 0600, because `settings.json` may hold
+  tokens.
 - Claude: adds the matching `Bash(...)` entries to `permissions.ask` of each listed config folder's
   `settings.json` (default `~/.claude`; extra folders as `--folder`, at most four). Parses JSON with
   duplicate-key and non-finite refusal, keeps every other key, adds only missing entries, never
@@ -42,7 +49,11 @@ digest, 60-minute expiry, owner/mode/symlink/git-work-tree refusals, backups
   commands that do not leave the sandbox are not covered.
 - Both: print the host's own test where one exists (`codex execpolicy check ...`) as a command for the
   user; the script runs nothing.
-- `--remove` takes out exactly the entries the script added (Claude: the same strings; Codex: the file).
+- Removal is manifest-based: apply records in `<data root>/state/merge-guard/installed.json` (0600) exactly
+  the entries it added that were not already present, and the target file's hash after the write.
+  `--remove` takes out only those entries (an `ask` rule the user already had stays) and, for the Codex
+  file, deletes it only when its first line is the script's marker comment and its hash matches the
+  recorded one; a changed file is left and reported.
 - Antigravity: refuse with a fixed message ("not supported in this version").
 
 ### Skill and doc text
@@ -56,6 +67,14 @@ requests" and `fnl-delegate` say the merge prompt is the user's authority made r
 is installed, and still advisory where it is not. `PRIVACY.md`: the script writes only to the
 named settings/rules files and the private preview; nothing is sent. README row, CHANGELOG
 `Unreleased`, `docs/specs/index.md`.
+
+## What it does not cover
+
+Tag pushes, `gh api .../merge`, `git push +main` and `--force-with-lease`, `git -C <dir> push`, `gh -R
+<repo> pr merge`, `npm publish` and anything run through a wrapper. Claude matching is best-effort;
+Codex covers only commands that leave the sandbox; behaviour in non-interactive and bypass modes is
+unverified. A prompt does not check that a review exists. The only non-bypassable gate is the
+repository's server-side rules. The skill text says all of this.
 
 ## Not in scope
 
@@ -73,13 +92,15 @@ named settings/rules files and the private preview; nothing is sent. README row,
 3. Codex: dedicated file created 0600, `default.rules` never touched, content exactly the selected
    `prefix_rule` lines, `--remove` deletes only that file.
 4. Antigravity refused; unknown rule names refused; no free-text pattern accepted.
-5. Docs updated; `check-references.py`, `claude plugin validate .`, targeted tests pass under a
+5. Verification before the recommended set ships, recorded in this spec: Claude with a throwaway config
+   folder (`claude -p` asked to run `gh pr merge --help` prompts), Codex with `codex execpolicy check`.
+6. Removal: a pre-existing identical `ask` rule survives `--remove`; a changed Codex file is left; backups
+   never overwrite and are not wider than 0600; a symlink, wrong owner or work-tree target is refused.
+7. Docs updated; `check-references.py`, `claude plugin validate .`, targeted tests pass under a
    world-writable `/tmp`; no hook file changed.
 
 ## Open
 
-- Verify the written rules with each host's checker on a throwaway config before recommending the set
-  (Claude: a throwaway config folder and `claude -p` asking to run `gh pr merge --help`; Codex:
-  `codex execpolicy check`).
+- Behaviour of `ask`/`prompt` in non-interactive and bypass modes.
 - Whether `permissions.ask` entries survive `/permissions` edits and plugin updates.
 - Antigravity rule storage and a writer, in a later version.

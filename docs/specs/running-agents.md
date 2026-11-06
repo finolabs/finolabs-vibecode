@@ -9,83 +9,103 @@ to other families, so a user often cannot tell how many agents and background pr
 | Source | Shows | Limit |
 | --- | --- | --- |
 | Ledger (`ledger.py open`) | Delegated headless runs: agent, model, project, task label, started, budget, age against budget, liveness | Only runs the coordinator started and recorded |
-| Process snapshot (new) | Every `claude`, `codex`, `agy` process alive on this machine, with its elapsed time and its descendants by program name | Machine-wide; cannot see inside an app's own session list; cannot tell a sub-agent from a session |
+| Process snapshot (new) | Command-line agent processes of the current user, by family, with elapsed time and a count of their descendants | Machine-wide; cannot see inside an app's own session list; cannot tell a sub-agent from a session; names are best-effort |
 | Hook events (phase 2) | In-session sub-agent start and stop | Needs new hook declarations (Codex asks the user to trust hooks again) and a metrics schema field |
 
-The desktop app's session list is not readable by a plugin; say so on the page.
+The desktop app's session list is not readable by a plugin; the page says so.
+
+## Rule first
+
+This adds a local command the plugin runs by itself, so it needs a scoped exception in `CLAUDE.md`
+before any code (owner approval for the exception is part of approving this spec). Proposed text: the
+dashboard refresh may run `ps` once per refresh, read-only, as the current user, to count
+command-line agent processes; fixed argv, absolute owner-checked path, no shell, allowlisted
+environment, neutral working folder, 2-second limit with the process group killed, 256 KiB output cap;
+it keeps only fixed family names and counts, never arguments, paths, environment or user-chosen names;
+it runs only when metrics consent is recorded; `FNL_AGENT_SNAPSHOT=off` stops it; no other command and
+no network. No code lands before that rule is merged.
 
 ## Phase 1
 
-### Process snapshot `scripts/agent_processes.py` (stdlib; one local read-only command)
+### Snapshot `scripts/agent_processes.py` (stdlib)
 
-- Runs `ps -axo pid=,ppid=,etime=,comm=` with a fixed argv, no shell, a 5-second limit and a 256 KiB
-  output cap (Linux and macOS). No other command except the optional step below.
-- Roots: processes whose program name (basename of `comm`) is exactly `claude`, `codex` or `agy`.
-  For each root: family, elapsed seconds, and its descendants counted by program name (basename only,
-  at most 8 names shown, the rest as `other: N`). It never reads, keeps or prints arguments,
-  environment, paths or file names.
-- Repository attribution (optional, best effort): one `lsof -a -d cwd -Fn -p <root pids>` call for the
-  root pids only (fixed argv, 5-second limit). A root whose working folder is inside the current
-  repository root is labelled with the same short repository code the metrics use; any other root is
-  `other`; a failure or a missing `lsof` makes every root `unknown`. The folder path itself is never kept.
-- Output is a small JSON object (family, elapsed, children summary, repo label) handed to
-  `refresh.py`; nothing is written to the events files. A failure yields an empty snapshot and a
-  one-line reason.
-- Ownership: only processes of the current user are listed (the user's own `ps` view).
+- Command: `ps -axo uid=,pid=,ppid=,etime=,comm=` run as described in "Rule first". `ps` is resolved once
+  to an absolute path that is owned by root, not a symlink and not group- or world-writable (`/bin/ps`
+  or `/usr/bin/ps`); anything else disables the snapshot. The environment is empty except `PATH`
+  fixed to `/usr/bin:/bin` and `LC_ALL=C`; `PS_FORMAT` and similar variables are never inherited.
+- Only rows whose uid equals the current uid are kept (filter in code, not by option, so it is the same
+  on macOS and Linux).
+- Roots: rows whose program name (the last path component of `comm`) is exactly `claude`, `codex` or
+  `agy`. A hostile process can be given one of these names, so the page says "processes named ..." and
+  nothing more is claimed.
+- Descendants of each root (bounded: depth 6, 500 rows per root) are counted by program name against a
+  fixed list (`node`, `python`, `python3`, `bash`, `zsh`, `sh`, `git`, `npm`, `pnpm`, `npx`, `pytest`,
+  `cargo`, `go`, `make`, `docker`, `ssh`, `rg`, `grep`); every other name counts as `other`. No user-chosen
+  name can reach the output.
+- Desktop app helpers are not roots. One summary line per app family ("Claude app: N processes",
+  "Codex app: N", "Antigravity app: N") is produced from fixed exact names (`Claude`, `Codex`,
+  `Antigravity`) and shown as "app processes, sessions not listed".
+- No `lsof`, no working folder, no repository attribution: the snapshot is machine-wide and says so.
+- Output: a JSON object with family, elapsed seconds, descendant counts, and the snapshot time. Failure
+  of any step gives an empty snapshot and a fixed one-line reason; exit 0.
 
 ### Dashboard (`refresh.py`, page)
 
-- `data.js` gains a `running` block: ledger open dispatches (with age against budget and the
-  liveness verdict `fnl-status` already computes) and the process snapshot with its time.
-- A "Running now" panel at the top: counts by family; a row per root process; a row per open
-  dispatch; ledger runs with no matching process are flagged "no process found" (finished without a
-  line, or stalled), and processes with no ledger run are labelled "not started by the coordinator".
-- States plainly: machine-wide; the app's own sessions are not listed; counts are a snapshot with its
-  time. It refreshes with the existing 5-second reload, but the snapshot is taken at most every 10
-  seconds (the existing throttle) and only when the dashboard exists.
-- Tied to the metrics consent the dashboard already needs. `FNL_METRICS=off` stops it with the rest.
-- `fnl-status` SKILL: step 3 reads the same data; the "Running now" panel replaces its manual
-  liveness listing; enforcer is the script, the verdict wording is advisory (agent judgment).
+- `data.js` gains a `running` block: ledger open dispatches (age against budget, the liveness verdict
+  `fnl-status` already computes) and the snapshot. It is written to `data.js` (a local file the
+  dashboard owns), overwritten at each refresh and removed by `purge`; it is not written to the events
+  files.
+- All values are emitted through `json.dumps` with `<`, `>` and `&` escaped, and rendered with
+  `textContent`, never `innerHTML`; a test feeds hostile names.
+- A "Running now" panel at the top: counts by family; a row per root process; a row per open dispatch;
+  a ledger run with no process is flagged "no process found", a process with no ledger run is labelled
+  "not started by the coordinator". States plainly: machine-wide, app sessions not listed, a snapshot
+  with its time.
+- The snapshot is taken only by `refresh.py`, at most every 10 seconds (the existing throttle), only
+  when metrics consent is recorded in the canonical consent file; the hook path starts the refresh
+  exactly as it does today and never waits for it. `fnl-status` runs it in the foreground.
+- `fnl-status` SKILL: step 3 reads the same data; verdict wording is advisory (agent judgment), the
+  data is produced by the script.
 
 ### Docs
 
-`PRIVACY.md`: the snapshot is transient, holds family names, elapsed times and program-name counts, no
-arguments, paths or file names, and is not stored in the events files. README row, CHANGELOG
-`Unreleased`, `docs/specs/index.md`.
+`PRIVACY.md`: what the snapshot keeps (fixed family names, counts, elapsed times), what it never keeps
+(arguments, paths, environment, user-chosen names), where it lives (`data.js`, overwritten, purged),
+that macOS `comm` can be a full path and only its last component is read, and the off switch. README
+row, CHANGELOG `Unreleased`, `docs/specs/index.md`.
 
 ## Phase 2 (not built here)
 
 Hook-reported sub-agent starts and stops as a new metrics event (fields: host, phase), declared in the
-Claude and Codex hook files and as an Antigravity user hook; the page then shows in-session
-sub-agents per session. Cost: schema change, `PRIVACY.md`, and a Codex re-trust. Decide after phase 1
-shows what users cannot see.
+Claude and Codex hook files and as an Antigravity user hook. Cost: schema change, `PRIVACY.md`, and a
+Codex re-trust. Decide after phase 1 shows what users cannot see. Repository attribution through
+`lsof` is also deferred: it reads working folders and needs its own review.
 
 ## Not in scope
 
-Killing or controlling processes; reading prompts, command lines, paths or working folders into any
-file; the desktop app's session list; remote machines; per-process CPU or memory.
+Killing or controlling processes; reading prompts, command lines, paths or working folders; the
+desktop app's session list; remote machines; per-process CPU or memory.
 
 ## Acceptance
 
-1. `agent_processes.py` with a fake `ps` output (injected): roots found by exact program name only
-   (`claude-helper`, `codexd`, `node` are not roots); descendants counted by basename; caps (8 names,
-   output size, line count); malformed lines skipped; no argument, path or environment text can reach
-   the output (test with hostile `comm` values containing paths, spaces and control characters).
-2. Failure paths: `ps` missing, timeout, non-zero exit, oversize output -> empty snapshot with a
-   fixed reason, exit 0. Optional `lsof` failure -> labels `unknown`, snapshot still returned.
-3. `refresh.py` writes the `running` block, merges ledger open dispatches, flags the two mismatch
-   cases, and leaves the events files untouched; the throttle holds.
-4. The page renders the panel (existing page tests with fake timers) including the empty state and
-   the stated limits; no inline script or remote resource is added.
-5. Docs updated; `check-references.py`, `claude plugin validate .` and targeted tests pass under a
-   world-writable `/tmp`; no hook file changed.
+1. `agent_processes.py` with a fake `ps` output (injected): other users' rows dropped; roots by exact
+   name only (`claude-helper`, `codexd`, `node` are not roots); descendants only by the fixed list,
+   the rest `other`; depth and row bounds hold; malformed lines skipped; hostile names (paths, spaces,
+   control characters, `</script>`) never appear in the output.
+2. Execution: a `ps` path that is a symlink, not root-owned or writable by others disables the
+   snapshot; the environment passed is exactly the allowlist; timeout, non-zero exit and oversize
+   output give an empty snapshot with a fixed reason, exit 0.
+3. `refresh.py` writes the `running` block with merged ledger data and the two mismatch flags, leaves
+   the events files untouched, does nothing without recorded metrics consent or with
+   `FNL_AGENT_SNAPSHOT=off`, keeps the throttle; `purge` removes the block.
+4. The page renders the panel via `textContent` (existing page tests with fake timers), the empty
+   state and the stated limits; no inline script or remote resource is added.
+5. `CLAUDE.md` rule merged first; docs updated; `check-references.py`, `claude plugin validate .` and
+   targeted tests pass under a world-writable `/tmp`; no hook file changed.
 
 ## Open
 
-- Observed on this Mac (macOS, 2026-11-06, `ps -axo comm=` basenames): `codex` (6), `codex-code-mode-host`,
-  `Codex` (15, the app and its helpers), `Antigravity` (10, the app and helpers), `Claude` (24, the desktop
-  app and helpers), `node` (46, MCP servers and wrappers); no lowercase `claude` and no `agy` was running at
-  that moment. So exact names `claude`, `codex`, `agy` find CLI runs, while app sessions appear only as the
-  app's helper family and cannot be told apart from sessions. Phase 1 therefore lists CLI roots by exact
-  name and shows app helpers as one line per app ("Claude app: N processes"), never as sessions. Re-check
-  `claude -p` and `agy -p` runs while they are alive before fixing the list.
+- Observed on this Mac (macOS, 2026-11-06, `ps -axo comm=` program names): `codex` (6),
+  `codex-code-mode-host`, `Codex` (15), `Antigravity` (10), `Claude` (24), `node` (46); no lowercase
+  `claude` and no `agy` was running at that moment. Re-check `claude -p` and `agy -p` runs while they
+  are alive before fixing the root list, and record the result here.

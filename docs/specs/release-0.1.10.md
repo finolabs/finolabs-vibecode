@@ -11,7 +11,7 @@ advice, and a user cannot see what the agents are doing. Three things follow, pl
 1. **Compaction nobody triggers.** A 61% session never compacted: hosts compact late, hooks cannot read
    the context or start a compaction, and the skill's "about 60%" had no enforcer.
 2. **Authority that is only text.** "Merge, tag and publish need the owner" is a sentence; a host
-   permission rule can make it a prompt.
+   permission rule can add a prompt on the common commands (not a complete guard).
 3. **No view of what is running.** Agents start sub-agents of their own family, the coordinator
    delegates to other families, and the user cannot tell how many agents and background processes are
    alive.
@@ -29,9 +29,9 @@ where only advice exists.
 | 1 | Checked compaction threshold writer (Claude Code, Codex) | [compaction-threshold.md](compaction-threshold.md) | Merged (pull request 97) |
 | 2 | Compaction steward: local handover, threshold decision, re-injection after compact, read-only agent | [compaction-steward.md](compaction-steward.md) | Merged (pull request 99) |
 | 3 | Session-title reminder in the always-loaded rule and the Titles section | none (one line of text) | Merged (pull request 98) |
-| 4 | Owner exception and code for an opt-in Antigravity compaction stop | [compaction-stop.md](compaction-stop.md); rule in `CLAUDE.md` (pull requests 100 and 101) | Rule merged; code in progress |
-| 5 | Merge guard through host permission rules (Claude Code, Codex) | [merge-guard.md](merge-guard.md) | Spec only |
-| 6 | Running agents on the dashboard (phase 1: ledger plus process snapshot) | [running-agents.md](running-agents.md) | Spec only |
+| 4 | Owner exception and code for an opt-in Antigravity compaction stop | [compaction-stop.md](compaction-stop.md); rule in `CLAUDE.md` (pull requests 100 and 101) | Rule merged; code running locally, no pull request yet |
+| 5 | Merge prompt through host permission rules (Claude Code, Codex): common commands only | [merge-guard.md](merge-guard.md) | Spec only |
+| 6 | Running agents on the dashboard (phase 1: ledger plus a `ps` snapshot) | [running-agents.md](running-agents.md); needs its own `CLAUDE.md` exception for the `ps` command first | Spec only |
 | 7 | Backlog and spec corrections | below | Not started |
 
 Order of work: 4, then 5, then 6, then 7. Packages 4 to 6 all edit `fnl-setup`, the README and the
@@ -43,8 +43,8 @@ changelog, so they run one at a time, each through its own pull request with bot
   boundaries); a central orchestrator that every session must ask (option A) is not built.
 - A second blocking hook is accepted, only as the opt-in Antigravity compaction stop, scoped by the
   second exception in `CLAUDE.md`.
-- The guard against unreviewed merges goes through permission rules written by `fnl-setup` after a
-  separate consent (package 5), not through a plugin hook.
+- A prompt on the common merge and publish commands goes through permission rules written by
+  `fnl-setup` after a separate consent (package 5), not through a plugin hook. It is not a complete guard.
 - Running agents: phase 1 now; hook-reported sub-agents (phase 2) wait until phase 1 shows what users
   cannot see.
 - The sync of the dev build to Codex is throttled to once per six hours (local script) because every
