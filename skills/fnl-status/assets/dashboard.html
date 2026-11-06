@@ -195,11 +195,49 @@ td.r, th.r { text-align: right; }
 .grow { display: grid; grid-template-columns: minmax(0, 15em) minmax(0, 1fr); gap: 10px; align-items: center; }
 .skel .nodata { display: none; }
 .skel .kpi .v { color: var(--faint); text-shadow: none; }
-.project-bar { height: 8px; background: var(--surface); border-left: 1px solid var(--line); }
-.project-bar i { display: block; height: 100%; border-radius: 0 4px 4px 0; }
-.project-table { overflow-x: auto; max-width: 100%; }
-.project-table table { width: 100%; overflow-wrap: anywhere; }
+/* Dispatch lanes and quota use the page's bar-and-tip vocabulary. */
+.agent-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.agent-kpis .v { text-shadow: none; font-variant-numeric: tabular-nums; }
+.baseline { flex: 1; border-bottom: 1px dashed var(--line); height: 24px; }
+.lanes { display: grid; gap: 14px; }
+.lane { display: grid; grid-template-columns: minmax(0, 19em) minmax(0, 1fr) 10em; align-items: center; gap: 12px; }
+.lane-label { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--t-sm); }
+.lane-label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lane-track { height: 16px; border-left: 1px solid var(--line); background: var(--h0); position: relative; }
+.lane-bar { display: block; height: 100%; border-radius: 0 4px 4px 0; transform-origin: left; position: relative; overflow: hidden; }
+.lane-tick { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--muted); }
+.lane-value { text-align: right; font-size: var(--t-xs); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.no-process { width: 7px; height: 7px; border: 1px solid var(--muted); border-radius: 2px; flex: none; }
+.ghost-lane { display: grid; gap: 8px; }
+.processes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.process-dot { width: 7px; height: 7px; border: 1px solid var(--p); border-radius: 50%; background: var(--p); }
+.process-dot.hollow { background: transparent; }
+.quota-block { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
+.quota { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.quota-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: var(--t-sm); }
+.quota-meter { height: 5px; background: var(--h0); }
+.quota-bar { height: 100%; display: block; box-sizing: border-box; transform-origin: left; }
+.quota-meter.hollow .quota-bar { background: transparent !important; border: 1px solid var(--muted); }
+.limits .body { font-size: var(--t-xs); color: var(--muted); overflow-wrap: anywhere; }
 .running-row { overflow-wrap: anywhere; min-width: 0; }
+.project-table { overflow-x: auto; max-width: 100%; }
+@keyframes amount-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes lane-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+@keyframes cell-breathe { 50% { opacity: .45; } }
+.tabpanel:not([hidden])[data-enter="true"] .lane-bar, .tabpanel:not([hidden])[data-enter="true"] .quota-bar { animation: amount-grow .7s ease-out; }
+.tabpanel:not([hidden]) .lane.live .lane-bar::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 65%, rgba(255,255,255,.2), transparent); animation: lane-sweep 2.4s ease-in-out infinite; }
+@media (max-width: 560px) {
+  .agent-kpis { gap: 6px; }
+  .agent-kpis .kpi { padding: 10px 8px; }
+  .agent-kpis .k { font-size: 10px; min-height: 3em; }
+  .agent-kpis .d { font-size: 10px; }
+  .lane { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
+  .lane-label { grid-column: 1 / -1; }
+  .quota { grid-template-columns: 1fr; gap: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
 
 /* Empty state: a veil blurs the placeholder panes and a card sits in view above it, sticky so it stays visible on a long phone page. */
 .veil { position: absolute; inset: 0; z-index: 5; display: flex; justify-content: center; align-items: flex-start; padding: 0 16px; background: color-mix(in srgb, var(--bg) 28%, transparent); -webkit-backdrop-filter: blur(2.5px); backdrop-filter: blur(2.5px); }
@@ -320,7 +358,7 @@ td.r, th.r { text-align: right; }
     p.appendChild(b);
     return p;
   }
-  function runningPanel() {
+  function runningLimits() {
     if (!D.running) return null;
     var r = D.running, snapshot = r.snapshot || {}, processes = r.processes || [], open = r.open || [], lines = [];
     function line(value) {
@@ -356,6 +394,86 @@ td.r, th.r { text-align: right; }
     });
     line("Liveness verdicts are advisory agent judgment from artifacts; a process name does not prove a dispatch is running.");
     return stack(lines);
+  }
+  function limits(content) {
+    return h("details", "limits", [t("summary", "", "limits"), h("div", "body", [content])]);
+  }
+  function runningPanel() {
+    if (!D.running) return null;
+    var r = D.running, snapshot = r.snapshot || {}, processes = r.processes || [], open = r.open || [];
+    var available = !!snapshot.time && !snapshot.reason;
+    var late = open.filter(function (run) { return run.budget_min > 0 && run.age_min >= run.budget_min / 2; }).length;
+    var unowned = processes.filter(function (p) { return p.not_started_by_coordinator; }).length;
+    var tiles = h("div", "kpis agent-kpis");
+    [["running now", open.length, available ? processes.length + " named processes" : "snapshot unavailable", ""],
+     ["past the check time", late, "half of the time budget", "var(--warn)"],
+     ["not started by coordinator", unowned, available ? "family-level match only" : "snapshot unavailable", ""]].forEach(function (x) {
+      var value = t("div", "v agent-value", x[1]);
+      if (x[1] && x[3]) value.style.color = x[3];
+      tiles.appendChild(h("div", "kpi", [t("div", "k", x[0]), h("div", "m", [value, h("span", "baseline")]), t("div", "d", x[2])]));
+    });
+    var lanes = h("div", "lanes");
+    open.slice().sort(function (a, b) {
+      var ar = a.budget_min > 0 ? a.budget_min - a.age_min : Infinity;
+      var br = b.budget_min > 0 ? b.budget_min - b.age_min : Infinity;
+      return ar - br;
+    }).forEach(function (run) {
+      var budget = run.budget_min, age = Number(run.age_min) || 0;
+      var state = budget > 0 ? age >= budget ? "cap" : age >= budget / 2 ? "check" : "within" : "unknown";
+      var color = state === "cap" ? "var(--crit)" : state === "check" ? "var(--warn)" : "var(--p)";
+      var bar = h("i", "lane-bar"), tick = h("i", "lane-tick"), track = h("div", "lane-track");
+      bar.style.width = (budget > 0 ? Math.max(0, Math.min(100, age / budget * 100)) : 0) + "%";
+      bar.style.background = color; tick.style.left = "50%";
+      tipOn(tick, "check deadline: half budget");
+      track.appendChild(bar); if (budget > 0) track.appendChild(tick);
+      var label = h("div", "lane-label", [t("span", "", (run.agent || "other") + " " + (run.model || "—") + " · " + (run.task || "—"))]);
+      if (run.no_process_found) label.appendChild(tipOn(h("i", "no-process"), "no process found"));
+      var lane = h("div", "lane" + (run.no_process_found ? "" : " live"), [label, track,
+        t("span", "lane-value", age + "/" + (budget == null ? "?" : budget) + " min")]);
+      lane.setAttribute("data-run", run.id || ""); lane.setAttribute("data-state", state);
+      tipOn(lane, (run.agent || "other") + "/" + run.model + " · " + run.project + ": " + run.task + " · " + run.id +
+        " · started " + run.ts + " · " + age + "/" + (budget == null ? "?" : budget) + " min · " +
+        (state === "cap" ? "past hard cap" : state === "check" ? "check due" : state === "unknown" ? "budget unknown" : "within budget") +
+        " · liveness: " + run.liveness + (run.no_process_found ? " · no process found" : ""));
+      lanes.appendChild(lane);
+    });
+    if (!open.length && !processes.length) {
+      lanes.appendChild(t("div", "nodata", "No agents running"));
+      for (var i = 0; i < 3; i++) lanes.appendChild(h("div", "ghost-lane", [ghost("30%", "10px"), ghost(["72%", "46%", "60%"][i], "12px")]));
+    }
+    if (available && processes.length) {
+      var dots = h("div", "processes", [t("span", "meta", "process roots")]);
+      processes.forEach(function (p) {
+        var text = p.family + " · elapsed " + p.elapsed_seconds + " seconds · descendants: " +
+          Object.keys(p.descendants || {}).map(function (name) { return name + ": " + p.descendants[name]; }).join(", ") +
+          (p.not_started_by_coordinator ? " · not started by the coordinator" : "");
+        dots.appendChild(tipOn(h("i", "process-dot" + (p.not_started_by_coordinator ? " hollow" : "")), text));
+      });
+      lanes.appendChild(dots);
+    }
+    var content = [tiles, lanes], quota = r.quota || [];
+    if (quota.length) {
+      var meters = h("div", "quota");
+      quota.forEach(function (q) {
+        var fraction = Math.max(0, Math.min(1, Number(q.remaining_fraction) || 0));
+        var stale = q.unverified || (Date.now() - Date.parse(q.measured)) / 1000 > 28800;
+        var bar = h("i", "quota-bar"), meter = h("div", "quota-meter" + (stale ? " hollow" : ""), [bar]);
+        bar.style.width = (fraction * 100) + "%"; bar.style.background = fraction < .1 ? "var(--crit)" : "var(--p)";
+        meter.setAttribute("role", "progressbar"); meter.setAttribute("aria-valuemin", "0"); meter.setAttribute("aria-valuemax", "100");
+        meter.setAttribute("aria-valuenow", Math.round(fraction * 100)); meter.setAttribute("aria-label", q.agent + " quota remaining");
+        tipOn(meter, q.agent + ": " + pct(fraction) + " remaining · measured " + q.measured + (stale ? " · unverified, older than 8 hours" : ""));
+        meters.appendChild(h("div", "quota-row", [t("span", "", q.agent), meter, t("span", "lane-value", pct(fraction) + (stale ? " ?" : ""))]));
+      });
+      content.push(h("div", "quota-block", [t("div", "meta", "quota remaining"), meters]));
+      TABS.get("agents").tableRows.push(tableOf("quota", ["family", "remaining", "measured", "state"], quota.map(function (q) {
+        return [q.agent, pct(q.remaining_fraction), q.measured, q.unverified ? "unverified" : "verified"];
+      })));
+    }
+    TABS.get("agents").tableRows.push(tableOf("dispatch budgets", ["agent / model / task", "elapsed / budget", "check", "liveness"], open.map(function (run) {
+      return [run.agent + " / " + run.model + " / " + run.task, run.age_min + "/" + run.budget_min + " min", run.check_due ? "check due" : "—", run.liveness];
+    })));
+    var notes = runningLimits(); notes.classList.add("running-limits"); content.push(limits(notes));
+    return stack(content);
   }
   function projectPanel() {
     if (!D.progress) return null;
@@ -479,6 +597,10 @@ td.r, th.r { text-align: right; }
       tab.button.setAttribute("aria-selected", String(active));
       tab.button.tabIndex = active ? 0 : -1;
       if (!tab.panel.hidden) { tab.scrollTop = tab.panel.scrollTop; tab.scrollLeft = tab.panel.scrollLeft; }
+      if (!active) tab.panel.setAttribute("data-enter", "false");
+      else if (tab.panel.hidden) {
+        tab.panel.setAttribute("data-enter", String(!!tab.pendingAnimation)); tab.pendingAnimation = false;
+      }
       tab.panel.hidden = !active;
       if (active) { tab.panel.scrollTop = tab.scrollTop || 0; tab.panel.scrollLeft = tab.scrollLeft || 0; }
     });
@@ -516,6 +638,9 @@ td.r, th.r { text-align: right; }
           TABS.get(target).button.focus();
         } else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectTab(name, true); }
       });
+      var signature = name === "agents" ? JSON.stringify(D.running) : name === "project" ? JSON.stringify(D.progress) : "";
+      if (signature !== tab.signature) tab.pendingAnimation = true;
+      tab.signature = signature;
       tab.button = button; tab.panel = panel; tab.tableRows = [];
       strip.appendChild(button);
     });
@@ -590,7 +715,7 @@ td.r, th.r { text-align: right; }
 
   drawTabs();
   var overview = TABS.get("overview").panel, delegation = TABS.get("delegation").panel;
-  TABS.get("agents").panel.appendChild(pane("Running now", "", "", runningPanel(), "not available yet"));
+  TABS.get("agents").panel.appendChild(pane("running now", "", "", runningPanel(), "not available yet"));
   TABS.get("project").panel.appendChild(pane("Project progress", "", "", projectPanel(), "not available yet"));
 
   /* Overview: activity and router composition beside depth and load cost. */

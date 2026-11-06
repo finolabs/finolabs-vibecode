@@ -96,8 +96,8 @@ function fire(n, type, key) {
   (n.handlers[type] || []).forEach((fn) => fn({ target: n, key, preventDefault() {} }));
 }
 const states = [];
-function state() { return { selected: role("tab").filter((n) => n.getAttribute("aria-selected") === "true").map((n) => n.textContent),
-  focused: document.activeElement ? document.activeElement.textContent : null }; }
+function state() { return { selected: role("tab").filter((n) => n.getAttribute("aria-selected") === "true").map((n) => n.textContent.split(" ")[0]),
+  focused: document.activeElement ? document.activeElement.textContent.split(" ")[0] : null }; }
 for (const action of scenario.actions || []) {
   if (action.click) fire(namedTab(action.click), "click");
   if (action.key) fire(namedTab(action.tab), "keydown", action.key);
@@ -120,8 +120,15 @@ for (const action of scenario.after || []) {
 if (scenario.reveal) { document.visibilityState = "visible"; handlers.visibilitychange(); }
 const out = { text: app ? app.textContent.replace(/\s+/g, " ").trim() : "", cells: 0, svg: 0, openRings: 0, tags: [], loads, poll_ms: timers.map((x) => x.ms), redrawn: !!first && app.children[0] !== first };
 (function walk(n) { out.tags.push(n.tag); out.openRings += n.className === "dot open" ? 1 : 0; out.cells += n.className.split(" ").includes("dy") ? 1 : 0; out.svg += n.tag === "svg" ? 1 : 0; n.children.forEach(walk); })(app || new Node_("x"));
+function picture(n, disclosure, hidden) {
+  disclosure = disclosure || (n.tag === "details" ? n.children[0].textContent : null);
+  hidden = hidden || n.hidden;
+  return [{ tag: n.tag, cls: n.className, text: n.textContent, attrs: n.attrs, style: n.style,
+    disclosure, hidden: !!hidden }, ...n.children.flatMap((child) => picture(child, disclosure, hidden))];
+}
+out.picture = picture(app);
 out.states = states;
-out.focused = document.activeElement ? document.activeElement.textContent : null;
+out.focused = document.activeElement ? document.activeElement.textContent.split(" ")[0] : null;
 out.stored = stored;
 out.hash = sandbox.window.location.hash;
 out.tabs = role("tab").map((n) => ({ text: n.textContent, attrs: n.attrs, tabIndex: n.tabIndex }));
