@@ -1,5 +1,7 @@
 # Merge guard through host permission rules
 
+Status: deferred; moved to 0.2.0 with autopilot (owner, 2026-11-06); the design below stays for that use.
+
 Deferred to 0.2.0 (owner, 2026-11-06): the hosts already ask before a merge in their default modes, and the owner
 authorizes merges in chat; the remaining gap is unattended runs, which autopilot settles (`autopilot.md`).
 The design below stays for that use.

@@ -1,5 +1,7 @@
 # Checked compaction threshold setup
 
+Status: implemented; checked setup writer (release 0.1.10, package 1, pull request 97); running-session effect and Codex default remain unverified.
+
 Decision: 2026-11-06. Setup writes the chosen threshold after explicit approval.
 Scope: one stdlib-only script, `skills/fnl-setup/scripts/compact_setup.py`;
 no network, subprocess, hook invocation, environment writes or other settings.

@@ -1,6 +1,6 @@
 # Dashboard infographics (running and project panes)
 
-Status: owner decisions settled on 2026-11-06 (see "Decisions settled"). Replaces the text-line rendering of the former Agents and Project tabs (now the Now tab) that `running-agents.md` and `project-progress.md` specified. The data rules of those specs (metadata only, consent, safe reading, `textContent` only) are unchanged except where this document says so.
+Status: implemented; owner decisions settled on 2026-11-06 (see "Decisions settled"). Replaces the text-line rendering of the former Agents and Project tabs (now the Now tab) that `running-agents.md` and `project-progress.md` specified. The data rules of those specs (metadata only, consent, safe reading, `textContent` only) are unchanged except where this document says so.
 
 ## Two-tab owner decision (2026-11-06)
 
