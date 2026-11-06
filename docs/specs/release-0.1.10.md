@@ -30,15 +30,28 @@ where only advice exists.
 | 2 | Compaction steward: local handover, threshold decision, re-injection after compact, read-only agent | [compaction-steward.md](compaction-steward.md) | Merged (pull request 99) |
 | 3 | Session-title reminder in the always-loaded rule and the Titles section | none (one line of text) | Merged (pull request 98) |
 | 4 | Owner exception and code for an opt-in Antigravity compaction stop | [compaction-stop.md](compaction-stop.md); rule in `CLAUDE.md` (pull requests 100 and 101) | Rule merged; code running locally, no pull request yet |
-| 5 | Merge prompt through host permission rules (Claude Code, Codex): common commands only | [merge-guard.md](merge-guard.md) | Spec only |
+| 5 | Merge prompt through host permission rules | [merge-guard.md](merge-guard.md) | Moved to 0.2.0 with autopilot (owner, 2026-11-06): hosts already ask in their default modes |
 | 6 | Running agents on the dashboard (phase 1: ledger plus a `ps` snapshot); the page becomes tabs (see package 8) | [running-agents.md](running-agents.md); needs its own `CLAUDE.md` exception for the `ps` command first | Spec only |
 | 7 | Backlog and spec corrections | below | Not started |
-| 8 | Project progress panel on the dashboard (Spec Kit `tasks.md`, ledger, usage events) | spec in its own pull request (project progress and dashboard tabs); builds on package 6 | Spec in review |
+| 9 | Dashboard freshness: ledger and Antigravity trigger a rebuild, a freshness line per host | [dashboard-freshness.md](dashboard-freshness.md) | Spec only |
+| 8 | Project progress panel on the dashboard, with the `task` event that links hand-started sessions to tasks | [project-progress.md](project-progress.md) and [dashboard-tabs.md](dashboard-tabs.md); builds on package 6 | Specs merged; code not started |
 
-Order of work: 4, then 5, then 6, then 8 (it shares the page and the refresh with 6), then 7. Packages 4 to 6 all edit `fnl-setup`, the README and the
+Order of work: 4, then 9 (small, and the other dashboard packages rely on it), then 6, then 8 (it shares the page and the refresh with 6), then 7. Package 5 is not in this release. Packages 4 to 6 all edit `fnl-setup`, the README and the
 changelog, so they run one at a time, each through its own pull request with both reviews.
 
 ## Decisions settled (owner, 2026-11-06)
+
+- All four dashboard packages (tabs and progress in 8, running agents in 6, freshness in 9) ship in 0.1.10: a release should carry features users notice, and time is not the constraint.
+- The `ps` exception for the process snapshot is approved. The snapshot is the last piece of package 6 and is
+  off until `fnl-setup` turns it on; the exception text merges into `CLAUDE.md` only when that code is about to land.
+- Project progress is on by default (it keeps identifiers and counts only, and needs metrics consent); the
+  dashboard shows a one-time notice of what it reads and how to switch it off. The `task` event is in this
+  release.
+- Codex no longer follows `main` on this machine: it installs from the `finolabs` catalog and is refreshed on
+  purpose after a release; Claude Code and Antigravity follow `main`. Cause: any reinstall (remove and add)
+  of Codex makes it ask to trust the hooks again, tested on 2026-11-06.
+- The release procedure (release pull request, tag, GitHub release, catalog pin) runs as one package after every
+  package is merged, stopping at the tag and the release for the owner's go.
 
 - Compaction design is option B (thin steward, host thresholds, local handover, fresh sessions at story
   boundaries); a central orchestrator that every session must ask (option A) is not built.
@@ -55,6 +68,7 @@ changelog, so they run one at a time, each through its own pull request with bot
 
 ## Not in this release
 
+- Autopilot, live dashboard mode, and the merge prompt (package 5) are release 0.2.0: [autopilot.md](autopilot.md).
 - A hook that forces the router to load before the first edit, and a Stop-hook review reminder: each
   needs another blocking exception, and the cost is a gate that also blocks work that needs no router.
   Alternative to measure first: inject the reminder and read the skip rate from the existing metrics.

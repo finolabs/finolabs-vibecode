@@ -44,10 +44,10 @@ The ledger is machine-wide, so the join is keyed three ways, each by an exact id
 
 A row shows: task id, story, state, agent (family and model), session (short id and host), run id and
 elapsed time. Sessions the user started by hand carry no `dispatch` and no task id, so they are listed
-under "Sessions without a task" with host and last activity; work the coordinator keeps for itself is
-likewise not linked. Phase 2 can close that: the coordinator or router records `task` with the id when it
+under "Sessions without a task" with host and last activity unless they recorded a `task` event; work the
+coordinator keeps for itself is linked the same way when it records one. The `task` event closes that (in scope for 0.1.10): the coordinator or router records `task` with the id when it
 starts a task (a new metrics event field limited to `^T[0-9]{1,4}$`, through `SCHEMA` in
-`scripts/fnl_metrics.py` and `PRIVACY.md`). Until then the page says "linked through delegated runs only".
+`scripts/fnl_metrics.py` and `PRIVACY.md`). Sessions that record nothing remain unlinked, and the page says so.
 
 Task states: `done` (checked), `in progress` (unchecked and a ledger run for it is open), `accepted, not
 ticked` (unchecked and its run finished `accepted`), `todo`. Agent family and outcome are rendered from
@@ -95,12 +95,24 @@ skipped, with a fixed reason, when it overruns; a hook never waits longer.
 
 ## Consent
 
-The panel is off until the host config has `Project progress: on` in the section `## Project progress`,
-written by `fnl-setup` after a question of its own (neutral Yes and No, none preselected) that says what is
-read (the repository's task list and the ledger) and what is kept (identifiers and counts, in `data.js`,
-local). Metrics consent must also be recorded. People who consented to metrics earlier are not switched on.
-`PRIVACY.md` lists the progress block and the ledger fields it reads (project name, id, rework rounds), and
-corrects the description of `dispatch`, which is an id.
+Owner decision (2026-11-06): the panel is on by default. It keeps identifiers and counts only (see "Metadata
+only"), and it needs metrics consent to exist at all, since the dashboard does. `fnl-setup` states in its
+metrics consent text that the dashboard also shows project progress from the repository's task list and the
+ledger, and `Project progress: off` in the host config section `## Project progress` (or `FNL_PROGRESS=off`)
+turns it off. People who consented to metrics before this release get a one-time notice on the dashboard
+("Project progress now reads this repository's task list and the ledger; nothing leaves your machine; turn off
+with ..."), and `PRIVACY.md` lists the progress block, the ledger fields it reads (project name, id, rework
+rounds) and corrects the description of `dispatch`, which is an id.
+
+## The `task` event
+
+`scripts/record.py task --id T012` (a record only the plugin's hook turns into an event, as for the keep receipt)
+adds one event type, `task`, with the single field `id` matching `^T[0-9]{1,4}$`, through `SCHEMA` in
+`scripts/fnl_metrics.py`, `docs/specs/usage-metrics.md` and `PRIVACY.md`. The coordinator or router runs it
+when it starts work on a task in a session the user started by hand, so such a session is linked to the task
+by its session id. `fnl-coding-router` and `fnl-delegate` get one advisory sentence asking for it (enforcer:
+agent judgment); the script validates the id. The join then has a fourth step: a session with a `task` event
+for `T012` in the repository is shown against that task, host included. No other field, no text.
 
 ## Not in scope
 
@@ -122,9 +134,11 @@ assignment; free text of any kind; linking sessions without a `dispatch` or a re
 3. `refresh.py` writes `progress` keyed by repository code (five at most), leaves the events files
    untouched, does nothing without recorded metrics consent and `Project progress: on`, or with
    `FNL_PROGRESS=off`, and `purge` removes it; no `git` is run; the repository is found by walking up.
-4. The Project tab renders with `textContent`, the empty state (no `tasks.md`) and the limits line; page
+4. `record.py task` accepts only the id pattern and prints the receipt; the hook records exactly one `task` event
+   with one field; a text or a long id is refused; a hand-started session with a `task` event links to its task.
+5. The Project tab renders with `textContent`, the empty state (no `tasks.md`) and the limits line; page
    tests with fake timers.
-5. `fnl-setup` asks the separate question; `fnl-delegate` ledger guidance asks for `<feature> T<id>` labels;
+6. `fnl-setup` metrics text mentions project progress; the one-time dashboard notice shows once; `fnl-delegate` ledger guidance asks for `<feature> T<id>` labels;
    `PRIVACY.md` (progress block, ledger fields, `dispatch` as an id), README, CHANGELOG, `docs/specs/index.md` updated; `check-references.py`,
    `claude plugin validate .` and targeted tests pass under a world-writable `/tmp`; no hook file changed.
 
@@ -132,5 +146,4 @@ assignment; free text of any kind; linking sessions without a `dispatch` or a re
 
 - Real `tasks.md` shapes across Spec Kit versions: check against the repository's own specs and one
   external project before fixing the grammar.
-- Whether phase 2 (`task` event) is worth its schema change after a few weeks of the delegated-only view.
 - Whether the owner's tracker connectors should feed the same tab later.

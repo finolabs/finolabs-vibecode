@@ -14,3 +14,5 @@
 | [Antigravity compaction stop](compaction-stop.md) | Spec; the rule is merged in `CLAUDE.md`, code running locally, no pull request yet. |
 | [Merge guard](merge-guard.md) | Spec; permission rules written by setup for Claude Code and Codex. |
 | [Running agents](running-agents.md) | Spec; phase 1 is the ledger plus a process snapshot on the dashboard. |
+| [Dashboard freshness](dashboard-freshness.md) | Spec; audit of what is current and the rebuild triggers that fix the gaps. |
+| [Autopilot (0.2.0)](autopilot.md) | Spec; opt-in agent that coordinates the repository while the user is away, governed by setup. |
