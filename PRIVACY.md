@@ -4,6 +4,8 @@
 
 The agent scan script itself uses no network and runs `--version` only on three fixed executables (`claude`, `codex`, `agy`) without a shell and reads `host.md`; it stores nothing outside `host.md`.
 
+Setup may write the user's own host compaction setting only after a previewed yes, keeping a private local plan and local backups; no data leaves the machine.
+
 ## Where your data goes
 
 The data folder can be relocated through `fnl-setup`; the fixed pointer `~/.finolabs/vibecode/root.json` contains its absolute `root` path and a random `id` matching the new folder's `.root-id`.

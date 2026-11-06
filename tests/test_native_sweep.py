@@ -7,7 +7,7 @@ YES = "Offer neutral Yes and No choices with none preselected or marked recommen
 QUESTIONS = {
     "fnl-setup/SKILL.md": (
         "On a bare invocation", "Before the mode choice", "**Beginner path.**",
-        "**Preferences**", "**Compaction suggestion**",
+        "**Preferences**", "**Compaction suggestion**", "**Compaction plan approval.**",
     ),
     "fnl-setup/references/check.md": ("4. Offer one small smoke task",),
     "fnl-setup/references/route-judge.md": ("Ask", "Ask a second, separate question"),
@@ -50,6 +50,7 @@ class NativeSweepTest(unittest.TestCase):
             ("fnl-setup/references/route-judge.md", "Ask"),
             ("fnl-setup/references/route-judge.md", "Ask a second, separate question"),
             ("fnl-setup/SKILL.md", "**Compaction suggestion**"),
+            ("fnl-setup/SKILL.md", "**Compaction plan approval.**"),
             ("fnl-update/SKILL.md", "2. If the user only asked"),
             ("fnl-status/SKILL.md", "When the argument is `purge`"),
             ("fnl-status/SKILL.md", "Their consent record stays"),
