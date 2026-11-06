@@ -123,6 +123,25 @@ class ProgressTest(unittest.TestCase):
         self.pp.set_setting(self.repo, 'ledger', None)
         self.assertEqual(self.pp.repository_settings(self.pp.config(), self.repo)['Ledger project'], 'old')
 
+    def test_work_record_template_parses_with_status_reader(self):
+        import re
+        template = ROOT / 'skills/fnl-coding-router/references/work-record.md'
+        block = re.search(r'```markdown\n(.*?)\n```', template.read_text(), re.S)
+        self.assertIsNotNone(block, 'keep one literal parseable template block')
+        pp = module('template_status_reader', ROOT / 'skills/fnl-status/scripts/project_progress.py')
+        item = pp.work_record(block[1], 1)
+        self.assertIsNotNone(item)
+        self.assertEqual(item['state'], 'todo')
+        self.assertEqual([(s['stage'], s['done'], s['total']) for s in item['stages']],
+                         [('spec', 0, 1), ('plan', 1, 1), ('tasks', 0, 1), ('verify', 1, 1)])
+        self.assertEqual(item['tasks'][0]['id'], 'T1')
+        self.assertEqual(item['stories'][0]['story'], 'US1')
+        self.assertNotIn('<', json.dumps(item))
+        text = template.read_text()
+        self.assertIn('MIN depth creates no work record', text)
+        for tool in ('grilling', 'to-spec', 'to-tickets', 'tdd', 'implement', 'code-review', 'pr'):
+            self.assertIn('`' + tool + '`', text)
+
     def record(self, status='in progress', tasks='- [x] T1 PRIVATE\n', directory='docs/specs', name='work.md'):
         return self.document(name, '# PRIVATE title\nStatus: ' + status + '; PRIVATE\n'
             '## Goal and acceptance\n- [ ] AC1 PRIVATE\n## Plan\nPRIVATE plan\n'
