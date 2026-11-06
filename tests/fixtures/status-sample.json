@@ -70,22 +70,144 @@
                 "state": "todo",
                 "runs": [],
                 "sessions": []
+              },
+              {
+                "id": "T101",
+                "story": "US1",
+                "phase": 3,
+                "state": "in progress",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T102",
+                "story": "US1",
+                "phase": 2,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T103",
+                "story": "US1",
+                "phase": 3,
+                "state": "todo",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T104",
+                "story": "US1",
+                "phase": 2,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T105",
+                "story": "US1",
+                "phase": 3,
+                "state": "in progress",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T106",
+                "story": "US1",
+                "phase": 2,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T107",
+                "story": "US1",
+                "phase": 3,
+                "state": "todo",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T108",
+                "story": "US1",
+                "phase": 2,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T109",
+                "story": "US1",
+                "phase": 3,
+                "state": "in progress",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T110",
+                "story": "US1",
+                "phase": 2,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T201",
+                "story": "US3",
+                "phase": 2,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T202",
+                "story": "US3",
+                "phase": 2,
+                "state": "todo",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T301",
+                "story": "US4",
+                "phase": 3,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T302",
+                "story": "US4",
+                "phase": 3,
+                "state": "todo",
+                "runs": [],
+                "sessions": []
               }
             ],
-            "total": 6,
-            "done": 2,
+            "total": 20,
+            "done": 5,
             "phases": [
               {
                 "phase": 1,
-                "done": 2,
-                "total": 6
+                "total": 5,
+                "done": 2
+              },
+              {
+                "phase": 2,
+                "total": 8,
+                "done": 3
+              },
+              {
+                "phase": 3,
+                "total": 7,
+                "done": 0
               }
             ],
             "stories": [
               {
                 "story": "US1",
-                "total": 4,
-                "done": 1,
+                "total": 14,
+                "done": 3,
                 "priority": 2
               },
               {
@@ -96,9 +218,15 @@
               },
               {
                 "story": "US3",
-                "total": 1,
-                "done": 0,
+                "total": 3,
+                "done": 1,
                 "priority": null
+              },
+              {
+                "story": "US4",
+                "total": 2,
+                "done": 0,
+                "priority": 3
               }
             ]
           },
@@ -178,7 +306,7 @@
                 "id": "T011",
                 "story": "US1",
                 "phase": 1,
-                "state": "in progress",
+                "state": "done",
                 "runs": [
                   {
                     "id": "d1",
@@ -194,7 +322,7 @@
                 "id": "T012",
                 "story": "US1",
                 "phase": 1,
-                "state": "done",
+                "state": "in progress",
                 "runs": [],
                 "sessions": []
               }
@@ -417,6 +545,19 @@
         "check_due": true,
         "liveness": "unverified",
         "no_process_found": true
+      },
+      {
+        "id": "run3",
+        "agent": "codex",
+        "model": "gpt-6",
+        "project": "Tools",
+        "task": "004 T012",
+        "ts": "2026-11-06T09:29:00Z",
+        "age_min": 31,
+        "budget_min": 30,
+        "check_due": true,
+        "liveness": "unverified",
+        "no_process_found": false
       }
     ],
     "processes": [

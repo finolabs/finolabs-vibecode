@@ -137,13 +137,16 @@
     var late = open.filter(function (run) { return run.budget_min > 0 && run.age_min >= run.budget_min / 2; }).length;
     var unowned = processes.filter(function (p) { return p.not_started_by_coordinator; }).length;
     var tiles = h("div", "kpis agent-kpis");
-    [["running now", open.length, available ? processes.length + " roots · " + Object.keys(snapshot.apps || {}).reduce(function (sum, family) { return sum + snapshot.apps[family]; }, 0) + " app processes" : "snapshot unavailable", ""],
-     ["past the check time", late, "half of the time budget", "var(--warn)"],
-     ["not started by coordinator", unowned, available ? "family-level match only" : "snapshot unavailable", ""]].forEach(function (x) {
+    [["running now", open.length, available ? processes.length + " roots · " + Object.keys(snapshot.apps || {}).reduce(function (sum, family) { return sum + snapshot.apps[family]; }, 0) + " app procs" : "snapshot unavailable", ""],
+     ["past the check time", late, "at half budget", "var(--warn)"],
+     ["not started by coordinator", unowned, available ? "family match only" : "snapshot unavailable", ""]].forEach(function (x) {
       var value = t("div", "v agent-value", x[1]);
       if (x[1] && x[3]) value.style.color = x[3];
       tiles.appendChild(h("div", "kpi", [t("div", "k", x[0]), h("div", "m", [value, h("span", "baseline")]), t("div", "d", x[2])]));
     });
+    if (available) tiles.children[0].children[2].appendChild(t("span", "process-counts", ["claude", "codex", "agy"].map(function (family) {
+      return family + " " + processes.filter(function (p) { return p.family === family; }).length;
+    }).join(" · ")));
     var lanes = h("div", "lanes");
     open.slice().sort(function (a, b) {
       var ar = a.budget_min > 0 ? a.budget_min - a.age_min : Infinity;
@@ -151,21 +154,30 @@
       return ar - br;
     }).forEach(function (run) {
       var budget = run.budget_min, age = Number(run.age_min) || 0;
-      var state = budget > 0 ? age >= budget ? "cap" : age >= budget / 2 ? "check" : "within" : "unknown";
-      var color = state === "cap" ? "var(--crit)" : state === "check" ? "var(--warn)" : "var(--p)";
-      var bar = h("i", "lane-bar"), tick = h("i", "lane-tick"), track = h("div", "lane-track");
-      bar.style.width = (budget > 0 ? Math.max(0, Math.min(100, age / budget * 100)) : 0) + "%";
-      bar.style.background = color; tick.style.left = "50%";
-      tipOn(tick, "check deadline: half budget");
-      track.appendChild(bar); if (budget > 0) track.appendChild(tick);
-      var label = h("div", "lane-label", [t("span", "", (run.agent || "other") + " " + (run.model || "—") + " · " + (run.task || "—"))]);
+      var cap = budget > 0 ? budget * 4 / 3 : null;
+      var state = cap && age > cap ? "cap" : budget > 0 ? age > budget ? "over" : age >= budget / 2 ? "check" : "within" : "unknown";
+      var bar = h("i", "lane-bar"), track = h("div", "lane-track");
+      var width = cap ? Math.max(0, Math.min(100, age / cap * 100)) : 0;
+      bar.style.width = width + "%";
+      // Stops are relative to the filled length so both deadlines stay fixed on the track.
+      var halfStop = age > 0 ? Math.min(100, budget / 2 / age * 100) : 100;
+      var budgetStop = age > 0 ? Math.min(100, budget / age * 100) : 100;
+      if (age > cap && cap) { halfStop = 37.5; budgetStop = 75; }
+      bar.style.background = "linear-gradient(to right, var(--good) 0% " + halfStop + "%, var(--warn) " + halfStop + "% " + budgetStop + "%, var(--crit) " + budgetStop + "% 100%)";
+      track.appendChild(bar);
+      if (cap) [["check", "37.5%", "check deadline: half budget"], ["budget", "75%", "budget"]].forEach(function (item) {
+        var tick = h("i", "lane-tick " + item[0] + "-tick"); tick.style.left = item[1]; track.appendChild(tipOn(tick, item[2]));
+      });
+      if (state === "cap") track.appendChild(tipOn(t("span", "lane-overflow", ">"), "past hard cap"));
+      var label = h("div", "lane-label", [t("span", "lane-identity", (run.agent || "other") + " " + (run.model || "—")),
+        tipOn(t("span", "lane-task", run.task || "—"), run.task || "—")]);
       if (run.no_process_found) label.appendChild(tipOn(h("i", "no-process"), "no process found"));
       var lane = h("div", "lane" + (run.no_process_found ? "" : " live"), [label, track,
         t("span", "lane-value", age + "/" + (budget == null ? "?" : budget) + " min")]);
       lane.setAttribute("data-run", run.id || ""); lane.setAttribute("data-state", state);
       tipOn(lane, (run.agent || "other") + "/" + run.model + " · " + run.project + ": " + run.task + " · " + run.id +
         " · started " + run.ts + " · " + age + "/" + (budget == null ? "?" : budget) + " min · " +
-        (state === "cap" ? "past hard cap" : state === "check" ? "check due" : state === "unknown" ? "budget unknown" : "within budget") +
+        (state === "cap" ? "past hard cap" : state === "over" ? "over budget" : state === "check" ? "check due" : state === "unknown" ? "budget unknown" : "within budget") +
         " · liveness: " + run.liveness + (run.no_process_found ? " · no process found" : ""));
       lanes.appendChild(lane);
     });
@@ -173,16 +185,7 @@
       lanes.appendChild(t("div", "nodata", "No agents running"));
       for (var i = 0; i < 3; i++) lanes.appendChild(h("div", "ghost-lane", [ghost("30%", "10px"), ghost(["72%", "46%", "60%"][i], "12px")]));
     }
-    if (available && processes.length) {
-      var dots = h("div", "processes", [t("span", "meta", "process roots")]);
-      processes.forEach(function (p) {
-        var text = p.family + " · elapsed " + p.elapsed_seconds + " seconds · descendants: " +
-          Object.keys(p.descendants || {}).map(function (name) { return name + ": " + p.descendants[name]; }).join(", ") +
-          (p.not_started_by_coordinator ? " · not started by the coordinator" : "");
-        dots.appendChild(tipOn(h("i", "process-dot" + (p.not_started_by_coordinator ? " hollow" : "")), text));
-      });
-      lanes.appendChild(dots);
-    }
+    if (open.length) lanes.appendChild(t("div", "lane-legend", "| check at half budget  | budget  red = over budget"));
     var content = [tiles, lanes], quota = r.quota || [];
     if (quota.length) {
       var meters = h("div", "quota");
@@ -194,7 +197,7 @@
         meter.setAttribute("role", "progressbar"); meter.setAttribute("aria-valuemin", "0"); meter.setAttribute("aria-valuemax", "100");
         meter.setAttribute("aria-valuenow", Math.round(fraction * 100)); meter.setAttribute("aria-label", q.agent + " quota remaining");
         tipOn(meter, q.agent + ": " + pct(fraction) + " remaining · measured " + q.measured + (stale ? " · unverified, older than 8 hours" : ""));
-        meters.appendChild(h("div", "quota-row", [t("span", "", q.agent), meter, t("span", "lane-value", pct(fraction) + (stale ? " ?" : ""))]));
+        meters.appendChild(h("div", "quota-row", [t("span", "quota-label", q.agent), meter, t("span", "lane-value", pct(fraction) + (stale ? " ?" : ""))]));
       });
       content.push(h("div", "quota-block", [t("div", "meta", "quota remaining"), meters]));
       TABS.get("agents").tableRows.push(tableOf("quota", ["family", "remaining", "measured", "state"], quota.map(function (q) {
@@ -266,6 +269,23 @@
   }
   function storyPriority(story) { return story.priority >= 1 && story.priority <= 9 ? story.priority : 10; }
   function unfinishedFeatures(p) { return (p.features || []).filter(function (f) { return f.total > f.done; }); }
+  function taskOrder(a, b) {
+    return (a.phase == null ? 100 : a.phase) - (b.phase == null ? 100 : b.phase) || String(a.id).localeCompare(String(b.id), undefined, {numeric: true});
+  }
+  function storyOrder(a, b) {
+    return storyPriority(a) - storyPriority(b) || String(a.story).localeCompare(String(b.story), undefined, {numeric: true});
+  }
+  function taskState(task) {
+    return task.state === "done" ? "done" : task.state === "in progress" ? "active" : task.state === "accepted, not ticked" ? "accepted" : "todo";
+  }
+  function taskLegend() {
+    var legend = h("div", "task-legend");
+    [["done", "done"], ["active", "agent on it"], ["accepted", "done, not accepted"], ["todo", "to do"]].forEach(function (item, index) {
+      if (index) legend.appendChild(t("span", "", "·"));
+      legend.appendChild(h("span", "legend-item", [h("i", "cell " + item[0]), t("span", "", item[1])]));
+    });
+    return legend;
+  }
   function projectPanel() {
     if (!D.progress) return null;
     var block = D.progress, repositories = block.repositories || {}, keys = Object.keys(repositories);
@@ -297,34 +317,45 @@
       return priority(left) - priority(right) || activity(right) - activity(left) || a.localeCompare(b);
     }).slice(0, 5);
     var content = [];
-    visible.forEach(function (code) {
+    visible.forEach(function (code, projectIndex) {
       var p = repositories[code], fs = p.features || [], total = 0, done = 0, active = 0;
       fs.forEach(function (f) { total += f.total; done += f.done; active += (f.tasks || []).filter(function (task) { return task.state === "in progress"; }).length; });
+      var accepted = fs.reduce(function (sum, f) { return sum + (f.tasks || []).filter(function (task) { return task.state === "accepted, not ticked"; }).length; }, 0);
       var seg = h("div", "seg project-segments");
-      [["done", done, "var(--p)"], ["an agent is on it", active, "var(--h2)"], ["to do", total - done - active, "var(--h0)"]].forEach(function (part) {
+      [["done", done], ["active", active], ["accepted", accepted], ["todo", total - done - active - accepted]].forEach(function (part) {
         if (part[1] <= 0) return;
-        var mark = h("i"); mark.style.flex = String(part[1]); mark.style.background = part[2];
+        var mark = h("i", "project-part cell " + part[0]); mark.style.flex = String(part[1]);
         seg.appendChild(tipOn(mark, part[0] + ": " + part[1] + "/" + total));
       });
-      seg.setAttribute("role", "img"); seg.setAttribute("aria-label", done + " done, " + active + " an agent is on it, " + (total - done - active) + " to do");
-      var header = h("div", "project-head", [tipOn(t("strong", "project-label", repoLabel(code)), repoLabel(code)),
-        t("strong", "project-percent", pct(total ? done / total : 0))]);
+      seg.setAttribute("role", "img"); seg.setAttribute("aria-label", done + " done, " + active + " agent on it, " + accepted + " done, not accepted, " + (total - done - active - accepted) + " to do");
+      var candidates = [];
+      unfinishedFeatures(p).forEach(function (f) {
+        (f.stories || []).filter(function (story) { return story.total > story.done; }).forEach(function (story) {
+          var first = (f.tasks || []).filter(function (task) { return task.story === story.story && task.state !== "done"; }).sort(taskOrder)[0];
+          if (first) candidates.push({story: story.story, priority: story.priority, task: first});
+        });
+      });
+      candidates.sort(storyOrder);
+      var status = h("div", "project-status", [t("strong", "project-percent", pct(total ? done / total : 0))]);
+      if (candidates.length) status.appendChild(t("span", "project-next", "next " + candidates[0].story + " · " + candidates[0].task.id));
+      var header = h("div", "project-head", [tipOn(t("strong", "project-label", repoLabel(code)), repoLabel(code)), status]);
       var card = h("div", "proj", [header, seg]); card.setAttribute("data-repo", code);
+      if (!projectIndex) card.appendChild(taskLegend());
       unfinishedFeatures(p).forEach(function (feature) {
-        var featureBody = h("div", "feature", [t("div", "meta", "feature " + String(feature.feature).padStart(3, "0"))]);
+        var featureBar = h("div", "feature-bar", [h("i")]);
+        featureBar.children[0].style.width = (feature.total ? feature.done / feature.total * 100 : 0) + "%";
+        featureBar.setAttribute("role", "img"); featureBar.setAttribute("aria-label", "spec completion " + pct(feature.total ? feature.done / feature.total : 0));
+        var featureBody = h("div", "feature", [h("div", "feature-head", [t("span", "meta", "spec " + String(feature.feature).padStart(3, "0") + " · " + pct(feature.total ? feature.done / feature.total : 0)), featureBar])]);
+        var tree = h("div", "story-tree");
         var stories = (feature.stories || []).slice(), tasks = feature.tasks || [], complete = stories.filter(function (story) { return story.done === story.total; }).length;
         if (tasks.some(function (task) { return !task.story; })) {
           var untagged = tasks.filter(function (task) { return !task.story; });
           stories.push({story: null, priority: null, total: untagged.length, done: untagged.filter(function (task) { return task.state === "done"; }).length});
         }
-        stories.filter(function (story) { return story.total > story.done; }).sort(function (a, b) {
-          return storyPriority(a) - storyPriority(b) || (parseInt(String(a.story).slice(2), 10) || 0) - (parseInt(String(b.story).slice(2), 10) || 0);
-        }).forEach(function (story) {
+        stories.filter(function (story) { return story.total > story.done; }).sort(storyOrder).forEach(function (story) {
           var cells = h("div", "cells");
-          tasks.filter(function (task) { return (task.story || null) === story.story; }).sort(function (a, b) {
-            return (a.phase == null ? 100 : a.phase) - (b.phase == null ? 100 : b.phase);
-          }).forEach(function (task) {
-            var state = task.state === "done" ? "done" : task.state === "in progress" ? "active" : task.state === "accepted, not ticked" ? "accepted" : "todo";
+          tasks.filter(function (task) { return (task.story || null) === story.story; }).sort(taskOrder).forEach(function (task) {
+            var state = taskState(task);
             var mark = h("i", "cell " + state), runs = task.runs || [], sessions = task.sessions || [];
             mark.setAttribute("data-task", task.id); mark.setAttribute("data-state", task.state);
             tipOn(mark, task.id + " · " + task.state + " · phase " + (task.phase == null ? "—" : task.phase) +
@@ -334,13 +365,12 @@
           });
           var row = h("div", "story", [t("span", "story-label", (story.story || "untagged") + (storyPriority(story) < 10 ? " · P" + story.priority : "")), cells,
             t("span", "lane-value", story.done + "/" + story.total)]);
-          row.setAttribute("data-story", story.story || "untagged"); featureBody.appendChild(row);
+          row.setAttribute("data-story", story.story || "untagged"); tree.appendChild(row);
         });
-        if (complete) featureBody.appendChild(t("span", "chip finished-stories", complete + " stories done"));
+        featureBody.appendChild(tree);
+        if (complete) featureBody.appendChild(t("span", "chip finished-stories", complete + (complete === 1 ? " story done" : " stories done")));
         card.appendChild(featureBody);
       });
-      var unlinked = (p.sessions_without_task || []).length;
-      if (unlinked) card.appendChild(tipOn(t("span", "chip unlinked-sessions", unlinked + " sessions without a task"), "Sessions without a task; details in the data tables"));
       content.push(card);
     });
     if (finished) content.push(t("div", "meta finished-projects", finished + " projects done, hidden"));
@@ -349,6 +379,10 @@
       TABS.get("project").tableRows.push(h("div", "tbl", [t("h3", "", repoLabel(code)), projectData(repositories[code])]));
     });
     var notes = [t("div", "", "Derived from files and local records, not from a tracker; done means the box is ticked. Linked through delegated runs or recorded task ids only; sessions that record neither remain unlinked. Task receipts are advisory, never a gate.")];
+    visible.forEach(function (code) {
+      var count = (repositories[code].sessions_without_task || []).length;
+      if (count) notes.push(t("span", "chip unlinked-sessions", repoLabel(code) + ": " + count + " sessions without a task"));
+    });
     if (block.notice) notes.push(t("div", "", "Project progress now reads this repository's task list and the ledger; nothing leaves your machine; turn off with Project progress: off in host.md under ## Project progress, or FNL_PROGRESS=off."));
     if (block.reason) notes.push(t("div", "", block.reason));
     notes.push(t("div", "", "Up to five last-written repository snapshots. Features under specs/archive are not read or counted; finished features and stories are hidden. Accepted, not ticked remains unfinished."));
