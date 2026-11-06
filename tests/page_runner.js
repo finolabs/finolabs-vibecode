@@ -21,9 +21,25 @@ class Node_ {
   }
   set textContent(v) { this.children = []; this._text = String(v); }
   get textContent() { return this._text + this.children.map((c) => c.textContent).join(" "); }
-  appendChild(c) { this.children.push(c); return c; }
-  removeChild(c) { this.children.splice(this.children.indexOf(c), 1); }
-  focus() { document.activeElement = this; }
+  appendChild(c) { return this.insertBefore(c, null); }
+  insertBefore(c, before) {
+    if (c.parentNode) c.parentNode.removeChild(c);
+    const index = before ? this.children.indexOf(before) : this.children.length;
+    if (index < 0) throw new Error("missing insertBefore child");
+    this.children.splice(index, 0, c); c.parentNode = this; return c;
+  }
+  removeChild(c) { this.children.splice(this.children.indexOf(c), 1); c.parentNode = null; }
+  closest(selector) {
+    const matches = selector.startsWith(".") ? this.classList.contains(selector.slice(1)) :
+      selector === "[data-tip]" && this.getAttribute("data-tip") !== null;
+    return matches ? this : this.parentNode ? this.parentNode.closest(selector) : null;
+  }
+  focus() {
+    const old = document.activeElement;
+    if (old && old !== this && handlers.focusout) handlers.focusout({target: old, relatedTarget: this});
+    document.activeElement = this;
+    if (handlers.focusin) handlers.focusin({target: this});
+  }
   append(...cs) { cs.forEach((c) => this.appendChild(c)); }
   replaceChildren(...cs) {
     if (this.children.some((c) => all(c).includes(document.activeElement))) document.activeElement = document.body;
@@ -74,7 +90,7 @@ const sandbox = {
   Date: FakeDate,
   console,
   setInterval: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
-  window: { matchMedia: () => ({ matches: false }), addEventListener(type, fn) { windowHandlers[type] = fn; }, innerWidth: 400,
+  window: { matchMedia: () => ({ matches: false }), addEventListener(type, fn) { windowHandlers[type] = fn; }, innerWidth: 400, innerHeight: 800,
     location: { hash: scenario.hash || "" } },
   localStorage: { getItem(k) { if (scenario.storageThrows) throw new Error("blocked"); return stored[k] || null; },
     setItem(k, v) { if (scenario.storageThrows) throw new Error("blocked"); stored[k] = String(v); } },
@@ -82,6 +98,9 @@ const sandbox = {
 document.activeElement = document.body;
 sandbox.window.document = document;
 if (dataPath) sandbox.window.FNL_DATA = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+if (scenario.budgetValue !== undefined) {
+  sandbox.window.FNL_DATA.running.open.forEach((run) => { run.budget_min = Number(scenario.budgetValue); });
+}
 vm.createContext(sandbox);
 vm.runInContext(scripts[0], sandbox, { filename: "dashboard.html" });
 
@@ -93,9 +112,34 @@ function namedTab(name) { return role("tab").find((n) => n.textContent.startsWit
 function namedPanel(name) { return role("tabpanel").find((n) => n.getAttribute("id") === "panel-" + name); }
 function fire(n, type, key) {
   if (!n) throw new Error("missing event target");
-  (n.handlers[type] || []).forEach((fn) => fn({ target: n, key, preventDefault() {} }));
+  const event = { target: n, key, clientX: 10, clientY: 10, preventDefault() {} };
+  (n.handlers[type] || []).forEach((fn) => fn(event));
+  if (handlers[type]) handlers[type](event);
 }
-const states = [];
+const states = [], tipStates = [];
+function tooltipState() {
+  const tip = byId.tip;
+  return {hidden: tip.hidden, text: tip.textContent, attrs: tip.attrs};
+}
+function tooltipAction(action) {
+  if (!action.tooltip) return;
+  const scope = action.scope === "footer" ? all(app).find((n) => n.className === "status") : namedPanel(action.scope || "agents");
+  const target = all(scope).find((n) => action.target === "merged" ?
+    n.classList.contains("task-brick") && Number(n.getAttribute("data-count")) > 1 :
+    n.classList.contains(action.target || "info-button"));
+  switch (action.tooltip) {
+    case "focus": target.focus(); break;
+    case "hover": fire(target, "pointermove"); break;
+    case "leave": fire(document.body, "pointermove"); break;
+    case "blur": document.body.focus(); break;
+    case "tap": fire(target, "pointerdown"); fire(target, "click"); break;
+    case "escape": fire(document.activeElement, "keydown", "Escape"); break;
+    case "outside": fire(document.body, "pointerdown"); break;
+    case "surface": fire(byId.tip, "pointermove"); fire(byId.tip, "pointerdown"); break;
+    default: throw new Error("unknown tooltip action");
+  }
+  tipStates.push(tooltipState());
+}
 function state() { return { selected: role("tab").filter((n) => n.getAttribute("aria-selected") === "true").map((n) => n.textContent.split(" ")[0]),
   focused: document.activeElement ? document.activeElement.textContent.split(" ")[0] : null }; }
 for (const action of scenario.actions || []) {
@@ -107,6 +151,7 @@ for (const action of scenario.actions || []) {
     panel.scrollTop = action.scrollTop || 0; panel.scrollLeft = action.scrollLeft || 0;
     if (action.open !== undefined) all(panel).filter((n) => n.tag === "details").forEach((n) => n.open = action.open);
   }
+  tooltipAction(action);
   states.push(state());
 }
 if (scenarioPath) for (let i = 0; i < (scenario.ticks || 1); i++) {
@@ -115,6 +160,7 @@ if (scenarioPath) for (let i = 0; i < (scenario.ticks || 1); i++) {
 }
 for (const action of scenario.after || []) {
   if (action.click) fire(namedTab(action.click), "click");
+  tooltipAction(action);
   states.push(state());
 }
 if (scenario.reveal) { document.visibilityState = "visible"; handlers.visibilitychange(); }
@@ -129,6 +175,8 @@ function picture(n, disclosure, hidden, panel) {
 }
 out.picture = picture(app);
 out.states = states;
+out.tip = tooltipState(); out.tipStates = tipStates;
+out.panelChildren = role("tabpanel").map((n) => n.children.map((c) => ({tag: c.tag, cls: c.className, text: c.textContent})));
 out.focused = document.activeElement ? document.activeElement.textContent.split(" ")[0] : null;
 out.stored = stored;
 out.hash = sandbox.window.location.hash;

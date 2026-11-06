@@ -27,6 +27,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Move dashboard limits and footer details behind accessible info buttons, show compact freshness and finished-project check bricks, and bound lane/quota marks while separating wrapped story runs.
+
 - Replace Agents tiles and Project text rows with lego budget lanes, slot/quota bricks and visible story runs, following the approved prototype; retain tables behind the existing disclosure.
 - Make Project a compact list of named repositories active in the last 24 hours, register local folder names only when status is run there with consent, and move unfinished task detail into closed disclosures.
 - Correct the Antigravity file-tool hook matcher and limit suggested prompts to three; an already installed Antigravity hook group keeps its old matcher until `refresh.py antigravity-hook --yes` is run again.

@@ -42,6 +42,16 @@
     return el;
   }
   function tipOn(el, text) { el.setAttribute("data-tip", text); return el; }
+  function infoButton(text) {
+    var button = t("button", "info-button", "ⓘ");
+    button.setAttribute("type", "button"); button.setAttribute("tabindex", "0");
+    button.setAttribute("aria-label", "About this data");
+    button.setAttribute("aria-describedby", "tip"); button.setAttribute("aria-expanded", "false");
+    return tipOn(button, text);
+  }
+  function budgetMinutes(value) {
+    return Number.isFinite(value) && value > 0 && value <= 1000000 ? value : null;
+  }
   function pct(v) { return v == null ? "—" : Math.round(v * 100) + "%"; }
   function num(v) { return v == null ? "—" : String(v); }
   function tok(v) { return v >= 1000 ? (Math.round(v / 100) / 10) + "k" : String(v); }
@@ -79,7 +89,7 @@
   };
   function pane(title, aside, cls, content, why, ghostKind) {
     var p = h("section", "pane" + (cls ? " " + cls : "")), b = h("div", "body");
-    p.appendChild(h("h2", "", [t("span", "", title), t("span", "", aside || "")]));
+    p.appendChild(h("h2", "", [t("span", "", title), typeof aside === "string" ? t("span", "", aside) : h("span", "pane-aside", [aside])]));
     if (content) b.appendChild(content);
     else {
       b.appendChild(t("div", "nodata", "no data: " + (why || "source missing")));
@@ -91,9 +101,7 @@
   function runningLimits() {
     if (!D.running) return null;
     var r = D.running, snapshot = r.snapshot || {}, processes = r.processes || [], open = r.open || [], lines = [];
-    function line(value) {
-      var el = h("div", "running-row"); el.textContent = value; lines.push(el);
-    }
+    function line(value) { lines.push(value); }
     line("machine-wide, current user only; app processes, sessions not listed. The desktop app's session list is not readable by this plugin.");
     line("Names are best-effort: cannot tell a sub-agent from a session. Mismatches compare families only, not process identities or repository ownership.");
     if (snapshot.reason || !snapshot.time) {
@@ -123,12 +131,7 @@
            (run.no_process_found ? " · no process found" : ""));
     });
     line("Liveness verdicts are advisory agent judgment from artifacts; a process name does not prove a dispatch is running.");
-    return stack(lines);
-  }
-  function limits(content, name) {
-    var disclosure = h("details", "limits", [t("summary", "", "limits"), h("div", "body", [content])]);
-    var tab = TABS.get(name); disclosure.open = !!tab.limitsOpen; tab.limits = disclosure;
-    return disclosure;
+    return lines.join("\n");
   }
   var brickId = 0;
   function brick(state, width, height, cls) {
@@ -156,20 +159,21 @@
     if (!D.running) return null;
     var r = D.running, snapshot = r.snapshot || {}, processes = r.processes || [], open = r.open || [];
     var available = !!snapshot.time && !snapshot.reason;
-    var late = open.filter(function (run) { return run.budget_min > 0 && run.age_min >= run.budget_min / 2; }).length;
+    var late = open.filter(function (run) { return budgetMinutes(run.budget_min) != null && run.age_min >= run.budget_min / 2; }).length;
     var unowned = processes.filter(function (p) { return p.not_started_by_coordinator; }).length;
     var lanes = h("div", "lanes");
     open.slice().sort(function (a, b) {
-      var ar = a.budget_min > 0 ? Math.max(a.budget_min * 4 / 3, a.budget_min + 10) - a.age_min : Infinity;
-      var br = b.budget_min > 0 ? Math.max(b.budget_min * 4 / 3, b.budget_min + 10) - b.age_min : Infinity;
+      var ab = budgetMinutes(a.budget_min), bb = budgetMinutes(b.budget_min);
+      var ar = ab ? Math.max(ab * 4 / 3, ab + 10) - a.age_min : Infinity;
+      var br = bb ? Math.max(bb * 4 / 3, bb + 10) - b.age_min : Infinity;
       return ar - br;
     }).forEach(function (run) {
-      var budget = run.budget_min, age = Number(run.age_min) || 0;
+      var budget = budgetMinutes(run.budget_min), age = Number(run.age_min) || 0;
       var cap = budget > 0 ? Math.max(budget * 4 / 3, budget + 10) : null;
       var state = cap && age > cap ? "cap" : budget > 0 ? age > budget ? "over" : age >= budget / 2 ? "check" : "within" : "unknown";
       var W = 560, H = 22, track = s("svg", {"class": "lane-track", viewBox: "0 0 560 30", width: "100%", height: 30,
         preserveAspectRatio: "none", role: "img", "aria-label": age + "/" + (cap || "?") + " minutes of track"});
-      var studs = cap ? Math.max(1, Math.round(cap / 10)) : 1;
+      var studs = cap ? Math.min(60, Math.max(1, Math.round(cap / 10))) : 1;
       for (var stud = 0; stud < studs; stud++) track.appendChild(s("rect", {"class": "lane-stud", x: stud * W / studs + W / studs * .28,
         y: 0, width: W / studs * .5, height: 5, rx: 2, fill: "var(--line)"}));
       track.appendChild(s("rect", {x: 0, y: 5, width: W, height: H, rx: 3, fill: "var(--raised)", stroke: "var(--line)"}));
@@ -189,7 +193,12 @@
       });
       var label = h("div", "lane-label", [tipOn(t("span", "lane-identity", (run.agent || "other") + " " + (run.model || "—")), (run.agent || "other") + " " + (run.model || "—")),
         tipOn(t("span", "lane-task", run.task || "—"), run.task || "—")]);
-      if (run.no_process_found) label.appendChild(tipOn(brick("todo", 12, 6, "no-process"), "no process"));
+      if (run.no_process_found) {
+        var marker = tipOn(brick("todo", 12, 6, "no-process"), "no process");
+        marker.setAttribute("aria-hidden", "false"); marker.setAttribute("role", "img");
+        marker.setAttribute("aria-label", "no process found"); marker.setAttribute("tabindex", "0");
+        label.appendChild(marker);
+      }
       var lane = h("div", "lane" + (run.no_process_found ? "" : " live"), [label, track,
         t("span", "lane-value", age + "/" + (budget == null ? "?" : budget) + " m")]);
       lane.setAttribute("data-run", run.id || ""); lane.setAttribute("data-state", state);
@@ -208,6 +217,8 @@
     var limit = Number(r.parallel_limit);
     limit = Number.isInteger(limit) && limit > 0 ? Math.min(100, limit) : 5;
     var slots = h("div", "slots");
+    slots.setAttribute("role", "img"); slots.setAttribute("tabindex", "0");
+    slots.setAttribute("aria-label", Math.min(open.length, limit) + " of " + limit + " slots lit");
     for (var slot = 0; slot < limit; slot++) slots.appendChild(brick(slot < open.length ? "done" : "todo", 18, 10, "slot" + (slot < open.length ? " lit" : "")));
     capacity.appendChild(h("div", "capacity-block", [t("div", "capacity-caption", "slots (" + limit + ")"), slots]));
     if (quota.length) {
@@ -215,11 +226,12 @@
         var fraction = Math.max(0, Math.min(1, Number(q.remaining_fraction) || 0));
         var measured = Date.parse(q.measured);
         var stale = q.unverified || !Number.isFinite(measured) || (Date.now() - measured) / 1000 > 28800;
-        var meter = h("div", "quota-bricks" + (stale ? " unverified" : "")), lit = Math.round(fraction * 10);
-        for (var i = 0; i < 10; i++) meter.appendChild(brick(stale || i >= lit ? "todo" : fraction < .1 ? "low" : "done", 14, 7,
+        var meter = h("div", "quota-bricks" + (stale ? " unverified" : "")), lit = fraction > 0 ? Math.max(1, Math.round(fraction * 10)) : 0;
+        for (var i = 0; i < 10; i++) meter.appendChild(brick(stale || i >= lit ? "todo" : fraction <= .1 ? "low" : "done", 14, 7,
           "quota-brick" + (!stale && i < lit ? " lit" : "")));
         if (stale) meter.appendChild(t("span", "quota-unknown", "?"));
-        meter.setAttribute("role", "img"); meter.setAttribute("aria-label", q.agent + " quota remaining" + (stale ? " unverified" : ""));
+        meter.setAttribute("role", "img"); meter.setAttribute("tabindex", "0");
+        meter.setAttribute("aria-label", q.agent + ": " + (fraction * 100) + "% remaining" + (stale ? " unverified" : ""));
         tipOn(meter, q.agent + ": " + (fraction * 100) + "% remaining · measured " + q.measured + (stale ? " · unverified" : ""));
         capacity.appendChild(h("div", "quota-block capacity-block", [t("div", "capacity-caption", q.agent + " quota"), meter]));
       });
@@ -238,9 +250,7 @@
     TABS.get("agents").tableRows.push(tableOf("dispatch budgets", ["agent / model / task", "elapsed / budget", "check", "liveness"], open.map(function (run) {
       return [run.agent + " / " + run.model + " / " + run.task, run.age_min + "/" + run.budget_min + " min", run.check_due ? "check due" : "—", run.liveness];
     })));
-    var content = [lanes, capacity];
-    var notes = runningLimits(); notes.classList.add("running-limits"); content.push(limits(notes, "agents"));
-    return stack(content);
+    return stack([lanes, capacity]);
   }
   function projectData(p) {
     var lines = [];
@@ -346,10 +356,18 @@
         h("div", "active-meta", [hosts, t("span", "active-last", at ? "last " + last + " ago" : "last unavailable")])])]);
       row.setAttribute("data-repo", project.repo);
       tipOn(row, project.label + " · " + (at ? String(project.last) : "last unavailable") + (!hasTasks ? " · no task list" : ""));
-      var percent = Number(project.percent), percentCell = t("span", "active-percent", "");
-      if (project.percent != null && Number.isFinite(percent)) {
-        percentCell.textContent = Math.max(0, Math.min(unfinished || !snapshot.done ? 99 : 100, Math.floor(percent))) + "%";
-      } else if (hasTasks && !unfinished) percentCell.textContent = "100%";
+      var percent = Number(project.percent), percentCell;
+      if (hasTasks && !unfinished) {
+        percentCell = brick("done", 22, 14, "project-done");
+        percentCell.setAttribute("aria-hidden", "false"); percentCell.setAttribute("role", "img");
+        percentCell.setAttribute("aria-label", "done");
+        percentCell.appendChild(s("path", {d: "M6 10l3 3 7-6", fill: "none", stroke: "var(--bg)", "stroke-width": 2,
+          "stroke-linecap": "round", "stroke-linejoin": "round", "class": "done-check"}));
+      } else {
+        percentCell = t("span", "active-percent", "");
+        if (project.percent != null && Number.isFinite(percent))
+          percentCell.textContent = Math.max(0, Math.min(99, Math.floor(percent))) + "%";
+      }
       row.appendChild(projectDetail(snapshot, motion)); row.appendChild(percentCell);
       list.appendChild(row);
     });
@@ -408,21 +426,25 @@
     var activeNames = {};
     namedActivity(block).forEach(function (row) { activeNames[row.repo] = row.label; });
     var keys = Object.keys(repositories).filter(function (code) { return repositories[code].label || activeNames[code]; });
-    var visible = namedActivity(block).map(function (row) { return row.repo; }).filter(function (code) { return repositories[code]; });
     var content = [activeProjects(block)];
     keys.forEach(function (code) {
       TABS.get("project").tableRows.push(h("div", "tbl", [t("h3", "", repositories[code].label || activeNames[code]), projectData(repositories[code])]));
     });
-    var notes = [t("div", "", "Derived from files and local records, not from a tracker; done means the box is ticked. Linked through delegated runs or recorded task ids only; sessions that record neither remain unlinked. Task receipts are advisory, never a gate.")];
+    return stack(content);
+  }
+  function projectLimits() {
+    if (!D.progress) return "not available yet";
+    var block = D.progress, repositories = block.repositories || {};
+    var visible = namedActivity(block).map(function (row) { return row.repo; }).filter(function (code) { return repositories[code]; });
+    var notes = ["Derived from files and local records, not from a tracker; done means the box is ticked. Linked through delegated runs or recorded task ids only; sessions that record neither remain unlinked. Task receipts are advisory, never a gate."];
     visible.forEach(function (code) {
       var count = (repositories[code].sessions_without_task || []).length;
-      if (count) notes.push(t("span", "chip unlinked-sessions", repoLabel(code) + ": " + count + " sessions without a task"));
+      if (count) notes.push(repoLabel(code) + ": " + count + " sessions without a task");
     });
-    if (block.notice) notes.push(t("div", "", "Project progress now reads this repository's task list and the ledger; nothing leaves your machine; turn off with Project progress: off in host.md under ## Project progress, or FNL_PROGRESS=off."));
-    if (block.reason) notes.push(t("div", "", block.reason));
-    notes.push(t("div", "", "Up to five last-written repository snapshots. Features under specs/archive are not read or counted; finished features and stories are hidden. Accepted, not ticked remains unfinished."));
-    content.push(limits(h("div", "project-limits", notes), "project"));
-    return stack(content);
+    if (block.notice) notes.push("Project progress now reads this repository's task list and the ledger; nothing leaves your machine; turn off with Project progress: off in host.md under ## Project progress, or FNL_PROGRESS=off.");
+    if (block.reason) notes.push(block.reason);
+    notes.push("Up to five last-written repository snapshots. Features under specs/archive are not read or counted; finished features and stories are hidden. Accepted, not ticked remains unfinished.");
+    return notes.join("\n");
   }
   function signed(n) { return (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n); }
 
@@ -469,7 +491,7 @@
   }
 
   /* draw() builds the whole page from D, so a newer data.js can replace it in place; the month shown and the open tables stay. */
-  var month = null, genEl = null, freshnessEl = null;
+  var month = null, footer = null, updatedEl = null, statusDot = null, footerInfo = null;
   /* Only these literal names can select a panel or become a fragment. */
   var TABS = new Map([
     ["overview", { label: "Overview", id: "panel-overview", buttonId: "tab-overview" }],
@@ -500,7 +522,8 @@
       tab.panel.hidden = !active;
       if (active) { tab.panel.scrollTop = tab.scrollTop || 0; tab.panel.scrollLeft = tab.scrollLeft || 0; }
     });
-    tip.hidden = true;
+    closeTip();
+    placeFooter();
     try { localStorage.setItem("fnl-tab", selected); } catch (e) { /* storage can be blocked */ }
     if (remember) {
       if (hashTab() !== selected) window.location.hash = selected;
@@ -543,8 +566,12 @@
     app.appendChild(strip);
     TABS.forEach(function (tab) { app.appendChild(tab.panel); });
   }
+  function placeFooter() {
+    var tab = TABS.get(selected);
+    if (footer && tab.panel) tab.panel.insertBefore(footer, tab.tables || null);
+  }
   function updateFreshness() {
-    if (!freshnessEl) return;
+    if (!footerInfo) return;
     var f = D.freshness || {}, now = Date.now(), builtAge = (now - Date.parse(f.built_at)) / 1000;
     var elapsed = Number.isFinite(builtAge) ? Math.max(0, builtAge) : 0;
     function minutes(seconds) { var n = Math.floor(seconds / 60); return n + (n === 1 ? " minute" : " minutes"); }
@@ -552,9 +579,16 @@
       return value == null ? "no reading" : typeof value === "number" ? minutes(value + elapsed) + " old" : String(value);
     }
     var hosts = f.latest_event || {}, names = {claude: "Claude Code", codex: "Codex", antigravity: "Antigravity"};
-    var lines = ["built " + (f.built_at || "—")];
+    var sess = D.sessions || {}, staleHost = false;
+    var lines = ["sources " + (D.sources || []).map(function (source) {
+      return source.name + (source.ok ? "" : " (unavailable)") + (source.note ? ": " + source.note : "");
+    }).join(" · "),
+      "sessions " + num(sess.total) + " · with edits " + num(sess.with_edits) + " · unclassified " + num(sess.unclassified) +
+      " · writer errors " + num(D.errors) + " · generated " + (D.generated || "—"), "built " + (f.built_at || "—")];
     Object.keys(hosts).forEach(function (host) {
-      var quiet = (now - Date.parse(hosts[host])) / 1000 > 900;
+      var hostAge = (now - Date.parse(hosts[host])) / 1000;
+      var quiet = hostAge > 900;
+      if (quiet || !Number.isFinite(hostAge)) staleHost = true;
       var otherActive = Object.keys(hosts).some(function (other) {
         return other !== host && (now - Date.parse(hosts[other])) / 1000 <= 900;
       });
@@ -564,7 +598,15 @@
     lines.push("ledger: " + age(f.ledger_age_seconds), "quota: " + age(f.quota_age_seconds));
     if (builtAge > 60 && document.visibilityState === "visible")
       lines.push("data is " + minutes(builtAge) + " old; it updates while a session runs tools");
-    freshnessEl.textContent = lines.join(" · ");
+    var generatedAge = (now - Date.parse(D.generated)) / 60000;
+    var n = Math.max(0, Math.floor(generatedAge));
+    var relative = n < 60 ? n + " min" : n < 1440 ? Math.floor(n / 60) + " hr" : Math.floor(n / 1440) + " d";
+    updatedEl.textContent = Number.isFinite(generatedAge) ? "updated " + relative + " ago" : "updated time unknown";
+    var state = !Number.isFinite(builtAge) || builtAge > 60 ? "stale" : staleHost ? "quiet" : "fresh";
+    statusDot.setAttribute("data-state", state);
+    statusDot.setAttribute("aria-label", state === "stale" ? "page data stale" : state === "quiet" ? "host data stale" : "data fresh");
+    tipOn(footerInfo, lines.join("\n"));
+    if (tipAnchor === footerInfo && !tip.hidden) tip.textContent = footerInfo.getAttribute("data-tip");
   }
   function draw() {
   var focusedTab = null;
@@ -572,10 +614,9 @@
     if (tab.button === document.activeElement) focusedTab = tab;
     if (tab.panel && !tab.panel.hidden) { tab.scrollTop = tab.panel.scrollTop; tab.scrollLeft = tab.panel.scrollLeft; }
     if (tab.tables) tab.tablesOpen = tab.tables.open;
-    if (tab.limits) tab.limitsOpen = tab.limits.open;
-    tab.limits = null;
     tab.tables = null;
   });
+  closeTip(); footer = null; footerInfo = null;
   app.replaceChildren();
   document.querySelector(".win").classList.toggle("skel", !D);
   var emptyNotice = null;
@@ -613,8 +654,8 @@
 
   drawTabs();
   var overview = TABS.get("overview").panel, delegation = TABS.get("delegation").panel;
-  TABS.get("agents").panel.appendChild(pane("running now", "", "", runningPanel(), "not available yet"));
-  TABS.get("project").panel.appendChild(pane("project progress", "", "", projectPanel(), "not available yet"));
+  TABS.get("agents").panel.appendChild(pane("running now", infoButton(runningLimits() || "not available yet"), "", runningPanel(), "not available yet"));
+  TABS.get("project").panel.appendChild(pane("project progress", infoButton(projectLimits()), "", projectPanel(), "not available yet"));
 
   /* Overview: activity and router composition beside depth and load cost. */
   var band1 = h("div", "g2");
@@ -826,28 +867,63 @@
     focusedTab.button.focus();
   }
 
-  var src = h("div", "src", [t("b", "", "sources")]);
-  (D.sources || []).forEach(function (x) { src.appendChild(tipOn(t("span", x.ok ? "" : "no", x.name), x.note || "")); });
-  genEl = t("span", "", D.generated || "—");
-  app.appendChild(h("div", "status", [src, h("span", "", ["sessions " + num(sess.total) + " · with edits " + num(sess.with_edits) + " · unclassified " + num(sess.unclassified) + " · writer errors " + num(D.errors) + " · generated ", genEl])]));
-  freshnessEl = app.appendChild(t("p", "status", ""));
+  updatedEl = t("span", "updated", ""); statusDot = h("span", "status-dot");
+  statusDot.setAttribute("role", "img");
+  footerInfo = infoButton("");
+  footer = h("div", "status", [statusDot, updatedEl, footerInfo]);
+  placeFooter();
   updateFreshness();
   }
-  draw();
-
+  var tipAnchor = null, pinnedTip = null, dismissedTip = null;
+  tip.setAttribute("role", "tooltip");
+  function closeTip() {
+    if (tipAnchor && tipAnchor.classList.contains("info-button")) tipAnchor.setAttribute("aria-expanded", "false");
+    tip.hidden = true; tipAnchor = null; pinnedTip = null;
+  }
+  function showTip(el, x, y) {
+    if (!el || el === dismissedTip) return;
+    if (tipAnchor !== el) closeTip();
+    tipAnchor = el; tip.textContent = el.getAttribute("data-tip"); tip.hidden = false;
+    tip.style.pointerEvents = el.classList.contains("info-button") ? "auto" : "none";
+    if (el.classList.contains("info-button")) el.setAttribute("aria-expanded", "true");
+    var b = el.getBoundingClientRect();
+    tip.style.left = Math.max(8, Math.min(x == null ? b.left : x + 12, window.innerWidth - 286)) + "px";
+    tip.style.top = Math.max(8, Math.min(y == null ? b.bottom + 6 : y + 14,
+      window.innerHeight - tip.getBoundingClientRect().height - 8)) + "px";
+  }
   document.addEventListener("pointermove", function (e) {
+    if (pinnedTip || e.target === tip) return;
     var el = e.target.closest && e.target.closest("[data-tip]");
-    if (!el) { tip.hidden = true; return; }
-    tip.textContent = el.getAttribute("data-tip"); tip.hidden = false;
-    tip.style.left = Math.min(e.clientX + 12, window.innerWidth - 270) + "px"; tip.style.top = (e.clientY + 14) + "px";
+    if (dismissedTip !== el) dismissedTip = null;
+    if (!el) { if (document.activeElement !== tipAnchor) closeTip(); return; }
+    showTip(el, e.clientX, e.clientY);
+  });
+  document.addEventListener("pointerout", function (e) {
+    if (e.relatedTarget === tip) return;
+    var next = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("[data-tip]");
+    if (tipAnchor !== next && !pinnedTip && document.activeElement !== tipAnchor) closeTip();
+    if (dismissedTip !== next) dismissedTip = null;
   });
   document.addEventListener("focusin", function (e) {
-    var el = e.target.getAttribute && e.target.getAttribute("data-tip");
-    if (!el) return;
-    var b = e.target.getBoundingClientRect(); tip.textContent = el; tip.hidden = false;
-    tip.style.left = Math.min(b.left, window.innerWidth - 270) + "px"; tip.style.top = (b.bottom + 6) + "px";
+    if (!e.target.getAttribute || !e.target.getAttribute("data-tip")) return;
+    dismissedTip = null; showTip(e.target);
   });
-  document.addEventListener("focusout", function () { tip.hidden = true; });
+  document.addEventListener("focusout", function () { dismissedTip = null; if (!pinnedTip) closeTip(); });
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest && e.target.closest(".info-button");
+    if (!el) return;
+    if (pinnedTip === el) { dismissedTip = el; closeTip(); }
+    else { dismissedTip = null; showTip(el); pinnedTip = el; }
+  });
+  document.addEventListener("pointerdown", function (e) {
+    if (e.target === tip) return;
+    var el = e.target.closest && e.target.closest("[data-tip]");
+    if (el !== tipAnchor) { dismissedTip = tipAnchor; closeTip(); }
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { dismissedTip = tipAnchor; closeTip(); }
+  });
+  draw();
 
   /* Live update: while the tab is visible, load data.js again. A page on disk cannot watch a file, and this needs no server. */
   var POLL_MS = 5000, loading = false;
@@ -858,7 +934,7 @@
     if (!next || next === D) return;
     D = next;
     var c = content(next);
-    if (c !== shown) { shown = c; draw(); } else { genEl.textContent = next.generated || "—"; updateFreshness(); }
+    if (c !== shown) { shown = c; draw(); } else { updateFreshness(); }
   }
   function poll() {
     updateFreshness();
