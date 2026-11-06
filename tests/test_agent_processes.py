@@ -19,6 +19,11 @@ SPEC.loader.exec_module(ap)
 
 
 class ProcessTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        account(self, Path(self.tmp.name) / 'home')
+
     def test_exact_roots_uid_names_elapsed_apps_and_hostile_names(self):
         raw = ('42 1 0 1-02:03:04 /private/claude\n'
                '42 2 1 00:01 /secret/node\n42 3 1 00:02 /secret/evil name</script>\n'

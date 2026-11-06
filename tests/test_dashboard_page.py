@@ -21,7 +21,7 @@ SVG_NAMESPACE = "http://www.w3.org/2000/svg"
 
 
 class DashboardPageTest(unittest.TestCase):
-    text = PAGE.read_text(encoding="utf-8")
+    text = PAGE.read_text(encoding="utf-8") + (PAGE.parent / "dashboard.js").read_text(encoding="utf-8")
 
     def test_it_is_a_complete_document_that_declares_its_encoding(self):
         head = self.text[:600].lower()
@@ -58,9 +58,10 @@ class DashboardPageTest(unittest.TestCase):
         self.assertIn('"data.js?t="', self.text)
         self.assertIn("window.FNL_DATA", self.text)
 
-    def test_tabs_add_no_resource_or_inline_handler(self):
-        self.assertEqual(re.findall(r'<script\b[^>]*src="([^"]+)"', self.text), ["data.js"])
-        self.assertNotRegex(self.text, r'<link\b|<[^>]+\son[a-z]+\s*=')
+    def test_local_script_has_no_inline_script_or_handler(self):
+        html = PAGE.read_text()
+        self.assertEqual(re.findall(r'<script\b[^>]*src="([^"]+)"', html), ['data.js', 'dashboard.js'])
+        self.assertNotRegex(html, r'<script\s*>|<link\b|<[^>]+\son[a-z]+\s*=')
         self.assertIn('new Map([', self.text)
         self.assertNotRegex(self.text, r'querySelector(?:All)?\([^"\']')
 
@@ -88,6 +89,25 @@ class DashboardPageTest(unittest.TestCase):
         self.assertEqual(set(sample["kpi"]), set(built["kpi"]))
         self.assertEqual(set(sample["kpi"]["spark"]), set(built["kpi"]["spark"]))
         self.assertEqual(set(sample["delegation"][0]), {"agent", "model", "grade", "runs", "first_pass", "quota", "error", "median_min", "rework"})
+
+    def test_rich_fixture_covers_infographic_acceptance(self):
+        data = json.loads(FIXTURE.read_text())
+        self.assertEqual(sorted(r['age_min'] for r in data['running']['open']), [5, 20, 31, 45])
+        self.assertTrue(all(r['budget_min'] == 30 for r in data['running']['open']))
+        first, second = [data['progress']['repositories'][key] for key in ('aaaaaaaa', 'bbbbbbbb')]
+        self.assertEqual(sum(len(f['stories']) for f in first['features']), 5)
+        self.assertEqual(sum(len(f['stories']) for f in second['features']), 2)
+        stories = [story for f in first['features'] for story in f['stories']]
+        self.assertIn(14, [story['total'] for story in stories])
+        self.assertIn(3, [story['total'] for story in stories])
+        self.assertEqual({t['state'] for t in first['features'][0]['tasks'] if t['story'] == 'US1'}, {'done', 'in progress', 'accepted, not ticked', 'todo'})
+        self.assertEqual(len(data['running']['quota']), 3)
+        self.assertTrue(any(r['no_process_found'] for r in data['running']['open']))
+        projects = list(data['progress']['repositories'].values())
+        self.assertEqual(sum(not p['done'] for p in projects), 2)
+        self.assertTrue(any(f['done'] == f['total'] for p in projects for f in p['features']))
+        self.assertIn('</script>', json.dumps(data['running']))
+        self.assertIn('</script>', json.dumps(data['progress']))
 
     def test_every_key_in_the_data_is_read_by_the_page(self):
         sample = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -119,9 +139,9 @@ class DashboardScriptTest(unittest.TestCase):
     def test_tabs_map_every_pane_and_share_the_header(self):
         out = self.render(FIXTURE)
         names = ["overview", "agents", "project", "delegation", "reviews"]
-        self.assertEqual([t["text"] for t in out["tabs"]], [n.title() for n in names])
+        self.assertEqual([t["text"].split()[0] for t in out["tabs"]], [n.title() for n in names])
         expected = [["activity", "router coverage", "skill and agent use", "depth vs outcome", "load cost"],
-                    ["Running now", "not available yet"], ["Project progress", "not available yet"],
+                    ["running now"], ["project progress"],
                     ["delegation", "Judge"], ["review gate"]]
         for index, (tab, panel, panes) in enumerate(zip(out["tabs"], out["panels"], expected)):
             self.assertEqual(tab["attrs"]["aria-controls"], panel["attrs"]["id"])
@@ -158,13 +178,13 @@ class DashboardScriptTest(unittest.TestCase):
                              {"stored": {"fnl-tab": name}}, {"hash": "#" + name, "storageThrows": True}):
                 with self.subTest(scenario=scenario):
                     out = self.render(FIXTURE, scenario)
-                    self.assertEqual([t["text"] for t in out["tabs"] if t["attrs"]["aria-selected"] == "true"], [name.title()])
-        for bad in ("unknown", "__proto__", "constructor", "<img src=x onerror=alert(1)>", "'][role=tab]", "%3Csvg%3E"):
+                    self.assertEqual([t["text"].split()[0] for t in out["tabs"] if t["attrs"]["aria-selected"] == "true"], [name.title()])
+        for bad in ("unknown", "__proto__", "constructor", "<img src=hash onerror=alert(2)>", "'][role=tab]", "%3Csvg%3E"):
             for scenario in ({"hash": "#" + bad, "stored": {"fnl-tab": "agents"}},
                              {"stored": {"fnl-tab": bad}}, {"actions": [{"hash": "#" + bad}]}):
                 with self.subTest(scenario=scenario):
                     out = self.render(FIXTURE, scenario)
-                    self.assertEqual([t["text"] for t in out["tabs"] if t["attrs"]["aria-selected"] == "true"], ["Overview"])
+                    self.assertEqual([t["text"].split()[0] for t in out["tabs"] if t["attrs"]["aria-selected"] == "true"], ["Overview"])
                     self.assertNotIn(bad, out["text"])
                     self.assertNotIn(bad, json.dumps([t["attrs"] for t in out["tabs"]] + [p["attrs"] for p in out["panels"]]))
         out = self.render(FIXTURE, {"storageThrows": True, "actions": [{"click": "Reviews"}]})
@@ -200,73 +220,202 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual([t["text"] for t in out["tabs"]], ["Overview", "Agents 3", "Project 4", "Delegation", "Reviews"])
         data.update(running={"processes": [], "open": []}, progress={"in_progress": 0})
         self.assertEqual([t["text"] for t in self.render_freshness(data)["tabs"]][1:3], ["Agents 0", "Project 0"])
-        for source in (None, FIXTURE):
+        for source in (None,):
             out = self.render(source)
             self.assertEqual([t["text"] for t in out["tabs"]][1:3], ["Agents", "Project"])
             self.assertIn("no data: not available yet", out["panels"][1]["text"])
             self.assertIn("no data: not available yet", out["panels"][2]["text"])
 
-    # Running-agents acceptance 4: the real page script, fake DOM and timers.
-    def test_running_panel_snapshot_dispatches_limits_and_hostile_text(self):
-        data = self.sample()
-        attack = '</script><img src=x onerror=alert(1)>'
-        data['running'] = dict(processes=[dict(family='codex', elapsed_seconds=61,
-            descendants={'node': 2, 'other': 1}, not_started_by_coordinator=True)],
-            open=[dict(id='d1', agent='claude', model='m', project=attack, task='t', ts='2026-11-06T10:00:00Z',
-                       age_min=12, budget_min=20, check_due=True, liveness='unverified', no_process_found=True)],
-            snapshot=dict(time='2026-11-06T10:00:00Z', reason='', apps={'Claude': 3}), ledger_note='')
-        out = self.render_freshness(data, {'hash': '#agents'})
-        panel = out['panels'][1]['text']
-        for text in ('Running now', 'processes named claude: 0', 'codex: 1', 'agy: 0',
-                     'elapsed 61 seconds', 'node: 2', 'other: 1', 'not started by the coordinator',
-                     'no process found', '12/20 min', 'check due', 'liveness: unverified',
-                     'Claude app: 3 processes', 'machine-wide', 'app processes, sessions not listed',
-                     'cannot tell a sub-agent from a session', '2026-11-06T10:00:00Z', attack):
-            self.assertIn(text, panel)
-        self.assertNotIn('img', out['tags'])
-        self.assertNotIn('script', out['tags'])
-        changed = json.loads(json.dumps(data))
-        changed['running']['processes'] = []
-        changed['running']['open'] = []
-        later = self.render_freshness(data, {'hash': '#agents', 'next': changed, 'ticks': 2})
-        self.assertIn('No command-line agent processes found', later['panels'][1]['text'])
-        self.assertIn('No open dispatches', later['panels'][1]['text'])
-        self.assertFalse(later['panels'][1]['hidden'])
-        self.assertEqual(later['poll_ms'], [5000])
+    @staticmethod
+    def marks(out, cls, disclosure=None):
+        return [m for m in out['picture'] if cls in m['cls'].split() and m['disclosure'] == disclosure]
 
-    def test_project_panel_metadata_limits_empty_state_hostile_names_and_reload(self):
-        data = self.sample()
-        attack = '<img src=x onerror=alert(1)>'
-        feature = dict(feature=3, done=1, total=2,
-            phases=[dict(phase=1, done=1, total=2)], stories=[dict(story='US1', done=1, total=2)],
-            tasks=[dict(id='T012', story='US1', phase=1, state='in progress',
-                        runs=[dict(id='d1', agent='codex', model=attack, elapsed_seconds=60, outcome='open')],
-                        sessions=[dict(id='s1', host=attack, last='now')])])
-        current = dict(features=[feature], reason='', skipped=[], labels_without_feature=1, unlinked_runs=2,
-                       outcomes={'accepted': 1}, sessions={'active_24h': 2, 'idle': 1},
-                       sessions_without_task=[dict(id='s2', host='claude', last='now')], reviews={'code': 'APPROVE'},
-                       version='0.1.10-dev', running_now=1)
-        data['progress'] = dict(current='aaaaaaaa', repositories={'aaaaaaaa': current}, in_progress=1, notice=True)
-        out = self.render_freshness(data, {'hash': '#project'})
-        panel = out['panels'][2]['text']
-        for value in ('feature 003', '1 / 2', 'Phase 1', 'US1', 'T012', 'in progress', 's1', 'd1', attack,
-                      'Sessions without a task', 's2', 'active in the last 24 hours: 2', 'idle: 1',
-                      'running now: 1', 'accepted: 1', 'APPROVE', '0.1.10-dev', 'derived from files and local records',
-                      'done means the box is ticked', 'label without a feature: 1', 'nothing leaves your machine'):
-            self.assertIn(value, panel)
+    def test_reviews_cap_chains_project_labels_and_live_hash_changes(self):
+        out = self.render(FIXTURE, {'hash': '#agents', 'actions': [{'hash': '#reviews'}, {'hash': '#project'}, {'hash': '#__proto__'}, {'hash': '#reviews'}]})
+        self.assertEqual([state['selected'] for state in out['states']], [['Reviews'], ['Project'], ['Overview'], ['Reviews']])
+        chains = self.marks(out, 'seq')
+        self.assertEqual(chains[0]['attrs']['data-dots'], '8')
+        self.assertEqual(self.marks(out, 'more-rounds')[0]['text'], '+6')
+        labels = self.marks(out, 'review-label')
+        self.assertTrue(labels[0]['text'].startswith('Fino tools '))
+        self.assertNotIn('aaaaaaaa', labels[0]['text'])
+        self.assertIn('white-space: nowrap', re.search(r'\.rv \.review-label \{([^}]+)', PAGE.read_text())[1])
+        self.assertIn('14 rounds', chains[0]['attrs']['data-tip'])
+        table = self.marks(out, 'tbl', 'show the data as tables')
+        self.assertTrue(any('REWORK → REWORK' in row['text'] for row in table))
+
+    def test_agents_infographics_lanes_kpis_quota_and_hostile_values(self):
+        out = self.render(FIXTURE, {'hash': '#agents', 'now': '2026-11-06T10:00:00Z'})
+        lanes = self.marks(out, 'lane')
+        self.assertEqual([m['attrs']['data-run'] for m in lanes],
+                         ['</script><img src=x onerror=alert(1)>', 'run3', 'run2', 'run1'])
+        self.assertEqual([m['style']['left'] for m in self.marks(out, 'check-tick')], ['37.5%'] * 4)
+        self.assertEqual([m['style']['left'] for m in self.marks(out, 'budget-tick')], ['75%'] * 4)
+        self.assertEqual([m['style']['width'] for m in self.marks(out, 'lane-bar')], ['100%', '77.5%', '50%', '12.5%'])
+        self.assertEqual([m['attrs']['data-state'] for m in lanes], ['cap', 'over', 'check', 'within'])
+        self.assertEqual([m['text'] for m in self.marks(out, 'lane-overflow')], ['>'])
+        backgrounds = [m['style']['background'] for m in self.marks(out, 'lane-bar')]
+        self.assertIn('var(--warn) 37.5% 75%', backgrounds[0])
+        self.assertIn('var(--crit) 75% 100%', backgrounds[0])
+        self.assertIn('var(--good) 0% 75%', backgrounds[2])
+        self.assertIn('var(--warn) 75% 100%', backgrounds[2])
+        self.assertIn('var(--good) 0% 100%', backgrounds[3])
+        self.assertEqual([m['text'] for m in self.marks(out, 'lane-legend')], ['| check at half budget  | budget  red = over budget'])
+        self.assertEqual([m['text'] for m in self.marks(out, 'lane-identity')][-2:], ['claude opus', 'codex gpt-6'])
+        tasks = self.marks(out, 'lane-task')
+        self.assertTrue(all(m['attrs']['data-tip'] == m['text'] for m in tasks))
+        self.assertIn('</script>', tasks[2]['text'])
+        self.assertEqual([m['text'] for m in self.marks(out, 'agent-value')], ['4', '3', '1'])
+        self.assertEqual(self.marks(out, 'process-dot'), [])
+        self.assertEqual(self.marks(out, 'processes'), [])
+        self.assertEqual([m['text'] for m in self.marks(out, 'process-counts')], ['claude 1 · codex 2 · agy 0'])
+        tiles = self.marks(out, 'kpi')
+        self.assertTrue(any('3 roots · 10 app procs' in m['text'] for m in tiles))
+        self.assertTrue(any('at half budget' in m['text'] for m in tiles))
+        self.assertTrue(any('family match only' in m['text'] for m in tiles))
+        self.assertEqual(len(self.marks(out, 'no-process')), 1)
+        quota = self.marks(out, 'quota-meter')
+        self.assertEqual(len(quota), 3)
+        self.assertEqual([m['attrs']['aria-valuenow'] for m in quota], ['68', '8', '42'])
+        bars = self.marks(out, 'quota-bar')
+        self.assertEqual(bars[1]['style']['background'], 'var(--crit)')
+        self.assertIn('hollow', quota[2]['cls'])
+        self.assertIn('unverified', quota[2]['attrs']['data-tip'])
+        self.assertEqual([m['text'] for m in self.marks(out, 'quota-row')], ['claude  68%', 'codex  8%', 'agy  42% ?'])
+        self.assertTrue(any('</script>' in m['attrs'].get('data-tip', '') for m in lanes))
+        tables = self.marks(out, 'tbl', 'show the data as tables')
+        self.assertTrue(any('agent state' in row['text'] and 'past the check time' in row['text'] for row in tables))
+        self.assertTrue(any('process roots' in row['text'] and 'descendants' in row['text'] for row in tables))
+        limits = self.marks(out, 'running-limits', 'limits')
+        self.assertEqual(len(limits), 1)
+        self.assertIn('machine-wide', limits[0]['text'])
+        self.assertIn('not started by the coordinator', limits[0]['text'])
+        self.assertTrue(any('quota' in m['text'] for m in self.marks(out, 'tbl', 'show the data as tables')))
         self.assertNotIn('img', out['tags'])
         self.assertNotIn('script', out['tags'])
-        current['features'] = []
-        data['progress']['notice'] = False
-        empty = self.render_freshness(data, {'hash': '#project'})
-        self.assertIn('No tasks.md or configured task file found', empty['panels'][2]['text'])
-        self.assertNotIn('nothing leaves your machine', empty['panels'][2]['text'])
-        changed = self.sample()
-        changed['progress'] = data['progress']
-        later = self.render_freshness(self.sample(), {'hash': '#project', 'next': changed, 'ticks': 2})
-        self.assertIn('No tasks.md or configured task file found', later['panels'][2]['text'])
-        self.assertFalse(later['panels'][2]['hidden'])
-        self.assertEqual(later['poll_ms'], [5000])
+
+    def test_reworked_layout_contracts_and_mobile_document_scroll(self):
+        css = PAGE.read_text()
+        def rule(selector):
+            return re.search(r"(?m)^" + re.escape(selector) + r" \{([^}]+)\}", css).group(1)
+        self.assertNotIn('overflow: hidden', rule('.lane-identity'))
+        self.assertIn('overflow-wrap: anywhere', rule('.lane-identity'))
+        self.assertIn('text-overflow: ellipsis', rule('.lane-task'))
+        self.assertIn('font-size: var(--t-xs)', rule('.lane-task'))
+        self.assertIn('color: var(--muted)', rule('.lane-task'))
+        self.assertIn('grid-template-columns: minmax(0, 240px) minmax(0, 1fr) 100px', rule('.lane, .quota-row'))
+        self.assertNotIn('grid-template-columns', rule('.quota'))
+        self.assertIn('background: var(--h0)', rule('.quota-meter'))
+        self.assertIn('border: 1px dashed', rule('.quota-meter.hollow'))
+        self.assertIn('grid-template-columns: 84px minmax(0, 1fr) 44px', rule('.story'))
+        for declaration in ('width: 14px', 'height: 14px', 'border-radius: 3px'):
+            self.assertIn(declaration, rule('.cell'))
+        self.assertIn('gap: 3px', rule('.cells'))
+        self.assertIn('flex-wrap: wrap', rule('.cells'))
+        self.assertIn('repeating-linear-gradient', rule('.cell.accepted'))
+        self.assertIn('var(--warn)', rule('.cell.accepted'))
+        self.assertIn('border-left: 1px', rule('.story-tree'))
+        self.assertIn('padding-left: 10px', rule('.story-tree'))
+        self.assertIn('height: 3px', rule('.feature-bar'))
+        self.assertIn('text-align: right', rule('.lane-value'))
+        mobile = css[css.index('@media (max-width: 560px) {\n  #panel-agents'):]
+        self.assertIn('#panel-agents, #panel-project { max-height: none; overflow: visible; }', mobile)
+        self.assertIn('.lane, .quota-row { grid-template-columns: minmax(0, 1fr) 84px;', mobile)
+        self.assertIn('.lane-label, .quota-label { grid-column: 1 / -1; }', mobile)
+        self.assertIn('.agent-kpis .kpi:first-child { grid-column: 1 / -1; }', mobile)
+
+    def test_next_uses_priority_then_phase_then_id_and_skips_done(self):
+        data = self.sample()
+        f = data['progress']['repositories']['bbbbbbbb']['features'][0]
+        f['tasks'] += [dict(id='T009', story='US1', phase=1, state='todo'),
+                       dict(id='T001', story='US1', phase=2, state='todo')]
+        out = self.render_freshness(data)
+        self.assertEqual(self.marks(out, 'project-next')[0]['text'], 'next US1 · T009')
+        f['tasks'][-2]['state'] = 'done'
+        self.assertEqual(self.marks(self.render_freshness(data), 'project-next')[0]['text'], 'next US1 · T012')
+        f['stories'][1]['priority'] = 4
+        self.assertEqual(self.marks(self.render_freshness(data), 'project-next')[0]['text'], 'next US1 · T003')
+
+    def test_finished_story_plural(self):
+        data = self.sample()
+        feature = data['progress']['repositories']['aaaaaaaa']['features'][0]
+        feature['stories'].append(dict(story='US8', total=2, done=2, priority=3))
+        out = self.render_freshness(data)
+        self.assertEqual([m['text'] for m in self.marks(out, 'finished-stories')], ['2 stories done'])
+
+    def test_agents_empty_state_and_omitted_quota(self):
+        data = self.sample()
+        data['running'] = dict(open=[], processes=[], snapshot=dict(reason='snapshot off'), ledger_note='')
+        out = self.render_freshness(data, {'hash': '#agents'})
+        self.assertEqual(len(self.marks(out, 'ghost-lane')), 3)
+        self.assertIn('No agents running', out['panels'][1]['text'])
+        self.assertEqual([m['text'] for m in self.marks(out, 'agent-value')], ['0', '0', '0'])
+        self.assertEqual(self.marks(out, 'quota-meter'), [])
+        self.assertTrue(all('alert' not in m['text'] for m in self.marks(out, 'agent-value')))
+
+    def test_project_infographics_priority_cells_hidden_work_and_tables(self):
+        out = self.render(FIXTURE, {'hash': '#project'})
+        projects = self.marks(out, 'proj')
+        self.assertEqual([p['attrs']['data-repo'] for p in projects], ['bbbbbbbb', 'aaaaaaaa'])
+        self.assertEqual([p['text'] for p in self.marks(out, 'project-percent')], ['33%', '29%'])
+        self.assertEqual([p['attrs']['data-story'] for p in self.marks(out, 'story')], ['US1', 'US2', 'US1', 'US4', 'US3'])
+        self.assertEqual([p['text'] for p in self.marks(out, 'story-label')], ['US1 · P1', 'US2 · P3', 'US1 · P2', 'US4 · P3', 'US3'])
+        cells = [p for p in self.marks(out, 'cell') if 'data-task' in p['attrs']]
+        self.assertEqual([p['attrs']['data-task'] for p in cells][:6], ['T011', 'T012', 'T010', 'T001', 'T003', 'T004'])
+        self.assertEqual(len(cells), 22)
+        self.assertEqual({p['attrs']['data-state'] for p in cells}, {'done', 'in progress', 'accepted, not ticked', 'todo'})
+        self.assertEqual([p['text'] for p in self.marks(out, 'project-next')], ['next US1 · T012', 'next US1 · T003'])
+        legend = self.marks(out, 'task-legend')
+        self.assertEqual(len(legend), 1)
+        self.assertEqual(legend[0]['text'].replace('  ', ' '), ' done · agent on it · done, not accepted · to do')
+        self.assertEqual([p['text'] for p in self.marks(out, 'feature-head')], ['spec 004 · 33% ', 'spec 003 · 25% '])
+        self.assertEqual(len(self.marks(out, 'feature-bar')), 2)
+        self.assertEqual(len(self.marks(out, 'story-tree')), 2)
+        self.assertEqual([p['text'] for p in self.marks(out, 'finished-projects')], ['2 projects done, hidden'])
+        self.assertEqual([p['text'] for p in self.marks(out, 'finished-stories')], ['1 story done'])
+        self.assertEqual(self.marks(out, 'unlinked-sessions'), [])
+        self.assertEqual(len(self.marks(out, 'unlinked-sessions', 'limits')), 2)
+        self.assertEqual(len(self.marks(out, 'project-segments')), 2)
+        tips = [p['attrs']['data-tip'] for p in cells]
+        self.assertTrue(any(all(t in tip for t in ('T002', 'in progress', 'codex', 'session1', '</script>')) for tip in tips))
+        tables = [p for p in out['picture'] if p['disclosure'] == 'show the data as tables']
+        self.assertTrue(any('project completion' in p['text'] and '33%' in p['text'] for p in tables))
+        self.assertTrue(any('T090' in p['text'] for p in tables), 'finished feature remains in the data equivalent')
+        self.assertTrue(any('feature 009' in p['text'] for p in tables))
+        self.assertFalse(any(p['tag'] == 'table' and p['disclosure'] is None for p in out['picture']))
+        limits = self.marks(out, 'project-limits', 'limits')
+        self.assertEqual(len(limits), 1)
+        self.assertIn('nothing leaves your machine', limits[0]['text'])
+        self.assertNotIn('img', out['tags'])
+        self.assertNotIn('script', out['tags'])
+
+    def test_project_empty_no_ghost_and_priority_tie_uses_latest_activity(self):
+        data = self.sample()
+        repos = data['progress']['repositories']
+        repos['aaaaaaaa']['features'][0]['stories'][0]['priority'] = 1
+        out = self.render_freshness(data, {'hash': '#project'})
+        self.assertEqual([p['attrs']['data-repo'] for p in self.marks(out, 'proj')], ['aaaaaaaa', 'bbbbbbbb'])
+        # A later local run wins a priority tie even when its snapshot is older.
+        repos['bbbbbbbb']['features'][0]['tasks'][1]['runs'][0]['start'] = '2026-11-06T12:00:00Z'
+        out = self.render_freshness(data, {'hash': '#project'})
+        self.assertEqual([p['attrs']['data-repo'] for p in self.marks(out, 'proj')], ['bbbbbbbb', 'aaaaaaaa'])
+        data['progress']['repositories'] = {'aaaaaaaa': dict(features=[], reason='')}
+        out = self.render_freshness(data, {'hash': '#project'})
+        self.assertIn('No tasks.md found for this repository', out['panels'][2]['text'])
+        self.assertEqual(self.marks(out, 'proj'), [])
+        self.assertFalse(any('ghost' in p['cls'] for p in out['picture'] if p.get('panel') == 'panel-project'))
+
+    def test_motion_scoped_to_visible_tab_and_once_per_changed_data(self):
+        page = PAGE.read_text()
+        self.assertRegex(page, r'@media \(prefers-reduced-motion: reduce\)\s*\{\s*\*, \*::before, \*::after \{ animation: none !important; transition: none !important;')
+        for selector, body in re.findall(r'([^{}]+)\{([^{}]+)\}', page.split('</style>')[0]):
+            if 'animation:' in body and any(name in body for name in ('amount-grow', 'lane-sweep', 'cell-breathe')):
+                self.assertTrue(all('.tabpanel:not([hidden])' in part for part in selector.split(',')))
+        out = self.render(FIXTURE, {'actions': [{'click': 'Agents'}, {'click': 'Project'}]})
+        self.assertTrue(all(p['attrs'].get('data-enter') != 'true' for p in out['panels'] if p['hidden']))
+        again = self.render(FIXTURE, {'actions': [{'click': 'Agents'}, {'click': 'Overview'}, {'click': 'Agents'}]})
+        self.assertEqual(again['panels'][1]['attrs'].get('data-enter'), 'false')
+        self.assertTrue(any('active' in p['cls'].split() for p in self.marks(out, 'cell')))
 
     def test_running_panel_off_and_failed_snapshots_do_not_claim_zero_processes(self):
         for reason in ('snapshot off', 'ps timed out'):

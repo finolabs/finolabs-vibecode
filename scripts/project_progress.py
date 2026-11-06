@@ -2,6 +2,7 @@
 """Bounded local task metadata. Project text is transient, never dashboard data."""
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -33,7 +34,7 @@ NOTICE = ('Project progress now reads this repository\'s task list and the ledge
           'turn off with Project progress: off in host.md under ## Project progress, or FNL_PROGRESS=off.')
 
 
-def host_section(text):
+def host_section(text, title="Project progress"):
     """Return authoritative section bounds, ignoring fenced examples; ambiguity fails closed."""
     headings, fence, offset = [], None, 0
     for line in text.splitlines(keepends=True):
@@ -47,7 +48,7 @@ def host_section(text):
         elif fence is None and re.match(r'^#{1,2} ', line):
             headings.append((offset, offset + len(line), line.strip()))
         offset += len(line)
-    indexes = [i for i, (_, _, heading) in enumerate(headings) if heading == '## Project progress']
+    indexes = [i for i, (_, _, heading) in enumerate(headings) if heading == '## ' + title]
     if fence is not None or len(indexes) > 1:
         raise ValueError('ambiguous host')
     if not indexes:
@@ -56,6 +57,79 @@ def host_section(text):
     start, body, _ = headings[index]
     end = headings[index + 1][0] if index + 1 < len(headings) else len(text)
     return start, body, end
+
+
+LABEL = re.compile(r'[A-Za-z0-9 ._-]{1,40}')
+
+
+def repository_code(root):
+    """Use the metrics identity for linked worktrees, without running git."""
+    identity = root
+    try:
+        with open_dir(root) as fd:
+            link = read_task(fd, '.git').strip()
+        if len(link) <= 4096 and link.startswith('gitdir:'):
+            gitdir = Path(os.path.abspath(root / link[len('gitdir:'):].strip()))
+            with open_dir(gitdir) as fd:
+                common = read_task(fd, 'commondir').strip()
+            if len(common) <= 4096 and common:
+                shared = Path(os.path.abspath(gitdir / common))
+                # Refuse symlinked metadata ancestors just like the project reader.
+                with open_dir(shared):
+                    identity = shared.parent if shared.name == '.git' else shared
+    except (OSError, ValueError):
+        pass
+    return hashlib.sha256(str(identity).encode('utf-8')).hexdigest()[:8]
+
+
+def project_labels(text):
+    _, body, end = host_section(text, 'Project labels')
+    labels = {}
+    for line in text[body:end].splitlines():
+        if not line.strip():
+            continue
+        match = re.fullmatch(r'- ([0-9a-f]{8}): ([A-Za-z0-9 ._-]{1,40})', line)
+        if not match or match[1] in labels or not match[2].strip():
+            raise ValueError('ambiguous labels')
+        labels[match[1]] = match[2]
+    return labels
+
+
+def set_label(cwd, label):
+    if not isinstance(label, str) or not LABEL.fullmatch(label) or not label.strip():
+        raise ValueError('invalid label')
+    root = find_root(cwd)
+    if root is None:
+        raise ValueError('no repository')
+    code = repository_code(root)
+    with dr.root_folder(create=True) as folder:
+        fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        text = dr.read_file(folder, 'host.md', 262144).decode('utf-8')
+        labels = project_labels(text)
+        labels[code] = label
+        start, _, end = host_section(text, 'Project labels')
+        newline = '\r\n' if '\r\n' in text else '\n'
+        section = '## Project labels\n\n' + ''.join('- ' + k + ': ' + v + '\n' for k, v in sorted(labels.items())) + '\n'
+        text = text[:start] + (newline if start == end and text and not text.endswith(newline * 2) else '') + section.replace('\n', newline) + text[end:]
+        raw = text.encode('utf-8')
+        if len(raw) > 262144:
+            raise ValueError('host cap')
+        dr.atomic_write(folder, 'host.md', raw)
+    return label
+
+
+def priorities(text):
+    """Keep a priority number only; no part of the heading text escapes."""
+    values, seen = {}, set()
+    for line in text.splitlines():
+        if len(line) > 4096:
+            continue
+        match = re.match(r'^#{1,6} User Story ([0-9]{1,3}) \(P([1-9])\)(?:[ \t].*)?$', line)
+        if match:
+            story = 'US' + str(int(match[1]))
+            values[story] = None if story in seen else int(match[2])
+            seen.add(story)
+    return values
 
 
 def config():
@@ -353,6 +427,11 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
             result = empty()
             repo = repo_code(cwd) if repo_code else repo
             result['repo'] = repo
+            try:
+                labels = project_labels(dr.read_data('host.md', 262144).decode('utf-8'))
+            except (OSError, ValueError, UnicodeError):
+                labels = {}
+            result['label'] = labels.get(repo, 'repo ' + str(repo)[:4])
             if records:
                 ledger = records()
                 if ledger is not None:
@@ -373,6 +452,8 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
                                     break
                                 names.append(entry.name)
                         for name in sorted(names):
+                            if name == 'archive':
+                                continue
                             paths.append(('specs/' + name + '/tasks.md', int(name[:3]) if re.match(r'^[0-9]{3}-', name) else len(paths) + 1))
                     finally:
                         os.close(specs)
@@ -383,7 +464,9 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
                 custom = settings.get('Task file')
                 if custom:
                     try:
-                        safe_parts(custom)
+                        parts = safe_parts(custom)
+                        if len(parts) >= 2 and parts[:2] == ('specs', 'archive'):
+                            raise ValueError('unsafe task path')
                         custom = str(Path(custom))
                         if os.path.commonpath((os.path.realpath(root), os.path.realpath(root / custom))) != os.path.realpath(root):
                             raise ValueError('unsafe task path')
@@ -393,16 +476,37 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
                             paths.insert(0, (custom, feature))
                     except ValueError:
                         result['skipped'].append('unsafe task path')
-                for relative, feature in paths[:20]:
+                files = 0
+                for relative, feature in paths:
+                    if files >= 20:
+                        result['skipped'].append('file limit')
+                        break
                     try:
-                        result['features'].append(parse(read_task(fd, relative), feature))
+                        parsed = parse(read_task(fd, relative), feature)
+                        files += 1
                     except (OSError, ValueError):
                         result['skipped'].append('task file skipped')
-                if len(paths) > 20:
-                    result['skipped'].append('file limit')
+                        continue
+                    tags = {}
+                    sibling = str(Path(relative).with_name('spec.md'))
+                    if sibling != relative:
+                        if files < 20:
+                            try:
+                                tags = priorities(read_task(fd, sibling))
+                                files += 1
+                            except FileNotFoundError:
+                                pass
+                            except (OSError, ValueError):
+                                result['skipped'].append('spec file skipped')
+                        else:
+                            result['skipped'].append('file limit')
+                    for story in parsed['stories']:
+                        story['priority'] = tags.get(story['story'])
+                    result['features'].append(parsed)
             result.update(join(result['features'], settings.get('Ledger project', root.name), repo,
                                starts or {}, finishes or {}, events, now or datetime.now(timezone.utc)))
             result['in_progress'] = sum(t['state'] == 'in progress' for f in result['features'] for t in f['tasks'])
+            result['done'] = bool(result['features']) and all(f['done'] == f['total'] for f in result['features'])
             result['skipped'] = sorted(set(result['skipped']))
             return result
     except ProgressTimeout:
@@ -454,11 +558,16 @@ def installed_version():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('choice', choices=('on', 'off'))
+    parser.add_argument('choice', choices=('on', 'off', 'label'))
+    parser.add_argument('--set', dest='label')
     parser.add_argument('--yes', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args(argv)
     try:
+        if args.choice == 'label':
+            set_label(os.getcwd(), args.label)
+            print('Project label saved.')
+            return 0
         result = configure(args.choice, args.yes, args.dry_run)
         print(result if args.dry_run else 'Project progress preference saved.')
         return 0

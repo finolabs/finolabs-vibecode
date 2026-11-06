@@ -27,6 +27,8 @@ Coordinator: unverified
 
 Advisory (agent judgment): use `fnl-setup` section A to opt in after the scan and confirm its path preview. The setup script writes `Agents`, `Executable <agent>`, optional `Interpreter <agent>`, and `Claude config: <label>: <absolute folder>` lines; replace this explanation with that generated section when enabling. The hooks and worker enforce the canonical opt-in and `FNL_QUOTA_PROBE=off`. They store only usage pools and measured times in `state/quota/quota.json`, with no environment redirect. Routing is advisory: below 10% with a future reset is out, older than 8 hours is unverified and excludes nothing, the user's statement wins, and Claude uses `week-all` separately for each install.
 
+## Project labels
+
 ## Limits
 
 - Parallel dispatches: at most <N> at one time (5 or fewer).

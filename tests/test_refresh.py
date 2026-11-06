@@ -76,6 +76,45 @@ class RefreshTest(unittest.TestCase):
         self.refresh('purge', '--yes')
         self.assertFalse((self.dir / 'data.js').exists())
 
+    def test_multiple_project_snapshots_and_quota_metadata(self):
+        self.consent()
+        self.ledger.parent.joinpath('host.md').write_text('# Host\n')
+        quota = self.dir / 'quota'
+        quota.mkdir(mode=0o700, exist_ok=True)
+        (quota / 'quota.json').write_text(json.dumps({'codex': {'default': {
+            'measured': self.at.isoformat(), 'source': 'local', 'groups': [
+                {'name': 'five-hour', 'window': '5h', 'remaining_fraction': .08, 'reset_time': None}]}}}))
+        codes = []
+        for n in range(6):
+            repo = Path(self.tmp.name).resolve() / ('project%d' % n)
+            (repo / '.git').mkdir(parents=True)
+            tasks = repo / 'specs/001-test/tasks.md'
+            tasks.parent.mkdir(parents=True)
+            tasks.write_text('- [ ] T1 US1\n')
+            result = subprocess.run([sys.executable, '-I', str(REFRESH), 'run', '--cwd', str(repo)],
+                                    env=self.env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            block = self.data()['progress']
+            codes.append(block['current'])
+            self.assertEqual(len(block['repositories']), min(n + 1, 5))
+        self.assertNotIn(codes[0], block['repositories'])
+        self.assertEqual(self.data()['running']['quota'][0]['remaining_fraction'], .08)
+        self.assertIn('updated', block['repositories'][codes[-1]])
+        # A refresh outside a repository must not erase the other last-written projects.
+        result = subprocess.run([sys.executable, '-I', str(REFRESH), 'run', '--cwd', str(Path(self.tmp.name).resolve())],
+                                env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(set(self.data()['progress']['repositories']), set(codes[-5:]))
+
+    def test_reviews_use_canonical_labels_even_when_progress_is_off(self):
+        self.consent()
+        self.ledger.parent.joinpath('host.md').write_text('## Project progress\n- Project progress: off\n\n## Project labels\n- aaaaaaaa: My tools\n')
+        self.write_events([self.event(0, 's', X, 'review', pr=31, verdict='APPROVE', kind='code')])
+        self.refresh('run')
+        data = self.data()
+        self.assertIsNone(data['progress'])
+        self.assertEqual(data['reviews'][0].get('label'), 'My tools')
+
     # Acceptance 1: ledger writes bypass only the age throttle.
     def test_freshness_newer_ledger_bypasses_throttle_older_or_absent_does_not(self):
         self.consent()
@@ -525,6 +564,8 @@ class RefreshTest(unittest.TestCase):
         self.assertTrue(raw.isascii())
         self.assertEqual(oct((self.dir / "data.js").stat().st_mode & 0o777), "0o600")
         self.assertEqual((self.dir / "dashboard.html").read_bytes(), PAGE.read_bytes())
+        self.assertEqual((self.dir / "dashboard.js").read_bytes(), PAGE.with_suffix(".js").read_bytes())
+        self.assertEqual((self.dir / "dashboard.js").stat().st_mode & 0o777, 0o600)
 
     def test_a_tampered_store_line_cannot_reach_the_script_file(self):
         self.consent()

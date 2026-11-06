@@ -46,6 +46,71 @@ class ProgressTest(unittest.TestCase):
     def collect(self, **kwargs):
         return self.pp.collect(self.repo, 'aaaaaaaa', **kwargs)
 
+    # Infographics acceptance 3: new metadata only, same safe reader.
+    def test_priorities_archive_labels_and_finished_project(self):
+        task = self.taskfile(text='- [x] T1 US1\n- [x] T2 US2\n- [x] T3 US3\n')
+        task.with_name('spec.md').write_text('## User Story 1 (P1) - private heading\n'
+            '### User Story 2 (P9) - <img secret>\n## User Story 3 (P10)\n')
+        self.taskfile('archive/005-secret', '- [ ] T9 US9')
+        self.taskfile('archive', '- [ ] T8 US8')
+        result = self.collect()
+        self.assertEqual(len(result['features']), 1)
+        self.assertEqual([s.get('priority') for s in result['features'][0]['stories']], [1, 9, None])
+        self.assertTrue(result['done'])
+        self.assertEqual(result['label'], 'repo aaaa')
+        self.assertNotIn('private', json.dumps(result))
+        self.assertNotIn('secret', json.dumps(result))
+        self.assertNotIn('<img', json.dumps(result))
+        for bad in ('', 'x' * 41, '<img>', 'a/b', 'a\nlabel', 'x\x01'):
+            with self.subTest(label=bad), self.assertRaises(ValueError):
+                self.pp.set_label(self.repo, bad)
+        with mock.patch.object(self.pp, 'repository_code', return_value='aaaaaaaa'):
+            self.pp.set_label(self.repo, 'Fino tools-2.0')
+        self.assertIn('## Project labels', self.host.read_text())
+        self.assertEqual(self.collect()['label'], 'Fino tools-2.0')
+        self.assertIn('- Project progress: on', self.host.read_text())
+        # Duplicate metadata is ambiguous, not last-heading-wins.
+        task.with_name('spec.md').write_text('## User Story 1 (P2)\n## User Story 1 (P3)\n')
+        self.assertIsNone(self.collect()['features'][0]['stories'][0]['priority'])
+
+    def test_label_worktree_code_matches_the_metrics_repository_identity(self):
+        import hashlib
+        main = self.repo
+        metadata = main / '.git/worktrees/linked'
+        metadata.mkdir(parents=True)
+        (metadata / 'commondir').write_text('../..\n')
+        linked = main.with_name('linked')
+        linked.mkdir()
+        (linked / '.git').write_text('gitdir: ' + str(metadata) + '\n')
+        expected = hashlib.sha256(str(main).encode()).hexdigest()[:8]
+        self.assertEqual(self.pp.repository_code(linked), expected)
+        self.pp.set_label(linked, 'Shared project')
+        self.assertIn('- ' + expected + ': Shared project', self.host.read_text())
+
+    def test_documented_infographics_metadata_and_setup(self):
+        privacy = (ROOT / 'PRIVACY.md').read_text()
+        for word in ('P1', 'P9', 'spec.md', 'specs/archive', 'Project labels', 'priority number'):
+            self.assertIn(word, privacy)
+        setup = (ROOT / 'skills/fnl-setup/SKILL.md').read_text()
+        self.assertIn('project_progress.py label --set', setup)
+        self.assertIn('## Project labels', setup)
+        self.assertIn('## Project labels', (ROOT / 'skills/fnl-delegate/references/host-template.md').read_text())
+        self.assertIn('[Dashboard infographics]', (ROOT / 'docs/specs/index.md').read_text())
+        for doc in ('README.md', 'CHANGELOG.md', 'skills/fnl-status/SKILL.md'):
+            self.assertIn('quota meters', (ROOT / doc).read_text())
+
+    def test_spec_uses_same_safe_read_and_twenty_file_budget(self):
+        for n in range(11):
+            task = self.taskfile('%03d-safe' % n)
+            task.with_name('spec.md').write_text('## User Story 1 (P2)\n')
+        result = self.collect()
+        self.assertEqual(len(result['features']), 10)
+        self.assertIn('file limit', result['skipped'])
+        task = self.repo / 'specs/000-safe/spec.md'
+        task.unlink()
+        task.symlink_to(self.repo / 'specs/001-safe/spec.md')
+        self.assertIsNone(self.collect()['features'][0]['stories'][0]['priority'])
+
     def test_parser_drops_everything_except_identifiers_and_numbers(self):
         text = ('# SECRET=secret\n## Phase 2: private heading\n'
                 '- [x] T012 [US1] <img src=x>\u202e\x01 private\n'
