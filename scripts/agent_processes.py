@@ -6,10 +6,10 @@ import json
 import os
 import re
 import selectors
+import shutil
 import signal
 import stat
 import subprocess
-import tempfile
 import sys
 import time
 from collections import Counter, defaultdict, deque
@@ -121,39 +121,49 @@ def resolve_ps():
 
 def execute(path):
     """Bound pipe reads as well as wall time; never buffer unlimited communicate() output."""
-    with tempfile.TemporaryDirectory(prefix='fnl-process-') as folder:
-        process = subprocess.Popen([path, '-axo', 'uid=,pid=,ppid=,etime=,comm='],
-                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                   env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'}, cwd=folder,
-                                   start_new_session=True)
-        deadline, output = time.monotonic() + SECONDS, bytearray()
+    name = 'process-' + os.urandom(16).hex()
+    with dr.data_folder('tmp', create=True, private=True) as parent:
+        os.mkdir(name, 0o700, dir_fd=parent)
+        folder = str(dr.consent_root() / 'tmp' / name)
         try:
-            with selectors.DefaultSelector() as selector:
-                selector.register(process.stdout, selectors.EVENT_READ)
-                while True:
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0 or not selector.select(remaining):
-                        raise TimeoutError()
-                    chunk = os.read(process.stdout.fileno(), min(65536, LIMIT + 1 - len(output)))
-                    if not chunk:
-                        break
-                    output.extend(chunk)
-                    if len(output) > LIMIT:
-                        raise ValueError('output cap')
-            try:
-                code = process.wait(timeout=max(0, deadline - time.monotonic()))
-            except subprocess.TimeoutExpired:
-                raise TimeoutError() from None
-            if code:
-                raise OSError('exit')
-            return bytes(output)
+            return _run(path, folder)
         finally:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            process.stdout.close()
-            process.wait()
+            shutil.rmtree(name, dir_fd=parent)
+
+
+def _run(path, folder):
+    process = subprocess.Popen([path, '-axo', 'uid=,pid=,ppid=,etime=,comm='],
+                               stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                               env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'}, cwd=folder,
+                               start_new_session=True)
+    deadline, output = time.monotonic() + SECONDS, bytearray()
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or not selector.select(remaining):
+                    raise TimeoutError()
+                chunk = os.read(process.stdout.fileno(), min(65536, LIMIT + 1 - len(output)))
+                if not chunk:
+                    break
+                output.extend(chunk)
+                if len(output) > LIMIT:
+                    raise ValueError('output cap')
+        try:
+            code = process.wait(timeout=max(0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            raise TimeoutError() from None
+        if code:
+            raise OSError('exit')
+        return bytes(output)
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.stdout.close()
+        process.wait()
 
 
 def snapshot():
