@@ -378,6 +378,57 @@ class HookTest(unittest.TestCase):
         self.assertFalse(self.dir.exists())
         self.assertEqual(list(self.repo.iterdir()), [self.repo / ".git"])
 
+    def test_task_receipt_copies_validate_without_writing(self):
+        records = [ROOT / ("skills/" + skill + "/scripts/record.py")
+                   for skill in ("fnl-coding-router", "fnl-delegate")]
+        self.assertEqual(records[0].read_bytes(), records[1].read_bytes())
+        for record in records:
+            for task_id in ("T1", "T012", "T9999", "task text", "T12345", "T12\n", "T１２", "t12", ""):
+                done = subprocess.run([sys.executable, "-I", str(record), "task", "--id", task_id],
+                                      capture_output=True, text=True, cwd=self.repo, env=self.env)
+                valid = task_id in ("T1", "T012", "T9999")
+                self.assertEqual(done.returncode == 0, valid)
+                if valid:
+                    self.assertEqual((done.stdout, done.stderr), ("task receipt: id=%s\n" % task_id, ""))
+                else:
+                    self.assertEqual(done.stdout, "")
+                    self.assertEqual(done.stderr.splitlines()[-1], "record.py task: error: argument --id: task id must match T[0-9]{1,4}")
+        self.assertFalse(self.dir.exists())
+        self.assertEqual(list(self.repo.iterdir()), [self.repo / ".git"])
+
+    def test_task_receipt_records_one_id_on_each_host_with_consent_only(self):
+        command = "python3 -I skills/fnl-coding-router/scripts/record.py task --id T012"
+        self.post("Bash", {"command": command})
+        self.assertEqual(self.events(), [])
+        self.consent()
+        self.post("Bash", {"command": command})
+        self.run_hook({"hook_event_name": "PostToolUse", "session_id": "s1", "cwd": str(self.repo),
+                       "tool_name": "Bash", "tool_input": {"command": command.split()}}, args=("--host", "codex"))
+        self.agy("post_tool_use", {"name": "run_command", "args": {"CommandLine": command}})
+        self.assertEqual(len(self.events()), 3)
+        for event in self.events():
+            self.assertEqual(set(event), {"ts", "sid", "repo", "event", "id"})
+            self.assertEqual((event["event"], event["id"]), ("task", "T012"))
+            self.assertTrue(fm.valid_event(event))
+        self.run_hook({"hook_event_name": "PostToolUse", "session_id": "s1", "tool_name": "Bash",
+                       "tool_input": {"command": command}}, env={**self.env, "FNL_METRICS": "off"})
+        self.assertEqual(len(self.events()), 3)
+
+    def test_task_receipt_rejects_malformed_arguments_and_noncommands(self):
+        self.consent()
+        command = "python3 -I record.py task --id T012"
+        bad = [command.replace("T012", value) for value in ("T12345", "text", "t12", "T１２", "T12extra", "'$ID'", "'T12\n'")]
+        bad += [command + " --text private", command + " --id T2", command + " trailing",
+                command.replace("--id", "--i"), command.replace("record.py", "myrecord.py"),
+                command.replace("--id T012", ""), "echo '" + command + "'",
+                "cat <<EOF\n" + command + "\nEOF", ["echo", "line; " + command], command + " '"]
+        for text in bad:
+            with self.subTest(command=text):
+                self.post("Bash", {"command": text})
+                self.assertEqual(self.events(), [])
+        self.post("Bash", {"command": "cd repo && " + command + "; " + command.replace("--id T012", "--id=T2")})
+        self.assertEqual([event["id"] for event in self.events()], ["T012", "T2"])
+
     def test_the_keep_receipt_is_not_recorded_without_consent(self):
         self.post("Bash", {"command": "python3 -I record.py keep --tasks 3 --reason needs-context"})
         self.assertEqual(self.events(), [])
@@ -394,6 +445,7 @@ class HookTest(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         self.assertEqual((module.REASONS, module.ROUTE_BY), (fm.KEPT_REASONS, fm.ROUTE_BY))
+        self.assertEqual((module.DEPTHS, module.TRIGGERS), (fm.DEPTHS, fm.TRIGGERS))
 
     def test_each_keep_receipt_is_read_from_its_own_arguments(self):
         self.consent()

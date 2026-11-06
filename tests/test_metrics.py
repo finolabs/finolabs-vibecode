@@ -81,6 +81,22 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(self.events(), [])
         self.assertEqual(m.errors_count(), len(bad))
 
+    def test_task_accepts_only_a_bounded_id_and_exact_fields(self):
+        self.assertEqual(set(m.SCHEMA.get("task", {})), {"id"})
+        for task_id in ("T0", "T1", "T012", "T9999"):
+            event = m.build_event("task", SID, "12345678", {"id": task_id})
+            self.assertTrue(m.valid_event(event))
+            self.assertEqual(set(event), {"ts", "sid", "repo", "event", "id"})
+        bad = [{"id": value} for value in
+               ("T", "T12345", "task text", "t12", "T１２", "T12\n", " T12", "T12 extra", None, 12, True)]
+        bad += [{}, {"id": "T012", "text": "private"}]
+        for fields in bad:
+            with self.subTest(fields=fields):
+                with self.assertRaises(ValueError):
+                    m.build_event("task", SID, "12345678", fields)
+                self.assertFalse(m.valid_event(dict(ts=m.now().isoformat(timespec="milliseconds"),
+                                                   sid=SID, repo="12345678", event="task", **fields)))
+
     def test_a_bad_session_id_cannot_become_a_path(self):
         self.consent()
         self.assertFalse(m.record("skill", "../escape", self.repo, name="fnl-x"))
