@@ -67,10 +67,12 @@ ledger source and says so in its tooltip.
 ## B. Who asks, who writes (each skill stays self-contained)
 
 - **`fnl-setup-instructions`** (project scope) gains a "Work tracking" interview, asked once per repository. It looks
-  first (`.specify/` and `specs/NNN-*`, `docs/specs`, a `tasks.md`, ledger runs whose project resembles the folder
-  name) and recommends an answer. Questions: the workflow (Spec Kit, the repository's own spec documents, none); where
-  specs live; how tasks are tracked (Spec Kit `tasks.md`, a checkbox file, the ledger, the forge's issues); the ledger
-  project name. Its only output is a short `## Work tracking` block in the project's agent context file after the
+  first (`specs/NNN-*/tasks.md` and `.specify/`, work records or spec documents in `docs/specs`, a checkbox file,
+  ledger runs whose project resembles the folder name) and recommends an answer. Questions: the workflow (Spec Kit,
+  work records as in part E, none); where specs live; how tasks are tracked (Spec Kit `tasks.md`, the `## Tasks`
+  section of a work record, a separate checkbox file, the ledger, the forge's issues); the ledger project name. The
+  `tasks` setting (part A) is only for a separate checkbox file: a work record's own `## Tasks` section is read
+  without it, and when both exist the record's section wins for that record. Its only output is a short `## Work tracking` block in the project's agent context file after the
   user's yes per file: plain sentences, no machine paths, no organisation names, no text copied from repository files.
   It writes nothing to the host config and calls no script of another skill; it ends by pointing to `/fnl-setup`.
 - **`fnl-setup`** (it already owns host-config writes and sits beside `fnl-status`) gains the two settings in its
@@ -114,7 +116,7 @@ git remotes or plugin names; OpenSpec or any third-party framework recognition; 
 
 Naming: parts of this spec are lettered A to F; `fnl-setup` sections are always written "setup section X" here.
 
-**What it is.** One Markdown file per piece of work larger than one pass (MIN depth never creates one), in the
+**What it is.** One Markdown file per piece of work that none.md says needs a spec or plan (MIN depth never creates one), in the
 repository's spec folder (`docs/specs/`, else `docs/spec/`, else `specs/` flat), with a fixed shape:
 
 ```
@@ -134,11 +136,14 @@ It is Spec Kit's spec, plan, tasks and quickstart-results collapsed into one fil
 slash commands. A file counts as a work record when it has the `Status:` line and at least two of the four headings;
 any other spec document stays a plain spec document (state only, no stages).
 
-**Composition (nothing is copied).** The router's none-path (`fnl-coding-router` `references/workflows/none.md`, step 2,
-Plan) says to create a work record from a template kept in `references/work-record.md` of the same skill, for work
-larger than one pass. The phase tools of mattpocock/skills carry the steps when installed and the record is where
+**Composition (nothing is copied).** The router's none-path (`fnl-coding-router` `references/workflows/none.md`) says to create a
+work record from a template kept in `references/work-record.md` of the same skill, whenever none.md's own trigger for
+a spec or plan applies (no new trigger is invented): step 1 (Clarify) fills Goal and acceptance, step 2 (Plan) fills
+Plan and Tasks, steps 3 and 4 tick Tasks, steps 5 and 6 (Prove, Review) fill Evidence. The phase tools of mattpocock/skills carry the steps when installed and the record is where
 their output lands: `grilling` fills Goal and acceptance, `to-spec` and `to-tickets` feed Plan and Tasks when the
-repository also uses an issue tracker, `tdd` and `implement` do the work, `code-review` and `pr` fill Evidence. Where
+repository also uses an issue tracker, `tdd` and `implement` do the work, `code-review` and `pr` fill Evidence (all
+named in the existing `mattpocock.md` adapter, and present on the maintainer's repository page when checked on
+2026-11-06). Where
 a tool is missing, the step is done as none.md says. In a Spec Kit repository Spec Kit owns the process and no work
 record is created.
 
@@ -151,9 +156,15 @@ shows an amber "status not updated" mark. Evidence content, titles, headings tex
 **Recognition order and one shared budget.** Per repository, first source that yields items wins: Spec Kit (the
 shipped signal: `specs/NNN-*/tasks.md`), then work records, then index and status-line wording of plain spec documents
 (part C), then ledger runs, then the simple row. All sources share the reader's rules (regular files only, no symlinks,
-no traversal, `O_NOFOLLOW` per component) and one budget: at most 40 documents, 64 KiB per file, 200 entries and one
-second in total; when exceeded, finished and released items are dropped first, then the oldest by file order, and the
-overflow is reported as a `skipped` count, never silently.
+no traversal, `O_NOFOLLOW` per component, directories opened with `O_DIRECTORY`, non-regular entries skipped, files
+opened `O_NONBLOCK`, lines capped at 4096 characters, headings inside fenced code blocks ignored). Only one source
+yields items per repository, so there is no ordering across mixed sources. The shipped Spec Kit limits are unchanged
+(20 features, 200 entries); the work-record source adds its own limits: at most 40 documents, 64 KiB per file, the same
+200 entries counted over directory entries listed, and one second per repository in total. Within the work-record
+source, when exceeded, documents with a finished state (`implemented`, `released`) are dropped first, then the rest in
+descending file-name order, and the overflow is reported as a `skipped` count, never silently. The flat `specs/*.md`
+rule applies only when `specs/` contains no `NNN-*` directory. The `Status:` word is mapped through the closed
+vocabulary only; an unknown word is never echoed.
 
 **In this repository.** The 16 existing specs are not restructured: they get the status vocabulary (part C) and stay
 plain spec documents. New work from 0.1.11 on uses the template, including the implementation of this spec.
@@ -198,7 +209,8 @@ script, preview and consent, unchanged.
   and creates no work record; overflow of 40 documents, 64 KiB, 200 entries or the one-second budget is reported as
   `skipped`; a symlinked or oversize file is skipped; no title, heading text, Evidence text or file name reaches
   `data.js`.
-- The template exists in `fnl-coding-router` `references/work-record.md`, none.md step 2 points to it, and MIN depth
+- The template exists in `fnl-coding-router` `references/work-record.md`, none.md points to it under its own trigger, a
+  repository test parses the template with the `fnl-status` reader so the two cannot drift, and MIN depth
   creates none; the reference check and the skill's trigger check pass.
 - `fnl-setup` asks the scope question first; a test lists every setup section and sub-step against the mapping table
   above (each in exactly one scope, project progress as the stated both case); Check mirrors the two groups with a
