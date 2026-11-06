@@ -263,14 +263,24 @@ def previous_projects():
         finally:
             os.close(fd)
         repositories = json.loads(raw.removeprefix('window.FNL_DATA = ').removesuffix(';\n'))['progress']['repositories']
-        keys = {'features', 'feature', 'tasks', 'total', 'done', 'phases', 'phase', 'stories', 'story', 'priority',
+        keys = {'source', 'recognition', 'ledger_join', 'work', 'ordinal', 'stages', 'stage', 'artifacts',
+                'spec', 'plan', 'design', 'verify', 'ship', 'status_hint', 'review_counts', 'code_final',
+                'security_final', 'packages', *pp.STATES, 'features', 'feature', 'tasks', 'total', 'done',
+                'phases', 'phase', 'stories', 'story', 'priority',
                 'state', 'runs', 'sessions', 'id', 'host', 'first', 'last', 'agent', 'model', 'start', 'finish',
                 'outcome', 'rework_rounds', 'elapsed_seconds', 'in_progress', 'labels_without_feature',
                 'unlinked_runs', 'outcomes', 'sessions_without_task', 'active_24h', 'idle', 'running_now',
                 'reviews', 'code', 'security', 'version', 'updated', 'reason', 'skipped', *pp.OUTCOMES, 'open', 'other'}
+        enums = {'source': pp.SOURCES, 'stage': pp.STAGES, 'status_hint': pp.HINTS,
+                 'recognition': ('index', 'status', 'artifacts', 'checkbox', 'ledger', 'none'),
+                 'ledger_join': ('configured', 'configured-empty', 'folder', 'none')}
         def clean(value, key='', depth=0):
             if depth > 9:
                 raise ValueError('depth')
+            if key in enums:
+                if isinstance(value, str) and value in enums[key]:
+                    return value
+                raise ValueError('metadata')
             if isinstance(value, dict):
                 return {k: clean(v, k, depth + 1) for k, v in value.items() if k in keys}
             if isinstance(value, list):
@@ -290,9 +300,9 @@ def previous_projects():
                     return value
                 if key == 'version' and re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-dev)?', value):
                     return value
-                if value in (*pp.AGENTS, *pp.HOSTS, *pp.OUTCOMES, 'other', 'unknown', 'open', 'todo', 'done',
+                if value in (*pp.AGENTS, *pp.HOSTS, *pp.OUTCOMES, *pp.STATES, 'other', 'unknown', 'open', 'todo', 'done', 'active',
                              'in progress', 'accepted, not ticked', 'APPROVE', 'REWORK', '', 'task file skipped',
-                             'spec file skipped', 'unsafe task path', 'file limit', 'entry limit', 'ledger unavailable'):
+                             'spec file skipped', 'unsafe task path', 'file limit', 'entry limit', 'feature limit', 'ledger unavailable'):
                     return value
             raise ValueError('metadata')
         return {code: clean(row) for code, row in list(repositories.items())[-5:]

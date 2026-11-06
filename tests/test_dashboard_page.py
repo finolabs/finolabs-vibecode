@@ -777,6 +777,112 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(len(self.marks(out, 'slot')), 3)
         self.assertEqual(self.marks(out, 'capacity-caption')[0]['text'], 'slots (3)')
 
+    def pipeline_sample(self):
+        data = self.sample()
+        data['progress'] = json.loads((ROOT / 'tests/fixtures/status-pipeline.json').read_text())
+        return data
+
+    def test_pipeline_sources_shapes_known_stages_and_neutral_unknown(self):
+        out = self.render_freshness(self.pipeline_sample(), {'hash': '#now'})
+        items = self.marks(out, 'pipeline-item')
+        self.assertEqual([m['text'] for m in self.marks(out, 'pipeline-ordinal')], ['016', '015', '#3', '#2'])
+        blocks = self.marks(out, 'pipeline-block')
+        self.assertEqual([m['attrs']['data-stage'] for m in blocks[:7]], ['spec', 'spec', 'plan', 'design', 'tasks', 'verify', 'review'])
+        self.assertEqual(blocks[0]['spec']['sub'], 'Spec Kit')
+        self.assertIn('status line says draft', blocks[0]['tooltip'])
+        unknown = next(m for m in blocks if m['attrs']['data-state'] == 'unknown')
+        self.assertIn('unknown', unknown['cls'].split())
+        self.assertIn('no status stated', unknown['tooltip'])
+        self.assertEqual(unknown['spec']['sub'], 'docs/specs index')
+        self.assertEqual([m['text'] for m in self.marks(out, 'pipeline-percent')], ['50%'])
+        self.assertEqual(len(items), 4)
+        self.assertEqual(len(self.marks(out, 'pipeline-chain')), 4)
+        self.assertFalse(any(m['attrs'].get('data-stage') == 'ship' for m in blocks))
+        self.assertEqual(len(self.marks(out, 'package-brick')), 4)
+        self.assertIn('deferred', self.marks(out, 'package-brick')[2]['cls'].split())
+        self.assertIn('no status stated', self.marks(out, 'package-brick')[1]['tooltip'])
+        self.assertEqual(len(self.marks(out, 'pipeline-tasks')), 1)
+        self.assertEqual(len(self.marks(out, 'task-brick')), 4)
+        self.assertEqual(len(self.marks(out, 'work-strip')), 2)
+        self.assertEqual([m['text'] for m in self.marks(out, 'pipeline-finished')], ['1 done', '1 done'])
+        self.assertIn('spec 013 · done · status line says draft', self.marks(out, 'pipeline-finished')[0]['tooltip'])
+        self.assertTrue(all(m['tag'] == 'span' for m in blocks))
+        self.assertTrue(all(m['tag'] == 'svg' for m in self.marks(out, 'task-brick') + self.marks(out, 'package-brick')))
+
+    def test_pipeline_review_chips_final_presence_and_flush_progress_segments(self):
+        out = self.render_freshness(self.pipeline_sample())
+        self.assertEqual([m['text'] for m in self.marks(out, 'pipeline-review')], ['code ✓', 'sec'])
+        self.assertEqual(self.marks(out, 'pipeline-review')[0]['spec']['rows'], [['files', 2], ['final', 'present']])
+        self.assertIn('no approval inferred', self.marks(out, 'pipeline-review')[0]['tooltip'])
+        self.assertEqual(len(self.marks(out, 'review-final')), 1)
+        segments = self.marks(out, 'pipeline-segment')
+        self.assertEqual([m['attrs']['x'] for m in segments], ['0', '21', '31.5'])
+        self.assertEqual(sum(float(m['attrs']['width']) for m in segments), 42)
+        for left, right in zip(segments, segments[1:]):
+            self.assertEqual(float(left['attrs']['x']) + float(left['attrs']['width']), float(right['attrs']['x']))
+        clips = [m['attrs']['id'] for m in out['picture'] if m['tag'] == 'clipPath']
+        self.assertEqual(len(clips), len(set(clips)))
+
+    def test_pipeline_unfinished_cap_newest_order_finished_collapse_and_single_active_bricks(self):
+        data = self.pipeline_sample()
+        p = data['progress']['repositories']['aaaaaaaa']
+        active = p['features'][1]
+        p['features'] += [dict(active, feature=n) for n in range(17, 24)]
+        out = self.render_freshness(data)
+        self.assertEqual([m['text'] for m in self.marks(out, 'pipeline-ordinal')][:5], ['023', '022', '021', '020', '019'])
+        self.assertEqual(self.marks(out, 'pipeline-more')[0]['text'], '+4 more')
+        self.assertIn('spec 018', self.marks(out, 'pipeline-more')[0]['tooltip'])
+        self.assertEqual(len(self.marks(out, 'pipeline-tasks')), 1)
+        self.assertEqual(len(self.marks(out, 'task-brick')), 4)
+        self.assertEqual(self.marks(out, 'pipeline-finished')[0]['text'], '1 done')
+        tables = [m for m in out['picture'] if m['disclosure'] == 'show the data as tables']
+        self.assertTrue(any('spec 017' in m['text'] for m in tables))
+
+    def test_pipeline_percent_floored_unknown_and_ledger_attention_tooltips(self):
+        data = self.pipeline_sample()
+        feature = data['progress']['repositories']['aaaaaaaa']['features'][1]
+        tasks_stage = next(s for s in feature['stages'] if s['stage'] == 'tasks')
+        for done, total, expected in ((408, 410, '99%'), (56, 57, '98%'), (1, 3, '33%'), (2, 3, '66%'), (0, 5, '0%'), (5, 5, '100%')):
+            tasks_stage.update(done=done, total=total)
+            out = self.render_freshness(data)
+            self.assertEqual(self.marks(out, 'pipeline-percent')[0]['text'], expected)
+        chips = self.marks(out, 'work-chip')
+        self.assertEqual([m['text'] for m in chips if 'needs-attention' in m['cls'].split()], ['2', '1'])
+        self.assertTrue(all('Exact project join' in m['tooltip'] for m in chips))
+        self.assertEqual(len(self.marks(out, 'pipeline-item')), 4)  # no per-run ledger bricks
+
+    def test_pipeline_source_c_retains_identity_only_with_searched_sources_and_ledger_limit(self):
+        data = self.pipeline_sample()
+        data['progress']['active'] = data['progress']['active'][-1:]
+        out = self.render_freshness(data)
+        self.assertEqual(self.marks(out, 'pipeline-item'), [])
+        self.assertEqual(self.marks(out, 'work-strip'), [])
+        row = self.marks(out, 'active-project')[0]
+        self.assertNotIn('pipeline-project', row['cls'].split())
+        for source in ('Spec Kit', 'docs/specs', 'docs/spec', 'release packages', 'ledger', 'no Ledger project override'):
+            self.assertIn(source, row['tooltip'])
+        self.assertIn('Synthetic unrecognised', row['text'])
+        self.assertIn('last', row['text'])
+        self.assertEqual(len(self.marks(out, 'active-host')), 1)
+
+    def test_pipeline_tables_keep_source_status_stages_and_packages(self):
+        out = self.render_freshness(self.pipeline_sample())
+        table_text = ' '.join(m['text'] for m in out['picture'] if m['disclosure'] == 'show the data as tables')
+        for text in ('Spec Kit', 'status line says draft', 'plan · done', 'package 2 · unknown', 'docs/specs index', 'ledger'):
+            self.assertIn(text, table_text)
+
+    def test_pipeline_new_shapes_reuse_tokens_and_fit_narrow_container_rules(self):
+        css = PAGE.read_text()
+        self.assertIn('.pipeline-project .project-detail { grid-column: 1 / -1; grid-row: 2; }', css)
+        self.assertIn('.pipeline-chain { display: flex;', css)
+        self.assertIn('.pipeline-block.unknown, .work-chip.unknown { border-style: dashed;', css)
+        self.assertIn('background: repeating-linear-gradient(135deg, var(--p)', css)
+        self.assertIn('.pipeline-block.done, .work-chip.done { background: var(--good)', css)
+        self.assertIn('.pipeline-chain { flex-wrap: wrap; max-width: calc(100% - 24px); }', css)
+        out = self.render_freshness(self.pipeline_sample())
+        self.assertNotIn('img', out['tags'])
+        self.assertNotIn('script', out['tags'])
+
     def test_named_project_story_bricks_and_tables(self):
         out = self.render(FIXTURE, {'hash': '#project', 'now': '2026-11-06T10:00:00Z'})
         rows = self.marks(out, 'active-project')

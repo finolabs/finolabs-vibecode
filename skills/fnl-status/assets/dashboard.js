@@ -170,7 +170,7 @@
   function brick(state, width, height, cls) {
     var svg = s("svg", {width: width, height: height + 3, viewBox: "0 0 " + width + " " + (height + 3),
       "class": "lego-brick " + state + (cls ? " " + cls : ""), "aria-hidden": "true"});
-    var ink = {done: "var(--h2)", active: "var(--p)", accepted: "var(--warn)", low: "var(--crit)", todo: "none"}[state] || "none";
+    var ink = {done: cls && cls.indexOf("package-brick") !== -1 ? "var(--good)" : "var(--h2)", active: "var(--p)", accepted: "var(--warn)", low: "var(--crit)", todo: "none"}[state] || "none";
     var group = s("g", {"class": "brick-ink"});
     [0.22, 0.58].forEach(function (x) {
       group.appendChild(s("rect", {x: width * x, y: 0, width: width * .2, height: 3, rx: 1,
@@ -178,10 +178,10 @@
     });
     var body = s("rect", {x: .5, y: 3.5, width: width - 1, height: height - 1, rx: 2,
       fill: ink, stroke: state === "todo" ? "var(--line)" : "none", "stroke-width": 1, "class": "brick-body"});
-    if (state === "accepted") {
+    if (state === "accepted" || state === "active" && cls && cls.indexOf("package-brick") !== -1) {
       var id = "brick-hatch-" + (++brickId), defs = s("defs"), pattern = s("pattern", {
         id: id, width: 4, height: 4, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)"});
-      pattern.appendChild(s("rect", {width: 2, height: 4, fill: "var(--warn)"}));
+      pattern.appendChild(s("rect", {width: 2, height: 4, fill: state === "active" ? "var(--p)" : "var(--warn)"}));
       defs.appendChild(pattern); svg.appendChild(defs); body.setAttribute("fill", "url(#" + id + ")");
     }
     group.appendChild(body); svg.appendChild(group);
@@ -294,11 +294,25 @@
     var allTasks = [], total = 0, done = 0;
     (p.features || []).forEach(function (f) { total += f.total; done += f.done; allTasks = allTasks.concat(f.tasks || []); });
     var active = allTasks.filter(function (task) { return task.state === "in progress"; }).length;
-    lines.push(tableOf("project completion", ["done", "total", "completion", "an agent is on it", "to do"],
+    if (p.source && p.source !== "none") {
+      var itemStates = ["done", "active", "todo", "unknown", "deferred", "needs-attention"];
+      lines.push(tableOf("pipeline items", itemStates, [itemStates.map(function (state) {
+        return (p.features || []).filter(function (f) { return f.state === state; }).length;
+      })]));
+    } else lines.push(tableOf("project completion", ["done", "total", "completion", "an agent is on it", "to do"],
       [[done, total, completionPercent(done, total) + "%", active, total - done - active]]));
     if (p.reason) line(p.reason);
     (p.features || []).forEach(function (feature) {
-      line("feature " + String(feature.feature).padStart(3, "0") + " · " + feature.done + " / " + feature.total);
+      line(itemLabel(feature) + " · " + feature.done + " / " + feature.total);
+      if (feature.stages) {
+        line(sourceName(p) + " · " + feature.state);
+        if (feature.status_hint) line("status line says " + feature.status_hint);
+        feature.stages.forEach(function (row) { line(row.stage + " · " + row.state + " · " + row.done + "/" + row.total); });
+        (feature.packages || []).forEach(function (pkg) { line("package " + pkg.ordinal + " · " + pkg.state); });
+        if (feature.review_counts) ["code", "security"].forEach(function (kind) {
+          line(kind + " review artefacts · " + feature.review_counts[kind] + " · final " + (feature.review_counts[kind + "_final"] ? "present" : "absent"));
+        });
+      }
       [ ["phases", "phase", "Phase "], ["stories", "story", ""] ].forEach(function (group) {
         (feature[group[0]] || []).forEach(function (row) {
           line(group[2] + row[group[1]] + (row.priority ? " · P" + row.priority : "") + " · " + row.done + " / " + row.total);
@@ -322,6 +336,7 @@
       });
       var wrap = h("div", "project-table"); wrap.appendChild(table); lines.push(wrap);
     });
+    if (p.work && Object.keys(p.work).length) line("ledger work · latest task outcomes · " + Object.keys(p.work).map(function (state) { return state + ": " + p.work[state]; }).join(" · "));
     var counts = p.sessions || {};
     line("Sessions · running now: " + (p.running_now == null ? "unavailable" : p.running_now) + " (machine-wide process count, not identified sessions) · active in the last 24 hours: " + (counts.active_24h || 0) + " · idle: " + (counts.idle || 0));
     line("Delegated runs · " + Object.keys(p.outcomes || {}).map(function (kind) { return kind + ": " + p.outcomes[kind]; }).join(" · "));
@@ -338,7 +353,7 @@
     return project && project.label || "repo " + key.slice(0, 4);
   }
   function storyPriority(story) { return story.priority >= 1 && story.priority <= 9 ? story.priority : 10; }
-  function unfinishedFeatures(p) { return (p.features || []).filter(function (f) { return f.total > f.done; }); }
+  function unfinishedFeatures(p) { return (p.features || []).filter(function (f) { return f.state ? f.state !== "done" : f.total > f.done; }); }
   function taskOrder(a, b) {
     return (a.phase == null ? 100 : a.phase) - (b.phase == null ? 100 : b.phase) || String(a.id).localeCompare(String(b.id), undefined, {numeric: true});
   }
@@ -387,11 +402,13 @@
       var last = age < 60 ? age + " min" : age < 1440 ? Math.floor(age / 60) + " hr" : Math.floor(age / 1440) + " d";
       var snapshot = (block.repositories || {})[project.repo] || {}, unfinished = unfinishedFeatures(snapshot).length > 0;
       var hasTasks = (snapshot.features || []).some(function (feature) { return feature.total > 0; });
+      var pipeline = (snapshot.features || []).some(function (feature) { return Array.isArray(feature.stages); });
       var label = tipOn(t("strong", "active-label", project.label), project.label);
       var row = h("div", "active-project", [h("div", "active-identity", [label,
         h("div", "active-meta", [hosts, t("span", "active-last", at ? "last " + last + " ago" : "last unavailable")])])]);
       row.setAttribute("data-repo", project.repo);
-      tipOn(row, project.label + " · " + (at ? String(project.last) : "last unavailable") + (!hasTasks ? " · no task list" : ""));
+      if (pipeline) row.className += " pipeline-project";
+      tipOn(row, pipeline || !hasTasks ? sourceTip(snapshot, project.label) : project.label + " · " + (at ? String(project.last) : "last unavailable"));
       var percent = Number(project.percent), percentCell;
       if (hasTasks && !unfinished) {
         percentCell = brick("done", 22, 14, "project-done");
@@ -401,10 +418,10 @@
           "stroke-linecap": "round", "stroke-linejoin": "round", "class": "done-check"}));
       } else {
         percentCell = t("span", "active-percent", "");
-        if (project.percent != null && Number.isFinite(percent))
+        if (!pipeline && project.percent != null && Number.isFinite(percent))
           percentCell.textContent = Math.max(0, Math.min(99, Math.floor(percent))) + "%";
       }
-      row.appendChild(projectDetail(snapshot, motion)); row.appendChild(percentCell);
+      row.appendChild(pipeline ? pipelineDetail(snapshot, motion) : projectDetail(snapshot, motion)); row.appendChild(percentCell);
       list.appendChild(row);
     });
     list.appendChild(taskLegend());
@@ -427,6 +444,129 @@
       rows: [["agent / model", runs.map(function (run) { return run.agent + " / " + run.model; }).join(", ") || "—"],
         ["session / host", sessions.map(function (session) { return session.id + " / " + session.host; }).join(", ") || "—"]],
       chips: [{label: {done: "done", active: "agent on it", accepted: "not accepted", todo: "to do"}[state], state: state}]};
+  }
+  function sourceName(p) {
+    return p.source === "speckit" ? "Spec Kit" : p.source === "ledger" ? "ledger" :
+      p.source === "checkbox" ? "configured checkboxes" : p.source && p.source !== "none" ?
+      p.source + (p.recognition === "index" ? " index" : " status lines") : "no recognised pipeline";
+  }
+  function sourceTip(p, title) {
+    var items = p.source && p.source !== "none" ? ["Artefact presence is evidence of a stage, not a review verdict or release proof."] :
+      ["no task list · Looked for Spec Kit specs/NNN-name, configured checkboxes, docs/specs, docs/spec and specs indexes/status lines, release packages, and exact-project ledger runs."];
+    if (p.ledger_join === "none") items.push("No ledger source: no Ledger project override and no runs match the folder name.");
+    if (p.ledger_join === "configured-empty") items.push("No ledger source: no runs match the configured Ledger project.");
+    if (p.reason) items.push(p.reason);
+    return {title: title, sub: sourceName(p), items: items.concat(p.skipped || []).slice(0, 5)};
+  }
+  function itemLabel(f) {
+    return f.feature != null ? "spec " + String(f.feature).padStart(3, "0") : "item " + f.ordinal;
+  }
+  function stageTip(p, f, row) {
+    var items = [];
+    if (f.status_hint) items.push("status line says " + f.status_hint);
+    if (row.state === "unknown") items.push("no status stated");
+    if (row.stage !== "tasks" && row.stage !== "packages" && row.stage !== "work") items.push("Artefact present; no content or verdict inferred.");
+    var rows = [["item state", f.state], ["stage state", row.state], ["done / total", row.done + " / " + row.total]];
+    if (row.stage === "tasks") {
+      (f.stories || []).slice().sort(storyOrder).forEach(function (story) {
+        rows.push([story.story + (story.priority ? " · P" + story.priority : ""), story.done + " / " + story.total]);
+      });
+      if (f.total && f.done === f.total && f.artifacts && !f.artifacts.verify) items.push("All tasks checked; verify artefact absent.");
+    }
+    return {title: itemLabel(f) + " · " + row.stage, sub: sourceName(p), rows: rows, items: items};
+  }
+  function progressSegments(f) {
+    var svg = s("svg", {width: 42, height: 3, viewBox: "0 0 42 3", "class": "pipeline-progress", "aria-hidden": "true"});
+    var id = "pipeline-clip-" + (++brickId), defs = s("defs"), clip = s("clipPath", {id: id});
+    clip.appendChild(s("rect", {width: 42, height: 3, rx: 1.5})); defs.appendChild(clip); svg.appendChild(defs);
+    var group = s("g", {"clip-path": "url(#" + id + ")", "shape-rendering": "crispEdges"});
+    var counts = {done: 0, active: 0, accepted: 0, todo: 0};
+    (f.tasks || []).forEach(function (task) { counts[taskState(task)]++; });
+    var offset = 0, total = Math.max(1, f.total);
+    ["done", "active", "accepted", "todo"].forEach(function (state) {
+      var width = counts[state] / total * 42;
+      if (width) group.appendChild(s("rect", {x: offset, y: 0, width: width, height: 3,
+        fill: {done: "var(--good)", active: "var(--p)", accepted: "var(--warn)", todo: "var(--line)"}[state], "class": "pipeline-segment " + state}));
+      offset += width;
+    });
+    svg.appendChild(group); return svg;
+  }
+  function pipelineBlock(p, f, row) {
+    var block = h("span", "pipeline-block " + row.state);
+    block.setAttribute("data-stage", row.stage); block.setAttribute("data-state", row.state);
+    if (row.stage === "review") {
+      var reviews = f.review_counts || {};
+      ["code", "security"].forEach(function (kind) {
+        var chip = t("span", "pipeline-review " + (reviews[kind] ? "done" : "unknown"), kind === "code" ? "code" : "sec");
+        if (reviews[kind + "_final"]) chip.appendChild(t("b", "review-final", "✓"));
+        tipOn(chip, {title: kind + " review artefacts", sub: sourceName(p), rows: [["files", reviews[kind] || 0], ["final", reviews[kind + "_final"] ? "present" : "absent"]],
+          items: ["File presence only; no approval inferred."]});
+        block.appendChild(chip);
+      });
+    } else {
+      block.appendChild(t("span", "pipeline-stage-label", row.stage));
+      if (row.stage === "tasks") {
+        block.appendChild(t("span", "pipeline-percent", completionPercent(row.done, row.total) + "%"));
+        block.appendChild(progressSegments(f));
+      }
+    }
+    return tipOn(block, stageTip(p, f, row));
+  }
+  function workStrip(p) {
+    var strip = h("div", "work-strip"), counts = p.work || {};
+    strip.appendChild(t("span", "work-label", "work"));
+    ["done", "needs-attention", "active", "deferred", "unknown"].forEach(function (state) {
+      if (!counts[state]) return;
+      var chip = t("span", "work-chip " + state, String(counts[state]));
+      tipOn(chip, {title: "ledger · " + state, rows: [["latest task outcomes", counts[state]]],
+        items: ["Exact project join; repeated task labels share their latest outcome."].concat(state === "unknown" ? ["no status stated"] : [])}); strip.appendChild(chip);
+    });
+    return strip;
+  }
+  function pipelineTasks(feature, motion) {
+    var priorities = {}; (feature.stories || []).forEach(function (row) { priorities[row.story] = row.priority; });
+    var cells = h("div", "cells pipeline-tasks"), tasks = (feature.tasks || []).slice().sort(function (a, b) {
+      return storyOrder({story: a.story, priority: priorities[a.story]}, {story: b.story, priority: priorities[b.story]}) || taskOrder(a, b);
+    });
+    var per = Math.max(1, Math.ceil(tasks.length / 12));
+    for (var i = 0; i < tasks.length;) {
+      var end = i + 1;
+      while (end < tasks.length && end < i + per && tasks[end].story === tasks[i].story) end++;
+      var group = tasks.slice(i, end), states = group.map(taskState); i = end;
+      var state = states.indexOf("active") !== -1 ? "active" : states.indexOf("accepted") !== -1 ? "accepted" : states.every(function (x) { return x === "done"; }) ? "done" : "todo";
+      var mark = brick(state, 15, 8, "task-brick");
+      mark.setAttribute("data-task", group[0].id); mark.setAttribute("data-state", state); mark.setAttribute("data-count", group.length);
+      mark.style.setProperty("--snap-delay", Math.min(500, motion.index++ * 10) + "ms");
+      tipOn(mark, taskTip(group, feature.feature, group[0].story));
+      mark.setAttribute("aria-hidden", "false"); mark.setAttribute("role", "img"); cells.appendChild(mark);
+    }
+    return cells;
+  }
+  function pipelineDetail(p, motion) {
+    var card = h("div", "project-detail pipeline-detail"), unfinished = unfinishedFeatures(p).slice().sort(function (a, b) {
+      return (b.feature || b.ordinal || 0) - (a.feature || a.ordinal || 0);
+    });
+    var finished = (p.features || []).length - unfinished.length, taskItem = null;
+    if (p.source !== "ledger") unfinished.slice(0, 5).forEach(function (feature) {
+      var line = h("div", "pipeline-item", [tipOn(t("span", "pipeline-ordinal", feature.feature != null ? String(feature.feature).padStart(3, "0") : "#" + feature.ordinal),
+        {title: itemLabel(feature), sub: sourceName(p), rows: [["state", feature.state]], items: feature.status_hint ? ["status line says " + feature.status_hint] : []})]);
+      var chain = h("div", "pipeline-chain");
+      (feature.stages || []).forEach(function (row) { chain.appendChild(pipelineBlock(p, feature, row)); });
+      line.appendChild(chain);
+      (feature.packages || []).forEach(function (pkg) {
+        var mark = brick(pkg.state === "done" ? "done" : pkg.state === "active" ? "active" : "todo", 12, 7, "package-brick " + pkg.state);
+        tipOn(mark, {title: "package " + pkg.ordinal, sub: sourceName(p), rows: [["state", pkg.state]], items: pkg.state === "unknown" ? ["no status stated"] : []});
+        mark.setAttribute("aria-hidden", "false"); mark.setAttribute("role", "img"); line.appendChild(mark);
+      });
+      if (!taskItem && feature.state === "active" && (feature.tasks || []).length) { taskItem = feature; line.appendChild(pipelineTasks(feature, motion)); }
+      card.appendChild(line);
+    });
+    if (p.source !== "ledger" && unfinished.length > 5) card.appendChild(tipOn(t("span", "pipeline-more", "+" + (unfinished.length - 5) + " more"),
+      {title: sourceName(p), rows: [["unfinished items", unfinished.length]], items: unfinished.slice(5, 10).map(function (f) { return itemLabel(f) + " · " + f.state; })}));
+    if (p.source !== "ledger" && finished) card.appendChild(tipOn(t("span", "pipeline-finished", finished + " done"),
+      {title: sourceName(p), rows: [["finished items", finished]], items: (p.features || []).filter(function (f) { return f.state === "done"; }).slice(-5).reverse().map(function (f) { return itemLabel(f) + " · done" + (f.status_hint ? " · status line says " + f.status_hint : ""); })}));
+    if (Object.keys(p.work || {}).length) card.appendChild(workStrip(p));
+    return card;
   }
   function projectDetail(p, motion) {
     var card = h("div", "project-detail");
@@ -478,9 +618,9 @@
   function projectLimits() {
     return {title: "How to read this", items: [
       "Named projects show local activity in the last 24 hours.",
-      "Each small brick is a task; large groups merge by state.",
-      "Done means ticked; not accepted remains unfinished.",
-      "Finished stories and features are hidden; tables keep details.",
+      "Pipelines show recognised artefacts or repository states; small bricks show tasks or packages.",
+      "Task done means ticked; not accepted remains unfinished. Features need verify artefacts.",
+      "At most five unfinished items; finished items collapse into a count. Tables keep details.",
       "Links use recorded task ids and runs; unlinked sessions stay separate."
     ]};
   }

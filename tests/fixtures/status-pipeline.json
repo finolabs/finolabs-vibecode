@@ -1,0 +1,375 @@
+{
+  "repositories": {
+    "aaaaaaaa": {
+      "source": "speckit",
+      "recognition": "artifacts",
+      "features": [
+        {
+          "feature": 13,
+          "state": "done",
+          "stages": [
+            {
+              "stage": "spec",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            },
+            {
+              "stage": "plan",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            },
+            {
+              "stage": "tasks",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            },
+            {
+              "stage": "verify",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            },
+            {
+              "stage": "review",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            },
+            {
+              "stage": "ship",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            }
+          ],
+          "tasks": [
+            {
+              "id": "T001",
+              "state": "done",
+              "story": "US1",
+              "phase": 2,
+              "runs": [],
+              "sessions": []
+            }
+          ],
+          "done": 1,
+          "total": 1,
+          "stories": [],
+          "phases": [],
+          "status_hint": "draft",
+          "review_counts": {
+            "code": 3,
+            "security": 2,
+            "code_final": true,
+            "security_final": true
+          }
+        },
+        {
+          "feature": 15,
+          "state": "active",
+          "stages": [
+            {
+              "stage": "spec",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            },
+            {
+              "stage": "plan",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            },
+            {
+              "stage": "design",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            },
+            {
+              "stage": "tasks",
+              "state": "active",
+              "done": 2,
+              "total": 4
+            },
+            {
+              "stage": "verify",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            },
+            {
+              "stage": "review",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            }
+          ],
+          "tasks": [
+            {
+              "id": "T001",
+              "state": "done",
+              "story": "US1",
+              "phase": 2,
+              "runs": [],
+              "sessions": []
+            },
+            {
+              "id": "T002",
+              "state": "done",
+              "story": "US1",
+              "phase": 2,
+              "runs": [],
+              "sessions": []
+            },
+            {
+              "id": "T003",
+              "state": "in progress",
+              "story": "US1",
+              "phase": 2,
+              "runs": [],
+              "sessions": []
+            },
+            {
+              "id": "T004",
+              "state": "todo",
+              "story": "US1",
+              "phase": 2,
+              "runs": [],
+              "sessions": []
+            }
+          ],
+          "done": 2,
+          "total": 4,
+          "stories": [
+            {
+              "story": "US1",
+              "priority": 1,
+              "done": 2,
+              "total": 4
+            }
+          ],
+          "phases": [],
+          "status_hint": "draft",
+          "review_counts": {
+            "code": 2,
+            "security": 1,
+            "code_final": true,
+            "security_final": false
+          }
+        },
+        {
+          "feature": 16,
+          "state": "todo",
+          "stages": [
+            {
+              "stage": "spec",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            }
+          ],
+          "tasks": [],
+          "done": 0,
+          "total": 0,
+          "stories": [],
+          "phases": [],
+          "status_hint": "draft"
+        }
+      ],
+      "ledger_join": "none",
+      "work": {},
+      "label": "Synthetic Spec Kit"
+    },
+    "bbbbbbbb": {
+      "source": "docs/specs",
+      "recognition": "index",
+      "features": [
+        {
+          "ordinal": 1,
+          "state": "done",
+          "stages": [
+            {
+              "stage": "spec",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            }
+          ],
+          "tasks": [],
+          "stories": [],
+          "phases": [],
+          "total": 1,
+          "done": 1
+        },
+        {
+          "ordinal": 2,
+          "state": "unknown",
+          "stages": [
+            {
+              "stage": "spec",
+              "state": "unknown",
+              "done": 0,
+              "total": 1
+            }
+          ],
+          "tasks": [],
+          "stories": [],
+          "phases": [],
+          "total": 1,
+          "done": 0
+        },
+        {
+          "ordinal": 3,
+          "state": "active",
+          "stages": [
+            {
+              "stage": "spec",
+              "state": "active",
+              "done": 0,
+              "total": 1
+            },
+            {
+              "stage": "packages",
+              "state": "active",
+              "done": 1,
+              "total": 4
+            }
+          ],
+          "tasks": [],
+          "stories": [],
+          "phases": [],
+          "total": 1,
+          "done": 0,
+          "packages": [
+            {
+              "ordinal": 1,
+              "state": "done"
+            },
+            {
+              "ordinal": 2,
+              "state": "unknown"
+            },
+            {
+              "ordinal": 3,
+              "state": "deferred"
+            },
+            {
+              "ordinal": 4,
+              "state": "active"
+            }
+          ]
+        }
+      ],
+      "ledger_join": "configured",
+      "work": {
+        "done": 3,
+        "needs-attention": 2,
+        "active": 1,
+        "deferred": 1
+      },
+      "label": "Synthetic repository"
+    },
+    "cccccccc": {
+      "source": "ledger",
+      "recognition": "ledger",
+      "features": [
+        {
+          "ordinal": 1,
+          "state": "done",
+          "stages": [
+            {
+              "stage": "work",
+              "state": "done",
+              "done": 1,
+              "total": 1
+            }
+          ],
+          "tasks": [],
+          "stories": [],
+          "phases": [],
+          "total": 1,
+          "done": 1
+        },
+        {
+          "ordinal": 2,
+          "state": "needs-attention",
+          "stages": [
+            {
+              "stage": "work",
+              "state": "needs-attention",
+              "done": 0,
+              "total": 1
+            }
+          ],
+          "tasks": [],
+          "stories": [],
+          "phases": [],
+          "total": 1,
+          "done": 0
+        }
+      ],
+      "ledger_join": "folder",
+      "work": {
+        "done": 1,
+        "needs-attention": 1
+      },
+      "label": "Synthetic ledger"
+    },
+    "dddddddd": {
+      "source": "none",
+      "recognition": "none",
+      "features": [],
+      "work": {},
+      "ledger_join": "none",
+      "label": "Synthetic unrecognised"
+    }
+  },
+  "active": [
+    {
+      "repo": "aaaaaaaa",
+      "label": "Synthetic Spec Kit",
+      "hosts": [
+        "codex"
+      ],
+      "sessions": 1,
+      "last": "2026-11-06T10:00:00Z",
+      "percent": null
+    },
+    {
+      "repo": "bbbbbbbb",
+      "label": "Synthetic repository",
+      "hosts": [
+        "codex"
+      ],
+      "sessions": 1,
+      "last": "2026-11-06T10:00:00Z",
+      "percent": null
+    },
+    {
+      "repo": "cccccccc",
+      "label": "Synthetic ledger",
+      "hosts": [
+        "codex"
+      ],
+      "sessions": 1,
+      "last": "2026-11-06T10:00:00Z",
+      "percent": null
+    },
+    {
+      "repo": "dddddddd",
+      "label": "Synthetic unrecognised",
+      "hosts": [
+        "codex"
+      ],
+      "sessions": 1,
+      "last": "2026-11-06T10:00:00Z",
+      "percent": null
+    }
+  ],
+  "in_progress": 1,
+  "notice": false
+}
