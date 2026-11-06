@@ -471,7 +471,7 @@ STATUS_MARKS = ('accepted', 'status-not-updated')
 def status_state(text):
     """Specific deferral/ongoing phrases precede generic completion words."""
     text = text.lower()
-    if re.search(r'\bnot(?:\s+yet)?\s+(?:released|done|merged|implemented)\b', text):
+    if negated_completion(text):
         return 'unknown'
     word = status_word(text)
     if word != 'unknown':
@@ -485,7 +485,13 @@ def status_state(text):
     return 'unknown'
 
 
+def negated_completion(text):
+    return re.search(r'\bnot(?:\s+yet)?\s+(?:released|done|merged|implemented)\b', text, re.I) is not None
+
+
 def status_word(text):
+    if negated_completion(text):
+        return 'unknown'
     match = re.fullmatch(r'(draft|accepted|in progress|implemented|released|deferred)(?:\s*;.*)?', text.strip(), re.I)
     return match[1].lower() if match else 'unknown'
 

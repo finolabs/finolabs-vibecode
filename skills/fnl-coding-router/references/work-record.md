@@ -34,7 +34,9 @@ The project progress reader enforces recognition and metadata extraction:
 
 - The first `Status:` line is within the first 40 physical lines, outside fenced code. Its leading value
   is `draft`, `accepted`, `in progress`, `implemented`, `released` or `deferred`; commentary follows a
-  semicolon. The reader maps an unknown value to `unknown` and never echoes it.
+  semicolon. The reader maps an unknown value to `unknown` and never echoes it. The negation
+  guard also applies to work records: `not released`, `not done`, `not yet merged` and
+  `not implemented` (including `not yet` variants) force `unknown`, even after a completion word.
 - At least two exact second-level headings from the template, plus a Status line, identify a record.
   Otherwise the file remains a plain spec document. Fenced headings are ignored.
 - Goal and acceptance checkboxes supply the `spec` stage and its done/total counts. A non-empty Plan

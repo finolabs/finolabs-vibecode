@@ -183,6 +183,15 @@ class ProgressTest(unittest.TestCase):
         self.document('work.md', 'Status: implemented\n## Goal and acceptance\n')
         self.assertNotEqual(self.collect()['source'], 'work-record')
 
+    def test_work_record_negated_completion_is_unknown(self):
+        for status in ('implemented; not yet released', 'released; not done',
+                       'implemented; not yet merged', 'implemented; not implemented'):
+            with self.subTest(status=status):
+                self.record(status)
+                self.assertEqual(self.collect()['features'][0]['state'], 'unknown')
+        self.record('implemented; tested locally')
+        self.assertEqual(self.collect()['features'][0]['state'], 'done')
+
     def test_work_record_fenced_evidence_and_empty_status(self):
         text = 'Status: \n## Plan\n```sh\n## Tasks\n- [x] T9\n```\n## Evidence\n```sh\npython -m unittest\n```\n'
         item = self.pp.work_record(text, 1)
