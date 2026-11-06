@@ -17,6 +17,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import shlex
 import shutil
 import stat
@@ -212,6 +213,91 @@ def recent_snapshot():
         return None
 
 
+def quota_meters():
+    """A bounded projection of the local cache, one limiting meter per family."""
+    try:
+        cache = json.loads(fm.dr.read_data('state/quota/quota.json', 262144))
+        meters = []
+        for family in ('claude', 'codex', 'agy'):
+            entries = cache.get(family, {})
+            candidates = []
+            for entry in list(entries.values())[:4]:
+                measured = pp.timestamp(entry.get('measured'))
+                if measured is None:
+                    continue
+                groups = entry.get('groups', [])
+                # Claude's weekly all-model pool is the family limit when present.
+                weekly = [g for g in groups if g.get('name') == 'week-all']
+                for group in (weekly or groups)[:64]:
+                    value = group.get('remaining_fraction')
+                    if type(value) in (int, float) and 0 <= value <= 1:
+                        candidates.append((value, measured))
+            if candidates:
+                value, measured = min(candidates, key=lambda pair: pair[0])
+                meters.append(dict(agent=family, remaining_fraction=value, measured=measured.isoformat(),
+                                   unverified=not 0 <= (fm.now() - measured).total_seconds() <= 28800))
+        return meters
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return []
+
+
+def previous_projects():
+    """Read the last page as data only, bounded and owner-checked like the snapshot.
+
+    Closed metadata keys and leaf values prevent a tampered file carrying free text
+    forward. Labels are always resolved again from canonical host configuration.
+    """
+    try:
+        path = fm.state_dir() / 'data.js'
+        fd = os.open(path, os.O_RDONLY | fm.NOFOLLOW | os.O_NONBLOCK)
+        try:
+            info = os.fstat(fd)
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                    or info.st_mode & 0o022 or info.st_size > 16 * 1024 * 1024):
+                return {}
+            with os.fdopen(os.dup(fd), 'r') as stream:
+                raw = stream.read(16 * 1024 * 1024 + 1)
+        finally:
+            os.close(fd)
+        repositories = json.loads(raw.removeprefix('window.FNL_DATA = ').removesuffix(';\n'))['progress']['repositories']
+        keys = {'features', 'feature', 'tasks', 'total', 'done', 'phases', 'phase', 'stories', 'story', 'priority',
+                'state', 'runs', 'sessions', 'id', 'host', 'first', 'last', 'agent', 'model', 'start', 'finish',
+                'outcome', 'rework_rounds', 'elapsed_seconds', 'in_progress', 'labels_without_feature',
+                'unlinked_runs', 'outcomes', 'sessions_without_task', 'active_24h', 'idle', 'running_now',
+                'reviews', 'code', 'security', 'version', 'updated', 'reason', 'skipped', *pp.OUTCOMES, 'open', 'other'}
+        def clean(value, key='', depth=0):
+            if depth > 9:
+                raise ValueError('depth')
+            if isinstance(value, dict):
+                return {k: clean(v, k, depth + 1) for k, v in value.items() if k in keys}
+            if isinstance(value, list):
+                if len(value) > 200:
+                    raise ValueError('rows')
+                return [clean(v, key, depth + 1) for v in value]
+            if value is None or type(value) is bool or type(value) is int and 0 <= value <= 10**12:
+                return value
+            if isinstance(value, str):
+                if key in ('first', 'last', 'start', 'finish', 'updated') and pp.timestamp(value):
+                    return value
+                if key == 'model' and pp.TOKEN.fullmatch(value):
+                    return value
+                if key == 'id' and pp.IDENT.fullmatch(value):
+                    return value
+                if key == 'story' and re.fullmatch(r'US[0-9]{1,3}', value):
+                    return value
+                if key == 'version' and re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-dev)?', value):
+                    return value
+                if value in (*pp.AGENTS, *pp.HOSTS, *pp.OUTCOMES, 'other', 'unknown', 'open', 'todo', 'done',
+                             'in progress', 'accepted, not ticked', 'APPROVE', 'REWORK', '', 'task file skipped',
+                             'spec file skipped', 'unsafe task path', 'file limit', 'entry limit', 'ledger unavailable'):
+                    return value
+            raise ValueError('metadata')
+        return {code: clean(row) for code, row in list(repositories.items())[-5:]
+                if re.fullmatch(r'[0-9a-f]{8}', code) and isinstance(row, dict)}
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return {}
+
+
 def running_metrics(generated):
     snapshot = ap.empty('snapshot off')
     if fm.enabled() and ap.enabled():
@@ -246,14 +332,14 @@ def running_metrics(generated):
     families = {'antigravity': 'agy', 'claude': 'claude', 'codex': 'codex'}
     for process in processes:
         process['not_started_by_coordinator'] = not any(families.get(row['agent']) == process['family'] for row in rows) if not note else False
-    return {'open': rows, 'processes': processes, 'snapshot': snapshot, 'ledger_note': note}
+    return {'open': rows, 'processes': processes, 'snapshot': snapshot, 'ledger_note': note, 'quota': quota_meters()}
 
 
 def progress_metrics(events, running, cwd=None):
     if not fm.enabled():
         return None
     # collect owns the wall timer, including configuration and repo_code's local reads.
-    # One current repository is kept: every refresh replaces its snapshot in full.
+    # Replace the current repository and retain four other last-written snapshots.
     with_progress = pp.collect(cwd or os.getcwd(), None, events=events, records=load_ledger, repo_code=fm.repo_code)
     if with_progress['reason'] == 'progress off':
         return None
@@ -268,7 +354,19 @@ def progress_metrics(events, running, cwd=None):
             reviews[event['kind']] = event['verdict']
     with_progress['reviews'] = reviews
     with_progress['version'] = pp.installed_version()
-    return {'current': code, 'repositories': {code: with_progress}, 'in_progress': with_progress['in_progress'],
+    with_progress['updated'] = fm.now().isoformat()
+    repositories = previous_projects()
+    repositories.pop(code, None)
+    repositories[code] = with_progress
+    repositories = dict(list(repositories.items())[-5:])
+    try:
+        labels = pp.project_labels(fm.dr.read_data('host.md', 262144).decode('utf-8'))
+    except (OSError, ValueError, UnicodeError):
+        labels = {}
+    for key, row in repositories.items():
+        row['label'] = labels.get(key, 'repo ' + key[:4])
+    return {'current': code, 'repositories': repositories,
+            'in_progress': sum(row.get('in_progress', 0) for row in repositories.values()),
             'notice': pp.notice('dashboard', with_progress['version'])}
 
 

@@ -76,6 +76,31 @@ class RefreshTest(unittest.TestCase):
         self.refresh('purge', '--yes')
         self.assertFalse((self.dir / 'data.js').exists())
 
+    def test_multiple_project_snapshots_and_quota_metadata(self):
+        self.consent()
+        self.ledger.parent.joinpath('host.md').write_text('# Host\n')
+        quota = self.dir / 'quota'
+        quota.mkdir(mode=0o700, exist_ok=True)
+        (quota / 'quota.json').write_text(json.dumps({'codex': {'default': {
+            'measured': self.at.isoformat(), 'source': 'local', 'groups': [
+                {'name': 'five-hour', 'window': '5h', 'remaining_fraction': .08, 'reset_time': None}]}}}))
+        codes = []
+        for n in range(6):
+            repo = Path(self.tmp.name).resolve() / ('project%d' % n)
+            (repo / '.git').mkdir(parents=True)
+            tasks = repo / 'specs/001-test/tasks.md'
+            tasks.parent.mkdir(parents=True)
+            tasks.write_text('- [ ] T1 US1\n')
+            result = subprocess.run([sys.executable, '-I', str(REFRESH), 'run', '--cwd', str(repo)],
+                                    env=self.env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            block = self.data()['progress']
+            codes.append(block['current'])
+            self.assertEqual(len(block['repositories']), min(n + 1, 5))
+        self.assertNotIn(codes[0], block['repositories'])
+        self.assertEqual(self.data()['running']['quota'][0]['remaining_fraction'], .08)
+        self.assertIn('updated', block['repositories'][codes[-1]])
+
     # Acceptance 1: ledger writes bypass only the age throttle.
     def test_freshness_newer_ledger_bypasses_throttle_older_or_absent_does_not(self):
         self.consent()
