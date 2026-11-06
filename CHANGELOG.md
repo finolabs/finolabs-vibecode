@@ -11,6 +11,9 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Parse capped hook payloads in linear time while preserving complete metadata fields and discarding truncated tool input.
+- Treat a quota cache that is unsafe, capped, unparsable or fails validation as no reading: status shows no reading, and the next scheduled reading, limited by the 30-minute backoff, replaces the file atomically without writing through a symlink and legacy records missing a resolved target; require a fresh setup preview for those records and verify the confirmed executable still resolves to its recorded target before running.
+- Refuse line breaks in quota setup paths and labels, and recognize the default Claude folder by filesystem identity, including case variants on case-insensitive volumes.
 - Read agent versions from stdout only, count each include cycle once, and preserve section ranges across Unicode line separators.
 - Clarify neutral setup approvals, question-tool fallbacks and default preferences. Keep language guidance outside lists, mark compaction advice explicitly, and align privacy and reference-check documentation with the existing rules.
 - Restore Claude quota readings by supplying the account database username to probe children and leaving `CLAUDE_CONFIG_DIR` unset for the default install while retaining it for listed extra folders.

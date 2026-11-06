@@ -225,6 +225,8 @@ def config():
             raise ValueError("duplicate folder")
         result = {}
         for agent in agents:
+            if "Resolved " + agent not in values:
+                continue  # Legacy records need a new preview and confirmation.
             executable = values["Executable " + agent]
             interpreter = values.get("Interpreter " + agent)
             for path in [executable, *([interpreter] if interpreter else [])]:
@@ -232,8 +234,7 @@ def config():
                     raise ValueError("absolute executable")
             result[agent] = {"executable": executable, "interpreter": interpreter,
                              "configs": folders if agent == "claude" else {"default": None}}
-            if "Resolved " + agent in values:
-                result[agent]["resolved"] = values["Resolved " + agent]
+            result[agent]["resolved"] = values["Resolved " + agent]
         return result
     except (OSError, ValueError, KeyError, UnicodeError):
         return {}
@@ -284,7 +285,11 @@ def checked_path(value, *, directory=False):
 def checked_executable(agent, entry):
     if agent not in SOURCES or Path(entry["executable"]).name != agent:
         raise ValueError("executable missing or wrong name")
-    executable = entry.get("resolved", entry["executable"])
+    executable = entry.get("resolved")
+    if not executable:
+        raise ValueError("missing resolved target; preview again")
+    if str(Path(entry["executable"]).resolve(strict=True)) != executable:
+        raise ValueError("executable target changed; preview again")
     first = checked_path(executable)
     interpreter = entry.get("interpreter")
     if first.startswith(b"#!"):
@@ -346,9 +351,19 @@ def write_json(folder, name, value):
     dr.atomic_write(folder, name, json.dumps(value, allow_nan=False, separators=(",", ":")).encode())
 
 
-def read_cache(folder):
+def read_cache(folder, repair=False):
+    # Status reads raise on an unsafe, capped or unparsable file. Spawning and the worker
+    # pass repair=True: nothing here trusts the content, cadence comes from backoff.json,
+    # and the worker's atomic write replaces the file.
     try:
         data = read_json(folder, "quota.json")
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError, OverflowError):
+        if repair:
+            return {}
+        raise
+    try:
         if not isinstance(data, dict) or data.keys() - SOURCES.keys():
             raise ValueError("cache")
         for agent, labels in data.items():
@@ -367,8 +382,8 @@ def read_cache(folder):
                         raise ValueError("group")
                     group(item["name"], item["window"], item["remaining_fraction"], item["reset_time"])
         return data
-    except (OSError, ValueError, TypeError, KeyError):
-        return {}
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return {}  # content that fails validation counts as no reading; the worker replaces it
 
 
 def backoff(folder, configs, current):
@@ -500,7 +515,7 @@ def command(agent, entry, label, nonce):
     if agent == "claude":
         validate_configs(entry["configs"])
         folder = entry["configs"][label]
-        if Path(folder) == dr.account_home() / ".claude":
+        if os.path.samefile(folder, dr.account_home() / ".claude"):
             folder = None
     argv += ["app-server"] if agent == "codex" else ["-p", "/usage", "--output-format", "json"]
     with working_folder() as cwd:
@@ -577,7 +592,7 @@ def trigger():
         current = now()
         with state_folder(create=True) as folder:
             delays = backoff(folder, configs, current)
-            jobs = due(configs, read_cache(folder), delays, current)
+            jobs = due(configs, read_cache(folder, repair=True), delays, current)
             if not jobs or marker(folder, current):
                 return False
             for agent, label in jobs:
@@ -636,7 +651,7 @@ def worker(jobs):
                 delays.setdefault(agent, {})[label] = {"retry_after": stamp(now() + timedelta(seconds=seconds)), "error": error}
                 write_json(folder, "backoff.json", delays)
                 if groups is not None:
-                    cache = read_cache(folder)
+                    cache = read_cache(folder, repair=True)
                     cache.setdefault(agent, {})[label] = {"measured": stamp(measured), "source": SOURCES[agent], "groups": groups}
                     write_json(folder, "quota.json", cache)
     finally:
@@ -659,7 +674,7 @@ def status_lines():
                 lines.append(f"Quota {agent}/{label}: measured {entry['measured']}; {pools}" +
                              (" (unverified: older than 8 hours)" if age > 8 * 3600 or age < 0 else ""))
         return lines or ["Quota: unverified (no reading)."]
-    except (OSError, ValueError):
+    except (OSError, ValueError, TypeError, KeyError):
         return ["Quota: unverified (no reading)."]
 
 

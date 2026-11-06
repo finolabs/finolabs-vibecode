@@ -262,20 +262,21 @@ def bounded_payload(raw):
     if not text.startswith("{"):
         return {}
     decoder, payload, index = json.JSONDecoder(), {}, 1
+    whitespace = re.compile(r"\s*")
     try:
         while True:
-            index += len(text[index:]) - len(text[index:].lstrip())
+            index = whitespace.match(text, index).end()
             key, index = decoder.raw_decode(text, index)
             if not isinstance(key, str):
                 break
-            index += len(text[index:]) - len(text[index:].lstrip())
+            index = whitespace.match(text, index).end()
             if text[index:index + 1] != ":":
                 break
             index += 1
-            index += len(text[index:]) - len(text[index:].lstrip())
+            index = whitespace.match(text, index).end()
             value, index = decoder.raw_decode(text, index)
             payload[key] = value
-            index += len(text[index:]) - len(text[index:].lstrip())
+            index = whitespace.match(text, index).end()
             if text[index:index + 1] != ",":
                 break
             index += 1
