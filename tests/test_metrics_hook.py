@@ -378,6 +378,14 @@ class HookTest(unittest.TestCase):
         self.assertFalse(self.dir.exists())
         self.assertEqual(list(self.repo.iterdir()), [self.repo / ".git"])
 
+    def test_project_progress_session_notice_once_without_hook_declaration_changes(self):
+        self.consent()
+        (self.home / '.finolabs/vibecode/host.md').write_text('## Project progress\n- Project progress: on\n')
+        payload = dict(hook_event_name='SessionStart', session_id='notice-session', cwd=str(self.repo), source='startup')
+        self.run_hook(payload, stdout='Project progress now reads this repository\'s task list and the ledger; nothing leaves your machine; turn off with Project progress: off in host.md under ## Project progress, or FNL_PROGRESS=off.\n')
+        self.run_hook(payload)
+        self.assertTrue((self.home / '.finolabs/vibecode/state/notices.json').exists())
+
     def test_task_receipt_copies_validate_without_writing(self):
         records = [ROOT / ("skills/" + skill + "/scripts/record.py")
                    for skill in ("fnl-coding-router", "fnl-delegate")]
@@ -572,11 +580,21 @@ class DetachedFreshnessTest(unittest.TestCase):
                         mock.patch.object(subprocess, "run") as synchronous:
                     self.invoke(event)
                     start.assert_called_once_with(
-                        [sys.executable, "-I", str(self.hook.REFRESH), "run", "--throttle", "10"],
+                        [sys.executable, "-I", str(self.hook.REFRESH), "run", "--throttle", "10", "--cwd", str(self.repo)],
                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                         start_new_session=True, close_fds=True, cwd=str(self.hook.REFRESH.parent),
                         env={k: os.environ[k] for k in ("SYSTEMROOT",) if k in os.environ})
                     synchronous.assert_not_called()
+
+    def test_progress_off_switch_and_payload_working_folder_reach_detached_refresh(self):
+        fm.write_consent(90)
+        for value in ('off', 'OFF', 'on', 'hostile'):
+            with mock.patch.dict(os.environ, {'FNL_PROGRESS': value}), mock.patch.object(subprocess, 'Popen') as start:
+                self.invoke('post_tool_use')
+                argv = start.call_args.args[0]
+                self.assertIn('--cwd', argv)
+                self.assertEqual(argv[argv.index('--cwd') + 1], str(self.repo))
+                self.assertEqual(start.call_args.kwargs['env'].get('FNL_PROGRESS'), 'off' if value.lower() == 'off' else None)
 
     def test_detached_refresh_preserves_only_the_snapshot_off_switch(self):
         fm.write_consent(90)

@@ -168,6 +168,22 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(self.pp.label_ids('003 T1-T99')[1], set())
         self.assertEqual(self.pp.label_ids('003 T1 T12')[1], {1, 12})
 
+    def test_configured_feature_and_project_alias(self):
+        path = self.repo / 'custom/007-private/tasks.md'
+        path.parent.mkdir(parents=True)
+        path.write_text('- [ ] T012 US1 private\n')
+        self.host.write_text('## Project progress\n- Task file: custom/007-private/tasks.md\n- Ledger project: alias\n')
+        run = dict(project='alias', task='007 T12', agent='codex', model='m', ts='2026-11-06T09:00:00Z')
+        result = self.collect(starts={'d1': run})
+        self.assertEqual(result['features'][0]['feature'], 7)
+        self.assertEqual(result['features'][0]['tasks'][0]['runs'][0]['id'], 'd1')
+        self.assertNotIn('private', json.dumps(result))
+    def test_prefix_boundary_never_turns_a_cut_token_into_a_shorter_id(self):
+        # A token cut by the 80-character window must not become a shorter id.
+        result = self.pp.parse('- [ ] ' + ' ' * 77 + 'T0123\n- [ ] T2 ' + ' ' * 74 + 'US12', 1)
+        self.assertEqual([t['id'] for t in result['tasks']], ['T2'])
+        self.assertIsNone(result['tasks'][0]['story'])
+
     def test_consent_canonical_section_default_off_unresolved_and_switch(self):
         self.assertTrue(self.pp.enabled())
         self.host.write_text('# resolved host, no progress section\n')
@@ -192,6 +208,18 @@ class ProgressTest(unittest.TestCase):
             self.assertFalse(self.pp.enabled())
         with self.assertRaises(ValueError):
             self.pp.configure('off')
+
+    def test_shared_copies_and_documented_consent_limits_and_ledger_labels(self):
+        raw = (ROOT / 'scripts/project_progress.py').read_bytes()
+        for relative in ('skills/fnl-status/scripts/project_progress.py', 'skills/fnl-setup/scripts/project_progress.py'):
+            self.assertEqual(raw, (ROOT / relative).read_bytes())
+        setup = (ROOT / 'skills/fnl-setup/SKILL.md').read_text()
+        for value in ('project progress', 'Task file:', 'Ledger project:', 'FNL_PROGRESS=off', 'project_progress.py off --yes', 'if it cannot be resolved it is off'):
+            self.assertIn(value, setup)
+        for name in ('PRIVACY.md', 'README.md', 'CHANGELOG.md', 'skills/fnl-status/SKILL.md'):
+            self.assertIn('FNL_PROGRESS=off', (ROOT / name).read_text())
+        self.assertIn('<feature> T<id>', (ROOT / 'skills/fnl-delegate/references/ledger.md').read_text())
+        self.assertIn('Implemented', (ROOT / 'docs/specs/index.md').read_text().split('[Project progress]')[1].split('\n')[0])
 
     def test_notice_channels_once_version_fixed_content_and_no_events(self):
         for channel in ('dashboard', 'session'):

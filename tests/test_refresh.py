@@ -40,6 +40,42 @@ class RefreshTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
         return result
 
+    def test_progress_local_metadata_consent_refresh_overwrite_and_purge(self):
+        repo = Path(self.tmp.name).resolve() / 'private-project'
+        repo.mkdir()
+        (repo / '.git').mkdir()
+        tasks = repo / 'specs/003-private/tasks.md'
+        tasks.parent.mkdir(parents=True)
+        tasks.write_text('## Phase 1: secret\n- [ ] T012 US1 private <script>\n')
+        self.ledger.parent.joinpath('host.md').write_text('## Project progress\n- Project progress: on\n')
+        def run():
+            result = subprocess.run([sys.executable, '-I', str(REFRESH), 'run'], cwd=repo,
+                                    capture_output=True, text=True, env=self.env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return self.data().get('progress')
+        self.assertIsNone(run())
+        self.consent()
+        self.write_events([self.event(0, 's', X, 'task', id='T012')])
+        events = {p: p.read_bytes() for p in self.dir.glob('events-*.jsonl')}
+        block = run()
+        self.assertRegex(block['current'], r'^[0-9a-f]{8}$')
+        self.assertLessEqual(len(block['repositories']), 5)
+        current = block['repositories'][block['current']]
+        self.assertEqual(current['features'][0]['tasks'][0]['id'], 'T012')
+        self.assertTrue(block['notice'])
+        self.assertNotIn('secret', json.dumps(block))
+        self.assertNotIn('<script>', json.dumps(block))
+        tasks.write_text('- [x] T012 US1\n')
+        block = run()
+        self.assertFalse(block['notice'])
+        self.assertEqual(block['repositories'][block['current']]['features'][0]['done'], 1)
+        self.assertEqual({p: p.read_bytes() for p in events}, events)
+        self.env['FNL_PROGRESS'] = 'off'
+        self.assertIsNone(run())
+        self.env.pop('FNL_PROGRESS')
+        self.refresh('purge', '--yes')
+        self.assertFalse((self.dir / 'data.js').exists())
+
     # Acceptance 1: ledger writes bypass only the age throttle.
     def test_freshness_newer_ledger_bypasses_throttle_older_or_absent_does_not(self):
         self.consent()
@@ -641,7 +677,7 @@ class RefreshOverlapTest(unittest.TestCase):
 
     @staticmethod
     def args(throttle=None, open_page=False):
-        return mock.Mock(throttle=throttle, open=open_page)
+        return mock.Mock(throttle=throttle, open=open_page, cwd=None)
 
     def test_a_run_waits_for_a_rebuild_in_progress_and_then_rebuilds_so_the_newest_data_wins(self):
         inside, release, order = threading.Event(), threading.Event(), []

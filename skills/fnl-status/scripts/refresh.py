@@ -32,6 +32,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))  # -I leaves the script folder off the path
 import fnl_metrics as fm  # noqa: E402
 import agent_processes as ap  # noqa: E402
+import project_progress as pp  # noqa: E402
 
 SKILLS = HERE.parent.parent
 PAGE = HERE.parent / "assets/dashboard.html"
@@ -248,7 +249,30 @@ def running_metrics(generated):
     return {'open': rows, 'processes': processes, 'snapshot': snapshot, 'ledger_note': note}
 
 
-def build(days=WEEKS * 7):
+def progress_metrics(events, running, cwd=None):
+    if not fm.enabled():
+        return None
+    # collect owns the wall timer, including configuration and repo_code's local reads.
+    # One current repository is kept: every refresh replaces its snapshot in full.
+    with_progress = pp.collect(cwd or os.getcwd(), None, events=events, records=load_ledger, repo_code=fm.repo_code)
+    if with_progress['reason'] == 'progress off':
+        return None
+    code = with_progress.pop('repo', None)
+    if code is None:
+        return {'current': None, 'repositories': {}, 'in_progress': 0, 'notice': False,
+                'reason': with_progress['reason']}
+    with_progress['running_now'] = len(running['processes']) if not running['snapshot']['reason'] else None
+    reviews = {}
+    for event in sorted(events, key=lambda e: e['ts']):
+        if event['repo'] == code and event['event'] == 'review':
+            reviews[event['kind']] = event['verdict']
+    with_progress['reviews'] = reviews
+    with_progress['version'] = pp.installed_version()
+    return {'current': code, 'repositories': {code: with_progress}, 'in_progress': with_progress['in_progress'],
+            'notice': pp.notice('dashboard', with_progress['version'])}
+
+
+def build(days=WEEKS * 7, cwd=None):
     today = datetime.now().astimezone().date()
     start = today - timedelta(days=days - 1)
     consent = fm.read_consent()
@@ -362,10 +386,12 @@ def build(days=WEEKS * 7):
         missing["delegation"] = ledger_note
 
     generated = fm.now().isoformat(timespec="seconds")
+    running = running_metrics(generated)
     return {
+        "progress": progress_metrics(events, running, cwd),
         "generated": generated,
         "freshness": freshness(events, generated),
-        "running": running_metrics(generated),
+        "running": running,
         "period": {"from": start.isoformat(), "to": today.isoformat(), "days": days},
         "sessions": {"total": len(by_sid), "with_edits": with_edits, "dispatch": excluded, "unclassified": unclassified},
         "errors": fm.errors_count(), "missing": missing,
@@ -452,7 +478,7 @@ def cmd_run(args):
 
 def publish(folder, args):
     target = folder / "data.js"
-    data = build()
+    data = build(cwd=args.cwd) if getattr(args, "cwd", None) else build()
     fm.atomic_write(target, js_text(data))
     fm.atomic_write(folder / "dashboard.html", PAGE.read_bytes())
     miss = sorted(data["missing"])
@@ -561,6 +587,7 @@ def main():
     run = sub.add_parser("run", help="write data.js and dashboard.html")
     run.add_argument("--open", action="store_true", help="show the page in the default browser")
     run.add_argument("--throttle", type=float, metavar="SECONDS", help="skip when data.js is newer than this")
+    run.add_argument("--cwd", help="repository working folder supplied by a session hook")
     run.set_defaults(func=cmd_run)
     consent = sub.add_parser("consent", help="record consent and retention")
     consent.add_argument("--retention", type=int, choices=fm.RETENTIONS)

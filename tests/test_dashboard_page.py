@@ -234,6 +234,40 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertFalse(later['panels'][1]['hidden'])
         self.assertEqual(later['poll_ms'], [5000])
 
+    def test_project_panel_metadata_limits_empty_state_hostile_names_and_reload(self):
+        data = self.sample()
+        attack = '<img src=x onerror=alert(1)>'
+        feature = dict(feature=3, done=1, total=2,
+            phases=[dict(phase=1, done=1, total=2)], stories=[dict(story='US1', done=1, total=2)],
+            tasks=[dict(id='T012', story='US1', phase=1, state='in progress',
+                        runs=[dict(id='d1', agent='codex', model=attack, elapsed_seconds=60, outcome='open')],
+                        sessions=[dict(id='s1', host=attack, last='now')])])
+        current = dict(features=[feature], reason='', skipped=[], labels_without_feature=1, unlinked_runs=2,
+                       outcomes={'accepted': 1}, sessions={'active_24h': 2, 'idle': 1},
+                       sessions_without_task=[dict(id='s2', host='claude', last='now')], reviews={'code': 'APPROVE'},
+                       version='0.1.10-dev', running_now=1)
+        data['progress'] = dict(current='aaaaaaaa', repositories={'aaaaaaaa': current}, in_progress=1, notice=True)
+        out = self.render_freshness(data, {'hash': '#project'})
+        panel = out['panels'][2]['text']
+        for value in ('feature 003', '1 / 2', 'Phase 1', 'US1', 'T012', 'in progress', 's1', 'd1', attack,
+                      'Sessions without a task', 's2', 'active in the last 24 hours: 2', 'idle: 1',
+                      'running now: 1', 'accepted: 1', 'APPROVE', '0.1.10-dev', 'derived from files and local records',
+                      'done means the box is ticked', 'label without a feature: 1', 'nothing leaves your machine'):
+            self.assertIn(value, panel)
+        self.assertNotIn('img', out['tags'])
+        self.assertNotIn('script', out['tags'])
+        current['features'] = []
+        data['progress']['notice'] = False
+        empty = self.render_freshness(data, {'hash': '#project'})
+        self.assertIn('No tasks.md or configured task file found', empty['panels'][2]['text'])
+        self.assertNotIn('nothing leaves your machine', empty['panels'][2]['text'])
+        changed = self.sample()
+        changed['progress'] = data['progress']
+        later = self.render_freshness(self.sample(), {'hash': '#project', 'next': changed, 'ticks': 2})
+        self.assertIn('No tasks.md or configured task file found', later['panels'][2]['text'])
+        self.assertFalse(later['panels'][2]['hidden'])
+        self.assertEqual(later['poll_ms'], [5000])
+
     def test_running_panel_off_and_failed_snapshots_do_not_claim_zero_processes(self):
         for reason in ('snapshot off', 'ps timed out'):
             data = self.sample()

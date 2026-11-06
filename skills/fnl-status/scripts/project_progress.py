@@ -220,12 +220,13 @@ def parse(text, feature):
         box = re.match(r'^\s*- \[( |x|X)\] ', line)
         if not box:
             continue
-        prefix = line[box.end():box.end() + 80]
+        # Include lookahead beyond the window so a cut token cannot become a shorter id.
+        prefix = line[box.end():box.end() + 85]
         ident, story = TASK.search(prefix), STORY.search(prefix)
-        if not ident or int(ident[1]) in seen:
+        if not ident or ident.end() > 80 or int(ident[1]) in seen:
             continue
         seen.add(int(ident[1]))
-        tasks.append({'id': ident[0], 'story': story[0] if story else None, 'phase': phase,
+        tasks.append({'id': ident[0], 'story': story[0] if story and story.end() <= 80 else None, 'phase': phase,
                       'state': 'done' if box[1] != ' ' else 'todo', 'runs': [], 'sessions': []})
         if len(tasks) == 200:
             break
@@ -383,10 +384,13 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
                 if custom:
                     try:
                         safe_parts(custom)
+                        custom = str(Path(custom))
                         if os.path.commonpath((os.path.realpath(root), os.path.realpath(root / custom))) != os.path.realpath(root):
                             raise ValueError('unsafe task path')
                         if custom not in [path for path, _ in paths]:
-                            paths.insert(0, (custom, len(paths) + 1))
+                            name = Path(custom).parent.name
+                            feature = int(name[:3]) if re.match(r'^[0-9]{3}-', name) else len(paths) + 1
+                            paths.insert(0, (custom, feature))
                     except ValueError:
                         result['skipped'].append('unsafe task path')
                 for relative, feature in paths[:20]:
