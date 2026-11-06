@@ -1,5 +1,7 @@
 # Compaction steward (option B)
 
+Status: implemented; option B: local handover storage, threshold decision and compact re-injection (release 0.1.10, package 2, pull request 99); real-host delivery remains unverified.
+
 Decision: 2026-11-06, owner: option B of the compaction analysis, built on the
 host thresholds of `compaction-threshold.md`. Option A (a central orchestrator
 that every session must ask) is not built. Scope: this document; the Antigravity

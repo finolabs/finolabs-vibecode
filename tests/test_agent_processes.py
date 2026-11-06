@@ -175,7 +175,7 @@ class SnapshotConsentTest(unittest.TestCase):
             'PRIVACY.md': ('## Agent snapshot', 'FNL_AGENT_SNAPSHOT=off', 'comm', 'data.js', 'user-chosen names'),
             'README.md': ('Running now', 'FNL_AGENT_SNAPSHOT=off'),
             'CHANGELOG.md': ('## [Unreleased]', 'process snapshot'),
-            'docs/specs/index.md': ('Phase 1 implemented',),
+            'docs/specs/index.md': ('implemented; phase 1',),
             'skills/fnl-status/SKILL.md': ('same `running` block', 'advisory'),
             'skills/fnl-setup/SKILL.md': ('scripts/agent_processes.py on --yes', 'if it cannot be resolved it is off'),
             'CLAUDE.md': ('absolute path owned by root', '2-second limit', '256 KiB output cap'),

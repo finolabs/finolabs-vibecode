@@ -1,5 +1,7 @@
 # Autopilot (release 0.2.0)
 
+Status: accepted; owner decisions recorded on 2026-11-06 for release 0.2.0; open questions are listed under "Open".
+
 Idea: owner, 2026-11-06. An agent that, only when the user asks, coordinates the repository's work while the
 user is away: it watches progress, picks the next work, delegates it, reviews it, and keeps going instead of
 waiting to be asked. The user stops it when they return. It is not on by default and never starts itself.

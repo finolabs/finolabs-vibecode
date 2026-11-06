@@ -1,5 +1,7 @@
 # Dashboard freshness
 
+Status: implemented; ledger and Antigravity rebuild triggers and the per-host freshness line (release 0.1.10, package 9, pull request 108).
+
 Owner concern, 2026-11-06: the dashboard must show current information. Audit of what is current today and
 what is not, and the fix for the parts that can be fixed without a background process. A live mode (a refresh
 loop that runs while no session does) is a separate, opt-in piece for 0.2.0, because autopilot monitoring needs it.
