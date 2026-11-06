@@ -8,6 +8,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Refuse cross-family ledger starts under manual Delegation mode unless the route is attributed to the user; the check blocks the record, not the dispatch.
 - Tell coordinators to start headless runs through the host's background mechanism, never a detached shell job, and to check the process table and the recorded exit status before saying a run is running.
 - Add metadata-only Project tab progress by feature, phase and story, exact identifier joins to runs and sessions, and a safe local reader with a one-second budget. With metrics consent and a resolved host config it defaults on; setup records the preference, `FNL_PROGRESS=off` disables it, page/session notices announce the change, and progress stays in overwritten dashboard data.
 - Add Running now in the Agents tab: open dispatch ages and budgets, advisory liveness checks and family mismatch flags, plus a separately opted-in, bounded process snapshot. Setup records its on/off choice in canonical host config; `FNL_AGENT_SNAPSHOT=off` disables it, and snapshots stay in the overwritten dashboard data only.

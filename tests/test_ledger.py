@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -23,6 +24,8 @@ class LedgerTest(unittest.TestCase):
         self.path = self.home / ".finolabs/vibecode/ledger.jsonl"
         self.path.parent.mkdir(parents=True)
         self.env = {**os.environ, "ORCHESTRATION_LEDGER": str(self.path)}
+        for key in ("FNL_DELEGATION_MODE", "ORCHESTRATION_HOST_CONFIG", "FNL_AUTO_GATE"):
+            self.env.pop(key, None)
 
     def tearDown(self):
         self.dir.cleanup()
@@ -46,6 +49,56 @@ class LedgerTest(unittest.TestCase):
 
     def records(self):
         return [json.loads(line) for line in self.path.read_text().splitlines()]
+
+    def set_mode(self, mode):
+        (self.path.parent / "host.md").write_text(f"## Delegation mode\n\n{mode}\n")
+
+    def test_manual_refuses_cross_family_without_user_route(self):
+        self.set_mode("manual")
+        result = self.run_ledger(*START, check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.stderr, "Delegation mode is manual: another agent family needs --route-by user\n")
+        self.assertFalse(self.path.exists())
+
+    def test_manual_accepts_user_route_and_own_family(self):
+        self.set_mode("manual")
+        self.run_ledger(*START, "--route-by", "user")
+        for agent, coordinator in (("claude", "claude"), ("claude-session", "claude"),
+                                   ("subagent", "claude"), ("codex", "codex")):
+            with self.subTest(agent=agent, coordinator=coordinator):
+                args = [agent if a == "codex" else a for a in START]
+                self.run_ledger(*args, "--coordinator", coordinator)
+        self.assertEqual(len(self.records()), 5)
+
+    def test_nonmanual_and_unresolved_modes_allow_dispatch(self):
+        for mode in ("suggest", "auto", "invalid", None):
+            with self.subTest(mode=mode):
+                host = self.path.parent / "host.md"
+                if mode is None:
+                    host.unlink(missing_ok=True)
+                else:
+                    self.set_mode(mode)
+                self.run_ledger(*START)
+        self.assertEqual(len(self.records()), 4)
+
+    def test_manual_environment_override_is_honoured(self):
+        self.set_mode("suggest")
+        self.env["FNL_DELEGATION_MODE"] = "manual"
+        result = self.run_ledger(*START, check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertFalse(self.path.exists())
+
+    def test_missing_mode_script_fails_open(self):
+        self.set_mode("manual")
+        scripts = Path(self.dir.name) / "scripts"
+        scripts.mkdir()
+        for name in ("ledger.py", "data_root.py"):
+            shutil.copy(LEDGER.parent / name, scripts / name)
+        result = subprocess.run([sys.executable, "-I", str(scripts / "ledger.py"), *START],
+                                capture_output=True, text=True, env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.records()), 1)
 
     def test_the_five_grades_are_accepted_and_an_ultra_hard_run_is_summarised(self):
         ids = {}
