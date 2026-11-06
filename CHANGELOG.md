@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Fixed
+
+- Warn about Claude per-model compaction overrides, preserve Codex threshold comments, and skip same-value threshold writes.
+
 ### Changed
 
 - Correct the Antigravity file-tool hook matcher and limit suggested prompts to three.
