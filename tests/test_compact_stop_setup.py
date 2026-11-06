@@ -265,10 +265,11 @@ class CompactStopSetupTest(unittest.TestCase):
                             ('CHANGELOG.md', 'opt-in Antigravity pre-invocation compaction stop'),
                             ('docs/specs/index.md', '(compaction-stop.md)')):
             self.assertIn(token, (ROOT / name).read_text())
+        # The bundled hook declarations must not carry the stop: it lives only in the user's own hooks file.
         for name in ('.claude-plugin/hooks.json', '.codex-plugin/hooks.json'):
-            result = subprocess.run(['git', 'show', 'main:' + name], cwd=ROOT, capture_output=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual((ROOT / name).read_bytes(), result.stdout)
+            declared = (ROOT / name).read_text()
+            for token in ('PreInvocation', 'compact_stop', 'compact-stop'):
+                self.assertNotIn(token, declared)
 
     def test_backups_are_unique_private_and_never_overwritten(self):
         with mock.patch.object(cs.time, 'strftime', return_value='20261106-120000'):
