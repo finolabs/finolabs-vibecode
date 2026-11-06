@@ -132,7 +132,7 @@ def preview(agents, configs=None, off=False):
     if len(set(agents)) != len(agents) or set(agents) - qp.SOURCES.keys() or (not off and not agents):
         raise ValueError("agents")
     folders = dict(configs or {})
-    if any("\n" in value or "\r" in value for pair in folders.items() for value in pair):
+    if any(qp.has_line_break(value) for pair in folders.items() for value in pair):
         raise ValueError("newline or carriage return in quota label or path")
     if "claude" in agents and not off:
         unique = {}
@@ -183,7 +183,7 @@ def validate_plan(plan):
     if not qp.timedelta(0) <= qp.now() - qp.timestamp(plan["created"]) <= qp.timedelta(minutes=60):
         raise ValueError("preview expired; preview again")
     agents, folders = plan["agents"], plan["configs"]
-    if isinstance(folders, dict) and any(isinstance(value, str) and ("\n" in value or "\r" in value) for pair in folders.items() for value in pair):
+    if isinstance(folders, dict) and any(isinstance(value, str) and qp.has_line_break(value) for pair in folders.items() for value in pair):
         raise ValueError("newline or carriage return in quota label or path")
     if not isinstance(agents, dict) or set(agents) - qp.SOURCES.keys() or not isinstance(folders, dict):
         raise ValueError("agents")
@@ -196,7 +196,7 @@ def validate_plan(plan):
     for agent, entry in agents.items():
         if not isinstance(entry, dict) or set(entry) != {"executable", "resolved", "interpreter"}:
             raise ValueError("executable")
-        if any("\n" in value or "\r" in value for value in entry.values() if isinstance(value, str)):
+        if any(qp.has_line_break(value) for value in entry.values() if isinstance(value, str)):
             raise ValueError("newline or carriage return in quota path")
         path = Path(entry["executable"])
         if not path.is_absolute() or ".." in path.parts or path.name != agent:

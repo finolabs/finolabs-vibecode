@@ -18,6 +18,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Reject excluded quota interpreters and all line separators in recorded paths and labels.
 - Bind each quota executable target to its confirmed digest and reject excluded resolved paths at probe time; older records need a new setup preview.
 - Retry quota cache write failures after 30 minutes instead of saving a successful backoff.
 - Reject line breaks in quota configuration paths and labels during plan validation.

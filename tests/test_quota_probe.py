@@ -664,6 +664,36 @@ class QuotaTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "temporary or downloads path"):
             qp.checked_executable("agy", entry)
 
+    def test_runtime_refuses_excluded_recorded_interpreter(self):
+        entry = self.fake("agy")
+        interpreter = self.home / "Downloads" / Path(self.interpreter).name
+        interpreter.parent.mkdir(exist_ok=True)
+        interpreter.write_text("synthetic interpreter")
+        interpreter.chmod(0o700)
+        Path(entry["executable"]).write_text("#!" + str(interpreter) + "\n")
+        entry["interpreter"] = str(interpreter)
+        with self.assertRaisesRegex(ValueError, "temporary or downloads path"):
+            qp.checked_executable("agy", entry)
+
+    def test_config_read_rejects_splitlines_separators_in_folder(self):
+        self.configure({"claude": self.fake("claude")})
+        host = dr.read_data("host.md").decode()
+        for separator in ("\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"):
+            with self.subTest(separator=repr(separator)):
+                dr.write_data("host.md", host.replace(str(self.config_dir), str(self.config_dir) + separator).encode())
+                self.assertEqual(qp.config(), {})
+
+    def test_runtime_rejects_line_breaks_in_config_values(self):
+        for separator in ("\n", "\r", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"):
+            for field in ("label", "path"):
+                with self.subTest(separator=repr(separator), field=field):
+                    label = "bad" + separator + "label" if field == "label" else "default"
+                    path = str(self.config_dir) + separator + "bad" if field == "path" else str(self.config_dir)
+                    with mock.patch.object(qp, "checked_path") as check:
+                        with self.assertRaises(ValueError):
+                            qp.validate_configs({label: path})
+                        check.assert_not_called()
+
     def test_cache_directory_records_execution_retry(self):
         self.configure({"agy": self.fake("agy")})
         self.ready()
@@ -679,7 +709,7 @@ class QuotaTest(unittest.TestCase):
         self.fake("claude")
         with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
             plan, _ = setup.preview(["claude"])
-            for separator in ("\n", "\r"):
+            for separator in ("\n", "\r", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"):
                 for configs in ({"bad" + separator + "label": str(self.config_dir)},
                                 {"default": str(self.config_dir) + separator + "bad"}):
                     plan["configs"] = configs
@@ -711,7 +741,7 @@ class QuotaTest(unittest.TestCase):
         setup = self.setup_module()
         entry = self.fake("claude")
         entry.pop("configs")
-        for separator in ("\n", "\r"):
+        for separator in ("\n", "\r", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"):
             for field in ("executable", "resolved", "interpreter", "label", "folder"):
                 with self.subTest(separator=repr(separator), field=field):
                     changed = dict(entry)
