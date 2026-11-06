@@ -18,3 +18,4 @@
 | [Running agents](running-agents.md) | Phase 1 implemented: ledger and opt-in process snapshot in Running now; liveness remains advisory, CLI name observations and real-host UI verification remain open. |
 | [Dashboard freshness](dashboard-freshness.md) | Spec; audit of what is current and the rebuild triggers that fix the gaps. |
 | [Autopilot (0.2.0)](autopilot.md) | Spec; opt-in agent that coordinates the repository while the user is away, governed by setup. |
+| [Work tracking facts per repository](work-tracking.md) | Draft for 0.1.11; per-repository ledger and task settings, a Work tracking interview in fnl-setup-instructions and a spec status vocabulary. |
