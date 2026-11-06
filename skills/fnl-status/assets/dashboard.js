@@ -296,7 +296,7 @@
           "quota-brick" + (!stale && i < lit ? " lit" : "")));
         if (stale) meter.appendChild(t("span", "quota-unknown", "?"));
         meter.setAttribute("role", "img"); meter.setAttribute("tabindex", "0");
-        tipOn(meter, q ? {title: family.agent + " quota", sub: q.name + (stale ? " · unverified" : ""),
+        tipOn(meter, q ? {title: family.agent + " quota", sub: (q.name || "pool") + (stale ? " · unverified" : ""),
           rows: [["remaining", Math.round(fraction * 100) + "%"], ["resets", q.resets || "unknown"], ["measured", q.measured]],
           bar: {value: fraction, max: 1, marks: [.1]}} : {title: family.agent + " quota", sub: "not read",
           items: ["quota probe off or no reading yet; turn on in fnl-setup"]});

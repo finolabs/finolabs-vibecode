@@ -6,15 +6,21 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add consent-gated per-repository ledger/task settings and bounded one-file work-record pipelines with a shared reader and parser-checked template.
+
 - Show delivery pipelines in the Now project pane from Spec Kit artefacts, repository specs/packages and exact-project ledger outcomes, with metadata-only states and a searched-sources fallback tooltip.
 
 ### Changed
+
+- Document host-only project settings, recent live activity counts and per-pool quota reset details; show an amber mark when completed tasks outpace the work-record status.
 
 - Show recent usage-session counts beside slots and every cached quota pool by family, with unread placeholders and per-pool reset/freshness details.
 
 - Draw project stages as SVG chevron chains beside identity, keep story lanes for one active item, and replace the truncated storyless label with a dashed tag icon.
 
 ### Fixed
+
+- Reject non-ASCII package ordinals and negated completion wording, resolve index status headers, retain progress failure reasons and use “pool” for unnamed quota tooltips.
 
 - Use the shared done theme token for pipeline package bricks in dark and light themes.
 - Match pipeline stages to theme-aware task colours, back striped labels with solid chips, and use compact review glyphs and icon-first ledger/summary counts.
