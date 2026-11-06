@@ -22,10 +22,11 @@ repository showed three gaps:
   facts as short text for agents.
 - This repository stays without Spec Kit, as the standing test of the non-Spec-Kit path. No reduced Spec Kit mode
   is invented.
-- OpenSpec (Fission-AI, openspec.dev, MIT) is recognised like Spec Kit but gets no router adapter until a repository
-  of the owner's uses it. The reason is adoption, not size: its per-change artefact count is close to Spec Kit's
-  (comparisons calling it lighter come from blogs and are unverified).
-- `fnl-setup` separates machine scope from project scope, like `fnl-setup-instructions` (section E).
+- No third-party spec framework is adopted or recognised in 0.1.11 beyond Spec Kit. OpenSpec was considered and
+  dropped: its per-change artefact count is close to Spec Kit's, so it is not the lighter option the owner wanted,
+  and its `tasks.md` checkbox syntax is undocumented. Instead the plugin defines a one-file work record (part E),
+  composed with the phase tools of mattpocock/skills, which it points to and does not copy.
+- `fnl-setup` separates machine scope from project scope, like `fnl-setup-instructions` (part F).
 
 ## A. Per-repository settings in the host config
 
@@ -107,32 +108,75 @@ A convention, applied in this repository and offered by the interview, not impos
 ## D. Not in scope
 
 Spec Kit adoption here; the dashboard reading instruction files; any new usage event; a ledger project inferred from
-git remotes or plugin names; the OpenSpec router adapter.
+git remotes or plugin names; OpenSpec or any third-party framework recognition; a CLI for work records.
 
-## E. OpenSpec recognition and the `fnl-setup` scope split
+## E. The work record: a one-file lightweight format
 
-**Recognition (no adapter).** Where `.specify/` means Spec Kit, an `openspec/` folder means OpenSpec (layout taken from
-the official repository page and site: `openspec/specs/` current specs; `openspec/changes/<name>/` in-flight changes,
-each with `proposal.md`, `specs/`, `design.md`, `tasks.md`; `openspec/changes/archive/<date>-<name>/` finished ones).
-- `fnl-setup` Explore reports it beside the Spec Kit check and the Agent skills block gets one neutral line (OpenSpec
-  owns the development workflow), in the same way as the Spec Kit line; nothing is installed.
-- The pipeline strip gets a third source, ranked after Spec Kit and before repository state: one item per change folder
-  (cap 60), stages `proposal`, `specs`, `design`, `tasks` by file or folder presence, task counts from the checkbox
-  lines of `tasks.md`, and each archived change counted as shipped (a count, not items). The same read rules as the
-  Spec Kit reader (regular files, no symlinks, no traversal, size and time caps, ordinals only).
-- Before any code reads `tasks.md` of OpenSpec, the checkbox syntax is checked on a real OpenSpec project and recorded
-  here; the official pages do not document it. Until then the stage presence works and task counts stay hidden.
-- Not in scope: a router adapter (`fnl-coding-router` `references/workflows/openspec.md`) until a repository of the
-  owner's uses OpenSpec; installing OpenSpec; slash commands.
+Naming: parts of this spec are lettered A to F; `fnl-setup` sections are always written "setup section X" here.
 
-**Scope split.** `fnl-setup` asks first, through the host's native question tool when there is one: "Which scope:
-machine, project, or both?", with a recommendation (machine on a first run on a new computer, project inside a
-repository that is not set up, both when unsure). Machine scope: data location, host config, delegation, quota,
-metrics and consent, agent snapshot, compaction. Project scope: workflow detection (Spec Kit, OpenSpec, own spec
-documents, none), the local exclude, the Agent skills block and its review line, work tracking (section B), the
-project label and project progress. There is no machine-wide default workflow: the workflow is a property of the
-repository. Check follows the same split. Skipped sections stay skippable as today. Enforcer: agent judgment
-(advisory); every write keeps its own script, preview and consent.
+**What it is.** One Markdown file per piece of work larger than one pass (MIN depth never creates one), in the
+repository's spec folder (`docs/specs/`, else `docs/spec/`, else `specs/` flat), with a fixed shape:
+
+```
+# <title>
+Status: draft | accepted | in progress | implemented | released | deferred
+## Goal and acceptance
+- [ ] AC1 a checkable criterion
+## Plan
+decisions and steps
+## Tasks
+- [ ] T1 ...        (optional `### US1` subheadings group tasks into stories)
+## Evidence
+commands run, pull requests, review verdicts
+```
+
+It is Spec Kit's spec, plan, tasks and quickstart-results collapsed into one file, without a CLI, a constitution or
+slash commands. A file counts as a work record when it has the `Status:` line and at least two of the four headings;
+any other spec document stays a plain spec document (state only, no stages).
+
+**Composition (nothing is copied).** The router's none-path (`fnl-coding-router` `references/workflows/none.md`, step 2,
+Plan) says to create a work record from a template kept in `references/work-record.md` of the same skill, for work
+larger than one pass. The phase tools of mattpocock/skills carry the steps when installed and the record is where
+their output lands: `grilling` fills Goal and acceptance, `to-spec` and `to-tickets` feed Plan and Tasks when the
+repository also uses an issue tracker, `tdd` and `implement` do the work, `code-review` and `pr` fill Evidence. Where
+a tool is missing, the step is done as none.md says. In a Spec Kit repository Spec Kit owns the process and no work
+record is created.
+
+**What the dashboard reads (counts and states only).** Per work record: the `Status:` word (part C) as the item state;
+the `spec` stage present when Goal and acceptance holds at least one checkbox, with done/total counts; `plan` present
+when Plan has a non-empty line; `tasks` as done/total checkboxes under Tasks (stories from `###` subheadings); `verify`
+present when Evidence has a non-empty line. Item state: the Status word wins; all tasks done with Status `in progress`
+shows an amber "status not updated" mark. Evidence content, titles, headings text and file names are never kept.
+
+**Recognition order and one shared budget.** Per repository, first source that yields items wins: Spec Kit (the
+shipped signal: `specs/NNN-*/tasks.md`), then work records, then index and status-line wording of plain spec documents
+(part C), then ledger runs, then the simple row. All sources share the reader's rules (regular files only, no symlinks,
+no traversal, `O_NOFOLLOW` per component) and one budget: at most 40 documents, 64 KiB per file, 200 entries and one
+second in total; when exceeded, finished and released items are dropped first, then the oldest by file order, and the
+overflow is reported as a `skipped` count, never silently.
+
+**In this repository.** The 16 existing specs are not restructured: they get the status vocabulary (part C) and stay
+plain spec documents. New work from 0.1.11 on uses the template, including the implementation of this spec.
+
+## F. The `fnl-setup` scope split
+
+`fnl-setup` asks first, through the host's native question tool when there is one: "Which scope: machine, project, or
+both?", with a recommendation (machine on a first run on a new computer, project inside a repository that is not set
+up, both when unsure). Mapping of every current item:
+
+| Item | Scope |
+| --- | --- |
+| Data location; setup section A host config (delegation, agent scan); quota probe | machine |
+| Setup section D user-scoped instructions (points to `fnl-setup-instructions` user scope) | machine |
+| Setup section E review tools; setup section G companions (installation is per machine) | machine |
+| Setup section F usage metrics, consent, retention; agent snapshot; compaction threshold and stop | machine |
+| Setup section B local exclude; setup section C Agent skills block and review line | project |
+| Workflow detection (Spec Kit, work records, none), work tracking settings (part B), project label | project |
+| Project progress | both: the on/off preference and metrics consent are machine; this repository's label, ledger name and task file are project. A project step that needs machine consent says so and asks the machine step first. |
+
+There is no machine-wide default workflow: the workflow is a property of the repository. Setup Check reports the same
+two groups. Skipped sections stay skippable as today. Enforcer: agent judgment (advisory); every write keeps its own
+script, preview and consent, unchanged.
 
 ## Acceptance
 
@@ -149,13 +193,18 @@ repository. Check follows the same split. Skipped sections stay skippable as tod
 - `PRIVACY.md` lists the `## Project settings` section, says its values never reach `data.js`, tooltips, events or
   `checkup.py` output, and says `purge` leaves the host config as it is (the user's own file).
 - This repository's specs and index follow the vocabulary and the test above enforces it.
-- OpenSpec recognition: fixtures of a real-shaped `openspec/` folder (one in-flight change, one archived) show the
-  chain and the shipped count; a repository with both `.specify/` and `openspec/` uses Spec Kit; a symlinked or
-  oversize file is skipped; no title or file name reaches `data.js`.
-- `fnl-setup` asks the scope question first, each section sits under exactly one scope, Check mirrors it, and no
-  existing opt-in or consent step changes.
+- Work record: fixtures (a full record, a record with only Goal and Tasks, a plain spec document, a Status word with
+  all tasks done) show the stages, counts and the amber mark; a repository with `specs/NNN-*/tasks.md` uses Spec Kit
+  and creates no work record; overflow of 40 documents, 64 KiB, 200 entries or the one-second budget is reported as
+  `skipped`; a symlinked or oversize file is skipped; no title, heading text, Evidence text or file name reaches
+  `data.js`.
+- The template exists in `fnl-coding-router` `references/work-record.md`, none.md step 2 points to it, and MIN depth
+  creates none; the reference check and the skill's trigger check pass.
+- `fnl-setup` asks the scope question first; a test lists every setup section and sub-step against the mapping table
+  above (each in exactly one scope, project progress as the stated both case); Check mirrors the two groups with a
+  named test; no existing opt-in or consent step changes.
 
 ## Open decisions
 
 None blocking. Later: reading `Status:` from release-spec package tables of other repositories that do not use the
-vocabulary; the OpenSpec router adapter once a repository of the owner's uses it.
+vocabulary; recognising other spec frameworks if a repository of the owner's uses one.
