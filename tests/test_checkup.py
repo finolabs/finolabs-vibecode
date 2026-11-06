@@ -99,6 +99,18 @@ class CheckupTest(unittest.TestCase):
                         pp.repository_code(self.repo) + ' ledger: PRIVATE other\n')
         self.assertFalse(any(r['check'] == 'ledger-project mismatch' for r in self.data()['setup']))
 
+    def test_invalid_progress_section_preserves_checkup_report(self):
+        for text in ('## Project progress\n## Project progress\n',
+                     '## Project progress\n```markdown\nPRIVATE unfinished\n'):
+            with self.subTest(text=text):
+                self.write(self.home / '.finolabs/vibecode/host.md', text)
+                report = self.data()
+                rows = report['setup']
+                self.assertTrue(any(r['check'] == 'project progress' and 'invalid' in r['reason'] for r in rows))
+                self.assertTrue(any(r['check'] == 'host config' for r in rows))
+                self.assertNotIn('inspection unavailable', json.dumps(report))
+                self.assertNotIn('PRIVATE', json.dumps(report))
+
     def test_missing_stale_recent_and_invalid_inventory(self):
         self.assertEqual(self.setup_item("agents inventory")["status"], "missing")
         config = self.home / ".finolabs/vibecode/host.md"

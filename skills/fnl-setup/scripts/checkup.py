@@ -855,7 +855,11 @@ def project_tracking(text, root):
     except ValueError:
         entries = {}
         rows.append(item('project settings', 'unverified', 'invalid Project settings section; all entries ignored'))
-    _, body, end = pp.host_section(text)
+    try:
+        _, body, end = pp.host_section(text)
+    except ValueError:
+        body = end = len(text)
+        rows.append(item('project progress', 'unverified', 'invalid Project progress section; global settings ignored'))
     globals_ = {}
     for key, old in (('ledger', 'Ledger project'), ('tasks', 'Task file')):
         matches = re.findall(r'^(?:- )?' + old + r': (.*)$', text[body:end], re.M)
