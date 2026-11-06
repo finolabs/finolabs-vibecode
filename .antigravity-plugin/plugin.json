@@ -25,7 +25,6 @@
   "suggestedPrompts": [
     "Route this change through the coding router and tell me the depth you chose.",
     "Use fnl-delegate to coordinate this spec with one session per task.",
-    "Prepare the version bump and changelog for the next release.",
     "Use fnl-scan-agents to refresh my local agent inventory, then fnl-set-mode to show effective settings."
   ]
 }
