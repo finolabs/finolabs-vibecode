@@ -459,6 +459,76 @@ class DashboardScriptTest(unittest.TestCase):
             'actions': [{'panel': 'project', 'open': True}]})
         self.assertTrue(self.marks(out, 'project-disclosure')[0]['open'])
 
+    def test_v1_project_grid_keeps_marker_and_empty_progress_columns(self):
+        data = self.sample()
+        data['progress']['active'][0]['label'] = 'A long project name that must keep its full tooltip'
+        data['progress']['active'][0]['percent'] = 0
+        out = self.render_freshness(data)
+        count = len(self.marks(out, 'active-project'))
+        for cls in ('active-identity', 'active-marker', 'active-bar-cell', 'active-percent-cell', 'project-next-cell'):
+            self.assertEqual(len(self.marks(out, cls)), count, cls)
+        for cls in ('active-bar-cell', 'active-percent-cell', 'project-next-cell'):
+            self.assertEqual([m['text'] for m in self.marks(out, cls)][1:], ['', ''])
+        self.assertTrue(all(m['text'] == '' and m['attrs']['aria-hidden'] == 'true'
+                            for m in self.marks(out, 'active-marker')))
+        self.assertEqual(self.marks(out, 'active-label')[0]['attrs']['title'], data['progress']['active'][0]['label'])
+        bars = [m for m in out['picture'] if m['tag'] == 'i' and m['style'].get('width') == '0%']
+        self.assertTrue(bars, 'zero completion still renders a bar track and zero-width fill')
+        css = PAGE.read_text()
+        self.assertIn('grid-template-columns: 14px minmax(0, 1fr) 56px 110px 100px 90px 40px 110px', css)
+        self.assertIn('.active-identity { display: contents; }', css)
+        self.assertIn('.active-marker { width: 14px;', css)
+        self.assertIn('.active-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }', css)
+        self.assertIn('.active-hosts { display: inline-flex; justify-content: flex-start;', css)
+        self.assertIn('summary::-webkit-details-marker { display: none; }', css)
+        self.assertIn('.active-marker::before { content: "▸"; }', css)
+        self.assertIn('.project-disclosure[open] > summary .active-marker::before { content: "▾"; }', css)
+        self.assertIn('.active-progress { width: 100%; height: 6px; background: var(--h0);', css)
+        mobile = css[css.index('@media (max-width: 860px)'):css.index('.feature-bar {')]
+        self.assertIn('grid-template-columns: 14px minmax(0, 1fr) 56px', mobile)
+        self.assertIn('grid-column: 1 / -1', mobile)
+        self.assertIn('grid-template-columns: 78px 70px minmax(0, 1fr) 24px 75px', mobile)
+        self.assertNotIn('flex-wrap: wrap', mobile)
+
+    def test_v2_project_cells_have_no_separator_but_host_legend_remains(self):
+        css = PAGE.read_text()
+        self.assertNotIn('.active-project > :not(:first-child)::before', css)
+        out = self.render_freshness(self.sample())
+        self.assertEqual(self.marks(out, 'project-activity-header')[0]['text'],
+                         'active in the last 24 hours · ● claude  ◆ codex  ▲ antigravity')
+        self.assertTrue(all(m['text'] != '·' for m in out['picture'] if m['cls'].startswith('active-')))
+
+    def test_v3_project_percent_is_ink_tabular_and_fill_is_teal(self):
+        data = self.sample()
+        data['progress']['active'][0]['percent'] = 28.9
+        out = self.render_freshness(data)
+        self.assertEqual(self.marks(out, 'active-percent')[0]['text'], '28%')
+        self.assertNotIn('meta', self.marks(out, 'active-percent')[0]['cls'].split())
+        css = PAGE.read_text()
+        self.assertIn('.active-percent-cell { text-align: right; font-variant-numeric: tabular-nums; color: var(--fg); }', css)
+        fill = re.search(r'\.active-progress i \{([^}]+)\}', css).group(1)
+        self.assertIn('linear-gradient(90deg, #1e5a55, #2b8c7d, #4fc0a8, #7fe2ce)', fill)
+        self.assertNotIn('var(--warn)', fill)
+        self.assertIn('.project-next-cell { text-align: right; color: var(--muted); }', css)
+        self.assertIn('.cell.accepted { border: 1px solid var(--warn); background: repeating-linear-gradient', css)
+
+    def test_v4_open_detail_indents_under_name_and_starts_with_single_line_legend(self):
+        out = self.render(FIXTURE, {'hash': '#project', 'actions': [{'panel': 'project', 'open': True}]})
+        self.assertTrue(self.marks(out, 'project-disclosure')[0]['open'])
+        detail = self.marks(out, 'project-detail')[0]
+        at = out['picture'].index(detail)
+        self.assertEqual(out['picture'][at + 1]['cls'], 'task-legend')
+        self.assertEqual(len(self.marks(out, 'task-legend')), 1)
+        self.assertEqual([m['text'].strip() for m in self.marks(out, 'legend-item')],
+                         ['done', 'agent on it', 'done, not accepted', 'to do'])
+        css = PAGE.read_text()
+        # The name starts at 14px marker + 8px gap; detail starts another 14px in.
+        self.assertIn('padding: 12px 0 16px 36px', css)
+        legend = re.search(r'(?m)^\.task-legend \{([^}]+)\}', css).group(1)
+        self.assertIn('color: var(--muted)', legend)
+        self.assertIn('white-space: nowrap', legend)
+        self.assertNotRegex(css, r'\.project-detail \.task-legend \{[^}]*flex-wrap: wrap')
+
     def test_empty_named_list_and_latest_activity_order_ignores_priority(self):
         data = self.sample()
         data['progress']['active'][1]['last'] = '2026-11-06T10:01:00Z'

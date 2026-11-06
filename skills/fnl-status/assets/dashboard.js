@@ -280,8 +280,7 @@
   }
   function taskLegend() {
     var legend = h("div", "task-legend");
-    [["done", "done"], ["active", "agent on it"], ["accepted", "done, not accepted"], ["todo", "to do"]].forEach(function (item, index) {
-      if (index) legend.appendChild(t("span", "", "·"));
+    [["done", "done"], ["active", "agent on it"], ["accepted", "done, not accepted"], ["todo", "to do"]].forEach(function (item) {
       legend.appendChild(h("span", "legend-item", [h("i", "cell " + item[0]), t("span", "", item[1])]));
     });
     return legend;
@@ -332,21 +331,28 @@
       var hasTasks = (snapshot.features || []).some(function (feature) { return feature.total > 0; });
       var sessions = Number(project.sessions);
       sessions = Number.isFinite(sessions) ? Math.max(0, Math.floor(sessions)) : 0;
-      var row = h(unfinished ? "summary" : "div", "active-project", [t("strong", "active-label", project.label), hosts,
+      var label = t("strong", "active-label", project.label);
+      label.setAttribute("title", project.label);
+      var marker = h("span", "active-marker");
+      marker.setAttribute("aria-hidden", "true");
+      var row = h(unfinished ? "summary" : "div", "active-project", [h("span", "active-identity", [marker, label, hosts]),
         t("span", "meta active-sessions", sessions + (sessions === 1 ? " session · 24h" : " sessions · 24h")),
         t("span", "meta active-last", at ? "last " + last + " ago" : "last unavailable")]);
       row.setAttribute("data-repo", project.repo);
       tipOn(row, project.label + " · " + (at ? String(project.last) : "last unavailable") + (!hasTasks ? " · no task list" : ""));
+      var barCell = h("span", "active-bar-cell"), percentCell = h("span", "active-percent-cell"), nextCell = h("span", "project-next-cell");
       var percent = Number(project.percent);
       if (unfinished && project.percent != null && Number.isFinite(percent)) {
         percent = Math.max(0, Math.min(99, Math.floor(percent)));
         var bar = h("div", "feature-bar active-progress", [h("i")]);
         bar.children[0].style.width = percent + "%";
         bar.setAttribute("role", "img"); bar.setAttribute("aria-label", percent + "% done");
-        row.appendChild(h("span", "active-completion", [bar, t("span", "meta active-percent", percent + "%")]));
+        barCell.appendChild(bar);
+        percentCell.appendChild(t("span", "active-percent", percent + "%"));
+        var next = nextTask(snapshot);
+        if (next) nextCell.appendChild(t("span", "project-next", "next " + next.story + " · " + next.task.id));
       }
-      var next = nextTask(snapshot);
-      if (next) row.appendChild(t("span", "project-next", "next " + next.story + " · " + next.task.id));
+      row.appendChild(barCell); row.appendChild(percentCell); row.appendChild(nextCell);
       if (unfinished) {
         var disclosure = h("details", "project-disclosure", [row, projectDetail(snapshot)]);
         disclosure.open = !!(tab.projectOpen && tab.projectOpen.get(project.repo));
