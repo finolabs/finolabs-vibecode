@@ -41,8 +41,8 @@ class Node_ {
 const [pagePath, dataPath, scenarioPath] = process.argv.slice(2);
 const scenario = scenarioPath ? JSON.parse(fs.readFileSync(scenarioPath, "utf8")) : {};
 const html = fs.readFileSync(pagePath, "utf8");
-const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
-if (scripts.length !== 1) throw new Error("expected one inline script, found " + scripts.length);
+const path = require("path");
+const scripts = [fs.readFileSync(path.join(path.dirname(pagePath), "dashboard.js"), "utf8")];
 
 const byId = {};
 const loads = [], timers = [], handlers = {}, windowHandlers = {};

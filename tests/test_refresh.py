@@ -550,6 +550,8 @@ class RefreshTest(unittest.TestCase):
         self.assertTrue(raw.isascii())
         self.assertEqual(oct((self.dir / "data.js").stat().st_mode & 0o777), "0o600")
         self.assertEqual((self.dir / "dashboard.html").read_bytes(), PAGE.read_bytes())
+        self.assertEqual((self.dir / "dashboard.js").read_bytes(), PAGE.with_suffix(".js").read_bytes())
+        self.assertEqual((self.dir / "dashboard.js").stat().st_mode & 0o777, 0o600)
 
     def test_a_tampered_store_line_cannot_reach_the_script_file(self):
         self.consent()

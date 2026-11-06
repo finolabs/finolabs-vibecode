@@ -578,6 +578,7 @@ def publish(folder, args):
     target = folder / "data.js"
     data = build(cwd=args.cwd) if getattr(args, "cwd", None) else build()
     fm.atomic_write(target, js_text(data))
+    fm.atomic_write(folder / "dashboard.js", PAGE.with_suffix(".js").read_bytes())
     fm.atomic_write(folder / "dashboard.html", PAGE.read_bytes())
     miss = sorted(data["missing"])
     last = fm.errors_last()
@@ -615,7 +616,7 @@ def cmd_purge(args):
     if not args.yes:
         sys.exit("purge: pass --yes once the user has confirmed")
     removed = fm.purge_store()
-    for name in ("data.js", "dashboard.html"):
+    for name in ("data.js", "dashboard.html", "dashboard.js"):
         path = fm.state_dir() / name
         if path.is_file() and not path.is_symlink():
             path.unlink()

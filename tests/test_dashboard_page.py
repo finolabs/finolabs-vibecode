@@ -21,7 +21,7 @@ SVG_NAMESPACE = "http://www.w3.org/2000/svg"
 
 
 class DashboardPageTest(unittest.TestCase):
-    text = PAGE.read_text(encoding="utf-8")
+    text = PAGE.read_text(encoding="utf-8") + (PAGE.parent / "dashboard.js").read_text(encoding="utf-8")
 
     def test_it_is_a_complete_document_that_declares_its_encoding(self):
         head = self.text[:600].lower()
@@ -58,9 +58,10 @@ class DashboardPageTest(unittest.TestCase):
         self.assertIn('"data.js?t="', self.text)
         self.assertIn("window.FNL_DATA", self.text)
 
-    def test_tabs_add_no_resource_or_inline_handler(self):
-        self.assertEqual(re.findall(r'<script\b[^>]*src="([^"]+)"', self.text), ["data.js"])
-        self.assertNotRegex(self.text, r'<link\b|<[^>]+\son[a-z]+\s*=')
+    def test_local_script_has_no_inline_script_or_handler(self):
+        html = PAGE.read_text()
+        self.assertEqual(re.findall(r'<script\b[^>]*src="([^"]+)"', html), ['data.js', 'dashboard.js'])
+        self.assertNotRegex(html, r'<script\s*>|<link\b|<[^>]+\son[a-z]+\s*=')
         self.assertIn('new Map([', self.text)
         self.assertNotRegex(self.text, r'querySelector(?:All)?\([^"\']')
 
@@ -220,6 +221,20 @@ class DashboardScriptTest(unittest.TestCase):
     @staticmethod
     def marks(out, cls, disclosure=None):
         return [m for m in out['picture'] if cls in m['cls'].split() and m['disclosure'] == disclosure]
+
+    def test_reviews_cap_chains_project_labels_and_live_hash_changes(self):
+        out = self.render(FIXTURE, {'hash': '#agents', 'actions': [{'hash': '#reviews'}, {'hash': '#project'}, {'hash': '#__proto__'}, {'hash': '#reviews'}]})
+        self.assertEqual([state['selected'] for state in out['states']], [['Reviews'], ['Project'], ['Overview'], ['Reviews']])
+        chains = self.marks(out, 'seq')
+        self.assertEqual(chains[0]['attrs']['data-dots'], '8')
+        self.assertEqual(self.marks(out, 'more-rounds')[0]['text'], '+6')
+        labels = self.marks(out, 'review-label')
+        self.assertTrue(labels[0]['text'].startswith('Fino tools '))
+        self.assertNotIn('aaaaaaaa', labels[0]['text'])
+        self.assertIn('white-space: nowrap', re.search(r'\.rv \.review-label \{([^}]+)', PAGE.read_text())[1])
+        self.assertIn('14 rounds', chains[0]['attrs']['data-tip'])
+        table = self.marks(out, 'tbl', 'show the data as tables')
+        self.assertTrue(any('REWORK → REWORK' in row['text'] for row in table))
 
     def test_agents_infographics_lanes_kpis_quota_and_hostile_values(self):
         out = self.render(FIXTURE, {'hash': '#agents', 'now': '2026-11-06T10:00:00Z'})
