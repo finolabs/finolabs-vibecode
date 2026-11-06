@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- Remind agents to rename their session at the start, on a phase change and after every compaction, in the always-loaded rule and in the Titles section of `fnl-session-hygiene`.
+
 ### Added
 
 - Add the advisory compaction steward, a deterministic threshold check and private local handovers re-injected on compact session starts; hook delivery remains unverified, and no hook declarations change.
