@@ -39,7 +39,7 @@ The 20 skill folders and their purposes match the README.
 | Saving the working tree before the agent edits, or going back to a saved point | `/fnl-restore-point` | |
 | Showing or changing Delegation mode or Routing, including environment overrides | `/fnl-set-mode` | |
 | Starting, resuming or redirecting coding work | `fnl-coding-router` | |
-| Requirements unclear | `fnl-coding-router` (workflow adapter's clarification step) | `/grill-me`, or `/grill-with-docs` to keep a glossary and ADRs |
+| Requirements unclear | `fnl-coding-router` (workflow adapter's clarification step, with questions put through the host's native question tool; advisory, agent judgment) | `/grill-me`, or `/grill-with-docs` to keep a glossary and ADRs |
 | A design question only code can answer | `fnl-coding-router` | `prototype` |
 | Ready to implement one seam | `fnl-coding-router` (depth, gates) | `tdd` for the red-green loop |
 | Bug, failing CI, unexplained behavior | `fnl-coding-router` (workflow adapter's debug path, router checkpoint) | `diagnosing-bugs` |
