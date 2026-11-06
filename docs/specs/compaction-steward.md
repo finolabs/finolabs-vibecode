@@ -95,7 +95,7 @@ reply.
 `fnl-session-hygiene` "Context pressure" names the steward, the `prepare`
 action and who enforces what: the host enforces its threshold; the script
 decides the action; the model judges the boundary; the agent writing the
-handover is advisory. `fnl-delegate` "Load sharing" may call the steward for a
+handover is advisory. the load-sharing rule of `fnl-delegate` may call the steward for a
 child session whose context it can read. `fnl-setup` explains the steward after
 the threshold step and writes nothing new. README and `PRIVACY.md` (the
 handover file: local, 0600, user's own text, never sent, 24-hour life).
