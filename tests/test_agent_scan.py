@@ -88,16 +88,25 @@ class AgentScanTest(unittest.TestCase):
         self.assertNotIn("\x1b", text)
         with mock.patch.dict(os.environ, self.env, clear=True), \
                 mock.patch.object(scan.subprocess, "Popen") as popen, \
-                mock.patch.object(scan.selectors, "DefaultSelector"), \
+                mock.patch.object(scan.selectors, "DefaultSelector") as selector, \
                 mock.patch.object(scan.os, "read", return_value=b"x" * 4096) as read:
             process = popen.return_value.__enter__.return_value
             process.wait.return_value = 0
+            selector.return_value.__enter__.return_value.select.return_value = [
+                (mock.Mock(fileobj=process.stdout), 1)]
             scan.inventory("claude", "", {})
             self.assertEqual(read.call_args.args[1], 4096)
             for call in popen.call_args_list:
                 self.assertEqual(call.args[0][1:], ["--version"])
                 self.assertIn(Path(call.args[0][0]).name, ("claude", "codex", "agy"))
                 self.assertFalse(call.kwargs["shell"])
+
+    def test_version_uses_stdout_only(self):
+        (self.bin / "codex").write_text(
+            "#!/bin/sh\nprintf 'startup warning\\n' >&2\nprintf 'fake 2.0\\n'\n")
+        text = self.run_scan("--host", "codex")
+        self.assertIn("| Codex | yes | fake 2.0 |", text)
+        self.assertNotIn("startup warning", text)
 
     def test_version_allowlist(self):
         for value, expected in [("v1.2+build_3 (stable)-ok", "v1.2+build_3 (stable)-ok"),

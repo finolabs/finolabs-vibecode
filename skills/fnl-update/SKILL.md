@@ -15,7 +15,7 @@ The helper and its shared core are in this skill's own `scripts/` folder. Resolv
 
 ## Show the facts, then ask
 
-Ask in text when the session has no such tool, the tool is refused or fails, nobody can answer (a delegated or headless run records the open decision and never assumes or invents an answer), or the decision is free text. The enforcer is agent judgment, so this is advisory.
+Questions below ask through the host's native question tool when the session has one. Ask in text when the session has no such tool, the tool is refused or fails, nobody can answer (a delegated or headless run records the open decision and never assumes or invents an answer), or the decision is free text. The enforcer is agent judgment, so this is advisory.
 
 **Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged. Script output stays English; report it to the user in their language (advisory, agent judgment).
 

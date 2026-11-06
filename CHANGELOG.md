@@ -7,11 +7,12 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Changed
 
 - Ask questions and show option labels in the user's language, preserving technical names and reporting English script output in that language (advisory, agent judgment); the beginner-register reference says it applies in the user's language, and CI checks its two copies match.
-
-- `fnl-session-hygiene` records the documented compaction settings of Claude Code (`autoCompactWindow`, `/autocompact`) and Codex, states that Antigravity documents none beyond `/compact`, and separates the advisory 60% from the host's later default trigger; `fnl-setup` repeats the Antigravity limit.
+- `fnl-session-hygiene` records the documented compaction settings of Claude Code (`autoCompactWindow`, `/autocompact`) and Codex, states that Antigravity documents none beyond `/compact`, and separates the advisory 60% from the host's later default trigger; `fnl-setup` repeats the Antigravity limit. After the 0.1.8 compaction-hook update, Codex hooks need trust again.
 
 ### Fixed
 
+- Read agent versions from stdout only, count each include cycle once, and preserve section ranges across Unicode line separators.
+- Clarify neutral setup approvals, question-tool fallbacks and default preferences. Keep language guidance outside lists, mark compaction advice explicitly, and align privacy and reference-check documentation with the existing rules.
 - Restore Claude quota readings by supplying the account database username to probe children and leaving `CLAUDE_CONFIG_DIR` unset for the default install while retaining it for listed extra folders.
 
 ## [0.1.8] - 2026-11-05
@@ -19,9 +20,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Added
 
 - Add an optional quota probe for Antigravity, Claude Code (up to four labelled installs) and Codex, with canonical consent, confirmed executable paths, bounded detached reads and private usage-only cache. Setup previews before digest-confirmed apply; Scan and Check show measured pools, and delegation uses fresh readings as advisory evidence.
-
 - One account-owned data root, with checked relocation through `fnl-setup` and digest-confirmed copying that preserves the old folder. Consent and opt-ins ignore environment redirects; only usage events and the dashboard retain the documented state override and legacy compatibility paths.
-
 - Judge receipts and a conditional Judge pane in `fnl-status`: use, usable answers, followed decisions and outcome association by routing source, with metadata only and no cost, latency or accuracy measurement.
 - `fnl-restore-point` (user-invoked, git repositories only) saves the working tree to a private ref `refs/finolabs/restore/<timestamp>` without touching the index, the branch or the files, lists the saved points and restores one only after a preview and a clear yes, taking a pre-restore point first; it never pushes. `fnl-ask` Start offers a guided "try it now" first result in a new empty folder outside any repository.
 - `fnl-setup-instructions` states a researched standard (add only what the agent cannot infer, verifiable lines with reasons, text is not enforcement, detail on demand), per-host limits and mechanics, and a pre-write measure step; `fnl-setup` Check gains a 20-item instruction checklist. `checkup.py` measures length, the Codex 32 KiB chain, the Antigravity 24,000-byte limit, includes, duplicates, secret-looking strings, machine paths, the local file, emphasis, layout and age offline and read-only, reporting file, line and pattern name only. The judgment items go to the route judge first (only with the separate `Instruction check` consent, through one payload builder that drops secret and path lines) and to the agent as fallback.
@@ -31,7 +30,6 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - Narrow the `fnl-handoff` and `fnl-delegate` descriptions so a request to hand one task to an agent with a brief goes to `fnl-handoff`, and routing among agents, parallel dispatch, quota and watched runs go to `fnl-delegate`.
 - Stop reading the `ORCHESTRATION_LEDGER` override, the legacy XDG ledger, the legacy `host.md` for Check, Routing mode and Delegation mode, and the legacy consent location. Use the data root for these files; data-location changes require the full 64-hex preview digest.
-
 - A Claude Code hook of this plugin may now deny the first file write in a repository without a decision in the last 8 hours when Delegation mode is `auto` and the opt-in auto gate is on; subsequent writes in the window allow, and `FNL_AUTO_GATE=off` disables it.
 - Clarify host-owned compaction thresholds and advisory writeback; setup only suggests settings, Claude Code and Codex gain a non-blocking `PreCompact` reminder, and Check reports declarations with delivery unverified.
 - The remaining text questions use the host's native question tool when the session has one: the `fnl-setup` beginner-path offer, mode choices, preferences confirmation and usage-metrics consent, the `fnl-setup` Check smoke task, the `fnl-status` purge and consent-withdrawal confirmations and the `fnl-update` confirmation. Text is the fallback; native-path verification stays manual per host. Approvals among them offer neutral Yes and No choices and never count a default or timeout. Advisory (agent judgment).
@@ -46,7 +44,6 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Fixed
 
 - Tighten consent withdrawal, instruction checks, judge receipt recognition, restore validation and ledger error reporting.
-
 - Allow retired skill names in dated changelog releases and the Unreleased migration mapping, preserving released history while rejecting other uses.
 - Check tracked documents with Git so untracked and git-ignored local context files cannot fail reference validation.
 - Remove the unused argument placeholder from the advisor's committee instructions.
@@ -57,7 +54,6 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - `fnl-scan-agents` refreshes the local agent inventory and user-confirmed allowed models; `fnl-delegate` routes only among recorded present families and warns once per session when the section is older than 30 days. The scan runs only three fixed `--version` calls, reads `host.md`, uses no network and stores nothing outside `host.md`; a clear yes is required for its atomic section-only write.
 - `fnl-set-mode` shows effective Delegation mode and Routing with their sources and environment overrides, previews changes and writes only those settings after a clear yes. Setup uses the scan, Check reports missing/stale inventory and retired context pointers, and the README includes light/dark skill architecture diagrams.
-
 - New behavior evals for the router in a Spec Kit repository, a repository with mattpocock/skills, and one with no workflow pack.
 - `fnl-delegate` "Keep or hand off": a coordinator holding two or more independent tasks with clear acceptance tests dispatches them or records why it kept them, before starting the first; under `suggest` (the default), it asks first. The coding router points to it. `record.py keep` prints one line with a count, a fixed reason and who settled it, and with usage metrics on the hook stores it as a new `kept` event, under the same consent, retention and purge as other events; existing consents cover it. The `fnl-status` delegation pane shows the tasks kept beside the implementation runs handed off.
 - Add user-chosen Delegation mode (manual, suggest or auto) and Routing (on/off), with a read-only settings reader, setup choices and honest Check reporting. Claude Code and Codex session-start reminders honor Routing; Antigravity’s static rule cannot, and safety gates remain unchanged.
@@ -78,7 +74,6 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - Consolidate 20 skill folders into 17: `fnl-committee` → `fnl-advisor` (`references/committee.md`), `fnl-coordinator-sessions` → `fnl-delegate` (`references/coordinator-sessions.md`), and `fnl-knowledge` → `fnl-session-hygiene` (`references/knowledge.md`). Use the surviving skill names; committee and knowledge procedures load only when needed, and session hygiene owns saved handovers.
 - Clarify six own-kind delegation follow-ups: use sessions or headless runs, limit offer-free starts under manual to project requirements or context pressure with a one-line reason, define own kind by the recorded coordinator family, else the host family, retain delegate authority limits, respect project session rules, and reject Codex hand-off offers in the keep-own-kind eval.
-
 - The README explains the bricks idea (small skills plus a guideline, inspired by the LEGO Group's turnaround under Jørgen Vig Knudstorp; independent of and not endorsed by the LEGO Group), says what you hand over and what stays with you, and gains a Check step in the three-minute start. The repository social preview shows a robot built from bricks.
 - `fnl-coding-router` now works in any repository. Depth, the review and security gates, proof, "Proportion" and the stop-before-a-third-fix checkpoint are the core; the workflow is a short first step that reads one adapter under `references/workflows/`: `speckit.md` (every Spec Kit rule and the Spec Kit depth gate, unchanged in meaning), `mattpocock.md`, `superpowers.md`, or `none.md`, a self-contained procedure (bounded clarification, a genuine red, the smallest change, proof, review) for repositories with no workflow pack. The description is workflow-neutral, and the fallback table that pointed to skills a user might not have is gone.
 - `fnl-session-hygiene` marks the 60% compaction rule advisory unless enforced by the host or a hook, with enforcement unverified until verified. The README and `fnl-ask` contents also list session wrap-up as a trigger for `fnl-handoff`.
@@ -112,7 +107,6 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `fnl-delegate` grades work on five levels (`easy`, `medium`, `hard`, `very hard`, and the new `ultra hard`, which `ledger.py` accepts as `ultra-hard`; earlier ledger lines still read), and routing defaults to `medium` effort on every agent and tier, hard work included, with `high` for very hard, `xhigh` for ultra hard and one level up after a run fell short; the tier table now names models, not effort levels, and the host template has an optional "Effort preference" section to override the default.
 - The project-scoped folder for briefs, logs and handover notes is now `.finolabs/` at the main checkout's root, matching `~/.finolabs/vibecode/` for the machine. A repository that still has `.orchestration/` and no `.finolabs/` keeps using it; nothing is moved.
 - The plugin's own data and configuration now default to `~/.finolabs/vibecode/`: `host.md`, `ledger.jsonl` and `state/` (consent, usage events, the dashboard). Folders it creates there are mode `0700`. A machine that already keeps them in `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` or `${XDG_CONFIG_HOME:-~/.config}/finolabs-vibecode` and has nothing in the new place keeps using the old files; nothing is moved. `FNL_STATE_DIR`, `ORCHESTRATION_LEDGER` and `ORCHESTRATION_HOST_CONFIG` still win.
-
 - `fnl-status` no longer takes `--since` or `--project` and no longer prints a routing table in the terminal; the dashboard shows the same figures, and the skill still lists open dispatches and checks the capability map's review date.
 - `PRIVACY.md` no longer says the plugin has no analytics; it describes the opt-in local record and what it holds.
 - Shortened the plugin description to 142 characters and made it identical in the Claude Code, Codex and Antigravity manifests, matching the shared catalog.
