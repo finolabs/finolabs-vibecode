@@ -527,6 +527,7 @@ class RefreshTest(unittest.TestCase):
         script = str(ROOT / "scripts/metrics_hook.py")
         self.assertIn(script, group["SessionStart"][0]["command"])
         self.assertIn("--host antigravity --event post_tool_use", group["PostToolUse"][0]["hooks"][0]["command"])
+        self.assertEqual(group["PostToolUse"][0]["matcher"], "run_command|write_to_file|replace_file_content|multi_replace_file_content")
         self.assertEqual(oct(config.stat().st_mode & 0o777), "0o640")
         backups = list(config.parent.glob("hooks.json.finolabs-backup-*"))
         self.assertEqual(len(backups), 1)
