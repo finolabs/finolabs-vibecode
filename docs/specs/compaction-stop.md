@@ -80,7 +80,7 @@ the data root).
 - Limit bounds: 50,000 to 20,000,000 bytes (integer). The hook command is built with
   `shlex.quote` from a path that passes the same plugin-root check as `refresh.py`
   (the file is inside a `finolabs-vibecode` plugin), with the plugin root additionally
-  checked like the hooks folder: outside git work trees and not group- or world-writable.
+  checked like the hooks folder: outside git work trees and not group- or world-writable. One exception, because Antigravity keeps the repository's `.git` directory in the copy it installs: the exact unresolved path `<account home>/.gemini/config/plugins/finolabs-vibecode` is accepted when it is reached without a symlink, every folder above it passes the same checks with no `.git`, the folder is owned by the user and not group- or world-writable, and its `.git` is a real directory. A development checkout or any other git work tree stays refused. Removal needs no script, so it never checks the plugin folder.
   The stored shell command prints `{}` if the script is missing or fails; Antigravity
   shell execution of hook commands remains unverified.
 - Refuses to run for any host but Antigravity; mentions Claude Code and Codex use
