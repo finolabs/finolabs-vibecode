@@ -103,11 +103,13 @@ fixed enumerations only.
 
 ## What the tab shows
 
-- Under each project identity, a compact pipeline strip per item, newest ordinal first, with only known
-  stages. At most five unfinished items, then `+n more` with ordinal/state detail; finished items collapse
-  into one count. Review has code/security chips and final marks. An artefact chip means presence only.
+- Beside each project identity (below on narrow screens), a compact SVG chevron strip per item, newest
+  ordinal first, with only known stages. At most five unfinished items, then `+n more` with ordinal/state
+  detail; finished items collapse into one count. Review has code/security chips and final marks. An artefact chip means presence only.
 - Tasks carry a thin flush segmented bar and floored percentage (never 100 unless all tasks are checked).
-  Existing task bricks remain after the chain for one active item; tooltips keep ids, states and join details.
+  Existing story lanes and task bricks remain below the chain for one active item; tooltips keep ids,
+  states and join details. A storyless task group uses a dashed tag icon with a “no story tag” tooltip and
+  counts. Source B labels use only their numeric ordinal, never a missing feature id.
 - Repository-state items use the same shapes with `spec`/packages and the aggregate ledger strip.
 - All figures retain textual equivalents in the bottom tables. Session activity, review verdicts and
   manifest version remain distinct from pipeline artefact presence.

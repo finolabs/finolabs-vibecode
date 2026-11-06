@@ -25,18 +25,20 @@ The project pane recognises Spec Kit, repository indexes/status lines/packages, 
 ledger runs, in the order and caps defined in [Project progress](project-progress.md). Only when none
 yields items does it keep the simple identity row; its tooltip lists what was searched.
 
-Under the identity line, each item is a compact chevron chain: `spec ▸ plan ▸ design ▸ tasks ▸ verify ▸
-review ▸ ship`, omitting stages without evidence. Repository items show only known stages, with small
-package bricks where present. Review holds two tiny code/security chips and a final-presence mark;
+Beside the identity on desktop (below it on narrow screens), each item is a compact SVG chevron chain:
+`spec ▸ plan ▸ design ▸ tasks ▸ verify ▸ review ▸ ship`, omitting stages without evidence. Repository items
+show only known stages, with small package bricks where present. Review holds two tiny code/security chips and a final-presence mark;
 file presence never implies an approved review. Tooltips show source, ordinal, state and counts, never
 file text. A stale Spec Kit status keyword remains a tooltip hint; artefacts determine the item state.
 
 Use existing tokens: solid teal (`--good`) for done, striped active, outlined todo, neutral dashed unknown
 (“no status stated”), muted deferred, amber needs-attention. Tasks contain a thin segmented bar with
 adjacent segments in a shared rounded clip, no gaps, and floored completion (100 only when all checked).
-For one active item keep the existing small task bricks after its chain, merging bounded groups. Lego
-studs belong only on small task/package blocks. A ledger work strip shows latest grouped task outcomes
-as done/amber/active/deferred/unknown counts; it never renders one block per run.
+For one active item keep the existing story lanes and small task bricks below its chain, merging bounded
+groups. Untagged tasks use a 14 px dashed tag-outline SVG with a rich “no story tag” tooltip and done/total
+counts; story ids retain their text. Clip each brick to its own SVG viewport so hatch paint cannot escape
+into the label column. Lego studs belong only on small task/package blocks. A ledger work strip shows
+latest grouped task outcomes as done/amber/active/deferred/unknown counts; it never renders one block per run.
 
 Newest ordinals first, at most five unfinished items, then `+n more` with a rich ordinal/state tooltip.
 Finished items collapse into one count, with full tables retained. One-item rows target about 56 px,

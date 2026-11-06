@@ -440,7 +440,7 @@
         })};
     }
     var task = group[0], runs = task.runs || [], sessions = task.sessions || [], state = taskState(task);
-    return {title: task.id, sub: (story || "untagged") + " · spec " + String(feature).padStart(3, "0"),
+    return {title: task.id, sub: (story || "no story tag") + " · spec " + String(feature).padStart(3, "0"),
       rows: [["agent / model", runs.map(function (run) { return run.agent + " / " + run.model; }).join(", ") || "—"],
         ["session / host", sessions.map(function (session) { return session.id + " / " + session.host; }).join(", ") || "—"]],
       chips: [{label: {done: "done", active: "agent on it", accepted: "not accepted", todo: "to do"}[state], state: state}]};
@@ -494,6 +494,15 @@
   function pipelineBlock(p, f, row) {
     var block = h("span", "pipeline-block " + row.state);
     block.setAttribute("data-stage", row.stage); block.setAttribute("data-state", row.state);
+    var shape = s("svg", {viewBox: "0 0 64 24", preserveAspectRatio: "none", "class": "pipeline-chevron", "aria-hidden": "true"});
+    var face = s("path", {d: "M1 1H56L63 12L56 23H1L8 12Z", fill: "var(--raised)", "class": "pipeline-face", "vector-effect": "non-scaling-stroke"});
+    if (row.state === "active") {
+      var id = "pipeline-hatch-" + (++brickId), defs = s("defs"), pattern = s("pattern", {
+        id: id, width: 4, height: 4, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)"});
+      pattern.appendChild(s("rect", {width: 2, height: 4, fill: "var(--p)"}));
+      defs.appendChild(pattern); shape.appendChild(defs); face.setAttribute("fill", "url(#" + id + ")");
+    }
+    shape.appendChild(face); block.appendChild(shape);
     if (row.stage === "review") {
       var reviews = f.review_counts || {};
       ["code", "security"].forEach(function (kind) {
@@ -523,25 +532,6 @@
     });
     return strip;
   }
-  function pipelineTasks(feature, motion) {
-    var priorities = {}; (feature.stories || []).forEach(function (row) { priorities[row.story] = row.priority; });
-    var cells = h("div", "cells pipeline-tasks"), tasks = (feature.tasks || []).slice().sort(function (a, b) {
-      return storyOrder({story: a.story, priority: priorities[a.story]}, {story: b.story, priority: priorities[b.story]}) || taskOrder(a, b);
-    });
-    var per = Math.max(1, Math.ceil(tasks.length / 12));
-    for (var i = 0; i < tasks.length;) {
-      var end = i + 1;
-      while (end < tasks.length && end < i + per && tasks[end].story === tasks[i].story) end++;
-      var group = tasks.slice(i, end), states = group.map(taskState); i = end;
-      var state = states.indexOf("active") !== -1 ? "active" : states.indexOf("accepted") !== -1 ? "accepted" : states.every(function (x) { return x === "done"; }) ? "done" : "todo";
-      var mark = brick(state, 15, 8, "task-brick");
-      mark.setAttribute("data-task", group[0].id); mark.setAttribute("data-state", state); mark.setAttribute("data-count", group.length);
-      mark.style.setProperty("--snap-delay", Math.min(500, motion.index++ * 10) + "ms");
-      tipOn(mark, taskTip(group, feature.feature, group[0].story));
-      mark.setAttribute("aria-hidden", "false"); mark.setAttribute("role", "img"); cells.appendChild(mark);
-    }
-    return cells;
-  }
   function pipelineDetail(p, motion) {
     var card = h("div", "project-detail pipeline-detail"), unfinished = unfinishedFeatures(p).slice().sort(function (a, b) {
       return (b.feature || b.ordinal || 0) - (a.feature || a.ordinal || 0);
@@ -558,7 +548,7 @@
         tipOn(mark, {title: "package " + pkg.ordinal, sub: sourceName(p), rows: [["state", pkg.state]], items: pkg.state === "unknown" ? ["no status stated"] : []});
         mark.setAttribute("aria-hidden", "false"); mark.setAttribute("role", "img"); line.appendChild(mark);
       });
-      if (!taskItem && feature.state === "active" && (feature.tasks || []).length) { taskItem = feature; line.appendChild(pipelineTasks(feature, motion)); }
+      if (!taskItem && feature.state === "active" && (feature.tasks || []).length) { taskItem = feature; line.appendChild(projectDetail({features: [feature]}, motion, true)); }
       card.appendChild(line);
     });
     if (p.source !== "ledger" && unfinished.length > 5) card.appendChild(tipOn(t("span", "pipeline-more", "+" + (unfinished.length - 5) + " more"),
@@ -568,8 +558,8 @@
     if (Object.keys(p.work || {}).length) card.appendChild(workStrip(p));
     return card;
   }
-  function projectDetail(p, motion) {
-    var card = h("div", "project-detail");
+  function projectDetail(p, motion, pipeline) {
+    var card = h("div", pipeline ? "pipeline-tasks" : "project-detail");
     unfinishedFeatures(p).forEach(function (feature) {
       var tasks = feature.tasks || [], stories = (feature.stories || []).slice();
       if (tasks.some(function (task) { return !task.story; })) {
@@ -579,7 +569,7 @@
       var complete = stories.filter(function (story) { return story.total > 0 && story.done === story.total; }).length;
       var header = h("div", "spec-head", [t("span", "spec-label", "spec " + String(feature.feature).padStart(3, "0")), h("i", "spec-rule")]);
       if (complete) header.appendChild(t("span", "finished-stories", "+" + complete + " done"));
-      var featureBody = h("div", "feature", [header]);
+      var featureBody = h("div", "feature", pipeline ? [] : [header]);
       stories.filter(function (story) { return story.total > story.done; }).sort(storyOrder).forEach(function (story) {
         var cells = h("div", "cells"), sorted = tasks.filter(function (task) { return (task.story || null) === (story.story || null); }).sort(taskOrder);
         var per = Math.max(1, Math.ceil(sorted.length / 36));
@@ -594,7 +584,15 @@
           mark.setAttribute("aria-hidden", "false"); mark.setAttribute("role", "img");
           cells.appendChild(mark);
         }
-        var row = h("div", "story", [t("span", "story-label", story.story || "untagged"), cells, t("span", "story-count", story.done + "/" + story.total)]);
+        var label = t("span", "story-label", story.story || "");
+        if (!story.story) {
+          var icon = s("svg", {width: 14, height: 14, viewBox: "0 0 16 16", "class": "story-no-tag", role: "img"});
+          icon.appendChild(s("path", {d: "M2 2H8L14 8L8 14L2 8Z", fill: "none", stroke: "currentColor", "stroke-width": 1, "stroke-dasharray": "2 2", "stroke-linejoin": "round"}));
+          icon.appendChild(s("circle", {cx: 5, cy: 5, r: 1, fill: "currentColor"}));
+          label.appendChild(tipOn(icon, {title: "no story tag", rows: [["done / total", story.done + " / " + story.total]],
+            items: [completionPercent(story.done, story.total) + "% done"]}));
+        }
+        var row = h("div", "story", [label, cells, t("span", "story-count", story.done + "/" + story.total)]);
         row.setAttribute("data-story", story.story || "untagged");
         tipOn(row, story.done + "/" + story.total + " · " + completionPercent(story.done, story.total) + "% done" + (storyPriority(story) < 10 ? " · P" + story.priority : ""));
         featureBody.appendChild(row);

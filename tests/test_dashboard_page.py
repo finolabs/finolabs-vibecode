@@ -782,6 +782,32 @@ class DashboardScriptTest(unittest.TestCase):
         data['progress'] = json.loads((ROOT / 'tests/fixtures/status-pipeline.json').read_text())
         return data
 
+    def test_pipeline_keeps_story_lanes_only_under_first_active_chain(self):
+        data = self.pipeline_sample()
+        feature = data['progress']['repositories']['aaaaaaaa']['features'][1]
+        feature['tasks'][-1]['story'] = None
+        feature['stories'][0].update(total=3)
+        out = self.render_freshness(data)
+        self.assertEqual(len(self.marks(out, 'pipeline-tasks')), 1)
+        self.assertEqual(len(self.marks(out, 'story')), 2)
+        icons = self.marks(out, 'story-no-tag')
+        self.assertEqual(len(icons), 1)
+        self.assertEqual(icons[0]['tag'], 'svg')
+        self.assertEqual(icons[0]['spec']['title'], 'no story tag')
+        self.assertEqual(icons[0]['spec']['rows'], [['done / total', '0 / 1']])
+        pane = ' '.join(m['text'] for m in self.marks(out, 'active-project'))
+        self.assertNotIn('untagged', pane)
+        self.assertNotIn('undefined', pane)
+
+    def test_story_no_tag_icon_replaces_label_and_bricks_are_clipped(self):
+        data = self.sample()
+        feature = data['progress']['repositories']['aaaaaaaa']['features'][0]
+        feature['tasks'][0].update(story=None, state='accepted, not ticked')
+        out = self.render_freshness(data)
+        self.assertTrue(self.marks(out, 'story-no-tag'))
+        self.assertTrue(all('untagged' not in m['text'] for m in self.marks(out, 'active-project')))
+        self.assertIn('.lego-brick { display: block; flex: none; overflow: hidden; }', PAGE.read_text())
+
     def test_pipeline_sources_shapes_known_stages_and_neutral_unknown(self):
         out = self.render_freshness(self.pipeline_sample(), {'hash': '#now'})
         items = self.marks(out, 'pipeline-item')
@@ -797,6 +823,9 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual([m['text'] for m in self.marks(out, 'pipeline-percent')], ['50%'])
         self.assertEqual(len(items), 4)
         self.assertEqual(len(self.marks(out, 'pipeline-chain')), 4)
+        self.assertEqual(len(self.marks(out, 'pipeline-chevron')), len(blocks))
+        self.assertTrue(all(m['tag'] == 'path' for m in self.marks(out, 'pipeline-face')))
+        self.assertNotIn('undefined', ' '.join(m['text'] for m in self.marks(out, 'active-project')))
         self.assertFalse(any(m['attrs'].get('data-stage') == 'ship' for m in blocks))
         self.assertEqual(len(self.marks(out, 'package-brick')), 4)
         self.assertIn('deferred', self.marks(out, 'package-brick')[2]['cls'].split())
@@ -875,9 +904,9 @@ class DashboardScriptTest(unittest.TestCase):
         css = PAGE.read_text()
         self.assertIn('.pipeline-project .project-detail { grid-column: 1 / -1; grid-row: 2; }', css)
         self.assertIn('.pipeline-chain { display: flex;', css)
-        self.assertIn('.pipeline-block.unknown, .work-chip.unknown { border-style: dashed;', css)
+        self.assertIn('.pipeline-block.unknown .pipeline-face { stroke-dasharray: 3 2;', css)
         self.assertIn('background: repeating-linear-gradient(135deg, var(--p)', css)
-        self.assertIn('.pipeline-block.done, .work-chip.done { background: var(--good)', css)
+        self.assertIn('.pipeline-block.done .pipeline-face { fill: var(--good)', css)
         self.assertIn('.pipeline-chain { flex-wrap: wrap; max-width: calc(100% - 24px); }', css)
         out = self.render_freshness(self.pipeline_sample())
         self.assertNotIn('img', out['tags'])

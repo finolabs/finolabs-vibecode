@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import shutil
 import stat
 import tempfile
 import time
@@ -104,6 +105,38 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual([s['stage'] for s in new['stages']], ['spec'])
         self.assertNotIn('PRIVATE', json.dumps(got))
         self.assertNotIn('synthetic', json.dumps(got))
+
+    @unittest.skipUnless(shutil.which("node") or Path("/opt/homebrew/bin/node").exists(), "node is not installed")
+    def test_collected_artifacts_and_source_b_render_chains_not_text_lanes(self):
+        # Exercise collector output, not a hand-authored stages schema.
+        from tests.test_dashboard_page import DashboardScriptTest
+        task = self.taskfile('015-synthetic', '## Phase 1: User Story 1 - Synthetic (P1)\n- [x] T001\n- [ ] T002\n')
+        for name in ('spec.md', 'plan.md', 'research.md', 'data-model.md', 'quickstart-results-local.md',
+                     'review-code-us1.md', 'review-security-final.md', 'release-notes-1.md'):
+            task.with_name(name).write_text('**Status**: Draft\nPRIVATE NEVER OUTPUT\n')
+        self.document('spec.md', '**Status**: Draft\n', 'specs/016-synthetic')
+        speckit = self.collect()
+        shutil.rmtree(self.repo / 'specs')
+        self.document('index.md', '| Title | Status |\n| --- | --- |\n'
+                      '| [Synthetic](one.md) | In progress |\n| [Synthetic](two.md) | Released |\n')
+        self.document('one.md', '# PRIVATE NEVER OUTPUT\n')
+        self.document('two.md', '# PRIVATE NEVER OUTPUT\n')
+        source_b = self.collect()
+        data = json.loads((ROOT / 'tests/fixtures/status-sample.json').read_text())
+        data['progress'] = {'repositories': {'aaaaaaaa': speckit, 'bbbbbbbb': source_b},
+                            'active': [{'repo': code, 'label': 'Synthetic', 'hosts': ['codex'], 'sessions': 1,
+                                        'last': '2026-11-06T10:00:00Z'} for code in ('aaaaaaaa', 'bbbbbbbb')]}
+        page = DashboardScriptTest()
+        out = page.render_freshness(data, {'hash': '#now'})
+        self.assertEqual(len(page.marks(out, 'pipeline-chain')), 3)
+        self.assertEqual([m['text'] for m in page.marks(out, 'pipeline-ordinal')], ['016', '015', '#1'])
+        self.assertEqual([m['attrs']['data-stage'] for m in page.marks(out, 'pipeline-block')],
+                         ['spec', 'spec', 'plan', 'design', 'tasks', 'verify', 'review', 'ship', 'spec'])
+        self.assertEqual([m['text'] for m in page.marks(out, 'pipeline-finished')], ['1 done'])
+        self.assertEqual(len(page.marks(out, 'pipeline-chevron')), 9)
+        pane = ' '.join(m['text'] for m in page.marks(out, 'active-project'))
+        for forbidden in ('undefined', 'untagged', 'PRIVATE', 'Synthetic](one.md)'):
+            self.assertNotIn(forbidden, pane)
 
     def test_speckit_task_completion_needs_verification_and_started_join(self):
         task = self.taskfile(text='- [x] T1 US1\n')
