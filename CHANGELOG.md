@@ -21,6 +21,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add Running now in the Agents tab: open dispatch ages and budgets, advisory liveness checks and family mismatch flags, plus a separately opted-in, bounded process snapshot. Setup records its on/off choice in canonical host config; `FNL_AGENT_SNAPSHOT=off` disables it, and snapshots stay in the overwritten dashboard data only.
+
 - Add a validated `record.py task --id T012` receipt and a consent-gated `task` event holding only the task id, with advisory guidance for sessions the user started by hand.
 
 - Let the Antigravity compaction stop install from Antigravity's own installed copy of the plugin, which keeps the repository's `.git` entry; any other plugin folder inside a git work tree is still refused.

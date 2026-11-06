@@ -16,6 +16,16 @@ The optional Antigravity stop records `Enabled: yes` and the user-chosen `Limit 
 
 `<data root>/state/compact-stop/<sha256(conversationId)[:16]>.json` holds only the integer transcript size at the last stop, mode 0600 in a 0700 folder. At most 200 marks are kept, oldest by modification time removed on write, excluding the current conversation's mark; shrink resets a mark. The hook reads the `## Compaction stop` section of the canonical host config and only the size of a regular, non-symlink transcript inside the account's Antigravity conversation folder, never its content. It sends nothing anywhere. `FNL_COMPACT_STOP=off` disables it; previewed removal deletes the hook group and sets `Enabled: no`, leaving marks and backups local until the user deletes them. Any failed check or mark write allows the turn. User-level hook delivery and the interactive TUI remain unverified.
 
+## Agent snapshot
+
+The dashboard's process snapshot is off by default. It runs only with recorded metrics consent and a separate setup opt-in in `## Agent snapshot` in canonical `<data root>/host.md`; if that file or the data root cannot be resolved safely, it is off. `FNL_AGENT_SNAPSHOT=off` disables collection, and setup can record `off` again. Environment overrides cannot grant consent.
+
+During a dashboard refresh it may run the root-owned system `ps` with fixed arguments, no shell, only `PATH=/usr/bin:/bin` and `LC_ALL=C`, an empty temporary working folder, a two-second process-group limit and a 256 KiB output cap. It reads the current user's process names and elapsed times. macOS `comm` can be a full path; only its last component is compared, and the path is discarded. Only exact `claude`, `codex` and `agy` names become roots; exact `Claude`, `Codex` and `Antigravity` names contribute app counts. Descendant names are reduced to a fixed list or `other`, to depth six and at most 500 descendants per root.
+
+It keeps only fixed family names, counts, elapsed seconds and the snapshot time, with a fixed reason on failure. It never keeps arguments, paths, environment values or user-chosen names, and never reads working folders or attributes processes to repositories. The machine-wide snapshot cannot distinguish a sub-agent from a session or list desktop app sessions. A process can adopt one of these names; family-level ledger mismatch flags do not prove a process's identity or liveness.
+
+The `running` block in the dashboard's local `data.js` holds that snapshot beside the ledger's open dispatch labels, start times, budget, age and an unverified liveness marker. It is overwritten on refresh, reused for at most ten seconds between readings, removed by `fnl-status purge`, and never appended to the events files. No snapshot history or separate snapshot cache is kept. The page reloads this file; it does not run `ps`. Nothing is sent anywhere.
+
 ## Where your data goes
 
 The data folder can be relocated through `fnl-setup`; the fixed pointer `~/.finolabs/vibecode/root.json` contains its absolute `root` path and a random `id` matching the new folder's `.root-id`.

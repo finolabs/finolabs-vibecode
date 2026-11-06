@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Read a bounded, content-free snapshot of processes named claude, codex or agy."""
+import argparse
+import fcntl
 import json
 import os
 import re
@@ -168,6 +170,80 @@ def snapshot():
         return empty('ps failed')
 
 
+def configure(choice, yes=False, dry_run=False):
+    """Replace only our section in canonical host.md, preserving all other bytes."""
+    if choice not in ('on', 'off') or (not yes and not dry_run):
+        raise ValueError('confirmation required')
+    if dr.consent_root() is None:
+        raise ValueError('root')
+    section_text = '## Agent snapshot\n\n- Snapshot: ' + choice + '\n\n'
+    if dry_run:
+        return section_text
+    with dr.root_folder(create=True) as folder:
+        fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            text = dr.read_file(folder, 'host.md', 262144).decode()
+        except FileNotFoundError:
+            text = ''
+        headings, fence, offset = [], None, 0
+        for line in text.splitlines(keepends=True):
+            match = re.match(r'^\s*(`{3,}|~{3,})', line)
+            if match:
+                token = match[1]
+                if fence is None:
+                    fence = token
+                elif token[0] == fence[0] and len(token) >= len(fence):
+                    fence = None
+            elif fence is None and re.match(r'^#{1,2} ', line):
+                headings.append((offset, line.strip()))
+            offset += len(line)
+        indexes = [i for i, (_, heading) in enumerate(headings) if heading == '## Agent snapshot']
+        if len(indexes) > 1 or fence is not None:
+            raise ValueError('ambiguous host')
+        newline = '\r\n' if '\r\n' in text else '\n'
+        section_text = section_text.replace('\n', newline)
+        if indexes:
+            index = indexes[0]
+            end = headings[index+1][0] if index+1 < len(headings) else len(text)
+            text = text[:headings[index][0]] + section_text + text[end:]
+        else:
+            text += (newline * 2 if text and not text.endswith(newline) else newline if text and not text.endswith(newline * 2) else '') + section_text
+        raw = text.encode()
+        if len(raw) > 262144:
+            raise ValueError('host cap')
+        dr.atomic_write(folder, 'host.md', raw)
+    return section_text
+
+
+def metrics_enabled():
+    if os.environ.get('FNL_METRICS', '').lower() == 'off':
+        return False
+    try:
+        consent = json.loads(dr.read_data('state/consent.json', 4096))
+        return (isinstance(consent, dict) and consent.get('retention_days') in (30, 90, 365)
+                and isinstance(consent.get('date'), str))
+    except (OSError, ValueError, UnicodeError):
+        return False
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('choice', nargs='?', choices=('on', 'off'))
+    parser.add_argument('--yes', action='store_true')
+    parser.add_argument('--dry-run', action='store_true')
+    args = parser.parse_args(argv)
+    if args.choice:
+        try:
+            result = configure(args.choice, args.yes, args.dry_run)
+            print(result if args.dry_run else 'Agent snapshot preference saved; no command was run.')
+            return 0
+        except (OSError, ValueError, UnicodeError):
+            print('Agent snapshot setup refused; no preference saved.', file=sys.stderr)
+            return 1
+    result = snapshot() if metrics_enabled() and enabled() else empty('snapshot off')
+    print(json.dumps(result, separators=(',', ':')))
+    return 0
+
+
 if __name__ == '__main__':
-    # Collection is opt-in; the refresh calls snapshot only after both consents.
-    print(json.dumps(empty('snapshot off')))
+    sys.exit(main())

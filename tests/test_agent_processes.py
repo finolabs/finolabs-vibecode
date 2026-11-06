@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
+from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location('agent_processes_test', ROOT / 'scripts/agent_processes.py')
@@ -96,6 +97,86 @@ class ProcessTest(unittest.TestCase):
             self.assertTrue(kwargs['start_new_session'])
             self.assertFalse(kwargs.get('shell', False))
             self.assertFalse(Path(kwargs['cwd']).exists())  # neutral temporary folder removed
+
+
+class SnapshotConsentTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.home = account(self, Path(self.tmp.name) / 'home')
+        self.root = self.home / '.finolabs/vibecode'
+        self.root.mkdir(parents=True)
+        self.host = self.root / 'host.md'
+        self.env = mock.patch.dict(os.environ, {'FNL_AGENT_SNAPSHOT': '', 'FNL_METRICS': ''})
+        self.env.start()
+        self.addCleanup(self.env.stop)
+
+    def test_setup_on_off_requires_yes_preserves_host_and_cli_collects_only_with_both_consents(self):
+        self.host.write_text('# Host\n\n## Other\n\nKeep this.\n')
+        before = self.host.read_bytes()
+        self.assertFalse(ap.enabled())
+        self.assertEqual(ap.main(['on']), 1)
+        self.assertEqual(self.host.read_bytes(), before)
+        self.assertEqual(ap.main(['on', '--dry-run']), 0)
+        self.assertEqual(self.host.read_bytes(), before)
+        self.assertEqual(ap.main(['on', '--yes']), 0)
+        self.assertTrue(ap.enabled())
+        self.assertTrue(self.host.read_bytes().startswith(before))
+        self.assertEqual(self.host.stat().st_mode & 0o777, 0o600)
+        with mock.patch.object(ap, 'snapshot', return_value=ap.empty()) as probe:
+            ap.main([])
+            probe.assert_not_called()
+            (self.root / 'state').mkdir(mode=0o700)
+            (self.root / 'state/consent.json').write_text('{"date":"2026-11-06","retention_days":90}')
+            ap.main([])
+            probe.assert_called_once()
+            with mock.patch.dict(os.environ, {'FNL_AGENT_SNAPSHOT': 'off'}):
+                self.assertFalse(ap.enabled())
+                ap.main([])
+            probe.assert_called_once()
+        self.assertEqual(ap.main(['off', '--yes']), 0)
+        self.assertFalse(ap.enabled())
+        self.assertEqual(self.host.read_text().count('## Agent snapshot'), 1)
+        self.assertIn('- Snapshot: off', self.host.read_text())
+
+    def test_unsafe_ambiguous_redirected_or_unresolved_consent_is_off(self):
+        for body in ('```md\n## Agent snapshot\n- Snapshot: on\n```\n',
+                     '## Agent snapshot\n- Snapshot: on\n## Agent snapshot\n- Snapshot: on\n',
+                     '## Agent snapshot\n- Snapshot: on\n- Snapshot: off\n',
+                     '## Agent snapshot\n- Snapshot: on\nextra\n'):
+            self.host.write_text(body)
+            self.assertFalse(ap.enabled())
+        self.host.write_text('## Agent snapshot\n- Snapshot: on\n')
+        self.host.chmod(0o666)
+        self.assertFalse(ap.enabled())
+        self.host.chmod(0o600)
+        outside = self.home / 'outside.md'
+        self.host.rename(outside)
+        self.host.symlink_to(outside)
+        self.assertFalse(ap.enabled())
+        self.host.unlink()
+        with mock.patch.dict(os.environ, {'ORCHESTRATION_HOST_CONFIG': str(outside), 'HOME': str(self.home / 'fake')}):
+            self.assertFalse(ap.enabled())
+        self.host.write_text('## Agent snapshot\n- Snapshot: on\n')
+        (self.root / 'root.json').write_text('{}')
+        self.assertFalse(ap.enabled())
+        self.assertEqual(ap.main(['on', '--yes']), 1)
+
+    def test_copies_and_phase_one_docs_match_the_policy_without_hook_changes(self):
+        original = (ROOT / 'scripts/agent_processes.py').read_bytes()
+        for skill in ('fnl-status', 'fnl-setup'):
+            self.assertEqual(original, (ROOT / f'skills/{skill}/scripts/agent_processes.py').read_bytes())
+        for file, phrases in {
+            'PRIVACY.md': ('## Agent snapshot', 'FNL_AGENT_SNAPSHOT=off', 'comm', 'data.js', 'user-chosen names'),
+            'README.md': ('Running now', 'FNL_AGENT_SNAPSHOT=off'),
+            'CHANGELOG.md': ('## [Unreleased]', 'process snapshot'),
+            'docs/specs/index.md': ('Phase 1 implemented',),
+            'skills/fnl-status/SKILL.md': ('same `running` block', 'advisory'),
+            'skills/fnl-setup/SKILL.md': ('scripts/agent_processes.py on --yes', 'if it cannot be resolved it is off'),
+            'CLAUDE.md': ('absolute path owned by root', '2-second limit', '256 KiB output cap'),
+        }.items():
+            for phrase in phrases:
+                self.assertIn(phrase, (ROOT / file).read_text(), file)
 
 
 if __name__ == '__main__':
