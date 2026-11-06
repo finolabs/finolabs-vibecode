@@ -1,5 +1,6 @@
 """Static checks of skills/fnl-status/assets/dashboard.html and its fit with the data refresh.py writes."""
 
+from collections import Counter
 import importlib.util
 import json
 import os
@@ -98,6 +99,7 @@ class DashboardPageTest(unittest.TestCase):
         self.assertEqual(sum(len(f['stories']) for f in first['features']), 5)
         self.assertEqual(sum(len(f['stories']) for f in second['features']), 2)
         stories = [story for f in first['features'] for story in f['stories']]
+        self.assertIn(45, [story['total'] for story in stories])
         self.assertIn(14, [story['total'] for story in stories])
         self.assertIn(3, [story['total'] for story in stories])
         self.assertEqual({t['state'] for t in first['features'][0]['tasks'] if t['story'] == 'US1'}, {'done', 'in progress', 'accepted, not ticked', 'todo'})
@@ -239,18 +241,15 @@ class DashboardScriptTest(unittest.TestCase):
                 data = self.sample()
                 feature = dict(feature=1, done=done, total=total, tasks=[],
                                stories=[dict(story='US1', done=done, total=total)])
-                data['progress']['repositories'] = {'aaaaaaaa': dict(features=[feature])}
+                data['progress']['repositories'] = {'aaaaaaaa': dict(features=[feature], done=done == total)}
                 data['progress']['active'] = [dict(repo='aaaaaaaa', label='A', hosts=['codex'],
                     sessions=2, last='2026-11-06T09:48:00Z', percent=percent if done < total else None)]
                 out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
+                self.assertEqual(self.marks(out, 'active-percent')[0]['text'], str(percent) + '%')
                 if done == total:
-                    self.assertEqual(self.marks(out, 'active-progress'), [])
-                    self.assertNotIn('no task list', self.marks(out, 'active-project')[0]['attrs']['data-tip'])
+                    self.assertEqual(self.marks(out, 'story'), [])
                     self.assertTrue(any('100%' in m['text'] for m in self.marks(out, 'tbl', 'show the data as tables')))
-                if done < total:
-                    self.assertEqual(self.marks(out, 'active-progress')[0]['attrs']['aria-label'], str(percent) + '% done')
-                    self.assertEqual(self.marks(out, 'active-percent')[0]['text'], str(percent) + '%')
-                    self.assertIn(str(percent) + '%', self.marks(out, 'feature-head')[0]['text'])
+                else:
                     self.assertIn(str(percent) + '%', self.marks(out, 'story')[0]['attrs']['data-tip'])
 
     def test_active_strip_hosts_relative_time_and_no_task_list(self):
@@ -264,11 +263,11 @@ class DashboardScriptTest(unittest.TestCase):
         rows = self.marks(out, 'active-project')
         self.assertEqual([r['attrs']['data-repo'] for r in rows], ['aaaaaaaa', 'eeeeeeee'])
         self.assertIn(attack, rows[0]['text'])
-        self.assertIn('3 sessions · 24h', rows[0]['text'])
+        self.assertNotIn('3 sessions · 24h', rows[0]['text'])
         self.assertIn('last 12 min ago', rows[0]['text'])
         self.assertNotIn('no task list', rows[1]['text'])
         self.assertIn('no task list', rows[1]['attrs']['data-tip'])
-        self.assertEqual(len(self.marks(out, 'active-progress')), 1)
+        self.assertEqual(len(self.marks(out, 'active-percent')), 2)
         self.assertEqual([m['attrs']['data-tip'] for m in self.marks(out, 'active-host')],
                          ['claude', 'codex', 'antigravity', 'codex'])
         self.assertEqual(len({m['text'] for m in self.marks(out, 'active-host')}), 3)
@@ -282,9 +281,11 @@ class DashboardScriptTest(unittest.TestCase):
         for budget, age, cap in ((15, 24, 25), (60, 85, 80)):
             data['running']['open'] = [dict(template, budget_min=budget, age_min=age)]
             out = self.render_freshness(data)
-            self.assertAlmostEqual(float(self.marks(out, 'lane-bar')[0]['style']['width'][:-1]), min(100, age / cap * 100))
-            self.assertAlmostEqual(float(self.marks(out, 'check-tick')[0]['style']['left'][:-1]), budget / 2 / cap * 100)
-            self.assertAlmostEqual(float(self.marks(out, 'budget-tick')[0]['style']['left'][:-1]), budget / cap * 100)
+            widths = [float(m['attrs']['width']) for m in self.marks(out, 'lane-segment')]
+            self.assertAlmostEqual(sum(widths), min(560, age / cap * 560))
+            self.assertAlmostEqual(float(self.marks(out, 'check-tick')[0]['attrs']['x']), budget / 2 / cap * 560)
+            self.assertAlmostEqual(float(self.marks(out, 'budget-tick')[0]['attrs']['x']), budget / cap * 560)
+            self.assertEqual(len(self.marks(out, 'lane-stud')), 3 if cap == 25 else 8)
             self.assertEqual(self.marks(out, 'lane')[0]['attrs']['data-state'], 'cap' if age > cap else 'over')
 
     def test_reviews_cap_chains_project_labels_and_live_hash_changes(self):
@@ -301,44 +302,42 @@ class DashboardScriptTest(unittest.TestCase):
         table = self.marks(out, 'tbl', 'show the data as tables')
         self.assertTrue(any('REWORK → REWORK' in row['text'] for row in table))
 
-    def test_agents_infographics_lanes_kpis_quota_and_hostile_values(self):
+    def test_agents_lego_lanes_slots_quota_and_hostile_values(self):
         out = self.render(FIXTURE, {'hash': '#agents', 'now': '2026-11-06T10:00:00Z'})
         lanes = self.marks(out, 'lane')
         self.assertEqual([m['attrs']['data-run'] for m in lanes],
                          ['</script><img src=x onerror=alert(1)>', 'run3', 'run2', 'run1'])
-        self.assertEqual([m['style']['left'] for m in self.marks(out, 'check-tick')], ['37.5%'] * 4)
-        self.assertEqual([m['style']['left'] for m in self.marks(out, 'budget-tick')], ['75%'] * 4)
-        self.assertEqual([m['style']['width'] for m in self.marks(out, 'lane-bar')], ['100%', '77.5%', '50%', '12.5%'])
         self.assertEqual([m['attrs']['data-state'] for m in lanes], ['cap', 'over', 'check', 'within'])
-        self.assertEqual([m['text'] for m in self.marks(out, 'lane-overflow')], ['>'])
-        backgrounds = [m['style']['background'] for m in self.marks(out, 'lane-bar')]
-        self.assertIn('var(--warn) 37.5% 75%', backgrounds[0])
-        self.assertIn('var(--crit) 75% 100%', backgrounds[0])
-        self.assertIn('var(--good) 0% 75%', backgrounds[2])
-        self.assertIn('var(--warn) 75% 100%', backgrounds[2])
-        self.assertIn('var(--good) 0% 100%', backgrounds[3])
-        self.assertEqual([m['text'] for m in self.marks(out, 'lane-legend')], ['| check at half budget  | budget  red = over budget'])
-        self.assertEqual([m['text'] for m in self.marks(out, 'lane-identity')][-2:], ['claude opus', 'codex gpt-6'])
+        self.assertEqual([m['attrs']['x'] for m in self.marks(out, 'check-tick')], ['210'] * 4)
+        self.assertEqual([m['attrs']['x'] for m in self.marks(out, 'budget-tick')], ['420'] * 4)
+        self.assertEqual([m['tag'] for m in self.marks(out, 'lane-track')], ['svg'] * 4)
+        self.assertEqual(len(self.marks(out, 'lane-stud')), 16)
+        segments = self.marks(out, 'lane-segment')
+        self.assertEqual([float(m['attrs']['width']) for m in segments],
+                         [210, 210, 140, 210, 210, 14, 210, 70, 0, 70, 0, 0])
+        self.assertEqual([m['attrs']['fill'] for m in segments[:3]], ['var(--h3)', 'var(--warn)', 'var(--crit)'])
+        self.assertEqual([m['text'] for m in self.marks(out, 'lane-value')], ['45/30 m', '31/30 m', '20/30 m', '5/30 m'])
         tasks = self.marks(out, 'lane-task')
         self.assertTrue(all(m['attrs']['data-tip'] == m['text'] for m in tasks))
+        self.assertTrue(all(m['attrs']['data-tip'] == m['text'] for m in self.marks(out, 'lane-identity')))
         self.assertIn('</script>', tasks[2]['text'])
-        self.assertEqual([m['text'] for m in self.marks(out, 'agent-value')], ['4', '3', '1'])
-        self.assertEqual(self.marks(out, 'process-dot'), [])
-        self.assertEqual(self.marks(out, 'processes'), [])
-        self.assertEqual([m['text'] for m in self.marks(out, 'process-counts')], ['claude 1 · codex 2 · agy 0'])
-        tiles = self.marks(out, 'kpi')
-        self.assertTrue(any('3 roots · 10 app procs' in m['text'] for m in tiles))
-        self.assertTrue(any('at half budget' in m['text'] for m in tiles))
-        self.assertTrue(any('family match only' in m['text'] for m in tiles))
-        self.assertEqual(len(self.marks(out, 'no-process')), 1)
-        quota = self.marks(out, 'quota-meter')
+        self.assertEqual(self.marks(out, 'no-process')[0]['attrs']['data-tip'], 'no process')
+        self.assertEqual(self.marks(out, 'no-process')[0]['tag'], 'svg')
+        self.assertEqual(self.marks(out, 'agent-kpis'), [])
+        slots = self.marks(out, 'slot')
+        self.assertEqual(len(slots), 5)
+        self.assertEqual(sum('lit' in m['cls'].split() for m in slots), 4)
+        quota = self.marks(out, 'quota-bricks')
         self.assertEqual(len(quota), 3)
-        self.assertEqual([m['attrs']['aria-valuenow'] for m in quota], ['68', '8', '42'])
-        bars = self.marks(out, 'quota-bar')
-        self.assertEqual(bars[1]['style']['background'], 'var(--crit)')
-        self.assertIn('hollow', quota[2]['cls'])
-        self.assertIn('unverified', quota[2]['attrs']['data-tip'])
-        self.assertEqual([m['text'] for m in self.marks(out, 'quota-row')], ['claude  68%', 'codex  8%', 'agy  42% ?'])
+        self.assertEqual([m['text'].strip() for m in quota], ['', '', '?'])
+        self.assertTrue(all(value in m['attrs']['data-tip'] for value, m in zip(['68%', '8%', '42%'], quota)))
+        self.assertIn('unverified', quota[2]['cls'])
+        blocks = self.marks(out, 'quota-brick')
+        self.assertEqual(len(blocks), 30)
+        self.assertEqual([sum('lit' in m['cls'].split() for m in blocks[i:i+10]) for i in range(0, 30, 10)], [7, 1, 0])
+        self.assertIn('low', blocks[10]['cls'].split())
+        self.assertEqual(self.marks(out, 'capacity-caption')[1]['text'], 'claude quota')
+        self.assertEqual(self.marks(out, 'process-counts'), [])
         self.assertTrue(any('</script>' in m['attrs'].get('data-tip', '') for m in lanes))
         tables = self.marks(out, 'tbl', 'show the data as tables')
         self.assertTrue(any('agent state' in row['text'] and 'past the check time' in row['text'] for row in tables))
@@ -347,187 +346,167 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(len(limits), 1)
         self.assertIn('machine-wide', limits[0]['text'])
         self.assertIn('not started by the coordinator', limits[0]['text'])
-        self.assertTrue(any('quota' in m['text'] for m in self.marks(out, 'tbl', 'show the data as tables')))
         self.assertNotIn('img', out['tags'])
         self.assertNotIn('script', out['tags'])
 
-    def test_reworked_layout_contracts_and_mobile_document_scroll(self):
+    def test_lego_geometry_and_mobile_wrap_contract(self):
         css = PAGE.read_text()
         def rule(selector):
             return re.search(r"(?m)^" + re.escape(selector) + r" \{([^}]+)\}", css).group(1)
-        self.assertNotIn('overflow: hidden', rule('.lane-identity'))
-        self.assertIn('overflow-wrap: anywhere', rule('.lane-identity'))
-        self.assertIn('text-overflow: ellipsis', rule('.lane-task'))
-        self.assertIn('font-size: var(--t-xs)', rule('.lane-task'))
-        self.assertIn('color: var(--muted)', rule('.lane-task'))
-        self.assertIn('grid-template-columns: minmax(0, 240px) minmax(0, 1fr) 100px', rule('.lane, .quota-row'))
-        self.assertNotIn('grid-template-columns', rule('.quota'))
-        self.assertIn('background: var(--h0)', rule('.quota-meter'))
-        self.assertIn('border: 1px dashed', rule('.quota-meter.hollow'))
-        self.assertIn('grid-template-columns: 84px minmax(0, 1fr) 44px', rule('.story'))
-        for declaration in ('width: 14px', 'height: 14px', 'border-radius: 3px'):
-            self.assertIn(declaration, rule('.cell'))
-        self.assertIn('gap: 3px', rule('.cells'))
+        for cls in ('.lane-identity', '.lane-task', '.active-label'):
+            self.assertIn('text-overflow: ellipsis', rule(cls))
+            self.assertIn('overflow: hidden', rule(cls))
+        for cls in ('.lane', '.active-project'):
+            self.assertIn('grid-template-columns: 150px minmax(0, 1fr) 54px', rule(cls))
+            self.assertIn('gap: 14px', rule(cls))
+        self.assertIn('grid-template-columns: 30px minmax(0, 1fr) 38px', rule('.story'))
+        self.assertIn('gap: 2px', rule('.cells'))
         self.assertIn('flex-wrap: wrap', rule('.cells'))
-        self.assertIn('repeating-linear-gradient', rule('.cell.accepted'))
-        self.assertIn('var(--warn)', rule('.cell.accepted'))
-        self.assertIn('border-left: 1px', rule('.story-tree'))
-        self.assertIn('padding-left: 10px', rule('.story-tree'))
-        self.assertIn('height: 3px', rule('.feature-bar'))
-        self.assertIn('text-align: right', rule('.lane-value'))
+        self.assertIn('width: 15px; height: 11px', rule('.task-brick'))
+        self.assertIn('stroke-dasharray: 2 2', rule('.quota-bricks.unverified .brick-body'))
+        self.assertIn('font-size: 22px', rule('.active-percent'))
+        self.assertIn('font-variant-numeric: tabular-nums', rule('.active-percent'))
         mobile = css[css.index('@media (max-width: 560px) {\n  #panel-agents'):]
         self.assertIn('#panel-agents, #panel-project { max-height: none; overflow: visible; }', mobile)
-        self.assertIn('.lane, .quota-row { grid-template-columns: minmax(0, 1fr) 84px;', mobile)
-        self.assertIn('.lane-label, .quota-label { grid-column: 1 / -1; }', mobile)
-        self.assertIn('.agent-kpis .kpi:first-child { grid-column: 1 / -1; }', mobile)
+        self.assertIn('.lane { grid-template-columns: minmax(0, 1fr) 64px;', mobile)
+        self.assertIn('.lane-label { grid-column: 1 / -1; }', mobile)
+        self.assertIn('.project-detail { grid-column: 1 / -1; grid-row: 2; }', mobile)
 
-    def test_next_uses_priority_then_phase_then_id_and_skips_done(self):
+    def test_story_priority_and_task_phase_then_id_order(self):
         data = self.sample()
         data['progress']['active'] = [dict(repo='bbbbbbbb', label='Shop app', hosts=['codex'], sessions=1, last='2026-11-06T10:00:00Z', percent=33)]
         f = data['progress']['repositories']['bbbbbbbb']['features'][0]
         f['tasks'] += [dict(id='T009', story='US1', phase=1, state='todo'),
                        dict(id='T001', story='US1', phase=2, state='todo')]
         out = self.render_freshness(data)
-        self.assertEqual(self.marks(out, 'project-next')[0]['text'], 'next US1 · T009')
-        f['tasks'][-2]['state'] = 'done'
-        self.assertEqual(self.marks(self.render_freshness(data), 'project-next')[0]['text'], 'next US1 · T012')
+        self.assertEqual([m['attrs']['data-story'] for m in self.marks(out, 'story')], ['US1', 'US2'])
+        self.assertEqual([m['attrs']['data-task'] for m in self.marks(out, 'task-brick')][:4], ['T009', 'T011', 'T012', 'T001'])
         f['stories'][1]['priority'] = 4
-        self.assertEqual(self.marks(self.render_freshness(data), 'project-next')[0]['text'], 'next US2 · T010')
+        self.assertEqual([m['attrs']['data-story'] for m in self.marks(self.render_freshness(data), 'story')], ['US2', 'US1'])
 
     def test_finished_story_plural(self):
         data = self.sample()
         feature = data['progress']['repositories']['aaaaaaaa']['features'][0]
         feature['stories'].append(dict(story='US8', total=2, done=2, priority=3))
         out = self.render_freshness(data)
-        self.assertEqual([m['text'] for m in self.marks(out, 'finished-stories')], ['2 stories done'])
+        self.assertEqual([m['text'] for m in self.marks(out, 'finished-stories')], ['+2 done'])
 
     def test_agents_empty_state_and_omitted_quota(self):
         data = self.sample()
-        data['running'] = dict(open=[], processes=[], snapshot=dict(reason='snapshot off'), ledger_note='')
+        # Unmatched machine processes stay in limits; only open dispatches light slots.
+        data['running'] = dict(open=[], processes=[dict(family='codex')], snapshot=dict(reason='snapshot off'), ledger_note='')
         out = self.render_freshness(data, {'hash': '#agents'})
-        self.assertEqual(len(self.marks(out, 'ghost-lane')), 3)
+        self.assertEqual(len(self.marks(out, 'ghost-brick')), 3)
         self.assertIn('No agents running', out['panels'][1]['text'])
-        self.assertEqual([m['text'] for m in self.marks(out, 'agent-value')], ['0', '0', '0'])
-        self.assertEqual(self.marks(out, 'quota-meter'), [])
-        self.assertTrue(all('alert' not in m['text'] for m in self.marks(out, 'agent-value')))
+        self.assertEqual(len(self.marks(out, 'slot')), 5)
+        self.assertFalse(any('lit' in m['cls'].split() for m in self.marks(out, 'slot')))
+        self.assertEqual(self.marks(out, 'quota-bricks'), [])
+        self.assertEqual(self.marks(out, 'agent-value'), [])
+        data['running']['parallel_limit'] = 3
+        out = self.render_freshness(data)
+        self.assertEqual(len(self.marks(out, 'slot')), 3)
+        self.assertEqual(self.marks(out, 'capacity-caption')[0]['text'], 'slots (3)')
 
-    def test_compact_named_list_closed_details_cells_and_all_tables(self):
+    def test_named_project_story_bricks_and_tables(self):
         out = self.render(FIXTURE, {'hash': '#project', 'now': '2026-11-06T10:00:00Z'})
         rows = self.marks(out, 'active-project')
         self.assertEqual([p['attrs']['data-repo'] for p in rows], ['aaaaaaaa', 'cccccccc', 'eeeeeeee'])
         self.assertEqual(out['tabs'][2]['text'], 'Project 3')
         self.assertNotIn('repo bbbb', out['panels'][2]['text'])
         self.assertNotIn('repo dddd', out['panels'][2]['text'])
-        details = self.marks(out, 'project-disclosure')
-        self.assertEqual(len(details), 1)
-        self.assertEqual(details[0]['tag'], 'details')
-        self.assertNotIn('open', details[0]['attrs'])
-        self.assertFalse(details[0]['open'])
-        self.assertEqual(rows[0]['tag'], 'summary')
-        self.assertEqual([r['tag'] for r in rows[1:]], ['div', 'div'])
-        self.assertEqual(self.marks(out, 'proj'), [])
-        self.assertEqual(self.marks(out, 'project-percent'), [])
-        self.assertEqual(self.marks(out, 'project-segments'), [])
-        self.assertEqual(len(self.marks(out, 'active-progress')), 1)
-        self.assertEqual([p['text'] for p in self.marks(out, 'active-percent')], ['28%'])
-        self.assertEqual([p['text'] for p in self.marks(out, 'project-next')], ['next US1 · T003'])
+        self.assertEqual(self.marks(out, 'project-disclosure'), [])
+        self.assertTrue(all(r['tag'] == 'div' for r in rows))
+        self.assertEqual([p['text'] for p in self.marks(out, 'active-percent')], ['46%', '100%', ''])
         self.assertEqual([p['attrs']['data-story'] for p in self.marks(out, 'story')], ['US1', 'US4', 'US3'])
-        self.assertEqual([p['text'] for p in self.marks(out, 'story-label')], ['US1 · P2', 'US4 · P3', 'US3'])
-        cells = [p for p in self.marks(out, 'cell') if 'data-task' in p['attrs']]
-        self.assertEqual(len(cells), 19)
-        self.assertEqual({p['attrs']['data-state'] for p in cells}, {'done', 'in progress', 'accepted, not ticked', 'todo'})
-        legends = self.marks(out, 'task-legend')
-        self.assertEqual(len(legends), 1)
-        self.assertEqual(legends[0]['disclosure'], details[0]['disclosure'])
-        self.assertTrue(all(p['disclosure'] == details[0]['disclosure'] for p in cells))
-        self.assertEqual([p['text'] for p in self.marks(out, 'feature-head')], ['spec 003 · 25% '])
-        self.assertEqual([p['text'] for p in self.marks(out, 'finished-stories')], ['1 story done'])
+        self.assertEqual([p['text'] for p in self.marks(out, 'story-label')], ['US1', 'US4', 'US3'])
+        cells = self.marks(out, 'task-brick')
+        self.assertEqual(len(cells), 14 + 23 + 3)
+        self.assertEqual(Counter(m['attrs']['data-state'] for m in cells[:14]),
+                         dict(done=3, active=4, accepted=4, todo=3))
+        self.assertEqual(Counter(m['attrs']['data-state'] for m in cells[-3:]), dict(done=1, todo=2))
+        self.assertTrue(all(p['tag'] == 'svg' and p['disclosure'] is None for p in cells))
+        self.assertEqual({p['attrs']['data-state'] for p in cells}, {'done', 'active', 'accepted', 'todo'})
+        self.assertEqual([p['text'] for p in self.marks(out, 'spec-label')], ['spec 003'])
+        self.assertEqual([p['text'] for p in self.marks(out, 'finished-stories')], ['+1 done'])
+        self.assertFalse(any(p['attrs']['data-task'] in ('T005', 'T090') for p in cells))
+        self.assertEqual(len(self.marks(out, 'brick-stud')), 2 * len(self.marks(out, 'lego-brick')))
+        bodies = self.marks(out, 'brick-body')
+        self.assertTrue(any(p['attrs']['fill'].startswith('url(#brick-hatch-') for p in bodies))
+        self.assertTrue(any(p['attrs']['fill'] == 'none' and p['attrs']['stroke'] == 'var(--line)' for p in bodies))
         tips = [p['attrs']['data-tip'] for p in cells]
         self.assertTrue(any(all(t in tip for t in ('T002', 'in progress', 'codex', 'session1', '</script>')) for tip in tips))
         tables = [p for p in out['picture'] if p['disclosure'] == 'show the data as tables']
-        self.assertTrue(any('project completion' in p['text'] and '28%' in p['text'] for p in tables))
+        self.assertTrue(any('project completion' in p['text'] and '46%' in p['text'] for p in tables))
         self.assertTrue(any('T090' in p['text'] for p in tables), 'finished feature remains in tables')
-        self.assertTrue(any('feature 009' in p['text'] for p in tables))
-        self.assertFalse(any(p['tag'] == 'table' and p['disclosure'] is None for p in out['picture']))
+        self.assertTrue(all(p['disclosure'] == 'show the data as tables' for p in out['picture'] if p['tag'] == 'table'))
         self.assertNotIn('img', out['tags'])
         self.assertNotIn('script', out['tags'])
 
-    def test_user_opened_project_detail_survives_data_refresh(self):
+    def test_project_bricks_remain_visible_after_data_refresh(self):
         changed = self.sample()
         changed['progress']['active'][0]['sessions'] = 4
-        out = self.render(FIXTURE, {'hash': '#project', 'next': changed,
-            'actions': [{'panel': 'project', 'open': True}]})
-        self.assertTrue(self.marks(out, 'project-disclosure')[0]['open'])
+        out = self.render(FIXTURE, {'hash': '#project', 'next': changed})
+        self.assertEqual(self.marks(out, 'project-disclosure'), [])
+        self.assertEqual(len(self.marks(out, 'task-brick')), 40)
+        self.assertEqual(out['panels'][2]['attrs']['data-enter'], 'true')
 
-    def test_v1_project_grid_keeps_marker_and_empty_progress_columns(self):
+    def test_long_story_merges_consecutive_tasks_with_state_precedence(self):
+        out = self.render(FIXTURE, {'hash': '#project'})
+        cells = self.marks(out, 'task-brick')[14:37]
+        self.assertEqual(len(cells), 23)
+        self.assertEqual(sum(int(m['attrs']['data-count']) for m in cells), 45)
+        self.assertEqual([m['attrs']['data-state'] for m in cells[:4]], ['done', 'todo', 'accepted', 'active'])
+        self.assertTrue(all(int(m['attrs']['data-count']) == 2 for m in cells[:-1]))
+        self.assertEqual(cells[-1]['attrs']['data-count'], '1')
+        self.assertIn('T301–T302 · 2 tasks', cells[0]['attrs']['data-tip'])
+        self.assertIn('T345', cells[-1]['attrs']['data-tip'])
+        self.assertEqual([m['style']['--snap-delay'] for m in self.marks(out, 'task-brick')][:3], ['0ms', '10ms', '20ms'])
+
+    def test_story_merge_boundary_and_stagger_cap(self):
         data = self.sample()
-        data['progress']['active'][0]['label'] = 'A long project name that must keep its full tooltip'
-        data['progress']['active'][0]['percent'] = 0
-        out = self.render_freshness(data)
-        count = len(self.marks(out, 'active-project'))
-        for cls in ('active-identity', 'active-marker', 'active-bar-cell', 'active-percent-cell', 'project-next-cell'):
-            self.assertEqual(len(self.marks(out, cls)), count, cls)
-        for cls in ('active-bar-cell', 'active-percent-cell', 'project-next-cell'):
-            self.assertEqual([m['text'] for m in self.marks(out, cls)][1:], ['', ''])
-        self.assertTrue(all(m['text'] == '' and m['attrs']['aria-hidden'] == 'true'
-                            for m in self.marks(out, 'active-marker')))
-        self.assertEqual(self.marks(out, 'active-label')[0]['attrs']['title'], data['progress']['active'][0]['label'])
-        bars = [m for m in out['picture'] if m['tag'] == 'i' and m['style'].get('width') == '0%']
-        self.assertTrue(bars, 'zero completion still renders a bar track and zero-width fill')
-        css = PAGE.read_text()
-        self.assertIn('grid-template-columns: 14px minmax(0, 1fr) 56px 110px 100px 90px 40px 110px', css)
-        self.assertIn('.active-identity { display: contents; }', css)
-        self.assertIn('.active-marker { width: 14px;', css)
-        self.assertIn('.active-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }', css)
-        self.assertIn('.active-hosts { display: inline-flex; justify-content: flex-start;', css)
-        self.assertIn('summary::-webkit-details-marker { display: none; }', css)
-        self.assertIn('.active-marker::before { content: "▸"; }', css)
-        self.assertIn('.project-disclosure[open] > summary .active-marker::before { content: "▾"; }', css)
-        self.assertIn('.active-progress { width: 100%; height: 6px; background: var(--h0);', css)
-        mobile = css[css.index('@media (max-width: 860px)'):css.index('.feature-bar {')]
-        self.assertIn('grid-template-columns: 14px minmax(0, 1fr) 56px', mobile)
-        self.assertIn('grid-column: 1 / -1', mobile)
-        self.assertIn('grid-template-columns: 78px 70px minmax(0, 1fr) 24px 75px', mobile)
-        self.assertNotIn('flex-wrap: wrap', mobile)
+        feature = data['progress']['repositories']['aaaaaaaa']['features'][0]
+        feature['stories'] = [dict(story='US1', total=36, done=0), dict(story='US2', total=37, done=0)]
+        feature['tasks'] = [dict(id=f'T{n:03}', story=story, state='todo', phase=1)
+                            for story, size in [('US1', 36), ('US2', 37)] for n in range(1, size + 1)]
+        feature.update(total=73, done=0)
+        out = self.render_freshness(data, {'hash': '#project'})
+        bricks = self.marks(out, 'task-brick')
+        self.assertEqual(len(bricks), 36 + 19)
+        self.assertEqual([int(m['attrs']['data-count']) for m in bricks[:36]], [1] * 36)
+        self.assertEqual(sum(int(m['attrs']['data-count']) for m in bricks[36:]), 37)
+        self.assertEqual(bricks[49]['style']['--snap-delay'], '490ms')
+        self.assertTrue(all(m['style']['--snap-delay'] == '500ms' for m in bricks[50:]))
 
-    def test_v2_project_cells_have_no_separator_but_host_legend_remains(self):
-        css = PAGE.read_text()
-        self.assertNotIn('.active-project > :not(:first-child)::before', css)
+    def test_task_svg_geometry_tokens_and_unique_hatches(self):
         out = self.render_freshness(self.sample())
-        self.assertEqual(self.marks(out, 'project-activity-header')[0]['text'],
-                         'active in the last 24 hours · ● claude  ◆ codex  ▲ antigravity')
-        self.assertTrue(all(m['text'] != '·' for m in out['picture'] if m['cls'].startswith('active-')))
+        bricks = self.marks(out, 'task-brick')
+        self.assertTrue(all(m['attrs']['width'] == '15' and m['attrs']['height'] == '11' for m in bricks))
+        self.assertTrue(all(m['attrs']['viewBox'] == '0 0 15 11' for m in bricks))
+        patterns = [m for m in out['picture'] if m['tag'] == 'pattern']
+        self.assertEqual(len({m['attrs']['id'] for m in patterns}), len(patterns))
+        self.assertTrue(all(m['attrs']['patternUnits'] == 'userSpaceOnUse' for m in patterns))
+        self.assertNotIn('innerHTML', (PAGE.parent / 'dashboard.js').read_text())
 
-    def test_v3_project_percent_is_ink_tabular_and_fill_is_teal(self):
+    def test_header_only_projects_without_unfinished_tasks_and_hostile_name(self):
         data = self.sample()
+        name = '<img src=x onerror=alert(1)> very long project name'
+        data['progress']['active'][0]['label'] = name
         data['progress']['active'][0]['percent'] = 28.9
         out = self.render_freshness(data)
         self.assertEqual(self.marks(out, 'active-percent')[0]['text'], '28%')
-        self.assertNotIn('meta', self.marks(out, 'active-percent')[0]['cls'].split())
-        css = PAGE.read_text()
-        self.assertIn('.active-percent-cell { text-align: right; font-variant-numeric: tabular-nums; color: var(--fg); }', css)
-        fill = re.search(r'\.active-progress i \{([^}]+)\}', css).group(1)
-        self.assertIn('linear-gradient(90deg, #1e5a55, #2b8c7d, #4fc0a8, #7fe2ce)', fill)
-        self.assertNotIn('var(--warn)', fill)
-        self.assertIn('.project-next-cell { text-align: right; color: var(--muted); }', css)
-        self.assertIn('.cell.accepted { border: 1px solid var(--warn); background: repeating-linear-gradient', css)
+        self.assertEqual(self.marks(out, 'active-label')[0]['attrs']['data-tip'], name)
+        self.assertEqual([len(m['text'].strip()) for m in self.marks(out, 'project-detail')][1:], [0, 0])
+        self.assertNotIn('img', out['tags'])
 
-    def test_v4_open_detail_indents_under_name_and_starts_with_single_line_legend(self):
-        out = self.render(FIXTURE, {'hash': '#project', 'actions': [{'panel': 'project', 'open': True}]})
-        self.assertTrue(self.marks(out, 'project-disclosure')[0]['open'])
-        detail = self.marks(out, 'project-detail')[0]
-        at = out['picture'].index(detail)
-        self.assertEqual(out['picture'][at + 1]['cls'], 'task-legend')
+    def test_single_legend_follows_all_project_blocks(self):
+        out = self.render(FIXTURE, {'hash': '#project'})
         self.assertEqual(len(self.marks(out, 'task-legend')), 1)
         self.assertEqual([m['text'].strip() for m in self.marks(out, 'legend-item')],
                          ['done', 'agent on it', 'done, not accepted', 'to do'])
-        css = PAGE.read_text()
-        # The name starts at 14px marker + 8px gap; detail starts another 14px in.
-        self.assertIn('padding: 12px 0 16px 36px', css)
-        legend = re.search(r'(?m)^\.task-legend \{([^}]+)\}', css).group(1)
-        self.assertIn('color: var(--muted)', legend)
-        self.assertIn('white-space: nowrap', legend)
-        self.assertNotRegex(css, r'\.project-detail \.task-legend \{[^}]*flex-wrap: wrap')
+        self.assertEqual([m['cls'].split()[1] for m in self.marks(out, 'legend-brick')],
+                         ['done', 'active', 'accepted', 'todo'])
+        self.assertGreater(out['picture'].index(self.marks(out, 'task-legend')[0]),
+                           out['picture'].index(self.marks(out, 'active-project')[-1]))
 
     def test_empty_named_list_and_latest_activity_order_ignores_priority(self):
         data = self.sample()
@@ -547,13 +526,13 @@ class DashboardScriptTest(unittest.TestCase):
         row = data['progress']['active'][0]
         row.update(hosts=['codex', '__proto__', {}, 'codex'], percent='66.9', last={})
         out = self.render_freshness(data)
-        self.assertEqual([m for m in out['picture'] if m['tag'] == 'i' and m['style'].get('width') == '66%'][0]['style']['width'], '66%')
+        self.assertEqual(self.marks(out, 'active-percent')[-1]['text'], '66%')
         self.assertIn('last unavailable', self.marks(out, 'active-project')[-1]['text'])
         self.assertEqual([m['attrs']['data-tip'] for m in self.marks(out, 'active-host')].count('codex'), 2)
         for bad in ('<img>', {}, None):
             row.update(hosts=bad, percent=bad, last=bad)
             out = self.render_freshness(data)
-            self.assertEqual(self.marks(out, 'active-progress'), [])
+            self.assertEqual(self.marks(out, 'active-percent')[-1]['text'], '')
             self.assertNotIn('NaN', out['panels'][2]['text'])
         data['progress']['active'] = [dict(repo=str(n), label='Named', hosts=[], sessions=1, last='2026-11-06T10:00:00Z') for n in range(20)]
         out = self.render_freshness(data)
@@ -564,13 +543,13 @@ class DashboardScriptTest(unittest.TestCase):
         page = PAGE.read_text()
         self.assertRegex(page, r'@media \(prefers-reduced-motion: reduce\)\s*\{\s*\*, \*::before, \*::after \{ animation: none !important; transition: none !important;')
         for selector, body in re.findall(r'([^{}]+)\{([^{}]+)\}', page.split('</style>')[0]):
-            if 'animation:' in body and any(name in body for name in ('amount-grow', 'lane-sweep', 'cell-breathe')):
+            if 'animation:' in body and any(name in body for name in ('amount-grow', 'brick-snap', 'brick-breathe')):
                 self.assertTrue(all('.tabpanel:not([hidden])' in part for part in selector.split(',')))
         out = self.render(FIXTURE, {'actions': [{'click': 'Agents'}, {'click': 'Project'}]})
         self.assertTrue(all(p['attrs'].get('data-enter') != 'true' for p in out['panels'] if p['hidden']))
         again = self.render(FIXTURE, {'actions': [{'click': 'Agents'}, {'click': 'Overview'}, {'click': 'Agents'}]})
         self.assertEqual(again['panels'][1]['attrs'].get('data-enter'), 'false')
-        self.assertTrue(any('active' in p['cls'].split() for p in self.marks(out, 'cell')))
+        self.assertTrue(any('active' in p['cls'].split() for p in self.marks(out, 'task-brick')))
 
     def test_running_panel_off_and_failed_snapshots_do_not_claim_zero_processes(self):
         for reason in ('snapshot off', 'ps timed out'):

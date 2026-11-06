@@ -130,23 +130,34 @@
     var tab = TABS.get(name); disclosure.open = !!tab.limitsOpen; tab.limits = disclosure;
     return disclosure;
   }
+  var brickId = 0;
+  function brick(state, width, height, cls) {
+    var svg = s("svg", {width: width, height: height + 3, viewBox: "0 0 " + width + " " + (height + 3),
+      "class": "lego-brick " + state + (cls ? " " + cls : ""), "aria-hidden": "true"});
+    var ink = {done: "var(--h2)", active: "var(--p)", accepted: "var(--warn)", low: "var(--crit)", todo: "none"}[state] || "none";
+    var group = s("g", {"class": "brick-ink"});
+    [0.22, 0.58].forEach(function (x) {
+      group.appendChild(s("rect", {x: width * x, y: 0, width: width * .2, height: 3, rx: 1,
+        fill: state === "todo" ? "var(--line)" : ink, "class": "brick-stud"}));
+    });
+    var body = s("rect", {x: .5, y: 3.5, width: width - 1, height: height - 1, rx: 2,
+      fill: ink, stroke: state === "todo" ? "var(--line)" : "none", "stroke-width": 1, "class": "brick-body"});
+    if (state === "accepted") {
+      var id = "brick-hatch-" + (++brickId), defs = s("defs"), pattern = s("pattern", {
+        id: id, width: 4, height: 4, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)"});
+      pattern.appendChild(s("rect", {width: 4, height: 4, fill: "var(--line)"}));
+      pattern.appendChild(s("rect", {width: 2, height: 4, fill: "var(--warn)"}));
+      defs.appendChild(pattern); svg.appendChild(defs); body.setAttribute("fill", "url(#" + id + ")");
+    }
+    group.appendChild(body); svg.appendChild(group);
+    return svg;
+  }
   function runningPanel() {
     if (!D.running) return null;
     var r = D.running, snapshot = r.snapshot || {}, processes = r.processes || [], open = r.open || [];
     var available = !!snapshot.time && !snapshot.reason;
     var late = open.filter(function (run) { return run.budget_min > 0 && run.age_min >= run.budget_min / 2; }).length;
     var unowned = processes.filter(function (p) { return p.not_started_by_coordinator; }).length;
-    var tiles = h("div", "kpis agent-kpis");
-    [["running now", open.length, available ? processes.length + " roots · " + Object.keys(snapshot.apps || {}).reduce(function (sum, family) { return sum + snapshot.apps[family]; }, 0) + " app procs" : "snapshot unavailable", ""],
-     ["past the check time", late, "at half budget", "var(--warn)"],
-     ["not started by coordinator", unowned, available ? "family match only" : "snapshot unavailable", ""]].forEach(function (x) {
-      var value = t("div", "v agent-value", x[1]);
-      if (x[1] && x[3]) value.style.color = x[3];
-      tiles.appendChild(h("div", "kpi", [t("div", "k", x[0]), h("div", "m", [value, h("span", "baseline")]), t("div", "d", x[2])]));
-    });
-    if (available) tiles.children[0].children[2].appendChild(t("span", "process-counts", ["claude", "codex", "agy"].map(function (family) {
-      return family + " " + processes.filter(function (p) { return p.family === family; }).length;
-    }).join(" · ")));
     var lanes = h("div", "lanes");
     open.slice().sort(function (a, b) {
       var ar = a.budget_min > 0 ? Math.max(a.budget_min * 4 / 3, a.budget_min + 10) - a.age_min : Infinity;
@@ -156,24 +167,31 @@
       var budget = run.budget_min, age = Number(run.age_min) || 0;
       var cap = budget > 0 ? Math.max(budget * 4 / 3, budget + 10) : null;
       var state = cap && age > cap ? "cap" : budget > 0 ? age > budget ? "over" : age >= budget / 2 ? "check" : "within" : "unknown";
-      var bar = h("i", "lane-bar"), track = h("div", "lane-track");
-      var width = cap ? Math.max(0, Math.min(100, age / cap * 100)) : 0;
-      bar.style.width = width + "%";
-      // Stops are relative to the filled length so both deadlines stay fixed on the track.
-      var halfStop = age > 0 ? Math.min(100, budget / 2 / age * 100) : 100;
-      var budgetStop = age > 0 ? Math.min(100, budget / age * 100) : 100;
-      if (age > cap && cap) { halfStop = budget / 2 / cap * 100; budgetStop = budget / cap * 100; }
-      bar.style.background = "linear-gradient(to right, var(--good) 0% " + halfStop + "%, var(--warn) " + halfStop + "% " + budgetStop + "%, var(--crit) " + budgetStop + "% 100%)";
-      track.appendChild(bar);
-      if (cap) [["check", budget / 2 / cap * 100 + "%", "check deadline: half budget"], ["budget", budget / cap * 100 + "%", "budget"]].forEach(function (item) {
-        var tick = h("i", "lane-tick " + item[0] + "-tick"); tick.style.left = item[1]; track.appendChild(tipOn(tick, item[2]));
+      var W = 560, H = 22, track = s("svg", {"class": "lane-track", viewBox: "0 0 560 30", width: "100%", height: 30,
+        preserveAspectRatio: "none", role: "img", "aria-label": age + "/" + (cap || "?") + " minutes of track"});
+      var studs = cap ? Math.max(1, Math.round(cap / 10)) : 1;
+      for (var stud = 0; stud < studs; stud++) track.appendChild(s("rect", {"class": "lane-stud", x: stud * W / studs + W / studs * .28,
+        y: 0, width: W / studs * .5, height: 5, rx: 2, fill: "var(--line)"}));
+      track.appendChild(s("rect", {x: 0, y: 5, width: W, height: H, rx: 3, fill: "var(--raised)", stroke: "var(--line)"}));
+      var fill = s("g", {"class": "lane-fill"});
+      var used = cap ? Math.max(0, Math.min(W, age / cap * W)) : 0;
+      var half = cap ? budget / 2 / cap * W : 0, end = cap ? budget / cap * W : 0;
+      [["teal", 0, Math.min(used, half), "var(--h3)"],
+       ["amber", half, Math.max(0, Math.min(used, end) - half), "var(--warn)"],
+       ["red", end, Math.max(0, used - end), "var(--crit)"]].forEach(function (part) {
+        fill.appendChild(s("rect", {"class": "lane-segment " + part[0], x: part[1], y: 5, width: part[2], height: H,
+          rx: part[0] === "teal" ? 3 : 0, fill: part[3]}));
       });
-      if (state === "cap") track.appendChild(tipOn(t("span", "lane-overflow", ">"), "past hard cap"));
-      var label = h("div", "lane-label", [t("span", "lane-identity", (run.agent || "other") + " " + (run.model || "—")),
+      track.appendChild(fill);
+      if (cap) [["check", half, "check deadline: half budget"], ["budget", end, "budget"]].forEach(function (item) {
+        track.appendChild(tipOn(s("rect", {"class": "lane-tick " + item[0] + "-tick", x: item[1], y: 2, width: 1.5,
+          height: H + 4, fill: "var(--fg)", opacity: .6}), item[2]));
+      });
+      var label = h("div", "lane-label", [tipOn(t("span", "lane-identity", (run.agent || "other") + " " + (run.model || "—")), (run.agent || "other") + " " + (run.model || "—")),
         tipOn(t("span", "lane-task", run.task || "—"), run.task || "—")]);
-      if (run.no_process_found) label.appendChild(tipOn(h("i", "no-process"), "no process found"));
+      if (run.no_process_found) label.appendChild(tipOn(brick("todo", 12, 6, "no-process"), "no process"));
       var lane = h("div", "lane" + (run.no_process_found ? "" : " live"), [label, track,
-        t("span", "lane-value", age + "/" + (budget == null ? "?" : budget) + " min")]);
+        t("span", "lane-value", age + "/" + (budget == null ? "?" : budget) + " m")]);
       lane.setAttribute("data-run", run.id || ""); lane.setAttribute("data-state", state);
       tipOn(lane, (run.agent || "other") + "/" + run.model + " · " + run.project + ": " + run.task + " · " + run.id +
         " · started " + run.ts + " · " + age + "/" + (budget == null ? "?" : budget) + " min · " +
@@ -181,31 +199,36 @@
         " · liveness: " + run.liveness + (run.no_process_found ? " · no process found" : ""));
       lanes.appendChild(lane);
     });
-    if (!open.length && !processes.length) {
-      lanes.appendChild(t("div", "nodata", "No agents running"));
-      for (var i = 0; i < 3; i++) lanes.appendChild(h("div", "ghost-lane", [ghost("30%", "10px"), ghost(["72%", "46%", "60%"][i], "12px")]));
+    if (!open.length) {
+      var ghosts = h("div", "ghost-bricks");
+      for (var i = 0; i < 3; i++) ghosts.appendChild(brick("todo", 48, 16, "ghost-brick"));
+      lanes.appendChild(ghosts); lanes.appendChild(t("div", "nodata", "No agents running"));
     }
-    if (open.length) lanes.appendChild(t("div", "lane-legend", "| check at half budget  | budget  red = over budget"));
-    var content = [tiles, lanes], quota = r.quota || [];
+    var quota = r.quota || [], capacity = h("div", "agent-capacity");
+    var limit = Number(r.parallel_limit);
+    limit = Number.isInteger(limit) && limit > 0 ? Math.min(100, limit) : 5;
+    var slots = h("div", "slots");
+    for (var slot = 0; slot < limit; slot++) slots.appendChild(brick(slot < open.length ? "done" : "todo", 18, 10, "slot" + (slot < open.length ? " lit" : "")));
+    capacity.appendChild(h("div", "capacity-block", [t("div", "capacity-caption", "slots (" + limit + ")"), slots]));
     if (quota.length) {
-      var meters = h("div", "quota");
       quota.forEach(function (q) {
         var fraction = Math.max(0, Math.min(1, Number(q.remaining_fraction) || 0));
-        var stale = q.unverified || (Date.now() - Date.parse(q.measured)) / 1000 > 28800;
-        var bar = h("i", "quota-bar"), meter = h("div", "quota-meter" + (stale ? " hollow" : ""), [bar]);
-        bar.style.width = (fraction * 100) + "%"; bar.style.background = fraction < .1 ? "var(--crit)" : "var(--p)";
-        meter.setAttribute("role", "progressbar"); meter.setAttribute("aria-valuemin", "0"); meter.setAttribute("aria-valuemax", "100");
-        meter.setAttribute("aria-valuenow", Math.round(fraction * 100)); meter.setAttribute("aria-label", q.agent + " quota remaining");
-        tipOn(meter, q.agent + ": " + pct(fraction) + " remaining · measured " + q.measured + (stale ? " · unverified, older than 8 hours" : ""));
-        meters.appendChild(h("div", "quota-row", [t("span", "quota-label", q.agent), meter, t("span", "lane-value", pct(fraction) + (stale ? " ?" : ""))]));
+        var measured = Date.parse(q.measured);
+        var stale = q.unverified || !Number.isFinite(measured) || (Date.now() - measured) / 1000 > 28800;
+        var meter = h("div", "quota-bricks" + (stale ? " unverified" : "")), lit = Math.round(fraction * 10);
+        for (var i = 0; i < 10; i++) meter.appendChild(brick(stale || i >= lit ? "todo" : fraction < .1 ? "low" : "done", 14, 7,
+          "quota-brick" + (!stale && i < lit ? " lit" : "")));
+        if (stale) meter.appendChild(t("span", "quota-unknown", "?"));
+        meter.setAttribute("role", "img"); meter.setAttribute("aria-label", q.agent + " quota remaining" + (stale ? " unverified" : ""));
+        tipOn(meter, q.agent + ": " + (fraction * 100) + "% remaining · measured " + q.measured + (stale ? " · unverified" : ""));
+        capacity.appendChild(h("div", "quota-block capacity-block", [t("div", "capacity-caption", q.agent + " quota"), meter]));
       });
-      content.push(h("div", "quota-block", [t("div", "meta", "quota remaining"), meters]));
       TABS.get("agents").tableRows.push(tableOf("quota", ["family", "remaining", "measured", "state"], quota.map(function (q) {
         return [q.agent, pct(q.remaining_fraction), q.measured, q.unverified ? "unverified" : "verified"];
       })));
     }
     TABS.get("agents").tableRows.push(tableOf("agent state", ["measure", "count"], [
-      ["running now", open.length], ["past the check time", late], ["not started by coordinator", unowned],
+      ["running now", open.length], ["parallel slots", limit], ["past the check time", late], ["not started by coordinator", unowned],
       ["named processes", available ? processes.length : "unavailable"],
       ["app processes", available ? Object.keys(snapshot.apps || {}).reduce(function (sum, family) { return sum + snapshot.apps[family]; }, 0) : "unavailable"]]));
     if (available) TABS.get("agents").tableRows.push(tableOf("process roots", ["family", "elapsed seconds", "descendants", "coordinator match"], processes.map(function (p) {
@@ -215,6 +238,7 @@
     TABS.get("agents").tableRows.push(tableOf("dispatch budgets", ["agent / model / task", "elapsed / budget", "check", "liveness"], open.map(function (run) {
       return [run.agent + " / " + run.model + " / " + run.task, run.age_min + "/" + run.budget_min + " min", run.check_due ? "check due" : "—", run.liveness];
     })));
+    var content = [lanes, capacity];
     var notes = runningLimits(); notes.classList.add("running-limits"); content.push(limits(notes, "agents"));
     return stack(content);
   }
@@ -281,7 +305,7 @@
   function taskLegend() {
     var legend = h("div", "task-legend");
     [["done", "done"], ["active", "agent on it"], ["accepted", "done, not accepted"], ["todo", "to do"]].forEach(function (item) {
-      legend.appendChild(h("span", "legend-item", [h("i", "cell " + item[0]), t("span", "", item[1])]));
+      legend.appendChild(h("span", "legend-item", [brick(item[0], 15, 8, "legend-brick"), t("span", "", item[1])]));
     });
     return legend;
   }
@@ -304,20 +328,8 @@
       return ["claude", "codex", "antigravity"].indexOf(host) !== -1 && all.indexOf(host) === index;
     });
   }
-  function nextTask(p) {
-    var candidates = [];
-    unfinishedFeatures(p).forEach(function (f) {
-      (f.stories || []).filter(function (story) { return story.total > story.done; }).forEach(function (story) {
-        var first = (f.tasks || []).filter(function (task) { return task.story === story.story && task.state !== "done"; }).sort(taskOrder)[0];
-        if (first) candidates.push({story: story.story, priority: story.priority, task: first});
-      });
-    });
-    return candidates.sort(storyOrder)[0];
-  }
   function activeProjects(block) {
-    var rows = namedActivity(block), list = h("div", "active-projects"), tab = TABS.get("project");
-    tab.projectDetails = [];
-    list.appendChild(t("div", "meta project-activity-header", "active in the last 24 hours · ● claude  ◆ codex  ▲ antigravity"));
+    var rows = namedActivity(block), list = h("div", "active-projects"), motion = {index: 0};
     if (!rows.length) list.appendChild(t("div", "meta", "No named project active in the last 24 hours. Run fnl-status inside a repository to add it."));
     rows.forEach(function (project) {
       var hosts = h("span", "active-hosts");
@@ -329,37 +341,19 @@
       var last = age < 60 ? age + " min" : age < 1440 ? Math.floor(age / 60) + " hr" : Math.floor(age / 1440) + " d";
       var snapshot = (block.repositories || {})[project.repo] || {}, unfinished = unfinishedFeatures(snapshot).length > 0;
       var hasTasks = (snapshot.features || []).some(function (feature) { return feature.total > 0; });
-      var sessions = Number(project.sessions);
-      sessions = Number.isFinite(sessions) ? Math.max(0, Math.floor(sessions)) : 0;
-      var label = t("strong", "active-label", project.label);
-      label.setAttribute("title", project.label);
-      var marker = h("span", "active-marker");
-      marker.setAttribute("aria-hidden", "true");
-      var row = h(unfinished ? "summary" : "div", "active-project", [h("span", "active-identity", [marker, label, hosts]),
-        t("span", "meta active-sessions", sessions + (sessions === 1 ? " session · 24h" : " sessions · 24h")),
-        t("span", "meta active-last", at ? "last " + last + " ago" : "last unavailable")]);
+      var label = tipOn(t("strong", "active-label", project.label), project.label);
+      var row = h("div", "active-project", [h("div", "active-identity", [label,
+        h("div", "active-meta", [hosts, t("span", "active-last", at ? "last " + last + " ago" : "last unavailable")])])]);
       row.setAttribute("data-repo", project.repo);
       tipOn(row, project.label + " · " + (at ? String(project.last) : "last unavailable") + (!hasTasks ? " · no task list" : ""));
-      var barCell = h("span", "active-bar-cell"), percentCell = h("span", "active-percent-cell"), nextCell = h("span", "project-next-cell");
-      var percent = Number(project.percent);
-      if (unfinished && project.percent != null && Number.isFinite(percent)) {
-        percent = Math.max(0, Math.min(99, Math.floor(percent)));
-        var bar = h("div", "feature-bar active-progress", [h("i")]);
-        bar.children[0].style.width = percent + "%";
-        bar.setAttribute("role", "img"); bar.setAttribute("aria-label", percent + "% done");
-        barCell.appendChild(bar);
-        percentCell.appendChild(t("span", "active-percent", percent + "%"));
-        var next = nextTask(snapshot);
-        if (next) nextCell.appendChild(t("span", "project-next", "next " + next.story + " · " + next.task.id));
-      }
-      row.appendChild(barCell); row.appendChild(percentCell); row.appendChild(nextCell);
-      if (unfinished) {
-        var disclosure = h("details", "project-disclosure", [row, projectDetail(snapshot)]);
-        disclosure.open = !!(tab.projectOpen && tab.projectOpen.get(project.repo));
-        tab.projectDetails.push({repo: project.repo, node: disclosure});
-        list.appendChild(disclosure);
-      } else list.appendChild(row);
+      var percent = Number(project.percent), percentCell = t("span", "active-percent", "");
+      if (project.percent != null && Number.isFinite(percent)) {
+        percentCell.textContent = Math.max(0, Math.min(unfinished || !snapshot.done ? 99 : 100, Math.floor(percent))) + "%";
+      } else if (hasTasks && !unfinished) percentCell.textContent = "100%";
+      row.appendChild(projectDetail(snapshot, motion)); row.appendChild(percentCell);
+      list.appendChild(row);
     });
+    list.appendChild(taskLegend());
     TABS.get("project").tableRows.push(tableOf("active projects", ["project", "hosts", "sessions · 24h", "last", "done"], rows.map(function (row) {
       var percent = Number(row.percent);
       return [row.label, activityHosts(row.hosts).join(", "), row.sessions, activityTime(row.last) ? String(row.last) : "unavailable",
@@ -367,37 +361,43 @@
     })));
     return list;
   }
-  function projectDetail(p) {
-    var card = h("div", "project-detail", [taskLegend()]);
+  function taskTip(task) {
+    var runs = task.runs || [], sessions = task.sessions || [];
+    return task.id + " · " + (taskState(task) === "accepted" ? "done, not accepted" : task.state) +
+      " · " + (runs.map(function (run) { return run.agent + " / " + run.model + " · " + run.id + " · " + run.elapsed_seconds + " seconds"; }).join(", ") || "no linked run") +
+      " · phase " + (task.phase == null ? "—" : task.phase) +
+      " · " + (sessions.map(function (session) { return session.id + " / " + session.host; }).join(", ") || "no linked session");
+  }
+  function projectDetail(p, motion) {
+    var card = h("div", "project-detail");
     unfinishedFeatures(p).forEach(function (feature) {
-      var featureBar = h("div", "feature-bar", [h("i")]);
-      featureBar.children[0].style.width = completionPercent(feature.done, feature.total) + "%";
-      featureBar.setAttribute("role", "img"); featureBar.setAttribute("aria-label", "spec completion " + (completionPercent(feature.done, feature.total) + "%"));
-      var featureBody = h("div", "feature", [h("div", "feature-head", [t("span", "meta", "spec " + String(feature.feature).padStart(3, "0") + " · " + (completionPercent(feature.done, feature.total) + "%")), featureBar])]);
-      var tree = h("div", "story-tree");
-      var stories = (feature.stories || []).slice(), tasks = feature.tasks || [], complete = stories.filter(function (story) { return story.done === story.total; }).length;
+      var tasks = feature.tasks || [], stories = (feature.stories || []).slice();
       if (tasks.some(function (task) { return !task.story; })) {
         var untagged = tasks.filter(function (task) { return !task.story; });
         stories.push({story: null, priority: null, total: untagged.length, done: untagged.filter(function (task) { return task.state === "done"; }).length});
       }
+      var complete = stories.filter(function (story) { return story.total > 0 && story.done === story.total; }).length;
+      var header = h("div", "spec-head", [t("span", "spec-label", "spec " + String(feature.feature).padStart(3, "0")), h("i", "spec-rule")]);
+      if (complete) header.appendChild(t("span", "finished-stories", "+" + complete + " done"));
+      var featureBody = h("div", "feature", [header]);
       stories.filter(function (story) { return story.total > story.done; }).sort(storyOrder).forEach(function (story) {
-        var cells = h("div", "cells");
-        tasks.filter(function (task) { return (task.story || null) === story.story; }).sort(taskOrder).forEach(function (task) {
-          var state = taskState(task);
-          var mark = h("i", "cell " + state), runs = task.runs || [], sessions = task.sessions || [];
-          mark.setAttribute("data-task", task.id); mark.setAttribute("data-state", task.state);
-          tipOn(mark, task.id + " · " + task.state + " · phase " + (task.phase == null ? "—" : task.phase) +
-            " · " + (runs.map(function (run) { return run.agent + " / " + run.model + " · " + run.id + " · " + run.elapsed_seconds + " seconds"; }).join(", ") || "no linked run") +
-            " · " + (sessions.map(function (session) { return session.id + " / " + session.host; }).join(", ") || "no linked session"));
+        var cells = h("div", "cells"), sorted = tasks.filter(function (task) { return (task.story || null) === (story.story || null); }).sort(taskOrder);
+        var per = Math.max(1, Math.ceil(sorted.length / 36));
+        for (var i = 0; i < sorted.length; i += per) {
+          var group = sorted.slice(i, i + per), states = group.map(taskState);
+          var state = states.indexOf("active") !== -1 ? "active" : states.indexOf("accepted") !== -1 ? "accepted" :
+            states.every(function (x) { return x === "done"; }) ? "done" : "todo";
+          var mark = brick(state, 15, 8, "task-brick");
+          mark.setAttribute("data-task", group[0].id); mark.setAttribute("data-state", state); mark.setAttribute("data-count", group.length);
+          mark.style.setProperty("--snap-delay", Math.min(500, motion.index++ * 10) + "ms");
+          tipOn(mark, (group.length > 1 ? group[0].id + "–" + group[group.length - 1].id + " · " + group.length + " tasks · " + state + "\n" : "") + group.map(taskTip).join("\n"));
           cells.appendChild(mark);
-        });
-        var row = h("div", "story", [t("span", "story-label", (story.story || "untagged") + (storyPriority(story) < 10 ? " · P" + story.priority : "")), cells,
-          t("span", "lane-value", story.done + "/" + story.total)]);
+        }
+        var row = h("div", "story", [t("span", "story-label", story.story || "untagged"), cells, t("span", "story-count", story.done + "/" + story.total)]);
         row.setAttribute("data-story", story.story || "untagged");
-        tipOn(row, story.done + "/" + story.total + " · " + completionPercent(story.done, story.total) + "% done"); tree.appendChild(row);
+        tipOn(row, story.done + "/" + story.total + " · " + completionPercent(story.done, story.total) + "% done" + (storyPriority(story) < 10 ? " · P" + story.priority : ""));
+        featureBody.appendChild(row);
       });
-      featureBody.appendChild(tree);
-      if (complete) featureBody.appendChild(t("span", "chip finished-stories", complete + (complete === 1 ? " story done" : " stories done")));
       card.appendChild(featureBody);
     });
     return card;
@@ -573,9 +573,6 @@
     if (tab.panel && !tab.panel.hidden) { tab.scrollTop = tab.panel.scrollTop; tab.scrollLeft = tab.panel.scrollLeft; }
     if (tab.tables) tab.tablesOpen = tab.tables.open;
     if (tab.limits) tab.limitsOpen = tab.limits.open;
-    if (tab.projectDetails) {
-      tab.projectOpen = new Map(tab.projectDetails.map(function (item) { return [item.repo, item.node.open]; }));
-    }
     tab.limits = null;
     tab.tables = null;
   });

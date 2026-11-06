@@ -6,9 +6,9 @@ Status: owner decisions settled on 2026-11-06 (see "Decisions settled"). Replace
 
 The owner reviewed the shipped tabs: both are dense text and a seven-column table, not a data visualisation. `fnl-status` exists to follow the present state so the coordinator can steer, not to manage projects. Each tab must answer one question at a glance, show it as a picture, and keep text for hover and for a collapsed "limits" note.
 
-## Design language (observed on the real page, 2026-11-06)
+## Design language (owner lego decision, 2026-11-06)
 
-New marks must look like the existing ones, not like a generic card UI: a terminal window frame with monospace type throughout; panes with a small teal bar before a lowercase title and a muted aside at the right; big monospace KPI figures with a dashed baseline sparkline; horizontal bars with the value printed at the bar end; lollipop rows on a 0 to 60 percent scale with a vertical threshold rule (Delegation); a calendar heat grid (Overview); dot chains per pull request (Reviews). Radius stays small (4 px marks, 8 px panes), no filled "cards on cards", no sans-serif face, numbers right-aligned in tabular figures, the tab badges (`Agents 0`) stay and show the live count.
+The approved visual reference is [`assets/dashboard-lego-prototype.html`](assets/dashboard-lego-prototype.html). Port its geometry and spacing into the real page using existing page tokens, not the prototype's copied tokens or fake data. The terminal frame, monospace type, pane titles and tab badges stay. Small bricks with two studs snap together into task runs; long studded bricks form dispatch tracks. No KPI tiles or text-led project list. Use `--h2` for done bricks, `--p` for agent bricks, `--h3` for elapsed within half budget, `--warn` for unchecked completion or time beyond half budget, `--crit` beyond budget or below 10% quota, and `--line`/`--faint` for hollow marks and captions.
 
 ## Defects found on the real page (fixed in this change)
 
@@ -18,30 +18,28 @@ New marks must look like the existing ones, not like a generic card UI: a termin
 
 ## Rules for every tab
 
-- One question per tab. Agents uses KPI figures; Project uses the compact named list specified below.
+- One question per tab. Agents uses studded budget lanes and quota bricks; Project uses visible story brick runs.
 - At most 6 lines of body text above the fold at 1280 by 800; explanations of limits live in one collapsed "limits" disclosure, not in the body.
 - Colour carries state, never decoration: the page's single teal ramp for progress and amount, `--warn` and `--crit` only for state, never reused for series. Every colour-coded mark also has a shape, label or tooltip (no colour-only meaning).
 - Every figure has the text equivalent in the existing "show the data as tables" disclosure; the seven-column task table moves there.
-- Motion is CSS only, subtle and optional: bars grow from the left once on first view of a tab and on data change (0.7 s ease-out); a running lane has a slow light sweep at its leading edge (2.4 s); active task cells breathe (opacity 1 to 0.45, 2 s); numbers change without tweening if the value is unchanged. Under `prefers-reduced-motion: reduce` all of it is off. No motion runs in a hidden tab, and none loops on a finished item.
+- Motion is CSS only: task bricks snap from translateY(-6px) to 0 in 280 ms, staggered 10 ms per brick up to 500 ms, once on first tab view or changed data. Agent bricks breathe from opacity 1 to 0.5 over 2 s; lanes grow from the left in 0.7 s. All motion is off under `prefers-reduced-motion: reduce`; nothing animates in a hidden tab. At 375 px, task runs wrap within their available width and lane labels sit above their tracks, without horizontal page scroll.
 - Rendering stays `textContent` and `setAttribute` only, no `innerHTML`, no inline script, no remote resource; hostile names are tested.
 
 ## Agents tab: who is working, is it healthy
 
-1. KPI row of three stat tiles: running now, past the check time, processes not started by the coordinator. Zero shows as `0`, in the neutral ink.
-2. Lanes, one per open dispatch, sorted by urgency (closest to its hard cap first): label `agent model · task label`, a track showing elapsed against budget, a tick at half budget (the check deadline), amber past the tick, red past the budget, `elapsed/budget` text on the right. The track ends at the hard cap, `max(budget * 4 / 3, budget + 10)` minutes (a third over budget, at least 10 minutes over). A lane with no process found shows a small outlined marker, not a sentence.
-3. Quota meters, one per agent family from the local quota cache (the probe already stores remaining fractions): a thin meter and the percent; below 10 percent uses `--crit`; unverified (older than 8 hours) shows hollow. If the cache is absent the block is omitted.
-4. The process snapshot is shown only as small counts on the KPI tiles and as a dot per root process inside the lane list when the snapshot is on; machine-wide caveats go in the "limits" disclosure.
-5. Empty state: one calm line ("No agents running") and three ghost lanes.
+One pane, `running now`, with no KPI tiles. Each open dispatch is a long SVG brick lane, urgency first (least time left to hard cap). The track ends at `max(budget * 4 / 3, budget + 10)` minutes and has one stud per 10 minutes, with thin ticks at half budget and budget. Elapsed fill is teal to half budget, amber to budget and red beyond. Left: family/model and task label in two short ellipsised lines with full tooltips. Right: `used/budget m`. No process found gets a small outlined brick whose tooltip is `no process`. Empty state: three ghost bricks and the muted line `No agents running`.
 
-## Project tab: compact named activity
+Below: `slots (5)` and five small bricks, one lit per open dispatch (use a supplied parallel limit if present). Each cached agent-family quota gets a caption such as `claude quota` and ten bricks. Lit count is remaining fraction rounded to tens of percent; lit bricks are teal, red below 10%. An unverified reading uses dashed hollow bricks and `?`. Exact percent is in its tooltip. Limits, process counts and mismatch flags stay inside the collapsed `limits` disclosure and the bottom tables.
 
-The Project badge counts named active repositories (at most 12), newest activity first. Show one list, one line per named repository, in the page's terminal/mono/teal language. Above it show one muted header: `active in the last 24 hours` and host marks `● claude  ▲ codex  ◆ antigravity`.
+## Project tab: named activity as lego runs
 
-Each line shows `name` · host marks · `n sessions · 24h` · `last 12 min ago` · a thin 80 px bar and floored percentage only for an unfinished task list · `next US1 · T012` when available. Percentages use `floor(done / total * 100)`, capped at 99 while unfinished. Coerce percent with `Number()` before setting width and validate/coerce hosts and last activity. There is no hero percentage, segmented bar or collapsed legend.
+One block per named active project, newest activity first, at most 12; named-only selection and all activity data rules remain unchanged. Header: bold project name, host marks and faint `last 12 min ago` underneath, a 22 px tabular floored percentage at the right (never 100 unless done). A project without a task list or unfinished work shows only this header.
 
-Unfinished spec > story > task detail lives inside that line in a `details` disclosure, closed by default and opened by the user. Preserve priority order, task cells/tooltips, hidden finished work and the cell legend inside the disclosure only. A repository without unfinished tasks has no disclosure. Keep every old data table under "show the data as tables". The Agents tab is unchanged.
+Beside/below the header, each unfinished spec has a faint `spec 003` header and a rule. Each unfinished story follows priority order: a 30 px `US2` tag column, task bricks and `done/total` at the right. Each brick has a 15 x 8 px body with two studs; gaps are 2 px. Done is teal, agent on it bright teal and breathing, done-not-accepted hatched amber, to do hollow. Task tooltips use existing fields (`T012 · done · codex`, plus linked metadata). Above 36 tasks, merge consecutive groups to at most 36 bricks: any agent wins, else any not-accepted, else all done, else to do. Merged tooltips give first/last ids and the number of tasks held.
 
-Only named repositories appear: an explicit host-config label wins over a registered name. There is no `repo xxxx` fallback row. Empty state: `No named project active in the last 24 hours. Run fnl-status inside a repository to add it.`
+Finished stories and features are not drawn; tiny faint `+2 done` on a spec header accounts for hidden finished work. There are no project task disclosures. A single legend at the bottom of the pane shows brick swatches and `done · agent on it · done, not accepted · to do`. All old data tables remain only behind `show the data as tables` at the bottom.
+
+Only named repositories appear: an explicit host-config label wins over a registered name. There is no short-code fallback. Empty state: `No named project active in the last 24 hours. Run fnl-status inside a repository to add it.`
 
 ## Data changes (all local, metadata only)
 
@@ -57,8 +55,8 @@ The Delegation tab (its lollipop and threshold view already fits the page) and a
 
 ## Acceptance
 
-1. A rich fixture (`tests/fixtures/status-sample.json`) holds three open dispatches including one past its check time and one without a process, quota for three families, three named active projects (unfinished with a 14-task mixed story, no tasks, and done), two unnamed repositories, one finished story and one finished feature, and a hostile name in each free field.
-2. Page tests also cover both badges, active rows with and without task lists, host tooltips, recency, empty state, and completion values 408/410, 56/57, 1/3, 2/3, 0/5, 5/5. Reader/refresh tests cover deduplication, the 24-hour boundary, ordering, the 12-row cap, labels, closed schema, carry-over validation and purge. Track scale tests cover both branches of the hard-cap formula. Page tests (fake DOM): the lane order, the tick position, the three lane colours, the empty states, the project order by latest activity, hidden finished detail, the tooltip content, the quota meter states, the disclosure content; no `innerHTML` anywhere in the file; the hostile names stay inert.
+1. A rich fixture (`tests/fixtures/status-sample.json`) holds four open dispatches including one past its check time and one without a process, quota for three families, three named active projects (unfinished with a 45-task story and a separate four-state story, no tasks, and done), two unnamed repositories, one finished story and one finished feature, and a hostile name in each free field.
+2. Page tests also cover both badges, active rows with and without task lists, host tooltips, recency, empty state, and completion values 408/410, 56/57, 1/3, 2/3, 0/5, 5/5. Reader/refresh tests cover deduplication, the 24-hour boundary, ordering, the 12-row cap, labels, closed schema, carry-over validation and purge. Track scale tests cover both branches of the hard-cap formula. Page tests (fake DOM): the lane order, the tick position, the three lane colours, the empty states, the project order by latest activity, hidden finished detail, the tooltip content, the quota brick lit counts, slots, merged brick states/counts, the disclosure content; no `innerHTML` anywhere in the file; the hostile names stay inert.
 3. Reader tests: the `P1` to `P9` tag only, a heading with markup or control characters yields no text, an `archive` folder is skipped, a label with a disallowed character is refused, a missing name hides the repository, a project with 100 percent is flagged done.
 4. Motion: a test asserts the reduced-motion media query disables every animation and no animation name is applied to an element in a hidden tab.
 5. Visual check (owner rule, not skippable): the coordinator serves the page from a localhost server with the rich fixture, screenshots the Agents and Project tabs at 1280 wide and at 390 wide, and attaches them to the pull request.
@@ -69,8 +67,8 @@ The Delegation tab (its lollipop and threshold view already fits the page) and a
 - The owner delegates the visual design to the coordinator; reviews are the repository's gate, not a design approval.
 - Complete and archived work is not shown; the tab follows the present state, not project management.
 - The redesign ships as a hotfix in the 0.1.10 line.
-- Owner review supersedes strip/cards and short-code fallback: only explicitly registered or labelled repositories appear, in a compact list with closed task disclosures. Unnamed repositories are excluded from Project tables too; all table types remain reachable for named repositories. Priority tags and archived-folder exclusion remain unchanged.
+- Owner review supersedes strip/cards and short-code fallback: only explicitly registered or labelled repositories appear, as visible lego story runs following the approved prototype. Unnamed repositories are excluded from Project tables too; all table types remain reachable for named repositories. Priority tags and archived-folder exclusion remain unchanged.
 
-## Compact Project acceptance (owner review, 2026-11-06)
+## Lego Project acceptance (owner review, 2026-11-06)
 
-Registration tests cover consent, hooks, sanitisation, closed schema, 50-entry cap, label precedence, purge and 0600. Reader tests count sessions over the rolling 24-hour window, including across midnight. The fixture has three named active projects (unfinished with a story of 14 mixed tasks, no task list, and done), plus two unnamed repositories excluded from the page, retaining hostile free-field values. Page tests cover one row per named project, badge count, default-closed disclosures and their cells/legend, no disclosure for absent/done tasks, and the named-project empty state.
+Registration tests cover consent, hooks, sanitisation, closed schema, 50-entry cap, label precedence, purge and 0600. Reader tests count sessions over the rolling 24-hour window, including across midnight. The fixture has three named active projects (unfinished with a 45-task story and a separate four-state story, no task list, and done), plus two unnamed repositories excluded from the page, retaining hostile free-field values. Page tests cover one row per named project, badge count, SVG bricks and their states/tooltips, bounded merging, hidden finished stories, one bottom legend, header-only absent/done task lists, and the named-project empty state.

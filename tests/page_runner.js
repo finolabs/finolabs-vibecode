@@ -29,7 +29,7 @@ class Node_ {
     if (this.children.some((c) => all(c).includes(document.activeElement))) document.activeElement = document.body;
     this.children = cs;
   }
-  setAttribute(k, v) { this.attrs[k] = String(v); }
+  setAttribute(k, v) { this.attrs[k] = String(v); if (k === "class") this.className = String(v); }
   getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
   remove() { this.removed = true; }
   addEventListener(type, fn) { (this.handlers[type] = this.handlers[type] || []).push(fn); }
