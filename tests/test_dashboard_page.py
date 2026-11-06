@@ -104,7 +104,7 @@ class DashboardPageTest(unittest.TestCase):
         self.assertEqual(len(data['running']['quota']), 3)
         self.assertTrue(any(r['no_process_found'] for r in data['running']['open']))
         projects = list(data['progress']['repositories'].values())
-        self.assertEqual(sum(not p['done'] for p in projects), 2)
+        self.assertEqual(sum(not p['done'] for p in projects), 3)
         self.assertTrue(any(f['done'] == f['total'] for p in projects for f in p['features']))
         self.assertIn('</script>', json.dumps(data['running']))
         self.assertIn('</script>', json.dumps(data['progress']))
@@ -185,7 +185,7 @@ class DashboardScriptTest(unittest.TestCase):
                 with self.subTest(scenario=scenario):
                     out = self.render(FIXTURE, scenario)
                     self.assertEqual([t["text"].split()[0] for t in out["tabs"] if t["attrs"]["aria-selected"] == "true"], ["Overview"])
-                    self.assertNotIn(bad, out["text"])
+                    self.assertNotIn(bad, " ".join(t["text"] for t in out["tabs"]))
                     self.assertNotIn(bad, json.dumps([t["attrs"] for t in out["tabs"]] + [p["attrs"] for p in out["panels"]]))
         out = self.render(FIXTURE, {"storageThrows": True, "actions": [{"click": "Reviews"}]})
         self.assertFalse(out["panels"][4]["hidden"])
@@ -228,7 +228,9 @@ class DashboardScriptTest(unittest.TestCase):
 
     @staticmethod
     def marks(out, cls, disclosure=None):
-        return [m for m in out['picture'] if cls in m['cls'].split() and m['disclosure'] == disclosure]
+        return [m for m in out['picture'] if cls in m['cls'].split() and
+                (m['disclosure'] == disclosure if disclosure is not None else
+                 m['disclosure'] not in ('show the data as tables', 'limits'))]
 
     def test_completion_is_floored_for_project_spec_and_story(self):
         for done, total, percent in ((408, 410, 99), (56, 57, 98), (1, 3, 33),
@@ -247,7 +249,7 @@ class DashboardScriptTest(unittest.TestCase):
                     self.assertTrue(any('100%' in m['text'] for m in self.marks(out, 'tbl', 'show the data as tables')))
                 if done < total:
                     self.assertEqual(self.marks(out, 'active-progress')[0]['attrs']['aria-label'], str(percent) + '% done')
-                    self.assertEqual(self.marks(out, 'project-percent')[0]['text'], str(percent) + '%')
+                    self.assertEqual(self.marks(out, 'active-percent')[0]['text'], str(percent) + '%')
                     self.assertIn(str(percent) + '%', self.marks(out, 'feature-head')[0]['text'])
                     self.assertIn(str(percent) + '%', self.marks(out, 'story')[0]['attrs']['data-tip'])
 
@@ -262,7 +264,7 @@ class DashboardScriptTest(unittest.TestCase):
         rows = self.marks(out, 'active-project')
         self.assertEqual([r['attrs']['data-repo'] for r in rows], ['aaaaaaaa', 'eeeeeeee'])
         self.assertIn(attack, rows[0]['text'])
-        self.assertIn('3 sessions today', rows[0]['text'])
+        self.assertIn('3 sessions · 24h', rows[0]['text'])
         self.assertIn('last 12 min ago', rows[0]['text'])
         self.assertNotIn('no task list', rows[1]['text'])
         self.assertIn('no task list', rows[1]['attrs']['data-tip'])
@@ -272,7 +274,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(len({m['text'] for m in self.marks(out, 'active-host')}), 3)
         self.assertNotIn('img', out['tags'])
         data['progress']['active'] = []
-        self.assertIn('No recorded sessions in the last 24 hours', self.render_freshness(data)['text'])
+        self.assertIn('No named project active in the last 24 hours. Run fnl-status inside a repository to add it.', self.render_freshness(data)['text'])
 
     def test_short_and_long_budget_track_uses_hard_cap(self):
         data = self.sample()
@@ -381,6 +383,7 @@ class DashboardScriptTest(unittest.TestCase):
 
     def test_next_uses_priority_then_phase_then_id_and_skips_done(self):
         data = self.sample()
+        data['progress']['active'] = [dict(repo='bbbbbbbb', label='Shop app', hosts=['codex'], sessions=1, last='2026-11-06T10:00:00Z', percent=33)]
         f = data['progress']['repositories']['bbbbbbbb']['features'][0]
         f['tasks'] += [dict(id='T009', story='US1', phase=1, state='todo'),
                        dict(id='T001', story='US1', phase=2, state='todo')]
@@ -389,7 +392,7 @@ class DashboardScriptTest(unittest.TestCase):
         f['tasks'][-2]['state'] = 'done'
         self.assertEqual(self.marks(self.render_freshness(data), 'project-next')[0]['text'], 'next US1 · T012')
         f['stories'][1]['priority'] = 4
-        self.assertEqual(self.marks(self.render_freshness(data), 'project-next')[0]['text'], 'next US1 · T003')
+        self.assertEqual(self.marks(self.render_freshness(data), 'project-next')[0]['text'], 'next US2 · T010')
 
     def test_finished_story_plural(self):
         data = self.sample()
@@ -408,57 +411,84 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(self.marks(out, 'quota-meter'), [])
         self.assertTrue(all('alert' not in m['text'] for m in self.marks(out, 'agent-value')))
 
-    def test_project_infographics_priority_cells_hidden_work_and_tables(self):
-        out = self.render(FIXTURE, {'hash': '#project'})
-        projects = self.marks(out, 'proj')
-        self.assertEqual([p['attrs']['data-repo'] for p in projects], ['bbbbbbbb', 'aaaaaaaa'])
-        self.assertEqual([p['text'] for p in self.marks(out, 'project-percent')], ['33%', '28%'])
-        self.assertEqual([p['attrs']['data-story'] for p in self.marks(out, 'story')], ['US1', 'US2', 'US1', 'US4', 'US3'])
-        self.assertEqual([p['text'] for p in self.marks(out, 'story-label')], ['US1 · P1', 'US2 · P3', 'US1 · P2', 'US4 · P3', 'US3'])
+    def test_compact_named_list_closed_details_cells_and_all_tables(self):
+        out = self.render(FIXTURE, {'hash': '#project', 'now': '2026-11-06T10:00:00Z'})
+        rows = self.marks(out, 'active-project')
+        self.assertEqual([p['attrs']['data-repo'] for p in rows], ['aaaaaaaa', 'cccccccc', 'eeeeeeee'])
+        self.assertEqual(out['tabs'][2]['text'], 'Project 3')
+        self.assertNotIn('repo bbbb', out['panels'][2]['text'])
+        self.assertNotIn('repo dddd', out['panels'][2]['text'])
+        details = self.marks(out, 'project-disclosure')
+        self.assertEqual(len(details), 1)
+        self.assertEqual(details[0]['tag'], 'details')
+        self.assertNotIn('open', details[0]['attrs'])
+        self.assertFalse(details[0]['open'])
+        self.assertEqual(rows[0]['tag'], 'summary')
+        self.assertEqual([r['tag'] for r in rows[1:]], ['div', 'div'])
+        self.assertEqual(self.marks(out, 'proj'), [])
+        self.assertEqual(self.marks(out, 'project-percent'), [])
+        self.assertEqual(self.marks(out, 'project-segments'), [])
+        self.assertEqual(len(self.marks(out, 'active-progress')), 1)
+        self.assertEqual([p['text'] for p in self.marks(out, 'active-percent')], ['28%'])
+        self.assertEqual([p['text'] for p in self.marks(out, 'project-next')], ['next US1 · T003'])
+        self.assertEqual([p['attrs']['data-story'] for p in self.marks(out, 'story')], ['US1', 'US4', 'US3'])
+        self.assertEqual([p['text'] for p in self.marks(out, 'story-label')], ['US1 · P2', 'US4 · P3', 'US3'])
         cells = [p for p in self.marks(out, 'cell') if 'data-task' in p['attrs']]
-        self.assertEqual([p['attrs']['data-task'] for p in cells][:6], ['T011', 'T012', 'T010', 'T001', 'T003', 'T004'])
-        self.assertEqual(len(cells), 22)
+        self.assertEqual(len(cells), 19)
         self.assertEqual({p['attrs']['data-state'] for p in cells}, {'done', 'in progress', 'accepted, not ticked', 'todo'})
-        self.assertEqual([p['text'] for p in self.marks(out, 'project-next')], ['next US1 · T012', 'next US1 · T003'])
-        legend = self.marks(out, 'task-legend')
-        self.assertEqual(len(legend), 1)
-        self.assertEqual(legend[0]['text'].replace('  ', ' '), ' done · agent on it · done, not accepted · to do')
-        self.assertEqual([p['text'] for p in self.marks(out, 'feature-head')], ['spec 004 · 33% ', 'spec 003 · 25% '])
-        self.assertEqual(len([m for m in self.marks(out, 'feature-bar') if 'active-progress' not in m['cls'].split()]), 2)
-        self.assertEqual(len(self.marks(out, 'story-tree')), 2)
-        self.assertEqual([p['text'] for p in self.marks(out, 'finished-projects')], ['2 projects done, hidden'])
+        legends = self.marks(out, 'task-legend')
+        self.assertEqual(len(legends), 1)
+        self.assertEqual(legends[0]['disclosure'], details[0]['disclosure'])
+        self.assertTrue(all(p['disclosure'] == details[0]['disclosure'] for p in cells))
+        self.assertEqual([p['text'] for p in self.marks(out, 'feature-head')], ['spec 003 · 25% '])
         self.assertEqual([p['text'] for p in self.marks(out, 'finished-stories')], ['1 story done'])
-        self.assertEqual(self.marks(out, 'unlinked-sessions'), [])
-        self.assertEqual(len(self.marks(out, 'unlinked-sessions', 'limits')), 2)
-        self.assertEqual(len(self.marks(out, 'project-segments')), 2)
         tips = [p['attrs']['data-tip'] for p in cells]
         self.assertTrue(any(all(t in tip for t in ('T002', 'in progress', 'codex', 'session1', '</script>')) for tip in tips))
         tables = [p for p in out['picture'] if p['disclosure'] == 'show the data as tables']
-        self.assertTrue(any('project completion' in p['text'] and '33%' in p['text'] for p in tables))
-        self.assertTrue(any('T090' in p['text'] for p in tables), 'finished feature remains in the data equivalent')
+        self.assertTrue(any('project completion' in p['text'] and '28%' in p['text'] for p in tables))
+        self.assertTrue(any('T090' in p['text'] for p in tables), 'finished feature remains in tables')
         self.assertTrue(any('feature 009' in p['text'] for p in tables))
         self.assertFalse(any(p['tag'] == 'table' and p['disclosure'] is None for p in out['picture']))
-        limits = self.marks(out, 'project-limits', 'limits')
-        self.assertEqual(len(limits), 1)
-        self.assertIn('nothing leaves your machine', limits[0]['text'])
         self.assertNotIn('img', out['tags'])
         self.assertNotIn('script', out['tags'])
 
-    def test_project_empty_no_ghost_and_priority_tie_uses_latest_activity(self):
+    def test_user_opened_project_detail_survives_data_refresh(self):
+        changed = self.sample()
+        changed['progress']['active'][0]['sessions'] = 4
+        out = self.render(FIXTURE, {'hash': '#project', 'next': changed,
+            'actions': [{'panel': 'project', 'open': True}]})
+        self.assertTrue(self.marks(out, 'project-disclosure')[0]['open'])
+
+    def test_empty_named_list_and_latest_activity_order_ignores_priority(self):
         data = self.sample()
-        repos = data['progress']['repositories']
-        repos['aaaaaaaa']['features'][0]['stories'][0]['priority'] = 1
+        data['progress']['active'][1]['last'] = '2026-11-06T10:01:00Z'
         out = self.render_freshness(data, {'hash': '#project'})
-        self.assertEqual([p['attrs']['data-repo'] for p in self.marks(out, 'proj')], ['aaaaaaaa', 'bbbbbbbb'])
-        # A later local run wins a priority tie even when its snapshot is older.
-        repos['bbbbbbbb']['features'][0]['tasks'][1]['runs'][0]['start'] = '2026-11-06T12:00:00Z'
+        self.assertEqual([p['attrs']['data-repo'] for p in self.marks(out, 'active-project')], ['cccccccc', 'aaaaaaaa', 'eeeeeeee'])
+        data['progress']['active'] = [dict(repo='bbbbbbbb', label='', hosts=[], sessions=1, last='2026-11-06T10:00:00Z')]
         out = self.render_freshness(data, {'hash': '#project'})
-        self.assertEqual([p['attrs']['data-repo'] for p in self.marks(out, 'proj')], ['bbbbbbbb', 'aaaaaaaa'])
-        data['progress']['repositories'] = {'aaaaaaaa': dict(features=[], reason='')}
-        out = self.render_freshness(data, {'hash': '#project'})
-        self.assertIn('No tasks.md found for this repository', out['panels'][2]['text'])
-        self.assertEqual(self.marks(out, 'proj'), [])
+        self.assertIn('No named project active in the last 24 hours. Run fnl-status inside a repository to add it.', out['panels'][2]['text'])
+        self.assertEqual(self.marks(out, 'active-project'), [])
+        self.assertEqual(self.marks(out, 'project-disclosure'), [])
+        self.assertEqual(out['tabs'][2]['text'], 'Project 0')
         self.assertFalse(any('ghost' in p['cls'] for p in out['picture'] if p.get('panel') == 'panel-project'))
+
+    def test_activity_input_coercion_and_named_cap(self):
+        data = self.sample()
+        row = data['progress']['active'][0]
+        row.update(hosts=['codex', '__proto__', {}, 'codex'], percent='66.9', last={})
+        out = self.render_freshness(data)
+        self.assertEqual([m for m in out['picture'] if m['tag'] == 'i' and m['style'].get('width') == '66%'][0]['style']['width'], '66%')
+        self.assertIn('last unavailable', self.marks(out, 'active-project')[-1]['text'])
+        self.assertEqual([m['attrs']['data-tip'] for m in self.marks(out, 'active-host')].count('codex'), 2)
+        for bad in ('<img>', {}, None):
+            row.update(hosts=bad, percent=bad, last=bad)
+            out = self.render_freshness(data)
+            self.assertEqual(self.marks(out, 'active-progress'), [])
+            self.assertNotIn('NaN', out['panels'][2]['text'])
+        data['progress']['active'] = [dict(repo=str(n), label='Named', hosts=[], sessions=1, last='2026-11-06T10:00:00Z') for n in range(20)]
+        out = self.render_freshness(data)
+        self.assertEqual(len(self.marks(out, 'active-project')), 12)
+        self.assertEqual(out['tabs'][2]['text'], 'Project 12')
 
     def test_motion_scoped_to_visible_tab_and_once_per_changed_data(self):
         page = PAGE.read_text()

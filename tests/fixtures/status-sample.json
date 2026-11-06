@@ -289,7 +289,7 @@
         "running_now": 3
       },
       "bbbbbbbb": {
-        "label": "Shop app",
+        "label": "",
         "features": [
           {
             "feature": 4,
@@ -441,7 +441,7 @@
         "running_now": 3
       },
       "dddddddd": {
-        "label": "Finished two",
+        "label": "",
         "features": [
           {
             "feature": 9,
@@ -500,6 +500,12 @@
         },
         "version": "0.1.10-dev",
         "running_now": 3
+      },
+      "eeeeeeee": {
+        "label": "No tasks",
+        "features": [],
+        "reason": "",
+        "done": false
       }
     },
     "in_progress": 2,
@@ -517,8 +523,28 @@
         "percent": 28
       },
       {
+        "repo": "cccccccc",
+        "label": "Finished one",
+        "hosts": [
+          "claude"
+        ],
+        "sessions": 1,
+        "last": "2026-11-06T09:55:00Z",
+        "percent": null
+      },
+      {
+        "repo": "eeeeeeee",
+        "label": "No tasks",
+        "hosts": [
+          "codex"
+        ],
+        "sessions": 2,
+        "last": "2026-11-06T09:00:00Z",
+        "percent": null
+      },
+      {
         "repo": "bbbbbbbb",
-        "label": "Shop app",
+        "label": "",
         "hosts": [
           "antigravity"
         ],
@@ -527,13 +553,13 @@
         "percent": 33
       },
       {
-        "repo": "eeeeeeee",
-        "label": "repo eeee",
+        "repo": "dddddddd",
+        "label": "",
         "hosts": [
           "codex"
         ],
-        "sessions": 2,
-        "last": "2026-11-06T09:00:00Z",
+        "sessions": 1,
+        "last": "2026-11-06T09:40:00Z",
         "percent": null
       }
     ]

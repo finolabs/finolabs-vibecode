@@ -225,26 +225,29 @@ td.r, th.r { text-align: right; }
 .limits .body { font-size: var(--t-xs); color: var(--muted); overflow-wrap: anywhere; }
 .running-row { overflow-wrap: anywhere; min-width: 0; }
 .project-table { overflow-x: auto; max-width: 100%; }
-/* Project blocks are ruled rows, not filled cards inside a pane. */
-.proj { display: grid; gap: 10px; padding-bottom: 16px; border-bottom: 1px solid var(--line); min-width: 0; }
-.project-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-width: 0; }
-.project-label { font-size: var(--t-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.project-status { display: flex; align-items: baseline; gap: 8px; flex: none; }
+/* Compact named activity; unfinished detail opens only on user request. */
 .project-next { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; }
-.project-percent { font-size: var(--t-kpi); line-height: 1; font-variant-numeric: tabular-nums; }
-.project-segments { height: 10px; transform-origin: left; }
 .feature { display: grid; gap: 8px; min-width: 0; }
 .feature-head { display: grid; gap: 5px; }
-.active-projects { display: grid; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 14px; }
-.active-project { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 6px 12px; align-items: center; }
-.active-label { min-width: 0; overflow-wrap: anywhere; }
-.active-hosts { display: flex; gap: 5px; color: var(--p); }
+.active-projects { display: grid; gap: 0; }
+.project-activity-header { padding-bottom: 10px; }
+.active-project { display: flex; gap: 8px; align-items: center; min-width: 0; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: var(--t-xs); }
+.active-project > :not(:first-child)::before { content: "·"; color: var(--muted); margin-right: 8px; }
+.active-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.active-hosts { display: inline-flex; gap: 5px; color: var(--p); }
 .active-host { font-size: 10px; }
-.active-progress { grid-column: 1 / -1; }
+.active-sessions, .active-last { white-space: nowrap; }
+.active-completion { display: inline-flex; align-items: center; gap: 6px; }
+.active-progress { width: 80px; flex: 0 0 80px; }
+.project-disclosure > summary { cursor: pointer; }
+.project-disclosure > summary .active-label::before { content: "▸ "; color: var(--muted); }
+.project-disclosure[open] > summary .active-label::before { content: "▾ "; }
+.project-detail { display: grid; gap: 12px; padding: 12px 0 16px 12px; }
 @media (max-width: 560px) {
-  .active-project { grid-template-columns: minmax(0, 1fr) auto; }
-  .active-sessions, .active-last { font-size: var(--t-xs); }
-  .active-last { text-align: right; }
+  .active-project { flex-wrap: wrap; gap: 6px; }
+  .active-label { flex-basis: calc(100% - 64px); }
+  .active-project > :not(:first-child)::before { margin-right: 4px; }
+  .project-detail .task-legend { flex-wrap: wrap; white-space: normal; }
 }
 .feature-bar { height: 3px; background: var(--h0); }
 .feature-bar i { display: block; height: 100%; background: var(--p); }
@@ -252,7 +255,6 @@ td.r, th.r { text-align: right; }
 .task-legend { display: flex; align-items: center; gap: 3px; font-size: 9px; color: var(--muted); white-space: nowrap; }
 .legend-item { display: inline-flex; align-items: center; gap: 3px; }
 .task-legend .cell { width: 8px; height: 8px; }
-.project-part.cell { height: 100%; width: auto; border-radius: 0; }
 .story { display: grid; grid-template-columns: 84px minmax(0, 1fr) 44px; align-items: center; gap: 10px; font-size: var(--t-xs); }
 .cells { display: flex; gap: 3px; flex-wrap: wrap; min-width: 0; }
 .cell { display: block; width: 14px; height: 14px; border-radius: 3px; box-sizing: border-box; flex: none; }
@@ -261,8 +263,8 @@ td.r, th.r { text-align: right; }
 .cell.accepted { border: 1px solid var(--warn); background: repeating-linear-gradient(135deg, transparent 0 3px, var(--warn) 3px 5px); }
 .cell.todo { background: var(--h0); border: 1px solid var(--line); }
 .chip { width: fit-content; font-size: var(--t-xs); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
-.tabpanel:not([hidden])[data-enter="true"] .project-segments { animation: amount-grow .7s ease-out; }
-.tabpanel:not([hidden]) .cell.active { animation: cell-breathe 2s ease-in-out infinite; }
+.tabpanel:not([hidden])[data-enter="true"] .active-progress { animation: amount-grow .7s ease-out; }
+.tabpanel:not([hidden]) details[open] .cell.active { animation: cell-breathe 2s ease-in-out infinite; }
 @media (max-width: 560px) { .story { gap: 6px; } }
 @keyframes amount-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes lane-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
@@ -274,9 +276,6 @@ td.r, th.r { text-align: right; }
   .agent-kpis { gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .agent-kpis .kpi:first-child { grid-column: 1 / -1; }
   .agent-kpis .kpi:first-child .k { min-height: 0; }
-  .project-head { flex-wrap: wrap; gap: 6px; }
-  .project-label { flex-basis: 100%; }
-  .project-status { width: 100%; justify-content: space-between; }
   .agent-kpis .kpi { padding: 10px 8px; }
   .agent-kpis .k { font-size: 10px; min-height: 3em; }
   .agent-kpis .d { font-size: 10px; }

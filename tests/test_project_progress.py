@@ -57,7 +57,7 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(len(result['features']), 1)
         self.assertEqual([s.get('priority') for s in result['features'][0]['stories']], [1, 9, None])
         self.assertTrue(result['done'])
-        self.assertEqual(result['label'], 'repo aaaa')
+        self.assertEqual(result['label'], '')
         self.assertNotIn('private', json.dumps(result))
         self.assertNotIn('secret', json.dumps(result))
         self.assertNotIn('<img', json.dumps(result))
@@ -79,7 +79,7 @@ class ProgressTest(unittest.TestCase):
             with self.subTest(done=done, total=total):
                 self.assertEqual(self.pp.completion_percent(done, total), expected)
 
-    def test_active_projects_deduplicate_and_count_today_with_closed_metadata(self):
+    def test_active_projects_deduplicate_and_count_24h_with_closed_metadata(self):
         from datetime import datetime, timedelta
         now = datetime(2026, 11, 6, 10).astimezone()
         def event(repo, sid, hours, host=None):
@@ -89,25 +89,65 @@ class ProgressTest(unittest.TestCase):
             return row
         events = [event('aaaaaaaa', 'one', 1, 'codex'), event('aaaaaaaa', 'one', .2),
                   event('aaaaaaaa', 'two', 2, 'claude'), event('aaaaaaaa', 'yesterday', 12, 'antigravity'),
-                  event('bbbbbbbb', 'one', 3, 'antigravity'), event('cccccccc', 'old', 24, 'codex'),
-                  event('dddddddd', 'future', -1, 'codex'), event('eeeeeeee', 'unknown', 1, 'hostile')]
+                  event('bbbbbbbb', 'one', 30, 'antigravity'), event('bbbbbbbb', 'one', 3), event('cccccccc', 'old', 24, 'codex'),
+                  event('dddddddd', 'future', -1, 'codex'), event('eeeeeeee', 'unknown', 1, 'hostile'),
+                  event('ffffffff', 'unnamed', .01, 'codex')]
         repos = {'aaaaaaaa': dict(features=[dict(done=408, total=410)])}
-        result = self.pp.active_projects(events, repos, {'aaaaaaaa': 'Tools'}, now)
+        labels = {'aaaaaaaa': 'Tools', 'bbbbbbbb': 'Other', 'eeeeeeee': 'Third'}
+        result = self.pp.active_projects(events, repos, labels, now)
         self.assertEqual([r['repo'] for r in result], ['aaaaaaaa', 'eeeeeeee', 'bbbbbbbb'])
         row = result[0]
         self.assertEqual(set(row), {'repo', 'label', 'hosts', 'sessions', 'last', 'percent'})
         self.assertEqual(row['label'], 'Tools')
-        self.assertEqual(row['sessions'], 2)
+        self.assertEqual(row['sessions'], 3)
         self.assertEqual(row['hosts'], ['claude', 'codex', 'antigravity'])
         self.assertEqual(row['percent'], 99)
         self.assertEqual(result[1]['hosts'], [])
         self.assertIsNone(result[-1]['percent'])
-        self.assertEqual(result[-1]['label'], 'repo bbbb')
+        self.assertEqual(result[-1]['label'], 'Other')
+        self.assertEqual(self.pp.active_projects(events, repos, {}, now), [])
         repos['aaaaaaaa']['features'][0]['done'] = 410
-        self.assertIsNone(self.pp.active_projects(events, repos, {}, now)[0]['percent'])
+        self.assertIsNone(self.pp.active_projects(events, repos, labels, now)[0]['percent'])
         self.assertNotIn('private', json.dumps(result))
         many = [event('%08x' % n, 'same', n / 100, 'codex') for n in range(20)]
-        self.assertEqual([r['repo'] for r in self.pp.active_projects(many, {}, {}, now)], ['%08x' % n for n in range(12)])
+        self.assertEqual([r['repo'] for r in self.pp.active_projects(many, {}, {'%08x' % n: 'Named' for n in range(20)}, now)], ['%08x' % n for n in range(12)])
+        self.assertEqual([r['repo'] for r in self.pp.active_projects(many, {}, {'%08x' % n: 'Named' for n in range(5, 20)}, now)], ['%08x' % n for n in range(5, 17)])
+
+    def test_registration_reader_rejects_non_closed_or_unsafe_maps(self):
+        state = self.data / 'state'
+        state.mkdir(mode=0o700)
+        path = state / 'projects.json'
+        for bad in ([], {'not-code': 'Name'}, {'aaaaaaaa': ''}, {'aaaaaaaa': 'x' * 41},
+                    {'aaaaaaaa': '<img>'}, {'aaaaaaaa': {'name': 'Name'}},
+                    {'%08x' % n: 'Name' for n in range(51)}):
+            path.write_text(json.dumps(bad))
+            self.assertEqual(self.pp.registered_projects(), {})
+        path.write_text('{bad json')
+        self.assertEqual(self.pp.registered_projects(), {})
+        path.write_text('{"aaaaaaaa": "Name"}')
+        path.chmod(0o666)
+        self.assertEqual(self.pp.registered_projects(), {})
+        path.chmod(0o600)
+        self.assertEqual(self.pp.registered_projects(), {'aaaaaaaa': 'Name'})
+        path.unlink()
+        target = state / 'other'
+        target.write_text('{"aaaaaaaa": "Name"}')
+        path.symlink_to(target)
+        self.assertEqual(self.pp.registered_projects(), {})
+
+    def test_registration_skips_empty_name_and_serialises_parallel_updates(self):
+        from concurrent.futures import ThreadPoolExecutor
+        blank = self.repo.parent / '   '
+        (blank / '.git').mkdir(parents=True)
+        self.pp.register_here(blank)
+        self.assertFalse((self.data / 'state/projects.json').exists())
+        repos = [self.repo.parent / ('parallel-%d' % n) for n in range(8)]
+        for repo in repos:
+            (repo / '.git').mkdir(parents=True)
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(self.pp.register_here, repos))
+        self.assertEqual(self.pp.registered_projects(), {self.pp.repository_code(repo): repo.name for repo in repos})
+        self.assertFalse(list((self.data / 'state').glob('.write-*')))
 
     def test_label_worktree_code_matches_the_metrics_repository_identity(self):
         import hashlib

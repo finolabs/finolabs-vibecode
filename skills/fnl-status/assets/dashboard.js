@@ -289,129 +289,123 @@
   function completionPercent(done, total) {
     return total ? Math.min(done === total ? 100 : 99, Math.floor(done / total * 100)) : 0;
   }
+  function namedActivity(block) {
+    return (Array.isArray(block.active) ? block.active : []).filter(function (row) {
+      return row && typeof row.label === "string" && row.label.trim();
+    }).sort(function (a, b) {
+      return activityTime(b.last) - activityTime(a.last) || String(a.repo).localeCompare(String(b.repo));
+    }).slice(0, 12);
+  }
+  function activityTime(value) {
+    var at = Date.parse(typeof value === "string" ? value : "");
+    return Number.isFinite(at) ? at : 0;
+  }
+  function activityHosts(value) {
+    return (Array.isArray(value) ? value : []).map(String).filter(function (host, index, all) {
+      return ["claude", "codex", "antigravity"].indexOf(host) !== -1 && all.indexOf(host) === index;
+    });
+  }
+  function nextTask(p) {
+    var candidates = [];
+    unfinishedFeatures(p).forEach(function (f) {
+      (f.stories || []).filter(function (story) { return story.total > story.done; }).forEach(function (story) {
+        var first = (f.tasks || []).filter(function (task) { return task.story === story.story && task.state !== "done"; }).sort(taskOrder)[0];
+        if (first) candidates.push({story: story.story, priority: story.priority, task: first});
+      });
+    });
+    return candidates.sort(storyOrder)[0];
+  }
   function activeProjects(block) {
-    var rows = block.active || [], strip = h("div", "active-projects");
-    if (!rows.length) strip.appendChild(t("div", "meta", "No recorded sessions in the last 24 hours"));
+    var rows = namedActivity(block), list = h("div", "active-projects"), tab = TABS.get("project");
+    tab.projectDetails = [];
+    list.appendChild(t("div", "meta project-activity-header", "active in the last 24 hours · ● claude  ◆ codex  ▲ antigravity"));
+    if (!rows.length) list.appendChild(t("div", "meta", "No named project active in the last 24 hours. Run fnl-status inside a repository to add it."));
     rows.forEach(function (project) {
       var hosts = h("span", "active-hosts");
-      project.hosts.forEach(function (host) {
+      activityHosts(project.hosts).forEach(function (host) {
         var shape = {claude: "●", codex: "◆", antigravity: "▲"}[host];
-        if (shape) hosts.appendChild(tipOn(t("span", "active-host", shape), host));
+        hosts.appendChild(tipOn(t("span", "active-host", shape), host));
       });
-      var age = Math.max(0, Math.floor((Date.now() - Date.parse(project.last)) / 60000));
+      var at = activityTime(project.last), age = Math.max(0, Math.floor((Date.now() - at) / 60000));
       var last = age < 60 ? age + " min" : age < 1440 ? Math.floor(age / 60) + " hr" : Math.floor(age / 1440) + " d";
-      var row = h("div", "active-project", [t("strong", "active-label", project.label), hosts,
-        t("span", "meta active-sessions", project.sessions + (project.sessions === 1 ? " session today" : " sessions today")),
-        t("span", "meta active-last", "last " + last + " ago")]);
+      var snapshot = (block.repositories || {})[project.repo] || {}, unfinished = unfinishedFeatures(snapshot).length > 0;
+      var hasTasks = (snapshot.features || []).some(function (feature) { return feature.total > 0; });
+      var sessions = Number(project.sessions);
+      sessions = Number.isFinite(sessions) ? Math.max(0, Math.floor(sessions)) : 0;
+      var row = h(unfinished ? "summary" : "div", "active-project", [t("strong", "active-label", project.label), hosts,
+        t("span", "meta active-sessions", sessions + (sessions === 1 ? " session · 24h" : " sessions · 24h")),
+        t("span", "meta active-last", at ? "last " + last + " ago" : "last unavailable")]);
       row.setAttribute("data-repo", project.repo);
-      var snapshot = (block.repositories || {})[project.repo];
-      var hasTasks = snapshot && (snapshot.features || []).some(function (feature) { return feature.total > 0; });
-      tipOn(row, project.label + " · " + project.last + (!hasTasks && project.percent == null ? " · no task list" : ""));
-      if (project.percent != null) {
+      tipOn(row, project.label + " · " + (at ? String(project.last) : "last unavailable") + (!hasTasks ? " · no task list" : ""));
+      var percent = Number(project.percent);
+      if (unfinished && project.percent != null && Number.isFinite(percent)) {
+        percent = Math.max(0, Math.min(99, Math.floor(percent)));
         var bar = h("div", "feature-bar active-progress", [h("i")]);
-        bar.children[0].style.width = project.percent + "%";
-        bar.setAttribute("role", "img"); bar.setAttribute("aria-label", project.percent + "% done");
-        row.appendChild(bar);
+        bar.children[0].style.width = percent + "%";
+        bar.setAttribute("role", "img"); bar.setAttribute("aria-label", percent + "% done");
+        row.appendChild(h("span", "active-completion", [bar, t("span", "meta active-percent", percent + "%")]));
       }
-      strip.appendChild(row);
+      var next = nextTask(snapshot);
+      if (next) row.appendChild(t("span", "project-next", "next " + next.story + " · " + next.task.id));
+      if (unfinished) {
+        var disclosure = h("details", "project-disclosure", [row, projectDetail(snapshot)]);
+        disclosure.open = !!(tab.projectOpen && tab.projectOpen.get(project.repo));
+        tab.projectDetails.push({repo: project.repo, node: disclosure});
+        list.appendChild(disclosure);
+      } else list.appendChild(row);
     });
-    TABS.get("project").tableRows.push(tableOf("active projects", ["project", "hosts", "sessions today", "last", "done"], rows.map(function (row) {
-      return [row.label, row.hosts.join(", "), row.sessions, row.last, row.percent == null ? "—" : row.percent + "%"];
+    TABS.get("project").tableRows.push(tableOf("active projects", ["project", "hosts", "sessions · 24h", "last", "done"], rows.map(function (row) {
+      var percent = Number(row.percent);
+      return [row.label, activityHosts(row.hosts).join(", "), row.sessions, activityTime(row.last) ? String(row.last) : "unavailable",
+        row.percent == null || !Number.isFinite(percent) ? "—" : Math.max(0, Math.min(100, Math.floor(percent))) + "%"];
     })));
-    return strip;
+    return list;
+  }
+  function projectDetail(p) {
+    var card = h("div", "project-detail", [taskLegend()]);
+    unfinishedFeatures(p).forEach(function (feature) {
+      var featureBar = h("div", "feature-bar", [h("i")]);
+      featureBar.children[0].style.width = completionPercent(feature.done, feature.total) + "%";
+      featureBar.setAttribute("role", "img"); featureBar.setAttribute("aria-label", "spec completion " + (completionPercent(feature.done, feature.total) + "%"));
+      var featureBody = h("div", "feature", [h("div", "feature-head", [t("span", "meta", "spec " + String(feature.feature).padStart(3, "0") + " · " + (completionPercent(feature.done, feature.total) + "%")), featureBar])]);
+      var tree = h("div", "story-tree");
+      var stories = (feature.stories || []).slice(), tasks = feature.tasks || [], complete = stories.filter(function (story) { return story.done === story.total; }).length;
+      if (tasks.some(function (task) { return !task.story; })) {
+        var untagged = tasks.filter(function (task) { return !task.story; });
+        stories.push({story: null, priority: null, total: untagged.length, done: untagged.filter(function (task) { return task.state === "done"; }).length});
+      }
+      stories.filter(function (story) { return story.total > story.done; }).sort(storyOrder).forEach(function (story) {
+        var cells = h("div", "cells");
+        tasks.filter(function (task) { return (task.story || null) === story.story; }).sort(taskOrder).forEach(function (task) {
+          var state = taskState(task);
+          var mark = h("i", "cell " + state), runs = task.runs || [], sessions = task.sessions || [];
+          mark.setAttribute("data-task", task.id); mark.setAttribute("data-state", task.state);
+          tipOn(mark, task.id + " · " + task.state + " · phase " + (task.phase == null ? "—" : task.phase) +
+            " · " + (runs.map(function (run) { return run.agent + " / " + run.model + " · " + run.id + " · " + run.elapsed_seconds + " seconds"; }).join(", ") || "no linked run") +
+            " · " + (sessions.map(function (session) { return session.id + " / " + session.host; }).join(", ") || "no linked session"));
+          cells.appendChild(mark);
+        });
+        var row = h("div", "story", [t("span", "story-label", (story.story || "untagged") + (storyPriority(story) < 10 ? " · P" + story.priority : "")), cells,
+          t("span", "lane-value", story.done + "/" + story.total)]);
+        row.setAttribute("data-story", story.story || "untagged");
+        tipOn(row, story.done + "/" + story.total + " · " + completionPercent(story.done, story.total) + "% done"); tree.appendChild(row);
+      });
+      featureBody.appendChild(tree);
+      if (complete) featureBody.appendChild(t("span", "chip finished-stories", complete + (complete === 1 ? " story done" : " stories done")));
+      card.appendChild(featureBody);
+    });
+    return card;
   }
   function projectPanel() {
     if (!D.progress) return null;
-    var block = D.progress, repositories = block.repositories || {}, keys = Object.keys(repositories);
-    function priority(p) {
-      var numbers = [];
-      unfinishedFeatures(p).forEach(function (f) {
-        (f.stories || []).forEach(function (story) { if (story.total > story.done) numbers.push(storyPriority(story)); });
-      });
-      return Math.min.apply(null, [10].concat(numbers));
-    }
-    function activity(p) {
-      var times = [];
-      function seen(value) { var at = Date.parse(value); if (Number.isFinite(at)) times.push(at); }
-      (p.sessions_without_task || []).forEach(function (session) { seen(session.last); });
-      (p.features || []).forEach(function (feature) {
-        (feature.tasks || []).forEach(function (task) {
-          (task.sessions || []).forEach(function (session) { seen(session.last); });
-          (task.runs || []).forEach(function (run) { seen(run.start); seen(run.finish); });
-        });
-      });
-      return times.length ? Math.max.apply(null, times) : Date.parse(p.updated) || 0;
-    }
-    var finished = keys.filter(function (code) {
-      var fs = repositories[code].features || [];
-      return fs.length && fs.every(function (f) { return f.done === f.total; });
-    }).length;
-    var visible = keys.filter(function (code) { return unfinishedFeatures(repositories[code]).length; }).sort(function (a, b) {
-      var left = repositories[a], right = repositories[b];
-      return priority(left) - priority(right) || activity(right) - activity(left) || a.localeCompare(b);
-    }).slice(0, 5);
+    var block = D.progress, repositories = block.repositories || {};
+    var activeNames = {};
+    namedActivity(block).forEach(function (row) { activeNames[row.repo] = row.label; });
+    var keys = Object.keys(repositories).filter(function (code) { return repositories[code].label || activeNames[code]; });
+    var visible = namedActivity(block).map(function (row) { return row.repo; }).filter(function (code) { return repositories[code]; });
     var content = [activeProjects(block)];
-    visible.forEach(function (code, projectIndex) {
-      var p = repositories[code], fs = p.features || [], total = 0, done = 0, active = 0;
-      fs.forEach(function (f) { total += f.total; done += f.done; active += (f.tasks || []).filter(function (task) { return task.state === "in progress"; }).length; });
-      var accepted = fs.reduce(function (sum, f) { return sum + (f.tasks || []).filter(function (task) { return task.state === "accepted, not ticked"; }).length; }, 0);
-      var seg = h("div", "seg project-segments");
-      [["done", done], ["active", active], ["accepted", accepted], ["todo", total - done - active - accepted]].forEach(function (part) {
-        if (part[1] <= 0) return;
-        var mark = h("i", "project-part cell " + part[0]); mark.style.flex = String(part[1]);
-        seg.appendChild(tipOn(mark, part[0] + ": " + part[1] + "/" + total));
-      });
-      seg.setAttribute("role", "img"); seg.setAttribute("aria-label", done + " done, " + active + " agent on it, " + accepted + " done, not accepted, " + (total - done - active - accepted) + " to do");
-      var candidates = [];
-      unfinishedFeatures(p).forEach(function (f) {
-        (f.stories || []).filter(function (story) { return story.total > story.done; }).forEach(function (story) {
-          var first = (f.tasks || []).filter(function (task) { return task.story === story.story && task.state !== "done"; }).sort(taskOrder)[0];
-          if (first) candidates.push({story: story.story, priority: story.priority, task: first});
-        });
-      });
-      candidates.sort(storyOrder);
-      var status = h("div", "project-status", [t("strong", "project-percent", completionPercent(done, total) + "%")]);
-      if (candidates.length) status.appendChild(t("span", "project-next", "next " + candidates[0].story + " · " + candidates[0].task.id));
-      var header = h("div", "project-head", [tipOn(t("strong", "project-label", repoLabel(code)), repoLabel(code)), status]);
-      var card = h("div", "proj", [header, seg]); card.setAttribute("data-repo", code);
-      if (!projectIndex) card.appendChild(taskLegend());
-      unfinishedFeatures(p).forEach(function (feature) {
-        var featureBar = h("div", "feature-bar", [h("i")]);
-        featureBar.children[0].style.width = completionPercent(feature.done, feature.total) + "%";
-        featureBar.setAttribute("role", "img"); featureBar.setAttribute("aria-label", "spec completion " + (completionPercent(feature.done, feature.total) + "%"));
-        var featureBody = h("div", "feature", [h("div", "feature-head", [t("span", "meta", "spec " + String(feature.feature).padStart(3, "0") + " · " + (completionPercent(feature.done, feature.total) + "%")), featureBar])]);
-        var tree = h("div", "story-tree");
-        var stories = (feature.stories || []).slice(), tasks = feature.tasks || [], complete = stories.filter(function (story) { return story.done === story.total; }).length;
-        if (tasks.some(function (task) { return !task.story; })) {
-          var untagged = tasks.filter(function (task) { return !task.story; });
-          stories.push({story: null, priority: null, total: untagged.length, done: untagged.filter(function (task) { return task.state === "done"; }).length});
-        }
-        stories.filter(function (story) { return story.total > story.done; }).sort(storyOrder).forEach(function (story) {
-          var cells = h("div", "cells");
-          tasks.filter(function (task) { return (task.story || null) === story.story; }).sort(taskOrder).forEach(function (task) {
-            var state = taskState(task);
-            var mark = h("i", "cell " + state), runs = task.runs || [], sessions = task.sessions || [];
-            mark.setAttribute("data-task", task.id); mark.setAttribute("data-state", task.state);
-            tipOn(mark, task.id + " · " + task.state + " · phase " + (task.phase == null ? "—" : task.phase) +
-              " · " + (runs.map(function (run) { return run.agent + " / " + run.model + " · " + run.id + " · " + run.elapsed_seconds + " seconds"; }).join(", ") || "no linked run") +
-              " · " + (sessions.map(function (session) { return session.id + " / " + session.host; }).join(", ") || "no linked session"));
-            cells.appendChild(mark);
-          });
-          var row = h("div", "story", [t("span", "story-label", (story.story || "untagged") + (storyPriority(story) < 10 ? " · P" + story.priority : "")), cells,
-            t("span", "lane-value", story.done + "/" + story.total)]);
-          row.setAttribute("data-story", story.story || "untagged");
-          tipOn(row, story.done + "/" + story.total + " · " + completionPercent(story.done, story.total) + "% done"); tree.appendChild(row);
-        });
-        featureBody.appendChild(tree);
-        if (complete) featureBody.appendChild(t("span", "chip finished-stories", complete + (complete === 1 ? " story done" : " stories done")));
-        card.appendChild(featureBody);
-      });
-      content.push(card);
-    });
-    if (finished) content.push(t("div", "meta finished-projects", finished + " projects done, hidden"));
-    if (!visible.length && !finished) content.push(t("div", "nodata", "No tasks.md found for this repository"));
     keys.forEach(function (code) {
-      TABS.get("project").tableRows.push(h("div", "tbl", [t("h3", "", repoLabel(code)), projectData(repositories[code])]));
+      TABS.get("project").tableRows.push(h("div", "tbl", [t("h3", "", repositories[code].label || activeNames[code]), projectData(repositories[code])]));
     });
     var notes = [t("div", "", "Derived from files and local records, not from a tracker; done means the box is ticked. Linked through delegated runs or recorded task ids only; sessions that record neither remain unlinked. Task receipts are advisory, never a gate.")];
     visible.forEach(function (code) {
@@ -519,7 +513,7 @@
       panel.setAttribute("aria-labelledby", tab.buttonId); panel.tabIndex = 0; panel.hidden = true;
       var count = null;
       if (name === "agents" && D.running) count = (D.running.open || []).length;
-      if (name === "project" && D.progress) count = (D.progress.active || []).length;
+      if (name === "project" && D.progress) count = namedActivity(D.progress).length;
       if (count != null) { var badge = h("span", "count"); badge.textContent = String(count); button.appendChild(badge); }
       button.addEventListener("click", function () { selectTab(name, true); });
       button.addEventListener("keydown", function (e) {
@@ -573,6 +567,9 @@
     if (tab.panel && !tab.panel.hidden) { tab.scrollTop = tab.panel.scrollTop; tab.scrollLeft = tab.panel.scrollLeft; }
     if (tab.tables) tab.tablesOpen = tab.tables.open;
     if (tab.limits) tab.limitsOpen = tab.limits.open;
+    if (tab.projectDetails) {
+      tab.projectOpen = new Map(tab.projectDetails.map(function (item) { return [item.repo, item.node.open]; }));
+    }
     tab.limits = null;
     tab.tables = null;
   });
