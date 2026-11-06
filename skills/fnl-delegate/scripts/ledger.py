@@ -83,6 +83,14 @@ def load():
 
 
 def cmd_start(args):
+    try:
+        from mode import effective
+        manual = effective(keys=("delegation_mode",), gate_opt_in=True)["delegation_mode"] == "manual"
+    except Exception:
+        manual = False
+    family = "claude" if args.agent in ("claude", "claude-session", "subagent") else args.agent
+    if manual and family != args.coordinator and args.route_by != "user":
+        sys.exit("Delegation mode is manual: another agent family needs --route-by user")
     dispatch_id = datetime.now().strftime("d%Y%m%d-%H%M%S-") + secrets.token_hex(2)
     append({
         "event": "start", "id": dispatch_id, "ts": now(),
