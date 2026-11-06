@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import stat
 import sys
 import time
 
@@ -27,10 +28,34 @@ def validate_choice(host, limit):
         raise cs.Refusal('limit must be an integer from 50000 to 20000000 bytes')
 
 
+GIT_TREE_ERRORS = ('root is a git work tree', 'root is inside a git work tree')
+
+
+def check_plugin_root(root):
+    """The folder holding the hook script must be safe; a git work tree is refused except Antigravity's own
+    installed copy, which keeps the repository's .git entry under the user's config folder."""
+    try:
+        with dr.relocated_folder(root):
+            return
+    except ValueError as error:
+        if str(error) not in GIT_TREE_ERRORS:
+            raise
+    home = dr.account_home()
+    if root != (home / '.gemini/config/plugins/finolabs-vibecode').resolve():
+        raise cs.Refusal('plugin folder is inside a git work tree; use the installed copy of the plugin')
+    for path in (root, *root.parents):
+        info = path.lstat()
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid not in (0, os.getuid()) or info.st_mode & 0o022):
+            raise cs.Refusal('plugin folder is not private enough')
+        if path == home:
+            break
+    else:
+        raise cs.Refusal('plugin folder is not under the account home')
+
+
 def hook_command():
     root = Path(__file__).resolve().parents[3]
-    with dr.relocated_folder(root):
-        pass
+    check_plugin_root(root)
     try:
         manifest = json.loads((root / '.claude-plugin/plugin.json').read_bytes())
     except (OSError, ValueError):

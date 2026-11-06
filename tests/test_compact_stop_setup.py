@@ -4,6 +4,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 from pathlib import Path
 import shlex
 import stat
@@ -65,6 +66,35 @@ class CompactStopSetupTest(unittest.TestCase):
         env = mock.patch.dict(os.environ, {}, clear=True)
         env.start()
         self.addCleanup(env.stop)
+
+    def installed_copy(self, git=True, mode=0o755):
+        """Antigravity's own installed copy: under the account's config folder, with the repository's .git entry."""
+        installed = self.home / '.gemini/config/plugins/finolabs-vibecode'
+        shutil.copytree(self.plugin, installed)
+        if git:
+            (installed / '.git').mkdir()
+        installed.chmod(mode)
+        patch = mock.patch.object(cs, '__file__', str(installed / 'skills/fnl-setup/scripts/compact_stop_setup.py'))
+        patch.start()
+        self.addCleanup(patch.stop)
+        return installed
+
+    def test_installed_antigravity_copy_with_git_entry_is_accepted(self):
+        self.installed_copy()
+        code, out, err = self.run_cli('preview', '--host', 'antigravity', '--limit', '50000')
+        self.assertEqual(code, 0, err)
+        self.assertIn('Digest: ', out)
+
+    def test_other_git_work_tree_is_still_refused(self):
+        (self.plugin / '.git').mkdir()
+        code, out, err = self.run_cli('preview', '--host', 'antigravity', '--limit', '50000')
+        self.assertEqual(code, 1)
+        self.assertIn('git work tree', err)
+
+    def test_installed_copy_must_not_be_group_writable(self):
+        self.installed_copy(mode=0o775)
+        code, out, err = self.run_cli('preview', '--host', 'antigravity', '--limit', '50000')
+        self.assertEqual(code, 1)
 
     def run_cli(self, *args):
         out, err = io.StringIO(), io.StringIO()
