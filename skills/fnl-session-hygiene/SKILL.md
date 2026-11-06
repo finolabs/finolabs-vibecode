@@ -70,7 +70,7 @@ A title tells the user which session holds which work, without opening it. Forma
 
 Keep the whole title near 50 characters, in English for the activity unless the user asks for their own language, with technical names intact. Examples: `billing-api: fix webhook retries`, `billing-api 003 search: T044–T046 rebuild CLI`, `docs-site: review PR 12`.
 
-When to name: at entry, on a resume whose title no longer matches the work, and when the task or phase changes materially (a new story, from planning to implementation, from implementation to review). Do not rename for every step.
+When to name: at entry, on a resume whose title no longer matches the work, and when the task or phase changes materially (a new story, from planning to implementation, from implementation to review). Do not rename for every step. After a compaction the reminder above is the only thing that survives, so check the title again then. Where the host's rename tool needs this session's own id and the agent cannot learn it (for example a session list that leaves out the current session), say so in one line and ask the user to rename; do not retry blind.
 
 Whose: rename only this session and sessions you started; a session someone else started keeps its name unless the user asks. A delegated run takes its title, or its log file name where the host has no titles, from its ledger project and task label (`fnl-delegate`).
 
