@@ -503,7 +503,40 @@
       }
     },
     "in_progress": 2,
-    "notice": true
+    "notice": true,
+    "active": [
+      {
+        "repo": "aaaaaaaa",
+        "label": "Fino tools </script><img src=x onerror=alert(1)>",
+        "hosts": [
+          "claude",
+          "codex"
+        ],
+        "sessions": 3,
+        "last": "2026-11-06T10:00:00Z",
+        "percent": 28
+      },
+      {
+        "repo": "bbbbbbbb",
+        "label": "Shop app",
+        "hosts": [
+          "antigravity"
+        ],
+        "sessions": 1,
+        "last": "2026-11-06T09:48:00Z",
+        "percent": 33
+      },
+      {
+        "repo": "eeeeeeee",
+        "label": "repo eeee",
+        "hosts": [
+          "codex"
+        ],
+        "sessions": 2,
+        "last": "2026-11-06T09:00:00Z",
+        "percent": null
+      }
+    ]
   },
   "running": {
     "open": [

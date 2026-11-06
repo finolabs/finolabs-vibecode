@@ -30,7 +30,7 @@ class RefreshTest(unittest.TestCase):
         self.dir = self.home / ".finolabs/vibecode/state"
         self.ledger = self.home / ".finolabs/vibecode/ledger.jsonl"
         self.ledger.parent.mkdir(parents=True)
-        self.env = {**os.environ, "FNL_STATE_DIR": str(self.dir), "ORCHESTRATION_LEDGER": str(self.ledger)}
+        self.env = {**os.environ, "HOME": str(self.home), "FNL_STATE_DIR": str(self.dir), "ORCHESTRATION_LEDGER": str(self.ledger)}
         self.env.pop("FNL_METRICS", None)
         self.at = datetime.now(timezone.utc)
 
@@ -105,6 +105,50 @@ class RefreshTest(unittest.TestCase):
                                 env=self.env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(set(self.data()['progress']['repositories']), set(codes[-5:]))
+
+    def test_active_strip_rebuilt_with_labels_retained_cards_and_purge(self):
+        # HOME alone does not redirect the account anchor; setUp also injects the
+        # synthetic passwd home and guards real-account reads in every child.
+        self.env['HOME'] = str(self.home)
+        self.consent()
+        repo = Path(self.tmp.name).resolve() / 'active-project'
+        (repo / '.git').mkdir(parents=True)
+        tasks = repo / 'specs/001-test/tasks.md'
+        tasks.parent.mkdir(parents=True)
+        tasks.write_text('- [x] T1 US1\n- [ ] T2 US1\n- [ ] T3 US1\n')
+        self.ledger.parent.joinpath('host.md').write_text('# Host\n')
+        self.refresh('run', '--cwd', str(repo))
+        code = self.data()['progress']['current']
+        self.ledger.parent.joinpath('host.md').write_text('# Host\n\n## Project labels\n- ' + code + ': My project\n')
+        self.write_events([self.event(12, 'session1', code, 'session_start', host='codex', dispatch=None, source='startup'),
+                           self.event(11, 'session1', code, 'skill', name='fnl-status'),
+                           self.event(30, 'session2', X, 'session_start', host='claude', dispatch=None, source='startup')])
+        self.refresh('run', '--cwd', str(repo))
+        progress = self.data()['progress']
+        active = progress['active']
+        self.assertEqual([r['repo'] for r in active], [code, X])
+        self.assertEqual(active[0]['label'], 'My project')
+        self.assertEqual(active[0]['hosts'], ['codex'])
+        self.assertEqual(active[0]['percent'], 33)
+        self.assertIsNone(active[1]['percent'])
+        self.assertEqual(set(active[0]), {'repo', 'label', 'hosts', 'sessions', 'last', 'percent'})
+        # Old activity, even arbitrary text/unknown keys, is never carried over.
+        tampered = self.data()
+        tampered['progress']['active'] = [{'repo': 'ffffffff', 'label': '<script>private', 'path': 'private'}]
+        (self.dir / 'data.js').write_text('window.FNL_DATA = ' + json.dumps(tampered) + ';\n')
+        self.refresh('run', '--cwd', str(Path(self.tmp.name).resolve()))
+        rebuilt = self.data()['progress']
+        self.assertEqual(rebuilt['active'], active)
+        self.assertIn(code, rebuilt['repositories'])
+        self.assertNotIn('private', json.dumps(rebuilt))
+        self.write_events([])
+        for path in self.dir.glob('events-*.jsonl'):
+            path.unlink()
+        self.refresh('run', '--cwd', str(repo))
+        self.assertEqual(self.data()['progress']['active'], [])
+        self.refresh('purge', '--yes')
+        self.assertFalse((self.dir / 'data.js').exists())
+        self.assertFalse(list(self.dir.glob('events-*.jsonl')))
 
     def test_reviews_use_canonical_labels_even_when_progress_is_off(self):
         self.consent()
