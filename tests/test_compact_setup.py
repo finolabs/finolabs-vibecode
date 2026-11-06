@@ -24,7 +24,24 @@ class CompactSetupTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.home = account(self, Path(self.temp.name).resolve() / "home")
+        base = Path(self.temp.name).resolve()
+        self.home = account(self, base / "home")
+        # Test-only seam: the system temporary ancestor (/tmp is sticky and
+        # world-writable on Linux) would be refused; every check on the
+        # synthetic tree itself stays in force.
+        ancestors = {p.stat().st_ino for p in base.parents if p.stat().st_mode & 0o022}
+        original = os.fstat
+
+        def fstat(fd):
+            info = original(fd)
+            if info.st_ino in ancestors and stat.S_ISDIR(info.st_mode):
+                fields = list(info)
+                fields[0] &= ~0o022
+                return os.stat_result(fields)
+            return info
+        patch = mock.patch.object(os, "fstat", side_effect=fstat)
+        patch.start()
+        self.addCleanup(patch.stop)
         self.claude = self.home / ".claude"
         self.codex = self.home / ".codex"
         self.claude.mkdir(mode=0o700)
