@@ -171,7 +171,7 @@
                 "id": "T301",
                 "story": "US4",
                 "phase": 3,
-                "state": "accepted, not ticked",
+                "state": "done",
                 "runs": [],
                 "sessions": []
               },
@@ -179,13 +179,357 @@
                 "id": "T302",
                 "story": "US4",
                 "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T303",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T304",
+                "story": "US4",
+                "phase": 3,
                 "state": "todo",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T305",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T306",
+                "story": "US4",
+                "phase": 3,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T307",
+                "story": "US4",
+                "phase": 3,
+                "state": "in progress",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T308",
+                "story": "US4",
+                "phase": 3,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T309",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T310",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T311",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T312",
+                "story": "US4",
+                "phase": 3,
+                "state": "todo",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T313",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T314",
+                "story": "US4",
+                "phase": 3,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T315",
+                "story": "US4",
+                "phase": 3,
+                "state": "in progress",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T316",
+                "story": "US4",
+                "phase": 3,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T317",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T318",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T319",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T320",
+                "story": "US4",
+                "phase": 3,
+                "state": "todo",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T321",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T322",
+                "story": "US4",
+                "phase": 3,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T323",
+                "story": "US4",
+                "phase": 3,
+                "state": "in progress",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T324",
+                "story": "US4",
+                "phase": 3,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T325",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T326",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T327",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T328",
+                "story": "US4",
+                "phase": 3,
+                "state": "todo",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T329",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T330",
+                "story": "US4",
+                "phase": 3,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T331",
+                "story": "US4",
+                "phase": 3,
+                "state": "in progress",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T332",
+                "story": "US4",
+                "phase": 3,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T333",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T334",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T335",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T336",
+                "story": "US4",
+                "phase": 3,
+                "state": "todo",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T337",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T338",
+                "story": "US4",
+                "phase": 3,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T339",
+                "story": "US4",
+                "phase": 3,
+                "state": "in progress",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T340",
+                "story": "US4",
+                "phase": 3,
+                "state": "accepted, not ticked",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T341",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T342",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T343",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T344",
+                "story": "US4",
+                "phase": 3,
+                "state": "todo",
+                "runs": [],
+                "sessions": []
+              },
+              {
+                "id": "T345",
+                "story": "US4",
+                "phase": 3,
+                "state": "done",
                 "runs": [],
                 "sessions": []
               }
             ],
-            "total": 20,
-            "done": 5,
+            "total": 63,
+            "done": 29,
             "phases": [
               {
                 "phase": 1,
@@ -199,8 +543,8 @@
               },
               {
                 "phase": 3,
-                "total": 7,
-                "done": 0
+                "total": 50,
+                "done": 24
               }
             ],
             "stories": [
@@ -224,8 +568,8 @@
               },
               {
                 "story": "US4",
-                "total": 2,
-                "done": 0,
+                "total": 45,
+                "done": 24,
                 "priority": 3
               }
             ]
@@ -520,7 +864,7 @@
         ],
         "sessions": 3,
         "last": "2026-11-06T10:00:00Z",
-        "percent": 28
+        "percent": 46
       },
       {
         "repo": "cccccccc",
