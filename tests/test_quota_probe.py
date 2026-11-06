@@ -146,6 +146,13 @@ class QuotaTest(unittest.TestCase):
         patch = mock.patch.object(qp, "checked_path", side_effect=test_path)
         patch.start()
         self.addCleanup(patch.stop)
+        excluded = qp.excluded
+        def test_excluded(path):
+            if "downloads" in (part.lower() for part in Path(path).parts):
+                return excluded(path)
+        patch = mock.patch.object(qp, "excluded", side_effect=test_excluded)
+        patch.start()
+        self.addCleanup(patch.stop)
         self.addCleanup(mock.patch.stopall)
 
     def fake(self, agent, body=None):
@@ -164,6 +171,7 @@ class QuotaTest(unittest.TestCase):
             lines += [f"- Executable {agent}: {entry['executable']}", f"- Interpreter {agent}: {entry['interpreter']}"]
             if "resolved" in entry:
                 lines.append(f"- Resolved {agent}: {entry['resolved']}")
+                lines.append(f"- Resolved digest {agent}: {qp.hashlib.sha256(entry['resolved'].encode()).hexdigest()}")
             if agent == "claude":
                 lines += [f"- Claude config: {label}: {path}" for label, path in entry["configs"].items()]
         dr.write_data("host.md", ("\n".join(lines) + "\n").encode())
@@ -634,6 +642,63 @@ class QuotaTest(unittest.TestCase):
         with qp.state_folder() as folder:
             self.assertIn("default", qp.read_cache(folder)["claude"])
 
+    def test_resolved_consent_digest_and_excluded_path(self):
+        entry = self.fake("agy")
+        self.configure({"agy": entry})
+        host = dr.read_data("host.md").decode()
+        host = "\n".join(line for line in host.splitlines() if not line.startswith("- Resolved digest ")) + "\n"
+        for changed in (host, host + "- Resolved digest agy: " + "0" * 64 + "\n"):
+            dr.write_data("host.md", changed.encode())
+            self.assertNotIn("agy", qp.config())
+        dr.write_data("host.md", host.encode())
+        setup = self.setup_module()
+        with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"), mock.patch.object(sys, "stderr", new_callable=io.StringIO) as errors:
+            setup.preview(["agy"])
+        self.assertIn("agy needs re-preview: missing Resolved digest.", errors.getvalue())
+        excluded = self.home / "Downloads" / "agy"
+        excluded.parent.mkdir()
+        excluded.write_text("binary")
+        excluded.chmod(0o700)
+        entry["executable"] = entry["resolved"] = str(excluded)
+        entry["resolved_digest"] = qp.hashlib.sha256(str(excluded).encode()).hexdigest()
+        with self.assertRaisesRegex(ValueError, "temporary or downloads path"):
+            qp.checked_executable("agy", entry)
+
+    def test_cache_directory_records_execution_retry(self):
+        self.configure({"agy": self.fake("agy")})
+        self.ready()
+        (self.root / "state/quota/quota.json").mkdir()
+        with mock.patch.object(qp, "now", return_value=MEASURED), mock.patch.object(qp, "command", return_value=(FIXTURES / "agy-usage.json").read_text()):
+            qp.worker([["agy", "default"]])
+        with qp.state_folder() as folder:
+            self.assertEqual(qp.read_json(folder, "backoff.json")["agy"]["default"],
+                             {"retry_after": qp.stamp(MEASURED + qp.timedelta(seconds=1800)), "error": "execution"})
+
+    def test_validate_plan_refuses_newlines_in_config_values(self):
+        setup = self.setup_module()
+        self.fake("claude")
+        with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
+            plan, _ = setup.preview(["claude"])
+            for separator in ("\n", "\r"):
+                for configs in ({"bad" + separator + "label": str(self.config_dir)},
+                                {"default": str(self.config_dir) + separator + "bad"}):
+                    plan["configs"] = configs
+                    with self.assertRaisesRegex(ValueError, "newline or carriage return"):
+                        setup.validate_plan(plan)
+
+    def test_setup_deduplicates_folder_identity_and_refuses_missing(self):
+        setup = self.setup_module()
+        self.fake("claude")
+        alternate = str(self.home / ".CLAUDE")
+        real_samefile = os.path.samefile
+        def samefile(a, b):
+            return real_samefile(str(a).replace(".CLAUDE", ".claude"), str(b).replace(".CLAUDE", ".claude"))
+        with mock.patch.object(os.path, "samefile", side_effect=samefile), mock.patch.object(setup, "excluded"), mock.patch.dict(os.environ, {"PATH": str(self.bin)}):
+            plan, _ = setup.preview(["claude"], {"default": str(self.config_dir), "other": alternate})
+            self.assertEqual(len(plan["configs"]), 1)
+            with self.assertRaisesRegex(ValueError, "config folder missing"):
+                setup.preview(["claude"], {"other": str(self.home / "missing")})
+
     def test_runtime_resolved_target_must_match_confirmed_path(self):
         entry = self.fake("agy")
         entry["resolved"] = self.fake("other", "print('unused')\n")["resolved"]
@@ -642,7 +707,7 @@ class QuotaTest(unittest.TestCase):
                 qp.checked_executable("agy", entry)
             spawn.assert_not_called()
 
-    def test_setup_refuses_line_breaks_in_recorded_values(self):
+    def test_preview_refuses_line_breaks_in_recorded_values(self):
         setup = self.setup_module()
         entry = self.fake("claude")
         entry.pop("configs")

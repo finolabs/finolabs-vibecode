@@ -7,7 +7,7 @@ const fs = require("fs");
 const vm = require("vm");
 
 class Node_ {
-  constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.style = { setProperty(k, v) { this[k] = v; } }; this.className = ""; this.hidden = false; this.handlers = {}; this._text = ""; }
+  constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.style = { setProperty(k, v) { this[k] = v; } }; this.className = ""; this.hidden = false; this.handlers = {}; this._text = ""; this.scrollTop = 0; this.scrollLeft = 0; }
   get firstChild() { return this.children[0] || null; }
   get classList() {
     const self = this;
@@ -22,8 +22,13 @@ class Node_ {
   set textContent(v) { this.children = []; this._text = String(v); }
   get textContent() { return this._text + this.children.map((c) => c.textContent).join(" "); }
   appendChild(c) { this.children.push(c); return c; }
+  removeChild(c) { this.children.splice(this.children.indexOf(c), 1); }
+  focus() { document.activeElement = this; }
   append(...cs) { cs.forEach((c) => this.appendChild(c)); }
-  replaceChildren(...cs) { this.children = cs; }
+  replaceChildren(...cs) {
+    if (this.children.some((c) => all(c).includes(document.activeElement))) document.activeElement = document.body;
+    this.children = cs;
+  }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
   remove() { this.removed = true; }
@@ -40,7 +45,8 @@ const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m
 if (scripts.length !== 1) throw new Error("expected one inline script, found " + scripts.length);
 
 const byId = {};
-const loads = [], timers = [], handlers = {};
+const loads = [], timers = [], handlers = {}, windowHandlers = {};
+const stored = Object.assign({}, scenario.stored);
 let clock = scenario.now ? Date.parse(scenario.now) : Date.now();
 class FakeDate extends Date {
   constructor(...args) { super(...(args.length ? args : [clock])); }
@@ -68,9 +74,12 @@ const sandbox = {
   Date: FakeDate,
   console,
   setInterval: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
-  window: { matchMedia: () => ({ matches: false }), addEventListener() {}, innerWidth: 400 },
-  localStorage: { getItem: () => null, setItem() {} },
+  window: { matchMedia: () => ({ matches: false }), addEventListener(type, fn) { windowHandlers[type] = fn; }, innerWidth: 400,
+    location: { hash: scenario.hash || "" } },
+  localStorage: { getItem(k) { if (scenario.storageThrows) throw new Error("blocked"); return stored[k] || null; },
+    setItem(k, v) { if (scenario.storageThrows) throw new Error("blocked"); stored[k] = String(v); } },
 };
+document.activeElement = document.body;
 sandbox.window.document = document;
 if (dataPath) sandbox.window.FNL_DATA = JSON.parse(fs.readFileSync(dataPath, "utf8"));
 vm.createContext(sandbox);
@@ -78,11 +87,45 @@ vm.runInContext(scripts[0], sandbox, { filename: "dashboard.html" });
 
 const app = byId["app"];
 const first = app ? app.children[0] : null;
+function all(n) { return [n, ...n.children.flatMap(all)]; }
+function role(value) { return all(app).filter((n) => n.getAttribute("role") === value); }
+function namedTab(name) { return role("tab").find((n) => n.textContent.startsWith(name)); }
+function namedPanel(name) { return role("tabpanel").find((n) => n.getAttribute("id") === "panel-" + name); }
+function fire(n, type, key) {
+  if (!n) throw new Error("missing event target");
+  (n.handlers[type] || []).forEach((fn) => fn({ target: n, key, preventDefault() {} }));
+}
+const states = [];
+function state() { return { selected: role("tab").filter((n) => n.getAttribute("aria-selected") === "true").map((n) => n.textContent),
+  focused: document.activeElement ? document.activeElement.textContent : null }; }
+for (const action of scenario.actions || []) {
+  if (action.click) fire(namedTab(action.click), "click");
+  if (action.key) fire(namedTab(action.tab), "keydown", action.key);
+  if (action.hash !== undefined) { sandbox.window.location.hash = action.hash; windowHandlers.hashchange(); }
+  if (action.panel) {
+    const panel = namedPanel(action.panel);
+    panel.scrollTop = action.scrollTop || 0; panel.scrollLeft = action.scrollLeft || 0;
+    if (action.open !== undefined) all(panel).filter((n) => n.tag === "details").forEach((n) => n.open = action.open);
+  }
+  states.push(state());
+}
 if (scenarioPath) for (let i = 0; i < (scenario.ticks || 1); i++) {
   clock += scenario.advance_ms || 0;
   timers.forEach((x) => x.fn());
 }
+for (const action of scenario.after || []) {
+  if (action.click) fire(namedTab(action.click), "click");
+  states.push(state());
+}
 if (scenario.reveal) { document.visibilityState = "visible"; handlers.visibilitychange(); }
 const out = { text: app ? app.textContent.replace(/\s+/g, " ").trim() : "", cells: 0, svg: 0, openRings: 0, tags: [], loads, poll_ms: timers.map((x) => x.ms), redrawn: !!first && app.children[0] !== first };
 (function walk(n) { out.tags.push(n.tag); out.openRings += n.className === "dot open" ? 1 : 0; out.cells += n.className.split(" ").includes("dy") ? 1 : 0; out.svg += n.tag === "svg" ? 1 : 0; n.children.forEach(walk); })(app || new Node_("x"));
+out.states = states;
+out.focused = document.activeElement ? document.activeElement.textContent : null;
+out.stored = stored;
+out.hash = sandbox.window.location.hash;
+out.tabs = role("tab").map((n) => ({ text: n.textContent, attrs: n.attrs, tabIndex: n.tabIndex }));
+out.panels = role("tabpanel").map((n) => ({ attrs: n.attrs, hidden: n.hidden, text: n.textContent,
+  scrollTop: n.scrollTop, scrollLeft: n.scrollLeft, open: all(n).filter((x) => x.tag === "details").map((x) => !!x.open) }));
+out.shared = app.children.filter((n) => !["tablist", "tabpanel"].includes(n.getAttribute("role"))).map((n) => n.className);
 process.stdout.write(JSON.stringify(out));

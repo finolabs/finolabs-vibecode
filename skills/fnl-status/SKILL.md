@@ -9,6 +9,8 @@ disable-model-invocation: true
 
 The dashboard is a static page, `dashboard.html`, in the resolved data root's `state/` folder. An absolute `FNL_STATE_DIR` remains a dashboard/events override; before relocation, an existing `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` is used while the default state folder is absent. It loads its numbers from a `data.js` beside it. This skill never writes or edits the page; a script rebuilds the data and copies the shipped page.
 
+The page has five tabs: Overview (activity, router coverage, skill and agent use, depth vs outcome and load cost), Agents (Running now), Project (task progress), Delegation (delegation and Judge), and Reviews (the review gate). Agents and Project show "not available yet" placeholders until their data sources exist.
+
 The scripts are in this skill's base directory: `scripts/refresh.py` builds the dashboard data, and the `fnl-delegate` skill beside this one holds `scripts/ledger.py`. Without `fnl-delegate`, the dashboard still shows the usage events and names the ledger as a missing source.
 
 **Arguments:** $ARGUMENTS

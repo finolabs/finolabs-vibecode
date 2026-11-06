@@ -57,7 +57,10 @@ Common fields: `ts` (UTC, ISO 8601), `sid` (the host's session id), `repo` (firs
 | `review` | `kind` (`code` or `security`), `verdict` (`APPROVE` or `REWORK`), `pr` (number) | hook after `Bash`, only when the command posts a comment (`gh pr comment`) whose body (a file, `--body`, or a heredoc on stdin) starts with a `fnl-review` marker line |
 | `router` | `depth` (`MIN`, `NORMAL`, `DEEP`), `trigger` (one value from a fixed list in the router skill) | hook after `Bash`, when the command is the router's `record.py router --depth D --trigger T`. The command only prints a receipt; the hook records it with the session id, which the router does not have. |
 | `kept` | `tasks` (1 to 999), `reason` (one value from a fixed list), `route_by` (`table`, `judge`, `user`) | hook after `Bash`, when the command is `fnl-delegate`'s `record.py keep --tasks N --reason R [--route-by B]`, which only prints a receipt. |
+| `task` | `id` (only `^T[0-9]{1,4}$`) | hook after a `record.py task --id T012` command; the command validates the id and only prints a receipt. |
 | `judge` | `site` (`route`, `depth`, `activity`, `instruction`), `grader` (`judge`, `agent`), `result` (`validated`, `unverified`), `followed` (`yes`, `no`, `na`) | hook after a `record.py judge --site S --grader G --result R --followed F` command; the command only prints a receipt. |
+
+Task events hold only a task id of the form `T` plus one to four ASCII digits, besides the common fields; no command text or other content is stored. They are advisory dashboard data, never input to task selection or a gate: any session can forge an event.
 
 Judge receipts hold only `site`, `grader`, `result`, and `followed` from fixed enumerations; they never hold a question, an answer, a cost, a file name or a path.
 

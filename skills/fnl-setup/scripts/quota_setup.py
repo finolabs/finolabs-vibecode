@@ -72,13 +72,15 @@ def read_host():
         return ""
 
 
-def render(plan):
+def render(plan, confirmed=False):
     lines = ["## Quota probe", "", "- Quota probe: " + plan["choice"], "- Date: " + plan["date"]]
     if plan["choice"] == "on":
         lines.append("- Agents: " + ", ".join(plan["agents"]))
         for agent, entry in plan["agents"].items():
             lines.append(f"- Executable {agent}: {entry['executable']}")
             lines.append(f"- Resolved {agent}: {entry['resolved']}")
+            if confirmed:
+                lines.append(f"- Resolved digest {agent}: {hashlib.sha256(entry['resolved'].encode()).hexdigest()}")
             if entry["interpreter"]:
                 lines.append(f"- Interpreter {agent}: {entry['interpreter']}")
         for label, path in plan["configs"].items():
@@ -116,6 +118,13 @@ def digest(plan):
     return hashlib.sha256(json.dumps(plan, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def validate_folders(folders):
+    try:
+        qp.validate_configs(folders)
+    except FileNotFoundError as error:
+        raise ValueError("config folder missing") from error
+
+
 def preview(agents, configs=None, off=False):
     root = dr.consent_root()
     if root is None:
@@ -126,20 +135,32 @@ def preview(agents, configs=None, off=False):
     if any("\n" in value or "\r" in value for pair in folders.items() for value in pair):
         raise ValueError("newline or carriage return in quota label or path")
     if "claude" in agents and not off:
+        unique = {}
+        for label, path in folders.items():
+            try:
+                os.path.samefile(path, path)
+                if any(os.path.samefile(path, previous) for previous in unique.values()):
+                    continue
+            except FileNotFoundError as error:
+                raise ValueError("config folder missing") from error
+            unique[label] = path
+        folders = unique
         default = str(dr.account_home() / ".claude")
-        if not any(os.path.samefile(path, default) for path in folders.values()):
+        if not any(os.path.samefile(path, default) for path in folders.values() if Path(default).exists()):
             if "default" in folders:
                 raise ValueError("default label names another folder")
             folders = {"default": default, **folders}
-        qp.validate_configs(folders)
+        validate_folders(folders)
     elif folders:
         raise ValueError("Claude not selected")
     text = read_host()
     old = qp.section(text).splitlines()
     for agent in agents:
-        if (any(line.startswith(f"- Executable {agent}: ") for line in old)
-                and not any(line.startswith(f"- Resolved {agent}: ") for line in old)):
-            print(f"Quota probe {agent} needs re-preview: missing Resolved record.", file=sys.stderr)
+        if any(line.startswith(f"- Executable {agent}: ") for line in old):
+            if not any(line.startswith(f"- Resolved {agent}: ") for line in old):
+                print(f"Quota probe {agent} needs re-preview: missing Resolved record.", file=sys.stderr)
+            elif not any(line.startswith(f"- Resolved digest {agent}: ") for line in old):
+                print(f"Quota probe {agent} needs re-preview: missing Resolved digest.", file=sys.stderr)
     plan = {"choice": "off" if off else "on", "date": qp.now().date().isoformat(),
             "created": qp.stamp(qp.now()), "root": str(root), "host_digest": hashlib.sha256(text.encode()).hexdigest(),
             "agents": {a: resolve_executable(a) for a in agents} if not off else {}, "configs": folders}
@@ -162,6 +183,8 @@ def validate_plan(plan):
     if not qp.timedelta(0) <= qp.now() - qp.timestamp(plan["created"]) <= qp.timedelta(minutes=60):
         raise ValueError("preview expired; preview again")
     agents, folders = plan["agents"], plan["configs"]
+    if isinstance(folders, dict) and any(isinstance(value, str) and ("\n" in value or "\r" in value) for pair in folders.items() for value in pair):
+        raise ValueError("newline or carriage return in quota label or path")
     if not isinstance(agents, dict) or set(agents) - qp.SOURCES.keys() or not isinstance(folders, dict):
         raise ValueError("agents")
     if plan["choice"] == "off":
@@ -187,7 +210,7 @@ def validate_plan(plan):
             excluded(Path(entry["interpreter"]))
         qp.checked_executable(agent, entry)
     if "claude" in agents:
-        qp.validate_configs(folders)
+        validate_folders(folders)
         if not any(os.path.samefile(path, dr.account_home() / ".claude") for path in folders.values()):
             raise ValueError("default install missing")
     elif folders:
@@ -215,7 +238,7 @@ def apply(plan, supplied_digest, yes=False):
                 text = ""
             if hashlib.sha256(text.encode()).hexdigest() != plan["host_digest"]:
                 raise ValueError("host changed; preview again")
-            result = replace_section(text, render(plan)).encode()
+            result = replace_section(text, render(plan, confirmed=True)).encode()
             if len(result) > 262144:
                 raise ValueError("host too large")
             dr.atomic_write(folder, "host.md", result)

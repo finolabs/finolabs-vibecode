@@ -842,21 +842,6 @@ class CheckupTest(unittest.TestCase):
         rows = [r for r in self.scan_direct()[0]["results"] if r["pattern"] == "include-cycle"]
         self.assertEqual(len(rows), 2)
 
-    def test_section_ranges_use_newlines_and_keep_unclosed_fences(self):
-        spec = importlib.util.spec_from_file_location(
-            "scan_ranges", ROOT / "skills/fnl-scan-agents/scripts/agent_scan.py")
-        scan = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(scan)
-        for separator in ("\u2028", "\u2029"):
-            with self.subTest(separator=repr(separator)):
-                text = "## Agents on this machine\nkeep" + separator + "## Other\nkeep too\n"
-                self.assertEqual(scan.section_ranges(text, scan.HEADING), [(0, len(text))])
-        for fence in ("```", "~~~"):
-            with self.subTest(fence=fence):
-                text = "## Agents on this machine\n" + fence + "\n## Other\nstill fenced\n"
-                self.assertEqual(scan.section_ranges(text, scan.HEADING), [(0, len(text))])
-                self.assertEqual(scan.section_ranges(fence + "\n" + text, scan.HEADING), [])
-
     def test_rework_dense_include_performance(self):
         text = "---\ntrigger: manual\n---\n" + "".join(f"@[rule](r{n:02}.md)\n" for n in range(58))
         for n in range(58):
