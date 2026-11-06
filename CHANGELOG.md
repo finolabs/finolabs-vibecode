@@ -13,9 +13,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Fixed
 
 - Parse capped hook payloads in linear time while preserving complete metadata fields and discarding truncated tool input.
-- Fail closed on unreadable quota caches and legacy records missing a resolved target; require a fresh setup preview for those records and verify the confirmed executable still resolves to its recorded target before running.
+- Fail closed on unsafe, capped or unparsable quota caches (the worker replaces them with the next reading; content that fails validation counts as no reading) and legacy records missing a resolved target; require a fresh setup preview for those records and verify the confirmed executable still resolves to its recorded target before running.
 - Refuse line breaks in quota setup paths and labels, and recognize the default Claude folder by filesystem identity, including case variants on case-insensitive volumes.
-
 - Restore Claude quota readings by supplying the account database username to probe children and leaving `CLAUDE_CONFIG_DIR` unset for the default install while retaining it for listed extra folders.
 
 ## [0.1.8] - 2026-11-05

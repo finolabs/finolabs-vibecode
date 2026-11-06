@@ -586,6 +586,25 @@ class QuotaTest(unittest.TestCase):
         self.assertEqual([e["event"] for e in events], ["first_edit"])
         self.assertNotIn("private content", json.dumps(events))
 
+    def test_invalid_cache_content_counts_as_no_reading(self):
+        self.ready()
+        path = self.root / "state/quota/quota.json"
+        path.write_text('{"agy":{"default":{"bad":1}}}')
+        path.chmod(0o600)
+        with qp.state_folder() as folder:
+            self.assertEqual(qp.read_cache(folder), {})
+
+    def test_worker_repairs_unsafe_or_corrupt_cache_but_hooks_refuse_it(self):
+        self.ready()
+        path = self.root / "state/quota/quota.json"
+        for content, mode in ((b"{not json", 0o600), (b"{}", 0o666), (b" " * (qp.LIMIT + 1), 0o600)):
+            path.write_bytes(content)
+            path.chmod(mode)
+            with qp.state_folder() as folder:
+                with self.assertRaises((OSError, ValueError, OverflowError)):
+                    qp.read_cache(folder)
+                self.assertEqual(qp.read_cache(folder, repair=True), {})
+
     def test_capped_cache_does_not_start_worker(self):
         self.configure({"agy": self.fake("agy")})
         self.ready()

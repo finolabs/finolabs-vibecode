@@ -234,8 +234,7 @@ def config():
                     raise ValueError("absolute executable")
             result[agent] = {"executable": executable, "interpreter": interpreter,
                              "configs": folders if agent == "claude" else {"default": None}}
-            if "Resolved " + agent in values:
-                result[agent]["resolved"] = values["Resolved " + agent]
+            result[agent]["resolved"] = values["Resolved " + agent]
         return result
     except (OSError, ValueError, KeyError, UnicodeError):
         return {}
@@ -352,9 +351,18 @@ def write_json(folder, name, value):
     dr.atomic_write(folder, name, json.dumps(value, allow_nan=False, separators=(",", ":")).encode())
 
 
-def read_cache(folder):
+def read_cache(folder, repair=False):
+    # Unsafe, capped or unparsable files raise (hooks fail closed); only the worker
+    # passes repair=True, because its atomic write replaces such a file.
     try:
         data = read_json(folder, "quota.json")
+    except FileNotFoundError:
+        return {}
+    except (ValueError, OverflowError):
+        if repair:
+            return {}
+        raise
+    try:
         if not isinstance(data, dict) or data.keys() - SOURCES.keys():
             raise ValueError("cache")
         for agent, labels in data.items():
@@ -373,8 +381,8 @@ def read_cache(folder):
                         raise ValueError("group")
                     group(item["name"], item["window"], item["remaining_fraction"], item["reset_time"])
         return data
-    except FileNotFoundError:
-        return {}
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return {}  # content that fails validation counts as no reading; the worker replaces it
 
 
 def backoff(folder, configs, current):
@@ -642,7 +650,7 @@ def worker(jobs):
                 delays.setdefault(agent, {})[label] = {"retry_after": stamp(now() + timedelta(seconds=seconds)), "error": error}
                 write_json(folder, "backoff.json", delays)
                 if groups is not None:
-                    cache = read_cache(folder)
+                    cache = read_cache(folder, repair=True)
                     cache.setdefault(agent, {})[label] = {"measured": stamp(measured), "source": SOURCES[agent], "groups": groups}
                     write_json(folder, "quota.json", cache)
     finally:
