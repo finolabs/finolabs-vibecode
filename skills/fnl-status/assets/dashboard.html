@@ -354,7 +354,30 @@ td.r, th.r { text-align: right; }
   }
 
   /* draw() builds the whole page from D, so a newer data.js can replace it in place; the month shown and the open tables stay. */
-  var month = null, tables = null, tablesOpen = false, genEl = null;
+  var month = null, tables = null, tablesOpen = false, genEl = null, freshnessEl = null;
+  function updateFreshness() {
+    if (!freshnessEl) return;
+    var f = D.freshness || {}, now = Date.now(), builtAge = (now - Date.parse(f.built_at)) / 1000;
+    var elapsed = Number.isFinite(builtAge) ? Math.max(0, builtAge) : 0;
+    function minutes(seconds) { var n = Math.floor(seconds / 60); return n + (n === 1 ? " minute" : " minutes"); }
+    function age(value) {
+      return value == null ? "no reading" : typeof value === "number" ? minutes(value + elapsed) + " old" : String(value);
+    }
+    var hosts = f.latest_event || {}, names = {claude: "Claude Code", codex: "Codex", antigravity: "Antigravity"};
+    var lines = ["built " + (f.built_at || "—")];
+    Object.keys(hosts).forEach(function (host) {
+      var quiet = (now - Date.parse(hosts[host])) / 1000 > 900;
+      var otherActive = Object.keys(hosts).some(function (other) {
+        return other !== host && (now - Date.parse(hosts[other])) / 1000 <= 900;
+      });
+      lines.push((Object.prototype.hasOwnProperty.call(names, host) ? names[host] : host) + ": last event " + hosts[host] +
+                 (quiet && otherActive ? "; hooks may need trust" : ""));
+    });
+    lines.push("ledger: " + age(f.ledger_age_seconds), "quota: " + age(f.quota_age_seconds));
+    if (builtAge > 60 && document.visibilityState === "visible")
+      lines.push("data is " + minutes(builtAge) + " old; it updates while a session runs tools");
+    freshnessEl.textContent = lines.join(" · ");
+  }
   function draw() {
   if (tables) tablesOpen = tables.open;
   app.replaceChildren();
@@ -593,6 +616,8 @@ td.r, th.r { text-align: right; }
   (D.sources || []).forEach(function (x) { src.appendChild(tipOn(t("span", x.ok ? "" : "no", x.name), x.note || "")); });
   genEl = t("span", "", D.generated || "—");
   app.appendChild(h("div", "status", [src, h("span", "", ["sessions " + num(sess.total) + " · with edits " + num(sess.with_edits) + " · unclassified " + num(sess.unclassified) + " · writer errors " + num(D.errors) + " · generated ", genEl])]));
+  freshnessEl = app.appendChild(t("p", "status", ""));
+  updateFreshness();
   }
   draw();
 
@@ -612,16 +637,17 @@ td.r, th.r { text-align: right; }
 
   /* Live update: while the tab is visible, load data.js again. A page on disk cannot watch a file, and this needs no server. */
   var POLL_MS = 5000, loading = false;
-  function content(d) { return JSON.stringify(d, function (key, v) { return key === "generated" ? undefined : v; }); }
+  function content(d) { return JSON.stringify(d, function (key, v) { return key === "generated" || key === "freshness" ? undefined : v; }); }
   var shown = content(dataNow());
   function apply() {
     var next = dataNow();
     if (!next || next === D) return;
     D = next;
     var c = content(next);
-    if (c !== shown) { shown = c; draw(); } else genEl.textContent = next.generated || "—";
+    if (c !== shown) { shown = c; draw(); } else { genEl.textContent = next.generated || "—"; updateFreshness(); }
   }
   function poll() {
+    updateFreshness();
     if (loading || document.visibilityState !== "visible") return;
     loading = true;
     var s = document.createElement("script");

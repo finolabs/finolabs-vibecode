@@ -11,6 +11,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Show dashboard freshness: build time, newest event per host, ledger and quota ages, quiet-host warnings and a visible-tab stale-data notice. A newer ledger bypasses the rebuild throttle; Antigravity events start a detached, consent-gated rebuild with a 20-second self-cap.
 - Add an opt-in Antigravity pre-invocation compaction stop with a user-chosen transcript byte limit, private size marks and a digest-bound setup preview; it keeps its own hook group and fails open. User-level hooks and interactive TUI delivery remain unverified.
 
 - Add the advisory compaction steward, a deterministic threshold check and private local handovers re-injected on compact session starts; hook delivery remains unverified, and no hook declarations change.

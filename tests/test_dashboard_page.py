@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = ROOT / "skills/fnl-status/assets/dashboard.html"
@@ -63,6 +64,7 @@ class DashboardPageTest(unittest.TestCase):
         spec.loader.exec_module(refresh)
         with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"FNL_STATE_DIR": tmp + "/state",
                                                                                "ORCHESTRATION_LEDGER": tmp + "/none.jsonl"}):
+            account(self, Path(tmp) / "home")
             built = refresh.build()
         sample = json.loads(FIXTURE.read_text(encoding="utf-8"))
         self.assertEqual(set(sample), set(built))
@@ -188,6 +190,55 @@ class DashboardScriptTest(unittest.TestCase):
     def sample(self):
         return json.loads(FIXTURE.read_text(encoding="utf-8"))
 
+    # Acceptance 3: fake clock exercises both warning thresholds without new data.
+    def freshness_data(self):
+        data = self.sample()
+        data["freshness"] = {"built_at": "2026-11-06T10:00:00Z", "latest_event": {
+            "codex": "2026-11-06T09:45:00Z", "claude": "2026-11-06T10:00:00Z"},
+            "ledger_age_seconds": 120, "quota_age_seconds": 14400}
+        return data
+
+    def render_freshness(self, data, scenario=None):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "data.json"
+            path.write_text(json.dumps(data))
+            return self.render(path, scenario)
+
+    def test_freshness_line_and_quiet_warning_advance_with_fake_clock(self):
+        data = self.freshness_data()
+        initial = self.render_freshness(data, {"now": "2026-11-06T10:00:00Z"})
+        for value in ("built 2026-11-06T10:00:00Z", "Codex: last event 2026-11-06T09:45:00Z",
+                      "ledger: 2 minutes old", "quota: 240 minutes old"):
+            self.assertIn(value, initial["text"])
+        self.assertNotIn("hooks may need trust", initial["text"])
+        self.assertNotIn("it updates while a session runs tools", initial["text"])
+        later = self.render_freshness(data, {"now": "2026-11-06T10:00:00Z", "advance_ms": 65000, "fail": True})
+        self.assertIn("Codex: last event 2026-11-06T09:45:00Z; hooks may need trust", later["text"])
+        self.assertNotIn("Claude Code: last event 2026-11-06T10:00:00Z; hooks may need trust", later["text"])
+        self.assertIn("data is 1 minute old; it updates while a session runs tools", later["text"])
+        self.assertIn("ledger: 3 minutes old", later["text"])
+        self.assertFalse(later["redrawn"])
+        quiet = self.render_freshness(data, {"now": "2026-11-06T10:16:00Z"})
+        self.assertNotIn("hooks may need trust", quiet["text"], "no host is active")
+
+    def test_freshness_stale_message_waits_for_visible_tab_and_rechecks_on_return(self):
+        data = self.freshness_data()
+        hidden = self.render_freshness(data, {"now": "2026-11-06T10:02:00Z", "hidden": True})
+        self.assertNotIn("it updates while a session runs tools", hidden["text"])
+        visible = self.render_freshness(data, {"now": "2026-11-06T10:02:00Z", "hidden": True, "reveal": True})
+        self.assertIn("data is 2 minutes old; it updates while a session runs tools", visible["text"])
+
+    def test_freshness_host_and_value_are_text_and_missing_times_are_named(self):
+        data = self.freshness_data()
+        attack = "<img src=x onerror=alert(1)>"
+        data["freshness"].update(built_at=attack, latest_event={attack: attack},
+                                 ledger_age_seconds=attack, quota_age_seconds=None)
+        out = self.render_freshness(data)
+        self.assertGreaterEqual(out["text"].count(attack), 4)
+        self.assertIn("quota: no reading", out["text"])
+        self.assertNotIn("img", out["tags"])
+        self.assertNotIn("script", out["tags"])
+
     def test_a_visible_tab_polls_every_five_seconds_and_redraws_new_numbers(self):
         changed = self.sample()
         changed["sessions"]["with_edits"] = 98765
@@ -201,9 +252,14 @@ class DashboardScriptTest(unittest.TestCase):
     def test_a_new_build_with_the_same_numbers_only_updates_the_generated_time(self):
         same = self.sample()
         same["generated"] = "2099-01-01T00:00:00+07:00"
+        same["freshness"].update(built_at=same["generated"], ledger_age_seconds=180,
+                                 latest_event={"antigravity": same["generated"]})
         out = self.render(FIXTURE, {"next": same})
         self.assertFalse(out["redrawn"])
         self.assertIn("generated 2099-01-01T00:00:00+07:00", out["text"])
+        self.assertIn("built 2099-01-01T00:00:00+07:00", out["text"])
+        self.assertIn("Antigravity: last event 2099-01-01T00:00:00+07:00", out["text"])
+        self.assertIn("ledger: 3 minutes old", out["text"])
 
     def test_a_hidden_tab_loads_nothing(self):
         changed = self.sample()
