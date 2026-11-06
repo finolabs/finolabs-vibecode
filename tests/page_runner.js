@@ -40,7 +40,12 @@ const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m
 if (scripts.length !== 1) throw new Error("expected one inline script, found " + scripts.length);
 
 const byId = {};
-const loads = [], timers = [];
+const loads = [], timers = [], handlers = {};
+let clock = scenario.now ? Date.parse(scenario.now) : Date.now();
+class FakeDate extends Date {
+  constructor(...args) { super(...(args.length ? args : [clock])); }
+  static now() { return clock; }
+}
 const document = {
   documentElement: new Node_("html"),
   body: new Node_("body"),
@@ -56,10 +61,11 @@ const document = {
   createTextNode: (s) => { const n = new Node_("#text"); n._text = String(s); return n; },
   getElementById: (id) => byId[id] || (byId[id] = new Node_("div")),
   querySelector: () => new Node_("div"),
-  addEventListener() {},
+  addEventListener(type, fn) { handlers[type] = fn; },
 };
 const sandbox = {
   document,
+  Date: FakeDate,
   console,
   setInterval: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
   window: { matchMedia: () => ({ matches: false }), addEventListener() {}, innerWidth: 400 },
@@ -72,7 +78,11 @@ vm.runInContext(scripts[0], sandbox, { filename: "dashboard.html" });
 
 const app = byId["app"];
 const first = app ? app.children[0] : null;
-if (scenarioPath) for (let i = 0; i < (scenario.ticks || 1); i++) timers.forEach((x) => x.fn());
+if (scenarioPath) for (let i = 0; i < (scenario.ticks || 1); i++) {
+  clock += scenario.advance_ms || 0;
+  timers.forEach((x) => x.fn());
+}
+if (scenario.reveal) { document.visibilityState = "visible"; handlers.visibilitychange(); }
 const out = { text: app ? app.textContent.replace(/\s+/g, " ").trim() : "", cells: 0, svg: 0, openRings: 0, tags: [], loads, poll_ms: timers.map((x) => x.ms), redrawn: !!first && app.children[0] !== first };
 (function walk(n) { out.tags.push(n.tag); out.openRings += n.className === "dot open" ? 1 : 0; out.cells += n.className.split(" ").includes("dy") ? 1 : 0; out.svg += n.tag === "svg" ? 1 : 0; n.children.forEach(walk); })(app || new Node_("x"));
 process.stdout.write(JSON.stringify(out));

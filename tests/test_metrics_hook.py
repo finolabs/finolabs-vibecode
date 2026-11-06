@@ -2,6 +2,7 @@
 
 import importlib.util
 import itertools
+import io
 import json
 import os
 import subprocess
@@ -197,11 +198,6 @@ class HookTest(unittest.TestCase):
         self.assertEqual((started["event"], started["host"], started["source"]), ("session_start", "antigravity", "startup"))
         self.assertEqual(started["sid"], "31357bed-2c92-4bc3-ad3d-23c9545c7b3e")
         self.assertEqual((edited["event"], committed["event"]), ("first_edit", "commit"))
-
-    def test_an_antigravity_session_start_does_not_wait_for_a_dashboard_refresh(self):
-        self.consent()
-        self.agy("session_start")
-        self.assertFalse((self.dir / "data.js").exists())
 
     def test_an_antigravity_hook_still_answers_with_an_empty_object_when_off_or_given_garbage(self):
         self.run_hook(None, raw="garbage", args=("--host", "antigravity", "--event", "post_tool_use"), stdout="{}\n")
@@ -472,11 +468,6 @@ class HookTest(unittest.TestCase):
         self.run_hook(self.tool_call(), env=off)
         self.assertFalse((self.dir / "data.js").exists())
 
-    def test_an_antigravity_tool_call_does_not_wait_for_a_rebuild(self):
-        self.consent()
-        self.agy("post_tool_use", {"name": "run_command", "args": {"CommandLine": "ls"}})
-        self.assertFalse((self.dir / "data.js").exists())
-
     def test_the_stop_hook_is_async_on_both_hosts(self):
         for name in (".claude-plugin", ".codex-plugin"):
             config = json.loads((ROOT / name / "hooks.json").read_text())
@@ -500,6 +491,115 @@ class HookTest(unittest.TestCase):
         self.run_hook({"hook_event_name": "PostToolUse", "session_id": "s1", "cwd": str(self.repo), "tool_name": "Skill",
                        "tool_input": {"skill": "fnl-x"}}, env={**self.env, "FNL_METRICS": "off"})
         self.assertEqual(self.events(), [])
+
+
+class DetachedFreshnessTest(unittest.TestCase):
+    """Acceptance 2: Antigravity starts, never waits, and fails closed."""
+
+    def setUp(self):
+        HookTest.setUp(self)
+        spec = importlib.util.spec_from_file_location("freshness_hook", HOOK)
+        self.hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.hook)
+
+    def invoke(self, event):
+        payload = {"conversationId": "freshness", "workspacePaths": [str(self.repo)],
+                   "toolCall": {"name": "run_command", "args": {"command": "ls"}}}
+        with mock.patch.object(sys, "argv", [str(HOOK), "--host", "antigravity", "--event", event]), \
+                mock.patch.object(sys, "stdin", io.TextIOWrapper(io.BytesIO(json.dumps(payload).encode()))), \
+                mock.patch("quota_probe.trigger"), mock.patch("quota_probe.worker_guard", return_value=False), \
+                mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            self.hook.main()
+        self.assertEqual(out.getvalue(), "{}\n")
+
+    def test_fixed_launch_contract_for_both_antigravity_events(self):
+        fm.write_consent(90)
+        with mock.patch.dict(os.environ, {"PYTHONPATH": "hostile", "FNL_DISPATCH_ID": "ignored", "EXTRA": "ignored"}):
+            for event in ("session_start", "post_tool_use"):
+                with self.subTest(event=event), mock.patch.object(subprocess, "Popen") as start, \
+                        mock.patch.object(subprocess, "run") as synchronous:
+                    self.invoke(event)
+                    start.assert_called_once_with(
+                        [sys.executable, "-I", str(self.hook.REFRESH), "run", "--throttle", "10"],
+                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        start_new_session=True, close_fds=True, cwd=str(self.hook.REFRESH.parent),
+                        env={k: os.environ[k] for k in ("SYSTEMROOT",) if k in os.environ})
+                    synchronous.assert_not_called()
+
+    def test_no_start_without_recorded_consent_when_off_or_lock_held(self):
+        with mock.patch.object(subprocess, "Popen") as start:
+            self.invoke("post_tool_use")
+            start.assert_not_called()
+        fm.write_consent(90)
+        with mock.patch.dict(os.environ, {"FNL_METRICS": "off"}), mock.patch.object(subprocess, "Popen") as start:
+            self.invoke("post_tool_use")
+            start.assert_not_called()
+        import fcntl
+        self.dir.mkdir(parents=True, exist_ok=True)
+        with (self.dir / "refresh.lock").open("w") as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with mock.patch.object(subprocess, "Popen") as start:
+                self.invoke("session_start")
+                self.invoke("post_tool_use")
+                start.assert_not_called()
+
+    def test_lock_probe_matches_child_state_when_host_overrides_state(self):
+        fm.write_consent(90)
+        import fcntl
+        other = Path(self.tmp.name) / "overridden-state"
+        with (self.dir / "refresh.lock").open("w") as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with mock.patch.dict(os.environ, {"FNL_STATE_DIR": str(other)}), \
+                    mock.patch.object(subprocess, "Popen") as start:
+                self.invoke("post_tool_use")
+                start.assert_not_called()
+                self.assertFalse(other.exists())
+
+    def test_real_detached_rebuild_publishes_in_the_synthetic_account(self):
+        fm.write_consent(90)
+        children = []
+        original = subprocess.Popen
+
+        def launch(*args, **kwargs):
+            child = original(*args, **kwargs)
+            children.append(child)
+            return child
+
+        with mock.patch.object(subprocess, "Popen", side_effect=launch):
+            self.invoke("session_start")
+        self.assertEqual(len(children), 1)
+        self.assertEqual(children[0].wait(timeout=5), 0)
+        data = json.loads((self.dir / "data.js").read_text().removeprefix("window.FNL_DATA = ").removesuffix(";\n"))
+        self.assertIn("antigravity", data["freshness"]["latest_event"])
+
+    def test_hook_returns_while_slow_detached_rebuild_is_still_alive(self):
+        fm.write_consent(90)
+        slow = Path(self.tmp.name) / "slow.py"
+        slow.write_text("import time; time.sleep(2)\n")
+        original = subprocess.Popen
+        children = []
+
+        def launch(*args, **kwargs):
+            child = original(*args, **kwargs)
+            children.append(child)
+            return child
+
+        with mock.patch.object(self.hook, "REFRESH", slow), mock.patch.object(subprocess, "Popen", side_effect=launch):
+            before = time.monotonic()
+            self.invoke("post_tool_use")
+            elapsed = time.monotonic() - before
+        try:
+            self.assertEqual(len(children), 1)
+            self.assertIsNone(children[0].poll())
+            self.assertLess(elapsed, 1, "the hook waited for a two-second rebuild")
+        finally:
+            for child in children:
+                child.wait(timeout=5)
+
+    def test_spawn_failure_is_ignored_and_antigravity_still_gets_json(self):
+        fm.write_consent(90)
+        with mock.patch.object(subprocess, "Popen", side_effect=OSError("cannot start")):
+            self.invoke("post_tool_use")
 
 
 if __name__ == "__main__":
