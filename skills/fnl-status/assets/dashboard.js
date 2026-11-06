@@ -41,7 +41,50 @@
     Object.keys(attrs || {}).forEach(function (k) { el.setAttribute(k, String(attrs[k])); });
     return el;
   }
-  function tipOn(el, text) { el.setAttribute("data-tip", text); return el; }
+  var tips = new WeakMap();
+  function tipSentence(spec) {
+    if (typeof spec === "string") return spec;
+    return [spec.title, spec.sub].concat((spec.rows || []).map(function (row) { return row[0] + ": " + row[1]; }),
+      spec.items || [], (spec.chips || []).map(function (chip) { return chip.label; })).filter(Boolean).map(function (part) { return String(part).replace(/[.!?]+$/, ""); }).join("; ").replace(/\s+/g, " ") + ".";
+  }
+  function tipOn(el, spec) {
+    tips.set(el, spec); el.setAttribute("data-tip", "");
+    if (typeof spec !== "string") {
+      el.setAttribute("aria-label", tipSentence(spec)); el.setAttribute("aria-describedby", "tip");
+      el.setAttribute("tabindex", "0");
+    }
+    return el;
+  }
+  function renderTip(spec) {
+    tip.textContent = "";
+    if (typeof spec === "string") { tip.textContent = spec; return; }
+    tip.appendChild(t("div", "tip-title", spec.title || ""));
+    if (spec.sub) tip.appendChild(t("div", "tip-sub", spec.sub));
+    tip.appendChild(h("div", "tip-divider"));
+    if (spec.rows && spec.rows.length) {
+      var grid = h("div", "tip-rows");
+      spec.rows.forEach(function (row) { grid.appendChild(t("span", "tip-label", row[0])); grid.appendChild(t("span", "tip-value", row[1])); });
+      tip.appendChild(grid);
+    }
+    (spec.items || []).slice(0, 5).forEach(function (item) { tip.appendChild(t("div", "tip-item", item)); });
+    if (spec.chips && spec.chips.length) {
+      var chips = h("div", "tip-chips");
+      spec.chips.forEach(function (chip) {
+        var state = ["done", "active", "accepted", "todo", "over"].indexOf(chip.state) !== -1 ? chip.state : "todo";
+        chips.appendChild(h("span", "tip-chip " + state, [h("i", "tip-dot"), String(chip.label)]));
+      });
+      tip.appendChild(chips);
+    }
+    if (spec.bar && Number.isFinite(spec.bar.max) && spec.bar.max > 0) {
+      var bar = h("div", "tip-bar"), ink = h("i", "tip-bar-fill");
+      ink.style.width = Math.max(0, Math.min(100, spec.bar.value / spec.bar.max * 100)) + "%";
+      bar.appendChild(ink);
+      (spec.bar.marks || []).forEach(function (value) {
+        var mark = h("i", "tip-bar-mark"); mark.style.left = Math.max(0, Math.min(100, value / spec.bar.max * 100)) + "%"; bar.appendChild(mark);
+      });
+      bar.setAttribute("aria-hidden", "true"); tip.appendChild(bar);
+    }
+  }
   function infoButton(text) {
     var button = t("button", "info-button", "ⓘ");
     button.setAttribute("type", "button"); button.setAttribute("tabindex", "0");
@@ -99,39 +142,15 @@
     return p;
   }
   function runningLimits() {
-    if (!D.running) return null;
-    var r = D.running, snapshot = r.snapshot || {}, processes = r.processes || [], open = r.open || [], lines = [];
-    function line(value) { lines.push(value); }
-    line("machine-wide, current user only; app processes, sessions not listed. The desktop app's session list is not readable by this plugin.");
-    line("Names are best-effort: cannot tell a sub-agent from a session. Mismatches compare families only, not process identities or repository ownership.");
-    if (snapshot.reason || !snapshot.time) {
-      line("Process snapshot: " + (snapshot.reason || "not available yet"));
-    } else {
-      line("snapshot " + snapshot.time);
-      line("processes named " + ["claude", "codex", "agy"].map(function (family) {
-        return family + ": " + processes.filter(function (p) { return p.family === family; }).length;
-      }).join(" · "));
-      if (!processes.length) line("No command-line agent processes found");
-      processes.forEach(function (p) {
-        var descendants = Object.keys(p.descendants || {}).map(function (name) { return name + ": " + p.descendants[name]; });
-        line(p.family + " · elapsed " + p.elapsed_seconds + " seconds · descendants: " + (descendants.join(", ") || "none") +
-             (p.not_started_by_coordinator ? " · not started by the coordinator" : ""));
-      });
-      ["Claude", "Codex", "Antigravity"].forEach(function (family) {
-        line(family + " app: " + ((snapshot.apps || {})[family] || 0) + " processes");
-      });
-      line("Descendants counted to depth 6, at most 500 per root; other names count as other.");
-    }
-    if (r.ledger_note) line(r.ledger_note);
-    else if (!open.length) line("No open dispatches");
-    open.forEach(function (run) {
-      line(run.agent + "/" + run.model + " · " + run.project + ": " + run.task + " · " + run.id + " · started " + run.ts +
-           " · age " + run.age_min + "/" + (run.budget_min == null ? "?" : run.budget_min) + " min" +
-           (run.check_due ? " · check due" : "") + " · liveness: " + run.liveness +
-           (run.no_process_found ? " · no process found" : ""));
-    });
-    line("Liveness verdicts are advisory agent judgment from artifacts; a process name does not prove a dispatch is running.");
-    return lines.join("\n");
+    var snapshot = D.running && D.running.snapshot || {};
+    return {title: "How to read this", items: [
+      "Lanes show elapsed time against budget and cap.",
+      "Ticks mark half budget and budget; red means over budget.",
+      "Slots count open dispatches, not identified sessions.",
+      "Quota bricks show cached remaining capacity; ? is unverified.",
+      "Processes are machine-wide, current user only; liveness is advisory" +
+        (snapshot.reason || !snapshot.time ? "; " + (snapshot.reason || "snapshot unavailable") : ".")
+    ]};
   }
   var brickId = 0;
   function brick(state, width, height, cls) {
@@ -148,7 +167,6 @@
     if (state === "accepted") {
       var id = "brick-hatch-" + (++brickId), defs = s("defs"), pattern = s("pattern", {
         id: id, width: 4, height: 4, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)"});
-      pattern.appendChild(s("rect", {width: 4, height: 4, fill: "var(--line)"}));
       pattern.appendChild(s("rect", {width: 2, height: 4, fill: "var(--warn)"}));
       defs.appendChild(pattern); svg.appendChild(defs); body.setAttribute("fill", "url(#" + id + ")");
     }
@@ -171,30 +189,33 @@
       var budget = budgetMinutes(run.budget_min), age = Number(run.age_min) || 0;
       var cap = budget > 0 ? Math.max(budget * 4 / 3, budget + 10) : null;
       var state = cap && age > cap ? "cap" : budget > 0 ? age > budget ? "over" : age >= budget / 2 ? "check" : "within" : "unknown";
-      var W = 560, H = 22, track = s("svg", {"class": "lane-track", viewBox: "0 0 560 30", width: "100%", height: 30,
-        preserveAspectRatio: "none", role: "img", "aria-label": age + "/" + (cap || "?") + " minutes of track"});
-      var studs = cap ? Math.min(60, Math.max(1, Math.round(cap / 10))) : 1;
-      for (var stud = 0; stud < studs; stud++) track.appendChild(s("rect", {"class": "lane-stud", x: stud * W / studs + W / studs * .28,
-        y: 0, width: W / studs * .5, height: 5, rx: 2, fill: "var(--line)"}));
-      track.appendChild(s("rect", {x: 0, y: 5, width: W, height: H, rx: 3, fill: "var(--raised)", stroke: "var(--line)"}));
+      var W = 560, H = 8, track = s("svg", {"class": "lane-track", width: "100%", height: 14,
+        role: "img", "aria-label": age + "/" + (cap || "?") + " minutes of track"});
+      var clipId = "lane-clip-" + (++brickId), defs = s("defs"), clip = s("clipPath", {id: clipId});
+      clip.appendChild(s("rect", {x: 0, y: 3, width: "100%", height: H, rx: 4}));
+      defs.appendChild(clip); track.appendChild(defs);
+      track.appendChild(s("rect", {"class": "lane-ground", x: 0, y: 3, width: "100%", height: H, rx: 4, fill: "var(--lane-track)"}));
+      // The outer SVG has CSS-pixel units so corners stay 4 px and ticks stay 1 px at every width.
+      // Only the inner amount scale stretches; both segments share its snapped edge.
+      var clipped = s("g", {"clip-path": "url(#" + clipId + ")"});
+      var scale = s("svg", {x: 0, y: 3, width: "100%", height: H, viewBox: "0 0 560 8", preserveAspectRatio: "none"});
       var fill = s("g", {"class": "lane-fill"});
-      var used = cap ? Math.max(0, Math.min(W, age / cap * W)) : 0;
-      var half = cap ? budget / 2 / cap * W : 0, end = cap ? budget / cap * W : 0;
-      [["teal", 0, Math.min(used, half), "var(--h3)"],
-       ["amber", half, Math.max(0, Math.min(used, end) - half), "var(--warn)"],
-       ["red", end, Math.max(0, used - end), "var(--crit)"]].forEach(function (part) {
-        fill.appendChild(s("rect", {"class": "lane-segment " + part[0], x: part[1], y: 5, width: part[2], height: H,
-          rx: part[0] === "teal" ? 3 : 0, fill: part[3]}));
+      var used = cap ? Math.round(Math.max(0, Math.min(W, age / cap * W)) * 2) / 2 : 0;
+      var half = cap ? budget / 2 / cap * W : 0, end = cap ? Math.round(budget / cap * W * 2) / 2 : 0;
+      var edge = Math.min(used, end);
+      [["brand", 0, edge, "var(--p)"], ["red", edge, used - edge, "var(--crit)"]].forEach(function (part) {
+        fill.appendChild(s("rect", {"class": "lane-segment " + part[0], x: part[1], y: 0, width: part[2], height: H,
+          "shape-rendering": "crispEdges", fill: part[3]}));
       });
-      track.appendChild(fill);
+      scale.appendChild(fill); clipped.appendChild(scale); track.appendChild(clipped);
       if (cap) [["check", half, "check deadline: half budget"], ["budget", end, "budget"]].forEach(function (item) {
-        track.appendChild(tipOn(s("rect", {"class": "lane-tick " + item[0] + "-tick", x: item[1], y: 2, width: 1.5,
-          height: H + 4, fill: "var(--fg)", opacity: .6}), item[2]));
+        track.appendChild(tipOn(s("rect", {"class": "lane-tick " + item[0] + "-tick", x: item[1] / W * 100 + "%", transform: "translate(-.5 0)", y: 0, width: 1,
+          height: 14, fill: "var(--faint)"}), item[2]));
       });
-      var label = h("div", "lane-label", [tipOn(t("span", "lane-identity", (run.agent || "other") + " " + (run.model || "—")), (run.agent || "other") + " " + (run.model || "—")),
-        tipOn(t("span", "lane-task", run.task || "—"), run.task || "—")]);
+      var label = h("div", "lane-label", [t("span", "lane-identity", (run.agent || "other") + " " + (run.model || "—")),
+        t("span", "lane-task", run.task || "—")]);
       if (run.no_process_found) {
-        var marker = tipOn(brick("todo", 12, 6, "no-process"), "no process");
+        var marker = tipOn(brick("todo", 12, 6, "no-process"), {title: "no process", items: ["No process found."]});
         marker.setAttribute("aria-hidden", "false"); marker.setAttribute("role", "img");
         marker.setAttribute("aria-label", "no process found"); marker.setAttribute("tabindex", "0");
         label.appendChild(marker);
@@ -202,10 +223,10 @@
       var lane = h("div", "lane" + (run.no_process_found ? "" : " live"), [label, track,
         t("span", "lane-value", age + "/" + (budget == null ? "?" : budget) + " m")]);
       lane.setAttribute("data-run", run.id || ""); lane.setAttribute("data-state", state);
-      tipOn(lane, (run.agent || "other") + "/" + run.model + " · " + run.project + ": " + run.task + " · " + run.id +
-        " · started " + run.ts + " · " + age + "/" + (budget == null ? "?" : budget) + " min · " +
-        (state === "cap" ? "past hard cap" : state === "over" ? "over budget" : state === "check" ? "check due" : state === "unknown" ? "budget unknown" : "within budget") +
-        " · liveness: " + run.liveness + (run.no_process_found ? " · no process found" : ""));
+      tipOn(lane, {title: (run.agent || "other") + " " + (run.model || "—"), sub: run.task || "—",
+        rows: [["elapsed", age + " min"], ["budget", budget == null ? "unknown" : budget + " min"],
+          ["check at", budget == null ? "unknown" : budget / 2 + " min"], ["cap", cap == null ? "unknown" : cap + " min"]],
+        bar: {value: age, max: cap, marks: budget == null ? [] : [budget / 2, budget]}});
       lanes.appendChild(lane);
     });
     if (!open.length) {
@@ -218,8 +239,9 @@
     limit = Number.isInteger(limit) && limit > 0 ? Math.min(100, limit) : 5;
     var slots = h("div", "slots");
     slots.setAttribute("role", "img"); slots.setAttribute("tabindex", "0");
-    slots.setAttribute("aria-label", Math.min(open.length, limit) + " of " + limit + " slots lit");
     for (var slot = 0; slot < limit; slot++) slots.appendChild(brick(slot < open.length ? "done" : "todo", 18, 10, "slot" + (slot < open.length ? " lit" : "")));
+    tipOn(slots, {title: "slots", rows: [["lit", Math.min(open.length, limit) + " of " + limit]]});
+    slots.setAttribute("aria-label", Math.min(open.length, limit) + " of " + limit + " slots lit");
     capacity.appendChild(h("div", "capacity-block", [t("div", "capacity-caption", "slots (" + limit + ")"), slots]));
     if (quota.length) {
       quota.forEach(function (q) {
@@ -231,8 +253,8 @@
           "quota-brick" + (!stale && i < lit ? " lit" : "")));
         if (stale) meter.appendChild(t("span", "quota-unknown", "?"));
         meter.setAttribute("role", "img"); meter.setAttribute("tabindex", "0");
-        meter.setAttribute("aria-label", q.agent + ": " + (fraction * 100) + "% remaining" + (stale ? " unverified" : ""));
-        tipOn(meter, q.agent + ": " + (fraction * 100) + "% remaining · measured " + q.measured + (stale ? " · unverified" : ""));
+        tipOn(meter, {title: q.agent + " quota", sub: stale ? "unverified" : null,
+          rows: [["remaining", Math.round(fraction * 100) + "%"], ["measured", q.measured]], bar: {value: fraction, max: 1, marks: [.1]}});
         capacity.appendChild(h("div", "quota-block capacity-block", [t("div", "capacity-caption", q.agent + " quota"), meter]));
       });
       TABS.get("agents").tableRows.push(tableOf("quota", ["family", "remaining", "measured", "state"], quota.map(function (q) {
@@ -345,7 +367,7 @@
       var hosts = h("span", "active-hosts");
       activityHosts(project.hosts).forEach(function (host) {
         var shape = {claude: "●", codex: "◆", antigravity: "▲"}[host];
-        hosts.appendChild(tipOn(t("span", "active-host", shape), host));
+        hosts.appendChild(tipOn(t("span", "active-host", shape), {title: host, sub: "project total · 24h", rows: [["sessions", project.sessions]]}));
       });
       var at = activityTime(project.last), age = Math.max(0, Math.floor((Date.now() - at) / 60000));
       var last = age < 60 ? age + " min" : age < 1440 ? Math.floor(age / 60) + " hr" : Math.floor(age / 1440) + " d";
@@ -379,12 +401,18 @@
     })));
     return list;
   }
-  function taskTip(task) {
-    var runs = task.runs || [], sessions = task.sessions || [];
-    return task.id + " · " + (taskState(task) === "accepted" ? "done, not accepted" : task.state) +
-      " · " + (runs.map(function (run) { return run.agent + " / " + run.model + " · " + run.id + " · " + run.elapsed_seconds + " seconds"; }).join(", ") || "no linked run") +
-      " · phase " + (task.phase == null ? "—" : task.phase) +
-      " · " + (sessions.map(function (session) { return session.id + " / " + session.host; }).join(", ") || "no linked session");
+  function taskTip(group, feature, story) {
+    if (group.length > 1) {
+      return {title: group[0].id + " to " + group[group.length - 1].id,
+        rows: [["done", "done"], ["agent on it", "active"], ["not accepted", "accepted"], ["to do", "todo"]].map(function (row) {
+          return [row[0], group.filter(function (task) { return taskState(task) === row[1]; }).length];
+        })};
+    }
+    var task = group[0], runs = task.runs || [], sessions = task.sessions || [], state = taskState(task);
+    return {title: task.id, sub: (story || "untagged") + " · spec " + String(feature).padStart(3, "0"),
+      rows: [["agent / model", runs.map(function (run) { return run.agent + " / " + run.model; }).join(", ") || "—"],
+        ["session / host", sessions.map(function (session) { return session.id + " / " + session.host; }).join(", ") || "—"]],
+      chips: [{label: {done: "done", active: "agent on it", accepted: "not accepted", todo: "to do"}[state], state: state}]};
   }
   function projectDetail(p, motion) {
     var card = h("div", "project-detail");
@@ -408,7 +436,8 @@
           var mark = brick(state, 15, 8, "task-brick");
           mark.setAttribute("data-task", group[0].id); mark.setAttribute("data-state", state); mark.setAttribute("data-count", group.length);
           mark.style.setProperty("--snap-delay", Math.min(500, motion.index++ * 10) + "ms");
-          tipOn(mark, (group.length > 1 ? group[0].id + "–" + group[group.length - 1].id + " · " + group.length + " tasks · " + state + "\n" : "") + group.map(taskTip).join("\n"));
+          tipOn(mark, taskTip(group, feature.feature, story.story));
+          mark.setAttribute("aria-hidden", "false"); mark.setAttribute("role", "img");
           cells.appendChild(mark);
         }
         var row = h("div", "story", [t("span", "story-label", story.story || "untagged"), cells, t("span", "story-count", story.done + "/" + story.total)]);
@@ -433,18 +462,13 @@
     return stack(content);
   }
   function projectLimits() {
-    if (!D.progress) return "not available yet";
-    var block = D.progress, repositories = block.repositories || {};
-    var visible = namedActivity(block).map(function (row) { return row.repo; }).filter(function (code) { return repositories[code]; });
-    var notes = ["Derived from files and local records, not from a tracker; done means the box is ticked. Linked through delegated runs or recorded task ids only; sessions that record neither remain unlinked. Task receipts are advisory, never a gate."];
-    visible.forEach(function (code) {
-      var count = (repositories[code].sessions_without_task || []).length;
-      if (count) notes.push(repoLabel(code) + ": " + count + " sessions without a task");
-    });
-    if (block.notice) notes.push("Project progress now reads this repository's task list and the ledger; nothing leaves your machine; turn off with Project progress: off in host.md under ## Project progress, or FNL_PROGRESS=off.");
-    if (block.reason) notes.push(block.reason);
-    notes.push("Up to five last-written repository snapshots. Features under specs/archive are not read or counted; finished features and stories are hidden. Accepted, not ticked remains unfinished.");
-    return notes.join("\n");
+    return {title: "How to read this", items: [
+      "Named projects show local activity in the last 24 hours.",
+      "Each small brick is a task; large groups merge by state.",
+      "Done means ticked; not accepted remains unfinished.",
+      "Finished stories and features are hidden; tables keep details.",
+      "Links use recorded task ids and runs; unlinked sessions stay separate."
+    ]};
   }
   function signed(n) { return (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n); }
 
@@ -588,7 +612,7 @@
     Object.keys(hosts).forEach(function (host) {
       var hostAge = (now - Date.parse(hosts[host])) / 1000;
       var quiet = hostAge > 900;
-      if (quiet || !Number.isFinite(hostAge)) staleHost = true;
+      if (quiet && Number.isFinite(hostAge)) staleHost = true;
       var otherActive = Object.keys(hosts).some(function (other) {
         return other !== host && (now - Date.parse(hosts[other])) / 1000 <= 900;
       });
@@ -602,11 +626,11 @@
     var n = Math.max(0, Math.floor(generatedAge));
     var relative = n < 60 ? n + " min" : n < 1440 ? Math.floor(n / 60) + " hr" : Math.floor(n / 1440) + " d";
     updatedEl.textContent = Number.isFinite(generatedAge) ? "updated " + relative + " ago" : "updated time unknown";
-    var state = !Number.isFinite(builtAge) || builtAge > 60 ? "stale" : staleHost ? "quiet" : "fresh";
+    var state = generatedAge > 360 ? "stale" : !Number.isFinite(generatedAge) || generatedAge > 10 || staleHost ? "quiet" : "fresh";
     statusDot.setAttribute("data-state", state);
-    statusDot.setAttribute("aria-label", state === "stale" ? "page data stale" : state === "quiet" ? "host data stale" : "data fresh");
+    statusDot.setAttribute("aria-label", state === "stale" ? "page data stale" : state === "quiet" ? "data or host activity quiet" : "data fresh");
     tipOn(footerInfo, lines.join("\n"));
-    if (tipAnchor === footerInfo && !tip.hidden) tip.textContent = footerInfo.getAttribute("data-tip");
+    if (tipAnchor === footerInfo && !tip.hidden) renderTip(tips.get(footerInfo));
   }
   function draw() {
   var focusedTab = null;
@@ -787,7 +811,7 @@
         trk.appendChild(st); trk.appendChild(dot);
       } else trk.appendChild(t("span", "na", "no judged run"));
       function cnt(n, c) { var e = t("span", "c" + (n ? "" : " z"), n); e.style.setProperty("--c", c); return e; }
-      rows.push(tipOn(h("div", "r", [h("div", "who", [t("span", "", x.agent + " · " + x.grade + " · n=" + x.runs), t("span", "meta", x.model)]), trk, cnt(x.quota, "var(--warn)"), cnt(x.error, "var(--crit)")]),
+      rows.push(tipOn(h("div", "r", [h("div", "who", [t("span", "", x.agent + " · " + x.grade + " · n=" + x.runs), t("span", "meta", x.model)]), trk, cnt(x.quota, "var(--warn-text, var(--warn))"), cnt(x.error, "var(--crit)")]),
         x.agent + " " + x.model + " (" + x.grade + "): " + x.runs + " runs, first pass " + pct(fp) + ", quota " + x.quota + ", error " + x.error + ", median " + x.median_min + " min"));
     });
     dl = stack([h("div", "dl", rows), legend([["first pass at or above 60%", "var(--good)"], ["below 60%", "var(--crit)"], ["open ring: fewer than 5 runs", "var(--faint)"]])]);
@@ -883,8 +907,8 @@
   function showTip(el, x, y) {
     if (!el || el === dismissedTip) return;
     if (tipAnchor !== el) closeTip();
-    tipAnchor = el; tip.textContent = el.getAttribute("data-tip"); tip.hidden = false;
-    tip.style.pointerEvents = el.classList.contains("info-button") ? "auto" : "none";
+    tipAnchor = el; renderTip(tips.get(el)); tip.hidden = false;
+    tip.style.pointerEvents = "auto";
     if (el.classList.contains("info-button")) el.setAttribute("aria-expanded", "true");
     var b = el.getBoundingClientRect();
     tip.style.left = Math.max(8, Math.min(x == null ? b.left : x + 12, window.innerWidth - 286)) + "px";
@@ -892,31 +916,31 @@
       window.innerHeight - tip.getBoundingClientRect().height - 8)) + "px";
   }
   document.addEventListener("pointermove", function (e) {
-    if (pinnedTip || e.target === tip) return;
+    if (pinnedTip || (e.target.closest && e.target.closest("#tip"))) return;
     var el = e.target.closest && e.target.closest("[data-tip]");
     if (dismissedTip !== el) dismissedTip = null;
     if (!el) { if (document.activeElement !== tipAnchor) closeTip(); return; }
     showTip(el, e.clientX, e.clientY);
   });
   document.addEventListener("pointerout", function (e) {
-    if (e.relatedTarget === tip) return;
+    if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("#tip")) return;
     var next = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("[data-tip]");
     if (tipAnchor !== next && !pinnedTip && document.activeElement !== tipAnchor) closeTip();
     if (dismissedTip !== next) dismissedTip = null;
   });
   document.addEventListener("focusin", function (e) {
-    if (!e.target.getAttribute || !e.target.getAttribute("data-tip")) return;
+    if (!tips.has(e.target)) return;
     dismissedTip = null; showTip(e.target);
   });
   document.addEventListener("focusout", function () { dismissedTip = null; if (!pinnedTip) closeTip(); });
   document.addEventListener("click", function (e) {
-    var el = e.target.closest && e.target.closest(".info-button");
+    var el = e.target.closest && e.target.closest("[data-tip]");
     if (!el) return;
     if (pinnedTip === el) { dismissedTip = el; closeTip(); }
     else { dismissedTip = null; showTip(el); pinnedTip = el; }
   });
   document.addEventListener("pointerdown", function (e) {
-    if (e.target === tip) return;
+    if (e.target.closest && e.target.closest("#tip")) return;
     var el = e.target.closest && e.target.closest("[data-tip]");
     if (el !== tipAnchor) { dismissedTip = tipAnchor; closeTip(); }
   });

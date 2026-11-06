@@ -236,13 +236,13 @@ class DashboardScriptTest(unittest.TestCase):
 
     @classmethod
     def info_text(cls, out, tab):
-        return next(m['attrs']['data-tip'] for m in cls.marks(out, 'info-button')
-                    if m['panel'] == 'panel-' + tab and not m['attrs']['data-tip'].startswith('sources '))
+        return next(m['tooltip'] for m in cls.marks(out, 'info-button')
+                    if m['panel'] == 'panel-' + tab and not m['tooltip'].startswith('sources '))
 
     @classmethod
     def footer_text(cls, out):
-        return next(m['attrs']['data-tip'] for m in cls.marks(out, 'info-button')
-                    if m['attrs']['data-tip'].startswith('sources '))
+        return next(m['tooltip'] for m in cls.marks(out, 'info-button')
+                    if m['tooltip'].startswith('sources '))
 
     def test_info_buttons_replace_limits_and_preserve_each_tabs_text(self):
         out = self.render(FIXTURE, {'now': '2026-11-06T10:00:00Z'})
@@ -251,19 +251,18 @@ class DashboardScriptTest(unittest.TestCase):
         for button in buttons:
             self.assertEqual(button['tag'], 'button')
             self.assertEqual(button['text'], 'ⓘ')
-            for key, value in {'type': 'button', 'tabindex': '0', 'aria-label': 'About this data',
+            for key, value in {'type': 'button', 'tabindex': '0',
                                'aria-describedby': 'tip', 'aria-expanded': 'false'}.items():
                 self.assertEqual(button['attrs'][key], value)
         self.assertIn('machine-wide, current user only', self.info_text(out, 'agents'))
-        self.assertIn('processes named claude: 1 · codex: 2 · agy: 0', self.info_text(out, 'agents'))
-        self.assertIn('Descendants counted to depth 6', self.info_text(out, 'agents'))
-        self.assertIn('Liveness verdicts are advisory', self.info_text(out, 'agents'))
-        self.assertIn('Derived from files and local records', self.info_text(out, 'project'))
-        self.assertIn('sessions without a task', self.info_text(out, 'project'))
-        self.assertIn('Accepted, not ticked remains unfinished.', self.info_text(out, 'project'))
+        self.assertIn('liveness is advisory', self.info_text(out, 'agents'))
+        self.assertIn('not accepted remains unfinished', self.info_text(out, 'project'))
         for tab in ('agents', 'project'):
-            self.assertIn('\n', self.info_text(out, tab))
-            self.assertNotIn(self.info_text(out, tab).split('\n')[0], out['text'])
+            button = next(m for m in buttons if m['panel'] == 'panel-' + tab)
+            self.assertEqual(button['spec']['title'], 'How to read this')
+            self.assertLessEqual(len(button['spec']['items']), 5)
+            self.assertTrue(all(len(item) < 100 for item in button['spec']['items']))
+            self.assertNotIn(button['spec']['items'][0], out['text'])
         self.assertFalse(any(p['tag'] == 'details' and 'limits' in p['cls'].split() for p in out['picture']))
         self.assertNotIn('.limits', PAGE.read_text())
         for text in ('indicative', 'events per day', 'from the dispatch ledger'):
@@ -281,9 +280,9 @@ class DashboardScriptTest(unittest.TestCase):
                 self.assertEqual([state['hidden'] for state in out['tipStates']],
                                  [False, True, True, True, False, True, False, True, False, True])
                 text = self.footer_text(out) if tab == 'footer' else self.info_text(out, tab)
-                self.assertEqual(out['tipStates'][0]['text'], text)
+                self.assertEqual(' '.join(out['tipStates'][0]['text'].split()), ' '.join(text.split()))
                 self.assertEqual(out['tipStates'][0]['attrs']['role'], 'tooltip')
-                self.assertEqual(out['tipStates'][6]['text'], text)
+                self.assertEqual(' '.join(out['tipStates'][6]['text'].split()), ' '.join(text.split()))
                 self.assertFalse(out['tipStates'][6]['hidden'])
                 self.assertTrue(all(button['attrs']['aria-expanded'] == 'false' for button in self.marks(out, 'info-button')))
 
@@ -296,7 +295,7 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render(FIXTURE, {'now': '2026-11-06T10:00:00Z'})
         meters = self.marks(out, 'quota-bricks')
         for meter, value in zip(meters, ('68%', '8%', '42%')):
-            self.assertIn(value + ' remaining', meter['attrs']['aria-label'])
+            self.assertIn('remaining: ' + value, meter['attrs']['aria-label'])
             self.assertEqual(meter['attrs']['role'], 'img')
             self.assertEqual(meter['attrs']['tabindex'], '0')
         self.assertIn('unverified', meters[2]['attrs']['aria-label'])
@@ -309,7 +308,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(marker['attrs']['role'], 'img')
         self.assertEqual(marker['attrs']['tabindex'], '0')
         out = self.render(FIXTURE, {'actions': [dict(tooltip='focus', target='quota-bricks')]})
-        self.assertIn('68% remaining', out['tipStates'][0]['text'])
+        self.assertIn('68%', out['tipStates'][0]['text'])
 
     def test_budget_studs_are_bounded_and_huge_or_nonfinite_is_unknown(self):
         data = self.sample()
@@ -319,15 +318,15 @@ class DashboardScriptTest(unittest.TestCase):
             with self.subTest(budget=budget):
                 data['running']['open'] = [dict(template, budget_min=budget)]
                 out = self.render_freshness(data)
-                self.assertEqual(len(self.marks(out, 'lane-stud')), studs)
+                self.assertEqual(self.marks(out, 'lane-stud'), [])
                 self.assertEqual(self.marks(out, 'lane')[0]['attrs']['data-state'], state)
                 if state == 'unknown':
                     self.assertEqual(self.marks(out, 'lane-value')[0]['text'], '5/? m')
                     self.assertEqual(self.marks(out, 'lane-tick'), [])
-                    self.assertIn('budget unknown', self.marks(out, 'lane')[0]['attrs']['data-tip'])
+                    self.assertIn('budget: unknown', self.marks(out, 'lane')[0]['tooltip'])
         for value in ('Infinity', '-Infinity', 'NaN'):
             out = self.render(FIXTURE, {'budgetValue': value})
-            self.assertEqual(len(self.marks(out, 'lane-stud')), 4)
+            self.assertEqual(self.marks(out, 'lane-stud'), [])
             self.assertTrue(all(m['attrs']['data-state'] == 'unknown' for m in self.marks(out, 'lane')))
 
     def test_positive_verified_quota_always_lights_a_brick(self):
@@ -345,6 +344,160 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
         self.assertTrue(all('lit' not in m['cls'].split() for m in self.marks(out, 'quota-brick')[10:20]))
 
+    def test_lanes_have_two_flush_clipped_segments_and_thin_ticks(self):
+        data = self.sample()
+        run = data['running']['open'][0]
+        # Includes non-integral scales and both sides of each threshold.
+        for budget in (15, 30, 37, 60):
+            for age in (0, budget / 2, budget - .1, budget, budget + .1, budget * 2):
+                data['running']['open'] = [dict(run, budget_min=budget, age_min=age)]
+                out = self.render_freshness(data)
+                segments = self.marks(out, 'lane-segment')
+                self.assertEqual(len(segments), 2)
+                first, second = [m['attrs'] for m in segments]
+                self.assertEqual(float(first['x']) + float(first['width']), float(second['x']))
+                self.assertEqual(float(second['x']) * 2 % 1, 0)
+                self.assertEqual([m['attrs']['fill'] for m in segments], ['var(--p)', 'var(--crit)'])
+                for rect in (first, second):
+                    self.assertEqual(rect['height'], '8')
+                    self.assertEqual(rect['shape-rendering'], 'crispEdges')
+                    self.assertNotIn('rx', rect)
+                    self.assertNotIn('stroke', rect)
+                self.assertEqual(self.marks(out, 'lane-stud'), [])
+                ground = self.marks(out, 'lane-ground')[0]['attrs']
+                self.assertEqual((ground['height'], ground['rx']), ('8', '4'))
+                self.assertNotIn('stroke', ground)
+                self.assertEqual(ground['width'], '100%')
+                self.assertNotIn('viewBox', self.marks(out, 'lane-track')[0]['attrs'])
+                clip = next(m for m in out['picture'] if m['tag'] == 'clipPath')
+                self.assertTrue(any(m['attrs'].get('clip-path') == 'url(#' + clip['attrs']['id'] + ')'
+                                    for m in out['picture']))
+                for tick in self.marks(out, 'lane-tick'):
+                    self.assertEqual((tick['attrs']['width'], tick['attrs']['height'], tick['attrs']['fill']),
+                                     ('1', '14', 'var(--faint)'))
+                    self.assertEqual(tick['attrs']['transform'], 'translate(-.5 0)')
+        # Unused space belongs to the neutral track; clipping ids never collide.
+        out = self.render(FIXTURE)
+        clips = [m for m in out['picture'] if m['tag'] == 'clipPath']
+        self.assertEqual(len(clips), 4)
+        self.assertEqual(len({m['attrs']['id'] for m in clips}), 4)
+
+    def test_light_warning_tokens_hatch_and_small_brick_geometry(self):
+        css = PAGE.read_text()
+        self.assertNotIn('#9a6700', css)
+        self.assertEqual(css.count('--warn: #d19a00; --warn-text: #8a6400; --crit: #cf222e;'), 2)
+        self.assertIn('--warn: #e3b341; --crit: #ff7b72;', css)
+        self.assertIn('--lane-track: var(--line)', css)
+        self.assertEqual(css.count('--lane-track: #eeebf0'), 2)
+        out = self.render(FIXTURE)
+        for index, mark in enumerate(out['picture']):
+            if mark['tag'] == 'pattern':
+                stripes = []
+                for child in out['picture'][index + 1:]:
+                    if child['tag'] != 'rect':
+                        break
+                    stripes.append(child['attrs']['fill'])
+                self.assertEqual(stripes, ['var(--warn)'])
+        for cls, size in (('task-brick', ('15', '11')), ('quota-brick', ('14', '10')),
+                          ('slot', ('18', '13')), ('project-done', ('22', '17'))):
+            self.assertTrue(all((m['attrs']['width'], m['attrs']['height']) == size for m in self.marks(out, cls)))
+        low = next(m for m in self.marks(out, 'quota-brick') if 'low' in m['cls'].split())
+        pos = out['picture'].index(low)
+        self.assertEqual(next(m['attrs']['fill'] for m in out['picture'][pos:] if m['cls'] == 'brick-body'), 'var(--crit)')
+
+    def test_each_rich_tooltip_kind_has_structure_and_plain_aria_facts(self):
+        cases = [('project', 'task-brick', 'T001', ['agent / model', 'session / host'], 0, 1, 0),
+                 ('project', 'merged', 'T301 to T302', ['done', 'agent on it', 'not accepted', 'to do'], 0, 0, 0),
+                 ('agents', 'lane', None, ['elapsed', 'budget', 'check at', 'cap'], 0, 0, 1),
+                 ('agents', 'quota-bricks', 'claude quota', ['remaining', 'measured'], 0, 0, 1),
+                 ('agents', 'slots', 'slots', ['lit'], 0, 0, 0),
+                 ('project', 'active-host', 'claude', ['sessions'], 0, 0, 0),
+                 ('agents', 'no-process', 'no process', [], 1, 0, 0),
+                 ('agents', 'info-button', 'How to read this', [], 5, 0, 0),
+                 ('project', 'info-button', 'How to read this', [], 5, 0, 0)]
+        for tab, target, title, labels, items, chips, bars in cases:
+            with self.subTest(kind=target, tab=tab):
+                out = self.render(FIXTURE, {'hash': '#' + tab, 'actions': [dict(scope=tab, tooltip='focus', target=target)]})
+                tip = out['tipStates'][0]
+                self.assertFalse(tip['hidden'])
+                parts = tip['picture']
+                self.assertEqual(sum(m['cls'] == 'tip-divider' for m in parts), 1)
+                titles = [m['text'] for m in parts if m['cls'] == 'tip-title']
+                self.assertEqual(len(titles), 1)
+                if title:
+                    self.assertEqual(titles[0], title)
+                self.assertEqual([m['text'] for m in parts if m['cls'] == 'tip-label'], labels)
+                self.assertEqual(sum(m['cls'] == 'tip-item' for m in parts), items)
+                self.assertEqual(sum('tip-chip' in m['cls'].split() for m in parts), chips)
+                self.assertEqual(sum(m['cls'] == 'tip-bar' for m in parts), bars)
+                self.assertLessEqual(items, 5)
+                self.assertNotIn('img', [m['tag'] for m in parts])
+                self.assertNotIn('script', [m['tag'] for m in parts])
+        for mark in out['picture']:
+            if mark.get('spec') and isinstance(mark['spec'], dict):
+                self.assertEqual(mark['attrs']['data-tip'], '')
+                self.assertIn('aria-label', mark['attrs'])
+                self.assertNotIn('\n', mark['attrs']['aria-label'])
+        js = (PAGE.parent / 'dashboard.js').read_text()
+        self.assertIn('new WeakMap()', js)
+        self.assertNotIn('getAttribute("data-tip")', js)
+        css = PAGE.read_text()
+        for declaration in ('max-height: 60vh', 'max-width: 260px', 'padding: 10px', 'border-radius: 8px', 'overflow-y: auto'):
+            self.assertIn(declaration, re.search(r'#tip \{([^}]+)', css)[1])
+        self.assertIn('tip-fade 120ms', css)
+        self.assertIn('font-variant-numeric: tabular-nums', re.search(r'\.tip-value \{([^}]+)', css)[1])
+
+    def test_hostile_structured_tooltip_values_are_inert_and_tap_pins(self):
+        data = self.sample()
+        attack = '<img src=x onerror=alert(1)></script><script>alert(2)</script>'
+        for run in data['running']['open']:
+            run.update(agent=attack, model=attack, task=attack)
+        data['running']['quota'][0]['agent'] = attack
+        for task in data['progress']['repositories']['aaaaaaaa']['features'][0]['tasks']:
+            task.update(runs=[dict(agent=attack, model=attack)], sessions=[dict(id=attack, host=attack)])
+        for tab, target in (('agents', 'lane'), ('agents', 'quota-bricks'), ('project', 'task-brick')):
+            with self.subTest(target=target):
+                out = self.render_freshness(data, {'hash': '#' + tab, 'actions': [
+                    dict(scope=tab, tooltip='tap', target=target), dict(scope=tab, tooltip='leave', target=target),
+                    dict(scope=tab, tooltip='surface', target=target), dict(scope=tab, tooltip='outside', target=target)]})
+                self.assertEqual([tip['hidden'] for tip in out['tipStates']], [False, False, False, True])
+                self.assertIn(attack, out['tipStates'][0]['text'])
+                for tip in out['tipStates']:
+                    self.assertNotIn('img', [m['tag'] for m in tip['picture']])
+                    self.assertNotIn('script', [m['tag'] for m in tip['picture']])
+                    self.assertFalse(any(k.startswith('on') for m in tip['picture'] for k in m['attrs']))
+        # The quota's user-supplied title is rendered literally and never stored in a content attribute.
+        out = self.render_freshness(data, {'actions': [dict(tooltip='focus', target='quota-bricks')]})
+        self.assertIn(attack, out['tipStates'][0]['text'])
+        self.assertEqual(self.marks(out, 'quota-bricks')[0]['attrs']['data-tip'], '')
+
+    def test_quota_rounds_tooltip_and_aria_and_legacy_strings_still_work(self):
+        data = self.sample()
+        data['running']['quota'][0]['remaining_fraction'] = .6799999999
+        out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z',
+            'actions': [dict(tooltip='focus', target='quota-bricks')]})
+        meter = self.marks(out, 'quota-bricks')[0]
+        self.assertEqual(meter['spec']['rows'][0], ['remaining', '68%'])
+        self.assertIn('remaining: 68%', meter['attrs']['aria-label'])
+        self.assertNotIn('67.999', out['tip']['text'])
+        out = self.render(FIXTURE, {'actions': [dict(tooltip='hover', target='lane-tick')]})
+        self.assertEqual(out['tip']['text'], 'check deadline: half budget')
+        self.assertFalse(any(m['cls'] == 'tip-title' for m in out['tip']['picture']))
+
+    def test_footer_dot_uses_ten_minutes_and_six_hours_not_one_minute(self):
+        data = self.freshness_data()
+        data['freshness']['latest_event'] = {}
+        for minutes, state in ((1, 'fresh'), (5, 'fresh'), (10, 'fresh'), (10.01, 'quiet'),
+                               (120, 'quiet'), (360, 'quiet'), (360.01, 'stale'), (420, 'stale')):
+            out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z', 'advance_ms': minutes * 60000})
+            self.assertEqual(self.marks(out, 'status-dot')[0]['attrs']['data-state'], state)
+        data['freshness']['latest_event'] = {'claude': None, 'codex': 'unknown'}
+        out = self.render_freshness(data, {'now': '2026-11-06T10:05:00Z'})
+        self.assertEqual(self.marks(out, 'status-dot')[0]['attrs']['data-state'], 'fresh')
+        data['freshness']['latest_event'] = {'codex': '2026-11-06T09:49:00Z'}
+        out = self.render_freshness(data, {'now': '2026-11-06T10:05:00Z'})
+        self.assertEqual(self.marks(out, 'status-dot')[0]['attrs']['data-state'], 'quiet')
+
     def test_finished_project_uses_a_teal_check_brick_and_no_tasks_is_not_done(self):
         out = self.render(FIXTURE)
         marks = self.marks(out, 'project-done')
@@ -360,23 +513,22 @@ class DashboardScriptTest(unittest.TestCase):
         body = next(m for m in out['picture'][done_index:] if 'brick-body' in m['cls'].split())
         self.assertEqual(body['attrs']['fill'], 'var(--h2)')
 
-    def test_merged_brick_tooltip_preserves_newlines_in_the_shared_tooltip(self):
+    def test_merged_brick_tooltip_has_state_counts_instead_of_task_paragraphs(self):
         out = self.render(FIXTURE, {'hash': '#project', 'actions': [dict(scope='project', tooltip='hover', target='merged')]})
-        text = out['tipStates'][0]['text']
-        self.assertFalse(out['tipStates'][0]['hidden'])
-        self.assertEqual(len(text.splitlines()), 3)
-        self.assertIn('2 tasks', text.splitlines()[0])
-        self.assertIn('T301', text.splitlines()[1])
-        self.assertIn('T302', text.splitlines()[2])
-        self.assertIn('white-space: pre-line', re.search(r'#tip \{([^}]+)', PAGE.read_text())[1])
+        tip = out['tipStates'][0]
+        self.assertFalse(tip['hidden'])
+        self.assertEqual(next(m['text'] for m in tip['picture'] if m['cls'] == 'tip-title'), 'T301 to T302')
+        self.assertEqual([m['text'] for m in tip['picture'] if m['cls'] == 'tip-label'],
+                         ['done', 'agent on it', 'not accepted', 'to do'])
+        self.assertEqual([m['text'] for m in tip['picture'] if m['cls'] == 'tip-value'], ['2', '0', '0', '0'])
 
     def test_footer_dot_relative_age_and_tables_last_on_every_tab(self):
         data = self.freshness_data()
         cases = [('2026-11-06T10:00:00Z', None, 'fresh', 'updated 0 min ago'),
                  ('2026-11-06T10:00:00Z', '2026-11-06T09:44:59Z', 'quiet', 'updated 0 min ago'),
-                 ('2026-11-06T10:00:00Z', 'unknown', 'quiet', 'updated 0 min ago'),
+                 ('2026-11-06T10:00:00Z', 'unknown', 'fresh', 'updated 0 min ago'),
                  ('2026-11-06T10:01:00Z', None, 'quiet', 'updated 1 min ago'),
-                 ('2026-11-06T10:03:00Z', None, 'stale', 'updated 3 min ago')]
+                 ('2026-11-06T10:03:00Z', None, 'quiet', 'updated 3 min ago')]
         for now, codex, state, relative in cases:
             with self.subTest(now=now, codex=codex):
                 current = json.loads(json.dumps(data))
@@ -397,7 +549,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(self.marks(out, 'updated')[0]['text'], 'updated 3 min ago')
         self.assertEqual(self.marks(out, 'status-dot')[0]['attrs']['data-state'], 'fresh')
         css = PAGE.read_text()
-        for selector, color in (('.status-dot', '--h2'), ('.status-dot[data-state="quiet"]', '--warn'),
+        for selector, color in (('.status-dot', '--status-fresh'), ('.status-dot[data-state="quiet"]', '--warn'),
                                 ('.status-dot[data-state="stale"]', '--crit')):
             rule = re.search(re.escape(selector) + r' \{([^}]+)', css)[1]
             self.assertIn('background: var(' + color + ')', rule)
@@ -435,7 +587,7 @@ class DashboardScriptTest(unittest.TestCase):
                 else:
                     self.assertEqual(self.marks(out, 'active-percent')[0]['text'], str(percent) + '%')
                     self.assertEqual(self.marks(out, 'project-done'), [])
-                    self.assertIn(str(percent) + '%', self.marks(out, 'story')[0]['attrs']['data-tip'])
+                    self.assertIn(str(percent) + '%', self.marks(out, 'story')[0]['tooltip'])
 
     def test_active_strip_hosts_relative_time_and_no_task_list(self):
         data = self.sample()
@@ -451,9 +603,9 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertNotIn('3 sessions · 24h', rows[0]['text'])
         self.assertIn('last 12 min ago', rows[0]['text'])
         self.assertNotIn('no task list', rows[1]['text'])
-        self.assertIn('no task list', rows[1]['attrs']['data-tip'])
+        self.assertIn('no task list', rows[1]['tooltip'])
         self.assertEqual(len(self.marks(out, 'active-percent')), 2)
-        self.assertEqual([m['attrs']['data-tip'] for m in self.marks(out, 'active-host')],
+        self.assertEqual([m['spec']['title'] for m in self.marks(out, 'active-host')],
                          ['claude', 'codex', 'antigravity', 'codex'])
         self.assertEqual(len({m['text'] for m in self.marks(out, 'active-host')}), 3)
         self.assertNotIn('img', out['tags'])
@@ -467,10 +619,10 @@ class DashboardScriptTest(unittest.TestCase):
             data['running']['open'] = [dict(template, budget_min=budget, age_min=age)]
             out = self.render_freshness(data)
             widths = [float(m['attrs']['width']) for m in self.marks(out, 'lane-segment')]
-            self.assertAlmostEqual(sum(widths), min(560, age / cap * 560))
-            self.assertAlmostEqual(float(self.marks(out, 'check-tick')[0]['attrs']['x']), budget / 2 / cap * 560)
-            self.assertAlmostEqual(float(self.marks(out, 'budget-tick')[0]['attrs']['x']), budget / cap * 560)
-            self.assertEqual(len(self.marks(out, 'lane-stud')), 3 if cap == 25 else 8)
+            self.assertAlmostEqual(sum(widths), round(min(560, age / cap * 560) * 2) / 2)
+            self.assertAlmostEqual(float(self.marks(out, 'check-tick')[0]['attrs']['x'].rstrip('%')), budget / 2 / cap * 100)
+            self.assertAlmostEqual(float(self.marks(out, 'budget-tick')[0]['attrs']['x'].rstrip('%')), round(budget / cap * 560 * 2) / 2 / 560 * 100)
+            self.assertEqual(self.marks(out, 'lane-stud'), [])
             self.assertEqual(self.marks(out, 'lane')[0]['attrs']['data-state'], 'cap' if age > cap else 'over')
 
     def test_reviews_cap_chains_project_labels_and_live_hash_changes(self):
@@ -483,7 +635,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertTrue(labels[0]['text'].startswith('Fino tools '))
         self.assertNotIn('aaaaaaaa', labels[0]['text'])
         self.assertIn('white-space: nowrap', re.search(r'\.rv \.review-label \{([^}]+)', PAGE.read_text())[1])
-        self.assertIn('14 rounds', chains[0]['attrs']['data-tip'])
+        self.assertIn('14 rounds', chains[0]['tooltip'])
         table = self.marks(out, 'tbl', 'show the data as tables')
         self.assertTrue(any('REWORK → REWORK' in row['text'] for row in table))
 
@@ -493,20 +645,20 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual([m['attrs']['data-run'] for m in lanes],
                          ['</script><img src=x onerror=alert(1)>', 'run3', 'run2', 'run1'])
         self.assertEqual([m['attrs']['data-state'] for m in lanes], ['cap', 'over', 'check', 'within'])
-        self.assertEqual([m['attrs']['x'] for m in self.marks(out, 'check-tick')], ['210'] * 4)
-        self.assertEqual([m['attrs']['x'] for m in self.marks(out, 'budget-tick')], ['420'] * 4)
+        self.assertEqual([m['attrs']['x'] for m in self.marks(out, 'check-tick')], ['37.5%'] * 4)
+        self.assertEqual([m['attrs']['x'] for m in self.marks(out, 'budget-tick')], ['75%'] * 4)
         self.assertEqual([m['tag'] for m in self.marks(out, 'lane-track')], ['svg'] * 4)
-        self.assertEqual(len(self.marks(out, 'lane-stud')), 16)
+        self.assertEqual(self.marks(out, 'lane-stud'), [])
         segments = self.marks(out, 'lane-segment')
         self.assertEqual([float(m['attrs']['width']) for m in segments],
-                         [210, 210, 140, 210, 210, 14, 210, 70, 0, 70, 0, 0])
-        self.assertEqual([m['attrs']['fill'] for m in segments[:3]], ['var(--h3)', 'var(--warn)', 'var(--crit)'])
+                         [420, 140, 420, 14, 280, 0, 70, 0])
+        self.assertEqual([m['attrs']['fill'] for m in segments[:2]], ['var(--p)', 'var(--crit)'])
         self.assertEqual([m['text'] for m in self.marks(out, 'lane-value')], ['45/30 m', '31/30 m', '20/30 m', '5/30 m'])
         tasks = self.marks(out, 'lane-task')
-        self.assertTrue(all(m['attrs']['data-tip'] == m['text'] for m in tasks))
-        self.assertTrue(all(m['attrs']['data-tip'] == m['text'] for m in self.marks(out, 'lane-identity')))
+        self.assertTrue(all(m['tooltip'] is None for m in tasks))
+        self.assertTrue(all(m['tooltip'] is None for m in self.marks(out, 'lane-identity')))
         self.assertIn('</script>', tasks[2]['text'])
-        self.assertEqual(self.marks(out, 'no-process')[0]['attrs']['data-tip'], 'no process')
+        self.assertIn('no process', self.marks(out, 'no-process')[0]['tooltip'])
         self.assertEqual(self.marks(out, 'no-process')[0]['tag'], 'svg')
         self.assertEqual(self.marks(out, 'agent-kpis'), [])
         slots = self.marks(out, 'slot')
@@ -515,7 +667,7 @@ class DashboardScriptTest(unittest.TestCase):
         quota = self.marks(out, 'quota-bricks')
         self.assertEqual(len(quota), 3)
         self.assertEqual([m['text'].strip() for m in quota], ['', '', '?'])
-        self.assertTrue(all(value in m['attrs']['data-tip'] for value, m in zip(['68%', '8%', '42%'], quota)))
+        self.assertTrue(all(value in m['tooltip'] for value, m in zip(['68%', '8%', '42%'], quota)))
         self.assertIn('unverified', quota[2]['cls'])
         blocks = self.marks(out, 'quota-brick')
         self.assertEqual(len(blocks), 30)
@@ -523,13 +675,13 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertIn('low', blocks[10]['cls'].split())
         self.assertEqual(self.marks(out, 'capacity-caption')[1]['text'], 'claude quota')
         self.assertEqual(self.marks(out, 'process-counts'), [])
-        self.assertTrue(any('</script>' in m['attrs'].get('data-tip', '') for m in lanes))
+        self.assertTrue(any('</script>' in (m.get('tooltip') or '') for m in lanes))
         tables = self.marks(out, 'tbl', 'show the data as tables')
         self.assertTrue(any('agent state' in row['text'] and 'past the check time' in row['text'] for row in tables))
         self.assertTrue(any('process roots' in row['text'] and 'descendants' in row['text'] for row in tables))
         notes = self.info_text(out, 'agents')
         self.assertIn('machine-wide', notes)
-        self.assertIn('not started by the coordinator', notes)
+        self.assertIn('liveness is advisory', notes)
         self.assertNotIn('img', out['tags'])
         self.assertNotIn('script', out['tags'])
 
@@ -547,8 +699,9 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertIn('gap: 2px', rule('.cells'))
         self.assertIn('align-items: start', rule('.story'))
         self.assertIn('margin-top: 8px', rule('.story + .story'))
-        self.assertIn('position: sticky', rule('.story-label'))
-        self.assertIn('top: 0', rule('.story-label'))
+        self.assertNotIn('position: sticky', rule('.story-label'))
+        self.assertIn('@media (max-width: 375px) {\n  .story + .story { margin-top: 6px; }', css)
+        self.assertGreater(css.index('@media (max-width: 375px)'), css.index('.story + .story { margin-top: 8px; }'))
         self.assertIn('align-self: start', rule('.story-label'))
         self.assertIn('flex-wrap: wrap', rule('.cells'))
         self.assertIn('width: 15px; height: 11px', rule('.task-brick'))
@@ -622,8 +775,8 @@ class DashboardScriptTest(unittest.TestCase):
         bodies = self.marks(out, 'brick-body')
         self.assertTrue(any(p['attrs']['fill'].startswith('url(#brick-hatch-') for p in bodies))
         self.assertTrue(any(p['attrs']['fill'] == 'none' and p['attrs']['stroke'] == 'var(--line)' for p in bodies))
-        tips = [p['attrs']['data-tip'] for p in cells]
-        self.assertTrue(any(all(t in tip for t in ('T002', 'in progress', 'codex', 'session1', '</script>')) for tip in tips))
+        tips = [p['tooltip'] for p in cells]
+        self.assertTrue(any(all(t in tip for t in ('T002', 'agent on it', 'codex', 'session1', '</script>')) for tip in tips))
         tables = [p for p in out['picture'] if p['disclosure'] == 'show the data as tables']
         self.assertTrue(any('project completion' in p['text'] and '46%' in p['text'] for p in tables))
         self.assertTrue(any('T090' in p['text'] for p in tables), 'finished feature remains in tables')
@@ -647,8 +800,9 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual([m['attrs']['data-state'] for m in cells[:4]], ['done', 'todo', 'accepted', 'active'])
         self.assertTrue(all(int(m['attrs']['data-count']) == 2 for m in cells[:-1]))
         self.assertEqual(cells[-1]['attrs']['data-count'], '1')
-        self.assertIn('T301–T302 · 2 tasks', cells[0]['attrs']['data-tip'])
-        self.assertIn('T345', cells[-1]['attrs']['data-tip'])
+        self.assertEqual(cells[0]['spec']['title'], 'T301 to T302')
+        self.assertEqual(sum(row[1] for row in cells[0]['spec']['rows']), 2)
+        self.assertIn('T345', cells[-1]['tooltip'])
         self.assertEqual([m['style']['--snap-delay'] for m in self.marks(out, 'task-brick')][:3], ['0ms', '10ms', '20ms'])
 
     def test_story_merge_boundary_and_stagger_cap(self):
@@ -683,7 +837,7 @@ class DashboardScriptTest(unittest.TestCase):
         data['progress']['active'][0]['percent'] = 28.9
         out = self.render_freshness(data)
         self.assertEqual(self.marks(out, 'active-percent')[0]['text'], '28%')
-        self.assertEqual(self.marks(out, 'active-label')[0]['attrs']['data-tip'], name)
+        self.assertEqual(self.marks(out, 'active-label')[0]['tooltip'], name)
         self.assertEqual([len(m['text'].strip()) for m in self.marks(out, 'project-detail')][1:], [0, 0])
         self.assertNotIn('img', out['tags'])
 
@@ -717,7 +871,7 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render_freshness(data)
         self.assertEqual(self.marks(out, 'active-percent')[-1]['text'], '66%')
         self.assertIn('last unavailable', self.marks(out, 'active-project')[-1]['text'])
-        self.assertEqual([m['attrs']['data-tip'] for m in self.marks(out, 'active-host')].count('codex'), 2)
+        self.assertEqual([m['spec']['title'] for m in self.marks(out, 'active-host')].count('codex'), 2)
         for bad in ('<img>', {}, None):
             row.update(hosts=bad, percent=bad, last=bad)
             out = self.render_freshness(data)
