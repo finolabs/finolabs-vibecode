@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 The dashboard is a static page, `dashboard.html`, in the resolved data root's `state/` folder. An absolute `FNL_STATE_DIR` remains a dashboard/events override; before relocation, an existing `${XDG_STATE_HOME:-~/.local/state}/finolabs-vibecode` is used while the default state folder is absent. It loads its numbers from a `data.js` beside it. This skill never writes or edits the page; a script rebuilds the data and copies the shipped page.
 
-The page has five tabs: Overview (activity, router coverage, skill and agent use, depth vs outcome and load cost), Agents (Running now), Project (task progress), Delegation (delegation and Judge), and Reviews (the review gate). Agents and Project show "not available yet" placeholders until their data sources exist.
+The page has five tabs: Overview (activity, router coverage, skill and agent use, depth vs outcome and load cost), Agents (Running now), Project (task progress), Delegation (delegation and Judge), and Reviews (the review gate). Agents shows open dispatches and the optional process snapshot; Project shows "not available yet" until its source exists.
 
 The scripts are in this skill's base directory: `scripts/refresh.py` builds the dashboard data, and the `fnl-delegate` skill beside this one holds `scripts/ledger.py`. Without `fnl-delegate`, the dashboard still shows the usage events and names the ledger as a missing source.
 
@@ -19,7 +19,7 @@ The scripts are in this skill's base directory: `scripts/refresh.py` builds the 
 
 1. Run `python3 -I <refresh.py> run --open`. It rebuilds `data.js`, copies the page and opens it in the default browser. Done when it prints its one-line summary. While its tab is visible the page reloads `data.js` every 5 seconds, and the hooks rebuild it during a session, so the user can leave it open.
 2. Report that line, then name each missing source it lists and what fixes it: consent not given means `fnl-setup`; no events means the plugin's hooks need the whole plugin installed and a session started after consent; a missing ledger means `fnl-delegate` "Ledger".
-3. Run `python3 -I <ledger.py> open`. It prints each open dispatch's age against its budget. For each one past its check deadline (half the budget), check liveness from artifacts as `fnl-delegate` "Budget and liveness" says and mark it **running**, **stalled** or **ended without a finish line**. A coordinator closes a record only when its log or the repository shows how the run ended, with that outcome and a note that it was closed late; otherwise list it and ask the user.
+3. Run `python3 -I <ledger.py> open`; it prints each open dispatch's age against its budget, and the same `running` block of the generated `data.js` (the Agents tab) holds the same dispatches, where the script produces each open dispatch's age against its budget, the half-budget check deadline, an `unverified` liveness marker and family-level snapshot mismatch flags. If the ledger is missing, report that source. For each run past its check deadline, check artifacts as `fnl-delegate` "Budget and liveness" says and report **running**, **stalled** or **ended without a finish line**; these verdicts are advisory (agent judgment), not inferred from process names. A coordinator closes a record only when its log or the repository shows how the run ended, with that outcome and a note that it was closed late; otherwise list it and ask the user.
 4. Read the `Review by` date (ISO, `YYYY-MM-DD`) at the top of `references/models.md` in the `fnl-delegate` folder. When today is past it, the capability map is stale: say so, with the date, since routing still reads it.
 
 The page marks a delegation group of fewer than five runs with an open ring and passes no judgment on it. A group of five or more is judged by first-pass acceptance below 60%.
@@ -37,3 +37,5 @@ Their consent record stays, so recording continues; to stop it as well, ask sepa
 ## What is recorded
 
 Only when the user consented in `fnl-setup`: the plugin's hooks append metadata to `events-YYYY-MM.jsonl` in the state folder (a time, a session id, a short repository code, a skill or agent name, a depth, a review verdict, a kept-task count with its reason and who settled it, judge receipt site, grader, result and followed status), never prompts, code, command text or file paths. Nothing is sent anywhere.
+
+The process snapshot has a separate setup consent, off by default. It keeps only fixed family names, counts, elapsed seconds and its time in the overwritten `data.js`, never in events; `FNL_AGENT_SNAPSHOT=off` disables it. It is machine-wide for the current user, cannot identify sub-agents or list desktop app sessions, and makes no repository attribution.

@@ -206,6 +206,43 @@ class DashboardScriptTest(unittest.TestCase):
             self.assertIn("no data: not available yet", out["panels"][1]["text"])
             self.assertIn("no data: not available yet", out["panels"][2]["text"])
 
+    # Running-agents acceptance 4: the real page script, fake DOM and timers.
+    def test_running_panel_snapshot_dispatches_limits_and_hostile_text(self):
+        data = self.sample()
+        attack = '</script><img src=x onerror=alert(1)>'
+        data['running'] = dict(processes=[dict(family='codex', elapsed_seconds=61,
+            descendants={'node': 2, 'other': 1}, not_started_by_coordinator=True)],
+            open=[dict(id='d1', agent='claude', model='m', project=attack, task='t', ts='2026-11-06T10:00:00Z',
+                       age_min=12, budget_min=20, check_due=True, liveness='unverified', no_process_found=True)],
+            snapshot=dict(time='2026-11-06T10:00:00Z', reason='', apps={'Claude': 3}), ledger_note='')
+        out = self.render_freshness(data, {'hash': '#agents'})
+        panel = out['panels'][1]['text']
+        for text in ('Running now', 'processes named claude: 0', 'codex: 1', 'agy: 0',
+                     'elapsed 61 seconds', 'node: 2', 'other: 1', 'not started by the coordinator',
+                     'no process found', '12/20 min', 'check due', 'liveness: unverified',
+                     'Claude app: 3 processes', 'machine-wide', 'app processes, sessions not listed',
+                     'cannot tell a sub-agent from a session', '2026-11-06T10:00:00Z', attack):
+            self.assertIn(text, panel)
+        self.assertNotIn('img', out['tags'])
+        self.assertNotIn('script', out['tags'])
+        changed = json.loads(json.dumps(data))
+        changed['running']['processes'] = []
+        changed['running']['open'] = []
+        later = self.render_freshness(data, {'hash': '#agents', 'next': changed, 'ticks': 2})
+        self.assertIn('No command-line agent processes found', later['panels'][1]['text'])
+        self.assertIn('No open dispatches', later['panels'][1]['text'])
+        self.assertFalse(later['panels'][1]['hidden'])
+        self.assertEqual(later['poll_ms'], [5000])
+
+    def test_running_panel_off_and_failed_snapshots_do_not_claim_zero_processes(self):
+        for reason in ('snapshot off', 'ps timed out'):
+            data = self.sample()
+            data['running'] = dict(processes=[], open=[], snapshot=dict(time='now', reason=reason, apps={}), ledger_note='')
+            out = self.render_freshness(data)
+            self.assertIn(reason, out['panels'][1]['text'])
+            self.assertNotIn('No command-line agent processes found', out['panels'][1]['text'])
+            self.assertNotIn('processes named claude: 0', out['panels'][1]['text'])
+
     def test_the_sample_data_draws_every_chart_without_an_error(self):
         out = self.render(FIXTURE)
         for expected in ("Router coverage", "events per day", "October 2026", "skill and agent use", "fnl-coding-router",

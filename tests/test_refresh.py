@@ -125,6 +125,72 @@ class RefreshTest(unittest.TestCase):
         self.refresh("consent", "--revoke", "--yes")
         self.assertFalse((self.dir / "consent.json").exists())
 
+    # Running-agents acceptance 3: synthetic snapshot, real canonical consent/ledger.
+    def running_module(self):
+        spec = importlib.util.spec_from_file_location("refresh_running", REFRESH)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def snapshot_on(self):
+        (self.ledger.parent / "host.md").write_text("## Agent snapshot\n\n- Snapshot: on\n")
+
+    def test_running_merges_open_dispatches_and_family_mismatches_without_events(self):
+        self.consent()
+        self.snapshot_on()
+        start = dict(event="start", id="open", ts=(self.at - timedelta(minutes=12)).isoformat(),
+                     project="demo</script>&", task="task", kind="implement", grade="easy",
+                     agent="claude", model="m", reason="routing", budget_min=20)
+        closed = dict(start, id="closed", agent="codex")
+        self.ledger.write_text("\n".join(map(json.dumps, [start, closed,
+            dict(event="finish", id="closed", ts=self.at.isoformat(), outcome="accepted", rework_rounds=0)])) + "\n")
+        self.write_events([self.event(1, "a", X, "first_edit")])
+        before = {p: p.read_bytes() for p in self.dir.glob('events-*')}
+        module = self.running_module()
+        snap = dict(time=self.at.isoformat(), reason="", apps={"Claude": 2}, processes=[
+            dict(family="codex", elapsed_seconds=5, descendants={"other": 1})])
+        with mock.patch.dict(os.environ, self.env), mock.patch.object(module.ap, "snapshot", return_value=snap) as probe:
+            module.cmd_run(mock.Mock(open=False, throttle=None))
+            result = self.data()['running']
+            self.assertEqual(len(result['open']), 1)
+            row = result['open'][0]
+            self.assertEqual(row['budget_min'], 20)
+            self.assertAlmostEqual(row['age_min'], 12, delta=.1)
+            self.assertTrue(row['check_due'])
+            self.assertEqual(row['liveness'], 'unverified')
+            self.assertTrue(row['no_process_found'])
+            self.assertTrue(result['processes'][0]['not_started_by_coordinator'])
+            self.assertEqual(result['snapshot']['time'], snap['time'])
+            module.cmd_run(mock.Mock(open=False, throttle=10))
+            probe.assert_called_once()
+            # A foreground rebuild and a newer ledger still cannot resample in 10s.
+            module.cmd_run(mock.Mock(open=False, throttle=None))
+            probe.assert_called_once()
+            with mock.patch.object(module.ap, 'enabled', return_value=False):
+                module.cmd_run(mock.Mock(open=False, throttle=None))
+            self.assertEqual(self.data()['running']['processes'], [])
+        self.assertEqual(before, {p: p.read_bytes() for p in self.dir.glob('events-*')})
+        raw = (self.dir / 'data.js').read_text()
+        self.assertNotIn('</script>', raw)
+        self.assertNotIn('&', raw)
+        self.refresh('purge', '--yes')
+        self.assertFalse((self.dir / 'data.js').exists())
+
+    def test_running_snapshot_off_default_invalid_root_and_canonical_consent_only(self):
+        module = self.running_module()
+        with mock.patch.dict(os.environ, self.env), mock.patch.object(module.ap, 'snapshot') as probe:
+            module.build()
+            self.snapshot_on()
+            module.build()  # snapshot on without metrics consent
+            self.consent()
+            with mock.patch.dict(os.environ, {'FNL_AGENT_SNAPSHOT': 'off'}):
+                module.build()
+            with mock.patch.dict(os.environ, {'FNL_METRICS': 'off'}):
+                module.build()
+            (self.ledger.parent / 'root.json').write_text('{}')
+            module.build()
+            probe.assert_not_called()
+
     def consent(self, days="90"):
         self.refresh("consent", "--retention", days)
 

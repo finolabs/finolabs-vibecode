@@ -195,7 +195,13 @@ def config():
     if os.environ.get("FNL_QUOTA_PROBE", "").lower() == "off":
         return {}
     try:
-        body = section(dr.read_data("host.md").decode())
+        text = dr.read_data("host.md").decode()
+        # Preserve non-CR/LF separators while locating the section so they
+        # cannot disappear before configuration values are validated.
+        guarded = text.translate(str.maketrans({char: "\0" for char in "\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029"}))
+        if "\0" in section(guarded):
+            raise ValueError("line break in quota config")
+        body = section(text)
         values, folders = {}, {}
         for line in body.splitlines():
             if not line.strip():
@@ -298,6 +304,10 @@ def excluded(path):
         raise ValueError("temporary or downloads path")
 
 
+def has_line_break(value):
+    return any(char in "\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029" for char in value)
+
+
 def checked_executable(agent, entry):
     if agent not in SOURCES or Path(entry["executable"]).name != agent:
         raise ValueError("executable missing or wrong name")
@@ -313,6 +323,7 @@ def checked_executable(agent, entry):
         words = first[2:].decode().strip().split()
         if not words or not Path(words[0]).is_absolute() or not interpreter:
             raise ValueError("recorded interpreter required")
+        excluded(Path(interpreter))
         checked_path(interpreter)
         if words[0] == "/usr/bin/env":
             # No env options, assignments, or extra interpreter arguments.
@@ -330,6 +341,8 @@ def validate_configs(folders):
     if not 1 <= len(folders) <= 4 or len(set(folders.values())) != len(folders):
         raise ValueError("config folders")
     for label, path in folders.items():
+        if has_line_break(label) or has_line_break(path):
+            raise ValueError("newline or carriage return in quota label or path")
         if not LABEL.fullmatch(label):
             raise ValueError("label")
         checked_path(path, directory=True)

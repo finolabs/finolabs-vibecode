@@ -18,6 +18,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Reject excluded quota interpreters and all line separators in recorded paths and labels.
 - Bind each quota executable target to its confirmed digest and reject excluded resolved paths at probe time; older records need a new setup preview.
 - Retry quota cache write failures after 30 minutes instead of saving a successful backoff.
 - Reject line breaks in quota configuration paths and labels during plan validation.
@@ -27,6 +28,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Added
 
 - Tell coordinators to start headless runs through the host's background mechanism, never a detached shell job, and to check the process table and the recorded exit status before saying a run is running.
+- Add Running now in the Agents tab: open dispatch ages and budgets, advisory liveness checks and family mismatch flags, plus a separately opted-in, bounded process snapshot. Setup records its on/off choice in canonical host config; `FNL_AGENT_SNAPSHOT=off` disables it, and snapshots stay in the overwritten dashboard data only.
+
 - Add a validated `record.py task --id T012` receipt and a consent-gated `task` event holding only the task id, with advisory guidance for sessions the user started by hand.
 
 - Let the Antigravity compaction stop install from Antigravity's own installed copy of the plugin, which keeps the repository's `.git` entry; any other plugin folder inside a git work tree is still refused.
