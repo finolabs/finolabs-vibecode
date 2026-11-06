@@ -22,10 +22,14 @@ dashboard refresh may run `ps` once per refresh, read-only, as the current user,
 command-line agent processes; fixed argv, absolute owner-checked path, no shell, allowlisted
 environment, neutral working folder, 2-second limit with the process group killed, 256 KiB output cap;
 it keeps only fixed family names, counts and elapsed seconds, never arguments, paths, environment or user-chosen names;
-it runs only when metrics consent is recorded; `FNL_AGENT_SNAPSHOT=off` stops it; no other command and
+it runs only when metrics consent is recorded and `fnl-setup` has turned the snapshot on (off by default); `FNL_AGENT_SNAPSHOT=off` stops it; no other command and
 no network. No code lands before that rule is merged.
 
 ## Phase 1
+
+Order inside the package: the ledger and hook-event parts of the panel first, the process snapshot last, off by
+default until `fnl-setup` offers it. The `ps` exception merges into `CLAUDE.md` only when that code is about to
+land (owner approved the text on 2026-11-06).
 
 ### Snapshot `scripts/agent_processes.py` (stdlib)
 

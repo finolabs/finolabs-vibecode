@@ -1,5 +1,9 @@
 # Merge guard through host permission rules
 
+Deferred to 0.2.0 (owner, 2026-11-06): the hosts already ask before a merge in their default modes, and the owner
+authorizes merges in chat; the remaining gap is unattended runs, which autopilot settles (`autopilot.md`).
+The design below stays for that use.
+
 Decision: 2026-11-06, owner agreed (harness synthesis, step 1). Goal: add a host prompt on the
 common merge and publish commands, so "merge, tag and publish need the owner" is more than advice there,
 with no new blocking plugin hook and so no new `CLAUDE.md` exception. It is a prompt, not a complete
