@@ -26,6 +26,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Tell coordinators to start headless runs through the host's background mechanism, never a detached shell job, and to check the process table and exit marker before saying a run is running.
 - Add a validated `record.py task --id T012` receipt and a consent-gated `task` event holding only the task id, with advisory guidance for sessions the user started by hand.
 
 - Let the Antigravity compaction stop install from Antigravity's own installed copy of the plugin, which keeps the repository's `.git` entry; any other plugin folder inside a git work tree is still refused.
