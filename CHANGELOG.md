@@ -6,6 +6,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Split the status dashboard into Overview, Agents, Project, Delegation and Reviews tabs, preserving the selected tab, panel scroll and open tables on data reload. Agents and Project show placeholders until their sources are available.
+
 - Remind agents to rename their session at the start, on a phase change and after every compaction, in the always-loaded rule and in the Titles section of `fnl-session-hygiene`.
 - Correct host instruction mechanics for Claude Code and Codex, note Codex `spawn_agent` hook matching in usage metrics, clarify compaction threshold settings and writer bounds, and document privacy boundaries for judge instruction checks.
 

@@ -58,6 +58,23 @@ class DashboardPageTest(unittest.TestCase):
         self.assertIn('"data.js?t="', self.text)
         self.assertIn("window.FNL_DATA", self.text)
 
+    def test_tabs_add_no_resource_or_inline_handler(self):
+        self.assertEqual(re.findall(r'<script\b[^>]*src="([^"]+)"', self.text), ["data.js"])
+        self.assertNotRegex(self.text, r'<link\b|<[^>]+\son[a-z]+\s*=')
+        self.assertIn('new Map([', self.text)
+        self.assertNotRegex(self.text, r'querySelector(?:All)?\([^"\']')
+
+    def test_narrow_tab_strip_is_bounded_and_scrolls_inside_the_page(self):
+        # CSS contract: a shrinkable grid track bounds the flex strip; labels do
+        # not shrink, so only the strip scrolls when their total width exceeds it.
+        def rule(selector):
+            return re.search(re.escape(selector) + r" \{([^}]+)\}", self.text).group(1)
+        self.assertIn("grid-template-columns: minmax(0, 1fr)", rule(".screen"))
+        for declaration in ("min-width: 0", "max-width: 100%", "overflow-x: auto"):
+            self.assertIn(declaration, rule(".tablist"))
+        self.assertIn("flex: 0 0 auto", rule(".tablist button"))
+        self.assertIn("min-width: 0", rule(".tabpanel"))
+
     def test_the_sample_data_has_exactly_the_keys_refresh_writes(self):
         spec = importlib.util.spec_from_file_location("fnl_refresh", REFRESH)
         refresh = importlib.util.module_from_spec(spec)
@@ -98,6 +115,96 @@ class DashboardScriptTest(unittest.TestCase):
         if done.returncode:
             raise AssertionError(done.stderr[-800:])
         return json.loads(done.stdout)
+
+    def test_tabs_map_every_pane_and_share_the_header(self):
+        out = self.render(FIXTURE)
+        names = ["overview", "agents", "project", "delegation", "reviews"]
+        self.assertEqual([t["text"] for t in out["tabs"]], [n.title() for n in names])
+        expected = [["activity", "router coverage", "skill and agent use", "depth vs outcome", "load cost"],
+                    ["Running now", "not available yet"], ["Project progress", "not available yet"],
+                    ["delegation", "Judge"], ["review gate"]]
+        for index, (tab, panel, panes) in enumerate(zip(out["tabs"], out["panels"], expected)):
+            self.assertEqual(tab["attrs"]["aria-controls"], panel["attrs"]["id"])
+            self.assertEqual(panel["attrs"]["id"], "panel-" + names[index])
+            self.assertEqual(panel["attrs"]["aria-labelledby"], tab["attrs"]["id"])
+            self.assertEqual(panel["hidden"], index != 0)
+            self.assertEqual(tab["attrs"]["aria-selected"], str(index == 0).lower())
+            self.assertEqual(tab["tabIndex"], 0 if index == 0 else -1)
+            for pane in panes:
+                self.assertIn(pane, panel["text"])
+        self.assertIn("cmd", out["shared"])
+        self.assertIn("kpis", out["shared"])
+        for panel in out["panels"]:
+            self.assertNotIn("Router coverage", panel["text"])
+        self.assertIn("veil", self.render()["shared"])
+
+    def test_click_keyboard_and_hash_navigation(self):
+        actions = [{"click": "Agents"}, {"tab": "Agents", "key": "ArrowRight"},
+                   {"tab": "Project", "key": "Enter"}, {"tab": "Project", "key": "End"},
+                   {"tab": "Reviews", "key": " "}, {"tab": "Reviews", "key": "ArrowRight"},
+                   {"tab": "Overview", "key": "Home"}, {"tab": "Overview", "key": "ArrowLeft"},
+                   {"hash": "#delegation"}]
+        out = self.render(FIXTURE, {"actions": actions})
+        self.assertEqual([s["selected"] for s in out["states"]],
+                         [["Agents"], ["Agents"], ["Project"], ["Project"], ["Reviews"],
+                          ["Reviews"], ["Reviews"], ["Reviews"], ["Delegation"]])
+        self.assertEqual([s["focused"] for s in out["states"]][1:8],
+                         ["Project", "Project", "Reviews", "Reviews", "Overview", "Overview", "Reviews"])
+        self.assertEqual(out["stored"]["fnl-tab"], "delegation")
+
+    def test_hash_storage_validation_and_blocked_storage(self):
+        for name in ("overview", "agents", "project", "delegation", "reviews"):
+            for scenario in ({"hash": "#" + name, "stored": {"fnl-tab": "reviews"}},
+                             {"stored": {"fnl-tab": name}}, {"hash": "#" + name, "storageThrows": True}):
+                with self.subTest(scenario=scenario):
+                    out = self.render(FIXTURE, scenario)
+                    self.assertEqual([t["text"] for t in out["tabs"] if t["attrs"]["aria-selected"] == "true"], [name.title()])
+        for bad in ("unknown", "__proto__", "constructor", "<img src=x onerror=alert(1)>", "'][role=tab]", "%3Csvg%3E"):
+            for scenario in ({"hash": "#" + bad, "stored": {"fnl-tab": "agents"}},
+                             {"stored": {"fnl-tab": bad}}, {"actions": [{"hash": "#" + bad}]}):
+                with self.subTest(scenario=scenario):
+                    out = self.render(FIXTURE, scenario)
+                    self.assertEqual([t["text"] for t in out["tabs"] if t["attrs"]["aria-selected"] == "true"], ["Overview"])
+                    self.assertNotIn(bad, out["text"])
+                    self.assertNotIn(bad, json.dumps([t["attrs"] for t in out["tabs"]] + [p["attrs"] for p in out["panels"]]))
+        out = self.render(FIXTURE, {"storageThrows": True, "actions": [{"click": "Reviews"}]})
+        self.assertFalse(out["panels"][4]["hidden"])
+
+    def test_reload_preserves_tab_panel_scroll_and_each_open_table(self):
+        changed = self.sample()
+        changed["sessions"]["with_edits"] = 98765
+        out = self.render(FIXTURE, {"next": changed, "ticks": 2, "after": [{"click": "Overview"}, {"click": "Delegation"}], "actions": [
+            {"panel": "overview", "scrollTop": 160, "open": True}, {"click": "Delegation"},
+            {"panel": "delegation", "scrollTop": 240, "scrollLeft": 12, "open": True}]})
+        self.assertFalse(out["panels"][3]["hidden"])
+        self.assertEqual(out["panels"][0]["scrollTop"], 160)
+        self.assertEqual(out["panels"][3]["scrollTop"], 240)
+        self.assertEqual(out["panels"][3]["scrollLeft"], 12)
+        self.assertEqual(out["panels"][0]["open"], [True])
+        self.assertEqual(out["panels"][3]["open"], [True])
+        self.assertIn("with edits 98765", out["text"])
+        self.assertEqual(out["poll_ms"], [5000])
+
+    def test_reload_keeps_keyboard_focus_independent_of_selection(self):
+        changed = self.sample()
+        changed["sessions"]["with_edits"] = 98765
+        out = self.render(FIXTURE, {"next": changed, "actions": [{"tab": "Overview", "key": "ArrowRight"}]})
+        self.assertEqual(out["focused"], "Agents")
+        self.assertEqual([tab["tabIndex"] for tab in out["tabs"]], [-1, 0, -1, -1, -1])
+        self.assertFalse(out["panels"][0]["hidden"])
+
+    def test_placeholder_counts_only_when_sources_exist(self):
+        data = self.sample()
+        data.update(running={"processes": [{}, {}], "open": [{}]}, progress={"in_progress": 4})
+        out = self.render_freshness(data)
+        self.assertEqual([t["text"] for t in out["tabs"]], ["Overview", "Agents 3", "Project 4", "Delegation", "Reviews"])
+        data.update(running={"processes": [], "open": []}, progress={"in_progress": 0})
+        self.assertEqual([t["text"] for t in self.render_freshness(data)["tabs"]][1:3], ["Agents 0", "Project 0"])
+        for source in (None, FIXTURE):
+            out = self.render(source)
+            self.assertEqual([t["text"] for t in out["tabs"]][1:3], ["Agents", "Project"])
+            self.assertIn("no data: not available yet", out["panels"][1]["text"])
+            self.assertIn("no data: not available yet", out["panels"][2]["text"])
 
     def test_the_sample_data_draws_every_chart_without_an_error(self):
         out = self.render(FIXTURE)
