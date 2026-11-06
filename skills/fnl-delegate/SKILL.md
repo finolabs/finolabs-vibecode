@@ -103,6 +103,7 @@ When a model's quota runs out, reroute as [references/dispatch.md](references/di
 
 - Discover what the target actually offers (models, effort, tools, context, resume) from its CLI or a current catalog; respect pins and restrictions. A control the target lacks falls back to its default: say so. Record the requested and the effective configuration in the `finish` line's `--note`. Unknown cost is not zero.
 - Before dispatching, budget the whole run: the root and its children, context, retries, evaluator calls, time, and a reserve for verification and review.
+- Start every headless run through the host's own background mechanism (on Claude Code, the Bash tool's background mode), never a detached shell job (`nohup … &`, `disown`). A detached job is invisible in the host's task list and sends no completion notice, so the coordinator neither shows nor notices the run; if one was started that way, attach a background waiter that blocks until the process is gone or the runner's own log records its exit status (a wrapper that appends `exit=<code>` to the log makes this simple on any host). Enforcer: agent judgment, advisory.
 - Wait through supported completion notices; leave no orphan runs and no busy polling. When a run falls short, tell a setup gap (missing tool, permission, quota) from a model failure before rerouting.
 
 ## Parallel dispatch
@@ -125,7 +126,7 @@ Take the upper end of a range for runs that build or test. Once `fnl-status` sho
 - The **hard cap** that kills the process (the host config gives the command form): the budget plus a third, and at least 10 minutes over it.
 - The **check deadline**, half the budget, when you inspect the run.
 
-Judge liveness from artifacts, never from status messages: the process and its elapsed time, growth of the log and output files, new commits or diff in the worktree, new transcript events. Two checks with no new artifact means the run has stalled: stop it, run the handover (below), then retry once with a smaller scope or switch agents, and tell the user. Each brief tells the agent to report failure rather than retry more than once.
+An open ledger line and its age prove only that nobody has closed it, not that the run is alive: before telling the user a run is running, check the process table and the run's recorded exit status, and use `pgrep -f` only with a quoted pattern taken from the run's own recorded id that cannot match the coordinator's own command line (it can report a false positive). Enforcer: agent judgment, advisory. Judge liveness from artifacts, never from status messages: the process and its elapsed time, growth of the log and output files, new commits or diff in the worktree, new transcript events. Two checks with no new artifact means the run has stalled: stop it, run the handover (below), then retry once with a smaller scope or switch agents, and tell the user. Each brief tells the agent to report failure rather than retry more than once.
 
 ## Heavy jobs
 
