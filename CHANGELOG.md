@@ -4,10 +4,12 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-11-06
+
 ### Changed
 
 - Ask questions and show option labels in the user's language, preserving technical names and reporting English script output in that language (advisory, agent judgment); the beginner-register reference says it applies in the user's language, and CI checks its two copies match.
-- `fnl-session-hygiene` records the documented compaction settings of Claude Code (`autoCompactWindow`, `/autocompact`) and Codex, states that Antigravity documents none beyond `/compact`, and separates the advisory 60% from the host's later default trigger; `fnl-setup` repeats the Antigravity limit. After the 0.1.8 compaction-hook update, Codex hooks need trust again.
+- `fnl-session-hygiene` records the documented compaction settings of Claude Code (`autoCompactWindow`, `/autocompact`) and Codex, states that Antigravity documents none beyond `/compact`, and separates the advisory 60% from the host's later default trigger; `fnl-setup` repeats the Antigravity limit.
 
 ### Fixed
 
@@ -271,7 +273,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.5...v0.1.6
