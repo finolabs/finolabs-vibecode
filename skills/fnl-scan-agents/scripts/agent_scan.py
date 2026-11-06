@@ -52,7 +52,7 @@ def section_ranges(text, heading):
     fence = None
     headings = []
     offset = 0
-    for line in text.splitlines(keepends=True):
+    for line in text.split("\n"):
         marker = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line.rstrip("\r\n"))
         if marker:
             run, tail = marker.groups()
@@ -62,7 +62,7 @@ def section_ranges(text, heading):
                 fence = None
         elif fence is None and re.match(r"^#{1,2} ", line):
             headings.append((offset, line.rstrip("\r\n")))
-        offset += len(line)
+        offset += len(line) + 1
     return [(start, headings[i + 1][0] if i + 1 < len(headings) else len(text))
             for i, (start, line) in enumerate(headings) if line.rstrip() == "## " + heading]
 
@@ -102,21 +102,31 @@ def inventory(host, previous, confirmed):
         if executable:
             try:
                 with subprocess.Popen([executable, "--version"], stdout=subprocess.PIPE,
-                                      stderr=subprocess.STDOUT, shell=False) as process:
+                                      stderr=subprocess.PIPE, shell=False) as process:
                     output = b""
+                    captured = 0
                     deadline = time.monotonic() + 3
                     try:
                         with selectors.DefaultSelector() as selector:
                             selector.register(process.stdout, selectors.EVENT_READ)
-                            while len(output) < 4096:
+                            selector.register(process.stderr, selectors.EVENT_READ)
+                            while selector.get_map() and captured < 4096:
                                 remaining = deadline - time.monotonic()
-                                if remaining <= 0 or not selector.select(remaining):
+                                if remaining <= 0:
                                     raise subprocess.TimeoutExpired(executable, 3)
-                                chunk = os.read(process.stdout.fileno(), 4096 - len(output))
-                                if not chunk:
-                                    break
-                                output += chunk
-                        if len(output) == 4096:
+                                ready = selector.select(remaining)
+                                if not ready:
+                                    raise subprocess.TimeoutExpired(executable, 3)
+                                for event, _ in ready:
+                                    chunk = os.read(event.fileobj.fileno(), 4096 - captured)
+                                    if not chunk:
+                                        selector.unregister(event.fileobj)
+                                    captured += len(chunk)
+                                    if event.fileobj is process.stdout:
+                                        output += chunk
+                                    if captured == 4096:
+                                        break
+                        if captured == 4096:
                             process.kill()
                         returncode = process.wait(timeout=max(0.001, deadline - time.monotonic()))
                     finally:

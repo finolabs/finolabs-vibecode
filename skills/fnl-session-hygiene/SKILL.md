@@ -7,11 +7,13 @@ description: Keep agent sessions healthy across long work. Use when a session's 
 
 ## Context pressure
 
+**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
+
 The **host** compacts at its own threshold: a host setting, not this plugin. The skill adds what the host cannot know: which decisions and next action to write back before compaction. The **agent** performs that writeback; it is advisory, not automatically enforced.
 
 An agent cannot see its own context percentage. **About 60% is advisory (agent judgment)**: a point to consider a boundary, not the host's compaction threshold, which is usually later (below); never invent a percentage. At task boundaries, use host-exposed usage if available and judge pressure from the work. The following choices are advisory, enforced by agent judgment:
 
-- At a safe idle boundary, use supported compaction for the same workstream when context pressure warrants it. When the agent cannot compact itself, ask the user to, or propose a fresh session with a handover. **Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
+- At a safe idle boundary, use supported compaction for the same workstream when context pressure warrants it. When the agent cannot compact itself, ask the user to, or propose a fresh session with a handover.
 - A wholly new, independent task starts in a fresh, correctly named session in the matching checkout, with a short verified handover.
 - A finished user story, with its review gate closed, is a natural boundary: prefer a fresh session for the next story with a short handover. A coordinator session whose context is still light may continue (`fnl-delegate`).
 - Delegated agents follow the same rule: start a fresh run with a short handover brief rather than resuming a run that has used much of its window.
@@ -21,9 +23,9 @@ Before a compaction, a fresh session or the end of the work, write back a decisi
 
 **Native settings.** Read from each host's documentation and installed binary on 2026-11-05; the host enforces them, and no value is prescribed because the right one is the user's choice:
 
-- Claude Code (documented, code.claude.com): `autoCompactWindow` in settings (100000 to 1000000 tokens), `/autocompact <tokens>` (saved per model) and the `--autocompact` flag; the `CLAUDE_CODE_AUTO_COMPACT_WINDOW` variable overrides all three, so a value set there makes the others do nothing; `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` only lowers the trigger; `autoCompactEnabled` and the `DISABLE_AUTO_COMPACT` variable turn it off. Models with a native 1M window compact late by default (about 967K tokens per the documentation), so for them the advisory 60% is far earlier than the host's trigger; models on extended context compact at the context limit.
+- Claude Code (documented, code.claude.com): `autoCompactWindow` in settings (100000 to 1000000 tokens), `/autocompact <tokens>` (saved per model) and the `--autocompact` flag; the `CLAUDE_CODE_AUTO_COMPACT_WINDOW` variable overrides all three, so a valid value set there makes the others do nothing; `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` only lowers the trigger; `autoCompactEnabled` and the `DISABLE_AUTO_COMPACT` variable turn it off. Models with a native 1M window compact late by default (about 967K tokens per the documentation), so for them the advisory 60% is far earlier than the host's trigger; models on extended context compact at the context limit.
 - Codex 0.166.0 (config reference and binary; defaults unverified on this version): `model_auto_compact_token_limit`, `model_post_turn_compact_threshold_percent` (0 or unset disables only this turn-end trigger; other auto-compaction limits still apply), and background compaction under `[features] async_compaction`.
-- Antigravity 1.5.1: compacts automatically; `/compact` is the only documented user control (in its changelog). No threshold or off switch is documented. `AGY_CLI_AUTO_COMPACT_OVERRIDE` is a string in the installed binary, but users report it has no effect, so it is unverified and never suggested; `compactionThreshold` is likewise reported ineffective. This is not proof that no setting exists. Until one is documented, the advisory rules above are the only mechanism there.
+- Antigravity 1.5.1: compacts automatically; `/compact` is the only documented user control (in its changelog). No threshold or off switch is documented. `AGY_CLI_AUTO_COMPACT_OVERRIDE` is a string in the installed binary, but users report it has no effect, so it is unverified and never suggested (advisory, agent judgment); `compactionThreshold` is likewise reported ineffective. This is not proof that no setting exists. Until one is documented, the advisory rules above are the only mechanism there.
 
 The agent rechecks the installed host's documentation or help before suggesting a setting, since names and defaults change; this is advisory (agent judgment). `/fnl-setup` offers guidance only after the user's yes. The user makes or confirms any shared-setting change; neither skill writes these settings.
 

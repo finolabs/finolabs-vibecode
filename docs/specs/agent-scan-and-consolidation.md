@@ -86,7 +86,7 @@ Package 1 covers consolidation; package 2 adds scan, mode settings, inventory-aw
 - fnl-scan-agents on a machine with only two of the three CLIs records exactly those two, marks the rest absent, writes nothing without a yes, and a second run with no change reports no difference.
 - With one family present, `fnl-delegate` offers no hand-off and says why; with two, an offer names only the other family.
 - fnl-set-mode changes only the two headings, reports an environment override, and never writes without a yes.
-- No removed skill name remains in the repository except in the changelog mapping; `check-references.py`, the unit tests, `claude plugin validate .` and the evals (trigger cases renamed, new cases below) pass.
+- No removed skill name remains in tracked files except in dated changelog releases or the Unreleased migration mapping; `check-references.py`, the unit tests, `claude plugin validate .` and the evals (trigger cases renamed, new cases below) pass.
 - New eval cases: a Claude Code coordinator with only Claude Code and Codex present never offers Antigravity; no other family present states delegation is off and continues itself; an environment override wins over mode file changes. The existing own-kind case remains.
 
 ## Delivery

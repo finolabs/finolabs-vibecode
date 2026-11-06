@@ -440,7 +440,7 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
         else:
             directory_limited = True
 
-    followed, include_targets = set(), {}
+    followed, include_targets, cycles = set(), {}, set()
 
     def include(path, depth, stack):
         entry = files[path]
@@ -486,7 +486,11 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
                 add("I4", "fail", path, number, "include-depth", "more than four include hops")
                 continue
             if candidate in stack:
-                add("I4", "fail", path, number, "include-cycle", "include cycle")
+                cycle = stack[stack.index(candidate):]
+                cycle = min(cycle[i:] + cycle[:i] for i in range(len(cycle)))
+                if cycle not in cycles:
+                    cycles.add(cycle)
+                    add("I4", "fail", path, number, "include-cycle", "include cycle")
                 continue
             child = load(candidate, boundary, entry["host"], rule=allowed_rule)
             if not child or child["status"] != "ok":
@@ -499,11 +503,11 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
             visit = (candidate, depth + 1)
             if visit not in followed:
                 followed.add(visit)
-                include(candidate, depth + 1, stack | {candidate})
+                include(candidate, depth + 1, stack + (candidate,))
 
     # Roots are snapshotted: included files are followed through their owner only.
     for path in list(files):
-        include(path, 0, {path})
+        include(path, 0, (path,))
 
     for path, entry in list(files.items()):
         for name, directory in entries(path.parent, backup=True):
