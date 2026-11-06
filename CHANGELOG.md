@@ -25,6 +25,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add a validated `record.py task --id T012` receipt and a consent-gated `task` event holding only the task id, with advisory guidance for sessions the user started by hand.
+
 - Let the Antigravity compaction stop install from Antigravity's own installed copy of the plugin, which keeps the repository's `.git` entry; any other plugin folder inside a git work tree is still refused.
 - Ask user decisions through the host's native question tool across any clarify or brainstorming skill, stage rounds larger than the tool's per-call limit across calls with blocking questions first, and note how a parent session can read its own id from a child session it started when renaming (advisory, agent judgment).
 - Show dashboard freshness: build time, newest event per host, ledger and quota ages, quiet-host warnings and a visible-tab stale-data notice. A newer ledger bypasses the rebuild throttle; Antigravity events start a detached, consent-gated rebuild with a 20-second self-cap.

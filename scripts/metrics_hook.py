@@ -27,6 +27,7 @@ COMMIT = re.compile(START + r"git(?:[ \t]+(?:-[cC][ \t]+(?:\"[^\"]*\"|'[^']*'|[^
 GH_COMMENT = re.compile(START + r"gh[ \t]+pr[ \t]+comment\b([^;&|\n]*)")
 ROUTER = re.compile(START + r"(?:python3?(?:[ \t]+-\S+)*[ \t]+)?[\"']?[^\s\"']*record\.py[\"']?[ \t]+router\b")
 KEEP = re.compile(START + r"(?:python3?(?:[ \t]+-\S+)*[ \t]+)?[\"']?(?:[^\s\"']*/)?record\.py[\"']?[ \t]+keep\b([^;&|)\n]*)")
+TASK = re.compile(START + r"(?:python3?(?:[ \t]+-(?:I|B|u))*[ \t]+)?[\"']?(?:[^\s\"']*/)?record\.py[\"']?[ \t]+task\b([^;&|)\n]*)")
 JUDGE = re.compile(START + r"(?:python3?(?:[ \t]+-(?:I|B|u))*[ \t]+)?[\"']?(?:[^\s\"']*/)?record\.py[\"']?[ \t]+judge\b([^;&|)\n]*)")
 MARKER_TEXT = r"<!-- fnl-review kind=(code|security) head=[0-9a-f]{7,40} verdict=(APPROVE|REWORK)(?: lane=yes)? -->"
 MARKER = re.compile("^" + MARKER_TEXT)
@@ -265,7 +266,9 @@ def post_tool_use(sid, cwd, tool, data):
                 shlex.split(judge_command)  # include the script token: unmatched quotes never ran
             except ValueError:
                 return
-            for judge in JUDGE.finditer(judge_command):
+            receipts = [(event, receipt) for event, pattern in (("judge", JUDGE), ("task", TASK))
+                        for receipt in pattern.finditer(judge_command)]
+            for event, judge in receipts:
                 if "$" in judge.group():
                     continue  # expanded receipt arguments cannot be validated from command text
                 try:
@@ -278,13 +281,13 @@ def post_tool_use(sid, cwd, tool, data):
                     for word in words:
                         flag, equal, value = word.partition("=")
                         key = flag[2:] if flag.startswith("--") else ""
-                        if key not in fm.SCHEMA["judge"] or key in fields:
+                        if key not in fm.SCHEMA[event] or key in fields:
                             raise ValueError("invalid judge argument")
                         fields[key] = value if equal else next(words)
-                    if (set(fields) == set(fm.SCHEMA["judge"])
-                            and all(check(fields[key]) for key, check in fm.SCHEMA["judge"].items())
-                            and fm.valid_judge_pairs(fields)):
-                        fm.record("judge", sid, cwd, **fields)
+                    if (set(fields) == set(fm.SCHEMA[event])
+                            and all(check(fields[key]) for key, check in fm.SCHEMA[event].items())
+                            and (event != "judge" or fm.valid_judge_pairs(fields))):
+                        fm.record(event, sid, cwd, **fields)
                 except (ValueError, StopIteration):
                     continue  # malformed commands never record or block the host
 
