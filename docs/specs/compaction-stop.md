@@ -1,0 +1,117 @@
+# Antigravity compaction stop
+
+Decision: 2026-11-06, owner: a second blocking hook, scoped by the second
+exception in `CLAUDE.md` (merged). This spec comes before any code and carries the
+`PRIVACY.md`, README and `fnl-setup` changes. Claude Code and Codex use host
+thresholds written by `fnl-setup` (`compaction-threshold.md`); Antigravity has none.
+
+## Verified on 2026-11-06 (throwaway workspace, Antigravity 1.5.1, `agy -p`)
+
+- Hooks from `<workspace>/.agents/hooks.json` ran with no trust prompt. Every event
+  receives `conversationId`, `transcriptPath`, `workspacePaths`, `modelName`,
+  `lastUserInput`; `PreInvocation` and `PostInvocation` add `invocationNum` and
+  `initialNumSteps`.
+- `transcriptPath` was a regular file under
+  `~/.gemini/antigravity-cli/brain/<conversationId>/.system_generated/logs/`, and
+  its size grew with each turn (588, then 777 bytes).
+- A `PreInvocation` hook answering
+  `{"injectSteps":[{"errorMessage":{"userMessage":"…"}}],"terminationBehavior":"terminate"}`
+  ended the turn before the model ran; the user saw the message and `-p` reported
+  `status: ERROR`. The same hook ran on a resumed conversation.
+- The transcript measures conversation content, not the whole context: 777 bytes of
+  transcript against 26,108 input tokens, most of it the fixed system prompt. A
+  byte limit is a rough proxy and must be presented as one.
+- Not verified: the same hook in the user-level `~/.gemini/config/hooks.json`, and
+  the interactive TUI.
+
+## Parts
+
+### 1. Hook `scripts/compact_stop_hook.py` (stdlib, no network, no subprocess)
+
+Runs on Antigravity `PreInvocation` only. Reads the event from stdin (64 KiB bound,
+select with a 0.5 s wait, as `session_start.py` does). It acts only when
+`invocationNum` is 0, so it can end the start of a new user turn and never the middle of
+one. Always exits 0 and prints exactly `{}` unless it stops the turn.
+
+Decision, in this order; any failure allows:
+1. `FNL_COMPACT_STOP=off` allows.
+2. The data root resolves and `host.md` has the section `## Compaction stop` with
+   `Enabled: yes` and `Limit bytes: <integer>` within the bounds below; otherwise allow.
+3. `transcriptPath` resolves (realpath) under the account's
+   `~/.gemini/antigravity-cli/brain/`, is a regular file and not a symlink (`lstat`);
+   only its size is read. Anything else allows.
+4. Size at or below the limit allows.
+5. The mark for this conversation is `<data root>/state/compact-stop/<first 16 hex
+   of sha256(conversationId)>.json` (0600, private folder) holding only the integer size
+   at the last stop. With a mark: a size below the mark resets it (allow); stop again
+   only when the size is at least 10% and at least 20,000 bytes above the mark.
+6. Write the mark atomically before answering. If the write fails, allow.
+7. Answer with the fixed message "The conversation is large. Run /compact, or start a
+   fresh session with a short handover, then continue." in the exact shape verified
+   above.
+
+The hook never denies a tool call, a prompt, a session start or the user's own stop,
+never opens the transcript, and sends nothing anywhere. At most 200 mark files are
+kept (oldest by mtime removed on write).
+
+### 2. Installer `skills/fnl-setup/scripts/compact_stop_setup.py` (stdlib)
+
+Pattern: `quota_setup.py` and `compact_setup.py` (stored private preview, digest,
+expiry 60 minutes, owner and mode checks, refusal of symlinks and git work trees for
+the data root).
+- `preview --limit <bytes>` | `preview --remove`: prints the exact change to
+  `host.md` (`## Compaction stop` section) and to the user's Antigravity hooks file
+  (`~/.gemini/config/hooks.json` or `--config <abs path>`), the group name, the
+  absolute hook command, the limit with its caveat (a byte proxy; the system prompt
+  is not counted), and the digest. This is the dry run; it writes only the private preview.
+- `apply --digest <64 hex> --yes`: applies only the stored preview. Writes the
+  section atomically, then the hooks file: its own group `finolabs-vibecode-compact-stop`
+  (never the metrics group, which `refresh.py antigravity-hook` owns and must not touch
+  this one), timestamped backup, atomic write, mode preserved, every other group
+  byte-for-byte, JSON object required, duplicate keys and non-finite numbers refused.
+- `--remove` deletes the group and sets `Enabled: no`.
+- Limit bounds: 50,000 to 20,000,000 bytes (integer). The hook command is built with
+  `shlex.quote` from a path that passes the same plugin-root check as `refresh.py`
+  (the file is inside a `finolabs-vibecode` plugin).
+- Refuses to run for any host but Antigravity; mentions Claude Code and Codex use
+  `compact_setup.py`.
+
+### 3. Skill and doc text
+
+`fnl-setup` gains one optional step after the compaction threshold step, only when
+Antigravity is present: a separate consent question (neutral Yes and No, none
+preselected, through the host's native question tool), the preview, then apply.
+Advisory (agent judgment) that the question is asked and the preview shown; the
+installer enforces digest, expiry and file safety. `fnl-session-hygiene` "Context
+pressure" names the stop and its limits. `PRIVACY.md`: the section in `host.md`, the
+mark files (an integer per conversation, hashed key, local), nothing sent. README row.
+CHANGELOG `Unreleased`.
+
+## Not in scope
+
+- Reading transcript content, or deriving token counts from it.
+- Running `/compact` for the user.
+- Plugin-bundled Antigravity hooks (working folder unverified).
+- A stop on any event but `PreInvocation`; Claude Code and Codex stops.
+
+## Acceptance
+
+1. Hook: allow on every row 1 to 3 failure; stop when over the limit; one stop until
+   +10% and +20,000 bytes; allow after a mark write failure; reset on a smaller
+   transcript; symlink and out-of-folder paths allow; `invocationNum` above 0 allows;
+   malformed or idle stdin allows; output is exactly `{}` or the verified shape.
+2. Installer: preview writes only the private preview; apply refuses a wrong or short
+   digest, an expired preview, a changed hooks file; other groups unchanged; backup
+   made; remove works; the metrics group is untouched by either command.
+3. `refresh.py antigravity-hook` keeps its behaviour; a test shows both installers
+   can run in either order.
+4. Docs updated; `check-references.py`, `claude plugin validate .` and targeted tests pass
+   with the temp folder under a world-writable `/tmp`.
+
+## Open
+
+- Whether the byte limit is a usable proxy in long real sessions: measure the
+  transcript size against `usage` over a few real conversations before recommending a
+  default; setup recommends none.
+- The same hook from the user-level hooks file and in the TUI: verify with the first
+  real install.
