@@ -585,7 +585,7 @@ class QuotaTest(unittest.TestCase):
         self.fake("agy")
         with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
             plan, value = setup.preview(["agy"])
-            plan["date"] = "2026-11-06"
+            plan["date"] = "1999-01-01"
             with self.assertRaises(ValueError):
                 setup.apply(plan, setup.digest(plan), True)
         self.assertFalse((self.root / "host.md").exists())
@@ -638,7 +638,7 @@ class QuotaTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
             plan, value = setup.preview(["agy"])
             edited = copy.deepcopy(plan)
-            edited["date"] = "2026-11-06"
+            edited["date"] = "1999-01-01"
             with qp.state_folder() as folder:
                 qp.write_json(folder, "preview.json", {"plan": edited, "digest": value})
             with self.assertRaisesRegex(ValueError, "digest mismatch"):
