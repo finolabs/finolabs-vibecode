@@ -600,5 +600,6 @@
   "kept": {"receipts": 3, "tasks": 7, "handed_off": 14, "rows": [
     {"coordinator": "claude", "reason": "needs-context", "route_by": "table", "receipts": 2, "tasks": 5},
     {"coordinator": "claude", "reason": "user-choice", "route_by": "user", "receipts": 1, "tasks": 2}
-  ]}
+  ]},
+  "freshness": {"built_at": "2026-10-31T18:00:00Z", "latest_event": {"claude": "2026-10-31T18:00:00Z"}, "ledger_age_seconds": 120, "quota_age_seconds": null}
 }

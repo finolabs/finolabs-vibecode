@@ -140,6 +140,39 @@ def refresh_dashboard(seconds=REFRESH_SECONDS, extra=()):
         pass
 
 
+def start_detached_refresh():
+    """Antigravity cannot wait for a rebuild. Probe the OS lock before starting one."""
+    if not fm.enabled() or not REFRESH.is_file():
+        return
+    fd = None
+    try:
+        # The isolated child drops state overrides. Consent guarantees this
+        # canonical state folder exists; probe the same lock the child will use.
+        root = fm.dr.consent_root()
+        if root is None:
+            return
+        folder = root / "state"
+        fd = os.open(folder / "refresh.lock", os.O_RDWR | os.O_CREAT | fm.NOFOLLOW | getattr(os, "O_NONBLOCK", 0), 0o600)
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return
+        try:
+            import fcntl
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except ImportError:
+            import msvcrt
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        # No host, project, Python injection or quota-worker variables are inherited.
+        env = {k: os.environ[k] for k in ("SYSTEMROOT",) if k in os.environ}
+        subprocess.Popen([sys.executable, "-I", str(REFRESH), "run", "--throttle", "10"],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         env=env, cwd=str(REFRESH.parent), close_fds=True, start_new_session=True)
+    except (OSError, ValueError):
+        pass
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
 def refresh_if_stale():
     """Rebuild at most once per REFRESH_EVERY seconds. The stat here spares most tool calls a process; the script
     checks again under its lock, so two hooks that both pass the stat still rebuild once."""
@@ -185,8 +218,10 @@ def session_start(sid, cwd, source, host):
     consent = fm.read_consent()
     if consent:
         fm.prune(consent["retention_days"])
-        if host != "antigravity":  # its hook is not async, and a refresh must not hold up the start of a session
+        if host != "antigravity":
             refresh_dashboard()
+        else:
+            start_detached_refresh()
 
 
 def post_tool_use(sid, cwd, tool, data):
@@ -311,8 +346,10 @@ def main():
             session_start(sid, cwd, source, host)
         elif event == "PostToolUse":
             post_tool_use(sid, cwd, tool, data)
-            if host != "antigravity":  # its hook is not async: a rebuild would hold up the tool call
+            if host != "antigravity":
                 refresh_if_stale()
+            else:
+                start_detached_refresh()
         elif event == "Stop" and host != "antigravity":
             refresh_dashboard()
     except Exception as error:
