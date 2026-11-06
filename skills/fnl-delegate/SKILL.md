@@ -13,6 +13,8 @@ References carry the detail. For routing: [references/models.md](references/mode
 
 For a spec run as a coordinator with one app session per task, load [references/coordinator-sessions.md](references/coordinator-sessions.md). It covers ownership, standby sessions, checkout handovers and the review gate per user story.
 
+**Advisory (agent judgment):** When the coordinator starts work on a task in a session the user started by hand, run `python3 -I <this skill folder>/scripts/record.py task --id <id>`; the script validates the task id.
+
 ## Delegation mode
 
 **Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged. Script output stays English; report it to the user in their language (advisory, agent judgment).
