@@ -30,7 +30,8 @@ class Node_ {
   }
   removeChild(c) { this.children.splice(this.children.indexOf(c), 1); c.parentNode = null; }
   closest(selector) {
-    const matches = selector.startsWith(".") ? this.classList.contains(selector.slice(1)) :
+    const matches = selector.startsWith("#") ? this === byId[selector.slice(1)] :
+      selector.startsWith(".") ? this.classList.contains(selector.slice(1)) :
       selector === "[data-tip]" && this.getAttribute("data-tip") !== null;
     return matches ? this : this.parentNode ? this.parentNode.closest(selector) : null;
   }
@@ -85,7 +86,12 @@ const document = {
   querySelector: () => new Node_("div"),
   addEventListener(type, fn) { handlers[type] = fn; },
 };
+const tipValues = new WeakMap();
+class ObservedWeakMap extends WeakMap {
+  set(key, value) { tipValues.set(key, value); return super.set(key, value); }
+}
 const sandbox = {
+  WeakMap: ObservedWeakMap,
   document,
   Date: FakeDate,
   console,
@@ -119,7 +125,7 @@ function fire(n, type, key) {
 const states = [], tipStates = [];
 function tooltipState() {
   const tip = byId.tip;
-  return {hidden: tip.hidden, text: tip.textContent, attrs: tip.attrs};
+  return {hidden: tip.hidden, text: tip.textContent, attrs: {...tip.attrs}, picture: picture(tip)};
 }
 function tooltipAction(action) {
   if (!action.tooltip) return;
@@ -170,7 +176,10 @@ function picture(n, disclosure, hidden, panel) {
   if (n.getAttribute("role") === "tabpanel") panel = n.getAttribute("id");
   disclosure = disclosure || (n.tag === "details" ? n.children[0].textContent : null);
   hidden = hidden || n.hidden;
-  return [{ tag: n.tag, cls: n.className, text: n.textContent, attrs: n.attrs, style: n.style,
+  const spec = tipValues.get(n);
+  const tooltip = typeof spec === "string" ? spec : spec ? [spec.title, spec.sub,
+    ...(spec.rows || []).map((row) => row.join(": ")), ...(spec.items || []), ...(spec.chips || []).map((chip) => chip.label)].filter(Boolean).join(" ") : null;
+  return [{ tooltip, spec, tag: n.tag, cls: n.className, text: n.textContent, attrs: n.attrs, style: n.style,
     disclosure, panel, open: !!n.open, hidden: !!hidden }, ...n.children.flatMap((child) => picture(child, disclosure, hidden, panel))];
 }
 out.picture = picture(app);

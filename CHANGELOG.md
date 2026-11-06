@@ -27,6 +27,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Flatten dashboard lanes into two flush colours, add structured tooltips, and refine light warning colours, freshness thresholds and story spacing.
+
 - Move dashboard limits and footer details behind accessible info buttons, show compact freshness and finished-project check bricks, and bound lane/quota marks while separating wrapped story runs.
 
 - Replace Agents tiles and Project text rows with lego budget lanes, slot/quota bricks and visible story runs, following the approved prototype; retain tables behind the existing disclosure.
