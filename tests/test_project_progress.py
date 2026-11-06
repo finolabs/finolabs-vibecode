@@ -73,8 +73,9 @@ class ProgressTest(unittest.TestCase):
     def test_settings_consent_atomic_private_and_cli_output(self):
         import io
         before = self.host.read_bytes()
-        with self.assertRaises(ValueError):
-            self.pp.set_setting(self.repo, 'ledger', 'PRIVATE')
+        for value in ('PRIVATE', None):
+            with self.assertRaises(ValueError):
+                self.pp.set_setting(self.repo, 'ledger', value)
         self.assertEqual(self.host.read_bytes(), before)
         self.consent()
         with mock.patch.object(self.pp, 'repository_code', return_value='aaaaaaaa'):
@@ -88,6 +89,10 @@ class ProgressTest(unittest.TestCase):
                 self.assertNotIn('private', out.getvalue())
             with self.assertRaises(ValueError):
                 self.pp.set_setting(self.repo, 'ledger', 'first=second')
+            with mock.patch('os.getcwd', return_value=str(self.repo)), mock.patch.object(self.pp, 'set_setting', return_value=True) as write, mock.patch('sys.stdout', new_callable=io.StringIO) as out:
+                self.assertEqual(self.pp.main(['settings', '--set', 'ledger=first=second']), 0)
+                write.assert_called_once_with(str(self.repo), 'ledger', 'first=second')
+                self.assertEqual(out.getvalue(), 'ledger changed\n')
             with mock.patch.object(self.pp.dr, 'atomic_write', side_effect=OSError('interrupted')):
                 saved = self.host.read_bytes()
                 with self.assertRaises(OSError):
@@ -117,6 +122,113 @@ class ProgressTest(unittest.TestCase):
         self.assertNotIn('PRIVATE', json.dumps([one, two]))
         self.pp.set_setting(self.repo, 'ledger', None)
         self.assertEqual(self.pp.repository_settings(self.pp.config(), self.repo)['Ledger project'], 'old')
+
+    def record(self, status='in progress', tasks='- [x] T1 PRIVATE\n', directory='docs/specs', name='work.md'):
+        return self.document(name, '# PRIVATE title\nStatus: ' + status + '; PRIVATE\n'
+            '## Goal and acceptance\n- [ ] AC1 PRIVATE\n## Plan\nPRIVATE plan\n'
+            '## Tasks\n### US1 PRIVATE story\n' + tasks + '## Evidence\nPRIVATE evidence\n', directory)
+
+    def test_work_record_stages_state_marks_and_closed_output(self):
+        self.record()
+        got = self.collect()
+        self.assertEqual((got['source'], got['recognition']), ('work-record', 'work-record'))
+        item = got['features'][0]
+        self.assertEqual(item['state'], 'active')
+        self.assertEqual(item['status_mark'], 'status-not-updated')
+        self.assertEqual([(s['stage'], s['done'], s['total']) for s in item['stages']],
+                         [('spec', 0, 1), ('plan', 1, 1), ('tasks', 1, 1), ('verify', 1, 1)])
+        self.assertEqual(item['stories'], [dict(story='US1', done=1, total=1)])
+        self.assertNotIn('PRIVATE', json.dumps(got))
+        for status, state in [('draft', 'todo'), ('accepted', 'todo'), ('in progress', 'active'),
+                              ('implemented', 'done'), ('released', 'done'), ('deferred', 'deferred'), ('PRIVATE', 'unknown')]:
+            self.record(status)
+            item = self.collect()['features'][0]
+            self.assertEqual(item['state'], state)
+            if status == 'accepted':
+                self.assertEqual(item['status_mark'], 'accepted')
+        self.document('work.md', 'Status: draft\n## Goal and acceptance\n- [x] AC1\n## Tasks\n- [ ] without id\n')
+        self.assertEqual([s['stage'] for s in self.collect()['features'][0]['stages']], ['spec', 'tasks'])
+        self.document('work.md', 'Status: implemented\n## Goal and acceptance\n')
+        self.assertNotEqual(self.collect()['source'], 'work-record')
+
+    def test_work_record_fenced_evidence_and_empty_status(self):
+        text = 'Status: \n## Plan\n```sh\n## Tasks\n- [x] T9\n```\n## Evidence\n```sh\npython -m unittest\n```\n'
+        item = self.pp.work_record(text, 1)
+        self.assertIsNotNone(item)
+        self.assertEqual(item['state'], 'unknown')
+        self.assertEqual([(row['stage'], row['total']) for row in item['stages']], [('plan', 1), ('verify', 1)])
+        self.assertEqual(item['tasks'], [])
+
+    def test_work_record_precedence_flat_specs_and_shared_safe_parser(self):
+        self.record(directory='specs')
+        self.assertEqual(self.collect()['source'], 'work-record')
+        (self.repo / 'specs/001-empty').mkdir()
+        self.assertEqual(self.collect()['source'], 'none')
+        self.record()
+        self.taskfile()
+        self.assertEqual(self.collect()['source'], 'speckit')
+        self.assertEqual(self.pp.parse('```md\n## Phase 2\n- [x] T1\n```\n- [ ] T2\n', 1)['total'], 1)
+        self.assertEqual(self.pp.priorities('~~~\n## User Story 1 (P1)\n~~~\n'), {})
+        self.assertEqual(self.pp.status_line('```\nStatus: released\n```\nStatus: draft\n'), 'draft')
+        self.assertEqual(self.pp.status_line('\n' * 40 + 'Status: released'), '')
+        self.assertEqual(self.pp.work_record('Status: draft\n```\n## Plan\n## Tasks\n```\n', 1), None)
+
+    @unittest.skipUnless(shutil.which('node') or Path('/opt/homebrew/bin/node').exists(), 'node is not installed')
+    def test_work_record_amber_dot_renders_with_tooltip(self):
+        from tests.test_dashboard_page import DashboardScriptTest
+        self.record()
+        got = self.collect()
+        data = json.loads((ROOT / 'tests/fixtures/status-sample.json').read_text())
+        data['progress'] = {'repositories': {'aaaaaaaa': got}, 'active': [
+            {'repo': 'aaaaaaaa', 'label': 'Synthetic', 'hosts': ['codex'], 'sessions': 1, 'last': '2026-11-06T10:00:00Z'}]}
+        page = DashboardScriptTest()
+        out = page.render_freshness(data, {'hash': '#now'})
+        marks = page.marks(out, 'pipeline-status-mark')
+        self.assertEqual(len(marks), 1)
+        self.assertIn('status not updated', json.dumps(marks))
+        self.assertNotIn('PRIVATE', json.dumps(out))
+        self.assertNotIn('undefined', ' '.join(m['text'] for m in page.marks(out, 'active-project')))
+
+    def test_truncated_flat_specs_listing_cannot_prove_no_numbered_directory(self):
+        for i in range(205):
+            self.record('draft', directory='specs', name=f'{i:03d}.md')
+        (self.repo / 'specs/001-empty').mkdir()
+        original = self.pp.directory_entries
+        def truncated(fd, relative, skipped, cap=200):
+            if relative == 'specs':
+                skipped.append('entry limit')
+                return [(f'{i:03d}.md', False, True) for i in range(min(200, cap))]
+            return original(fd, relative, skipped, cap)
+        with mock.patch.object(self.pp, 'directory_entries', side_effect=truncated):
+            got = self.collect()
+        self.assertEqual(got['source'], 'none')
+        self.assertGreaterEqual(got['work_records']['skipped'], 1)
+
+    def test_work_record_caps_drop_order_and_unsafe_entries(self):
+        for i in range(41):
+            self.record('implemented' if i == 0 else 'draft', name=f'{i:03d}.md')
+        got = self.collect()
+        self.assertEqual(len(got['features']), 40)
+        self.assertTrue(all(f['state'] == 'todo' for f in got['features']))
+        self.assertEqual(got['work_records']['skipped'], 1)
+        folder = self.repo / 'docs/specs'
+        (folder / 'big.md').write_bytes(b'x' * (65536 + 1))
+        (folder / 'link.md').symlink_to(folder / '001.md')
+        os.mkfifo(folder / 'x.md')
+        self.assertEqual(self.collect()['work_records']['skipped'], 4)
+        shutil.rmtree(folder)
+        folder.symlink_to(self.repo / 'specs')
+        self.assertGreaterEqual(self.collect()['work_records']['skipped'], 1)
+        folder.unlink()
+        for i in range(205):
+            self.document(f'{i:03d}.md', 'Status: draft\n## Plan\nx\n## Tasks\n')
+        self.assertGreaterEqual(self.collect()['work_records']['skipped'], 1)
+        with mock.patch.object(self.pp, 'work_record', side_effect=lambda *a: time.sleep(2)):
+            started = time.monotonic()
+            got = self.collect()
+            self.assertEqual(got['reason'], 'progress timed out')
+            self.assertEqual(got['work_records']['skipped'], 1)
+            self.assertLess(time.monotonic() - started, 1.5)
 
     # Infographics acceptance 3: new metadata only, same safe reader.
     def test_priorities_archive_labels_and_finished_project(self):
@@ -235,7 +347,7 @@ class ProgressTest(unittest.TestCase):
 
     def test_status_mapping_is_unknown_unless_stated_and_deferrals_remain_distinct(self):
         cases = {'Implemented for 0.1.7': 'done', 'merged; release pull request open': 'done',
-                 'Released as 0.1.8': 'done', 'shipped': 'done', 'accepted': 'done', 'done': 'done',
+                 'Released as 0.1.8': 'done', 'shipped': 'done', 'accepted': 'todo', 'done': 'done',
                  'In progress': 'active', 'In review': 'active', 'building': 'active', 'running locally': 'active',
                  'Spec; rule is merged; no pull request yet': 'active', 'Moved to 0.2.0 after merged work': 'deferred',
                  'deferred': 'deferred', 'See its verification and host limits': 'unknown', 'fix': 'unknown', '': 'unknown'}

@@ -341,6 +341,7 @@
       if (feature.stages) {
         line(sourceName(p) + " · " + feature.state);
         if (feature.status_hint) line("status line says " + feature.status_hint);
+        if (feature.status_mark) line(feature.status_mark === "status-not-updated" ? "status not updated" : "accepted");
         feature.stages.forEach(function (row) { line(row.stage + " · " + row.state + " · " + row.done + "/" + row.total); });
         (feature.packages || []).forEach(function (pkg) { line("package " + pkg.ordinal + " · " + pkg.state); });
         if (feature.review_counts) ["code", "security"].forEach(function (kind) {
@@ -360,7 +361,7 @@
       table.appendChild(head);
       (feature.tasks || []).forEach(function (task) {
         var row = h("tr"), runs = task.runs || [], sessions = task.sessions || [];
-        [task.id, task.story || "—", task.phase == null ? "—" : task.phase, task.state,
+        [task.id || "checkbox", task.story || "—", task.phase == null ? "—" : task.phase, task.state,
           runs.map(function (run) { return run.agent + " / " + run.model; }).join(", ") || "—",
           sessions.map(function (session) { return session.id + " / " + session.host; }).join(", ") || "—",
           runs.map(function (run) { return run.id + " / " + run.elapsed_seconds + " seconds · " + run.outcome; }).join(", ") || "—"].forEach(function (value) {
@@ -378,6 +379,7 @@
     line("Sessions without a task");
     (p.sessions_without_task || []).forEach(function (session) { line(session.id + " · " + session.host + " · last activity " + session.last); });
     line("Last reviews · " + Object.keys(p.reviews || {}).map(function (kind) { return kind + ": " + p.reviews[kind]; }).join(" · ") + " · manifest " + (p.version || "unknown"));
+    if (p.work_records && p.work_records.skipped) line("Work records skipped: " + p.work_records.skipped);
     (p.skipped || []).forEach(function (reason) { line(reason); });
     return stack(lines);
   }
@@ -468,27 +470,28 @@
   }
   function taskTip(group, feature, story) {
     if (group.length > 1) {
-      return {title: group[0].id + " to " + group[group.length - 1].id,
+      return {title: (group[0].id || "checkbox") + " to " + (group[group.length - 1].id || "checkbox"),
         rows: [["done", "done"], ["agent on it", "active"], ["not accepted", "accepted"], ["to do", "todo"]].map(function (row) {
           return [row[0], group.filter(function (task) { return taskState(task) === row[1]; }).length];
         })};
     }
     var task = group[0], runs = task.runs || [], sessions = task.sessions || [], state = taskState(task);
-    return {title: task.id, sub: (story || "no story tag") + " · spec " + String(feature).padStart(3, "0"),
+    return {title: task.id || "checkbox", sub: (story || "no story tag") + " · spec " + String(feature == null ? "—" : feature).padStart(3, "0"),
       rows: [["agent / model", runs.map(function (run) { return run.agent + " / " + run.model; }).join(", ") || "—"],
         ["session / host", sessions.map(function (session) { return session.id + " / " + session.host; }).join(", ") || "—"]],
       chips: [{label: {done: "done", active: "agent on it", accepted: "not accepted", todo: "to do"}[state], state: state}]};
   }
   function sourceName(p) {
     return p.source === "speckit" ? "Spec Kit" : p.source === "ledger" ? "ledger" :
-      p.source === "checkbox" ? "configured checkboxes" : p.source && p.source !== "none" ?
+      p.source === "work-record" ? "work records" : p.source === "checkbox" ? "configured checkboxes" : p.source && p.source !== "none" ?
       p.source + (p.recognition === "index" ? " index" : " status lines") : "no recognised pipeline";
   }
   function sourceTip(p, title) {
     var items = p.source && p.source !== "none" ? ["Artefact presence is evidence of a stage, not a review verdict or release proof."] :
-      ["no task list · Looked for Spec Kit specs/NNN-name, configured checkboxes, docs/specs, docs/spec and specs indexes/status lines, release packages, and exact-project ledger runs."];
+      ["no task list · Looked for Spec Kit specs/NNN-name, work records, configured checkboxes, docs/specs, docs/spec and specs indexes/status lines, release packages, and exact-project ledger runs."];
     if (p.ledger_join === "none") items.push("No ledger source: no Ledger project override and no runs match the folder name.");
     if (p.ledger_join === "configured-empty") items.push("No ledger source: no runs match the configured Ledger project.");
+    if (p.work_records && p.work_records.skipped) items.push("Work records skipped: " + p.work_records.skipped);
     if (p.reason) items.push(p.reason);
     return {title: title, sub: sourceName(p), items: items.concat(p.skipped || []).slice(0, 5)};
   }
@@ -591,6 +594,14 @@
         {title: itemLabel(feature), sub: sourceName(p), rows: [["state", feature.state]], items: feature.status_hint ? ["status line says " + feature.status_hint] : []})]);
       var chain = h("div", "pipeline-chain");
       (feature.stages || []).forEach(function (row) { chain.appendChild(pipelineBlock(p, feature, row)); });
+      if (feature.status_mark) {
+        var statusMark = h("span", "pipeline-status-mark " + feature.status_mark);
+        statusMark.setAttribute("role", "img");
+        statusMark.setAttribute("aria-label", feature.status_mark === "status-not-updated" ? "status not updated" : "accepted");
+        tipOn(statusMark, {title: feature.status_mark === "status-not-updated" ? "status not updated" : "accepted",
+          items: feature.status_mark === "status-not-updated" ? ["All tasks checked; Status still in progress."] : ["Status accepted; work remains to do."]});
+        chain.appendChild(statusMark);
+      }
       line.appendChild(chain);
       (feature.packages || []).forEach(function (pkg) {
         var mark = brick(pkg.state === "done" ? "done" : pkg.state === "active" ? "active" : "todo", 12, 7, "package-brick " + pkg.state);
@@ -627,7 +638,7 @@
           var state = states.indexOf("active") !== -1 ? "active" : states.indexOf("accepted") !== -1 ? "accepted" :
             states.every(function (x) { return x === "done"; }) ? "done" : "todo";
           var mark = brick(state, 15, 8, "task-brick");
-          mark.setAttribute("data-task", group[0].id); mark.setAttribute("data-state", state); mark.setAttribute("data-count", group.length);
+          mark.setAttribute("data-task", group[0].id || "checkbox"); mark.setAttribute("data-state", state); mark.setAttribute("data-count", group.length);
           mark.style.setProperty("--snap-delay", Math.min(500, motion.index++ * 10) + "ms");
           tipOn(mark, taskTip(group, feature.feature, story.story));
           mark.setAttribute("aria-hidden", "false"); mark.setAttribute("role", "img");
