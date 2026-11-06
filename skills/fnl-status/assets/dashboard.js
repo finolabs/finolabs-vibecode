@@ -187,6 +187,20 @@
     group.appendChild(body); svg.appendChild(group);
     return svg;
   }
+  function quotaPoolMark(name) {
+    var weekly = /week/i.test(name), clock = /five.hour|session|5h/i.test(name);
+    if (!weekly && !clock) return t("span", "quota-pool-name", name.slice(0, 8));
+    var icon = s("svg", {width: 14, height: 14, viewBox: "0 0 16 16", "class": "quota-pool-icon", "aria-hidden": "true"});
+    var ink = {fill: "none", stroke: "currentColor", "stroke-width": 1.2, "stroke-linecap": "round"};
+    if (weekly) {
+      icon.appendChild(s("rect", Object.assign({x: 2, y: 3, width: 12, height: 11, rx: 1.5}, ink)));
+      icon.appendChild(s("path", Object.assign({d: "M5 1V5M11 1V5M2 7H14M5 10H11"}, ink)));
+    } else {
+      icon.appendChild(s("circle", Object.assign({cx: 8, cy: 8, r: 6}, ink)));
+      icon.appendChild(s("path", Object.assign({d: "M8 4V8L11 10"}, ink)));
+    }
+    return icon;
+  }
   function runningPanel() {
     if (!D.running) return null;
     var r = D.running, snapshot = r.snapshot || {}, processes = r.processes || [], open = r.open || [];
@@ -246,7 +260,7 @@
     if (!open.length) {
       var ghosts = h("div", "ghost-bricks");
       for (var i = 0; i < 3; i++) ghosts.appendChild(brick("todo", 48, 16, "ghost-brick"));
-      lanes.appendChild(ghosts); lanes.appendChild(t("div", "nodata", "No agents running"));
+      lanes.appendChild(ghosts); lanes.appendChild(t("div", "nodata", "No open dispatches"));
     }
     var quota = r.quota || [], capacity = h("div", "agent-capacity");
     var limit = Number(r.parallel_limit);
@@ -257,24 +271,44 @@
     tipOn(slots, {title: "slots", rows: [["lit", Math.min(open.length, limit) + " of " + limit]]});
     slots.setAttribute("aria-label", Math.min(open.length, limit) + " of " + limit + " slots lit");
     capacity.appendChild(h("div", "capacity-block", [t("div", "capacity-caption", "slots (" + limit + ")"), slots]));
-    if (quota.length) {
-      quota.forEach(function (q) {
-        var fraction = Math.max(0, Math.min(1, Number(q.remaining_fraction) || 0));
-        var measured = Date.parse(q.measured);
-        var stale = q.unverified || !Number.isFinite(measured) || (Date.now() - measured) / 1000 > 28800;
-        var meter = h("div", "quota-bricks" + (stale ? " unverified" : "")), lit = fraction > 0 ? Math.max(1, Math.round(fraction * 10)) : 0;
+    var live = r.live || {}, liveMarks = h("div", "live-sessions");
+    ["claude", "codex", "antigravity"].forEach(function (family) {
+      var value = live[family], count = Number.isInteger(value) && value >= 0 ? Math.min(99, value) : "?";
+      var mark = t("span", "live-session", {claude: "●", codex: "◆", antigravity: "▲"}[family] + " " + count);
+      mark.setAttribute("tabindex", "0");
+      tipOn(mark, {title: family + " live sessions", rows: [["sessions", count]], items: [
+        "sessions with activity in the last 15 min, from usage events; not a process count; a session idle longer is not shown",
+        available ? "Both usage-session counts and the process snapshot exist; process counts are in the data tables." : "Process snapshot unavailable: " + (snapshot.reason || "not read")
+      ]});
+      liveMarks.appendChild(mark);
+    });
+    capacity.appendChild(h("div", "capacity-block live-block", [t("div", "capacity-caption", "active · 15 min"), liveMarks]));
+    var quotaRows = [];
+    quota.forEach(function (family) {
+      var pools = (family.pools || []).slice(0, 8), group = h("div", "quota-pools");
+      (pools.length ? pools : [null]).forEach(function (q) {
+        var fraction = q ? Math.max(0, Math.min(1, Number(q.remaining_fraction) || 0)) : 0;
+        var measured = q ? Date.parse(q.measured) : NaN;
+        var stale = !q || q.unverified || !Number.isFinite(measured) || Date.now() < measured || (Date.now() - measured) / 1000 > 28800;
+        var meter = h("div", "quota-bricks" + (stale ? " unverified" : "") + (!q ? " unread" : ""));
+        var lit = fraction > 0 ? Math.max(1, Math.round(fraction * 10)) : 0;
         for (var i = 0; i < 10; i++) meter.appendChild(brick(stale || i >= lit ? "todo" : fraction <= .1 ? "low" : "done", 14, 7,
           "quota-brick" + (!stale && i < lit ? " lit" : "")));
         if (stale) meter.appendChild(t("span", "quota-unknown", "?"));
         meter.setAttribute("role", "img"); meter.setAttribute("tabindex", "0");
-        tipOn(meter, {title: q.agent + " quota", sub: stale ? "unverified" : null,
-          rows: [["remaining", Math.round(fraction * 100) + "%"], ["measured", q.measured]], bar: {value: fraction, max: 1, marks: [.1]}});
-        capacity.appendChild(h("div", "quota-block capacity-block", [t("div", "capacity-caption", q.agent + " quota"), meter]));
+        tipOn(meter, q ? {title: family.agent + " quota", sub: q.name + (stale ? " · unverified" : ""),
+          rows: [["remaining", Math.round(fraction * 100) + "%"], ["resets", q.resets || "unknown"], ["measured", q.measured]],
+          bar: {value: fraction, max: 1, marks: [.1]}} : {title: family.agent + " quota", sub: "not read",
+          items: ["quota probe off or no reading yet; turn on in fnl-setup"]});
+        var label = q ? quotaPoolMark(q.name || "pool") : t("span", "quota-pool-name", "—");
+        group.appendChild(h("div", "quota-pool", [label, meter]));
+        if (q) quotaRows.push([family.agent, q.name, pct(fraction), q.resets || "unknown", q.measured, stale ? "unverified" : "verified"]);
       });
-      TABS.get("now").tableRows.push(tableOf("quota", ["family", "remaining", "measured", "state"], quota.map(function (q) {
-        return [q.agent, pct(q.remaining_fraction), q.measured, q.unverified ? "unverified" : "verified"];
-      })));
-    }
+      capacity.appendChild(h("div", "quota-block capacity-block", [t("div", "capacity-caption", family.agent + " quota"), group]));
+    });
+    if (quotaRows.length) TABS.get("now").tableRows.push(tableOf("quota", ["family", "pool", "remaining", "resets", "measured", "state"], quotaRows));
+    TABS.get("now").tableRows.push(tableOf("live sessions", ["family", "active in last 15 min"],
+      ["claude", "codex", "antigravity"].map(function (family) { return [family, live[family] == null ? "unknown" : live[family]]; })));
     TABS.get("now").tableRows.push(tableOf("agent state", ["measure", "count"], [
       ["running now", open.length], ["parallel slots", limit], ["past the check time", late], ["not started by coordinator", unowned],
       ["named processes", available ? processes.length : "unavailable"],

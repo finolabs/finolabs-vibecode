@@ -14,6 +14,17 @@ to other families, so a user often cannot tell how many agents and background pr
 
 The desktop app's session list is not readable by a plugin; the page says so.
 
+## Live usage sessions (owner feedback, 2026-11-06)
+
+Alongside the unchanged ledger lanes and opt-in process counts, show `running.live` with
+`window_minutes: 15` and counts for `claude`, `codex`, `antigravity`. Count distinct sessions
+having any existing event strictly less than 15 minutes old, never future events; join the family
+from session-start receipts even when the start predates the window. Cap each count at 99 and
+retain no session ids in this block. This does not enumerate desktop sessions or identify sub-agents:
+it includes any of their sessions that emit existing usage events. No new event field or consent.
+The rich tooltip states “sessions with activity in the last 15 min, from usage events; not a process
+count; a session idle longer is not shown”, and notes when both this and process snapshot exist.
+
 ## Rule first
 
 This adds a local command the plugin runs by itself, so it needs a scoped exception in `CLAUDE.md`

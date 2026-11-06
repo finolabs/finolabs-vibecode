@@ -46,6 +46,30 @@ growing with items and wrapping compactly at 375 px. Reuse the current tooltip c
 page typography in dark/light themes; no new colour family, remote resource, inline script or markup
 injection. The coordinator checks both themes at 1280 and 375 with real-shaped synthetic data.
 
+## Capacity detail (owner feedback, 2026-11-06)
+
+Keep ledger lanes unchanged. Beside slots, show fixed host marks and distinct session counts
+from existing usage events in the last 15 minutes, excluding the exact boundary and future events,
+capped at 99 per host. `running.live` contains only `window_minutes: 15`, `claude`, `codex`, and
+`antigravity` counts. Join host family from session-start receipts, including older starts.
+The rich tooltip explains that these are sessions with activity from usage events, not processes;
+sessions idle longer disappear. When the process snapshot exists, explain that both sources exist.
+No event field, hook, consent or process-snapshot rule changes.
+
+`running.quota` is three groups, in claude/codex/agy order, each `{agent, pools: [...]}`.
+Read at most four cache entries per family and retain at most eight pools across them, without
+collapsing to the limiting pool. A pool contains only `name`, `remaining_fraction`, `resets`,
+`measured`, `unverified`; copy only the group name and validated fraction/timestamps, never other
+cache text. For generic names (codex/model pools), append the validated `5h`/`weekly` window
+to `name` so the closed output schema can distinguish windows and select glyphs. Preserve duplicate
+group names from different entries. Each pool has a compact ten-brick meter: week pools use a calendar-week glyph, five-hour pools a clock, other names at most eight
+visible characters. Tooltips retain the full group name, remaining percent, reset and measured times.
+Readings older than eight hours are hollow with `?`. Missing cache families have empty pools and
+one dashed placeholder with “not read; quota probe off or no reading yet; turn on in fnl-setup”.
+The disclosure has one row per pool including reset/measured/state metadata. Use existing tokens,
+rich tooltips and SVG helpers; keep the capacity row around two lines at 1280 and cleanly wrapped
+at 375 in both themes. The coordinator performs the real-browser checks.
+
 ## Why
 
 The owner reviewed the shipped tabs: both are dense text and a seven-column table, not a data visualisation. `fnl-status` exists to follow the present state so the coordinator can steer, not to manage projects. Each tab must answer one question at a glance, show it as a picture, and keep rarely needed explanations behind a small info button in the pane header.
@@ -71,9 +95,9 @@ The approved visual reference is [`assets/dashboard-lego-prototype.html`](assets
 
 ## Now tab, agents: who is working, is it healthy
 
-One pane, `running now`, with no KPI tiles. Each open dispatch is a flat 8 px bar with 4 px rounded outer ends, urgency first (least time left to hard cap). The neutral track has no outline, studs or brick body: `--line` in dark, very pale neutral lavender-grey in light. It ends at `max(budget * 4 / 3, budget + 10)` minutes. A shared rounded clip contains exactly two adjacent, square-ended fill rects: `--p` up to budget, `--crit` beyond. Their shared edge is half-pixel aligned with crisp edges, with no seam or rounded inner ends. Half-budget and budget ticks sit above the fill: 1 px wide, 14 px tall, `--faint`, centred on the bar. Left: family/model and task label in two short ellipsised lines with full tooltips. Right: `used/budget m`. A budget is unknown unless it is a finite positive number of at most 1,000,000 minutes. No process found gets the existing small outlined brick with a rich `no process` tooltip and accessible label `no process found`. Empty state: three ghost bricks and the muted line `No agents running`.
+One pane, `running now`, with no KPI tiles. Each open dispatch is a flat 8 px bar with 4 px rounded outer ends, urgency first (least time left to hard cap). The neutral track has no outline, studs or brick body: `--line` in dark, very pale neutral lavender-grey in light. It ends at `max(budget * 4 / 3, budget + 10)` minutes. A shared rounded clip contains exactly two adjacent, square-ended fill rects: `--p` up to budget, `--crit` beyond. Their shared edge is half-pixel aligned with crisp edges, with no seam or rounded inner ends. Half-budget and budget ticks sit above the fill: 1 px wide, 14 px tall, `--faint`, centred on the bar. Left: family/model and task label in two short ellipsised lines with full tooltips. Right: `used/budget m`. A budget is unknown unless it is a finite positive number of at most 1,000,000 minutes. No process found gets the existing small outlined brick with a rich `no process` tooltip and accessible label `no process found`. Empty state: three ghost bricks and the muted line `No open dispatches`.
 
-Below: `slots (5)` and five small bricks, one lit per open dispatch (use a supplied parallel limit if present). Each cached agent-family quota gets a caption such as `claude quota` and ten bricks. Lit count is remaining fraction rounded to tens of percent, with a minimum of one lit brick for every positive verified fraction (including below 5%); lit bricks are teal, red at or below 10%. Zero quota has no lit bricks. An unverified reading uses dashed hollow bricks and `?`. Remaining percent is rounded with `Math.round` in its tooltip and accessible label. Slots have an accessible label giving the lit count and total. The header info tooltip gives short reading guidance; process counts, limits and mismatch flags stay in the bottom tables.
+Below: `slots (5)` and five small bricks, one lit per open dispatch (use a supplied parallel limit if present). Live usage-session counts sit beside slots, as described in Capacity detail above. Each agent-family quota group gets a caption such as `claude quota` and one ten-brick meter per pool; unread families get a dashed placeholder. Lit count is remaining fraction rounded to tens of percent, with a minimum of one lit brick for every positive verified fraction (including below 5%); lit bricks are teal, red at or below 10%. Zero quota has no lit bricks. An unverified reading uses dashed hollow bricks and `?`. Remaining percent is rounded with `Math.round` in its tooltip and accessible label. Slots have an accessible label giving the lit count and total. The header info tooltip gives short reading guidance; process counts, limits and mismatch flags stay in the bottom tables.
 
 ## Now tab, projects: named activity as lego runs
 

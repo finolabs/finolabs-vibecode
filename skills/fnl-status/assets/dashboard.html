@@ -214,11 +214,23 @@ td.r, th.r { text-align: right; }
 .lego-brick { display: block; flex: none; overflow: hidden; }
 .lanes .nodata::before { content: none; }
 .ghost-bricks { display: flex; gap: 6px; opacity: .5; }
-.agent-capacity { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 6px; }
+.agent-capacity { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 18px; margin-top: 6px; }
 .capacity-block { min-width: 0; }
 .capacity-caption { color: var(--faint); font-size: 11px; margin-bottom: 6px; }
 .slots { display: flex; gap: 4px; flex-wrap: wrap; }
-.quota-bricks { display: flex; align-items: center; gap: 3px; }
+.live-sessions { display: flex; align-items: center; gap: 10px; min-height: 14px; }
+.live-session { color: var(--faint); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.quota-pools { display: grid; grid-auto-flow: column; grid-template-rows: repeat(2, auto); gap: 5px 10px; }
+.quota-pools:has(.quota-pool:only-child) { grid-template-rows: auto; }
+.quota-pool { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.quota-pool-name { color: var(--faint); font-size: 10px; max-width: 8ch; overflow: hidden; white-space: nowrap; }
+.quota-pool-icon { flex: none; color: var(--faint); }
+.quota-bricks { display: flex; align-items: center; gap: 2px; }
+.quota-bricks .quota-brick { width: 9px; }
+.quota-block { max-width: 100%; }
+@media (max-width: 600px) {
+  .quota-pools { display: flex; flex-wrap: wrap; }
+}
 .quota-bricks.unverified .brick-body { stroke-dasharray: 2 2; }
 .quota-unknown { color: var(--faint); font-size: 11px; }
 .running-row { overflow-wrap: anywhere; min-width: 0; }
