@@ -103,7 +103,7 @@ Two files in the state directory:
 
 The refresh runs when `fnl-status` is called, on `SessionStart` and `Stop`, and after a tool call when `data.js` is more than 10 seconds old. While its tab is visible the page loads `data.js` again every 5 seconds through a new script element and redraws in place when the numbers changed, keeping the month shown and the open tables; a page on disk cannot watch a file, and no local server or listener is involved. Checked in Chrome; Safari and Firefox are unverified. The page shows its `generated` time, so a stale page says so. `fnl-status` (`disable-model-invocation: true` stays) is one step: run `python3 -I refresh.py --open`, which refreshes and opens `dashboard.html` with the system opener, then report the script's one-line summary: the period, the number of sessions, unclassified sessions, the writer's error count and any missing source (no hooks installed, consent not given, ledger empty). A missing source is stated, never shown as zero.
 
-Repository labels are short codes (`repo-3f2a`) in this release; folder names are not shown.
+The dashboard shows a project's folder name only after the user runs `fnl-status` in that repository with consent (see the [registration rule](dashboard-infographics.md#data-changes-all-local-metadata-only)); an explicit host-config project label takes precedence.
 
 `ledger.py` provides `summary --json` so the refresh reads the same numbers the text report would. Its `summary_rows` accepts `route_by` as a grouping key without changing the default agent/model/kind/grade output; legacy lines with no known routing source are excluded from this split.
 

@@ -204,7 +204,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(out["panels"][3]["scrollLeft"], 12)
         self.assertEqual(out["panels"][0]["open"], [True])
         self.assertEqual(out["panels"][3]["open"], [True])
-        self.assertIn("with edits 98765", out["text"])
+        self.assertIn("with edits 98765", self.footer_text(out))
         self.assertEqual(out["poll_ms"], [5000])
 
     def test_reload_keeps_keyboard_focus_independent_of_selection(self):
@@ -234,6 +234,188 @@ class DashboardScriptTest(unittest.TestCase):
                 (m['disclosure'] == disclosure if disclosure is not None else
                  m['disclosure'] not in ('show the data as tables', 'limits'))]
 
+    @classmethod
+    def info_text(cls, out, tab):
+        return next(m['attrs']['data-tip'] for m in cls.marks(out, 'info-button')
+                    if m['panel'] == 'panel-' + tab and not m['attrs']['data-tip'].startswith('sources '))
+
+    @classmethod
+    def footer_text(cls, out):
+        return next(m['attrs']['data-tip'] for m in cls.marks(out, 'info-button')
+                    if m['attrs']['data-tip'].startswith('sources '))
+
+    def test_info_buttons_replace_limits_and_preserve_each_tabs_text(self):
+        out = self.render(FIXTURE, {'now': '2026-11-06T10:00:00Z'})
+        buttons = self.marks(out, 'info-button')
+        self.assertEqual(len(buttons), 3)
+        for button in buttons:
+            self.assertEqual(button['tag'], 'button')
+            self.assertEqual(button['text'], 'ⓘ')
+            for key, value in {'type': 'button', 'tabindex': '0', 'aria-label': 'About this data',
+                               'aria-describedby': 'tip', 'aria-expanded': 'false'}.items():
+                self.assertEqual(button['attrs'][key], value)
+        self.assertIn('machine-wide, current user only', self.info_text(out, 'agents'))
+        self.assertIn('processes named claude: 1 · codex: 2 · agy: 0', self.info_text(out, 'agents'))
+        self.assertIn('Descendants counted to depth 6', self.info_text(out, 'agents'))
+        self.assertIn('Liveness verdicts are advisory', self.info_text(out, 'agents'))
+        self.assertIn('Derived from files and local records', self.info_text(out, 'project'))
+        self.assertIn('sessions without a task', self.info_text(out, 'project'))
+        self.assertIn('Accepted, not ticked remains unfinished.', self.info_text(out, 'project'))
+        for tab in ('agents', 'project'):
+            self.assertIn('\n', self.info_text(out, tab))
+            self.assertNotIn(self.info_text(out, tab).split('\n')[0], out['text'])
+        self.assertFalse(any(p['tag'] == 'details' and 'limits' in p['cls'].split() for p in out['picture']))
+        self.assertNotIn('.limits', PAGE.read_text())
+        for text in ('indicative', 'events per day', 'from the dispatch ledger'):
+            self.assertIn(text, out['text'])
+        css = PAGE.read_text()
+        self.assertRegex(css, r'\.info-button \{[^}]*width: 14px; height: 14px;')
+        self.assertIn('white-space: pre-line', re.search(r'#tip \{([^}]+)', css)[1])
+
+    def test_info_tooltip_opens_by_keyboard_hover_and_tap_and_dismisses(self):
+        for tab in ('agents', 'project', 'footer'):
+            with self.subTest(tab=tab):
+                actions = [dict(scope=tab, tooltip=event) for event in
+                           ('focus', 'escape', 'hover', 'blur', 'hover', 'leave', 'tap', 'tap', 'tap', 'outside')]
+                out = self.render(FIXTURE, {'hash': '#' + (tab if tab != 'footer' else 'overview'), 'actions': actions})
+                self.assertEqual([state['hidden'] for state in out['tipStates']],
+                                 [False, True, True, True, False, True, False, True, False, True])
+                text = self.footer_text(out) if tab == 'footer' else self.info_text(out, tab)
+                self.assertEqual(out['tipStates'][0]['text'], text)
+                self.assertEqual(out['tipStates'][0]['attrs']['role'], 'tooltip')
+                self.assertEqual(out['tipStates'][6]['text'], text)
+                self.assertFalse(out['tipStates'][6]['hidden'])
+                self.assertTrue(all(button['attrs']['aria-expanded'] == 'false' for button in self.marks(out, 'info-button')))
+
+    def test_info_tooltip_stays_open_when_tapped_or_hovered_to_read_it(self):
+        out = self.render(FIXTURE, {'actions': [dict(tooltip='hover'), dict(tooltip='surface'), dict(tooltip='outside')]})
+        self.assertEqual([state['hidden'] for state in out['tipStates']], [False, False, True])
+        self.assertEqual(out['tipStates'][0]['text'], out['tipStates'][1]['text'])
+
+    def test_capacity_values_have_focusable_exact_text_equivalents(self):
+        out = self.render(FIXTURE, {'now': '2026-11-06T10:00:00Z'})
+        meters = self.marks(out, 'quota-bricks')
+        for meter, value in zip(meters, ('68%', '8%', '42%')):
+            self.assertIn(value + ' remaining', meter['attrs']['aria-label'])
+            self.assertEqual(meter['attrs']['role'], 'img')
+            self.assertEqual(meter['attrs']['tabindex'], '0')
+        self.assertIn('unverified', meters[2]['attrs']['aria-label'])
+        slots = self.marks(out, 'slots')[0]
+        self.assertEqual(slots['attrs']['aria-label'], '4 of 5 slots lit')
+        self.assertEqual(slots['attrs']['tabindex'], '0')
+        marker = self.marks(out, 'no-process')[0]
+        self.assertEqual(marker['attrs']['aria-label'], 'no process found')
+        self.assertEqual(marker['attrs']['aria-hidden'], 'false')
+        self.assertEqual(marker['attrs']['role'], 'img')
+        self.assertEqual(marker['attrs']['tabindex'], '0')
+        out = self.render(FIXTURE, {'actions': [dict(tooltip='focus', target='quota-bricks')]})
+        self.assertIn('68% remaining', out['tipStates'][0]['text'])
+
+    def test_budget_studs_are_bounded_and_huge_or_nonfinite_is_unknown(self):
+        data = self.sample()
+        template = data['running']['open'][0]
+        for budget, studs, state in ((5e9, 1, 'unknown'), (1000000, 60, 'within'), (800, 60, 'within'),
+                                     (None, 1, 'unknown'), (0, 1, 'unknown')):
+            with self.subTest(budget=budget):
+                data['running']['open'] = [dict(template, budget_min=budget)]
+                out = self.render_freshness(data)
+                self.assertEqual(len(self.marks(out, 'lane-stud')), studs)
+                self.assertEqual(self.marks(out, 'lane')[0]['attrs']['data-state'], state)
+                if state == 'unknown':
+                    self.assertEqual(self.marks(out, 'lane-value')[0]['text'], '5/? m')
+                    self.assertEqual(self.marks(out, 'lane-tick'), [])
+                    self.assertIn('budget unknown', self.marks(out, 'lane')[0]['attrs']['data-tip'])
+        for value in ('Infinity', '-Infinity', 'NaN'):
+            out = self.render(FIXTURE, {'budgetValue': value})
+            self.assertEqual(len(self.marks(out, 'lane-stud')), 4)
+            self.assertTrue(all(m['attrs']['data-state'] == 'unknown' for m in self.marks(out, 'lane')))
+
+    def test_positive_verified_quota_always_lights_a_brick(self):
+        data = self.sample()
+        fractions = (0, .001, .049, .05, .08, .099, .1, .15, 1)
+        data['running']['quota'] = [dict(agent=str(fraction), remaining_fraction=fraction,
+            measured='2026-11-06T10:00:00Z', unverified=False) for fraction in fractions]
+        out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
+        bricks = self.marks(out, 'quota-brick')
+        for i, (fraction, count) in enumerate(zip(fractions, (0, 1, 1, 1, 1, 1, 1, 2, 10))):
+            lit = [m for m in bricks[i*10:(i+1)*10] if 'lit' in m['cls'].split()]
+            self.assertEqual(len(lit), count)
+            self.assertTrue(all(('low' if fraction <= .1 else 'done') in m['cls'].split() for m in lit))
+        data['running']['quota'][1]['unverified'] = True
+        out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
+        self.assertTrue(all('lit' not in m['cls'].split() for m in self.marks(out, 'quota-brick')[10:20]))
+
+    def test_finished_project_uses_a_teal_check_brick_and_no_tasks_is_not_done(self):
+        out = self.render(FIXTURE)
+        marks = self.marks(out, 'project-done')
+        self.assertEqual(len(marks), 1)
+        self.assertEqual(marks[0]['tag'], 'svg')
+        self.assertEqual(marks[0]['attrs']['aria-label'], 'done')
+        self.assertEqual(marks[0]['attrs']['aria-hidden'], 'false')
+        self.assertEqual(marks[0]['attrs']['width'], '22')
+        self.assertEqual(len(self.marks(out, 'done-check')), 1)
+        self.assertIn('stroke', self.marks(out, 'done-check')[0]['attrs'])
+        self.assertEqual([m['text'] for m in self.marks(out, 'active-percent')], ['46%', ''])
+        done_index = next(i for i, m in enumerate(out['picture']) if 'project-done' in m['cls'].split())
+        body = next(m for m in out['picture'][done_index:] if 'brick-body' in m['cls'].split())
+        self.assertEqual(body['attrs']['fill'], 'var(--h2)')
+
+    def test_merged_brick_tooltip_preserves_newlines_in_the_shared_tooltip(self):
+        out = self.render(FIXTURE, {'hash': '#project', 'actions': [dict(scope='project', tooltip='hover', target='merged')]})
+        text = out['tipStates'][0]['text']
+        self.assertFalse(out['tipStates'][0]['hidden'])
+        self.assertEqual(len(text.splitlines()), 3)
+        self.assertIn('2 tasks', text.splitlines()[0])
+        self.assertIn('T301', text.splitlines()[1])
+        self.assertIn('T302', text.splitlines()[2])
+        self.assertIn('white-space: pre-line', re.search(r'#tip \{([^}]+)', PAGE.read_text())[1])
+
+    def test_footer_dot_relative_age_and_tables_last_on_every_tab(self):
+        data = self.freshness_data()
+        cases = [('2026-11-06T10:00:00Z', None, 'fresh', 'updated 0 min ago'),
+                 ('2026-11-06T10:00:00Z', '2026-11-06T09:44:59Z', 'quiet', 'updated 0 min ago'),
+                 ('2026-11-06T10:00:00Z', 'unknown', 'quiet', 'updated 0 min ago'),
+                 ('2026-11-06T10:01:00Z', None, 'quiet', 'updated 1 min ago'),
+                 ('2026-11-06T10:03:00Z', None, 'stale', 'updated 3 min ago')]
+        for now, codex, state, relative in cases:
+            with self.subTest(now=now, codex=codex):
+                current = json.loads(json.dumps(data))
+                if codex is not None:
+                    current['freshness']['latest_event']['codex'] = codex
+                out = self.render_freshness(current, {'now': now})
+                self.assertEqual(self.marks(out, 'status-dot')[0]['attrs']['data-state'], state)
+                self.assertEqual(self.marks(out, 'updated')[0]['text'], relative)
+                self.assertNotIn('sources ', out['text'])
+                self.assertNotIn('built ', out['text'])
+                self.assertIn('sources hooks', self.footer_text(out))
+                self.assertIn('sessions ', self.footer_text(out))
+                self.assertIn('quota: ', self.footer_text(out))
+        # The compact age follows generated, independently of the build timestamp.
+        data['freshness']['built_at'] = '2026-11-06T10:02:50Z'
+        data['freshness']['latest_event'] = {'codex': '2026-11-06T10:02:50Z'}
+        out = self.render_freshness(data, {'now': '2026-11-06T10:03:00Z'})
+        self.assertEqual(self.marks(out, 'updated')[0]['text'], 'updated 3 min ago')
+        self.assertEqual(self.marks(out, 'status-dot')[0]['attrs']['data-state'], 'fresh')
+        css = PAGE.read_text()
+        for selector, color in (('.status-dot', '--h2'), ('.status-dot[data-state="quiet"]', '--warn'),
+                                ('.status-dot[data-state="stale"]', '--crit')):
+            rule = re.search(re.escape(selector) + r' \{([^}]+)', css)[1]
+            self.assertIn('background: var(' + color + ')', rule)
+        for tab in ('overview', 'agents', 'project', 'delegation', 'reviews'):
+            out = self.render(FIXTURE, {'actions': [{'click': tab.title()}]})
+            index = ('overview', 'agents', 'project', 'delegation', 'reviews').index(tab)
+            children = out['panelChildren'][index]
+            self.assertEqual(children[-2]['cls'], 'status')
+            self.assertEqual(children[-1]['tag'], 'details')
+            self.assertTrue(children[-1]['text'].startswith('show the data as tables'))
+            self.assertEqual(len(self.marks(out, 'status')), 1)
+        data['generated'] = None
+        out = self.render_freshness(data)
+        self.assertEqual(self.marks(out, 'updated')[0]['text'], 'updated time unknown')
+        data['generated'] = '2099-01-01T00:00:00Z'
+        out = self.render_freshness(data)
+        self.assertEqual(self.marks(out, 'updated')[0]['text'], 'updated 0 min ago')
+
     def test_completion_is_floored_for_project_spec_and_story(self):
         for done, total, percent in ((408, 410, 99), (56, 57, 98), (1, 3, 33),
                                      (2, 3, 66), (0, 5, 0), (5, 5, 100)):
@@ -245,11 +427,14 @@ class DashboardScriptTest(unittest.TestCase):
                 data['progress']['active'] = [dict(repo='aaaaaaaa', label='A', hosts=['codex'],
                     sessions=2, last='2026-11-06T09:48:00Z', percent=percent if done < total else None)]
                 out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
-                self.assertEqual(self.marks(out, 'active-percent')[0]['text'], str(percent) + '%')
                 if done == total:
+                    self.assertEqual(self.marks(out, 'active-percent'), [])
+                    self.assertEqual(self.marks(out, 'project-done')[0]['attrs']['aria-label'], 'done')
                     self.assertEqual(self.marks(out, 'story'), [])
                     self.assertTrue(any('100%' in m['text'] for m in self.marks(out, 'tbl', 'show the data as tables')))
                 else:
+                    self.assertEqual(self.marks(out, 'active-percent')[0]['text'], str(percent) + '%')
+                    self.assertEqual(self.marks(out, 'project-done'), [])
                     self.assertIn(str(percent) + '%', self.marks(out, 'story')[0]['attrs']['data-tip'])
 
     def test_active_strip_hosts_relative_time_and_no_task_list(self):
@@ -342,10 +527,9 @@ class DashboardScriptTest(unittest.TestCase):
         tables = self.marks(out, 'tbl', 'show the data as tables')
         self.assertTrue(any('agent state' in row['text'] and 'past the check time' in row['text'] for row in tables))
         self.assertTrue(any('process roots' in row['text'] and 'descendants' in row['text'] for row in tables))
-        limits = self.marks(out, 'running-limits', 'limits')
-        self.assertEqual(len(limits), 1)
-        self.assertIn('machine-wide', limits[0]['text'])
-        self.assertIn('not started by the coordinator', limits[0]['text'])
+        notes = self.info_text(out, 'agents')
+        self.assertIn('machine-wide', notes)
+        self.assertIn('not started by the coordinator', notes)
         self.assertNotIn('img', out['tags'])
         self.assertNotIn('script', out['tags'])
 
@@ -361,6 +545,11 @@ class DashboardScriptTest(unittest.TestCase):
             self.assertIn('gap: 14px', rule(cls))
         self.assertIn('grid-template-columns: 30px minmax(0, 1fr) 38px', rule('.story'))
         self.assertIn('gap: 2px', rule('.cells'))
+        self.assertIn('align-items: start', rule('.story'))
+        self.assertIn('margin-top: 8px', rule('.story + .story'))
+        self.assertIn('position: sticky', rule('.story-label'))
+        self.assertIn('top: 0', rule('.story-label'))
+        self.assertIn('align-self: start', rule('.story-label'))
         self.assertIn('flex-wrap: wrap', rule('.cells'))
         self.assertIn('width: 15px; height: 11px', rule('.task-brick'))
         self.assertIn('stroke-dasharray: 2 2', rule('.quota-bricks.unverified .brick-body'))
@@ -393,7 +582,7 @@ class DashboardScriptTest(unittest.TestCase):
 
     def test_agents_empty_state_and_omitted_quota(self):
         data = self.sample()
-        # Unmatched machine processes stay in limits; only open dispatches light slots.
+        # Unmatched machine processes stay in the info tooltip; only open dispatches light slots.
         data['running'] = dict(open=[], processes=[dict(family='codex')], snapshot=dict(reason='snapshot off'), ledger_note='')
         out = self.render_freshness(data, {'hash': '#agents'})
         self.assertEqual(len(self.marks(out, 'ghost-brick')), 3)
@@ -416,7 +605,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertNotIn('repo dddd', out['panels'][2]['text'])
         self.assertEqual(self.marks(out, 'project-disclosure'), [])
         self.assertTrue(all(r['tag'] == 'div' for r in rows))
-        self.assertEqual([p['text'] for p in self.marks(out, 'active-percent')], ['46%', '100%', ''])
+        self.assertEqual([p['text'] for p in self.marks(out, 'active-percent')], ['46%', ''])
         self.assertEqual([p['attrs']['data-story'] for p in self.marks(out, 'story')], ['US1', 'US4', 'US3'])
         self.assertEqual([p['text'] for p in self.marks(out, 'story-label')], ['US1', 'US4', 'US3'])
         cells = self.marks(out, 'task-brick')
@@ -556,9 +745,9 @@ class DashboardScriptTest(unittest.TestCase):
             data = self.sample()
             data['running'] = dict(processes=[], open=[], snapshot=dict(time='now', reason=reason, apps={}), ledger_note='')
             out = self.render_freshness(data)
-            self.assertIn(reason, out['panels'][1]['text'])
-            self.assertNotIn('No command-line agent processes found', out['panels'][1]['text'])
-            self.assertNotIn('processes named claude: 0', out['panels'][1]['text'])
+            self.assertIn(reason, self.info_text(out, 'agents'))
+            self.assertNotIn('No command-line agent processes found', self.info_text(out, 'agents'))
+            self.assertNotIn('processes named claude: 0', self.info_text(out, 'agents'))
 
     def test_the_sample_data_draws_every_chart_without_an_error(self):
         out = self.render(FIXTURE)
@@ -654,6 +843,7 @@ class DashboardScriptTest(unittest.TestCase):
     # Acceptance 3: fake clock exercises both warning thresholds without new data.
     def freshness_data(self):
         data = self.sample()
+        data["generated"] = "2026-11-06T10:00:00Z"
         data["freshness"] = {"built_at": "2026-11-06T10:00:00Z", "latest_event": {
             "codex": "2026-11-06T09:45:00Z", "claude": "2026-11-06T10:00:00Z"},
             "ledger_age_seconds": 120, "quota_age_seconds": 14400}
@@ -670,24 +860,24 @@ class DashboardScriptTest(unittest.TestCase):
         initial = self.render_freshness(data, {"now": "2026-11-06T10:00:00Z"})
         for value in ("built 2026-11-06T10:00:00Z", "Codex: last event 2026-11-06T09:45:00Z",
                       "ledger: 2 minutes old", "quota: 240 minutes old"):
-            self.assertIn(value, initial["text"])
-        self.assertNotIn("hooks may need trust", initial["text"])
-        self.assertNotIn("it updates while a session runs tools", initial["text"])
+            self.assertIn(value, self.footer_text(initial))
+        self.assertNotIn("hooks may need trust", self.footer_text(initial))
+        self.assertNotIn("it updates while a session runs tools", self.footer_text(initial))
         later = self.render_freshness(data, {"now": "2026-11-06T10:00:00Z", "advance_ms": 65000, "fail": True})
-        self.assertIn("Codex: last event 2026-11-06T09:45:00Z; hooks may need trust", later["text"])
-        self.assertNotIn("Claude Code: last event 2026-11-06T10:00:00Z; hooks may need trust", later["text"])
-        self.assertIn("data is 1 minute old; it updates while a session runs tools", later["text"])
-        self.assertIn("ledger: 3 minutes old", later["text"])
+        self.assertIn("Codex: last event 2026-11-06T09:45:00Z; hooks may need trust", self.footer_text(later))
+        self.assertNotIn("Claude Code: last event 2026-11-06T10:00:00Z; hooks may need trust", self.footer_text(later))
+        self.assertIn("data is 1 minute old; it updates while a session runs tools", self.footer_text(later))
+        self.assertIn("ledger: 3 minutes old", self.footer_text(later))
         self.assertFalse(later["redrawn"])
         quiet = self.render_freshness(data, {"now": "2026-11-06T10:16:00Z"})
-        self.assertNotIn("hooks may need trust", quiet["text"], "no host is active")
+        self.assertNotIn("hooks may need trust", self.footer_text(quiet), "no host is active")
 
     def test_freshness_stale_message_waits_for_visible_tab_and_rechecks_on_return(self):
         data = self.freshness_data()
         hidden = self.render_freshness(data, {"now": "2026-11-06T10:02:00Z", "hidden": True})
-        self.assertNotIn("it updates while a session runs tools", hidden["text"])
+        self.assertNotIn("it updates while a session runs tools", self.footer_text(hidden))
         visible = self.render_freshness(data, {"now": "2026-11-06T10:02:00Z", "hidden": True, "reveal": True})
-        self.assertIn("data is 2 minutes old; it updates while a session runs tools", visible["text"])
+        self.assertIn("data is 2 minutes old; it updates while a session runs tools", self.footer_text(visible))
 
     def test_freshness_host_and_value_are_text_and_missing_times_are_named(self):
         data = self.freshness_data()
@@ -695,8 +885,8 @@ class DashboardScriptTest(unittest.TestCase):
         data["freshness"].update(built_at=attack, latest_event={attack: attack},
                                  ledger_age_seconds=attack, quota_age_seconds=None)
         out = self.render_freshness(data)
-        self.assertGreaterEqual(out["text"].count(attack), 4)
-        self.assertIn("quota: no reading", out["text"])
+        self.assertGreaterEqual(self.footer_text(out).count(attack), 4)
+        self.assertIn("quota: no reading", self.footer_text(out))
         self.assertNotIn("img", out["tags"])
         self.assertNotIn("script", out["tags"])
 
@@ -708,19 +898,22 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(len(out["loads"]), 1)
         self.assertRegex(out["loads"][0], r"^data\.js\?t=\d+$")
         self.assertTrue(out["redrawn"])
-        self.assertIn("with edits 98765", out["text"])
+        self.assertIn("with edits 98765", self.footer_text(out))
 
     def test_a_new_build_with_the_same_numbers_only_updates_the_generated_time(self):
         same = self.sample()
         same["generated"] = "2099-01-01T00:00:00+07:00"
         same["freshness"].update(built_at=same["generated"], ledger_age_seconds=180,
                                  latest_event={"antigravity": same["generated"]})
-        out = self.render(FIXTURE, {"next": same})
+        out = self.render(FIXTURE, {"next": same, "actions": [dict(scope='footer', tooltip='focus')]})
         self.assertFalse(out["redrawn"])
-        self.assertIn("generated 2099-01-01T00:00:00+07:00", out["text"])
-        self.assertIn("built 2099-01-01T00:00:00+07:00", out["text"])
-        self.assertIn("Antigravity: last event 2099-01-01T00:00:00+07:00", out["text"])
-        self.assertIn("ledger: 3 minutes old", out["text"])
+        self.assertIn('updated 0 min ago', self.marks(out, 'status')[0]['text'])
+        self.assertEqual(out['tip']['text'], self.footer_text(out))
+        self.assertFalse(out['tip']['hidden'])
+        self.assertIn("generated 2099-01-01T00:00:00+07:00", self.footer_text(out))
+        self.assertIn("built 2099-01-01T00:00:00+07:00", self.footer_text(out))
+        self.assertIn("Antigravity: last event 2099-01-01T00:00:00+07:00", self.footer_text(out))
+        self.assertIn("ledger: 3 minutes old", self.footer_text(out))
 
     def test_a_hidden_tab_loads_nothing(self):
         changed = self.sample()
