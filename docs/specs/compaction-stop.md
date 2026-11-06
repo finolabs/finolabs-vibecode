@@ -14,6 +14,8 @@ thresholds written by `fnl-setup` (`compaction-threshold.md`); Antigravity has n
 - `transcriptPath` was a regular file under
   `~/.gemini/antigravity-cli/brain/<conversationId>/.system_generated/logs/`, and
   its size grew with each turn (588, then 777 bytes).
+- The conversation id was a 36-character lower-case hex-and-dash UUID, and the transcript file was named
+  `transcript_full.jsonl`.
 - A `PreInvocation` hook answering
   `{"injectSteps":[{"errorMessage":{"userMessage":"…"}}],"terminationBehavior":"terminate"}`
   ended the turn before the model ran; the user saw the message and `-p` reported
@@ -21,8 +23,10 @@ thresholds written by `fnl-setup` (`compaction-threshold.md`); Antigravity has n
 - The transcript measures conversation content, not the whole context: 777 bytes of
   transcript against 26,108 input tokens, most of it the fixed system prompt. A
   byte limit is a rough proxy and must be presented as one.
-- Not verified: the same hook in the user-level `~/.gemini/config/hooks.json`, and
-  the interactive TUI.
+- Consistent with, not proof of: `invocationNum` was 0 on both resumed turns, so it appears to restart
+  at each user turn.
+- Not verified: the same hook in the user-level `~/.gemini/config/hooks.json`, and the interactive TUI;
+  setup text must therefore say "set up", not "enforced", until it is.
 
 ## Parts
 
@@ -37,12 +41,13 @@ Decision, in this order; any failure allows:
 1. `FNL_COMPACT_STOP=off` allows.
 2. The data root resolves and `host.md` has the section `## Compaction stop` with
    `Enabled: yes` and `Limit bytes: <integer>` within the bounds below; otherwise allow.
-3. `transcriptPath` resolves (realpath) under the account's
-   `~/.gemini/antigravity-cli/brain/`, is a regular file and not a symlink (`lstat`);
-   only its size is read. Anything else allows.
+3. `lstat` the `transcriptPath` as given: it must be a regular file, not a symlink; then its realpath
+   must equal `~/.gemini/antigravity-cli/brain/<conversationId>/.system_generated/logs/transcript_full.jsonl`
+   under the account home, with `conversationId` matching `^[0-9a-f-]{36}$`. Only its size is read.
+   Anything else allows.
 4. Size at or below the limit allows.
 5. The mark for this conversation is `<data root>/state/compact-stop/<first 16 hex
-   of sha256(conversationId)>.json` (0600, private folder) holding only the integer size
+   of sha256(conversationId)>.json` (0600, private folder, opened with no-follow semantics) holding only the integer size
    at the last stop. With a mark: a size below the mark resets it (allow); stop again
    only when the size is at least 10% and at least 20,000 bytes above the mark.
 6. Write the mark atomically before answering. If the write fails, allow.
@@ -52,7 +57,7 @@ Decision, in this order; any failure allows:
 
 The hook never denies a tool call, a prompt, a session start or the user's own stop,
 never opens the transcript, and sends nothing anywhere. At most 200 mark files are
-kept (oldest by mtime removed on write).
+kept (oldest by mtime removed on write, matching only names `^[0-9a-f]{16}\.json$` and checked with `lstat`).
 
 ### 2. Installer `skills/fnl-setup/scripts/compact_stop_setup.py` (stdlib)
 
@@ -60,8 +65,10 @@ Pattern: `quota_setup.py` and `compact_setup.py` (stored private preview, digest
 expiry 60 minutes, owner and mode checks, refusal of symlinks and git work trees for
 the data root).
 - `preview --limit <bytes>` | `preview --remove`: prints the exact change to
-  `host.md` (`## Compaction stop` section) and to the user's Antigravity hooks file
-  (`~/.gemini/config/hooks.json` or `--config <abs path>`), the group name, the
+  `host.md` (`## Compaction stop` section) and to the user's Antigravity hooks file, which is fixed at
+  `~/.gemini/config/hooks.json` under the account home (there is no `--config` option; the hooks file
+  must be owned by the user, not a symlink, not group- or world-writable, and outside every git work tree,
+  as must its folder), the group name, the
   absolute hook command, the limit with its caveat (a byte proxy; the system prompt
   is not counted), and the digest. This is the dry run; it writes only the private preview.
 - `apply --digest <64 hex> --yes`: applies only the stored preview. Writes the
@@ -86,6 +93,11 @@ installer enforces digest, expiry and file safety. `fnl-session-hygiene` "Contex
 pressure" names the stop and its limits. `PRIVACY.md`: the section in `host.md`, the
 mark files (an integer per conversation, hashed key, local), nothing sent. README row.
 CHANGELOG `Unreleased`.
+
+## Side effects to document
+
+A stop ends a delegated headless `agy -p` run with `status: ERROR` and the fixed message. `fnl-delegate`
+says so, and a coordinator treats it as "context limit", not a model failure.
 
 ## Not in scope
 
