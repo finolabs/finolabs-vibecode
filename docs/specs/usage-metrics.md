@@ -1,6 +1,6 @@
 # Usage metrics and the status dashboard
 
-Status: implemented in `0.1.6`; later releases add the `kept` event (`0.1.7`) and `judge` receipts (`0.1.8`). Depth: DEEP (hooks run on every matching tool call and record behavior data).
+Status: implemented; in `0.1.6`; later releases add the `kept` event (`0.1.7`) and `judge` receipts (`0.1.8`). Depth: DEEP (hooks run on every matching tool call and record behavior data).
 
 ## Goal
 

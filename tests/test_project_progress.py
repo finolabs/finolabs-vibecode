@@ -555,7 +555,7 @@ class ProgressTest(unittest.TestCase):
         for name in ('PRIVACY.md', 'README.md', 'CHANGELOG.md', 'skills/fnl-status/SKILL.md'):
             self.assertIn('FNL_PROGRESS=off', (ROOT / name).read_text())
         self.assertIn('<feature> T<id>', (ROOT / 'skills/fnl-delegate/references/ledger.md').read_text())
-        self.assertIn('Implemented', (ROOT / 'docs/specs/index.md').read_text().split('[Project progress]')[1].split('\n')[0])
+        self.assertIn('implemented', (ROOT / 'docs/specs/index.md').read_text().split('[Project progress]')[1].split('\n')[0])
 
     def test_notice_channels_once_version_fixed_content_and_no_events(self):
         for channel in ('dashboard', 'session'):

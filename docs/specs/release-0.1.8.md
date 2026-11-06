@@ -1,6 +1,6 @@
 # Release 0.1.8: spec and plan
 
-Status: released as 0.1.8 on 2026-11-05. Scope and plan were settled by the owner on 2026-11-05 (the open decisions are recorded under "Decisions settled"). Merged: packages 1 (pull request 58), 2 (61), 3 (62), 5 (60), 9 (63), 10 (64), 6 (66), 7 (72, with the exception rule in 71), 11 (73), 12 (76), 8 (77), 14 (78), 4 (79 and 82), the native question sweep (83), 13 (81 and 84), and one cleanup of accumulated LOW findings (80). Open for 0.1.9: `keep-manual` still offers a hand-off in 2 of 12 trials under manual mode (measured twice, six trials each, in pull request 83), the quota worker's survival after a host session ends is unverified, and so is verification on each host of the native question form, the hook delivery of the compaction reminder and the auto gate. Release 0.1.8 is tagged (`v0.1.8`); the build after it is `0.1.9-dev`.
+Status: released; as 0.1.8 on 2026-11-05. Scope and plan were settled by the owner on 2026-11-05 (the open decisions are recorded under "Decisions settled"). Merged: packages 1 (pull request 58), 2 (61), 3 (62), 5 (60), 9 (63), 10 (64), 6 (66), 7 (72, with the exception rule in 71), 11 (73), 12 (76), 8 (77), 14 (78), 4 (79 and 82), the native question sweep (83), 13 (81 and 84), and one cleanup of accumulated LOW findings (80). Open for 0.1.9: `keep-manual` still offers a hand-off in 2 of 12 trials under manual mode (measured twice, six trials each, in pull request 83), the quota worker's survival after a host session ends is unverified, and so is verification on each host of the native question form, the hook delivery of the compaction reminder and the auto gate. Release 0.1.8 is tagged (`v0.1.8`); the build after it is `0.1.9-dev`.
 
 ## Why
 
@@ -15,22 +15,22 @@ Status: released as 0.1.8 on 2026-11-05. Scope and plan were settled by the owne
 
 In, by package (Plan below gives order and dependencies):
 
-| # | Package | Kind |
+| # | Package | Status |
 | --- | --- | --- |
-| 1 | Native question form for every skill that asks the user | merged (pull request 58) |
-| 2 | Scan hardening | merged (pull request 61) |
-| 3 | Reference check and CI fixes | merged (pull request 62) |
-| 4 | Eval stability | fix |
-| 5 | Release checklist: catalog pin step | merged (pull request 60) |
-| 6 | Compaction: advisory, host thresholds, `PreCompact` reminder | feature |
-| 7 | `auto` blocking gate | feature, policy change |
-| 8 | Restore point and "try it now" demo | feature |
-| 9 | Decisions asked, not listed | merged (pull request 63) |
-| 10 | Name every background run by its runner and what it does | merged (pull request 64) |
-| 11 | Instruction files to a researched standard, with an instruction checklist in Check | merged (pull request 73) |
-| 12 | Judge metrics in the status dashboard | merged (pull request 76) |
-| 13 | Quota probe: a cached read of each agent's usage limits every 4 hours | feature, policy change |
-| 14 | Data root: where the plugin's own data lives, changed only through `fnl-setup` | feature |
+| 1 | Native question form for every skill that asks the user | released; merged (pull request 58) |
+| 2 | Scan hardening | released; merged (pull request 61) |
+| 3 | Reference check and CI fixes | released; merged (pull request 62) |
+| 4 | Eval stability | released; fix |
+| 5 | Release checklist: catalog pin step | released; merged (pull request 60) |
+| 6 | Compaction: advisory, host thresholds, `PreCompact` reminder | released; feature |
+| 7 | `auto` blocking gate | released; feature, policy change |
+| 8 | Restore point and "try it now" demo | released; feature |
+| 9 | Decisions asked, not listed | released; merged (pull request 63) |
+| 10 | Name every background run by its runner and what it does | released; merged (pull request 64) |
+| 11 | Instruction files to a researched standard, with an instruction checklist in Check | released; merged (pull request 73) |
+| 12 | Judge metrics in the status dashboard | released; merged (pull request 76) |
+| 13 | Quota probe: a cached read of each agent's usage limits every 4 hours | released; feature, policy change |
+| 14 | Data root: where the plugin's own data lives, changed only through `fnl-setup` | released; feature |
 
 Out of 0.1.8, recorded so it is not lost: **multiple accounts** per host (needs each host's real support and a second account to verify; the open points are what each host supports, how quota fallback picks an account since quota is per account, where account facts live (host config, never skill bodies), and that any metrics field stays metadata with no identity and goes through `SCHEMA` and `PRIVACY.md`). A research spike may start it later; it is not scheduled.
 

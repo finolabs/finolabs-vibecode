@@ -1,5 +1,7 @@
 # Antigravity compaction stop
 
+Status: implemented; local size-only hook and previewed installer; user-level hooks, TUI delivery and the usefulness of a byte limit remain unverified.
+
 Decision: 2026-11-06, owner: a second blocking hook, scoped by the second
 exception in `CLAUDE.md` (merged). This spec comes before any code and carries the
 `PRIVACY.md`, README and `fnl-setup` changes. Claude Code and Codex use host

@@ -1,5 +1,7 @@
 # Project progress on the dashboard
 
+Status: implemented; for 0.1.10: bounded local reader, exact identifier joins, consent/default notice and Project tab; duplicate task ids leave manual sessions unlinked. Local fixture checks only; real-host delivery remains unverified. The pipeline extension targets 0.1.11.
+
 Idea: owner, 2026-11-06. Most projects that use this pack also use Spec Kit, or another method that splits
 the work into stories and tasks, and sessions are created to carry that work. The dashboard shows how far
 the project is and, for each task, which agent works on it through which session. It is the project pane of the `now` tab in
