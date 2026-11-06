@@ -125,7 +125,7 @@ function picture(n, disclosure, hidden, panel) {
   disclosure = disclosure || (n.tag === "details" ? n.children[0].textContent : null);
   hidden = hidden || n.hidden;
   return [{ tag: n.tag, cls: n.className, text: n.textContent, attrs: n.attrs, style: n.style,
-    disclosure, panel, hidden: !!hidden }, ...n.children.flatMap((child) => picture(child, disclosure, hidden, panel))];
+    disclosure, panel, open: !!n.open, hidden: !!hidden }, ...n.children.flatMap((child) => picture(child, disclosure, hidden, panel))];
 }
 out.picture = picture(app);
 out.states = states;

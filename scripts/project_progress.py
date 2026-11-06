@@ -95,6 +95,42 @@ def project_labels(text):
     return labels
 
 
+def registered_projects(folder=None):
+    """Read a bounded closed code-to-name map; unsafe or malformed state names nothing."""
+    try:
+        raw = dr.read_file(folder, 'projects.json', 8192) if folder is not None else dr.read_data('state/projects.json', 8192)
+        names = json.loads(raw)
+        if (not isinstance(names, dict) or len(names) > 50 or any(
+                not re.fullmatch(r'[0-9a-f]{8}', code) or not isinstance(name, str)
+                or not LABEL.fullmatch(name) or not name.strip()
+                for code, name in names.items())):
+            return {}
+        return names
+    except (OSError, ValueError, UnicodeError):
+        return {}
+
+
+def register_here(cwd):
+    """Caller requires consent and an explicit status invocation, never a hook."""
+    root = find_root(cwd)
+    if root is None:
+        return
+    name = re.sub(r'[^A-Za-z0-9 ._-]', '-', root.name).strip()[:40].strip()
+    if not name:
+        return
+    code = repository_code(root)
+    try:
+        with dr.data_folder('state', create=True, private=True) as folder:
+            fcntl.flock(folder, fcntl.LOCK_EX)
+            names = registered_projects(folder)
+            if code not in names and len(names) >= 50:
+                return
+            names[code] = name
+            dr.atomic_write(folder, 'projects.json', json.dumps(names, sort_keys=True).encode('ascii'))
+    except (OSError, ValueError):
+        return
+
+
 def set_label(cwd, label):
     if not isinstance(label, str) or not LABEL.fullmatch(label) or not label.strip():
         raise ValueError('invalid label')
@@ -431,19 +467,18 @@ def active_projects(events, repositories, labels, now):
         if event.get('event') == 'session_start' and event.get('host') in HOSTS:
             row['hosts'].add(event['host'])
     projects = {}
-    today = now.astimezone().date()
     for (repo, _), session in sessions.items():
-        if not 0 <= (now - session['last']).total_seconds() < 86400:
+        if not labels.get(repo) or not 0 <= (now - session['last']).total_seconds() < 86400:
             continue
         row = projects.setdefault(repo, {'last': session['last'], 'hosts': set(), 'sessions': 0})
         row['last'] = max(row['last'], session['last'])
         row['hosts'].update(session['hosts'])
-        row['sessions'] += session['last'].astimezone().date() == today
+        row['sessions'] += 1
     result = []
     for repo, row in sorted(projects.items(), key=lambda item: (-item[1]['last'].timestamp(), item[0]))[:12]:
         features = repositories.get(repo, {}).get('features', [])
         total, done = sum(f['total'] for f in features), sum(f['done'] for f in features)
-        result.append({'repo': repo, 'label': labels.get(repo, 'repo ' + repo[:4]),
+        result.append({'repo': repo, 'label': labels[repo],
                        'hosts': [host for host in HOSTS if host in row['hosts']],
                        'sessions': row['sessions'], 'last': row['last'].isoformat(),
                        'percent': completion_percent(done, total) if total > done else None})
@@ -471,7 +506,7 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
                 labels = project_labels(dr.read_data('host.md', 262144).decode('utf-8'))
             except (OSError, ValueError, UnicodeError):
                 labels = {}
-            result['label'] = labels.get(repo, 'repo ' + str(repo)[:4])
+            result['label'] = labels.get(repo, registered_projects().get(repo, ''))
             if records:
                 ledger = records()
                 if ledger is not None:

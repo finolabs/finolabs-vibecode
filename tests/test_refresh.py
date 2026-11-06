@@ -126,11 +126,10 @@ class RefreshTest(unittest.TestCase):
         self.refresh('run', '--cwd', str(repo))
         progress = self.data()['progress']
         active = progress['active']
-        self.assertEqual([r['repo'] for r in active], [code, X])
+        self.assertEqual([r['repo'] for r in active], [code])
         self.assertEqual(active[0]['label'], 'My project')
         self.assertEqual(active[0]['hosts'], ['codex'])
         self.assertEqual(active[0]['percent'], 33)
-        self.assertIsNone(active[1]['percent'])
         self.assertEqual(set(active[0]), {'repo', 'label', 'hosts', 'sessions', 'last', 'percent'})
         # Old activity, even arbitrary text/unknown keys, is never carried over.
         tampered = self.data()
@@ -149,6 +148,83 @@ class RefreshTest(unittest.TestCase):
         self.refresh('purge', '--yes')
         self.assertFalse((self.dir / 'data.js').exists())
         self.assertFalse(list(self.dir.glob('events-*.jsonl')))
+
+    def status_here(self, repo, *extra):
+        result = subprocess.run([sys.executable, '-I', str(REFRESH), 'run', '--register-here', *extra],
+                                cwd=repo, capture_output=True, text=True, env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_registration_requires_consent_is_private_sanitised_and_label_wins(self):
+        repo = Path(self.tmp.name).resolve() / ('  Démo<>_' + 'x' * 45)
+        (repo / '.git').mkdir(parents=True)
+        nested = repo / 'nested'
+        nested.mkdir()
+        projects = self.dir / 'projects.json'
+        self.status_here(nested)
+        self.assertFalse(projects.exists())
+        self.consent()
+        self.ledger.parent.joinpath('host.md').write_text('# Host\n')
+        self.status_here(nested)
+        names = json.loads(projects.read_text())
+        code, name = next(iter(names.items()))
+        self.assertRegex(code, r'^[0-9a-f]{8}$')
+        self.assertEqual(name, ('D-mo--_' + 'x' * 45)[:40])
+        self.assertEqual(projects.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(projects.parent.stat().st_mode & 0o777, 0o700)
+        self.write_events([self.event(1, 's', code, 'session_start', host='codex', dispatch=None, source='startup')])
+        self.status_here(nested)
+        self.assertEqual(self.data()['progress']['active'][0]['label'], name)
+        self.ledger.parent.joinpath('host.md').write_text('## Project labels\n- ' + code + ': Owner label\n')
+        self.status_here(nested)
+        self.assertEqual(self.data()['progress']['active'][0]['label'], 'Owner label')
+        self.assertEqual(self.data()['progress']['repositories'][code]['label'], 'Owner label')
+        self.refresh('purge', '--yes')
+        self.assertFalse(projects.exists())
+        self.assertIn('Owner label', self.ledger.parent.joinpath('host.md').read_text())
+
+    def test_hook_refresh_never_registers_even_with_flag_and_non_repo_is_skipped(self):
+        self.consent()
+        repo = Path(self.tmp.name).resolve() / 'hook-project'
+        (repo / '.git').mkdir(parents=True)
+        self.refresh('run', '--cwd', str(repo))
+        self.refresh('run', '--cwd', str(repo), '--register-here')
+        self.assertFalse((self.dir / 'projects.json').exists())
+        self.status_here(Path(self.tmp.name))
+        self.assertFalse((self.dir / 'projects.json').exists())
+        # Without the flag, even a refresh inside a repository is not registration.
+        result = subprocess.run([sys.executable, '-I', str(REFRESH), 'run'], cwd=repo,
+                                capture_output=True, text=True, env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.dir / 'projects.json').exists())
+
+    def test_registered_names_stay_canonical_and_purge_with_state_override(self):
+        self.consent()
+        self.env['FNL_STATE_DIR'] = str(Path(self.tmp.name).resolve() / 'alternate-state')
+        repo = Path(self.tmp.name).resolve() / 'canonical-project'
+        (repo / '.git').mkdir(parents=True)
+        self.status_here(repo)
+        self.assertTrue((self.dir / 'projects.json').exists())
+        self.assertFalse((Path(self.env['FNL_STATE_DIR']) / 'projects.json').exists())
+        self.refresh('purge', '--yes')
+        self.assertFalse((self.dir / 'projects.json').exists())
+
+    def test_registration_caps_new_entries_and_updates_existing_at_cap(self):
+        self.consent()
+        repo = Path(self.tmp.name).resolve() / 'named-project'
+        (repo / '.git').mkdir(parents=True)
+        self.status_here(repo)
+        path = self.dir / 'projects.json'
+        code = next(iter(json.loads(path.read_text())))
+        names = {'%08x' % n: 'Existing' for n in range(49)}
+        names[code] = 'Old name'
+        path.write_text(json.dumps(names))
+        self.status_here(repo)
+        self.assertEqual(len(json.loads(path.read_text())), 50)
+        self.assertEqual(json.loads(path.read_text())[code], repo.name)
+        other = repo.parent / 'new-project'
+        (other / '.git').mkdir(parents=True)
+        self.status_here(other)
+        self.assertEqual(json.loads(path.read_text()), {**names, code: repo.name})
 
     def test_reviews_use_canonical_labels_even_when_progress_is_off(self):
         self.consent()

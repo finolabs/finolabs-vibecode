@@ -14,6 +14,7 @@ sibling script. Nothing is sent anywhere. Dates are the machine's local dates.
 """
 
 import argparse
+import fcntl
 import importlib.util
 import json
 import os
@@ -363,7 +364,7 @@ def progress_metrics(events, running, cwd=None):
         notice = pp.notice('dashboard', with_progress['version'])
     labels = canonical_labels()
     for key, row in repositories.items():
-        row['label'] = labels.get(key, 'repo ' + key[:4])
+        row['label'] = labels.get(key, '')
     result = {'current': code, 'repositories': repositories,
               'active': pp.active_projects(events, repositories, labels, fm.now()),
               'in_progress': sum(row.get('in_progress', 0) for row in repositories.values()), 'notice': notice}
@@ -374,9 +375,11 @@ def progress_metrics(events, running, cwd=None):
 
 def canonical_labels():
     try:
-        return pp.project_labels(fm.dr.read_data('host.md', 262144).decode('utf-8'))
+        labels = pp.registered_projects()
+        labels.update(pp.project_labels(fm.dr.read_data('host.md', 262144).decode('utf-8')))
+        return labels
     except (OSError, ValueError, UnicodeError):
-        return {}
+        return pp.registered_projects()
 
 
 def build(days=WEEKS * 7, cwd=None):
@@ -577,6 +580,10 @@ def cmd_run(args):
             webbrowser.open((folder / "dashboard.html").as_uri())
         return
     try:
+        # Hooks supply --cwd/--throttle and never request registration. Register
+        # before the throttle so an explicit status invocation names the repo.
+        if getattr(args, "register_here", False) is True and not getattr(args, "cwd", None) and fm.enabled():
+            pp.register_here(os.getcwd())
         if args.throttle is not None and (folder / "data.js").exists() and \
                 fm.now().timestamp() - (folder / "data.js").stat().st_mtime < args.throttle and not newer_ledger(folder / "data.js"):
             return
@@ -632,6 +639,13 @@ def cmd_purge(args):
         if path.is_file() and not path.is_symlink():
             path.unlink()
             removed += 1
+    try:
+        with fm.dr.data_folder("state") as folder:
+            fcntl.flock(folder, fcntl.LOCK_EX)
+            os.unlink("projects.json", dir_fd=folder)
+            removed += 1
+    except (OSError, ValueError):
+        pass
     print("purge: removed %d files" % removed)
 
 
@@ -695,6 +709,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="write data.js and dashboard.html")
+    run.add_argument("--register-here", action="store_true", help="name this repository locally after metrics consent")
     run.add_argument("--open", action="store_true", help="show the page in the default browser")
     run.add_argument("--throttle", type=float, metavar="SECONDS", help="skip when data.js is newer than this")
     run.add_argument("--cwd", help="repository working folder supplied by a session hook")
