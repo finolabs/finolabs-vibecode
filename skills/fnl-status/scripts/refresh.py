@@ -214,32 +214,60 @@ def recent_snapshot():
         return None
 
 
+def live_sessions(events, generated):
+    """Counts only: recent event activity, not a process or session inventory."""
+    current = datetime.fromisoformat(generated)
+    families = ('claude', 'codex', 'antigravity')
+    hosts = {e['sid']: e['host'] for e in events if e['event'] == 'session_start'}
+    active = {family: set() for family in families}
+    for event in events:
+        host = hosts.get(event['sid'])
+        at = pp.timestamp(event['ts'])
+        if host in active and at is not None and 0 <= (current - at).total_seconds() < 900:
+            active[host].add(event['sid'])
+    return dict(window_minutes=15, **{family: min(99, len(active[family])) for family in families})
+
+
 def quota_meters():
-    """A bounded projection of the local cache, one limiting meter per family."""
+    """Project bounded pool metadata, preserving all three family placeholders."""
     try:
         cache = json.loads(fm.dr.read_data('state/quota/quota.json', 262144))
-        meters = []
-        for family in ('claude', 'codex', 'agy'):
-            entries = cache.get(family, {})
-            candidates = []
-            for entry in list(entries.values())[:4]:
-                measured = pp.timestamp(entry.get('measured'))
-                if measured is None:
+    except (OSError, ValueError):
+        cache = {}
+    if not isinstance(cache, dict):
+        cache = {}
+    meters = []
+    current = fm.now()
+    for family in ('claude', 'codex', 'agy'):
+        entries = cache.get(family, {})
+        pools = []
+        for entry in list(entries.values())[:4] if isinstance(entries, dict) else []:
+            if not isinstance(entry, dict):
+                continue
+            measured = pp.timestamp(entry.get('measured'))
+            groups = entry.get('groups')
+            if measured is None or not isinstance(groups, list):
+                continue
+            for group in groups[:64]:
+                if len(pools) >= 8:
+                    break
+                if not isinstance(group, dict):
                     continue
-                groups = entry.get('groups', [])
-                # Claude's weekly all-model pool is the family limit when present.
-                weekly = [g for g in groups if g.get('name') == 'week-all']
-                for group in (weekly or groups)[:64]:
-                    value = group.get('remaining_fraction')
-                    if type(value) in (int, float) and 0 <= value <= 1:
-                        candidates.append((value, measured))
-            if candidates:
-                value, measured = min(candidates, key=lambda pair: pair[0])
-                meters.append(dict(agent=family, remaining_fraction=value, measured=measured.isoformat(),
-                                   unverified=not 0 <= (fm.now() - measured).total_seconds() <= 28800))
-        return meters
-    except (OSError, ValueError, TypeError, KeyError, AttributeError):
-        return []
+                name, value = group.get('name'), group.get('remaining_fraction')
+                if (not isinstance(name, str) or not name or len(name) > 80
+                        or any(ord(c) < 32 or ord(c) == 127 for c in name)
+                        or type(value) not in (int, float) or not 0 <= value <= 1):
+                    continue
+                reset = pp.timestamp(group.get('reset_time'))
+                window = group.get('window')
+                # The closed output shape carries the window in the pool display name.
+                if window in ('5h', 'weekly') and not (name.startswith('week') or name in ('session', 'five-hour')):
+                    name += ' / ' + window
+                pools.append(dict(name=name, remaining_fraction=value,
+                    resets=reset.isoformat() if reset else None, measured=measured.isoformat(),
+                    unverified=not 0 <= (current - measured).total_seconds() <= 28800))
+        meters.append(dict(agent=family, pools=pools))
+    return meters
 
 
 def previous_projects():
@@ -311,7 +339,7 @@ def previous_projects():
         return {}
 
 
-def running_metrics(generated):
+def running_metrics(generated, events=()):
     snapshot = ap.empty('snapshot off')
     if fm.enabled() and ap.enabled():
         snapshot = recent_snapshot() or ap.snapshot()
@@ -345,7 +373,7 @@ def running_metrics(generated):
     families = {'antigravity': 'agy', 'claude': 'claude', 'codex': 'codex'}
     for process in processes:
         process['not_started_by_coordinator'] = not any(families.get(row['agent']) == process['family'] for row in rows) if not note else False
-    return {'open': rows, 'processes': processes, 'snapshot': snapshot, 'ledger_note': note, 'quota': quota_meters()}
+    return {'open': rows, 'processes': processes, 'snapshot': snapshot, 'ledger_note': note, 'quota': quota_meters(), 'live': live_sessions(events, generated)}
 
 
 def progress_metrics(events, running, cwd=None):
@@ -396,7 +424,8 @@ def build(days=WEEKS * 7, cwd=None):
     today = datetime.now().astimezone().date()
     start = today - timedelta(days=days - 1)
     consent = fm.read_consent()
-    events = [e for e in fm.read_events()[0] if local_date(e["ts"]) >= start]
+    recorded_events = fm.read_events()[0]
+    events = [e for e in recorded_events if local_date(e["ts"]) >= start]
     by_sid = defaultdict(list)
     for e in events:
         by_sid[e["sid"]].append(e)
@@ -508,7 +537,7 @@ def build(days=WEEKS * 7, cwd=None):
         missing["delegation"] = ledger_note
 
     generated = fm.now().isoformat(timespec="seconds")
-    running = running_metrics(generated)
+    running = running_metrics(generated, recorded_events)
     return {
         "progress": progress_metrics(events, running, cwd),
         "generated": generated,

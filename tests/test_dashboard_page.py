@@ -325,6 +325,61 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render(FIXTURE, {'actions': [dict(tooltip='focus', target='quota-bricks')]})
         self.assertIn('68%', out['tipStates'][0]['text'])
 
+    def test_live_sessions_marks_explain_sources_and_keep_lanes_unchanged(self):
+        data = self.sample()
+        for snapshot_on in (False, True):
+            data['running']['snapshot']['reason'] = '' if snapshot_on else 'snapshot off'
+            out = self.render_freshness(data)
+            marks = self.marks(out, 'live-session')
+            self.assertEqual([m['text'] for m in marks], ['● 3', '◆ 7', '▲ 2'])
+            self.assertEqual(len(self.marks(out, 'lane')), 4)
+            for mark in marks:
+                self.assertEqual(mark['attrs']['tabindex'], '0')
+                for text in ('sessions with activity in the last 15 min', 'from usage events',
+                             'not a process count', 'a session idle longer is not shown'):
+                    self.assertIn(text, mark['tooltip'])
+                self.assertIn('Both usage-session counts' if snapshot_on else 'snapshot off', mark['tooltip'])
+
+    def test_quota_pools_marks_placeholder_stale_and_one_table_row_per_pool(self):
+        data = self.sample()
+        pool = data['running']['quota'][0]['pools'][0]
+        data['running']['quota'] = [dict(agent='claude', pools=[dict(pool, name='week-all'),
+            dict(pool, name='session'), dict(pool, name='long-pool-name', unverified=True)]),
+            dict(agent='codex', pools=[]), dict(agent='agy', pools=[dict(pool, name='gemini / weekly')])]
+        out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
+        self.assertEqual(len(self.marks(out, 'quota-block')), 3)
+        meters = self.marks(out, 'quota-bricks')
+        self.assertEqual(len(meters), 5)
+        self.assertEqual(len(self.marks(out, 'quota-pool-icon')), 3)
+        self.assertEqual([m['text'] for m in self.marks(out, 'quota-pool-name')], ['long-poo', '—'])
+        self.assertIn('long-pool-name', meters[2]['tooltip'])
+        self.assertIn('unverified', meters[2]['cls'])
+        for meter in (meters[2], meters[3]):
+            self.assertEqual(meter['text'].strip(), '?')
+        self.assertIn('unread', meters[3]['cls'])
+        for text in ('not read', 'quota probe off or no reading yet', 'turn on in fnl-setup'):
+            self.assertIn(text, meters[3]['tooltip'])
+        for meter in (meters[0], meters[1], meters[2], meters[4]):
+            for text in ('remaining', '68%', 'resets', pool['resets'], 'measured', pool['measured']):
+                self.assertIn(text, meter['tooltip'])
+        table = next(m for m in self.marks(out, 'tbl', 'show the data as tables') if m['text'].startswith('quota'))
+        self.assertIn('long-pool-name', table['text'])
+        self.assertIn('resets', table['text'])
+        self.assertEqual(table['text'].count('68%'), 4)
+        data['running']['quota'] = [dict(agent='claude', pools=[dict(pool, name='week-all')] * 10)]
+        out = self.render_freshness(data)
+        self.assertEqual(len(self.marks(out, 'quota-bricks')), 8)
+
+    def test_quota_measured_age_boundary_is_hollow_after_eight_hours(self):
+        data = self.sample()
+        pool = data['running']['quota'][0]['pools'][0]
+        for measured, stale in (('2026-11-06T02:00:00Z', False),
+                                ('2026-11-06T01:59:59Z', True), ('2026-11-06T10:00:01Z', True)):
+            data['running']['quota'] = [dict(agent='claude', pools=[dict(pool, measured=measured, unverified=False)])]
+            out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
+            self.assertEqual('unverified' in self.marks(out, 'quota-bricks')[0]['cls'], stale)
+            self.assertEqual(sum('lit' in m['cls'].split() for m in self.marks(out, 'quota-brick')), 0 if stale else 7)
+
     def test_budget_studs_are_bounded_and_huge_or_nonfinite_is_unknown(self):
         data = self.sample()
         template = data['running']['open'][0]
@@ -347,15 +402,15 @@ class DashboardScriptTest(unittest.TestCase):
     def test_positive_verified_quota_always_lights_a_brick(self):
         data = self.sample()
         fractions = (0, .001, .049, .05, .08, .099, .1, .15, 1)
-        data['running']['quota'] = [dict(agent=str(fraction), remaining_fraction=fraction,
-            measured='2026-11-06T10:00:00Z', unverified=False) for fraction in fractions]
+        data['running']['quota'] = [dict(agent=str(fraction), pools=[dict(name='week-all', remaining_fraction=fraction,
+            resets=None, measured='2026-11-06T10:00:00Z', unverified=False)]) for fraction in fractions]
         out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
         bricks = self.marks(out, 'quota-brick')
         for i, (fraction, count) in enumerate(zip(fractions, (0, 1, 1, 1, 1, 1, 1, 2, 10))):
             lit = [m for m in bricks[i*10:(i+1)*10] if 'lit' in m['cls'].split()]
             self.assertEqual(len(lit), count)
             self.assertTrue(all(('low' if fraction <= .1 else 'done') in m['cls'].split() for m in lit))
-        data['running']['quota'][1]['unverified'] = True
+        data['running']['quota'][1]['pools'][0]['unverified'] = True
         out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z'})
         self.assertTrue(all('lit' not in m['cls'].split() for m in self.marks(out, 'quota-brick')[10:20]))
 
@@ -424,7 +479,7 @@ class DashboardScriptTest(unittest.TestCase):
         cases = [('project', 'task-brick', 'T001', ['agent / model', 'session / host'], 0, 1, 0),
                  ('project', 'merged', 'T301 to T302', ['done', 'agent on it', 'not accepted', 'to do'], 0, 0, 0),
                  ('agents', 'lane', None, ['elapsed', 'budget', 'check at', 'cap'], 0, 0, 1),
-                 ('agents', 'quota-bricks', 'claude quota', ['remaining', 'measured'], 0, 0, 1),
+                 ('agents', 'quota-bricks', 'claude quota', ['remaining', 'resets', 'measured'], 0, 0, 1),
                  ('agents', 'slots', 'slots', ['lit'], 0, 0, 0),
                  ('project', 'active-host', 'claude', ['sessions'], 0, 0, 0),
                  ('agents', 'no-process', 'no process', [], 1, 0, 0),
@@ -488,7 +543,7 @@ class DashboardScriptTest(unittest.TestCase):
 
     def test_quota_rounds_tooltip_and_aria_and_legacy_strings_still_work(self):
         data = self.sample()
-        data['running']['quota'][0]['remaining_fraction'] = .6799999999
+        data['running']['quota'][0]['pools'][0]['remaining_fraction'] = .6799999999
         out = self.render_freshness(data, {'now': '2026-11-06T10:00:00Z',
             'actions': [dict(tooltip='focus', target='quota-bricks')]})
         meter = self.marks(out, 'quota-bricks')[0]
@@ -701,7 +756,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(len(blocks), 30)
         self.assertEqual([sum('lit' in m['cls'].split() for m in blocks[i:i+10]) for i in range(0, 30, 10)], [7, 1, 0])
         self.assertIn('low', blocks[10]['cls'].split())
-        self.assertEqual(self.marks(out, 'capacity-caption')[1]['text'], 'claude quota')
+        self.assertEqual(self.marks(out, 'capacity-caption')[2]['text'], 'claude quota')
         self.assertEqual(self.marks(out, 'process-counts'), [])
         self.assertTrue(any('</script>' in (m.get('tooltip') or '') for m in lanes))
         tables = self.marks(out, 'tbl', 'show the data as tables')
@@ -767,7 +822,7 @@ class DashboardScriptTest(unittest.TestCase):
         data['running'] = dict(open=[], processes=[dict(family='codex')], snapshot=dict(reason='snapshot off'), ledger_note='')
         out = self.render_freshness(data, {'hash': '#agents'})
         self.assertEqual(len(self.marks(out, 'ghost-brick')), 3)
-        self.assertIn('No agents running', out['panels'][1]['text'])
+        self.assertIn('No open dispatches', out['panels'][1]['text'])
         self.assertEqual(len(self.marks(out, 'slot')), 5)
         self.assertFalse(any('lit' in m['cls'].split() for m in self.marks(out, 'slot')))
         self.assertEqual(self.marks(out, 'quota-bricks'), [])

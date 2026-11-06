@@ -173,7 +173,7 @@ class RefreshTest(unittest.TestCase):
             codes.append(block['current'])
             self.assertEqual(len(block['repositories']), min(n + 1, 5))
         self.assertNotIn(codes[0], block['repositories'])
-        self.assertEqual(self.data()['running']['quota'][0]['remaining_fraction'], .08)
+        self.assertEqual(self.data()['running']['quota'][1]['pools'][0]['remaining_fraction'], .08)
         self.assertIn('updated', block['repositories'][codes[-1]])
         # A refresh outside a repository must not erase the other last-written projects.
         result = subprocess.run([sys.executable, '-I', str(REFRESH), 'run', '--cwd', str(Path(self.tmp.name).resolve())],
@@ -401,6 +401,81 @@ class RefreshTest(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
+
+    def test_live_sessions_distinct_window_boundary_future_and_cap(self):
+        module = self.running_module()
+        at = self.at
+        def event(sid, minutes, kind='skill', host=None):
+            row = dict(sid=sid, ts=(at - timedelta(minutes=minutes)).isoformat(), event=kind)
+            if host is not None:
+                row['host'] = host
+            return row
+        rows = [event('coordinator', 60, 'session_start', 'claude'),
+                event('coordinator', 1), event('coordinator', 2),
+                event('child', 10, 'session_start', 'claude'),
+                event('idle', 15, 'session_start', 'claude'),
+                event('future', -1, 'session_start', 'antigravity'),
+                event('unknown', 0), event('agy', 0, 'session_start', 'antigravity')]
+        for n in range(105):
+            rows.append(event('codex%d' % n, 14.999, 'session_start', 'codex'))
+        self.assertEqual(module.live_sessions(rows, at.isoformat()),
+                         dict(window_minutes=15, claude=2, codex=99, antigravity=1))
+        self.assertEqual(module.live_sessions([], at.isoformat()),
+                         dict(window_minutes=15, claude=0, codex=0, antigravity=0))
+
+    def test_live_sessions_are_built_from_existing_events_with_snapshot_off(self):
+        self.consent()
+        rows = [self.event(85 * 24 * 60, 'parent', X, 'session_start', host='claude', dispatch=None, source='startup'),
+                self.event(1, 'parent', X, 'skill', name='fnl-status'),
+                self.event(2, 'child', X, 'session_start', host='codex', dispatch=None, source='startup')]
+        self.write_events(rows)
+        before = {p: p.read_bytes() for p in self.dir.glob('events-*.jsonl')}
+        self.refresh('run')
+        running = self.data()['running']
+        self.assertEqual(running['live'], dict(window_minutes=15, claude=1, codex=1, antigravity=0))
+        self.assertEqual(running['snapshot']['reason'], 'snapshot off')
+        self.assertEqual(running['open'], [])
+        self.assertEqual(before, {p: p.read_bytes() for p in before})
+
+    def test_quota_all_pools_caps_placeholders_staleness_and_closed_metadata(self):
+        module = self.running_module()
+        at = self.at
+        def entry(names, hours=0):
+            return dict(measured=(at - timedelta(hours=hours)).isoformat(), source='PRIVATE SOURCE',
+                        prompt='PRIVATE PROMPT', groups=[dict(name=name, window='weekly',
+                            remaining_fraction=.5, reset_time=(at + timedelta(days=1)).isoformat(),
+                            private='PRIVATE GROUP') for name in names])
+        cache = dict(claude={str(n): entry(['week-all', 'session'], hours=n * 4) for n in range(5)},
+                     codex=dict(default=entry(['codex'] * 12)))
+        folder = self.dir / 'quota'
+        folder.mkdir(parents=True, mode=0o700)
+        path = folder / 'quota.json'
+        path.write_text(json.dumps(cache))
+        with mock.patch.dict(os.environ, self.env), mock.patch.object(module.fm, 'now', return_value=at):
+            rows = module.quota_meters()
+            self.assertEqual([r['agent'] for r in rows], ['claude', 'codex', 'agy'])
+            self.assertEqual([len(r['pools']) for r in rows], [8, 8, 0])
+            self.assertEqual([q['name'] for q in rows[0]['pools']], ['week-all', 'session'] * 4)
+            self.assertEqual([q['unverified'] for q in rows[0]['pools']], [False] * 6 + [True] * 2)
+            self.assertEqual(rows[1]['pools'][0]['name'], 'codex / weekly')
+            for row in rows:
+                self.assertEqual(set(row), {'agent', 'pools'})
+                for pool in row['pools']:
+                    self.assertEqual(set(pool), {'name', 'remaining_fraction', 'resets', 'measured', 'unverified'})
+            self.assertNotIn('PRIVATE', json.dumps(rows))
+            self.assertEqual(rows[0]['pools'][0]['resets'], (at + timedelta(days=1)).isoformat())
+            cache['claude'] = {str(n): entry(['week-all']) for n in range(5)}
+            cache['codex'] = dict(default=entry(['codex'], hours=-1))
+            cache['agy'] = dict(default=dict(measured='PRIVATE TIME', groups=[]))
+            path.write_text(json.dumps(cache))
+            rows = module.quota_meters()
+            self.assertEqual(len(rows[0]['pools']), 4)  # fifth entry is never read
+            self.assertTrue(rows[1]['pools'][0]['unverified'])
+            self.assertEqual(rows[2]['pools'], [])
+            path.write_text('{bad')
+            self.assertEqual([r['pools'] for r in module.quota_meters()], [[], [], []])
+            path.unlink()
+            self.assertEqual([r['pools'] for r in module.quota_meters()], [[], [], []])
 
     def snapshot_on(self):
         (self.ledger.parent / "host.md").write_text("## Agent snapshot\n\n- Snapshot: on\n")

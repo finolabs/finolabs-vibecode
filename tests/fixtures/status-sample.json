@@ -999,23 +999,47 @@
     "quota": [
       {
         "agent": "claude",
-        "remaining_fraction": 0.68,
-        "measured": "2026-11-06T10:00:00Z",
-        "unverified": false
+        "pools": [
+          {
+            "name": "week-all",
+            "remaining_fraction": 0.68,
+            "resets": "2026-11-07T10:00:00Z",
+            "measured": "2026-11-06T10:00:00Z",
+            "unverified": false
+          }
+        ]
       },
       {
         "agent": "codex",
-        "remaining_fraction": 0.08,
-        "measured": "2026-11-06T10:00:00Z",
-        "unverified": false
+        "pools": [
+          {
+            "name": "codex / 5h",
+            "remaining_fraction": 0.08,
+            "resets": "2026-11-07T10:00:00Z",
+            "measured": "2026-11-06T10:00:00Z",
+            "unverified": false
+          }
+        ]
       },
       {
         "agent": "agy",
-        "remaining_fraction": 0.42,
-        "measured": "2026-11-05T10:00:00Z",
-        "unverified": true
+        "pools": [
+          {
+            "name": "gemini / weekly",
+            "remaining_fraction": 0.42,
+            "resets": "2026-11-07T10:00:00Z",
+            "measured": "2026-11-05T10:00:00Z",
+            "unverified": true
+          }
+        ]
       }
-    ]
+    ],
+    "live": {
+      "window_minutes": 15,
+      "claude": 3,
+      "codex": 7,
+      "antigravity": 2
+    }
   },
   "generated": "2026-10-31T18:00:00Z",
   "period": {
