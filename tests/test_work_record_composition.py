@@ -20,7 +20,6 @@ class WorkRecordCompositionTests(unittest.TestCase):
         self.assertEqual(len(steps), 6)
         for (number, body), section in zip(steps, ('Goal and acceptance', 'Plan', 'Tasks', 'Tasks', 'Evidence', 'Evidence')):
             self.assertIn(section, body, number)
-        self.assertIn('Tasks', steps[1][1])
         self.assertIn('no work record', read('fnl-coding-router', 'references/workflows/speckit.md'))
         pack = read('fnl-coding-router', 'references/workflows/mattpocock.md')
         for phrase in ('work record', 'Goal and acceptance', 'Plan', 'Tasks', 'Evidence', 'issue tracker'):

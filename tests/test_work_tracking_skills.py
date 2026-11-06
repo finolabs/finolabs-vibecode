@@ -93,7 +93,8 @@ class WorkTrackingSkillsTests(unittest.TestCase):
                        "forge's issues", 'only output', 'plain sentences',
                        'no machine paths', 'no organisation names', 'no text copied from repository files',
                        'writes nothing to host config', 'calls no script of another skill',
-                       'explicit yes for each file'):
+                       'explicit yes for each file', '1 to 40 characters', '1 to 120 characters',
+                       'safe to commit'):
             self.assertIn(phrase, text)
         self.assertTrue(text.rstrip().endswith('`/fnl-setup`.'))
 
