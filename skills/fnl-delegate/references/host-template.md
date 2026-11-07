@@ -22,6 +22,18 @@ Coordinator: unverified
 
 ## Delegate environment
 
+<!--
+The `Delegate environment` section accepts only blank lines and `- <family>: none` or one
+`- <family>: <NAME>` per variable; replace `none` when adding names. Families are `claude`, `codex`,
+`antigravity`. Names match `^[A-Z][A-Z0-9_]{0,63}$`, with no duplicates, values or wildcards.
+Loader/interpreter controls, `GIT_*`, `*_PROXY`, `SSL_CERT_*` are refused by `delegate_env.py`.
+A name containing KEY/TOKEN/SECRET/PASSWORD/CREDENTIAL/PASS/AUTH/COOKIE/SESSION/PRIVATE needs its own setup Yes and No naming
+both name and family; only that Yes records `- <family>: <NAME>; approved: yes`.
+The wrapper reads canonical host config, not an environment-selected file. Default: none.
+HOME remains: protection is environment-only; credential files remain reachable. Report this residual risk.
+Private HOME is an open owner decision and is not offered or created in this package.
+-->
+
 - claude: none
 - codex: none
 - antigravity: none
@@ -78,22 +90,11 @@ Which agent can coordinate on this machine, and which delegates each one can rea
 
 ## Route judgment
 
-Judge selection now lives only in canonical `## Agent roles`; the legacy Route judgment heading retains instruction-check consent. `judge.py` caps calls at 24 per run, and no skill install is required for calls.
+Judge selection now lives only in canonical `## Agent roles`; this legacy heading retains instruction-check consent. `judge.py` caps calls at 24 per run, and no skill install is required for calls.
 
 - Instruction check: <on | off>. Default off. `on` means the user approved, on <DD/MM/YYYY>, sending lines of their private instruction files to the configured judge for the Check judgment items. Instruction checks use the small host fallback because they are outside the four outbound sites; retention is the host provider's. It is separate from the routing approval and is global to this machine; turning it off takes effect on the next run.
 
 ## Dispatch marker
-
-The `Delegate environment` section accepts only blank lines and `- <family>: none` or one
-`- <family>: <NAME>` per variable; replace `none` when adding names. Families are `claude`, `codex`,
-`antigravity`. Names match `^[A-Z][A-Z0-9_]{0,63}$`, with no duplicates, values or wildcards.
-Loader/interpreter controls, `GIT_*`, `*_PROXY`, `SSL_CERT_*` are refused by `delegate_env.py`.
-A name containing KEY/TOKEN/SECRET/PASSWORD/CREDENTIAL/PASS/AUTH/COOKIE/SESSION/PRIVATE needs its own setup Yes and No naming
-both name and family; only that Yes records `- <family>: <NAME>; approved: yes`.
-The wrapper reads canonical host config, not an environment-selected file. Default: none.
-HOME remains: protection is environment-only; credential files remain reachable. Report this residual risk.
-Private HOME is an open owner decision and is not offered or created in this package.
-
 
 Each headless command below starts with `FNL_DISPATCH_ID=<ledger id>`, the id `ledger.py start` printed. The usage metrics read it to tell a delegated session from one the user started. It is a short label and carries no task data.
 

@@ -25,6 +25,21 @@ class Parser(argparse.ArgumentParser):
 def names_from_host(text, family):
     if family not in FAMILIES:
         raise ValueError('refused family')
+    # Documentation is never an opt-in; unterminated comments fail closed.
+    parts, position = [], 0
+    while True:
+        start = text.find('<!--', position)
+        if start < 0:
+            parts.append(text[position:])
+            break
+        parts.append(text[position:start])
+        end = text.find('-->', start + 4)
+        if end < 0:
+            raise ValueError('invalid environment section')
+        position = end + 3
+    text = ''.join(parts)
+    if '-->' in text:
+        raise ValueError('invalid environment section')
     lines = text.splitlines()
     headings = [i for i, line in enumerate(lines) if line.rstrip() == '## Delegate environment']
     if not headings:

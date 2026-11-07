@@ -22,6 +22,13 @@ class BriefCheckTest(unittest.TestCase):
         self.assertIn(('rule_1_heading', 1), brief_check.lint(self.brief().replace('## Task', 'Task')))
         self.assertIn('rule_1_environment', [e[0] for e in brief_check.lint(self.brief().replace('never print', 'print'))])
 
+    def test_repeated_private_markers_lint_in_bounded_time(self):
+        from tests.scan_timing import timed_scan
+        marker = '-----' + 'BEGIN '
+        text = self.brief() + '\n' + (marker * (1024 * 1024 // len(marker) + 1))[:1024 * 1024]
+        errors = timed_scan(self, lambda: bool(brief_check.lint(text)))
+        self.assertFalse(errors, 'unexpected lint findings; content suppressed')
+
     def test_template_and_constraint_extension(self):
         text = (ROOT / 'skills/fnl-handoff/references/brief-template.md').read_text().split('```\n', 1)[1].split('\n```', 1)[0]
         self.assertEqual(brief_check.lint(text), [])

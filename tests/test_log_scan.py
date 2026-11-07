@@ -58,6 +58,26 @@ class LogScanTest(unittest.TestCase):
                 self.assertEqual(sp.findings(view), [])
                 self.assertIn('[REDACTED]', view)
 
+    def test_repeated_private_markers_scan_in_bounded_time(self):
+        from tests.scan_timing import timed_scan
+        marker = '-----' + 'BEGIN '
+        self.write((marker * (1024 * 1024 // len(marker) + 1))[:1024 * 1024])
+        status = timed_scan(self, lambda: log_scan.scan(self.log)['status'])
+        self.assertEqual(status, 'no_findings')
+
+    def test_private_blocks_keep_spans_and_bound_end_marker_search(self):
+        from tests.scan_timing import timed_scan
+        header = '-----' + 'BEGIN RSA PRIVATE KEY-----\n'
+        footer = '-----' + 'END RSA PRIVATE KEY-----'
+        block = header + 'fixture\n' + footer
+        hits = sp.findings(block + '\n' + block)
+        self.assertEqual([(h['start'], h['end']) for h in hits],
+                         [(0, len(block)), (len(block) + 1, 2 * len(block) + 1)])
+        marker = '-----' + 'END '
+        self.write(header + (marker * (1024 * 1024 // len(marker) + 1))[:1024 * 1024])
+        status = timed_scan(self, lambda: log_scan.scan(self.log)['status'])
+        self.assertEqual(status, 'findings')
+
     def test_thresholds_all_prefixes_and_short_values(self):
         for prefix in ('sk' + '-', 'sk' + '-ant-', 'gh' + 'p_', 'gh' + 'o_', 'gh' + 'u_', 'gh' + 's_',
                        'github' + '_pat_', 'glpat' + '-', 'xox' + 'b-', 'xox' + 'p-', 'npm' + '_',

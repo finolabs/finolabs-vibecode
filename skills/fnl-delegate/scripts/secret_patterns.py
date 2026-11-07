@@ -13,7 +13,9 @@ PREFIX = re.compile(r'(?:sk-ant-|sk-|sk_live_|sk_test_|ghp_|gho_|ghu_|ghs_|githu
 BEARER = re.compile(r'Authorization[ \t]*:[ \t]*Bearer[ \t]+' + TOKEN + r'{16,}', re.I)
 SECRET_NAME = re.compile(r'(?:[A-F0-9]{20,}|[A-Z2-7]{20,})')
 MAX_MATCHES = 1000
-PRIVATE = re.compile(r'-----BEGIN[^\r\n]*PRIVATE KEY[^\r\n]*-----')
+# Fixed header windows bound work at each marker on hostile single-line input.
+PRIVATE = re.compile(r'-----BEGIN[^\r\n]{0,80}PRIVATE KEY[^\r\n]{0,80}-----')
+PRIVATE_END = re.compile(r'-----END[^\r\n]{0,80}PRIVATE KEY[^\r\n]{0,80}-----')
 # Keep the complete candidate name, so an attacker cannot cause a valid suffix to be printed.
 PAIR = re.compile(r'''(?<![^\s=:,'"{}\[\]])(?P<quote>['"]?)(?P<name>[^\s=:,'"{}\[\]]+)(?P=quote)[ \t]*[=:][ \t]*(?:"(?P<double>(?:\\.|[^"\\\r\n])*)"|'(?P<single>(?:\\.|[^'\\\r\n])*)'|(?P<bare>[^\s,}\]'" ]*))''')
 
@@ -87,8 +89,8 @@ def findings(text):
         for match in matches(PRIVATE):
             if match.start() < private_end:
                 continue
-            end_match = re.search(r'-----END[^\r\n]*PRIVATE KEY[^\r\n]*-----', clean[match.end():])
-            end = match.end() + end_match.end() if end_match else len(clean)
+            end_match = PRIVATE_END.search(clean, match.end())
+            end = end_match.end() if end_match else len(clean)
             add('private_key', match.start(), end)
             private_end = end
         named = []
