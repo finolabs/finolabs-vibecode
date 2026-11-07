@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import socket
 import subprocess
 import sys
@@ -32,10 +33,41 @@ def host(present=("claude", "codex", "antigravity"), roles="", posting=""):
 
 class ReviewConfigTest(unittest.TestCase):
     def test_owned_script_copies_match(self):
-        for name in ("review_route.py", "review_config.py"):
+        for name in ("review_route.py", "review_config.py", "post_review.py", "data_root.py", "quota_probe.py"):
             expected = (ROOT / "scripts" / name).read_bytes()
-            for skill in ("fnl-delegate",):
+            skills = ("fnl-delegate", "fnl-review-gate") if name in {"review_route.py", "review_config.py"} else ("fnl-review-gate",)
+            for skill in skills:
                 self.assertEqual((ROOT / "skills" / skill / "scripts" / name).read_bytes(), expected)
+
+    def test_review_skill_scripts_run_without_repository(self):
+        # Copy only the installed skill, with no repository scripts or test
+        # helpers on sys.path. Help exercises CLI imports without posting,
+        # quota reads or access to the real account's .finolabs folder.
+        boot = (
+            "import pwd,runpy,sys; from unittest.mock import patch; "
+            "script=sys.argv[1]; sys.argv=[script,'--help']; "
+            "guard=patch.object(pwd,'getpwuid',side_effect=AssertionError('account access forbidden')); "
+            "guard.start(); runpy.run_path(script,run_name='__main__')"
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            skill = Path(temp) / "fnl-review-gate"
+            shutil.copytree(ROOT / "skills/fnl-review-gate", skill)
+            scripts = sorted((skill / "scripts").glob("*.py"))
+            self.assertTrue(scripts)
+            for script in scripts:
+                with self.subTest(script=script.name):
+                    result = subprocess.run(
+                        [sys.executable, "-I", "-c", boot, str(script)],
+                        cwd=temp, capture_output=True, text=True, timeout=10,
+                    )
+                    # Posting intentionally accepts only PR and --body-file,
+                    # so --help must stop at its usage parser with exit 2.
+                    expected = 2 if script.name == "post_review.py" else 0
+                    self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+                    if expected == 2:
+                        self.assertIn("usage: post_review.py", result.stderr)
+                        self.assertIn("the following arguments are required: pr", result.stderr)
+                        self.assertNotIn("Traceback", result.stderr)
 
     def test_exact_roles_and_absent_judge(self):
         text = host(roles="- code review: antigravity\n- security review: codex\n- navigator: claude\n- judge: jev")

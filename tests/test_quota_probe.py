@@ -1175,10 +1175,15 @@ class AccountCommandTest(unittest.TestCase):
 class CopiesTest(unittest.TestCase):
     def test_all_copies_identical_and_listed(self):
         actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob("quota_probe.py")}
-        self.assertEqual(actual, set(COPIES))
+        # Package A adds the self-contained review skill; integration owns
+        # adding its copy-group entry to validate.yml. Preserve the existing
+        # CI inventory assertions until that package lands.
+        packaged = [*COPIES, "skills/fnl-review-gate/scripts/quota_probe.py"]
+        self.assertEqual(actual, set(packaged))
+        for name in packaged:
+            self.assertEqual((ROOT / name).read_bytes(), (ROOT / COPIES[0]).read_bytes())
         ci = (ROOT / ".github/workflows/validate.yml").read_text()
         for name in COPIES:
-            self.assertEqual((ROOT / name).read_bytes(), (ROOT / COPIES[0]).read_bytes())
             self.assertIn('"' + name + '"', ci)
 
     def test_fixtures_have_no_identity_or_path(self):
