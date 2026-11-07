@@ -1,4 +1,4 @@
-# Work tracking facts per repository (release 0.1.11)
+# Work tracking facts per repository (release 0.2.0)
 
 Status: draft; scope settled by the owner on 2026-11-06 (see "Decisions settled"). Implementation not started.
 
@@ -16,13 +16,13 @@ repository showed three gaps:
 
 ## Decisions settled (owner, 2026-11-06)
 
-- Both the facts and the convention go into 0.1.11.
+- Both the facts and the convention go into 0.2.0.
 - The dashboard never reads `CLAUDE.md`, `AGENTS.md` or any other instruction file. Facts that drive it live in the
   host config under the data root (local, consent-gated, written by a script); the instruction files carry the same
   facts as short text for agents.
 - This repository stays without Spec Kit, as the standing test of the non-Spec-Kit path. No reduced Spec Kit mode
   is invented.
-- No third-party spec framework is adopted or recognised in 0.1.11 beyond Spec Kit. OpenSpec was considered and
+- No third-party spec framework is adopted or recognised in 0.2.0 beyond Spec Kit. OpenSpec was considered and
   dropped: its per-change artefact count is close to Spec Kit's, so it is not the lighter option the owner wanted,
   and its `tasks.md` checkbox syntax is undocumented. Instead the plugin defines a one-file work record (part E),
   composed with the phase tools of mattpocock/skills, which it points to and does not copy.
@@ -62,7 +62,7 @@ reach `data.js`, tooltips, events or `checkup.py` output.
 
 Lookup order: this repository's entry; then the old global `Ledger project:` and `Task file:` lines; then the folder
 name for the ledger and nothing for tasks. A per-repository entry always wins over a global line. The global lines are
-deprecated: still read in 0.1.11 and 0.1.12, reported by `checkup.py` with the one-line conversion, removed in 0.2.0
+deprecated: still read in 0.2.0 and 0.2.1, reported by `checkup.py` with the one-line conversion, removed in 0.3.0
 (no automatic migration; `fnl-setup` offers to convert them for the current repository only, after a yes).
 
 The pipeline strip's ledger source uses the entry. With no entry and no ledger runs under the folder name it uses no
@@ -174,7 +174,7 @@ rule applies only when `specs/` contains no `NNN-*` directory. The `Status:` wor
 vocabulary only; an unknown word is never echoed.
 
 **In this repository.** The 16 existing specs are not restructured: they get the status vocabulary (part C) and stay
-plain spec documents. New work from 0.1.11 on uses the template, including the implementation of this spec.
+plain spec documents. New work from 0.2.0 on uses the template, including the implementation of this spec.
 
 ## F. The `fnl-setup` scope split
 
@@ -204,7 +204,7 @@ script, preview and consent, unchanged.
 - `settings --set` and `--clear` write only this repository's entry, refuse without metrics consent, write owner-only
   and atomically, print no value, and two repositories with different ledger names join their own runs.
 - A test fails if `refresh.py` or the dashboard code opens `CLAUDE.md` or `AGENTS.md`.
-- The deprecated global lines still work in 0.1.11, are reported by `checkup.py` and lose to a per-repository entry;
+- The deprecated global lines still work in 0.2.0, are reported by `checkup.py` and lose to a per-repository entry;
   the existing tests and `project-progress.md` that describe the global lines are updated in the same change.
 - `fnl-setup-instructions` and `fnl-setup` carry the interview and the two-step flow with their trigger checks; neither
   calls the other's script; references stay within their size limits.

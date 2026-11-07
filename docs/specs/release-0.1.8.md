@@ -208,7 +208,7 @@ Problem: `fnl-delegate` routes by quota, but the only source is what the user sa
 
 A cached reading tells the coordinator which agent and model pool still has room. Each parser accepts only the documented shape, and anything else leaves that agent `unverified`. A user with two Claude Code installs lists each config folder in the `## Quota probe` section; each is probed and cached separately under its label.
 
-Superseded in release 0.1.11 by [quota-on-demand.md](quota-on-demand.md): the 4-hour hook-started cadence and the "no new hook entry" premise below are historical. Readings now happen on demand with a 15-minute minimum. Claude Code gets one StopFailure marker hook and asks to trust the changed hooks; Codex and Antigravity get no new entry.
+Superseded in release 0.2.0 by [quota-on-demand.md](quota-on-demand.md): the 4-hour hook-started cadence and the "no new hook entry" premise below are historical. Readings now happen on demand with a 15-minute minimum. Claude Code gets one StopFailure marker hook and asks to trust the changed hooks; Codex and Antigravity get no new entry.
 
 Design:
 

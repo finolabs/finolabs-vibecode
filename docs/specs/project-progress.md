@@ -1,11 +1,11 @@
 # Project progress on the dashboard
 
-Status: implemented; for 0.1.10: bounded local reader, exact identifier joins, consent/default notice and Project tab; duplicate task ids leave manual sessions unlinked. The 0.1.11 pipeline extension (Spec Kit stages, work records, repository state, ledger) is implemented with local parser, refresh and page checks; real-host delivery remains unverified.
+Status: implemented; for 0.1.10: bounded local reader, exact identifier joins, consent/default notice and Project tab; duplicate task ids leave manual sessions unlinked. The 0.2.0 pipeline extension (Spec Kit stages, work records, repository state, ledger) is implemented with local parser, refresh and page checks; real-host delivery remains unverified.
 
 Idea: owner, 2026-11-06. Most projects that use this pack also use Spec Kit, or another method that splits
 the work into stories and tasks, and sessions are created to carry that work. The dashboard shows how far
 the project is and, for each task, which agent works on it through which session. It is the project pane of the `now` tab in
-`dashboard-tabs.md` and shares its refresh with `running-agents.md`. The pipeline extension targets 0.1.11;
+`dashboard-tabs.md` and shares its refresh with `running-agents.md`. The pipeline extension targets 0.2.0;
 0.1.10 is already released.
 
 ## Metadata only (rule for the whole spec)
@@ -124,7 +124,7 @@ without recorded metrics consent, locks host config and replaces it atomically w
 events or checkup output. Purge leaves host config unchanged, including settings and labels.
 
 Lookup is entry, deprecated global, then folder name for ledger or no task file. Globals remain read
-in 0.1.11 and 0.1.12 and are scheduled for removal in 0.2.0. No automatic migration. Checkup names each
+in 0.2.0 and 0.2.1 and are scheduled for removal in 0.3.0. No automatic migration. Checkup names each
 key and prints a conversion command with `<value>`, never the old value. It reports when ledger
 projects exist but none match the repository mapping; association remains unverified because the
 ledger is machine-wide and has no repository identifier. A per-repository match suppresses that warning.
@@ -272,7 +272,7 @@ assignment; free text of any kind; linking sessions without a `dispatch` or a re
   tables and ledger shapes. Real-browser verification at 1280 and 375, both themes, belongs to the coordinator.
 - Whether the owner's tracker connectors should feed the same tab later.
 
-## Pipeline acceptance (0.1.11)
+## Pipeline acceptance (0.2.0)
 
 Targeted fixtures cover artefact stages, numbering gaps, spec-only features, phase story inheritance,
 stale status hints, both release table shapes, index/own-status/package precedence, unknown/deferred

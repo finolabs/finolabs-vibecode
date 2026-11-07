@@ -1,4 +1,4 @@
-# Quota reading on demand, with a rate-limit marker (release 0.1.11)
+# Quota reading on demand, with a rate-limit marker (release 0.2.0)
 
 Status: in progress; owner decisions recorded on 2026-11-07; implementation underway.
 

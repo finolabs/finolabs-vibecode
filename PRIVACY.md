@@ -52,8 +52,8 @@ underscores or slashes. Task paths must be relative Markdown paths, without empt
 components and outside `specs/archive`. Any malformed line, duplicate pair or unknown key makes
 the entire section unreadable; the reader ignores every entry and checkup reports invalid settings.
 Lookup uses the repository entry, then deprecated global `Ledger project:`/`Task file:` lines, then
-the folder name for ledger and no task file. Globals remain readable in 0.1.11 and 0.1.12, with removal
-planned for 0.2.0; there is no automatic migration. Checkup names only each deprecated key and a
+the folder name for ledger and no task file. Globals remain readable in 0.2.0 and 0.2.1, with removal
+planned for 0.3.0; there is no automatic migration. Checkup names only each deprecated key and a
 conversion command with a placeholder. It flags an unmatched ledger mapping without disclosing
 project names; a machine-wide ledger cannot establish repository association by itself.
 
