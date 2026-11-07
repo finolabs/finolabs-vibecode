@@ -95,7 +95,7 @@ The first stable release carrying the checker gives no notice of itself: older i
 
 ## Quota probe
 
-For the quota probe, the plugin itself makes no network call (the judge call below is separate). The user's own `agy`, `claude` and `codex` programs contact their providers with the user's own accounts; the plugin sends nothing about the user. This is separate from the update check above.
+For the quota probe, the plugin itself makes no network call. The user's own `agy`, `claude` and `codex` programs contact their providers with the user's own accounts; the plugin sends nothing about the user. This is separate from the update check above.
 
 The probe stays off until setup records the dated opt-in in the canonical `<data root>/host.md`, under `## Quota probe`. That section lists selected agents, confirmed absolute executable and interpreter paths, and labelled Claude config folders. For the default Claude Code install, `CLAUDE_CONFIG_DIR` is left unset so the program resolves its own folder and login; it is set only to config folders the user listed. Each Claude install starts with its usual configuration, including hooks, plugins and servers. `FNL_QUOTA_PROBE=off` stops probing; metrics consent neither enables nor disables it.
 
