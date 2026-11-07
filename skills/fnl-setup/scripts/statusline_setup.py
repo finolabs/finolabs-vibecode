@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Preview, apply or remove an opt-in Claude status-line context recorder."""
+"""Preview, apply or remove an opt-in host status-line context recorder."""
 import argparse
 from contextlib import ExitStack
 import json
@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import stat
 import sys
 import time
 
@@ -16,21 +17,54 @@ import compact_setup as common
 import data_root as dr
 
 Refusal = common.Refusal
+HOSTS = ("claude", "antigravity")
 
 
-def recorder_path():
-    scripts = Path(__file__).resolve().parent
+def check_antigravity_plugin(root):
+    # Same installed-copy exception as compact_stop_setup.check_plugin_root.
+    try:
+        with dr.relocated_folder(root):
+            return
+    except ValueError as error:
+        if str(error) != "root is a git work tree":
+            raise
+    if root != dr.account_home() / ".gemini/config/plugins/finolabs-vibecode":
+        raise Refusal("plugin folder is inside a git work tree; use the installed copy of the plugin")
+    with dr.relocated_folder(root.parent):
+        pass
+    fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(fd)
+        if info.st_uid != os.getuid() or info.st_mode & 0o022:
+            raise Refusal("plugin folder is not private enough")
+        if not stat.S_ISDIR(os.stat(".git", dir_fd=fd, follow_symlinks=False).st_mode):
+            raise Refusal("plugin folder .git is not a directory")
+    finally:
+        os.close(fd)
+
+
+def recorder_path(host="claude"):
+    scripts = Path(os.path.abspath(__file__)).parent
     candidate = scripts / "context_snapshot.py"
     if not candidate.is_file() and scripts.parent.name == "fnl-setup":
         candidate = scripts.parents[2] / "scripts" / "context_snapshot.py"
     if not candidate.is_file() or candidate.is_symlink():
         raise Refusal("whole plugin required; use the manual procedure for standalone installs")
+    if host == "antigravity":
+        check_antigravity_plugin(candidate.parent.parent)
+        fd = os.open(candidate.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            for info in (os.fstat(fd), os.stat(candidate.name, dir_fd=fd, follow_symlinks=False)):
+                if info.st_uid != os.getuid() or info.st_mode & 0o022:
+                    raise Refusal("unsafe plugin script or folder")
+        finally:
+            os.close(fd)
     return candidate
 
 
-def statusline(path=None):
-    path = recorder_path() if path is None else path
-    return {"type": "command", "command": "python3 -I " + shlex.quote(str(path)) + " record --line"}
+def statusline(path=None, host="claude"):
+    path = recorder_path(host) if path is None else path
+    return {"type": "command", "command": "python3 -I " + shlex.quote(str(path)) + " record --host " + host + " --line"}
 
 
 def settings(raw):
@@ -56,8 +90,8 @@ def transform(raw, remove, command):
     return (json.dumps(data, indent=2, ensure_ascii=False, allow_nan=False) + "\n").encode()
 
 
-def recipe():
-    command = "python3 -I " + shlex.quote(str(recorder_path())) + " record"
+def recipe(host):
+    command = "python3 -I " + shlex.quote(str(recorder_path(host))) + " record --host " + host
     print("Existing statusLine: unchanged. No plan saved.\nRecipe: wrap your existing command in a local shell script:")
     print('input=$(mktemp) || exit 0\ntrap \'rm -f "$input"\' EXIT\ncat > "$input"')
     print(command + ' < "$input"')
@@ -65,18 +99,27 @@ def recipe():
     print("Replace YOUR_EXISTING_COMMAND by hand. The recorder receives the same stdin JSON; it prints nothing.")
 
 
-def preview(folders, remove=False):
-    folders = folders or [dr.account_home() / ".claude"]
+def target_path(value, host):
+    path = common.checked_path(value, "claude")
+    if host == "antigravity" and path != dr.account_home() / ".gemini/antigravity-cli/settings.json":
+        raise Refusal("Antigravity target is fixed at the account home's settings file")
+    return path
+
+
+def preview(folders, remove=False, host="claude"):
+    if host not in HOSTS or (host == "antigravity" and folders):
+        raise Refusal("unsupported host or config folders")
+    folders = folders or [dr.account_home() / (".gemini/antigravity-cli" if host == "antigravity" else ".claude")]
     if not 1 <= len(folders) <= 4:
         raise Refusal("one to four config folders required")
     root = dr.consent_root()
     if root is None:
         raise Refusal("invalid data root")
-    command = statusline()
+    command = statusline(host=host)
     targets, displays, identities = [], [], set()
     existing = False
     for folder_path in folders:
-        path = common.checked_path(Path(folder_path) / "settings.json", "claude")
+        path = target_path(Path(folder_path) / "settings.json", host)
         with dr.relocated_folder(path.parent) as folder:
             info = os.fstat(folder)
             identity = (info.st_dev, info.st_ino)
@@ -93,9 +136,9 @@ def preview(folders, remove=False):
             targets.append({"path": str(path), "sha256": common.content_hash(raw), "mode": mode, "backup": backup})
             displays.append((path, raw, backup))
     if existing:
-        recipe()
+        recipe(host)
         return
-    plan = {"created": time.time(), "root": str(root), "remove": remove,
+    plan = {"host": host, "created": time.time(), "root": str(root), "remove": remove,
             "statusLine": command, "targets": targets}
     value = common.digest(plan)
     with dr.data_folder("state/statusline", create=True, private=True) as state:
@@ -112,7 +155,7 @@ def preview(folders, remove=False):
     print("Digest: " + value)
 
 
-def apply(value, yes):
+def apply(value, yes, host="claude"):
     if not yes or not isinstance(value, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", value):
         raise Refusal("clear yes and full 64-hex preview digest required")
     value = value.lower()
@@ -124,21 +167,22 @@ def apply(value, yes):
                 or saved["digest"] != value or common.digest(saved["plan"]) != value):
             raise Refusal("digest mismatch; preview again")
         plan = saved["plan"]
-        if (not isinstance(plan, dict) or set(plan) != {"created", "root", "remove", "statusLine", "targets"}
-                or type(plan["remove"]) is not bool or plan["statusLine"] != statusline()):
+        if (not isinstance(plan, dict) or set(plan) != {"host", "created", "root", "remove", "statusLine", "targets"}
+                or host not in HOSTS or plan["host"] != host
+                or type(plan["remove"]) is not bool or plan["statusLine"] != statusline(host=host)):
             raise Refusal("invalid or moved install; preview again")
         if plan["root"] != str(dr.consent_root()):
             raise Refusal("data root changed; preview again")
         if type(plan["created"]) not in (int, float) or not 0 <= time.time() - plan["created"] <= 3600:
             raise Refusal("preview expired; preview again")
         targets = plan["targets"]
-        if not isinstance(targets, list) or not 1 <= len(targets) <= 4:
+        if not isinstance(targets, list) or not 1 <= len(targets) <= (1 if host == "antigravity" else 4):
             raise Refusal("invalid targets")
         ready, identities = [], set()
         for target in targets:
             if not isinstance(target, dict) or set(target) != {"path", "sha256", "mode", "backup"}:
                 raise Refusal("invalid target")
-            path = common.checked_path(target["path"], "claude")
+            path = target_path(target["path"], host)
             folder = stack.enter_context(dr.relocated_folder(path.parent))
             info = os.fstat(folder)
             identity = (info.st_dev, info.st_ino)
@@ -183,16 +227,18 @@ def main():
         parser = common.Parser(description=__doc__)
         commands = parser.add_subparsers(dest="action", required=True)
         pre = commands.add_parser("preview")
+        pre.add_argument("--host", choices=HOSTS, default="claude")
         pre.add_argument("--folder", action="append", default=[])
         pre.add_argument("--remove", action="store_true")
         app = commands.add_parser("apply")
+        app.add_argument("--host", choices=HOSTS, default="claude")
         app.add_argument("--digest", required=True)
         app.add_argument("--yes", action="store_true")
         args = parser.parse_args()
         if args.action == "preview":
-            preview(args.folder, args.remove)
+            preview(args.folder, args.remove, args.host)
         else:
-            apply(args.digest, args.yes)
+            apply(args.digest, args.yes, args.host)
         return 0
     except Refusal as error:
         print("Status-line setup refused: " + str(error), file=sys.stderr)

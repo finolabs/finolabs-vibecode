@@ -20,7 +20,7 @@ support by itself.
 This procedure reports only; it never runs a compaction command or starts a session (advisory, agent judgment). The script and judge are included for standalone skill installs.
 
 **Prepare the handover.** On `prepare`, write goal, decisions, work in progress and next action now; before compaction, use the plugin's `handover_state.py write --session <id>` with the text on stdin, then write back decisions (advisory, agent judgment). The script enforces UTF-8, at most 8 KiB without truncation, private local storage, a 24-hour read lifetime and at most 20 files. The existing `session_start.py` script appends a safe handover only on source `compact`. The handover and session-start scripts belong to the plugin; a standalone skill install keeps the manual
-handover procedure below (advisory, agent judgment), with no automatic re-injection promised.
+handover procedure below (advisory, agent judgment), with no automatic re-injection promised. Vendor docs (07/11/2026; Codex 0.167.0) document SessionStart `source: compact` delivery on both hosts; live plugin delivery remains unverified on every host (sources below).
 
 An agent can read its own context percentage when a fresh, correctly identified snapshot or supported host reading exists. **About 60% is advisory (agent judgment)**: a point to consider a boundary, not the host's compaction threshold, which is usually later (below); never invent a percentage. At task boundaries, use host-exposed usage if available and judge pressure from the work. The following choices are advisory, enforced by agent judgment:
 
@@ -28,7 +28,7 @@ An agent can read its own context percentage when a fresh, correctly identified 
 - A wholly new, independent task starts in a fresh, correctly named session in the matching checkout, with a short verified handover.
 - A finished user story, with its review gate closed, is a natural boundary: prefer a fresh session for the next story with a short handover. A coordinator session whose context is still light may continue (`fnl-delegate`).
 - Delegated agents follow the same rule: start a fresh run with a short handover brief rather than resuming a run that has used much of its window.
-- Without usage telemetry, say so; never invent a percentage or interrupt active work. Claude Code readings: [references/context-reading.md](references/context-reading.md) (advisory, agent judgment; `context_snapshot.py` enforces storage and freshness).
+- Without usage telemetry, say so; never invent a percentage or interrupt active work. Claude Code and Antigravity readings: [references/context-reading.md](references/context-reading.md) (advisory, agent judgment; `context_snapshot.py` enforces storage and freshness).
 
 Before a compaction, a fresh session or the end of the work, write back a decision or lesson that would change what an agent does next time, through the knowledge-base procedure below. A compaction with nothing new to keep carries only the handover.
 

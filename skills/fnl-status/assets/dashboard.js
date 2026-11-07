@@ -264,14 +264,34 @@
       lanes.appendChild(ghosts); lanes.appendChild(t("div", "nodata", "No open dispatches"));
     }
     var quota = r.quota || [], capacity = h("div", "agent-capacity");
-    var limit = Number(r.parallel_limit);
-    limit = Number.isInteger(limit) && limit > 0 ? Math.min(100, limit) : 5;
+    var limit = r.parallel_limit === undefined ? 5 : r.parallel_limit;
+    limit = Number.isInteger(limit) && limit >= 1 && limit <= 32 ? limit : null;
+    var familySlots = r.family_slots, slotRows = [], slotOpen = open.length;
+    if (familySlots !== undefined) {
+      slotOpen = 0;
+      ["claude", "codex", "antigravity"].forEach(function (family) {
+        var row = familySlots && familySlots[family];
+        if (!row || !Number.isInteger(row.open) || row.open < 0 ||
+            (row.cap !== null && (!Number.isInteger(row.cap) || row.cap < 1 || row.cap > limit))) {
+          slotOpen = null; slotRows.push([family, "unknown"]); return;
+        }
+        if (slotOpen !== null) slotOpen += row.open;
+        slotRows.push([family, row.open + " open" + (row.cap === null ? "" : " of cap " + row.cap)]);
+      });
+    }
+    var known = limit !== null && slotOpen !== null, total = limit === null ? "?" : limit;
     var slots = h("div", "slots");
     slots.setAttribute("role", "img"); slots.setAttribute("tabindex", "0");
-    for (var slot = 0; slot < limit; slot++) slots.appendChild(brick(slot < open.length ? "done" : "todo", 18, 10, "slot" + (slot < open.length ? " lit" : "")));
-    tipOn(slots, {title: "slots", rows: [["lit", Math.min(open.length, limit) + " of " + limit]]});
-    slots.setAttribute("aria-label", Math.min(open.length, limit) + " of " + limit + " slots lit");
-    capacity.appendChild(h("div", "capacity-block", [t("div", "capacity-caption", "slots (" + limit + ")"), slots]));
+    for (var slot = 0; slot < (limit || 0); slot++) slots.appendChild(brick(known && slot < slotOpen ? "done" : "todo", 18, 10,
+      "slot" + (known && slot < slotOpen ? " lit" : "")));
+    var lit = known ? Math.min(slotOpen, limit) + " of " + limit : "unknown";
+    if (!known) slots.appendChild(t("span", "nodata", "unknown"));
+    slotRows.unshift(["lit", lit]);
+    if (r.parallel_source === "default" || r.parallel_source === "host config" || r.parallel_source === "unknown")
+      slotRows.push(["source", r.parallel_source]);
+    tipOn(slots, {title: "slots", rows: slotRows});
+    slots.setAttribute("aria-label", known ? lit + " slots lit" : "parallel slots unknown");
+    capacity.appendChild(h("div", "capacity-block", [t("div", "capacity-caption", "slots (" + total + ")"), slots]));
     var live = r.live || {}, liveMarks = h("div", "live-sessions");
     ["claude", "codex", "antigravity"].forEach(function (family) {
       var value = live[family], count = Number.isInteger(value) && value >= 0 ? Math.min(99, value) : "?";
@@ -311,7 +331,7 @@
     TABS.get("now").tableRows.push(tableOf("live sessions", ["family", "active in last 15 min"],
       ["claude", "codex", "antigravity"].map(function (family) { return [family, live[family] == null ? "unknown" : live[family]]; })));
     TABS.get("now").tableRows.push(tableOf("agent state", ["measure", "count"], [
-      ["running now", open.length], ["parallel slots", limit], ["past the check time", late], ["not started by coordinator", unowned],
+      ["running now", open.length], ["parallel slots", limit === null ? "unknown" : limit], ["past the check time", late], ["not started by coordinator", unowned],
       ["named processes", available ? processes.length : "unavailable"],
       ["app processes", available ? Object.keys(snapshot.apps || {}).reduce(function (sum, family) { return sum + snapshot.apps[family]; }, 0) : "unavailable"]]));
     if (available) TABS.get("now").tableRows.push(tableOf("process roots", ["family", "elapsed seconds", "descendants", "coordinator match"], processes.map(function (p) {

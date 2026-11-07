@@ -8,9 +8,11 @@ The quota probe of release 0.1.8 (`release-0.1.8.md` package 13) reads each agen
 worker that the session-start and `PostToolUse` hooks start when a cache is older than 4 hours. The owner rejected
 that timer on 2026-11-07: a periodic background run is not wanted, and what the coordinator needs is a fresh answer
 at the moment it decides whom to delegate to. Checking the documentation of Claude Code the same day showed that
-hooks do not receive quota or rate-limit state; only the status line input carries `rate_limits`, and the
+hooks do not receive a quota snapshot; the status line input carries `rate_limits`, and the
 `StopFailure` hook event reports `error: rate_limit` without a reset time. A fixed Homebrew prefix also blocked the
 Codex probe: `/opt/homebrew` is a git work tree, and the executable check refuses any executable inside one.
+
+Claude Code [official hooks docs](https://code.claude.com/docs/en/hooks.md), researched 07/11/2026, verify the StopFailure stdin contract: common `session_id`, `transcript_path`, `cwd`, always-present `error`, optional `error_details` and `last_assistant_message`. The rate-limit value is exactly `rate_limit`; other documented values include `overloaded`, `authentication_failed`, `billing_error`, `server_error`, `max_output_tokens` and `unknown`. StopFailure receives no token counts and ignores hook output and exit code. This verifies the vendor contract only; no live event or plugin delivery was verified by this research.
 
 ## Decisions settled (owner, 2026-11-07)
 
@@ -46,7 +48,7 @@ Codex probe: `/opt/homebrew` is a git work tree, and the executable check refuse
 
 ## B. The rate-limit marker
 
-- One new hook entry in the Claude plugin manifest (not Codex, not Antigravity) for the `StopFailure` event, running a small script. It reads the event input (capped at 64 KiB, JSON) and writes only when `error` equals the exact string `rate_limit`. It reads the canonical `host.md` (no-follow, owned by the user) to check `Quota probe: on` and `FNL_QUOTA_PROBE`, and `state/quota/limits.json` (private folder, mode 0600, no-follow, owner-checked) under an exclusive lock, then replaces it atomically with `{claude: <UTC time>}`. It runs no process and sends nothing. It exits 0 on every path; fails closed means no write. The payload shape is pinned by a test fixture (unverified against a live event; a real one is captured before release).
+- One new hook entry in the Claude plugin manifest (not Codex, not Antigravity) for the `StopFailure` event, running a small script. It reads the event input (capped at 64 KiB, JSON) and writes only when `error` equals the exact string `rate_limit`. It reads the canonical `host.md` (no-follow, owned by the user) to check `Quota probe: on` and `FNL_QUOTA_PROBE`, and `state/quota/limits.json` (private folder, mode 0600, no-follow, owner-checked) under an exclusive lock, then replaces it atomically with `{claude: <UTC time>}`. It runs no process and sends nothing. It exits 0 on every path; fails closed means no write. The payload shape is pinned by a test fixture and supported by vendor docs (07/11/2026), but remains unverified against a live event; a real one is captured before release.
 - The marker is advisory. A repository can influence the error (for example through a project `ANTHROPIC_BASE_URL`), and the marker is per family, so one limited install marks all Claude installs. Therefore a newer successful `read` of the family overrides the marker, it excludes the family only from routing offers, and the user's statement wins.
 - Expiry, single rule: out of quota until the family's cached reset time when that lies in the future and within five hours after the marker; otherwise one hour after the marker; never longer than five hours. A test pins both cases and the override.
 - Codex and Antigravity get no marker (no documented equivalent was found); their on-demand reading is the signal.

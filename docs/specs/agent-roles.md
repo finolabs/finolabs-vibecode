@@ -4,7 +4,7 @@ Status: in progress; release 0.2.0 scripts and local tests are implemented; rela
 
 ## Why
 
-The plugin ships four agents: `fnl-reviewer`, `fnl-security-reviewer`, `fnl-verifier` and `fnl-steward`. Looking at them
+Before this change, the plugin shipped four agents: `fnl-reviewer`, `fnl-security-reviewer`, `fnl-verifier` and `fnl-steward`. Looking at them
 on 2026-11-07 showed four problems:
 
 1. Reviews are not routed. The two reviewer agents are the entry; each runs its own host's review tool. On Claude Code
@@ -284,7 +284,8 @@ Starting a task cannot be enforced; evidence at the end can. Three pieces:
    Posting defaults to `unverified`. `unknown` means the role reader is unavailable, raises an error or returns a value
    outside its closed vocabulary; it does not mean an absent assignment.
 2. **`route_task.py`** (script): applies the decision matrix of `fnl-delegate` to a kind and a grade and prints the
-   agent, model and effort. Grading difficulty is the one semantic judgment; it goes to the judge (part I) with the
+   tier, effort, budget, run form and family order. The implemented helper prints `model=coordinator`:
+   presence, allowed models, quota and the final model selection remain coordinator responsibilities. Grading difficulty is the one semantic judgment; it goes to the judge (part I) with the
    coordinator free to override. The agent runs one command.
 3. **Router marker.** A pull request body carries one line matching exactly
    `^<!-- fnl-router depth=(MIN|NORMAL|DEEP) trigger=(none|contract|security|privacy|permission|migration|dependency|uncertainty|consumers|irreversible|calculation|prediction|input) -->$`

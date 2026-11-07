@@ -45,9 +45,10 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    Enforcer: the script; the host config only holds names.
    **Residual risk (stated, not solved):** `HOME` stays, so credential files the child can read under it
    (`~/.npmrc`, `~/.aws`, `~/.netrc`, the GitHub CLI hosts file, other agents' config folders, the plugin's data root,
-   keychain-backed helpers) remain reachable. `fnl-setup` offers an opt-in private `HOME` for a family (a per-run
-   folder holding only what that agent's login store needs); a sandbox that hides the paths is the stronger option
-   where the host has one. Until the user chooses, the report to the user says the protection is environment-only.
+   keychain-backed helpers) remain reachable. A private `HOME` for a family (a per-run folder holding only
+   what that agent's login store needs) is a proposed option, not implemented or offered by current setup; the owner
+   decision below remains open. A sandbox that hides the paths is the stronger option where the host has one.
+   The report to the user says the current protection is environment-only.
 3. **Delegates and test commands start through one helper.** `run_env.py` (new here; package B's `verify_claim.py`
    currently carries its own scrub of `TYPESAFE_API_KEY` and `GIT_*` and moves to it) builds the allowlisted
    environment for `delegate_env.py` and `verify_claim.py`. A test greps the plugin's scripts and fails when a script

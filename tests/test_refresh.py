@@ -30,7 +30,7 @@ class RefreshTest(unittest.TestCase):
         self.dir = self.home / ".finolabs/vibecode/state"
         self.ledger = self.home / ".finolabs/vibecode/ledger.jsonl"
         self.ledger.parent.mkdir(parents=True)
-        self.env = {**os.environ, "HOME": str(self.home), "FNL_STATE_DIR": str(self.dir), "ORCHESTRATION_LEDGER": str(self.ledger)}
+        self.env = {"PATH": os.defpath, "HOME": str(self.home), "FNL_STATE_DIR": str(self.dir), "ORCHESTRATION_LEDGER": str(self.ledger)}
         self.env.pop("FNL_METRICS", None)
         self.at = datetime.now(timezone.utc)
 
@@ -482,6 +482,53 @@ class RefreshTest(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
+
+    def test_parallel_capacity_canonical_config_multiple_runs_and_default_source(self):
+        self.consent()
+        host = self.ledger.parent / 'host.md'
+        host.write_text('## Limits\n- Parallel dispatches: at most 12 at one time.\n'
+                        '- Parallel per family: codex=3, claude=4\n')
+        rows = [dict(event='start', id=str(n), ts=self.at.isoformat(), project='demo', task='t',
+                     kind='implement', grade='hard', model='m', reason='routing', agent=agent)
+                for n, agent in enumerate(('claude-session', 'subagent', 'codex', 'codex', 'codex'))]
+        self.ledger.write_text('\n'.join(map(json.dumps, rows)))
+        original = self.ledger.read_bytes()
+        self.refresh('run')
+        block = self.data()['running']
+        self.assertEqual(block['parallel_limit'], 12)
+        self.assertEqual(block['parallel_source'], 'host config')
+        self.assertEqual(block['family_slots'], dict(claude=dict(open=2, cap=4), codex=dict(open=3, cap=3),
+                                                   antigravity=dict(open=0, cap=None)))
+        self.assertEqual(original, self.ledger.read_bytes())
+        host.write_text('## Limits\n- Parallel dispatches: invalid\n')
+        self.refresh('run')
+        block = self.data()['running']
+        self.assertEqual((block['parallel_limit'], block['parallel_source']), (5, 'default'))
+        host.chmod(0o666)
+        self.refresh('run')
+        block = self.data()['running']
+        self.assertEqual((block['parallel_limit'], block['family_slots'], block['parallel_source']),
+                         (None, None, 'unknown'))
+
+    def test_slot_metrics_validates_numeric_schema_and_projects_only_known_fields(self):
+        module = self.running_module()
+        state = dict(limit=8, source='host config', families={
+            family: dict(open=2, cap=None, private='PRIVATE') for family in module.ps.FAMILIES})
+        with mock.patch.object(module.ps, 'status', return_value=state):
+            result = module.slot_metrics()
+        self.assertNotIn('PRIVATE', json.dumps(result))
+        self.assertEqual(set(result), {'parallel_limit', 'family_slots', 'parallel_source'})
+        with mock.patch.object(module.ps, 'status', side_effect=RecursionError):
+            self.assertIsNone(module.slot_metrics()['parallel_limit'])
+        for field, value in [('limit', True), ('limit', 33), ('limit', '8'), ('source', 'PRIVATE')]:
+            bad = dict(state, **{field: value})
+            with mock.patch.object(module.ps, 'status', return_value=bad):
+                self.assertEqual(module.slot_metrics()['parallel_source'], 'unknown')
+        for field, value in [('open', True), ('open', -1), ('open', '2'), ('cap', True), ('cap', 0), ('cap', 9)]:
+            bad = dict(state, families={**state['families'], 'codex': dict(open=2, cap=None)})
+            bad['families']['codex'][field] = value
+            with mock.patch.object(module.ps, 'status', return_value=bad):
+                self.assertIsNone(module.slot_metrics()['parallel_limit'])
 
     def test_live_sessions_distinct_window_boundary_future_and_cap(self):
         module = self.running_module()

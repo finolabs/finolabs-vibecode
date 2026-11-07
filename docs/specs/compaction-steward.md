@@ -27,7 +27,7 @@ in a fresh session. A script decides; the model only judges "safe boundary?".
 - The compaction summary is written by the host model; a script controls only
   when to ask and what is re-injected afterwards.
 
-Context numbers can now come from the opt-in Claude status-line [context snapshot](context-snapshot.md); missing or stale readings never supply invented counts.
+Context numbers can now come from the opt-in Claude Code and Antigravity status-line [context snapshot](context-snapshot.md); missing or stale readings never supply invented counts. Codex 0.167.0 exposes context telemetry through app-server and built-in TUI items, not an external JSON status-line command; this recorder does not cover it (vendor docs and pinned source, 07/11/2026; details in the snapshot spec).
 
 ## Parts
 
@@ -52,8 +52,8 @@ Context numbers can now come from the opt-in Claude status-line [context snapsho
 ### 2. Re-injection
 
 No hook file changes: the existing `session_start.py` entry already runs on
-`compact` in Claude Code (its matcher lists it) and on every start in Codex, so
-adding an entry would only make Codex hooks need trust again. `session_start.py`
+`compact` in Claude Code (its matcher lists it) and on every start in Codex. However,
+changing bundled scripts can also require renewed Codex trust even with unchanged declarations (normalized event/matcher/handler plus bundle-byte fingerprint, pinned `rust-v0.167.0` source, 07/11/2026). `session_start.py`
 reads the hook input from stdin (bounded, 64 KiB); when `source` is `compact` and
 a `session_id` is present it appends the output of the `read` function of
 `handover_state.py` under the heading `Handover before compaction`. It exits 0 and
@@ -61,8 +61,11 @@ fails closed (adds nothing) on any error, uses no network, and leaves its existi
 output unchanged.
 `precompact.py` text becomes: "Before compaction, write the handover (goal,
 decisions, work in progress, next action) with handover_state.py write, then
-write back decisions." Delivery of hook output to the model remains unverified
-per host and is stated as such.
+write back decisions." Claude Code PreCompact stdout feeds summary instructions (up to 10,000 characters), not documented as added to model context. **On Codex a plain-text reminder does not reach the model**: PreCompact and PostCompact ignore plain stdout. Thus the agent must write the handover on `prepare`, before compaction (advisory, agent judgment); this reminder is no guarantee of a write.
+
+SessionStart with `source: compact` is the documented delivery path on both hosts. Claude Code adds stdout to model context, including after compact; Codex 0.167.0 adds plain stdout or JSON `additionalContext` as developer context before the next model request. Codex SessionStart input includes `session_id`, nullable `transcript_path`, `cwd`, `hook_event_name`, `model`, `permission_mode`, and `source` (`startup`, `resume`, `clear`, `compact`, `fork`). Claude PostCompact receives `trigger` and `compact_summary`.
+
+Sources: Claude Code [hooks](https://code.claude.com/docs/en/hooks.md) and [context-window docs](https://code.claude.com/docs/en/context-window.md), Codex [hooks docs](https://learn.chatgpt.com/docs/hooks) and pinned [rust-v0.167.0 source](https://github.com/openai/codex/tree/rust-v0.167.0), researched 07/11/2026. These verify vendor contracts only; live delivery/order of this plugin remains unverified.
 
 ### 3. Steward check (the threshold decision)
 

@@ -8,6 +8,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add advisory parallel-slot reporting and checks (`parallel_slots.py`) with a user-selected total and optional per-family caps.
 - Add user-assigned code review, security review, navigator and judge roles, with deterministic review routing that prefers another author family and reports same-family fallbacks.
 - Add a guarded review-posting wrapper that checks the repository, marker, draft location and size, with observed posting state and an explicit coordinator relay procedure. Relay receipts and dashboard relay counters are not built yet; the temporary relay fallback is uncounted until they are.
 - Add `fnl-navigator` and bounded course-check evidence to compare work against confirmed outcome anchors and report drift without editing the project.
@@ -16,10 +17,16 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Add `route_task.py` for the delegation matrix and a read-only session-start summary of delegation, roles, posting state, cached quota and open dispatches.
 - Add brief lint, allowlisted headless environments and guarded local log scanning, display and redaction, with fixed ledger scan states and a stated residual risk from reachable HOME credential files.
 - Add per-repository work tracking, confirmed outcome anchors and bounded one-file work records alongside Spec Kit artifacts.
-- Add opt-in Claude Code context snapshots: a status-line recorder stores only token counts, `read` and `check` give the compaction steward a fresh real reading, and session start shows it. Setup writes the status line only when none exists, after a previewed, digest-approved plan, and otherwise prints a recipe for a user-owned one. Codex and Antigravity are not covered.
+- Add opt-in Claude Code context snapshots: a status-line recorder stores only token counts, `read` and `check` give the compaction steward a fresh real reading, and session start shows it. Setup writes the status line only when none exists, after a previewed, digest-approved plan, and otherwise prints a recipe for a user-owned one. Antigravity is covered through its own status line with a separate previewed installer; Codex is not covered.
 
 ### Changed
 
+- Refresh the architecture and task-lifecycle diagrams (dark and light, and the README images) for parallel agent pools, context snapshots, the newest skills and the status board.
+- Rewrite every setup approval question in plain words: each one says what saying yes changes and where, what stays untouched on no, and how to undo it, with outcome-worded neutral choices (nothing preselected or recommended). A new test keeps the shape from rotting. The plain-words term list moves to `plain-terms.md`.
+- State that a delegated run's label carries the agent family and its short model name in the task description, wrapper and log names, and note that the process snapshot shows the family only while dispatch lanes show the model.
+- Let the status board page scroll with the browser's own scrollbar (no inner height cap), and scope the `fnl-status` skill's reply to the repository it runs in; `ledger.py open` takes `--project` for that, and other repositories stay on the dashboard.
+- Correct the documented host contracts for compaction delivery, context telemetry, hook trust and StopFailure against vendor documentation, keeping the live-verification limits stated.
+- Treat agent families as pools of concurrent runs: independent tasks may use several runs of one family up to the limit, and capacity appears in setup, session start and the dashboard.
 - Make the status board easier to read: running dispatches show their repository, quota pools show the model name beside the window icon, times appear as local, human-readable text (today 18:09, in 2d 5h), and the word project becomes repositories.
 - Restructure `/fnl-setup` into a short core with `add <feature>`, `instructions`, `check`, `scan` and `mode`, using user and project scopes and separate consent for every grant.
 - Offer Quick setup with recommended inert defaults and companion selection, or Advanced interviews and optional features, with checked install commands that install nothing automatically.

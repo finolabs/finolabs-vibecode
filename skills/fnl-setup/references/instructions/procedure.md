@@ -10,7 +10,7 @@ Ask one scope question, recommendation first: user for a bare invocation or pref
 - Project scope: the repository root, documented build and test commands and conventions, existing context files and overrides, and the `## Agent skills` block written by the core path. Read and preserve those entries; if missing, point to `/fnl-setup` and leave adoption pending. Run the look-first procedure in [../work-tracking.md](../work-tracking.md) before the work tracking interview.
 - Something that cannot be checked here is listed as unverified in one line, with a request that the user paste its contents; missing permissions are not a reason to stop.
 
-Done when the message lists the files found, their sizes, duplication and what is unverified, and ends with the first round of questions, each with a recommended answer. Interview by [../interview.md](../interview.md): map the decisions, look up facts yourself, ask every ready decision in one numbered round, finish with a read-back and a yes. For user scope go section by section through the template; for project scope settle commands, conventions, adopted gates, skill pointers and any migration into `AGENTS.md`, settling each decision once in its own scope. Prefer existing files: ask only about gaps, conflicts and stale lines.
+Done when the message lists the files found, their sizes, duplication and what is unverified, and ends with the first round of questions, with recommended answers for preferences only; approvals stay neutral. Interview by [../interview.md](../interview.md): map the decisions, look up facts yourself, ask every ready decision in one numbered round, finish with a read-back and a yes. For user scope go section by section through the template; for project scope settle commands, conventions, adopted gates, skill pointers and any migration into `AGENTS.md`, settling each decision once in its own scope. Prefer existing files: ask only about gaps, conflicts and stale lines.
 
 ## 2. Work tracking (project scope)
 
@@ -41,7 +41,12 @@ Enforcers: agent judgment while drafting (advisory), then `/fnl-setup check` mea
 
 1. Count each proposed file's lines and bytes against the host limits in `hosts.md` (Claude Code 200 lines, Codex 32 KiB for the whole chain, Antigravity 24,000 bytes per file after includes), flagging any file over a limit or the 150-line house limit (advisory). For user scope recommend a layout with one source of truth.
 2. Save each draft to a scratch file, then for every file run `python3 -I <this skill folder>/scripts/instructions_write.py preview --target <path> --content-file <draft>`. For the `## Agent skills` or `## Work tracking` block add `--block "Agent skills"` or `--block "Work tracking"`, with the block text alone in the draft; the script replaces only that section. Show the diff and the full `Digest:`.
-3. **Advisory (agent judgment):** Ask for each file: "Write this instruction file?" Only after that file's clear yes (neutral Yes and No, none preselected) run `instructions_write.py apply --digest <full 64-hex digest> --yes`. Never write an instruction file in either scope without that file's explicit yes; these files steer future sessions.
+3. **Advisory (agent judgment):** Get explicit yes. Ask for each file: "Save these instructions for future AI sessions in the scope shown?"
+Yes: Write only the shown file or block at the shown user or repository location, with a backup. Saving sends nothing; future sessions load it through their AI provider.
+No: Leave this file unchanged; ask later. Other files still need their own approval.
+Undo: Restore the named backup; remove a newly created file if no longer wanted.
+Choices: "Yes, save this file" / "No, leave this file unchanged".
+Only after that file's clear yes (neutral Yes and No, none preselected) run `instructions_write.py apply --digest <full 64-hex digest> --yes`. Never write an instruction file in either scope without that file's explicit yes; these files steer future sessions.
 
 Enforcers: the script. It writes only the closed list of targets (the user-level files `hosts.md` names, and `AGENTS.md`, `CLAUDE.md`, `CLAUDE.local.md` at the git top level), refuses a symlink at the target or any folder below its base, refuses when the content digest differs from the one shown or the file changed after the preview, expires the plan after 60 minutes, writes atomically (owner-only for a new file) and keeps a backup `<file>.bak-YYYYMMDD`, then `-2`, `-3`, never overwriting one. Reading the result back is agent judgment.
 

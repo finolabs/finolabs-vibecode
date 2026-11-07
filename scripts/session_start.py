@@ -130,12 +130,21 @@ def open_dispatches():
         return "unknown"
 
 
+def parallel_words():
+    try:
+        from parallel_slots import summary
+        return summary()
+    except Exception:
+        return "unknown"
+
+
 def state_block():
     return ("\nPlugin state (local files; fixed words and counts only)\n"
             f"Delegation mode: {delegation_word()}\n"
             f"Roles: {roles_words()}\n"
             f"Quota (cached): {quota_words()}\n"
-            f"Open ledger dispatches: {open_dispatches()}\n")
+            f"Open ledger dispatches: {open_dispatches()}\n"
+            f"Parallel slots: {parallel_words()}\n")
 
 
 def main():

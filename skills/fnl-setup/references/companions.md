@@ -13,14 +13,16 @@ Optional data for the `companions` feature; questions are advisory (agent judgme
 | `markmap` | [finolabs/markmap-skills](https://github.com/finolabs/markmap-skills/tree/v0.2.0), MIT | v0.2.0 | `DISABLE_TELEMETRY=1 npx skills@1.5.20 add https://github.com/finolabs/markmap-skills/tree/v0.2.0 --skill markmap` | 2026-11-07 |
 | `security-audit` | [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill), MIT | none (no release/tag) | `DISABLE_TELEMETRY=1 npx skills@1.5.20 add https://github.com/cloudflare/security-audit-skill --skill security-audit` | 2026-11-07 |
 
+These are preferences for choosing offers: no file changes, consent or installation follows an answer; setup sends nothing. Skip or revise later. Installation commands have their own approval.
+
 ## Questions and selection data
 
 | Skill | Question text | Quick selection condition | Data note and fallback |
 | --- | --- | --- | --- |
-| `agybird` | What would you delegate to Antigravity from Claude Code or Codex? | delegating work to Antigravity | Task/context goes to Google's CLI with the user's account/subscription; quota applies, no agybird telemetry. Never install in Antigravity. Fallback: plugin delegation or a manual handoff; separate test-command grants stay in `delegation`. |
+| `agybird` | What tasks would you ask Antigravity to do from Claude Code or Codex? | delegating work to Antigravity | Task/context goes to Google's CLI with the user's account/subscription; quota applies, no agybird telemetry. Never install in Antigravity. Fallback: plugin delegation or a manual handoff; separate test-command grants stay in `delegation`. |
 | `vietnamizer` | What Vietnamese documents or posts do your readers need? | writing Vietnamese for readers | Edits reader-facing Vietnamese in the host's model/context; host data policy and token costs apply, not agent text/logs/code. Fallback: host edits manually and checks meaning/voice. |
-| `typesafe-ai` | Would TypeSafe cookbooks help you design bounded judgments? | Advanced only; never selected by Quick | Optional cookbooks, not required for calls: plugin `judge.py` makes the call. Jev separately needs authorized key/budget and sends the bounded payload to TypeSafe; the skill grants neither. Fallback: plugin's host judge; no skill needed. |
-| `diagram-design` | What architecture or flow in your stack needs a diagram? | drawing architecture or flow diagrams | Produces HTML/SVG/PNG in the host; Google Fonts requests and optional browser/export dependencies may access the network; no author telemetry declared. Fallback: host draws Mermaid or plain diagrams. |
+| `typesafe-ai` | Which small decisions would you like TypeSafe’s examples to help you check? | Advanced only; never selected by Quick | Optional cookbooks, not required for calls: plugin `judge.py` makes the call. Jev separately needs authorized key/budget and sends the bounded payload to TypeSafe; the skill grants neither. Fallback: plugin's host judge; no skill needed. |
+| `diagram-design` | Which software parts or steps would you like to see in a diagram? | drawing architecture or flow diagrams | Produces HTML/SVG/PNG in the host; Google Fonts requests and optional browser/export dependencies may access the network; no author telemetry declared. Fallback: host draws Mermaid or plain diagrams. |
 | `markmap` | What notes or outline would you turn into a mind map? | mind maps and outlines | Host processes source text and uses tokens; Node.js/npx rendering may download npm packages; offline HTML embeds libraries, alternative template loads jsDelivr. No bundled server/maintainer daemon. Fallback: host writes a Markdown outline. |
 
 ## Review-instrument data (Advanced only)
