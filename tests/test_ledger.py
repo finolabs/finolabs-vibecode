@@ -211,6 +211,17 @@ class LedgerTest(unittest.TestCase):
         self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--accept-unverified", "--reason", "Synthetic fixture")
         self.assertEqual(self.run_ledger("open").stdout, "")
 
+    def test_open_can_be_limited_to_one_project(self):
+        mine = self.run_ledger(*START).stdout.strip()
+        other = self.run_ledger(*[("other" if value == "demo" else value) for value in START]).stdout.strip()
+        everything = self.run_ledger("open").stdout
+        self.assertIn(mine, everything)
+        self.assertIn(other, everything)
+        scoped = self.run_ledger("open", "--project", "demo").stdout
+        self.assertIn(mine, scoped)
+        self.assertNotIn(other, scoped)
+        self.assertEqual(self.run_ledger("open", "--project", "nothing").stdout, "")
+
     def test_finish_needs_a_start_and_happens_once(self):
         missing = self.run_ledger("finish", "d-missing", "--outcome", "accepted", "--accept-unverified", "--reason", "Synthetic fixture", check=False)
         self.assertNotEqual(missing.returncode, 0)
