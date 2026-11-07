@@ -46,6 +46,6 @@ Committing locally is part of the task when the task calls for it: commit when a
 
 ## Pull request descriptions
 
-When `pr` from [mattpocock/skills](https://github.com/mattpocock/skills) is installed, let it shape the body and keep the verification and review-status lines below.
+When `pr` from [mattpocock/skills](https://github.com/mattpocock/skills) is installed, let it shape the body and keep the verification and review-status lines and the router marker line below.
 
-Summary of the change, how it was verified (commands and results), what was not verified, and the review status (`fnl-review-gate`), each in one to a few lines. Do not copy the changelog entry: `CHANGELOG.md` is the one place that records a public change. End with the attribution line the host asks for.
+Summary of the change, how it was verified (commands and results), what was not verified, and the review status (`fnl-review-gate`), each in one to a few lines. When `fnl-coding-router` routed the work, add its marker on a line of its own, exactly `<!-- fnl-router depth=<MIN|NORMAL|DEEP> trigger=<trigger> -->` with the depth and trigger of its receipt (`fnl-coding-router` "3. Choose the depth"); a repository that adopted `fnl-review-gate` blocks the merge without it (enforcer: its `merge_check.py`). Do not copy the changelog entry: `CHANGELOG.md` is the one place that records a public change. End with the attribution line the host asks for.
