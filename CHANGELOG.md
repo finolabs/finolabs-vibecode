@@ -6,6 +6,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add the navigator agent and `nav_state.py` for bounded course-check evidence, screened judge payloads and collected-reference report checks; the agent requires `judge.py` from the verification package.
+
 - Record opt-in Claude Code StopFailure rate-limit markers as family and time only; Claude Code asks to trust the changed hooks. Codex and Antigravity receive no new hook entry; the live payload remains unverified.
 
 - Add consent-gated per-repository ledger/task settings and bounded one-file work-record pipelines with a shared reader and parser-checked template.
