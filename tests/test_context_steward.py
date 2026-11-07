@@ -84,8 +84,8 @@ class ContextStewardTest(unittest.TestCase):
         for phrase in ("fnl-steward", "prepare", "context_steward.py", "handover_state.py",
                        "host enforces", "advisory (agent judgment)", "unverified on every host", "standalone"):
             self.assertIn(phrase, hygiene)
-        for path in ("fnl-delegate", "fnl-setup"):
-            text = (ROOT / "skills" / path / "SKILL.md").read_text()
+        for path in ("fnl-delegate/SKILL.md", "fnl-setup/references/features/compaction.md"):
+            text = (ROOT / "skills" / path).read_text()
             paragraph = next(p for p in text.split("\n\n") if "fnl-steward" in p)
             self.assertIn("advisory (agent judgment)", paragraph)
 

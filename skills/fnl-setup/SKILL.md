@@ -19,7 +19,7 @@ User scope is everything under the user's account (host config, consent, user-le
 
 A plain sentence ("add quota", "set up my instruction files") only selects what to present and never answers a consent question. A sweeping or ambiguous sentence ("set up everything") gets one clarifying question and opens the core path, never several features at once. Whether Codex passes a word after `$fnl-setup` is unverified, so the sentence path is the contract. Enforcer: agent judgment (advisory); the host flag `disable-model-invocation: true` keeps the skill user-invoked on Claude Code.
 
-Talk in the user's language (questions and option labels too); keep commands, flags, paths and skill names unchanged. Script output stays English. Ask through the host's native question tool as `references/interview.md` says. A delegated or headless run records an open decision and never assumes an answer. All advisory (agent judgment).
+**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged. Script output stays English. Ask through the host's native question tool as `references/interview.md` says. A delegated or headless run records an open decision and never assumes an answer. All advisory (agent judgment).
 
 ## Core path
 

@@ -1,5 +1,8 @@
 """Setup restructure oracle: size limits, the consent inventory, prerequisites and entry forms."""
 import re
+import shutil
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -186,6 +189,32 @@ class EntryAndVocabularyTests(unittest.TestCase):
         self.assertIn("exactly one of `configured`, `missing` or `unverified`", check)
         for word in ("roles", "judge", "review posting"):
             self.assertIn(word, check)
+
+
+class ParityBuildTests(unittest.TestCase):
+    def test_parity_builder_packages_the_surviving_setup_skill(self):
+        # Execute a copied builder in a synthetic checkout; never rewrite real eval plugins.
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            checkout = base / "checkout"
+            (checkout / "scripts").mkdir(parents=True)
+            shutil.copy2(ROOT / "scripts/build-parity-plugins.sh", checkout / "scripts")
+            shutil.copytree(SKILL, checkout / "skills/fnl-setup")
+            upstream = base / "upstream"
+            grilling = upstream / "skills/productivity/grilling"
+            grilling.mkdir(parents=True)
+            (grilling / "SKILL.md").write_text("# Grilling fixture\n")
+            result = subprocess.run(["bash", str(checkout / "scripts/build-parity-plugins.sh"), str(upstream)],
+                                    capture_output=True, text=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for path, with_grilling in (("parity-interview-ours/plugins/ours", False),
+                                        ("parity-interview-with-grilling/plugins/with-grilling", True)):
+                plugin = checkout / "evals" / path
+                self.assertEqual((plugin / "skills/fnl-setup/SKILL.md").read_bytes(), (SKILL / "SKILL.md").read_bytes())
+                self.assertEqual((plugin / "skills/fnl-setup/scripts/instructions_write.py").read_bytes(),
+                                 (SKILL / "scripts/instructions_write.py").read_bytes())
+                self.assertEqual((plugin / "skills/grilling/SKILL.md").is_file(), with_grilling)
+                self.assertFalse((plugin / "skills/fnl-setup-instructions").exists())
 
 
 if __name__ == "__main__":

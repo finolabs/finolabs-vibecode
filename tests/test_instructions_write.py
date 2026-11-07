@@ -134,6 +134,30 @@ class InstructionsWriteTest(unittest.TestCase):
         self.refused("preview", "--target", str(link), "--content-file", str(self.content))
         self.assertEqual(real.read_text(), "keep\n")
 
+    def test_refuses_parent_traversal_before_normalising(self):
+        link = self.repo / "link"
+        link.symlink_to(self.outside, target_is_directory=True)
+        for target in (link / ".." / "AGENTS.md", self.repo / ".." / "repo" / "AGENTS.md"):
+            with self.subTest(target=target):
+                self.refused("preview", "--target", str(target), "--content-file", str(self.content))
+        self.assertFalse((self.repo / "AGENTS.md").exists())
+        self.assertFalse(self.plans.exists())
+
+    def test_refuses_project_target_reached_through_symlink(self):
+        link = self.outside / "repo-link"
+        link.symlink_to(self.repo, target_is_directory=True)
+        for target in (link / "AGENTS.md", Path(os.path.relpath(link / "AGENTS.md", self.repo))):
+            with self.subTest(target=target):
+                self.refused("preview", "--target", str(target), "--content-file", str(self.content))
+        self.assertFalse((self.repo / "AGENTS.md").exists())
+        self.assertFalse(self.plans.exists())
+
+    def test_relative_project_targets_still_work(self):
+        for target in ("AGENTS.md", "./CLAUDE.md", "CLAUDE.local.md"):
+            digest, _ = self.preview(target)
+            self.assertEqual(self.apply(digest, "--yes")[0], 0)
+            self.assertEqual((self.repo / target).read_text(), self.content.read_text())
+
     def test_refuses_symlink_created_after_preview(self):
         target = self.repo / "AGENTS.md"
         digest, _ = self.preview(target)

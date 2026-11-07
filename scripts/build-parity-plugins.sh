@@ -9,7 +9,7 @@ build() {
   rm -rf "$dest"
   mkdir -p "$dest/.claude-plugin" "$dest/skills"
   printf '{\n  "name": "finolabs-vibecode",\n  "version": "0.0.0-parity"\n}\n' > "$dest/.claude-plugin/plugin.json"
-  cp -R "$root/skills/fnl-setup-instructions" "$dest/skills/"
+  cp -R "$root/skills/fnl-setup" "$dest/skills/"
   if [ "$with_grilling" = yes ]; then
     cp -R "$upstream/skills/productivity/grilling" "$dest/skills/grilling"
   fi

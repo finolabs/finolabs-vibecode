@@ -17,6 +17,8 @@ import unittest
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from unittest import mock
 
+from tests.test_shared_copies import ci_copy_groups
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import quota_probe as qp
@@ -1176,10 +1178,9 @@ class CopiesTest(unittest.TestCase):
     def test_all_copies_identical_and_listed(self):
         actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob("quota_probe.py")}
         self.assertEqual(actual, set(COPIES))
-        ci = (ROOT / ".github/workflows/validate.yml").read_text()
+        self.assertEqual(next(group for group in ci_copy_groups() if "scripts/quota_probe.py" in group), COPIES)
         for name in COPIES:
             self.assertEqual((ROOT / name).read_bytes(), (ROOT / COPIES[0]).read_bytes())
-            self.assertIn('"' + name + '"', ci)
 
     def test_fixtures_have_no_identity_or_path(self):
         for path in FIXTURES.glob("*.json"):

@@ -67,14 +67,18 @@ def git_top():
 
 def allowed(target):
     """Return (base folder, relative parts) when the target is on the closed list, else refuse."""
+    if ".." in Path(target).parts:
+        raise Refusal("parent traversal is not allowed in the target")
     path = os.path.abspath(target)
     home = str(dr.account_home())
     rel = Path(path).relative_to(home).parts if path.startswith(home.rstrip("/") + "/") else None
     if rel is not None and rel in USER_TARGETS:
         return home, rel
     top = git_top()
-    if top is not None and Path(path).name in PROJECT_TARGETS and os.path.realpath(os.path.dirname(path)) == top:
-        path = os.path.join(top, Path(path).name)
+    parent = os.path.dirname(path)
+    if top is not None and Path(path).name in PROJECT_TARGETS and os.path.realpath(parent) == top:
+        if parent != os.path.realpath(parent):
+            raise Refusal("a symlink lies on the path to the project target")
         return top, (Path(path).name,)
     raise Refusal("target is not on the allowed list (user-level instruction files, or AGENTS.md, CLAUDE.md, "
                   "CLAUDE.local.md at the repository top level)")
