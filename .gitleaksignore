@@ -1,0 +1,2 @@
+# Synthetic private-key fixture in the history of the navigator tests (commit d609267); the current file builds it by concatenation.
+d6092677724dee752aeacdf63e8fcc036082bef0:tests/test_nav_state.py:private-key:259
