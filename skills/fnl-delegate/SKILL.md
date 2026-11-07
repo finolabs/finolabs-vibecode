@@ -37,7 +37,7 @@ Read [references/capabilities-and-budget.md](references/capabilities-and-budget.
 
 ## Parallel dispatch
 
-Read [references/parallel-dispatch.md](references/parallel-dispatch.md) for this step.
+Read [references/parallel-dispatch.md](references/parallel-dispatch.md) for family pools and advisory slots.
 
 ## Budget and liveness
 

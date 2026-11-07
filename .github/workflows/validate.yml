@@ -94,6 +94,7 @@ jobs:
                     ["scripts/verify_claim.py", "skills/fnl-verification/scripts/verify_claim.py"],
                     ["scripts/record.py", "skills/fnl-coding-router/scripts/record.py", "skills/fnl-delegate/scripts/record.py", "skills/fnl-verification/scripts/record.py"],
                     ["scripts/context_steward.py", "skills/fnl-session-hygiene/scripts/context_steward.py"],
+                    ["scripts/parallel_slots.py", "skills/fnl-delegate/scripts/parallel_slots.py", "skills/fnl-status/scripts/parallel_slots.py"],
                     ["scripts/context_snapshot.py", "skills/fnl-session-hygiene/scripts/context_snapshot.py"],
                     ["scripts/statusline_setup.py", "skills/fnl-setup/scripts/statusline_setup.py"],
                     ["scripts/compact_setup.py", "skills/fnl-setup/scripts/compact_setup.py"],

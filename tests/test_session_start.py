@@ -23,8 +23,9 @@ ROLES_UNKNOWN = ("Roles: code review unknown; security review unknown; navigator
                  "posting claude unknown, codex unknown, antigravity unknown\n")
 ROLES_DEFAULT = ("Roles: code review unassigned; security review unassigned; navigator unassigned; judge host; "
                  "posting claude unverified, codex unverified, antigravity unverified\n")
+SLOTS_DEFAULT = "Parallel slots: 5 free of 5 (claude 0 open, codex 0 open, antigravity 0 open; default)\n"
 STATE_BASELINE = ("\nPlugin state (local files; fixed words and counts only)\n"
-                  "Delegation mode: unknown\n" + ROLES_DEFAULT + "Quota (cached): unknown\nOpen ledger dispatches: 0\n")
+                  "Delegation mode: unknown\n" + ROLES_DEFAULT + "Quota (cached): unknown\nOpen ledger dispatches: 0\n" + SLOTS_DEFAULT)
 
 
 class SyntheticStateTest(unittest.TestCase):
@@ -219,7 +220,16 @@ class StateBlockTest(SyntheticStateTest):
 
     def test_no_host_config_no_quota_and_no_ledger(self):
         self.assertEqual(self.state(), "Delegation mode: suggest\n" + ROLES_DEFAULT + "Quota (cached): no reading\n"
-                                       "Open ledger dispatches: 0\n")
+                                       "Open ledger dispatches: 0\n" + SLOTS_DEFAULT)
+
+    def test_parallel_slots_from_canonical_synthetic_state(self):
+        self.write("host.md", "## Limits\n- Parallel dispatches: at most 6 at one time.\n"
+                   "- Parallel per family: codex=3\n")
+        records = [dict(event="start", id=str(n), agent=agent)
+                   for n, agent in enumerate(("claude-session", "codex", "codex", "codex"))]
+        self.write("ledger.jsonl", "\n".join(map(json.dumps, records)))
+        self.assertIn("Parallel slots: 2 free of 6 (claude 1 open, codex 3 open of cap 3, "
+                      "antigravity 0 open; host config)\n", self.state())
 
     def test_no_metrics_consent_still_reads_recorded_roles(self):
         self.write("host.md", "## Agents on this machine\n| Codex | yes | x | x | x |\n"
@@ -251,7 +261,7 @@ class StateBlockTest(SyntheticStateTest):
         output = self.state()
         # The oversized cache fails the reader's size check: unknown, not a reading.
         self.assertEqual(output, "Delegation mode: suggest\n" + ROLES_DEFAULT + "Quota (cached): unknown\n"
-                                 "Open ledger dispatches: 3\n")
+                                 "Open ledger dispatches: 3\nParallel slots: unknown\n")
         self.write("state/quota/quota.json", json.dumps({"claude": {"bad label": {"measured": "x\x1b"}}}))
         self.assertIn("Quota (cached): no reading\n", self.state())
         for fragment in ("\x1b", "\x07", "owned", "ignore previous", "ZZZ"):
@@ -283,13 +293,13 @@ class StateBlockTest(SyntheticStateTest):
     def test_open_dispatches_are_counted_and_capped(self):
         lines = [{"event": "start", "id": f"d{n}"} for n in range(3)] + [{"event": "finish", "id": "d0"}]
         self.write("ledger.jsonl", "\n".join(json.dumps(line) for line in lines) + "\n")
-        self.assertTrue(self.state().endswith("Open ledger dispatches: 2\n"))
+        self.assertIn("Open ledger dispatches: 2\n", self.state())
         self.write("ledger.jsonl", "\n".join(json.dumps({"event": "start", "id": f"d{n}"}) for n in range(150)))
-        self.assertTrue(self.state().endswith("Open ledger dispatches: 99+\n"))
+        self.assertIn("Open ledger dispatches: 99+\n", self.state())
         self.write("ledger.jsonl", b"\xff\xfe")
-        self.assertTrue(self.state().endswith("Open ledger dispatches: unknown\n"))
+        self.assertIn("Open ledger dispatches: unknown\n", self.state())
         (self.root / "ledger.jsonl").chmod(0o666)
-        self.assertTrue(self.state().endswith("Open ledger dispatches: unknown\n"))
+        self.assertIn("Open ledger dispatches: unknown\n", self.state())
 
     def test_quota_summary_uses_fixed_words_and_capped_percents(self):
         current = self.qp.now().replace(microsecond=0)
@@ -318,7 +328,7 @@ class StateBlockTest(SyntheticStateTest):
                 mock.patch.object(os, "fork", side_effect=AssertionError("fork")) as fork, \
                 mock.patch.object(os, "posix_spawn", side_effect=AssertionError("spawn")) as spawn:
             self.assertEqual(self.state(), "Delegation mode: manual\n" + ROLES_DEFAULT + "Quota (cached): no reading\n"
-                                           "Open ledger dispatches: 1\n")
+                                           "Open ledger dispatches: 1\nParallel slots: unknown\n")
         popen.assert_not_called()
         fork.assert_not_called()
         spawn.assert_not_called()
