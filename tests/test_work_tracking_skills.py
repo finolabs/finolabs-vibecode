@@ -13,13 +13,13 @@ class WorkTrackingSkillsTests(unittest.TestCase):
     def test_scope_question_precedes_the_beginner_offer(self):
         text = read()
         scope = text.index('one scope question, user, project or both')
-        self.assertLess(scope, text.index('Would you like a simpler setup?'))
+        self.assertLess(scope, text.index('Start with only the essential setup questions?'))
         for phrase in ('recommendation first', 'new computer', 'repository that is not set up'):
             self.assertIn(phrase, text[scope - 200:scope + 400])
         self.assertNotIn('Set up, or check what is already set up?', text)
 
     def test_every_feature_has_exactly_one_scope(self):
-        text = read()
+        text = read('references/menu.md')
         expected = {'delegation': 'user', 'roles': 'user', 'quota': 'user', 'metrics': 'user',
                     'compaction': 'user', 'companions': 'user', 'project': 'project'}
         for name, scope in expected.items():
