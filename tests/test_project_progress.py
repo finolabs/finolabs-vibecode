@@ -671,7 +671,7 @@ class ProgressTest(unittest.TestCase):
         privacy = (ROOT / 'PRIVACY.md').read_text()
         for word in ('P1', 'P9', 'spec.md', 'specs/archive', 'Project labels', 'priority number'):
             self.assertIn(word, privacy)
-        setup = (ROOT / 'skills/fnl-setup/SKILL.md').read_text()
+        setup = (ROOT / 'skills/fnl-setup/references/features/project.md').read_text()
         self.assertIn('project_progress.py label --set', setup)
         self.assertIn('## Project labels', setup)
         self.assertIn('## Project labels', (ROOT / 'skills/fnl-delegate/references/host-template.md').read_text())
@@ -865,9 +865,14 @@ class ProgressTest(unittest.TestCase):
         raw = (ROOT / 'scripts/project_progress.py').read_bytes()
         for relative in ('skills/fnl-status/scripts/project_progress.py', 'skills/fnl-setup/scripts/project_progress.py'):
             self.assertEqual(raw, (ROOT / relative).read_bytes())
-        setup = (ROOT / 'skills/fnl-setup/SKILL.md').read_text()
-        for value in ('project progress', 'Task file:', 'Ledger project:', 'FNL_PROGRESS=off', 'project_progress.py off --yes', 'if it cannot be resolved it is off'):
-            self.assertIn(value, setup)
+        metrics = (ROOT / 'skills/fnl-setup/references/features/metrics.md').read_text()
+        for value in ('project progress', 'FNL_PROGRESS=off', '... off --yes', 'if the root cannot be resolved it is off'):
+            self.assertIn(value, metrics)
+        project = (ROOT / 'skills/fnl-setup/references/features/project.md').read_text()
+        self.assertIn('project-settings.md', project)
+        settings = (ROOT / 'skills/fnl-setup/references/project-settings.md').read_text()
+        for value in ('Task file:', 'Ledger project:'):
+            self.assertIn(value, settings)
         for name in ('PRIVACY.md', 'README.md', 'CHANGELOG.md', 'skills/fnl-status/SKILL.md'):
             self.assertIn('FNL_PROGRESS=off', (ROOT / name).read_text())
         self.assertIn('<feature> T<id>', (ROOT / 'skills/fnl-delegate/references/ledger.md').read_text())

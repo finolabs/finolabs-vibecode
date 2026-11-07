@@ -18,7 +18,7 @@ The hook and decision writers read gate opt-in only from `host.md` under the res
 
 A first hook event of 64 KiB or more is allowed without consuming the single deny. A hook killed during a state write may leave a `.auto-gate-<hex>` temporary file in the state folder. These files do not count as decisions or denials; automatic cleanup is not implemented. Stale files can be removed by hand when no writer is active.
 
-Turn the gate off with `/fnl-set-mode auto-gate off` or `FNL_AUTO_GATE=off`.
+Turn the gate off with `/fnl-setup mode auto-gate off` or `FNL_AUTO_GATE=off`.
 
 ## Host limits
 

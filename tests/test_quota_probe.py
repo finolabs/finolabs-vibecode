@@ -17,6 +17,8 @@ import unittest
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from unittest import mock
 
+from tests.test_shared_copies import ci_copy_groups
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import quota_probe as qp
@@ -25,7 +27,7 @@ from tests.data_root_fixture import account
 
 FIXTURES = ROOT / "tests/fixtures/quota"
 COPIES = ["scripts/quota_probe.py", *[f"skills/{name}/scripts/quota_probe.py" for name in
-          ("fnl-setup", "fnl-delegate", "fnl-scan-agents", "fnl-update", "fnl-review-gate")]]
+          ("fnl-setup", "fnl-delegate", "fnl-update", "fnl-review-gate")]]
 MEASURED = qp.timestamp("2026-11-05T09:00:00Z")
 
 
@@ -1095,7 +1097,7 @@ class QuotaTest(unittest.TestCase):
             qp.read_family("agy")
         # Empty PATH ensures the scan can never find a real agent executable.
         env = {"HOME": str(self.home), "PATH": ""}
-        for script, args in (("fnl-scan-agents/scripts/agent_scan.py", ["--host", "codex"]),
+        for script, args in (("fnl-setup/scripts/agent_scan.py", ["--host", "codex"]),
                              ("fnl-setup/scripts/checkup.py", ["--json"])):
             with self.subTest(script=script):
                 result = subprocess.run([sys.executable, "-I", str(ROOT / "skills" / script), *args],
@@ -1176,11 +1178,9 @@ class CopiesTest(unittest.TestCase):
     def test_all_copies_identical_and_listed(self):
         actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob("quota_probe.py")}
         self.assertEqual(actual, set(COPIES))
+        self.assertEqual(next(group for group in ci_copy_groups() if "scripts/quota_probe.py" in group), COPIES)
         for name in COPIES:
             self.assertEqual((ROOT / name).read_bytes(), (ROOT / COPIES[0]).read_bytes())
-        ci = (ROOT / ".github/workflows/validate.yml").read_text()
-        for name in COPIES:
-            self.assertIn('"' + name + '"', ci)
 
     def test_fixtures_have_no_identity_or_path(self):
         for path in FIXTURES.glob("*.json"):
@@ -1207,9 +1207,9 @@ class DocumentationTest(unittest.TestCase):
             self.assertIn(phrase, text)
 
     def test_setup_consent_and_displays(self):
-        text = (ROOT / "skills/fnl-setup/SKILL.md").read_text()
+        text = (ROOT / "skills/fnl-setup/references/features/quota.md").read_text()
         self.assertIn("When the coordinator is about to delegate, and a reading is older than 15 minutes", text)
         self.assertIn("its hooks, plugins and servers run", text)
         self.assertIn("neutral Yes and No", text)
-        for file in ("skills/fnl-setup/scripts/checkup.py", "skills/fnl-scan-agents/scripts/agent_scan.py"):
+        for file in ("skills/fnl-setup/scripts/checkup.py", "skills/fnl-setup/scripts/agent_scan.py"):
             self.assertIn("status_lines()", (ROOT / file).read_text())

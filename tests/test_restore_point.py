@@ -614,7 +614,9 @@ class RestorePointTest(unittest.TestCase):
         self.assertIn(".env", text)
         self.assertIn("mirror clone or bundle", text)
         self.assertIn("never push `refs/finolabs/*`", text)
-        self.assertIn("The 20 skill folders", (ROOT / "skills/fnl-ask/references/map.md").read_text())
+        skill_count = sum(1 for path in (ROOT / "skills").glob("*/SKILL.md"))
+        self.assertEqual(skill_count, 17)
+        self.assertIn(f"The {skill_count} skill folders", (ROOT / "skills/fnl-ask/references/map.md").read_text())
 
     def test_script_source_uses_no_network_push_or_fetch(self):
         source = SCRIPT.read_text(encoding="utf-8").lower()

@@ -374,13 +374,21 @@ class CompactStopSetupTest(unittest.TestCase):
 
     def test_acceptance_4_docs_and_bundled_hooks_unchanged(self):
         setup = (ROOT / 'skills/fnl-setup/SKILL.md').read_text()
-        self.assertIn('**Compaction stop**', setup)
-        self.assertLess(setup.index('**Compaction plan approval.**'), setup.index('**Compaction stop**'))
-        stop = setup.split('**Compaction stop**', 1)[1].split('**Steward explanation.**', 1)[0]
-        for text in ('Advisory (agent judgment)', 'Enforcer:', 'none preselected', 'native question tool', 'system prompt', '--remove', '60-minute'):
+        interview = (ROOT / 'skills/fnl-setup/references/interview.md').read_text()
+        feature = (ROOT / 'skills/fnl-setup/references/features/compaction.md').read_text()
+        self.assertIn('`compaction`', setup)
+        self.assertIn('references/features/<feature>.md', setup)
+        self.assertLess(feature.index('## Native threshold'), feature.index('## Antigravity stop'))
+        self.assertLess(feature.index('## Antigravity stop'), feature.index('## Steward explanation'))
+        stop = feature.split('## Antigravity stop', 1)[1].split('## Steward explanation', 1)[0]
+        for text in ('advisory (agent judgment)', 'Enforcer:', 'system prompt', '--remove', '60-minute'):
             self.assertIn(text, stop)
+        self.assertIn('none preselected', feature)
+        self.assertIn('references/interview.md', setup)
+        self.assertIn('native question tool', interview)
+        self.assertIn('neutral Yes and No', interview)
         self.assertIn('set up', stop)
-        self.assertNotIn('`--config', stop)
+        self.assertNotIn('--config', feature)
         delegate = (ROOT / 'skills/fnl-delegate/SKILL.md').read_text()
         for text in ('agy -p', 'status: ERROR', 'context limit', 'not a model failure',
                      'The conversation is large. Run /compact, or start a fresh session with a short handover, then continue.'):

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Check that cross-references in the skills, agents and docs still resolve.
 
-- README and the ask map list exactly the skill folders; retired names occur only in dated changelog releases or the Unreleased migration mapping.
-- Every `fnl-<name>` in backticks names a skill, an agent or the review marker.
+- README and the ask map list and count exactly the skill folders.
+- Retired names occur only in dated releases, Unreleased migration mappings or
+  the explicitly listed historical setup specs.
+- Every `fnl-<name>` in backticks names a skill, an agent or the review marker,
+  except explicitly retired setup names in the historical specs listed below.
 - Every `fnl-<name>` "Heading" names a heading in that skill or agent.
 - Every `file.md` "Heading" or [file.md](file.md) "Heading" names a heading in that file, in the same skill.
 - Every relative Markdown link points to an existing file.
@@ -28,6 +31,15 @@ RETIRED = {"fnl-" + old: "fnl-" + new for old, new in (
 # Historical specs and released entries retain these names; current callers use the replacements.
 RETIRED_AGENTS = {"fnl-" + old: "fnl-" + new for old, new in (
     ("verifier", "verification"), ("steward", "session-hygiene"))}
+# Setup commands were folded into one skill in 0.2.0. Keep the original
+# decisions in these specs; current surfaces must use the replacement commands.
+SETUP_RETIRED = {"fnl-" + old: "/fnl-setup " + new for old, new in (
+    ("setup-instructions", "instructions"), ("scan-agents", "scan"), ("set-mode", "mode"))}
+SETUP_HISTORY = {
+    "docs/specs/agent-roles.md", "docs/specs/agent-scan-and-consolidation.md",
+    "docs/specs/release-0.1.8.md", "docs/specs/setup-restructure.md",
+    "docs/specs/work-tracking.md",
+}
 RELEASED = re.compile(r"^## \[\d[^\]]*\] - \d{4}-\d{2}-\d{2}$")
 # Agent CLI flags that fnl-delegate cites beside the ledger's.
 AGENT_FLAGS = {"print-timeout", "timeout", "max-turns"}
@@ -105,6 +117,12 @@ def check_names_and_sections(root, docs, problems):
                     if (path == root / "CHANGELOG.md" and name in RETIRED
                             and f"`{name}` → `{RETIRED[name]}`" in line):
                         continue  # the inventory check enforces the mapping's section
+                    if name in SETUP_RETIRED:
+                        if rel.as_posix() in SETUP_HISTORY:
+                            continue
+                        if (path == root / "CHANGELOG.md"
+                                and f"`{name}` → `{SETUP_RETIRED[name]}`" in line):
+                            continue
                     problems.append(f"{rel}:{n}: unknown skill or agent `{name}`")
             for name, title in SECTION.findall(line):
                 if name in known and title not in headings(known[name]):
@@ -243,7 +261,7 @@ def check_review_by(root, problems):
 
 def check_mode_copies(root, problems):
     source = root / "skills/fnl-delegate/scripts/mode.py"
-    for relative in ("scripts/mode.py", "skills/fnl-setup/scripts/mode.py", "skills/fnl-set-mode/scripts/mode.py"):
+    for relative in ("scripts/mode.py", "skills/fnl-setup/scripts/mode.py"):
         copy = root / relative
         if not source.is_file() or not copy.is_file() or source.read_bytes() != copy.read_bytes():
             problems.append(f"{relative}: mode.py copies differ or are missing")
@@ -253,6 +271,9 @@ def check_skill_inventory(root, problems):
     folders = {p.name for p in (root / "skills").iterdir() if p.is_dir()}
     for relative in ("README.md", "skills/fnl-ask/references/map.md"):
         path = root / relative
+        for count in re.findall(r"\b(\d+) skill folders\b", path.read_text()):
+            if int(count) != len(folders):
+                problems.append(f"{relative}: skill count {count} does not match {len(folders)} folders")
         # The canonical skill table lives under Skills, before the next heading.
         section = sections(path).get("Skills", "")
         section = re.split(r"^#{1,6} ", section, maxsplit=1, flags=re.M)[0]
@@ -277,6 +298,17 @@ def check_skill_inventory(root, problems):
                 version, heading = line, ""
             elif line.startswith("### "):
                 heading = line
+            # Check every tracked consumer, including manifests and HTML labels.
+            # Test fixtures may define retired names as input data.
+            if not relative.startswith("tests/"):
+                for old, new in SETUP_RETIRED.items():
+                    if not re.search(r"(?<![\w-])" + re.escape(old) + r"(?![\w-])", line):
+                        continue
+                    released = relative == "CHANGELOG.md" and RELEASED.fullmatch(version)
+                    mapping = (relative == "CHANGELOG.md" and version == "## [Unreleased]"
+                               and heading == "### Removed" and f"`{old}` → `{new}`" in line)
+                    if relative not in SETUP_HISTORY and not released and not mapping:
+                        problems.append(f"{relative}:{n}: retired skill name {old}")
             for old, new in RETIRED.items():
                 if old not in line:
                     continue

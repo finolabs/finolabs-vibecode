@@ -2,7 +2,7 @@
 
 How each agent is dispatched as a delegate, what ends a run, and how its result maps to a ledger outcome. These hold whichever agent coordinates. Exact paths, wrappers and allow-rules for this machine live in the host config (see `SKILL.md`); recheck flags with each CLI's `--help`, since they change between versions.
 
-By agent judgment, dispatch only families recorded present in host config's `Agents on this machine`, as `SKILL.md` "Route" says. A missing section keeps previous routing behavior and suggests `/fnl-scan-agents`; recorded presence never grants reachability, model access or permissions.
+By agent judgment, dispatch only families recorded present in host config's `Agents on this machine`, as `SKILL.md` "Route" says. A missing section keeps previous routing behavior and suggests `/fnl-setup scan`; recorded presence never grants reachability, model access or permissions.
 
 Common to every headless dispatch: run it in the background from the task's worktree, pass the brief from its file, close stdin (`< /dev/null`), wrap it in a hard-cap timer (`timeout`, or `perl -e 'alarm N; exec @ARGV'` where `timeout` is missing; exit 142 or 124 at the cap means `timeout`), and write the log and final message into the logs folder (`.finolabs/logs/`).
 

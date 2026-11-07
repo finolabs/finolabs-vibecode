@@ -15,13 +15,13 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Record opt-in Claude Code StopFailure rate-limit markers as family and time only; Claude Code asks to trust the changed hooks. Codex and Antigravity receive no new hook entry; the live payload remains unverified.
 
 - Add consent-gated per-repository ledger/task settings and bounded one-file work-record pipelines with a shared reader and parser-checked template.
-- Add a project Work tracking interview to `fnl-setup-instructions`, writing only a confirmed agent-context block; `/fnl-setup` separately confirms repository ledger and task-file settings for the dashboard.
+- Add a project Work tracking interview to `/fnl-setup instructions`, writing only a confirmed agent-context block; `/fnl-setup` separately confirms repository ledger and task-file settings for the dashboard.
 - Show delivery pipelines in the Now project pane from Spec Kit artefacts, repository specs/packages and exact-project ledger outcomes, with metadata-only states and a searched-sources fallback tooltip.
 
 ### Changed
 
 - Fold threshold checks into `fnl-session-hygiene` with its self-contained `context_steward.py`; ask the configured judge about an uncertain safe boundary only after the script reports `compact`.
-
+- Fold setup into a short core with optional features and the `instructions`, `scan` and `mode` subcommands; update current command references and skill counts while preserving retired names in historical specs and released entries.
 - Require exactly one valid fnl-router marker line in pull request bodies at merge when the base commit adopted `fnl-review-gate`; missing, malformed or duplicate markers now block. Adoption uses the GitHub contents API without a clone; unreadable adoption data or body, invalid base SHAs, files over 256 KiB or outside UTF-8, and unsupported file types or symlink targets exit 2.
 
 - Read quota on demand before routing with a 15-minute minimum and bounded synchronous per-install commands; replace hook-started workers with advisory rate-limit markers and allow only the checked Homebrew prefix exception.
@@ -35,6 +35,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Restore native-question and neutral-consent wording throughout the restructured setup flow; defaults, timeouts and auto-selected options never grant approval.
+
+- Correct setup starter commands and retired-pointer checks; accept custom Codex instruction folders and Antigravity global rules through the guarded writer. Count all core references against the setup budget while preserving separate consent questions.
+
 - Reject non-ASCII package ordinals and negated completion wording, resolve index status headers, retain progress failure reasons and use “pool” for unnamed quota tooltips.
 - Use the shared done theme token for pipeline package bricks in dark and light themes.
 - Match pipeline stages to theme-aware task colours, back striped labels with solid chips, and use compact review glyphs and icon-first ledger/summary counts.
@@ -45,6 +49,9 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - `fnl-verifier` → `fnl-verification`: callers run its self-contained `verify_claim.py`, read the evidence and decide acceptance as coordinator.
 - `fnl-steward` → `fnl-session-hygiene`: callers follow its Context pressure procedure and threshold script; no separate agent is invoked.
+- `fnl-setup-instructions` → `/fnl-setup instructions`: use the instructions component in the same setup session.
+- `fnl-scan-agents` → `/fnl-setup scan`: use setup to refresh the agent inventory.
+- `fnl-set-mode` → `/fnl-setup mode`: use setup to show or change Delegation mode and Routing.
 
 ## [0.1.10] - 2026-11-06
 
