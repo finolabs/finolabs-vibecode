@@ -1205,7 +1205,7 @@ class DocumentationTest(unittest.TestCase):
 
     def test_setup_consent_and_displays(self):
         text = (ROOT / "skills/fnl-setup/references/features/quota.md").read_text()
-        self.assertIn("When the coordinator is about to delegate, and a reading is older than 15 minutes", text)
+        self.assertIn("Let this plugin check your AI usage limits before sharing work with helpers?", text)
         self.assertIn("its hooks, plugins and servers run", text)
         self.assertIn("neutral Yes and No", text)
         for file in ("skills/fnl-setup/scripts/checkup.py", "skills/fnl-setup/scripts/agent_scan.py"):

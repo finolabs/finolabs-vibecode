@@ -15,39 +15,53 @@ MARKDOWN = [SKILL / "SKILL.md", *sorted(REFS.rglob("*.md"))]
 # (inventory row, consent sentence, home file under references/ or SKILL.md). Each sentence appears exactly once
 # in the whole skill, in its home. Core step 4 (knowledge-base write-back) has no row: it asks nothing new.
 INVENTORY = [
-    (1, "Keep this data root, or move it to a folder you name?", "core.md"),
-    (1, "Copy the existing data to that folder?", "core.md"),
-    (2, "How should I hand work to other AI helpers: manual, suggest, or auto; and should the coding guideline start automatically: on or off?", "mode.md"),
-    (3, "Arm auto delegation, where the coordinator hands independent tasks to other agents without asking each time?", "mode.md"),
-    (3, "Turn the auto gate on?", "mode.md"),
-    (4, "Write this agent inventory section?", "scan.md"),
-    (5, "Fill the host config from the `fnl-delegate` template?", "features/delegation.md"),
-    (5, "Grant Antigravity this exact test command as a remembered allow-rule?", "features/delegation.md"),
-    (6, "When the coordinator is about to delegate, and a reading is older than 15 minutes", "features/quota.md"),
-    (6, "Do you confirm these exact executable paths?", "features/quota.md"),
-    (7, "Which judge should answer semantic questions: Jev, a small model of your host, or none?", "features/roles.md"),
-    (8, "May Check send lines of your instruction files to the judge", "features/roles.md"),
-    (9, "Assign these review roles?", "features/roles.md"),
-    (9, "Set up review posting for this family?", "features/roles.md"),
-    (10, "Record usage metadata, and keep it for how many days?", "features/metrics.md"),
-    (11, "Write the Antigravity metrics hook?", "features/metrics.md"),
-    (12, "Show project progress on the dashboard?", "features/metrics.md"),
-    (13, "Would you like Running now to count processes named claude, codex and agy", "features/metrics.md"),
-    (14, "Would you like help setting a native compaction threshold?", "features/compaction.md"),
-    (14, "Which token value?", "features/compaction.md"),
-    (14, "Apply this compaction plan?", "features/compaction.md"),
-    (15, "Would you like a local hook to stop the start of a new turn", "features/compaction.md"),
-    (15, "Apply this compaction stop preview?", "features/compaction.md"),
-    (16, "Add `.finolabs/` to `.git/info/exclude`?", "core.md"),
-    (17, "Write this `## Agent skills` block?", "core.md"),
-    (18, "Does this repository use Spec Kit, work records or none?", "core.md"),
-    (19, "Save this ledger line?", "features/project.md"),
-    (19, "Save this task file line?", "features/project.md"),
-    (20, "Set this project label?", "features/project.md"),
-    (21, "Write this instruction file?", "instructions/procedure.md"),
-    (22, "What do you do with this plugin?", "features/companions.md"),
-    (23, "For this companion, show the install command?", "features/companions.md"),
-    (24, "Show this review instrument's install or update command?", "features/companions.md"),
+    (1, "Move this plugin’s saved settings and records to another folder?", "core.md"),
+    (1, "Copy the saved settings and records to the folder shown?", "core.md"),
+    (2, "When should other AI helpers join, and should the coding guide start with each session?", "mode.md"),
+    (3, "Let the lead AI hand independent tasks to other AI helpers without asking each time?", "mode.md"),
+    (3, "Require a handoff decision before the first file edit in a repository?", "mode.md"),
+    (4, "Save this list of AI helpers and models for future tasks?", "scan.md"),
+    (5, "Save how this computer starts and shares work with other AI helpers?", "features/delegation.md"),
+    (5, "Let Antigravity run this exact test command again in this repository without asking?", "features/delegation.md"),
+    (6, "Let this plugin check your AI usage limits before sharing work with helpers?", "features/quota.md"),
+    (6, "Use the programs at the locations shown to check your AI usage limits?", "features/quota.md"),
+    (7, "Who should help check whether task evidence meets a requirement?", "features/roles.md"),
+    (8, "Let your AI provider review your saved instructions during setup checks?", "features/roles.md"),
+    (9, "Save which AI helpers review code, check safety and watch project progress?", "features/roles.md"),
+    (9, "Set up this AI helper to post its own review comments on this repository’s pull requests?", "features/roles.md"),
+    (10, "Let this plugin keep a private record of how its skills and helpers are used on this computer?", "features/metrics.md"),
+    (11, "Let Antigravity record plugin usage for your private dashboard?", "features/metrics.md"),
+    (12, "Show progress from task lists and work records on your private dashboard?", "features/metrics.md"),
+    (13, "Show how many Claude, Codex and Antigravity programs are running under your account?", "features/metrics.md"),
+    (14, "Choose when Claude Code or Codex shortens a long conversation to make room?", "features/compaction.md"),
+    (14, "How many tokens should the conversation reach before it is shortened?", "features/compaction.md"),
+    (14, "Save the shown limit for shortening future conversations?", "features/compaction.md"),
+    (15, "Set up Antigravity to ask for a fresh session when a saved conversation grows too large?", "features/compaction.md"),
+    (15, "Save the shown Antigravity session stop and its size limit?", "features/compaction.md"),
+    (16, "Hide this plugin’s local working files from Git’s untracked-file list?", "core.md"),
+    (17, "Save these plugin rules for AI sessions in this repository?", "core.md"),
+    (18, "How does this repository keep its building plan and task progress?", "core.md"),
+    (19, "Link this repository’s dashboard progress to the task records named here?", "features/project.md"),
+    (19, "Use this checkbox file to count this repository’s tasks on the dashboard?", "features/project.md"),
+    (20, "Show this name for the repository on your private dashboard?", "features/project.md"),
+    (21, "Save these instructions for future AI sessions in the scope shown?", "instructions/procedure.md"),
+    (22, "Which kinds of work would you like optional helpers for?", "features/companions.md"),
+    (23, "Show how you can install this optional helper yourself?", "features/companions.md"),
+    (24, "Show how you can install or update this optional review helper yourself?", "features/companions.md"),
+]
+# Approvals found outside the numbered design inventory. Same home/shape contract.
+EXTRA_APPROVALS = [
+    ("Start with only the essential setup questions?", SKILL / "SKILL.md"),
+    ("Save only the notes shown about this setup?", REFS / "core.md"),
+    ("Save the shown helper preferences and coding-guide setting?", REFS / "mode.md"),
+    ("Show how the plugin would plan a one-line documentation correction?", REFS / "check.md"),
+    ("Explore <the plain-language goal of this feature>?", REFS / "menu.md"),
+    ("Draft instructions for how AI helpers should work with you?", REFS / "menu.md"),
+    ("Show how much conversation space Claude Code or Antigravity is using?", REFS / "features" / "compaction.md"),
+    ("Save the shown command to display and record conversation-space usage?", REFS / "context-reading.md"),
+    ("Let <agent family> receive any named runtime settings when it starts?", REFS / "features" / "delegation.md"),
+    ("Let <agent family> receive the value of <VARIABLE_NAME> when it starts?", REFS / "features" / "delegation.md"),
+    ("Let TypeSafe check task evidence using your service account and approved budget?", REFS / "features" / "roles.md"),
 ]
 PREREQUISITES = {
     "delegation": "the agent scan", "quota": "the agent scan", "roles": "the agent scan",
@@ -122,6 +136,36 @@ class SizeLimitTests(unittest.TestCase):
 
 
 class ConsentInventoryTests(unittest.TestCase):
+    def test_inventory_questions_have_local_explanations(self):
+        # Preferences retain their native choices; approvals also name both outcomes.
+        preferences = {2, 7, 18, 22}
+        for row, sentence, home in INVENTORY:
+            with self.subTest(row=row, sentence=sentence):
+                if row in preferences or sentence == 'How many tokens should the conversation reach before it is shortened?':
+                    continue  # Preferences and free text do not approve a write or grant.
+                following = (REFS / home).read_text().split(sentence, 1)[1]
+                # The block must immediately follow this question, in order; a later
+                # question's explanation cannot accidentally satisfy this one.
+                block = re.match(r'^[^\n]*\nYes: [^\n]+\nNo: [^\n]+\nUndo: [^\n]+(?:\nChoices: [^\n]+)?', following)
+                self.assertIsNotNone(block)
+                explanation = block.group()
+                self.assertIn('Choices:', explanation)
+                self.assertRegex(explanation, r'"Yes, [^"\n]+" / "No, [^"\n]+"')
+                choices = explanation.split('Choices:', 1)[1].lower()
+                for word in ('recommend', 'default', 'preselect'):
+                    self.assertNotIn(word, choices)  # approval labels stay neutral
+
+        texts = {path: path.read_text() for path in MARKDOWN}
+        for sentence, home in EXTRA_APPROVALS:
+            with self.subTest(sentence=sentence):
+                hits = [path for path, text in texts.items() for _ in range(text.count(sentence))]
+                self.assertEqual(hits, [home])
+                following = texts[home].split(sentence, 1)[1]
+                self.assertRegex(following, r'^[^\n]*\nYes: [^\n]+\nNo: [^\n]+\nUndo: [^\n]+\nChoices: "Yes, [^"\n]+" / "No, [^"\n]+"')
+                extra_choices = following.split('Choices:', 1)[1].split('\n', 1)[0].lower()
+                for word in ('recommend', 'default', 'preselect'):
+                    self.assertNotIn(word, extra_choices)
+
     def test_every_consent_sentence_appears_once_in_its_home(self):
         texts = {path: path.read_text() for path in MARKDOWN}
         for row, sentence, home in INVENTORY:
@@ -170,12 +214,12 @@ class PrerequisiteTests(unittest.TestCase):
         for name in ("delegation", "quota", "roles"):
             self.assertIn("declining it ends", (REFS / "features" / (name + ".md")).read_text())
         self.assertIn("declining it ends the dependent feature and never records consent as given",
-                      (SKILL / "SKILL.md").read_text())
+                      (REFS / "menu.md").read_text())
         self.assertIn("declining it ends them without recording any", (REFS / "features/metrics.md").read_text())
         self.assertIn("leaves this feature pending", (REFS / "features/project.md").read_text())
 
     def test_declined_is_recorded_distinctly_and_add_asks_again(self):
-        skill = (SKILL / "SKILL.md").read_text()
+        skill = (REFS / "menu.md").read_text()
         for words in ("setup_features.py decline <feature> --yes", "a bare run does not offer it again",
                       "that record is not a consent", "`add <feature>` always asks again"):
             self.assertIn(words, skill)
