@@ -152,6 +152,7 @@ def cmd_finish(args):
                 identity = checkout_identity(args.checkout)
                 if (starts[args.id].get("checkout_id") != identity or receipt["checkout_id"] != identity
                         or receipt["head"] != current_head(args.checkout)
+                        or (args.head is not None and receipt["head"] != args.head)
                         or receipt["mechanical"] != "passed" or receipt["tests"] != "passed"):
                     raise ValueError("verification mismatch")
                 extra = {"verified_head": receipt["head"], "accept_unverified": False}

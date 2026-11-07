@@ -125,14 +125,17 @@ class LedgerTest(unittest.TestCase):
         invalid = self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--head", "invalid", check=False)
         self.assertNotEqual(invalid.returncode, 0)
         self.assertEqual(len(self.records()), 1)
-        self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--head", "a" * 40)
+        self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--head", "a" * 40,
+                        "--accept-unverified", "--reason", "Head binding fixture")
         finish = self.records()[-1]
         self.assertEqual((finish["head"], finish["agent"]), ("a" * 40, "codex"))
 
     def test_review_dispatch_cannot_claim_implementation_head(self):
         args = ["review" if a == "implement" else a for a in START]
         dispatch_id = self.run_ledger(*args).stdout.strip()
-        result = self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--head", "a" * 40, check=False)
+        result = self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--head", "a" * 40,
+                                 "--accept-unverified", "--reason", "Head binding fixture", check=False)
+        self.assertIn("only implementation dispatches", result.stderr)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(len(self.records()), 1)
 
@@ -223,6 +226,45 @@ class LedgerTest(unittest.TestCase):
         self.assertNotEqual(done.returncode, 0)
         self.assertIn("passing verify receipt", done.stderr)
         self.assertEqual(len(self.records()), 1)
+
+    def test_head_binding_cannot_bypass_receipt_gate(self):
+        dispatch = self.run_ledger(*START).stdout.strip()
+        done = self.run_ledger("finish", dispatch, "--outcome", "accepted",
+                               "--head", "a" * 40, check=False)
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("passing verify receipt", done.stderr)
+        self.assertEqual(len(self.records()), 1)
+
+    def test_head_binding_accepts_matching_receipt_and_refuses_another_head(self):
+        checkout = Path(self.dir.name) / "checkout"
+        checkout.mkdir()
+        def git(*args):
+            return subprocess.run(["git", "-C", str(checkout), *args], capture_output=True,
+                                  text=True, check=True).stdout.strip()
+        git("init", "-q")
+        git("config", "user.name", "Synthetic Author")
+        git("config", "user.email", "author@example.com")
+        git("commit", "--allow-empty", "-qm", "Create fixture")
+        head = git("rev-parse", "HEAD")
+        dispatch = self.run_ledger(*START, "--checkout", str(checkout)).stdout.strip()
+        criteria = Path(self.dir.name) / "criteria.json"
+        criteria.write_text("[]")
+        done = subprocess.run([sys.executable, "-I", str(LEDGER.parent / "record.py"),
+            "verify", "--id", dispatch, "--head", head, "--tests", "passed", "--mechanical", "passed",
+            "--criteria-file", str(criteria), "--checkout", str(checkout)],
+            capture_output=True, text=True, env=self.env)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        mismatch = self.run_ledger("finish", dispatch, "--outcome", "accepted", "--head", "0" * 40,
+                                   "--checkout", str(checkout), check=False)
+        self.assertNotEqual(mismatch.returncode, 0)
+        self.assertIn("passing verify receipt", mismatch.stderr)
+        self.assertEqual(len(self.records()), 1)
+        self.run_ledger("finish", dispatch, "--outcome", "accepted", "--head", head,
+                        "--checkout", str(checkout))
+        finish = self.records()[-1]
+        self.assertEqual((finish["head"], finish["verified_head"], finish["agent"]),
+                         (head, head, "codex"))
+        self.assertFalse(finish["accept_unverified"])
 
     def test_matching_head_receipt_passes_but_stale_failed_or_other_checkout_refuses(self):
         checkout = Path(self.dir.name) / "checkout"
