@@ -46,7 +46,9 @@ With a judge configured, ask it for the depth as [references/activity-selection.
 
 Record the receipt with `python3 -I <this skill's folder>/scripts/record.py router --depth <MIN|NORMAL|DEEP> --trigger <trigger>`. The command only prints the receipt; when the user has turned usage metrics on, the plugin's hook records it with the session. The trigger names what set the depth, one of `none`, `contract`, `security`, `privacy`, `permission`, `migration`, `dependency`, `uncertainty`, `consumers`, `irreversible`, `calculation`, `prediction`, `input`.
 
-Done when the depth and its reason are in the receipt and the command above has run.
+When the work goes into a pull request, its body carries the same depth and trigger as one line with nothing else on it: `<!-- fnl-router depth=<MIN|NORMAL|DEEP> trigger=<trigger> -->`, for example `<!-- fnl-router depth=NORMAL trigger=consumers -->`. Write it when you open the pull request and update it before merge if the depth changed; keep one such line only. In a repository whose `CLAUDE.md` or `AGENTS.md` at the pull request's base commit has a `## Agent skills` section naming `fnl-review-gate`, that skill's merge check blocks a missing, malformed or conflicting line for every pull request, the low-risk lane and bot pull requests included (enforcer: `merge_check.py`). The line states the depth for the reviewers to compare with the diff; it never changes which reviews or lane a change needs.
+
+Done when the depth and its reason are in the receipt, the command above has run, and a pull request's body carries the marker line.
 
 ## 4. Work, then gate
 
