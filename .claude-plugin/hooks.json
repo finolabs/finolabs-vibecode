@@ -80,6 +80,17 @@
           }
         ]
       }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/quota_limit_hook.py\" 2>/dev/null; exit 0",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

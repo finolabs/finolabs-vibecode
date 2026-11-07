@@ -162,7 +162,7 @@ def start_detached_refresh(cwd=None):
         except ImportError:
             import msvcrt
             msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
-        # No host, project, Python injection or quota-worker variables are inherited.
+        # No host, project, Python injection or quota variables are inherited.
         env = {k: os.environ[k] for k in ("SYSTEMROOT",) if k in os.environ}
         for switch in ("FNL_AGENT_SNAPSHOT", "FNL_PROGRESS"):
             if os.environ.get(switch, "").lower() == "off":
@@ -332,23 +332,13 @@ def bounded_payload(raw):
 def main():
     host, hook_event = options(sys.argv[1:])
     try:
-        from quota_probe import worker_guard, trigger, config
-        if worker_guard():
-            return
-        metrics = fm.enabled()
-        # Quota consent lives in canonical host.md; config checks its off switch
-        # before opening it. Neither consent means no stdin read or state writes.
-        if not metrics and not config():
+        if not fm.enabled():
             return
         raw = sys.stdin.buffer.read(65536)
         payload = bounded_payload(raw)
         if not isinstance(payload, dict):
             return
         event, sid, cwd, source, tool, data = read_payload(payload, host, hook_event)
-        if event in {"SessionStart", "PostToolUse"} or len(raw) == 65536:
-            trigger()
-        if not metrics:
-            return
         if not fm.valid_id(sid) or not isinstance(cwd, str):
             return
         if event == "SessionStart":
