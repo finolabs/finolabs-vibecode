@@ -1,6 +1,6 @@
 # Context snapshot
 
-Status: implemented for release 0.2.0; targeted local fixtures pass. Live status-line payloads on the installed Claude Code version, user-owned status-line composition and hook delivery remain unverified.
+Status: implemented; for release 0.2.0, targeted local fixtures pass. Live status-line payloads on the installed Claude Code version, user-owned status-line composition and hook delivery remain unverified.
 
 Owner decisions: Fio, 07/11/2026: measure the context window with a script, surface the number and ship it in 0.2.0. This document records the settled design, not a new compaction actuator.
 
