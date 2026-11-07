@@ -19,6 +19,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Correct the documented host contracts for compaction delivery, context telemetry, hook trust and StopFailure against vendor documentation, keeping the live-verification limits stated.
 - Treat agent families as pools of concurrent runs: independent tasks may use several runs of one family up to the limit, and capacity appears in setup, session start and the dashboard.
 - Make the status board easier to read: running dispatches show their repository, quota pools show the model name beside the window icon, times appear as local, human-readable text (today 18:09, in 2d 5h), and the word project becomes repositories.
 - Restructure `/fnl-setup` into a short core with `add <feature>`, `instructions`, `check`, `scan` and `mode`, using user and project scopes and separate consent for every grant.
