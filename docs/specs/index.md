@@ -20,3 +20,4 @@
 | [Work tracking facts per repository](work-tracking.md) | draft; for 0.1.11; per-repository ledger and task settings, a Work tracking interview, a spec status vocabulary, a one-file work record and a machine/project scope split in fnl-setup. |
 | [Quota reading on demand](quota-on-demand.md) | in progress; for 0.1.11; reading before a delegation instead of a 4-hour timer, a rate-limit marker from Claude's StopFailure event and a narrow Homebrew exception for the executable check. |
 | [Agent roles](agent-roles.md) | accepted; owner decisions recorded 2026-11-07; routed reviews with user-assigned families, verification by script and Jev, steward folded into session hygiene, and a navigator agent. |
+| [Setup restructure](setup-restructure.md) | accepted; owner decisions recorded 2026-11-07; for 0.2.0; a short setup core, features loaded on demand, instructions, scan and mode folded in, one vocabulary of user and project scope. |
