@@ -17,6 +17,18 @@ import delegate_env
 
 
 class RunEnvironmentTest(unittest.TestCase):
+    def test_session_cookie_substrings_require_individual_approval(self):
+        for name in ('J' + 'SESSIONID', 'PHP' + 'SESSID', 'WEB_' + 'SESSID', 'X' + 'SESSID' + 'Y'):
+            with self.subTest(case=name):
+                self.assertTrue(run_env.SENSITIVE.search(name), 'sensitive name missed')
+                text = '## Delegate environment\n- codex: ' + name
+                with self.assertRaises(ValueError):
+                    delegate_env.names_from_host(text + '\n', 'codex')
+                self.assertEqual(delegate_env.names_from_host(text + '; approved: yes\n', 'codex'), [name])
+        name = 'AUTHOR' + '_NAME'
+        self.assertFalse(run_env.SENSITIVE.search(name))
+        self.assertEqual(delegate_env.names_from_host('## Delegate environment\n- codex: ' + name + '\n', 'codex'), [name])
+
     def setUp(self):
         # Production refuses writable ancestors. Simulate a trusted temporary
         # parent so all fixtures remain in scratch space, never a real home.

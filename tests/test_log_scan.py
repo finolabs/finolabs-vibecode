@@ -17,6 +17,19 @@ import secret_patterns as sp
 
 
 class LogScanTest(unittest.TestCase):
+    def test_session_cookie_substrings_are_found_and_redacted(self):
+        value = 'fixture' * 4
+        for name in ('J' + 'SESSIONID', 'PHP' + 'SESSID', 'WEB_' + 'SESSID', 'X' + 'SESSID' + 'Y',
+                     'j' + 'sessionid', 'php' + 'sessid'):
+            with self.subTest(case=name):
+                self.write(name + '=' + value)
+                result = log_scan.scan(self.log)
+                self.assertEqual(result['status'], 'findings')
+                self.assertEqual([hit['kind'] for hit in result['hits']], ['named_token'])
+                self.assert_output(log_scan.safe_view(result), name + '=[REDACTED]')
+        self.write('AUTHOR' + '_NAME=' + value)
+        self.assertEqual(log_scan.scan(self.log)['status'], 'no_findings')
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

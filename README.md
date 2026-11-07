@@ -316,7 +316,7 @@ The judge defaults to a small host model. Choose `judge: jev` in canonical `## A
 
 ```text
 .claude-plugin/plugin.json        Claude Code manifest (the version's single source of truth)
-.claude-plugin/hooks.json         Claude Code hooks: the session reminder, the update notice and the usage-metrics hooks
+.claude-plugin/hooks.json         Claude Code hooks: the session reminder, the update notice, usage metrics and the advisory StopFailure hook
 .claude-plugin/marketplace.json   Claude Code marketplace listing this repository
 .codex-plugin/plugin.json         Codex manifest, version kept equal
 .codex-plugin/hooks.json          Codex hooks for the session reminder, update notices and usage metrics (named by the manifest)

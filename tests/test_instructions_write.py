@@ -242,6 +242,26 @@ class InstructionsWriteTest(unittest.TestCase):
             self.refused("preview", "--target", str(target), "--content-file", str(self.content))
         self.assertFalse(self.plans.exists())
 
+    def test_content_fifo_is_refused_before_timeout(self):
+        fifo = self.outside / ("content" + ".fifo")
+        os.mkfifo(fifo, 0o600)
+        target = self.repo / ("AGENTS" + ".md")
+        for script in (SCRIPT, COPY):
+            with self.subTest(script=script.relative_to(ROOT)):
+                try:
+                    result = subprocess.run(
+                        [sys.executable, "-I", str(script), "preview", "--target", str(target),
+                         "--content-file", str(fifo)],
+                        cwd=self.repo, env={"PATH": os.defpath, "HOME": str(self.home)},
+                        capture_output=True, timeout=3, check=False)
+                except subprocess.TimeoutExpired:
+                    self.fail("content FIFO blocked preview")
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, b"")
+                self.assertIn(b"content file is not a regular file", result.stderr)
+        self.assertFalse(target.exists())
+        self.assertFalse(self.plans.exists())
+
     def test_antigravity_rules_symlink_is_refused(self):
         rules = self.home / ".gemini/config/rules"
         rules.parent.mkdir(parents=True)

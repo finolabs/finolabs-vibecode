@@ -135,7 +135,7 @@ def read_existing(folder, name):
 
 def read_content(path):
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
         raise Refusal("content file is missing or a symlink")
     with os.fdopen(fd, "rb") as stream:

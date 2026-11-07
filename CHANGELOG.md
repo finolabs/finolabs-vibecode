@@ -7,7 +7,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Added
 
 - Add user-assigned code review, security review, navigator and judge roles, with deterministic review routing that prefers another author family and reports same-family fallbacks.
-- Add a guarded review-posting wrapper that checks the repository, marker, draft location and size, with observed posting state and an explicit coordinator relay procedure.
+- Add a guarded review-posting wrapper that checks the repository, marker, draft location and size, with observed posting state and an explicit coordinator relay procedure. Relay receipts and dashboard relay counters are not built yet; the temporary relay fallback is uncounted until they are.
 - Add `fnl-navigator` and bounded course-check evidence to compare work against confirmed outcome anchors and report drift without editing the project.
 - Add verification receipts bound to the checkout and current head, with targeted test results and criterion judgments, and require a passing receipt before accepting delegated ledger work unless an explicit reason-digested exception is recorded.
 - Add one judge interface with a small host model by default and optional Jev under the scoped network exception, with judgments that grant neither authority nor acceptance.
@@ -22,6 +22,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Fold compaction threshold checks and the safe-boundary procedure into `fnl-session-hygiene` with the configured judge for uncertain boundaries.
 - Require exactly one valid router marker before merging when the base commit adopted the review gate, without relaxing code or security review requirements.
 - Read quota on demand before routing with a 15-minute minimum, bounded per-install commands and advisory Claude Code StopFailure rate-limit markers instead of hook-started workers.
+- Claude Code asks the user to re-trust the changed hooks because of the new `StopFailure` entry. Codex and Antigravity get no new hook; the live `StopFailure` payload shape is unverified.
 - Show per-install quota labels, all cached pools, reset times and freshness alongside recent activity and running-agent budget lanes.
 - Show named projects with delivery pipelines, task and package states, exact-project ledger outcomes and a visible warning when checked tasks outpace the work-record status.
 - Keep dashboard review chains bounded and theme-aware, retain the detailed tables and five local project snapshots, and support fragment navigation and reduced motion.

@@ -175,7 +175,9 @@ class RunHygieneTest(unittest.TestCase):
     def test_setup_individual_neutral_consent_names_only(self):
         text = (ROOT / 'skills/fnl-setup/references/features/delegation.md').read_text()
         for expected in ('For each present agent family', 'Default none', 'names only, never values',
-                         'KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, PASS, AUTH, COOKIE, SESSION or PRIVATE', 'ask separately',
+                         'KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, SESSIONID or SESSID anywhere',
+                         'PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION or PRIVATE as a complete',
+                         'underscore-delimited part', 'ask separately',
                          'Pass <VARIABLE_NAME> to <agent family>?', 'neutral Yes and No with none preselected',
                          'only an explicit Yes', '; approved: yes'):
             self.assertIn(expected, text)

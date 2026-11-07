@@ -15,7 +15,9 @@ Validate each name against `^[A-Z][A-Z0-9_]{0,63}$`; refuse duplicates and loade
 (`LD_*`, `DYLD_*`, `BASH_ENV`, `ENV`, `NODE_OPTIONS`, `PYTHON*`, `PERL5*`, `RUBY*`, `GIT_*`, `*_PROXY`, `SSL_CERT_*`,
 `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`, `NODE_TLS_REJECT_UNAUTHORIZED`,
 `NODE_PATH`, `PERLLIB`, `SHELLOPTS`, `PS4`, `PROMPT_COMMAND`, `JAVA_TOOL_OPTIONS`).
-For each name containing KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, PASS, AUTH, COOKIE, SESSION or PRIVATE, ask separately:
+For each name containing KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, SESSIONID or SESSID anywhere, or
+PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION or PRIVATE as a complete
+underscore-delimited part, ask separately:
 "Pass <VARIABLE_NAME> to <agent family>?" Offer neutral Yes and No with none preselected; only an explicit Yes
 records that name's `; approved: yes`. No, skip or timeout passes nothing. Store names only in canonical
 `## Delegate environment`: `- <family>: none` or one `- <family>: <NAME>` per line; sensitive names require
