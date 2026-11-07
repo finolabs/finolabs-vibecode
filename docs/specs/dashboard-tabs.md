@@ -13,7 +13,7 @@ the title bar does not wrap: tab padding shrinks and the count badge stays visib
 | Tab | Panes | Bottom tables |
 | --- | --- | --- |
 | overview (default) | all existing Overview panes, plus a small review gate beside router coverage | existing Overview tables, delegation by agent/model/grade, kept and handed-off counts, Judge receipts and outcome association, full Reviews table |
-| now | `running now`, then `projects, last 24 h`, stacked vertically, retaining the existing lanes, slots, quota and project graphics | existing running and project tables |
+| now | `running now`, then `repositories, last 24 h`, stacked vertically, retaining the existing lanes, slots, quota and project graphics | existing running and project tables |
 
 Delegation and full Reviews are tables only, each in the existing `show the data as tables`
 disclosure at the bottom of Overview. The first-pass KPI stays. The review gate shows a large
