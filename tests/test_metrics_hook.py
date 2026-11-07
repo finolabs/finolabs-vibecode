@@ -527,10 +527,30 @@ class HookTest(unittest.TestCase):
         self.run_hook(self.tool_call())
         self.assertGreater(data.stat().st_mtime, 1_000_000_000, "old data is rebuilt")
 
+    def test_a_timed_out_tool_refresh_is_best_effort(self):
+        self.consent()
+        spec = importlib.util.spec_from_file_location("timeout_hook", HOOK)
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+        payload = json.dumps(self.tool_call()).encode()
+        with mock.patch.object(sys, "argv", [str(HOOK)]), \
+                mock.patch.object(sys, "stdin", io.TextIOWrapper(io.BytesIO(payload))), \
+                mock.patch.object(subprocess, "run", side_effect=subprocess.TimeoutExpired("refresh", 4)) as run, \
+                mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            hook.main()
+        run.assert_called_once_with(
+            [sys.executable, "-I", str(hook.REFRESH), "run", "--throttle", "10", "--cwd", str(self.repo)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=4)
+        self.assertEqual(out.getvalue(), "")
+        self.assertFalse((self.dir / "data.js").exists())
+        self.assertFalse((self.dir / "errors.count").exists())
+
     def test_stop_and_session_start_rebuild_fresh_data(self):
         self.consent()
-        self.run_hook(self.tool_call())
         data = self.dir / "data.js"
+        # Seed the precondition directly: PostToolUse may time out without a file.
+        # Stop and SessionStart must still replace fresh data without throttling.
+        fm.atomic_write(data, "window.FNL_DATA = {};\n")
         for payload in ({"hook_event_name": "Stop", "session_id": "s1", "cwd": str(self.repo)},
                         {"hook_event_name": "SessionStart", "session_id": "s1", "cwd": str(self.repo), "source": "startup"}):
             fresh = time.time() - 1  # inside the 10 second throttle: a forced rebuild must still run
