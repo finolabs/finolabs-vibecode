@@ -55,7 +55,7 @@ class CompanionQuestionsTest(unittest.TestCase):
     def test_quick_has_exactly_one_selection_and_at_most_four_followups(self):
         procedure = (REFS / 'features/companions.md').read_text()
         quick = procedure.split('## Quick (row 22)', 1)[1].split('## Advanced', 1)[0]
-        self.assertEqual(procedure.count('What do you do with this plugin?'), 1)
+        self.assertEqual(procedure.count('Which kinds of work would you like optional helpers for?'), 1)
         self.assertEqual(quick.count('multi-select question'), 1)
         for choice in CHOICES:
             self.assertIn(choice, quick)
@@ -63,7 +63,7 @@ class CompanionQuestionsTest(unittest.TestCase):
                      'setup_features.py decline companions --yes', 'records nothing',
                      '`add companions` always asks again', 'never combine'):
             self.assertIn(rule, procedure)
-        skill = (SETUP / 'SKILL.md').read_text()
+        skill = (REFS / 'menu.md').read_text()
         self.assertIn('Quick opens `companions` directly', skill)
         self.assertIn('beginner skips companion questions', skill)
 
@@ -73,7 +73,7 @@ class CompanionQuestionsTest(unittest.TestCase):
         for rule in ('skips the Quick selection', 'what it does for this user', 'concrete example in their stack',
                      'what it costs or sends', 'fallback', 'then the same offer', 'row 24'):
             self.assertIn(rule, advanced)
-        for rule in ('Show me how to install', 'Not now', 'only prints', 'records nothing',
+        for rule in ('Yes, show me how to install', 'No, not now', 'only prints', 'records nothing',
                      'native question tool', 'install everything', 'Install nothing yourself'):
             self.assertIn(rule, procedure)
         contract = (REFS / 'interview.md').read_text()
