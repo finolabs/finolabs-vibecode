@@ -17,23 +17,24 @@ User scope: account. Project scope: repository.
 | `check` | `references/check.md` (read-only), then stop |
 | `scan` / `mode [args]` | `references/scan.md` / `references/mode.md` |
 
-A plain sentence selects, never answers a consent question. Ambiguity: one clarifying question, core, never several features at once. Codex forwarding is unverified; use sentences. Claude Code enforces user invocation; routing elsewhere: advisory (agent judgment).
+A plain sentence selects, never answers a consent question. Ambiguity: one clarifying question, core, never several features at once. Codex forwarding is unverified; use sentences. Claude Code enforces user invocation; elsewhere: advisory (agent judgment).
 
-**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged. English output. Follow `references/interview.md`; headless decisions stay open.
+**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged. English output. Questions: native question tool per `references/interview.md`; headless decisions stay open.
 
 ## Core path
 
-Show host config/scan date; ask one scope question, user, project or both, recommendation first (user on a new computer, project in a repository that is not set up). Follow `references/core.md`.
+A bare run says: "Check: `/fnl-setup check` (read-only)." Show host config/scan date; ask one scope question, user, project or both, recommendation first (user on a new computer, project in a repository that is not set up). Follow `references/core.md`.
 
 Read-back: inert facts only. Grants: separate questions, beginner and quick included, with no default.
 
-Offer: "Would you like a simpler setup? Other helpers, reviews and extras can wait." On acceptance follow `references/plain-language.md`. Detailed asks inert items; quick confirms defaults once.
+Offer the beginner path: "Would you like a simpler setup? Other helpers, reviews and extras can wait." If yes: `references/plain-language.md`.
+Otherwise **detailed** asks each inert item; **quick** confirms inert defaults once. Ask which.
 In every mode these keep their own question: moving the data root and its copy; arming `auto` and the auto gate; filling host config; each Antigravity test-command grant; roles and review posting; the Antigravity hook write; each instruction-file write. In quick mode unknowns stay open.
 
 ## Menu
 
-Show feature/cost lines; neutral Yes/No, no preselection. Load selected features only. Ask `Needs:` separately; declining it ends the dependent feature and never records consent as given.
-Record No: `python3 -I <this skill folder>/scripts/setup_features.py decline <feature> --yes`; a bare run does not offer it again (`show` lists records); that record is not a consent; `add <feature>` always asks again. Last offer instructions in this session (neutral Yes/No).
+Show feature/cost lines. Load selected features only. Ask `Needs:` separately; declining it ends the dependent feature and never records consent as given.
+Record No: `python3 -I <this skill folder>/scripts/setup_features.py decline <feature> --yes`; a bare run does not offer it again (`show` lists records); that record is not a consent; `add <feature>` always asks again. Last offer instructions in this session.
 
 | Feature | Scope | Holds |
 | --- | --- | --- |

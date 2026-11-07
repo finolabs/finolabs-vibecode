@@ -2,6 +2,8 @@
 
 Needs: the agent scan (`scan.md`), asked as its own consent; declining it ends this feature. Skip when the `fnl-delegate` skill is not installed. Every question below uses neutral Yes and No with none preselected, as `interview.md` says; a default or timeout is not consent.
 
+Every question follows [interview.md](../interview.md): native question tool, neutral approvals, explicit yes; fallback only as stated there (advisory, agent judgment).
+
 Run the scan procedure with the running host passed explicitly, including its model confirmation, preview and clear yes before its section-only write. If it is unavailable, leave the inventory unverified and point to `/fnl-setup scan`; never guess which families exist.
 
 Ask: "Fill the host config from the `fnl-delegate` template?" Create the remaining config from `fnl-delegate`'s `references/host-template.md`, preserving the scan section byte for byte, and fill: how this computer invokes the present agents, which agents may coordinate and which delegates each can reach, the parallel limit (5 or fewer), the heavy-job lock path, and the durable folder for briefs and logs. Leave unknown commands as questions in the file rather than guesses.

@@ -2,6 +2,8 @@
 
 Needs: the plugin's hooks installed (the whole plugin on Claude Code, Codex or Antigravity; a single skill installed alone has none), otherwise skip. Optional. Each later step needs the consent before it: progress, snapshot and the Antigravity hook need metrics consent (declining it ends them without recording any). Every question uses neutral Yes and No with none preselected or recommended; a default, a timeout or an auto-selected option never counts as the yes.
 
+Every question follows [interview.md](../interview.md): native question tool, neutral approvals, explicit yes; fallback only as stated there (advisory, agent judgment).
+
 ## Usage metrics consent
 
 Say, in this order: what is recorded (a time, a session id, a short repository code, a skill or agent name, the router's depth, a review verdict, the number of tasks a coordinator kept with a fixed reason and who settled it, judge receipt site, grader, result and followed status; never prompts, code, command text or file paths); where it lives (the state folder on this computer, readable only by the user); that the dashboard also shows project progress from the repository's task list and the ledger using identifiers and counts only (on by default after consent;

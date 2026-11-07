@@ -2,6 +2,8 @@
 
 Needs: nothing for the native threshold; the Antigravity stop needs Antigravity present in the scan findings, otherwise skip that step. Optional. Every question uses neutral Yes and No with none preselected or marked recommended; a default, timeout or auto-selected option never counts as the yes. Asking and rechecking are advisory (agent judgment).
 
+Every question follows [interview.md](../interview.md): native question tool, neutral approvals, explicit yes; fallback only as stated there (advisory, agent judgment).
+
 ## Native threshold (Claude Code, Codex)
 
 Ask: "Would you like help setting a native compaction threshold?" After a clear yes, recheck the installed host's documented control from `fnl-session-hygiene` "Context pressure", then ask the token value as free text: "Which token value?" Claude Code allows 100000 to 1000000; Codex 1000 to 10000000. Explain that models with a 1M window compact late by default, so a lower value compacts earlier; prescribe no value. Antigravity has no documented native setting, only `/compact`: skip this and offer the stop below.

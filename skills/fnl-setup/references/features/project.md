@@ -2,6 +2,8 @@
 
 Needs: metrics consent and project progress on (the `metrics` feature), asked there as its own consent and never bundled or assumed; a declined or missing prerequisite leaves this feature pending. Optional. In a run that covers both scopes, finish metrics consent and its `refresh.py consent` write first. Every question uses neutral Yes and No with none preselected or marked recommended; a default, timeout or auto-selected option never counts as the yes. There is no user-scope default workflow.
 
+Every question follows [interview.md](../interview.md): native question tool, neutral approvals, explicit yes; fallback only as stated there (advisory, agent judgment).
+
 ## Work tracking settings
 
 Follow [project-settings.md](../project-settings.md) for this repository's ledger name and separate task file; its questions are "Save this ledger line?" and "Save this task file line?", each shown with the exact line first. Legacy global `Ledger project:` and `Task file:` lines are offered for conversion for this repository only, never automatically. Enforcers: `project_progress.py` for writes and validation; agent judgment (advisory) for the interview.

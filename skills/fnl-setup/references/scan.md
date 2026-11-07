@@ -1,10 +1,10 @@
 # Scan agents (`/fnl-setup scan`)
 
-Script enforces preview, atomic section-only writes, no symlinks. Consent: advisory (agent judgment).
+Script: preview, atomic section-only writes, no symlinks. `interview.md` governs questions (advisory).
 
-1. Run `python3 -I <this skill folder>/scripts/agent_scan.py --host <claude|codex|antigravity>` with the known running host; ask if unknown. Checks claude/codex/agy PATH/`--version` (no shell, three seconds), canonical config/cache; prints root/source, quota times/pools. No network/probe. Read refusals even at exit 0. Screened versions prove no access; quota over eight hours is unverified; user wins.
-2. Show coordinator and all three rows, including absent families. Confirm present families' full model IDs (free text), recorded or `fnl-delegate` tier seeds, never availability proof. Without dependency/confirmation leave unverified. Pass confirmed IDs as repeated quoted `--models '<family>=<models>'` arguments.
-3. Ask: "Write this agent inventory section?" After clear yes repeat the command with confirmed models, `--yes --digest <printed Digest prefix, at least 8 hex>`. A mismatch writes nothing. Only canonical `## Agents on this machine` changes. Preview coordinator changes. Overrides/legacy config must read this inventory; leave their settings to the user.
-4. Report changes/unverified. Suggest other present families for reach; confirm separately, never write `Coordinators and reach`. Refresh after CLI changes; inventory over 30 days is stale.
+1. Run `python3 -I <this skill folder>/scripts/agent_scan.py --host <claude|codex|antigravity>` (ask host if unknown). Checks claude/codex/agy PATH/`--version` (no shell, 3s), canonical config/cache; shows root/source, quota times/pools. No network/probe; read refusals even at exit 0. Versions prove no access; quota over eight hours is unverified; user wins.
+2. Show coordinator/all three rows (absent too). Confirm full model IDs (free text; recorded or `fnl-delegate` tier seeds, never availability proof); missing dependency/confirmation stays unverified. Pass repeated quoted `--models '<family>=<models>'` arguments.
+3. Ask: "Write this agent inventory section?" After clear yes repeat with confirmed IDs, `--yes --digest <printed Digest prefix, at least 8 hex>`. Mismatch writes nothing. Only canonical `## Agents on this machine` changes; preview coordinator changes. Overrides/legacy read this inventory; user owns their settings.
+4. Report changes/limits; suggest present families for reach, confirm separately; never write `Coordinators and reach`. Refresh after CLI changes; stale after 30 days.
 
-Consent: neutral Yes/No, no defaults/recommendation; timeout never means yes.
+Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes.

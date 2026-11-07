@@ -32,6 +32,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Restore native-question and neutral-consent wording throughout the restructured setup flow; defaults, timeouts and auto-selected options never grant approval.
+
 - Correct setup starter commands and retired-pointer checks; accept custom Codex instruction folders and Antigravity global rules through the guarded writer. Count all core references against the setup budget while preserving separate consent questions.
 
 - Reject non-ASCII package ordinals and negated completion wording, resolve index status headers, retain progress failure reasons and use “pool” for unnamed quota tooltips.

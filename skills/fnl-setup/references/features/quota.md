@@ -2,6 +2,8 @@
 
 Needs: the agent scan (`scan.md`), asked as its own consent; declining it ends this feature. Optional, off by default. Offer only agents the scan recorded present.
 
+Every question follows [interview.md](../interview.md): native question tool, neutral approvals, explicit yes; fallback only as stated there (advisory, agent judgment).
+
 Ask as a separate consent, with neutral Yes and No, none preselected or recommended: "When the coordinator is about to delegate, and a reading is older than 15 minutes, it runs each agent's own read-only usage command (`agy`, `claude`, `codex`) once; those programs contact their providers with your own accounts, and the plugin sends nothing about you." For Claude add:
 "The probe starts each Claude Code install with its usual configuration; the default install runs without `CLAUDE_CONFIG_DIR` and listed extra folders with it set; its hooks, plugins and servers run." A default or timeout is not consent; a No leaves probing off. Asking is advisory (agent judgment).
 

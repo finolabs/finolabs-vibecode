@@ -2,6 +2,8 @@
 
 Needs: the agent scan (`scan.md`), asked as its own consent; declining it ends the roles and posting steps. The judge step needs nothing. If `roles` is never run the judge is `host`. Every question uses neutral Yes and No (or the listed choices) with none preselected, as `interview.md` says. Roles, the judge and posting grant nothing by themselves; the section is never an access or posting right. Asking is advisory (agent judgment); `## Agent roles` and `## Review posting` are read strictly by their readers and an unreadable section falls back to the routing rule.
 
+Every question follows [interview.md](../interview.md): native question tool, neutral approvals, explicit yes; fallback only as stated there (advisory, agent judgment).
+
 ## Judge
 
 Ask with three neutral choices: "Which judge should answer semantic questions: Jev, a small model of your host, or none?" Record `judge: jev` or `judge: host` in `## Agent roles`; `none` writes no `judge` line, which reads as `host`, and nothing leaves the host's own provider. Jev needs the user's own TypeSafe authorization and API budget; an installed `typesafe-ai` skill grants neither, and task data goes to that service only on the user's yes.
