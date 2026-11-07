@@ -120,6 +120,22 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(rec["reason"], "routing")
         self.assertEqual(rec["route_by"], "table")
 
+    def test_finish_binds_implementation_head_to_start_agent(self):
+        dispatch_id = self.run_ledger(*START).stdout.strip()
+        invalid = self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--head", "invalid", check=False)
+        self.assertNotEqual(invalid.returncode, 0)
+        self.assertEqual(len(self.records()), 1)
+        self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--head", "a" * 40)
+        finish = self.records()[-1]
+        self.assertEqual((finish["head"], finish["agent"]), ("a" * 40, "codex"))
+
+    def test_review_dispatch_cannot_claim_implementation_head(self):
+        args = ["review" if a == "implement" else a for a in START]
+        dispatch_id = self.run_ledger(*args).stdout.strip()
+        result = self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--head", "a" * 40, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(len(self.records()), 1)
+
     def test_open_lists_unfinished_runs_with_age_against_budget(self):
         dispatch_id = self.run_ledger(*START).stdout.strip()
         out = self.run_ledger("open").stdout

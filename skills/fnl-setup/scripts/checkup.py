@@ -17,7 +17,8 @@ PLUGIN = "finolabs-vibecode"
 PRINCIPLE = "A file that says something is on is not proof that it runs."
 # Required sections; Effort preference, Delegation mode and Routing are optional.
 HEADINGS = {"Limits", "Briefs folder", "Coordinators and reach", "Route judgment",
-            "Dispatch marker", "Claude Code", "Codex", "Antigravity"}
+            "Dispatch marker", "Claude Code", "Codex", "Antigravity",
+            "Agent roles", "Review posting"}
 MAX_BYTES = 262144
 
 

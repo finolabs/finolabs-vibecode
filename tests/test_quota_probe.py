@@ -27,7 +27,7 @@ from tests.data_root_fixture import account
 
 FIXTURES = ROOT / "tests/fixtures/quota"
 COPIES = ["scripts/quota_probe.py", *[f"skills/{name}/scripts/quota_probe.py" for name in
-          ("fnl-setup", "fnl-delegate", "fnl-update")]]
+          ("fnl-setup", "fnl-delegate", "fnl-update", "fnl-review-gate")]]
 MEASURED = qp.timestamp("2026-11-05T09:00:00Z")
 
 
