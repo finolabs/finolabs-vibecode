@@ -2,6 +2,12 @@
 
 Status: implemented; in `0.1.6`; later releases add the `kept` event (`0.1.7`) and `judge` receipts (`0.1.8`). Depth: DEEP (hooks run on every matching tool call and record behavior data).
 
+## Current contract and historical design
+
+The original design below records the 0.1.6 implementation and owner decisions. Later contracts supersede its old layout and refresh wording: [dashboard tabs](dashboard-tabs.md), [infographics](dashboard-infographics.md), [freshness](dashboard-freshness.md), [project progress](project-progress.md), [work tracking](work-tracking.md) and [parallel slots](parallel-instances.md). The page now has Overview and Now, a separate local `dashboard.js`, and the browser's scrollbar rather than an inner page-height cap. Antigravity's consented metrics hook can start a detached refresh; it is not a quota reader. `fnl-status` runs `refresh.py run --open --register-here`, not the earlier bare `--open` form.
+
+For storage, `data_root.py` resolves canonical consent from the account home and optional relocation pointer. Environment overrides select only the compatibility event/dashboard folder; they cannot redirect consent or other trusted state. See [PRIVACY.md](../../PRIVACY.md#what-the-plugin-stores-on-your-machine) for current retained fields and purge boundaries. Review events parsed from command text are best effort: guarded `post_review.py` posting does not itself emit a review receipt, so a successful post need not appear in the review metrics. Neither a dashboard count nor its absence proves review approval.
+
 ## Goal
 
 Show each user whether `finolabs-vibecode` earns its cost on their own machine: did their agents follow the practice, what did loading it cost, and what did delegation and review produce. Today the only evidence is the delegate ledger; everything else has to be reconstructed from host transcripts.
