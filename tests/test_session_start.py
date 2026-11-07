@@ -30,6 +30,9 @@ STATE_BASELINE = ("\nPlugin state (local files; fixed words and counts only)\n"
 class SyntheticStateTest(unittest.TestCase):
     def setUp(self):
         self.root = setup_store(self)
+        environment = mock.patch.dict(os.environ, {}, clear=True)
+        environment.start()
+        self.addCleanup(environment.stop)
         sys.path.insert(0, str(ROOT / "scripts"))
         self.addCleanup(sys.path.remove, str(ROOT / "scripts"))
         import data_root
@@ -139,6 +142,30 @@ class SessionStartTest(SyntheticStateTest):
         with mock.patch.object(hook, "state_block", side_effect=RuntimeError("private text")):
             out, _ = self.run_hook(b"")
         self.assertEqual(out, self.baseline("on")[:-len(STATE_BASELINE)])
+
+    def test_context_line_only_for_this_session_fresh_safe_reading_any_source(self):
+        import context_snapshot as ctx
+        from tests.test_context_snapshot import fixture
+        current = 2000000000
+        with mock.patch.object(ctx.time, "time", return_value=current):
+            ctx.record(json.dumps(fixture()).encode())
+            for source in ("startup", "resume", "compact", "clear", None):
+                raw = json.dumps({"source": source, "session_id": "synthetic"}).encode()
+                out, _ = self.run_hook(raw, reader=mock.Mock(return_value=""))
+                self.assertEqual(out, self.baseline("on") +
+                                 b"Context: 62% of a 200000 window, read 0s ago (status line)\n")
+            for event in ({"source": "startup", "session_id": "another"}, {}, {"session_id": 1}):
+                out, _ = self.run_hook(json.dumps(event).encode())
+                self.assertEqual(out, self.baseline("on"))
+        raw = b'{"source":"resume","session_id":"synthetic"}'
+        with mock.patch.object(ctx.time, "time", return_value=current + 3601):
+            out, _ = self.run_hook(raw)
+            self.assertEqual(out, self.baseline("on"))
+        path = self.root / "state" / "context" / ctx.filename("synthetic")
+        path.chmod(0o644)
+        with mock.patch.object(ctx.time, "time", return_value=current):
+            out, _ = self.run_hook(raw)
+            self.assertEqual(out, self.baseline("on"))
 
     def test_existing_hook_declarations_retain_pre_steward_bytes(self):
         # Baseline main 421b2d0; changing Codex declarations requires renewed trust.
