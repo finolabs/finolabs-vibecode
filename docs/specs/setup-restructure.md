@@ -75,8 +75,8 @@ included, with no default.
   block; (4) workflow detection; (5) a read-back and one yes; (6) the report.
 
 A bare invocation asks one scope question (user, project, both), recommendation first, then runs the core. The beginner
-path and quick or detailed modes apply to the core only: beginner and quick take defaults for inert items and write after
-one confirmation; detailed asks each inert item. The Preferences "effort" and routing handling lives in `mode`.
+path and Quick or Advanced modes apply to the core only: beginner and Quick take defaults for inert items and write after
+one confirmation; Advanced asks each inert item. The Preferences "effort" and routing handling lives in `mode`.
 
 ## C. Features
 
@@ -91,7 +91,7 @@ Each feature is a file under `references/features/` loaded only when the user pi
 | `quota` | user | the on-demand quota reading and its preview |
 | `metrics` | user | usage metrics consent and retention, project progress, the process snapshot, the Antigravity hook |
 | `compaction` | user | native threshold plan and the Antigravity stop |
-| `review-tools` | user | review instruments and companion skills (recommendations only, nothing installed) |
+| `companions` (was `review-tools`, section F) | user | review instruments and companion skills (questions and recommendations only, nothing installed) |
 | `project` | project | work tracking settings, project label |
 
 A feature starts by naming what it needs from another feature and asks that prerequisite as its own consent; declining
@@ -127,7 +127,10 @@ Every consent below keeps its own neutral Yes and No (none preselected), is aske
 | 20 | Project label | Project label | `project` | 10 |
 | 21 | Instruction-file writes (one per file) | `fnl-setup-instructions` | instructions component | none |
 
-Review tools and companions (today's E and G) ask nothing: they recommend and install nothing, so they have no row.
+Review tools and companions (today's E and G) install nothing, but section F gives companions a question process, so rows 22 to 24 below cover it.
+| 22 | Companion selection (Quick: one multi-select question; Advanced: skipped, each companion is interviewed) | `fnl-setup` | `companions` | none |
+| 23 | Per-companion "Show me how to install" and "Not now" (Quick: at most one per selected companion, at most four; Advanced: after its interview) | `fnl-setup` | `companions` | none; a Yes only prints the pinned install command and records nothing, a No records nothing (answering No to row 22 alone records `companions: declined` with `setup_features.py`) |
+| 24 | Advanced review-tool recommendation (same Yes and No shape as row 23) | `fnl-setup` | `companions` | none |
 
 ### Size limits (enforced by a test)
 
@@ -184,31 +187,42 @@ Advanced. Companion skills get a real question process in both.
 
 Decisions settled (owner, 2026-11-07):
 
-- **Quick** asks the inert items once with their recommended defaults, plus **one multiple-choice companion question**:
+- **Quick** asks the inert items once with their recommended defaults, plus **one multi-select companion question**:
   "What do you do with this plugin?" with choices (writing Vietnamese for readers, delegating work to Antigravity,
-  drawing architecture or flow diagrams, mind maps and outlines, none). A choice selects companions; Quick then
-  presents each selected companion with one line of reason and its install command, and the user answers a neutral Yes
-  and No per companion (none preselected). Installing stays the user's act; no choice installs anything.
+  drawing architecture or flow diagrams, mind maps and outlines, none of these); several may be chosen. Each choice
+  selects the companions whose condition it matches. Quick then presents each selected companion with one line of reason
+  and its install command, and the user answers a neutral Yes and No per companion (none preselected), worded "Show me
+  how to install" and "Not now", so a Yes never means "install it for me". **A Yes only prints the pinned install
+  command and records nothing; a No records nothing. Answering "none of these" to the multi-select records
+  `companions: declined` through `setup_features.py`, so a bare run does not ask again; `add companions` always asks.**
+  Installing stays the user's act; no choice installs anything. The Quick inert items and the question count are rows 22
+  and 23 of the consent inventory (Quick adds at most five companion questions: one selection plus one per selected
+  companion).
 - **Advanced** asks, per companion, a short interview: what the companion does for this user, a concrete example in
   their stack, what it costs or sends (telemetry, fonts, accounts), the fallback the plugin keeps without it, and
-  then the neutral Yes and No. It also holds the other widening features: review tools, roles and judge, quota,
-  metrics, compaction, project settings.
-- **Renaming**: the word "detailed" becomes "Advanced" in `fnl-setup`, `plain-language.md`, `fnl-ask`, README and tests;
-  the beginner path stays as it is and takes the Quick defaults without the companion question.
+  then the same neutral Yes and No. It also holds the other widening features: roles and judge, quota, metrics,
+  compaction, project settings, and the review-instrument recommendations (row 24).
+- **Renaming**: the word "detailed" becomes "Advanced" in `fnl-setup` (including section B above), `plain-language.md`,
+  `fnl-ask`, README, the evals and the tests that pin it (`tests/test_native_sweep.py` splits on "Otherwise
+  **detailed**" and moves with the text); the beginner path stays as it is and takes the Quick defaults without the
+  companion question. The feature `review-tools` is renamed `companions`; its file `references/features/companions.md`
+  holds the procedure and `references/companions.md` stays the data file.
 - **Companion list** (`references/companions.md`): `agybird`, `vietnamizer`, `diagram-design` stay; **`markmap`**
   (mind maps and outlines) is added after the source, license and install command are checked against its official
-  repository at writing time and recorded in the file with the check date. Each row gains an `Ask` column: the
-  one-line question text, the condition that selects it in Quick, and the data note. Rows remain data; the procedure
-  lives in `references/features/review-tools.md`, renamed `companions.md`-driven "companions" feature.
-- **Consent**: the Quick question and every Yes and No follow the consent rules of section B (neutral choices, no
-  default, a timeout never counts). A sentence such as "install everything" never answers a companion question.
+  repository at writing time and recorded in the file with the check date, shown to the user next to the install
+  command; install commands are pinned to a released version or tag where the source offers one and say so when it
+  does not. The question text, the condition that selects the companion in Quick and the data note live in a second
+  table of the same file (one row per companion, each line under 600 characters), so rows stay data.
+- **Consent**: the Quick question and every Yes and No follow the consent rules in `references/interview.md` and
+  `SKILL.md` (neutral choices, none preselected, a default or timeout never counts as a yes). A sentence such as
+  "install everything" never answers a companion question.
 - **Enforcer**: the selection table lives in data; a test asserts each companion row has its question, condition,
-  install command and data note, that Quick asks exactly one multiple-choice question for companions, and that no
-  script or command installs a companion. The questioning itself is agent judgment (advisory).
+  install command, check date and data note, that Quick asks exactly one multi-select question for companions, and that
+  no script or command installs a companion. The questioning itself is agent judgment (advisory).
 
 Acceptance additions: the size limits of section C hold after the rename and the added rows; `test_native_sweep`
-and `test_agent_scan` stay green; Quick's total question count is reported in the spec's consent inventory; the
-README table of modes says Quick and Advanced.
+and `test_agent_scan` stay green; the consent inventory lists rows 22 to 24 and Quick's question count; the README table
+of modes says Quick and Advanced; `setup_features.py` accepts `companions` and refuses an unknown name.
 
 ## Not in scope
 

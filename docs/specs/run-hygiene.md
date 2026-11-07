@@ -13,45 +13,86 @@ same hole, so the practice belongs in the plugin, with scripts as enforcers wher
 
 ## Rules and enforcers
 
-Each rule names its enforcer. Anything marked advisory is agent judgment.
+Each rule names its enforcer. Anything marked advisory is agent judgment. The scope is stated plainly: these rules keep
+credentials out of the **environment** and out of **logs the plugin reads or stores**. They do not claim to stop an
+agent that reads credential **files** it can reach (see rule 2, residual risk).
 
 1. **The brief forbids it.** Every brief names, under Constraints: never print, dump, log or assert on the process
    environment or any credential; tests build a synthetic environment and compare only variable names. Enforcer: the
-   `fnl-handoff` template carries the line, and `brief_check.py <brief>` refuses a brief without it, without the
-   other required headings, or containing a secret-shaped value. The host-config command forms call it before a
-   dispatch. Writing the brief is advisory; the refusal is the script's.
-2. **A delegate starts with an allowlisted environment.** `delegate_env.py` runs the agent command with only the
-   variables a run needs: `PATH`, `HOME`, `LANG`, `TMPDIR`, `FNL_DISPATCH_ID`, and the names listed in a
-   `## Delegate environment` section of the host config for that agent family (names only, confirmed by the user in
-   `fnl-setup`, empty by default; a family that logs in through its own login store needs none). A variable the
-   section names but the coordinator lacks is skipped. The coordinator's other variables never reach the child.
+   `fnl-handoff` template carries the line (it extends the existing bullet "never read env or credential files" instead of repeating it), and `brief_check.py <brief>` is a lint that refuses a brief without it,
+   without the required headings, or containing a secret-shaped value; its message names the rule and the line number,
+   never the matched text. The dispatch command forms in `fnl-delegate` `references/agents.md` call it before a dispatch. It is a lint, not a control: the
+   allowlist in rule 2 is the control.
+2. **A headless delegate starts with an allowlisted environment.** `delegate_env.py`, called by the dispatch command forms in `agents.md` and never by a hook (it runs only when the coordinator dispatches), reuses the `environment()` pattern of `quota_probe.py` and runs the agent command with only
+   `PATH`, `HOME`, `LANG`, `TMPDIR`, `FNL_DISPATCH_ID` and the names listed in a `## Delegate environment` section of
+   the host config for that agent family (empty by default), plus what the command form of a family sets explicitly
+   (for example `CLAUDE_CONFIG_DIR` for a second Claude install, whose value the form chooses and the coordinator's
+   environment does not supply). A family whose login lives in its own store needs no inherited variable. Scope: headless
+   dispatches through the command forms, including the agybird runner; interactive sessions the user starts, desktop-app
+   sessions and in-session subagents inherit the user's environment and are **not covered** (the report says so). The coordinator's other variables never reach the child. Names obey a strict pattern
+   (`^[A-Z][A-Z0-9_]{0,63}$`, no wildcard, no value, no duplicate) and are refused when they are loader or
+   interpreter controls (`LD_*`, `DYLD_*`, `BASH_ENV`, `ENV`, `NODE_OPTIONS`, `PYTHON*`, `PERL5*`, `RUBY*`, `GIT_*`
+   command variables, `*_PROXY`, `SSL_CERT_*`). A name that looks secret (contains KEY, TOKEN, SECRET, PASSWORD or
+   CREDENTIAL) needs its own neutral Yes and No in `fnl-setup` that names the variable and the receiving agent family.
    Enforcer: the script; the host config only holds names.
-3. **Test commands in a checkout use an allowlisted environment too.** Already built for `verify_claim.py` in package
-   B; this spec adds that the same helper is the only way the plugin starts an untrusted command.
-4. **A finished run's log is scanned.** `log_scan.py <log>...` looks for secret-shaped values (known key prefixes,
-   private-key blocks, long high-entropy tokens after a name containing KEY, TOKEN, SECRET, PASSWORD or CREDENTIAL)
-   and for environment dumps (many `NAME=value` or `'NAME': 'value'` pairs). It prints only file, line and the variable
-   name or pattern kind, never the value. `log_scan.py redact <log>` previews and, with `--yes --digest`, replaces the
-   values with `[REDACTED]` through an atomic write, keeping the file's owner-only mode. The coordinator runs it
-   after every run and before reading or quoting a log (advisory); `ledger.py finish` prints a warning when the run's
-   log has findings (script) and records `log_clean: false` without any content.
-5. **A leak is reported by name, never chased.** When a finding shows a credential reached a log or a model, the
-   coordinator tells the user the variable names and what could not be undone, redacts local copies, and does not look
-   for the credential's source or read credential stores; rotation is the owner's (advisory, matching the user-scope
-   rule that credentials are never hunted).
-6. **The lesson is kept.** The incident is stored as a lesson in the user's knowledge base and summarized in
-   `fnl-session-hygiene` "Remember or recall" as an example of a corrected lesson (advisory).
+   **Residual risk (stated, not solved):** `HOME` stays, so credential files the child can read under it
+   (`~/.npmrc`, `~/.aws`, `~/.netrc`, the GitHub CLI hosts file, other agents' config folders, the plugin's data root,
+   keychain-backed helpers) remain reachable. `fnl-setup` offers an opt-in private `HOME` for a family (a per-run
+   folder holding only what that agent's login store needs); a sandbox that hides the paths is the stronger option
+   where the host has one. Until the user chooses, the report to the user says the protection is environment-only.
+3. **Delegates and test commands start through one helper.** `run_env.py` (new here; package B's `verify_claim.py`
+   currently carries its own scrub of `TYPESAFE_API_KEY` and `GIT_*` and moves to it) builds the allowlisted
+   environment for `delegate_env.py` and `verify_claim.py`. A test greps the plugin's scripts and fails when a script
+   starts a delegate or a test command without it. Two commands keep their own scoped allowlists under their
+   `CLAUDE.md` exceptions: the quota probe and the `ps` snapshot.
+4. **A finished run's log is scanned.** `log_scan.py scan <log>...` looks for secret-shaped values (known key
+   prefixes, private-key blocks, tokens after a name containing KEY, TOKEN, SECRET, PASSWORD or CREDENTIAL, also
+   after ANSI sequences are stripped and for base64 of 32 or more characters next to such a name) and environment
+   dumps (ten or more `NAME=value` or `'NAME': 'value'` pairs within 200 lines). Thresholds, fixed in `secret_patterns.py`:
+   prefixes `sk-`, `sk-ant-`, `ghp_`, `gho_`, `ghu_`, `ghs_`, `github_pat_`, `glpat-`, `xoxb-`, `xoxp-`, `npm_`, `AKIA`,
+   `ASIA`, `AIza` each followed by at least 16 token characters; a private-key block by its `-----BEGIN` line; a name
+   with KEY, TOKEN, SECRET, PASSWORD or CREDENTIAL followed by a value of at least 16 characters from
+   `[A-Za-z0-9+/_=.-]`. The stance is to prefer false positives: a finding is reviewed by the coordinator, and no
+   ignore list exists. It is a best-effort filter, not proof: a binary,
+   compressed, unreadable or oversize (over 8 MiB) log is reported `not scanned`. Output is a fixed vocabulary of
+   kinds plus the file and line, and a variable name only when it matches the name pattern of rule 2 and is not
+   itself secret-shaped; no value, length, prefix or entropy is ever printed. The result recorded by
+   `ledger.py finish` is `log_scan: no_findings | findings | not_scanned`, never `clean`.
+5. **Redaction is a guarded write.** `log_scan.py redact <log>` previews and, with `--yes --digest`, rewrites only a
+   regular file (lstat; no symlink, no hardlink, owner is the current user) inside the run-log folder, using a temp
+   file created with `O_EXCL` in the same directory, mode copied from the original and never wider than 0600, then
+   fsync and rename; no backup is made (a backup would keep the value). It refuses while a process still has the log
+   open or its mtime is under 60 seconds, and the digest binds the previewed bytes. The run-log folder is created
+   0700. The agents' own transcript stores (for example `~/.codex/sessions`, `~/.claude/projects`) hold the same
+   copy; `log_scan.py` lists them as places the user may need to clean and never touches them.
+6. **Logs are read through the scan.** `log_scan.py show <log>` prints a redacted view and is the sanctioned way to
+   read a delegate log. `ledger.py finish --log <path>` (new optional argument; the path must be a regular file inside the run-log folder,
+   else the command refuses) imports `log_scan.py` and runs the scan before it stores or prints anything about the
+   run, records `log_scan` in the ledger line (a local file; the metrics `SCHEMA` is not touched and `PRIVACY.md` lists the
+   field) and never copies log text. Reading a raw log first is advisory; the scripts do not read raw logs into any record.
+7. **A leak is reported by name, never chased.** When a finding shows a credential reached a log or a model, the
+   coordinator tells the user the variable names and what could not be undone, redacts local copies, and does not
+   look for the credential's source or read credential stores; rotation is the owner's (advisory, matching the
+   user-scope rule that credentials are never hunted).
+8. **The lesson is kept.** The incident is stored as a lesson in the user's knowledge base and cited in
+   `fnl-session-hygiene` "Remember or recall" as an example (advisory).
+
+## Where the code lives
+
+`fnl-delegate` owns `delegate_env.py`, `run_env.py`, `log_scan.py` and `secret_patterns.py`; `fnl-handoff` carries
+`brief_check.py` with its own copy of `secret_patterns.py`, and `run_env.py` is copied into `fnl-verification`. Each copy
+is listed in the CI copy groups and in the test that compares them, so each skill folder stays self-contained.
 
 ## Changes
 
 - `fnl-handoff`: Constraints line and a short "Secrets and environments" paragraph; the template check by
   `brief_check.py`.
 - `fnl-delegate`: dispatch forms in `references/agents.md` go through `delegate_env.py`; the host template gains
-  `## Delegate environment`; "Accept" gains the log scan; `ledger.py finish` warning and `log_clean` field.
+  `## Delegate environment`; "Accept" gains the log scan; `ledger.py finish` records `log_scan`.
 - `fnl-setup`: `delegation` feature asks, per present agent family, whether any variable must pass through (default
   none), with a neutral Yes and No; names only.
 - `fnl-verification`: states that the environment helper is the only way to start an untrusted command.
-- `PRIVACY.md`: the log scan and redaction are local; `log_clean` is a boolean.
+- `PRIVACY.md`: the log scan and redaction are local; `log_scan` is one of three fixed words.
 - `CHANGELOG.md`, README, `fnl-ask` map: current-surface wording.
 - No change to `CLAUDE.md`: no network call, no new class of command (the helper starts the same agent commands the
   dispatch already starts).
@@ -59,16 +100,25 @@ Each rule names its enforcer. Anything marked advisory is agent judgment.
 ## Acceptance
 
 - `brief_check.py` refuses a brief lacking the environment rule or containing a secret-shaped value (tests).
-- `delegate_env.py`: a child started through it sees only the allowlisted names; an extra variable in the
+- `delegate_env.py`: names outside the pattern, loader/interpreter/proxy controls and duplicates are refused; a
+  secret-looking name needs its own approval record; a child started through it sees only the allowlisted names; an extra variable in the
   coordinator's environment is absent (test compares names, never prints the environment); a name from the host
   config passes; an invalid name or a duplicate is refused.
-- `log_scan.py`: finds a planted fake key, a private-key block and a dumped synthetic environment; output holds no
-  value (test asserts the planted values do not appear); `redact` previews, requires `--yes` and the digest, and
-  leaves no value in the file.
-- `ledger.py finish` records `log_clean` and warns without reproducing content.
+- `log_scan.py`: finds a planted fake key, a private-key block, an ANSI-wrapped key and a dumped synthetic
+  environment; a binary and an oversize log are `not_scanned`; output holds no value, length or prefix (test asserts
+  the planted values and their parts do not appear, and that an attacker-controlled name that is not name-shaped is
+  not printed); `redact` previews, requires `--yes` and the digest, refuses a symlink, a hardlink, a path outside the
+  run-log folder and a log written in the last 60 seconds, creates its temp file `O_EXCL` with the original mode
+  never wider than 0600, makes no backup and leaves no value in the file.
+- `ledger.py finish` records `log_scan` (`no_findings`, `findings` or `not_scanned`) and warns without reproducing content.
 - Setup consent for pass-through names is a separate neutral Yes and No; none preselected.
+- Rule 8 (the lesson) has an acceptance line: `fnl-session-hygiene` cites the incident as a corrected-lesson example
+  (a test greps the sentence).
 - Every touched skill file respects the size limits of `setup-restructure.md`.
 
 ## Open decisions
 
-None. Names of the scripts and the `log_clean` field may change in review.
+- Whether the private `HOME` option ships in 0.2.0 or only the statement of the residual risk; owner to settle when the
+  package is briefed (it needs evidence of what each agent's login store requires).
+
+None other. Names of the scripts and the `log_scan` field may change in review.
