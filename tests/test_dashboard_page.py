@@ -817,8 +817,9 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertIn('stroke-dasharray: 2 2', rule('.quota-bricks.unverified .brick-body'))
         self.assertIn('font-size: 22px', rule('.active-percent'))
         self.assertIn('font-variant-numeric: tabular-nums', rule('.active-percent'))
-        mobile = css[css.index('@media (max-width: 560px) {\n  #panel-now'):]
-        self.assertIn('#panel-now { max-height: none; overflow: visible; }', mobile)
+        mobile = css[css.index('@media (max-width: 560px) {\n  .lane'):]
+        for declaration in ('max-height', 'overflow'):
+            self.assertNotIn(declaration, rule('.tabpanel'))  # the browser's own scrollbar scrolls the page
         self.assertIn('.lane { grid-template-columns: minmax(0, 1fr) 64px;', mobile)
         self.assertIn('.lane-label { grid-column: 1 / -1; }', mobile)
         self.assertIn('.project-detail { grid-column: 1 / -1; grid-row: 2; }', mobile)
