@@ -14,6 +14,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Add `route_task.py` for the delegation matrix and a read-only session-start summary of delegation, roles, posting state, cached quota and open dispatches.
 - Add brief lint, allowlisted headless environments and guarded local log scanning, display and redaction, with fixed ledger scan states and a stated residual risk from reachable HOME credential files.
 - Add per-repository work tracking, confirmed outcome anchors and bounded one-file work records alongside Spec Kit artifacts.
+- Add opt-in Claude Code context snapshots: a status-line recorder stores only token counts, `read` and `check` give the compaction steward a fresh real reading, and session start shows it. Setup writes the status line only when none exists, after a previewed, digest-approved plan, and otherwise prints a recipe for a user-owned one. Codex and Antigravity are not covered.
 
 ### Changed
 

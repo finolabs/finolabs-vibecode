@@ -27,6 +27,8 @@ in a fresh session. A script decides; the model only judges "safe boundary?".
 - The compaction summary is written by the host model; a script controls only
   when to ask and what is re-injected afterwards.
 
+Context numbers can now come from the opt-in Claude status-line [context snapshot](context-snapshot.md); missing or stale readings never supply invented counts.
+
 ## Parts
 
 ### 1. Handover state (F)

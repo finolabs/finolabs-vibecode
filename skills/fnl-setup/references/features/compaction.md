@@ -12,6 +12,10 @@ Run `python3 -I <this skill folder>/scripts/compact_setup.py preview --host <cla
 "Apply this compaction plan?" Only after the yes run `compact_setup.py apply --digest <full digest> --yes`. Even quick setup keeps this approval separate. Removal uses `--off` instead of `--tokens` with the same preview and approval; it removes this key, not auto-compaction. Enforcers: the script checks the private stored plan, full digest, 60-minute expiry, unchanged targets and safe paths, keeps backups and writes atomically; asking and invoking only from a user's `fnl-setup` request are advisory (agent judgment), never a hook.
 The host enforces the threshold; it applies to sessions started afterwards, and a running session and the Codex default remain unverified. Never write environment variables or the percent override.
 
+## Context reading
+
+Offer Claude Code context reading with its own neutral Yes/No question: "Would you like a local status-line command to record context counts and show ctx N%?" A No leaves it off. After a yes follow [../context-reading.md](../context-reading.md): the previewed `statusline_setup.py` plan with its own separate approval, including in Quick setup, or the printed recipe when a status line already exists. Asking is advisory (agent judgment); the script enforces the plan, digest, expiry and safe writes. The reading is no compaction trigger; Codex and Antigravity are not covered.
+
 ## Antigravity stop
 
 Offer only when the findings show Antigravity present. Ask: "Would you like a local hook to stop the start of a new turn when the conversation transcript exceeds a byte limit you choose, and ask you to run /compact or start a fresh session?" A No leaves it off. Explain that transcript bytes are a rough proxy, exclude the system prompt and are not a token count; recommend no default. Report the stop as "set up", not "enforced": the user-level hooks file and interactive TUI remain unverified; only the workspace hook in Antigravity 1.5.1 `agy -p` was verified.
@@ -26,4 +30,4 @@ Enforcer of the hook: `compact_stop_hook.py` acts only on Antigravity `PreInvoca
 ## Steward explanation
 
 Explain `fnl-session-hygiene`'s threshold check after the threshold step; this is advisory (agent judgment), and setup writes nothing new for it. The host enforces the native threshold; `context_steward.py` decides `ok`, `prepare`, `wait` or `compact` and `fnl-session-hygiene` holds its procedure. On `prepare` the working agent writes a private handover before compaction (advisory), while `handover_state.py` enforces its size, safety and lifetime. The session-start script re-injects it only on source `compact`; hook delivery is unverified on every host.
-A standalone skill install has no steward scripts and keeps the manual `fnl-session-hygiene` handover procedure (advisory).
+A standalone `fnl-session-hygiene` install includes its context reader and steward scripts; automatic handover re-injection still requires the plugin. Standalone setup keeps the manual status-line procedure above (advisory, agent judgment).
