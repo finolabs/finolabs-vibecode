@@ -16,9 +16,11 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Add `route_task.py` for the delegation matrix and a read-only session-start summary of delegation, roles, posting state, cached quota and open dispatches.
 - Add brief lint, allowlisted headless environments and guarded local log scanning, display and redaction, with fixed ledger scan states and a stated residual risk from reachable HOME credential files.
 - Add per-repository work tracking, confirmed outcome anchors and bounded one-file work records alongside Spec Kit artifacts.
+- Add opt-in Claude Code context snapshots: a status-line recorder stores only token counts, `read` and `check` give the compaction steward a fresh real reading, and session start shows it. Setup writes the status line only when none exists, after a previewed, digest-approved plan, and otherwise prints a recipe for a user-owned one. Codex and Antigravity are not covered.
 
 ### Changed
 
+- Make the status board easier to read: running dispatches show their repository, quota pools show the model name beside the window icon, times appear as local, human-readable text (today 18:09, in 2d 5h), and the word project becomes repositories.
 - Restructure `/fnl-setup` into a short core with `add <feature>`, `instructions`, `check`, `scan` and `mode`, using user and project scopes and separate consent for every grant.
 - Offer Quick setup with recommended inert defaults and companion selection, or Advanced interviews and optional features, with checked install commands that install nothing automatically.
 - Fold compaction threshold checks and the safe-boundary procedure into `fnl-session-hygiene` with the configured judge for uncertain boundaries.

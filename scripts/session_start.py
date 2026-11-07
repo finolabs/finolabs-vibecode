@@ -3,8 +3,8 @@
 
 After the reminder it prints the plugin's state from local files only: the
 delegation mode, roles and posting state, cached quota and the count of open ledger
-dispatches. Every value printed is a fixed word or a capped integer, never text
-read from a file, because the hook also runs in untrusted repositories. It
+dispatches and, when available, this session's fresh context counts. Every value
+printed is a fixed word or a capped integer, never text read from a file, because the hook also runs in untrusted repositories. It
 starts no process, makes no network call and writes nothing.
 """
 
@@ -176,6 +176,16 @@ def main():
         raw = sys.stdin.buffer.read(64 * 1024 + 1)
         if len(raw) <= 64 * 1024:
             event = json.loads(raw.decode("utf-8"))
+            if (isinstance(event, dict) and event.get("source") != "compact"
+                    and isinstance(event.get("session_id"), str) and event["session_id"]):
+                try:
+                    from context_snapshot import read as read_context
+                    context = read_context(event["session_id"])
+                    if context is not None:
+                        print(f"Context: {context['percent']}% of a {context['window']} window, "
+                              f"read {context['age_seconds']}s ago (status line)")
+                except Exception:
+                    pass
             if (isinstance(event, dict) and event.get("source") == "compact"
                     and isinstance(event.get("session_id"), str) and event["session_id"]):
                 from handover_state import read

@@ -3,6 +3,7 @@
    A scenario runs the live update with fake timers: {"hidden": true} keeps the tab hidden, {"next": {...}} is what the next
    data.js sets, {"fail": true} makes it fail to load, {"ticks": n} is how many polls run (default 1). */
 "use strict";
+process.env.TZ = "UTC"; // the page shows local times; fix the zone so the expected text does not depend on the machine
 const fs = require("fs");
 const vm = require("vm");
 
@@ -145,7 +146,7 @@ function tooltipState() {
 }
 function tooltipAction(action) {
   if (!action.tooltip) return;
-  const legacyPane = action.scope === "project" ? "projects, last 24 h" : "running now";
+  const legacyPane = action.scope === "project" ? "repositories, last 24 h" : "running now";
   const scope = action.scope === "prompt" ? all(app).find((n) => n.className === "cmd") : action.scope === "footer" ? all(app).find((n) => n.className === "status") : ["agents", "project"].includes(action.scope || "agents") ?
     all(namedPanel("now")).find((n) => n.tag === "section" && n.children[0].textContent.startsWith(legacyPane)) : namedPanel(action.scope);
   const target = all(scope).find((n) => action.target === "merged" ?
