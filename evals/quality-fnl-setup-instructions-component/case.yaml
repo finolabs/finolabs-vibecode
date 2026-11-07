@@ -1,4 +1,4 @@
 schema_version: "1.1"
-name: quality-fnl-setup-instructions-interview
+name: quality-fnl-setup-instructions-component
 context:
   scaffold_script: scaffold.sh

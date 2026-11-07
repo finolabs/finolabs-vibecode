@@ -38,8 +38,8 @@ Each rule line says who enforces it: a host setting, a hook, the review gate, or
 ## 5. Delegation (optional)
 
 - Which other agents the user has (Codex, Antigravity, Claude Code sessions) and that `fnl-delegate` governs routing, budgets and acceptance.
-- Which Delegation mode the user wants: `manual`, `suggest` (default) or `auto`, and whether Routing is `on` (default) or `off`. `/fnl-set-mode` shows their effective sources and changes them after a clear yes; environment overrides win over host config. `/fnl-setup` asks these preferences during onboarding. Modes govern other-family hand-offs; own-family sessions follow the project and context rules in `fnl-delegate` and retain delegate authority limits.
-- Machine facts live in the delegation host config, not here. `/fnl-scan-agents` refreshes present families and user-confirmed allowed models; `/fnl-setup` configures their reach.
+- Which Delegation mode the user wants: `manual`, `suggest` (default) or `auto`, and whether Routing is `on` (default) or `off`. `/fnl-setup mode` shows their effective sources and changes them after a clear yes; environment overrides win over host config. `/fnl-setup` asks these preferences during onboarding. Modes govern other-family hand-offs; own-family sessions follow the project and context rules in `fnl-delegate` and retain delegate authority limits.
+- Facts about this computer live in the delegation host config, not here. `/fnl-setup scan` refreshes present families and user-confirmed allowed models; `/fnl-setup` configures their reach.
 
 ## 6. Knowledge base (optional)
 

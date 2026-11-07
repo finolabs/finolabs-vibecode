@@ -14,15 +14,15 @@ def text(*parts):
 
 class InstructionStandardTests(unittest.TestCase):
     def test_hosts_reference_states_limits_and_mechanics(self):
-        hosts = text("fnl-setup-instructions", "references", "hosts.md")
+        hosts = text("fnl-setup", "references", "instructions", "hosts.md")
         for needle in ("32 KiB", "24,000 bytes", "20,000 tokens", "2.1.277", "`trigger`",
                        "Superseded by the Antigravity CLI", "learn.chatgpt.com"):
             self.assertIn(needle, hosts)
         self.assertNotIn("](https://developers.openai.com", hosts)
 
     def test_skill_states_standard_thresholds_and_enforcer(self):
-        skill = text("fnl-setup-instructions", "SKILL.md")
-        self.assertIn("## The standard", skill)
+        skill = text("fnl-setup", "references", "instructions", "procedure.md")
+        self.assertIn("## 3. The standard", skill)
         self.assertIn("150 lines", skill)
         self.assertIn("200 lines", skill)
         self.assertIn("advisory", skill)
@@ -38,9 +38,9 @@ class InstructionStandardTests(unittest.TestCase):
         self.assertIn("1. **Judge.**", check)
         self.assertIn("2. **Agent.**", check)
         self.assertIn("Instruction check: on", check)
-        judge = text("fnl-setup", "references", "route-judge.md")
+        judge = text("fnl-setup", "references", "features", "roles.md")
         self.assertIn("separate question", judge)
-        self.assertIn("does not follow from the routing yes", judge)
+        self.assertIn("does not follow from the judge choice", judge)
         template = text("fnl-delegate", "references", "host-template.md")
         self.assertIn("Instruction check: <on | off>", template)
         self.assertIn("Default off", template)

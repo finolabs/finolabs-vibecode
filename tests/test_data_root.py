@@ -11,6 +11,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.test_shared_copies import ci_copy_groups
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import data_root as dr
@@ -384,8 +386,6 @@ COPIES = ["scripts/data_root.py",
           "skills/fnl-coding-router/scripts/data_root.py",
           "skills/fnl-delegate/scripts/data_root.py",
           "skills/fnl-review-gate/scripts/data_root.py",
-          "skills/fnl-scan-agents/scripts/data_root.py",
-          "skills/fnl-set-mode/scripts/data_root.py",
           "skills/fnl-setup/scripts/data_root.py",
           "skills/fnl-status/scripts/data_root.py",
           "skills/fnl-restore-point/scripts/data_root.py", "skills/fnl-update/scripts/data_root.py"]
@@ -395,9 +395,8 @@ class DataRootCopiesTest(unittest.TestCase):
     def test_every_copy_is_identical_and_listed_in_ci(self):
         actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob("data_root.py")}
         self.assertEqual(actual, set(COPIES))
-        ci = (ROOT / ".github/workflows/validate.yml").read_text()
+        self.assertEqual(next(group for group in ci_copy_groups() if "scripts/data_root.py" in group), COPIES)
         for name in COPIES:
-            self.assertIn('"' + name + '"', ci)
             self.assertEqual((ROOT / name).read_bytes(), (ROOT / COPIES[0]).read_bytes())
 
     def test_no_alternative_data_paths(self):

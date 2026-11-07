@@ -102,7 +102,7 @@ class DelegationModeTest(unittest.TestCase):
 
     def test_shared_copies_match(self):
         for name, copies in (
-            ("mode.py", ("fnl-delegate", "fnl-setup", "fnl-set-mode")),
+            ("mode.py", ("fnl-delegate", "fnl-setup")),
             ("auto_gate.py", ("fnl-delegate",)),
         ):
             for skill in copies:

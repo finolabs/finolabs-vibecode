@@ -225,9 +225,9 @@ def agents_evidence(status, text):
         return item("agents inventory", "unverified", "host config unreadable or symlink refused")
     sections = re.findall(r"^## Agents on this machine[ \t]*\r?$.*?(?=^#{1,2} |\Z)", text, re.M | re.S)
     if not sections:
-        return item("agents inventory", "missing", "section absent; run /fnl-scan-agents")
+        return item("agents inventory", "missing", "section absent; run /fnl-setup scan")
     if len(sections) != 1:
-        return item("agents inventory", "unverified", "duplicate section; run /fnl-scan-agents")
+        return item("agents inventory", "unverified", "duplicate section; run /fnl-setup scan")
     rows = {}
     for line in sections[0].splitlines():
         cells = [v.strip() for v in line.strip().strip("|").split("|")]
@@ -243,15 +243,16 @@ def agents_evidence(status, text):
         if max(dates) > today:
             raise ValueError("future check")
     except ValueError:
-        return item("agents inventory", "unverified", "incomplete rows or invalid Checked dates; run /fnl-scan-agents")
+        return item("agents inventory", "unverified", "incomplete rows or invalid Checked dates; run /fnl-setup scan")
     if (today - min(dates)).days > 30:
-        return item("agents inventory", "missing", "section stale (older than 30 days); run /fnl-scan-agents")
+        return item("agents inventory", "missing", "section stale (older than 30 days); run /fnl-setup scan")
     return item("agents inventory", "ok", "recent file inventory only; live access unverified")
 
 
 def retired_evidence(paths, reader=read):
     # Construct the historical names so the repository's retired-name rule still applies.
-    names = ["fnl-" + suffix for suffix in ("committee", "coordinator-sessions", "knowledge")]
+    names = ["fnl-" + suffix for suffix in ("committee", "coordinator-sessions", "knowledge",
+                                         "setup-instructions", "scan-agents", "set-mode")]
     evidence = [reader(path) for path in paths]
     found = sorted({name for status, text in evidence if status == "ok"
                     for name in names if re.search(r"(?<![\w-])" + re.escape(name) + r"(?![\w-])", text)})
@@ -596,7 +597,8 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
                 in_comment = True
             if "-->" in visible:
                 in_comment = False
-            for suffix in ("committee", "coordinator-sessions", "knowledge"):
+            for suffix in ("committee", "coordinator-sessions", "knowledge",
+                           "setup-instructions", "scan-agents", "set-mode"):
                 if re.search(r"(?<![\w-])fnl-" + suffix + r"(?![\w-])", line):
                     add("I14", "warn", path, number, "retired-skill", "retired skill pointer")
         try:
