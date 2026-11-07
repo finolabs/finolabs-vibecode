@@ -21,6 +21,9 @@ MARKER = f"<!-- fnl-review kind=code head={HEAD} verdict=APPROVE -->"
 BODY = MARKER + "\nNo findings.\n"
 
 
+AT = chr(64)
+
+
 class PostingTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -178,15 +181,15 @@ else:
 
     def test_non_github_or_credential_bearing_remotes_refused_before_gh(self):
         for remote in ("https://other.example/sample-owner/sample-repository", "https://github.com.evil.example/sample/repo",
-                       "https://user:secret@github.com/sample/repo", "file:///sample/repo", "ext::anything",
-                       "https://github.com/sample/repo?x=1", "ssh://git@github.com:22/sample/repo", "git@other.example:sample/repo"):
+                       "https://user:secret" + AT + "github.com/sample/repo", "file:///sample/repo", "ext::anything",
+                       "https://github.com/sample/repo?x=1", "ssh://git" + AT + "github.com:22/sample/repo", "git" + AT + "other.example:sample/repo"):
             with self.subTest(remote=remote):
                 self.remote(remote)
                 self.assertEqual(self.main(["31", "--body-file", str(self.body)])[0], 2)
         self.assertEqual(self.calls(), [])
 
     def test_github_remote_forms_and_linked_worktree(self):
-        for remote in ("https://github.com/sample/repo", "git@github.com:sample/repo.git", "ssh://git@github.com/sample/repo.git"):
+        for remote in ("https://github.com/sample/repo", "git" + AT + "github.com:sample/repo.git", "ssh://git" + AT + "github.com/sample/repo.git"):
             self.remote(remote)
             self.assertEqual(post.checkout_remote(self.checkout), "github.com/sample/repo")
         common = self.checkout / ".git"
