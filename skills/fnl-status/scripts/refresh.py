@@ -75,7 +75,7 @@ def ledger_metrics(ledger, start, usage_start=None):
     """(delegation rows, overall first pass, weekly first pass with None for empty weeks, finished runs, runs handed off)."""
     rows = ledger.summary_rows(keys=("agent", "model", "grade"), since=start.isoformat())
     delegation = [{"agent": r["agent"], "model": r["model"], "grade": r["grade"], "runs": r["n"], "first_pass": r["first_pass"],
-                   "quota": r["quota"], "error": r["error"], "median_min": round(r["median_min"]), "rework": round(r["rework"], 1)}
+                   "quota": r["quota"], "error": r["error"], "median_min": round(r["median_min"]), "rework": round(r["rework"], 1), "accepted_unverified": r["accepted_unverified"]}
                   for r in rows]
     runs = sum(r["n"] for r in rows)
     starts, finishes = ledger.load()
@@ -543,6 +543,9 @@ def build(days=WEEKS * 7, cwd=None):
     if not delegation:
         missing["delegation"] = ledger_note
 
+    unverified = Counter()
+    for row in delegation or []:
+        unverified[row["agent"]] += row["accepted_unverified"]
     generated = fm.now().isoformat(timespec="seconds")
     running = running_metrics(generated, recorded_events)
     return {
@@ -560,6 +563,7 @@ def build(days=WEEKS * 7, cwd=None):
                           "first_pass": fp_week if first_pass is not None else None}},
         "router": {"covered": covered, "missed": missed, "excluded": excluded, "unclassified": unclassified, "eligible": eligible} if eligible else None,
         "use": use or None, "load": load, "depth": depth_rows or None, "delegation": delegation or None, "kept": kept_metrics(events, by_sid, handed_off),
+        "accepted_unverified": [{"agent": agent, "count": count} for agent, count in sorted(unverified.items())],
         "judge": judge_metrics(events, route_rows, has_judge_route, ledger_note),
         "reviews": reviews or None, "review_stats": review_stats if groups else None, "activity": activity if events else None,
         "sources": [

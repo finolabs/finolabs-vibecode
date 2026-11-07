@@ -9,4 +9,4 @@
 - `never-delegated`: the work is on the "Never delegated" list.
 - `user-choice`: the user said to keep it, declined the offer, set the delegation mode to `manual`, or is away with a `suggest` offer pending, with `--route-by user`.
 
-`--route-by` says who settled it, as on `start`: `table` on a host whose config names a route judge shows the judge was not asked.
+`--route-by` says who settled it, as on `start`: `judge` means a validated configured-judge response informed the decision; `table` means the coordinator used the rules or conservative fallback. It does not prove whether a judge was asked.

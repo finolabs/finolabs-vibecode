@@ -65,7 +65,8 @@ The 17 skill folders and their purposes match the README.
 
 | Piece | What it answers or does | Where it comes from |
 | --- | --- | --- |
-| `fnl-verifier` agent | Is the report true? Reruns targeted tests and checks each acceptance criterion. | `fnl-delegate` (accepting delegated work) |
+| `scripts/verify_claim.py` | Checks the reported head, changed-file scope and targeted tests, then records verification metadata. | `fnl-verification` (accepting delegated work) |
+| `scripts/context_steward.py` | Checks supplied usage against the chosen threshold; the working agent handles the safe boundary and handover. | `fnl-session-hygiene` |
 | `fnl-reviewer` agent | Is the change good? Reads the diff, then its callers, contracts and tests. | `fnl-review-gate` |
 | `fnl-security-reviewer` agent | Is the change safe? Reads the diff, then every trust path that reaches it. | `fnl-security-review-gate` |
 | `scripts/agent_scan.py` | Previews the local agent inventory; writes only after a yes. | `/fnl-setup scan` |

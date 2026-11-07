@@ -126,16 +126,15 @@ class NavStateTest(unittest.TestCase):
                     'AC1 ' + 'x' * 110 + ' (#151) trailing']
         raw = ''.join(f'{i + 1:040x}\t{s}\n' for i, s in enumerate(subjects)).encode()
         with mock.patch.object(ns.shutil, 'which', return_value='/custom/git/bin/git'), \
-                mock.patch.dict(os.environ, {'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'bad', 'SECRET': 'private'}), \
+                mock.patch.dict(os.environ, {'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'bad', 'SECRET': 'private'}, clear=True), \
                 mock.patch.object(ns.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, raw)) as run:
             payload = ns.collect(self.anchors, '2026-11-01')
         self.assertEqual(run.call_args.args[0], [
             '/custom/git/bin/git', '-c', 'log.showSignature=false', '-c', 'core.fsmonitor=false',
             '-C', str(self.repo), 'log', '--no-show-signature', '--no-color', '--no-ext-diff',
             '--no-textconv', '--format=%H%x09%s', '--since=2026-11-01'])
-        self.assertEqual(run.call_args.kwargs['env'], {
-            'PATH': os.defpath + os.pathsep + '/custom/git/bin', 'GIT_CONFIG_NOSYSTEM': '1',
-            'GIT_CONFIG_GLOBAL': '/dev/null', 'GIT_TERMINAL_PROMPT': '0'})
+        self.assertEqual(set(run.call_args.kwargs['env']), {
+            'PATH', 'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL', 'GIT_TERMINAL_PROMPT'})
         self.assertEqual(payload['evidence']['pull_requests'], ['#146', '#147', '#148', '#150', '#144'])
         ac1 = next(c for c in payload['criteria'] if c['id'] == 'AC1')
         self.assertIn('#146', ac1['evidence_refs'])

@@ -1221,7 +1221,8 @@
       "quota": 1,
       "error": 0,
       "median_min": 5,
-      "rework": 0.4
+      "rework": 0.4,
+      "accepted_unverified": 1
     },
     {
       "agent": "antigravity",
@@ -1232,7 +1233,8 @@
       "quota": 0,
       "error": 0,
       "median_min": 10,
-      "rework": 0.2
+      "rework": 0.2,
+      "accepted_unverified": 0
     },
     {
       "agent": "codex",
@@ -1243,7 +1245,8 @@
       "quota": 0,
       "error": 0,
       "median_min": 0,
-      "rework": 0.0
+      "rework": 0.0,
+      "accepted_unverified": 1
     }
   ],
   "reviews": [
@@ -1680,5 +1683,15 @@
     },
     "ledger_age_seconds": 120,
     "quota_age_seconds": null
-  }
+  },
+  "accepted_unverified": [
+    {
+      "agent": "antigravity",
+      "count": 1
+    },
+    {
+      "agent": "codex",
+      "count": 1
+    }
+  ]
 }

@@ -7,10 +7,19 @@ Every question follows [interview.md](../interview.md): native question tool, ne
 ## Judge
 
 Ask with three neutral choices: "Which judge should answer semantic questions: Jev, a small model of your host, or none?" Record `judge: jev` or `judge: host` in `## Agent roles`; `none` writes no `judge` line, which reads as `host`, and nothing leaves the host's own provider. Jev needs the user's own TypeSafe authorization and API budget; an installed `typesafe-ai` skill grants neither, and task data goes to that service only on the user's yes.
-If the user picks Jev and `typesafe-ai` is missing, print its install command from [companions.md](../companions.md), say the user's own key and budget are needed, and never read, store or search for the key; a read-only `--check` may report whether the variable is set without printing it. Once configured, `fnl-delegate` and `fnl-coding-router` ask the judge first for the grade, route, depth and next activity; if Jev is unavailable at run time the small host model takes over for that call and the report says so.
+If the user picks Jev, explain that `judge.py` sends a closed, size-capped English question and its evidence to
+`https://api.typesafe.ai/v1/systemone`, only at the four sites allowed by `CLAUDE.md`. The key comes only from
+`TYPESAFE_API_KEY` in the process environment; never read, store or search for it. A read-only check may report only
+whether it is set. The optional `typesafe-ai` skill supplies cookbooks and is not needed for calls. The script refuses
+secrets and machine paths before sending, caps attempts at 24 per run, verifies TLS, ignores proxy/certificate
+variables and follows no redirects; `FNL_JUDGE=off` stops calls. No hook starts a judgment. Record `judge: jev` only
+after the user's separate yes and API-budget authorization. If unavailable, use the small host model with the same
+payload and disclose the fallback. Deterministic rules and explicit choices precede a bounded judge question.
 Receipts hold the answer and an identifier, never the criterion text.
 
-When the judge is not none, ask a second, separate question: "May Check send lines of your instruction files to the judge for the judgment items of the instruction checklist?" Say it sees the text of your private instruction files, apart from lines that look like secrets or machine paths, which are dropped; the provider (TypeSafe) keeps data under its own retention; judge grading is optional and the agent grades those items itself without it. A yes does not follow from the judge choice. Record `Instruction check: on` with the date; no, or no judge, records `off`.
+When the judge is not none, ask a second, separate question: "May Check send lines of your instruction files to the judge for the judgment items of the instruction checklist?"
+Say it sees the text of your private instruction files, apart from lines that look like secrets or machine paths, which are dropped; instruction checking uses the small host fallback because it is outside the four outbound sites, under the host provider's retention; judge grading is optional and the agent grades those items itself without it.
+A yes does not follow from the judge choice. Record `Instruction check: on` with the date; no, or no judge, records `off`.
 
 ## Roles
 

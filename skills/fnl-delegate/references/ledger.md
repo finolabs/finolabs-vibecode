@@ -13,11 +13,13 @@ python3 -I "$L" summary --since 2026-11-01
 python3 -I "$L" summary --json           # the same rows as JSON, with quota and error counts
 ```
 
-For review routing, the coordinator adds `--head <implementation head SHA>` to `finish`. This validates a forty-character lowercase SHA and copies the agent from the dispatch's start record; legacy records without a head cannot establish authorship. Commit trailers alone are insufficient.
+For review routing, the coordinator adds `--head <implementation head SHA>` to `finish`. This validates a forty-character lowercase SHA and copies the agent from the dispatch's start record; legacy records without a head cannot establish authorship. Commit trailers alone are insufficient. When acceptance uses a verification receipt, this head must also match the verified head.
+
+Before `finish --outcome accepted`, run the self-contained `verify_claim.py` from `fnl-verification` "Accepting someone else's work" and read its evidence. Pass `--checkout <task checkout>` to both `start` and `finish` when the task runs elsewhere: the gate requires a passing receipt for that checkout and its current head. For work with nothing to check, the coordinator can use `--accept-unverified --reason <text>`; keep the full reason in the coordinator report because the ledger stores only its SHA-256 digest and counts the exception in `summary`.
 
 `--grade` is one of `easy`, `medium`, `hard`, `very-hard` and `ultra-hard` (`SKILL.md` "Grade" defines them); lines written before `ultra-hard` existed still read.
 
-Record why a route was taken: `--reason fallback-quota` for a quota fallback, `--reason fallback-failure` for a reroute after a failed run, `--reason user-choice --route-by user` for a route the user named, and `--route-by judge` when the route judge settled it.
+Record why a route was taken: `--reason fallback-quota` for a quota fallback, `--reason fallback-failure` for a reroute after a failed run, `--reason user-choice --route-by user` for a route the user named, and `--route-by judge` when a validated configured-judge response informed it.
 
 Under Delegation mode `manual`, `start` refuses a cross-family record without `--route-by user`, writes nothing and exits 1. Claude, `claude-session` and `subagent` are the Claude family; own-family records remain allowed. This check blocks the record, not the dispatch itself; an unavailable or invalid mode leaves the previous behavior unchanged.
 

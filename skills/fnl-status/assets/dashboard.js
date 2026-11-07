@@ -1011,8 +1011,15 @@
   band2.appendChild(pane("load cost", D.load ? "tokens, ~" + tok(D.load.avg_tokens_per_session) + " per session" : "", "", ld, missing("load") || "hooks not installed or consent not given", "bars4"));
   overview.appendChild(band2);
 
+  var unverified = D.accepted_unverified || [];
+  overview.appendChild(pane("accepted without verification", "per agent · ledger escape hatch", "",
+    unverified.length ? hbars(unverified.map(function (x) {
+      return {n: x.agent, v: x.count, label: String(x.count), tip: x.agent + ": " + x.count + " accepted without verification"};
+    }), "var(--warn)") : null, missing("delegation") || "no finished runs in this period"));
+
   /* Tables follow their panes; sources and footer stay shared. */
   var tabs = TABS.get("overview").tableRows, delegationTables = tabs;
+  if (unverified.length) tabs.push(tableOf("accepted without verification", ["agent", "runs"], unverified.map(function (x) { return [x.agent, x.count]; })));
   if (D.use) tabs.push(tableOf("use", ["name", "calls"], D.use.map(function (u) { return [u.name, u.count]; })));
   if (D.load && D.load.top) tabs.push(tableOf("load (estimate)", ["skill", "tokens", "loads"], D.load.top.map(function (x) { return [x.name, x.tokens, x.loads]; })));
   if (D.depth) tabs.push(tableOf("depth", ["depth", "receipts", "reworked"], D.depth.map(function (x) { return [x.depth, x.receipts, x.reworked]; })));
