@@ -21,10 +21,10 @@ svg { width: 100%; min-width: 900px; display: block; }
 <div class="frame">
 <p class="eyebrow">Architecture · finolabs-vibecode</p>
 <h1>How the skills work together</h1>
-<p class="sub">Setup is one skill with Quick, Advanced and subcommands. The hook points the agent at the router; the router hands work to delegation, gates, and session and git skills; the commands you type keep the machine's config and logs current.</p>
+<p class="sub">Setup is one skill with Quick, Advanced and subcommands. The hook points the agent at the router; the router hands work to delegation (parallel pools), gates, and session and git skills; the commands you type keep the machine's config and logs current.</p>
 <svg viewBox="0 0 1280 1064" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="skills-architecture-light-title skills-architecture-light-desc">
 <title id="skills-architecture-light-title">How the finolabs-vibecode skills work together</title>
-<desc id="skills-architecture-light-desc">Architecture of the 17-skill set for release 0.2.0: a session-start hook reminds the agent to use the coding router, which hands work to delegation (delegate_env, log_scan), gates (verify_claim with judge, review_route, post_review, merge_check), and session and git skills (including fnl-navigator), while setup and status commands manage configuration and logs on the user machine.</desc>
+<desc id="skills-architecture-light-desc">Architecture of the 17-skill set for release 0.2.0: a session-start hook reminds the agent to use the coding router, which hands work to delegation (parallel pools, delegate_env, log_scan), gates (verify_claim with judge, review_route, post_review, merge_check), and session and git skills (context snapshots, fnl-navigator), while setup and status commands manage configuration and logs on the user machine.</desc>
 <defs>
 <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5B5B79"/></marker>
 <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#14627A"/></marker>
@@ -80,9 +80,9 @@ svg { width: 100%; min-width: 900px; display: block; }
 <text x="504" y="809" fill="#5B5B79" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">WRITES</text>
 <rect x="650.0" y="800" width="40" height="12" rx="2" fill="#F7F7FB"/>
 <text x="670" y="809" fill="#5B5B79" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">READS</text>
-<text x="64" y="488" fill="#5B5B79" font-size="14" font-style="italic" font-family="'Space Grotesk', system-ui, sans-serif">A hand-off to your</text>
-<text x="64" y="508" fill="#5B5B79" font-size="14" font-style="italic" font-family="'Space Grotesk', system-ui, sans-serif">own family is just you</text>
-<text x="64" y="528" fill="#5B5B79" font-size="14" font-style="italic" font-family="'Space Grotesk', system-ui, sans-serif">doing the work.</text>
+<text x="64" y="488" fill="#5B5B79" font-size="13" font-style="italic" font-family="'Space Grotesk', system-ui, sans-serif">Agent families are pools:</text>
+<text x="64" y="508" fill="#5B5B79" font-size="13" font-style="italic" font-family="'Space Grotesk', system-ui, sans-serif">runs up to your limit,</text>
+<text x="64" y="528" fill="#5B5B79" font-size="13" font-style="italic" font-family="'Space Grotesk', system-ui, sans-serif">with per-family caps.</text>
 <rect x="512" y="76" width="240" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="512" y="76" width="240" height="72" rx="8" fill="#EDDFF7" stroke="#4B1E73" stroke-width="1.2"/>
 <rect x="520" y="82" width="38" height="12" rx="2" fill="none" stroke="#4B1E73" stroke-opacity="0.5" stroke-width="0.8"/>
@@ -100,7 +100,7 @@ svg { width: 100%; min-width: 900px; display: block; }
 <rect x="72" y="258" width="38" height="12" rx="2" fill="none" stroke="#4B1E73" stroke-opacity="0.5" stroke-width="0.8"/>
 <text x="91.0" y="267" fill="#4B1E73" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">COORD</text>
 <text x="232.0" y="284" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-delegate</text>
-<text x="232.0" y="301" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">route_task · delegate_env · log_scan</text>
+<text x="232.0" y="301" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">parallel pools · route_task · log_scan</text>
 <text x="232.0" y="314" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">brief · dispatch · receipt-gated accept</text>
 <rect x="64" y="364" width="152" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="64" y="364" width="152" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
@@ -131,7 +131,7 @@ svg { width: 100%; min-width: 900px; display: block; }
 <rect x="864" y="252" width="352" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="864" y="252" width="352" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
 <text x="1040.0" y="284" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-session-hygiene</text>
-<text x="1040.0" y="301" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">context steward (script + judge)</text>
+<text x="1040.0" y="301" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">context snapshots (Claude/Agy) · steward</text>
 <text x="1040.0" y="314" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">titles · handovers · knowledge</text>
 <rect x="864" y="364" width="168" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="864" y="364" width="168" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
@@ -143,8 +143,8 @@ svg { width: 100%; min-width: 900px; display: block; }
 <text x="1132.0" y="420" fill="#5B5B79" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">SemVer · tags · changelog</text>
 <rect x="864" y="476" width="352" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="864" y="476" width="352" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
-<rect x="872" y="482" width="68" height="12" rx="2" fill="none" stroke="#5B5B79" stroke-opacity="0.5" stroke-width="0.8"/>
-<text x="906.0" y="491" fill="#5B5B79" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">NAVIGATOR</text>
+<rect x="872" y="482" width="38" height="12" rx="2" fill="none" stroke="#5B5B79" stroke-opacity="0.5" stroke-width="0.8"/>
+<text x="891.0" y="491" fill="#5B5B79" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">AGENT</text>
 <text x="1040.0" y="508" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-navigator</text>
 <text x="1040.0" y="524" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">course check vs anchors · nav_state.py</text>
 <text x="1040.0" y="537" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">small model + judge · up to 3 options</text>
@@ -154,7 +154,7 @@ svg { width: 100%; min-width: 900px; display: block; }
 <text x="88.0" y="691" fill="#156B58" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">FILE</text>
 <text x="280.0" y="706" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">host config</text>
 <text x="280.0" y="722" fill="#5B5B79" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">~/.finolabs/vibecode/host.md</text>
-<text x="280.0" y="735" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">roles &amp; judge · quota cache · allowlists · mode</text>
+<text x="280.0" y="735" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">roles &amp; judge · quota pools · parallel limits · mode</text>
 <rect x="520" y="676" width="192" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="520" y="676" width="192" height="72" rx="8" fill="#DCF3E8" stroke="#156B58" stroke-width="1" stroke-opacity="0.75"/>
 <rect x="528" y="682" width="32" height="12" rx="2" fill="none" stroke="#156B58" stroke-opacity="0.5" stroke-width="0.8"/>
@@ -192,8 +192,8 @@ svg { width: 100%; min-width: 900px; display: block; }
 <rect x="566" y="880" width="148" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="566" y="880" width="148" height="72" rx="8" fill="rgba(11,11,23,0.02)" stroke="rgba(11,11,23,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
 <text x="640.0" y="912" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-status</text>
-<text x="640.0" y="927" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">usage dashboard</text>
-<text x="640.0" y="939" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">overview &amp; now tabs</text>
+<text x="640.0" y="927" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Now tab &amp; overview</text>
+<text x="640.0" y="939" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">repos · quota pools</text>
 <rect x="732" y="880" width="148" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="732" y="880" width="148" height="72" rx="8" fill="rgba(11,11,23,0.02)" stroke="rgba(11,11,23,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
 <text x="806.0" y="912" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-restore-point</text>
