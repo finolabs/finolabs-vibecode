@@ -20,7 +20,7 @@ support by itself.
 This procedure reports only; it never runs a compaction command or starts a session (advisory, agent judgment). The script and judge are included for standalone skill installs.
 
 **Prepare the handover.** On `prepare`, write goal, decisions, work in progress and next action now; before compaction, use the plugin's `handover_state.py write --session <id>` with the text on stdin, then write back decisions (advisory, agent judgment). The script enforces UTF-8, at most 8 KiB without truncation, private local storage, a 24-hour read lifetime and at most 20 files. The existing `session_start.py` script appends a safe handover only on source `compact`. The handover and session-start scripts belong to the plugin; a standalone skill install keeps the manual
-handover procedure below (advisory, agent judgment), with no automatic re-injection promised. Vendor docs (07/11/2026; Codex 0.167.0) document SessionStart `source: compact` delivery on both hosts; live plugin delivery remains unverified (sources below).
+handover procedure below (advisory, agent judgment), with no automatic re-injection promised. Vendor docs (07/11/2026; Codex 0.167.0) document SessionStart `source: compact` delivery on both hosts; live plugin delivery remains unverified on every host (sources below).
 
 An agent can read its own context percentage when a fresh, correctly identified snapshot or supported host reading exists. **About 60% is advisory (agent judgment)**: a point to consider a boundary, not the host's compaction threshold, which is usually later (below); never invent a percentage. At task boundaries, use host-exposed usage if available and judge pressure from the work. The following choices are advisory, enforced by agent judgment:
 
