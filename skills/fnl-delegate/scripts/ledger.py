@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 import statistics
 import subprocess
@@ -128,6 +129,10 @@ def cmd_finish(args):
         sys.exit(f"ledger: no start line for {args.id}")
     if args.id in finishes:
         sys.exit(f"ledger: {args.id} already has a finish line")
+    if args.head is not None and starts[args.id]["kind"] != "implement":
+        sys.exit("ledger: only implementation dispatches can bind a head")
+    if args.head is not None and not re.fullmatch(r"[0-9a-f]{40}", args.head):
+        sys.exit("ledger: invalid head")
     extra = {}
     if args.accept_unverified and args.outcome != "accepted":
         sys.exit("ledger: --accept-unverified requires accepted")
@@ -155,6 +160,7 @@ def cmd_finish(args):
                          "or use --accept-unverified --reason")
     append({
         **extra,
+        **({"head": args.head, "agent": starts[args.id]["agent"]} if args.head is not None else {}),
         "event": "finish", "id": args.id, "ts": now(), "outcome": args.outcome,
         "rework_rounds": args.rework_rounds, "tests": args.tests, "note": args.note,
     })
@@ -250,6 +256,7 @@ def build_parser():
 
     f = sub.add_parser("finish", help="record how a dispatch ended")
     f.add_argument("id")
+    f.add_argument("--head", help="exact reviewed implementation head for trusted review routing")
     f.add_argument("--outcome", required=True, choices=OUTCOMES)
     f.add_argument("--rework-rounds", type=int, default=0)
     f.add_argument("--tests", default="not-run", choices=TESTS)

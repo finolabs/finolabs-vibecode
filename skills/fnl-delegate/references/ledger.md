@@ -13,6 +13,8 @@ python3 -I "$L" summary --since 2026-11-01
 python3 -I "$L" summary --json           # the same rows as JSON, with quota and error counts
 ```
 
+For review routing, the coordinator adds `--head <implementation head SHA>` to `finish`. This validates a forty-character lowercase SHA and copies the agent from the dispatch's start record; legacy records without a head cannot establish authorship. Commit trailers alone are insufficient.
+
 `--grade` is one of `easy`, `medium`, `hard`, `very-hard` and `ultra-hard` (`SKILL.md` "Grade" defines them); lines written before `ultra-hard` existed still read.
 
 Record why a route was taken: `--reason fallback-quota` for a quota fallback, `--reason fallback-failure` for a reroute after a failed run, `--reason user-choice --route-by user` for a route the user named, and `--route-by judge` when the route judge settled it.
