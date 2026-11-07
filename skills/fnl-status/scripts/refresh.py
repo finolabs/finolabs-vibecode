@@ -35,6 +35,7 @@ sys.path.insert(0, str(HERE))  # -I leaves the script folder off the path
 import fnl_metrics as fm  # noqa: E402
 import agent_processes as ap  # noqa: E402
 import project_progress as pp  # noqa: E402
+import parallel_slots as ps  # noqa: E402
 
 SKILLS = HERE.parent.parent
 PAGE = HERE.parent / "assets/dashboard.html"
@@ -346,6 +347,28 @@ def previous_projects():
         return {}
 
 
+def slot_metrics():
+    """Closed numeric projection; unavailable capacity is null, never a fake five."""
+    try:
+        state = ps.status()
+        limit = state['limit']
+        if type(limit) is not int or not 1 <= limit <= 32 or set(state['families']) != set(ps.FAMILIES):
+            raise ValueError('slots')
+        rows = {}
+        for family in ps.FAMILIES:
+            row = state['families'][family]
+            opened, cap = row['open'], row['cap']
+            if (type(opened) is not int or not 0 <= opened <= ps.LEDGER_LIMIT
+                    or (cap is not None and (type(cap) is not int or not 1 <= cap <= limit))):
+                raise ValueError('slots')
+            rows[family] = dict(open=opened, cap=cap)
+        if state['source'] not in ('host config', 'default'):
+            raise ValueError('source')
+        return dict(parallel_limit=limit, family_slots=rows, parallel_source=state['source'])
+    except (OSError, ValueError, KeyError, TypeError, RecursionError):
+        return dict(parallel_limit=None, family_slots=None, parallel_source='unknown')
+
+
 def running_metrics(generated, events=()):
     snapshot = ap.empty('snapshot off')
     if fm.enabled() and ap.enabled():
@@ -380,7 +403,7 @@ def running_metrics(generated, events=()):
     families = {'antigravity': 'agy', 'claude': 'claude', 'codex': 'codex'}
     for process in processes:
         process['not_started_by_coordinator'] = not any(families.get(row['agent']) == process['family'] for row in rows) if not note else False
-    return {'open': rows, 'processes': processes, 'snapshot': snapshot, 'ledger_note': note, 'quota': quota_meters(), 'live': live_sessions(events, generated)}
+    return {'open': rows, 'processes': processes, 'snapshot': snapshot, 'ledger_note': note, 'quota': quota_meters(), 'live': live_sessions(events, generated), **slot_metrics()}
 
 
 def progress_metrics(events, running, cwd=None):

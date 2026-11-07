@@ -490,7 +490,7 @@ class DashboardScriptTest(unittest.TestCase):
                  ('project', 'merged', 'T301 to T302', ['done', 'agent on it', 'not accepted', 'to do'], 0, 0, 0),
                  ('agents', 'lane', None, ['elapsed', 'budget', 'check at', 'cap'], 0, 0, 1),
                  ('agents', 'quota-bricks', 'claude quota', ['remaining', 'resets', 'measured'], 0, 0, 1),
-                 ('agents', 'slots', 'slots', ['lit'], 0, 0, 0),
+                 ('agents', 'slots', 'slots', ['lit', 'claude', 'codex', 'antigravity', 'source'], 0, 0, 0),
                  ('project', 'active-host', 'claude', ['sessions'], 0, 0, 0),
                  ('agents', 'no-process', 'no process', [], 1, 0, 0),
                  ('agents', 'info-button', 'How to read this', [], 5, 0, 0),
@@ -857,6 +857,25 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render_freshness(data)
         self.assertEqual(len(self.marks(out, 'slot')), 3)
         self.assertEqual(self.marks(out, 'capacity-caption')[0]['text'], 'slots (3)')
+
+    def test_parallel_capacity_above_five_family_tooltip_and_unknown(self):
+        data = self.sample()
+        running = data['running']
+        running.update(parallel_limit=12, parallel_source='host config', family_slots={
+            'claude': dict(open=1, cap=None), 'codex': dict(open=3, cap=3),
+            'antigravity': dict(open=0, cap=None)})
+        out = self.render_freshness(data)
+        self.assertEqual(len(self.marks(out, 'slot')), 12)
+        self.assertEqual(sum('lit' in m['cls'].split() for m in self.marks(out, 'slot')), 4)
+        mark = self.marks(out, 'slots')[0]
+        self.assertEqual(mark['spec']['rows'], [['lit', '4 of 12'], ['claude', '1 open'],
+                         ['codex', '3 open of cap 3'], ['antigravity', '0 open'], ['source', 'host config']])
+        self.assertEqual(mark['attrs']['aria-label'], '4 of 12 slots lit')
+        running.update(parallel_limit=None, family_slots=None, parallel_source='unknown')
+        out = self.render_freshness(data)
+        self.assertEqual(self.marks(out, 'slot'), [])
+        self.assertEqual(self.marks(out, 'slots')[0]['attrs']['aria-label'], 'parallel slots unknown')
+        self.assertEqual(self.marks(out, 'capacity-caption')[0]['text'], 'slots (?)')
 
     def pipeline_sample(self):
         data = self.sample()

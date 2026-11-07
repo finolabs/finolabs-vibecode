@@ -23,3 +23,4 @@
 | [Setup restructure](setup-restructure.md) | implemented; release 0.2.0 core, features, Quick/Advanced companions and guarded instructions writer have local tests; live-host interviews and Codex word passing remain unverified. |
 | [Run hygiene](run-hygiene.md) | implemented; release 0.2.0 brief lint, environment allowlists, guarded log scan/redaction and ledger states have local tests; real-host dispatch remains unverified and private HOME is deferred. |
 | [Context snapshot](context-snapshot.md) | implemented; release 0.2.0 local Claude status-line recorder, fresh context reads, steward checks and previewed settings writer; live status-line delivery and user-owned composition remain unverified. |
+| [Parallel agent instances](parallel-instances.md) | implemented; targeted local verification recorded in the spec; integration and live-host behavior remain unverified. |

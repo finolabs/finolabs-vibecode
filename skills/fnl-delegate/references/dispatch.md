@@ -8,6 +8,8 @@ When a model's quota runs out, move to the next route the rules give: another mo
 
 ## Parallel dispatch
 
+Read [parallel-dispatch.md](parallel-dispatch.md) for family pools, shared quota and advisory total/per-family slots before assigning runs (advisory, agent judgment). Several independent runs may use the same family.
+
 - Size each run small: one task or a tight pair, budget up to 90 minutes. A long run holding many tasks is slower, bloats the agent's context and loses more when it breaks.
 - Give each parallel run its own git worktree on its own branch, cut from the integration branch tip. One writer per worktree.
 - Merge back one branch at a time into the integration branch, rerunning the targeted tests after each merge. Resolve conflicts yourself or brief a fix run. Naming, syncing, conflicts and cleanup of these branches follow `fnl-commit-messages` "Branches".

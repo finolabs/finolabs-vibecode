@@ -1039,6 +1039,22 @@
       "claude": 3,
       "codex": 7,
       "antigravity": 2
+    },
+    "parallel_limit": 5,
+    "parallel_source": "default",
+    "family_slots": {
+      "claude": {
+        "open": 1,
+        "cap": null
+      },
+      "codex": {
+        "open": 2,
+        "cap": null
+      },
+      "antigravity": {
+        "open": 1,
+        "cap": null
+      }
     }
   },
   "generated": "2026-10-31T18:00:00Z",
