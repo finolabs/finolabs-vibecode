@@ -31,7 +31,9 @@ on 2026-11-07 showed four problems:
 - An agent that cannot post its review reports why; the user sets it up (a narrow token for Codex, a remembered
   allow-rule for Antigravity); a coordinator relay is a counted fallback, not a standing arrangement (part D). This
   removes the need for a standing relay of security reviews.
-- Payloads to Jev are written in English; criteria written in another language are restated in English by the small
+- Jev is a recommendation, not a requirement. Every semantic judgment goes through one judge interface; when the user
+  does not choose Jev at setup, or Jev is unavailable, a small model of the host takes its place (part I).
+- Payloads to the judge are written in English; criteria written in another language are restated in English by the small
   model and both texts are kept in the report.
 
 ## A. The agent set
@@ -55,10 +57,11 @@ A new section in the canonical `host.md`, one line per role, strict and fail clo
 - code review: antigravity
 - security review: codex
 - navigator: claude
+- judge: host
 ```
 
-Keys are exactly `code review`, `security review` and `navigator`; values are a family named in `## Agents on this
-machine` (`claude`, `codex`, `antigravity`). Any other line, a duplicate key or an unknown family makes the section
+Keys are exactly `code review`, `security review`, `navigator` and `judge`; values are a family named in `## Agents on this
+machine` (`claude`, `codex`, `antigravity`), except `judge`, whose value is `jev` or `host`; absent means `host`. Any other line, a duplicate key or an unknown family makes the section
 unreadable and every role falls back to the rule in part C. At most 10 lines. Written only by `fnl-setup`, after a
 neutral Yes and No and a shown line, with defaults taken from the scan (the present families other than the
 coordinator's). The section never grants access or posting rights.
@@ -115,10 +118,10 @@ Enforcers: the script for the choice; `fnl-review-gate` text and agent judgment 
 1. Mechanical part, no model: runs exactly the tests the brief lists (never the full suite), compares the changed
    files with the brief's scope, checks that the head is the one reported, and prints `PASS` or `FAIL` with the
    evidence lines.
-2. Semantic part: for each acceptance criterion, a Jev question over the diff summary and test results (the
-   `typesafe-ai` skill; answers `yes`, `no`, `insufficient`; the distribution is kept). `no` and `insufficient` are
-   read by the coordinator. Jev informs judgment and grants no acceptance. Without an authorized Jev interface the
-   section says `not run` and the coordinator reads the criteria itself.
+2. Semantic part: for each acceptance criterion, a question to the judge (part I) over the diff summary and test
+   results; answers `yes`, `no`, `insufficient`. `no` and `insufficient` are read by the coordinator. The judge informs
+   judgment and grants no acceptance; a `yes` never replaces the mechanical part. A criterion that compares two
+   documents is split into one question per document and the answers are compared in code.
 3. It writes a receipt (head, test result, criteria answers) through `record.py`.
 
 `ledger.py finish --outcome accepted` refuses unless a receipt for the current head of the task's checkout exists. The
@@ -129,8 +132,8 @@ check cannot stop an agent that never uses `ledger.py`; the spec says so and doe
 ## F. The steward folds into session hygiene
 
 `context_steward.py` is unchanged. `fnl-session-hygiene` "Context pressure" gets the procedure in prose: run
-`context_steward.py check` with the counts and the threshold, ask Jev the one boundary question only when the script
-says `compact` and the boundary is not obvious, and run the script again. The agent file, its entry in the manifests
+`context_steward.py check` with the counts and the threshold, ask the judge (part I) the one boundary question only
+when the script says `compact` and the boundary is not obvious, and run the script again. The agent file, its entry in the manifests
 and `agents/openai.yaml` lines are removed. `compaction-steward.md` gets a note that the agent is retired.
 
 ## G. The navigator
@@ -152,8 +155,8 @@ Flow:
 2. A small model (the family and tier named for `navigator`; fast tier) turns each criterion and its evidence into a
    narrow question in English. A criterion in another language is restated in English; the report keeps the original
    and the sent text. A script checks that the payload holds only the allowed fields.
-3. Jev answers through `typesafe-ai` with `yes`, `no`, `insufficient`; TypeSafe is the approved processor, only the
-   needed fields are sent, spend guards stay on.
+3. The judge (part I) answers `yes`, `no` or `insufficient`. With Jev, only the needed fields are sent and spend
+   guards stay on.
 4. The navigator reports to the host, per anchor: status (on course, drifting, abandoned), items matching no anchor,
    Jev's answers verbatim with the evidence, and at most three options to steer back, each with its cost. "No drift"
    is a valid result; a finding without evidence is not allowed. It decides nothing and edits nothing.
@@ -174,6 +177,51 @@ and records the agreement; that result is part of acceptance.
 - `CLAUDE.md` is not edited by this work. If the owner later wants the "Standing relay" paragraph reworded as
   temporary, that is a separate pull request.
 
+## I. The judge: Jev when chosen, a small host model otherwise
+
+All semantic judgments of this spec (parts E, F and G) use one interface: a narrow question and its evidence in, one of
+`yes`, `no`, `insufficient` out. Two implementations:
+
+- **Jev** through the user's `typesafe-ai` skill, with its probability kept. Chosen at setup by a separate neutral Yes
+  and No in `fnl-setup` (it needs the user's own authorization and API budget; the skill being installed grants
+  neither) and recorded as `judge: jev`. Only a validated reply counts as Jev use.
+- **A small model of the host** (the fast tier of `fnl-delegate` `models.md`: a Haiku-class model on Claude, a mini
+  model on Codex, a flash model on Antigravity), the default when `judge` is absent or `host`. The question and the
+  evidence are in English, the answer is constrained to the three values, and for a `yes` the model must quote the
+  evidence line that supports it. A script checks that the quote occurs in the supplied evidence; if it does not, the
+  answer becomes `insufficient`. It gives no probability, so no threshold applies: only a checked `yes` counts as
+  support, and every `no` and `insufficient` goes to the coordinator. Nothing leaves the host's own provider.
+
+If Jev is chosen but unavailable at run time (no interface, an error, a missing budget), the host model takes over for
+that call and the report says so. Both judges inform and grant nothing; neither replaces the mechanical checks. The same
+rule holds for any other judgment in the plugin that today says "Jev, when available" (the steward boundary question,
+the route judge): the fallback is the small host model, not silence.
+
+Validation: one harness runs the same questions with either judge over cases whose answers are known from merged pull
+requests, and records agreement. A judge with no recorded agreement is labelled unvalidated in the reports that use it.
+First measurement (Jev, 2026-11-07, 12 cases from pull requests 138, 139 and 141, thresholds 0.7 and 0.3): 9 agree,
+2 unsure, 1 wrong (a contradiction between two documents, accepted at 0.88); all six corrected-version cases passed.
+The result drives the rules above: a judge is a filter, and cross-document consistency is decided in code.
+
+## J. Setup and instruction changes this spec needs
+
+- `fnl-setup`, user scope: after the scan, one question for the judge with three neutral choices (Jev, a small host
+  model, none), recorded as `judge`; the route-judge reference is replaced by it. Choosing Jev when `typesafe-ai` is
+  missing prints the install command (checked against the skill's official source at the time of writing, never
+  guessed), says that the user's own API key and budget are needed, and never reads, stores or searches for the key;
+  a read-only `--check` may report whether the variable is set without printing it. `companions.md` lists TypeSafe with
+  the condition "wants an external judge" and the data-processor note. README says the judge is optional and how to pick.
+- `fnl-setup`, user scope: asks for the three roles with defaults from the scan, and per family whether review posting is
+  set up (part D) with the exact setup step shown before any write. Section E and the steward explanation are
+  rewritten for the new agent set.
+- `fnl-setup`, `references/check.md`: reports roles, judge and posting state, each as configured, unverified or
+  missing.
+- `fnl-setup-instructions`, project scope: the `## Work tracking` block gains the `Outcome` line (goal and three to five
+  success criteria, dated), written only after the user's yes. User scope text stays free of machine settings.
+- Both skills use the same scope names in their text: user scope (everything under the user's account: host config,
+  consent, user-level instruction files) and project scope (one repository). The wider restructure of the setup skill
+  (a short core path with optional features loaded on demand) is a separate spec.
+
 ## Not in scope
 
 A forced rule that author and reviewer families differ; changing the review markers or `merge_check.py`; a hook for the
@@ -189,7 +237,9 @@ judgments listed.
   no network.
 - Posting: the `cannot-post` reasons, one relay per run, the receipt count, and `yes` recorded only after a seen marker.
 - `verify_claim.py` and the ledger check: refusal without a receipt, acceptance with one, the escape hatch recorded and
-  counted, Jev missing reported as `not run`.
+  counted, and the fallback from Jev to the host judge reported in the receipt.
+- The judge: the quote check turns an unquoted or misquoted `yes` into `insufficient`; the harness runs both judges on
+  the same cases; `judge` absent means `host`.
 - `fnl-steward` and `fnl-verifier` files gone, no manifest or text still names them as callable, `fnl-ask` map and
   counts updated, `check-references.py` and the manifests test green.
 - Navigator: `nav_state.py` output limited to the allowed fields, payload check, English restatement kept with the
