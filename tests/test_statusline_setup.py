@@ -5,6 +5,8 @@ import io
 import json
 import os
 from pathlib import Path
+import shlex
+import shutil
 import stat
 import sys
 import unittest
@@ -85,7 +87,7 @@ class StatuslineSetupTest(unittest.TestCase):
             code, out, err = self.cli("preview")
             self.assertEqual((code, err), (0, ""))
             self.assertIn("Recipe:", out)
-            self.assertIn("record <", out)
+            self.assertIn("record --host claude <", out)
             self.assertNotIn("--line", out)
             self.assertNotIn("Digest:", out)
             self.assertFalse(self.plan.exists())
@@ -195,8 +197,7 @@ class StatuslineSetupTest(unittest.TestCase):
         path = Path("/") / "synthetic install" / "plugin's scripts" / "context_snapshot.py"
         command = sl.statusline(path)["command"]
         self.assertTrue(command.startswith("python3 -I "))
-        import shlex
-        self.assertEqual(shlex.split(command), ["python3", "-I", str(path), "record", "--line"])
+        self.assertEqual(shlex.split(command), ["python3", "-I", str(path), "record", "--host", "claude", "--line"])
         digest = self.preview()
         with mock.patch.object(sl, "statusline", return_value={"type": "command", "command": "changed"}):
             self.refuse("apply", "--digest", digest, "--yes")
@@ -206,6 +207,130 @@ class StatuslineSetupTest(unittest.TestCase):
         for name in ("statusline_setup.py", "compact_setup.py"):
             self.assertEqual((ROOT / "scripts" / name).read_bytes(),
                              (ROOT / "skills" / "fnl-setup" / "scripts" / name).read_bytes())
+
+
+class AntigravityStatuslineTest(unittest.TestCase):
+    def setUp(self):
+        StatuslineSetupTest.setUp(self)
+        self.folder = self.home / ".gemini" / "antigravity-cli"
+        self.folder.mkdir(parents=True, mode=0o700)
+        self.target = self.folder / "settings.json"
+        self.plugin = self.home / ".gemini" / "config" / "plugins" / "finolabs-vibecode"
+        (self.plugin / "scripts").mkdir(parents=True)
+        (self.plugin / ".git").mkdir()
+        shutil.copyfile(ROOT / "scripts" / "context_snapshot.py", self.plugin / "scripts" / "context_snapshot.py")
+        patch = mock.patch.object(sl, "__file__", str(self.plugin / "scripts" / "statusline_setup.py"))
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def cli(self, action, *args):
+        return StatuslineSetupTest.cli(self, action, "--host", "antigravity", *args)
+
+    preview = StatuslineSetupTest.preview
+    apply = StatuslineSetupTest.apply
+    refuse = StatuslineSetupTest.refuse
+    test_yes_full_digest_expiry_and_mismatch_required = StatuslineSetupTest.test_yes_full_digest_expiry_and_mismatch_required
+    test_changed_target_and_tampered_plan_refused = StatuslineSetupTest.test_changed_target_and_tampered_plan_refused
+    test_private_plan_and_changed_data_root_refused = StatuslineSetupTest.test_private_plan_and_changed_data_root_refused
+    test_remove_never_removes_user_command = StatuslineSetupTest.test_remove_never_removes_user_command
+    test_foreign_settings_owner_refused = StatuslineSetupTest.test_foreign_settings_owner_refused
+    test_invalid_deep_duplicate_and_nonfinite_json_refused_without_echo = StatuslineSetupTest.test_invalid_deep_duplicate_and_nonfinite_json_refused_without_echo
+
+    def test_preview_apply_remove_backup_and_preserves_other_json_values(self):
+        before = b'{"allowRules":[{"tool":"example","allow":true}],"nested":{"number":1e2,"text":"\\u03bb"}}\n'
+        self.target.write_bytes(before)
+        original = json.loads(before)
+        digest = self.preview()
+        self.assertEqual(self.target.read_bytes(), before)
+        self.assertEqual(stat.S_IMODE(self.plan.stat().st_mode), 0o600)
+        plan = json.loads(self.plan.read_bytes())["plan"]
+        self.assertEqual(plan["host"], "antigravity")
+        self.assertEqual(shlex.split(plan["statusLine"]["command"]),
+                         ["python3", "-I", str(self.plugin / "scripts" / "context_snapshot.py"),
+                          "record", "--host", "antigravity", "--line"])
+        self.apply(digest)
+        self.assertEqual(json.loads(self.target.read_bytes()), {**original, "statusLine": sl.statusline(host="antigravity")})
+        backup, = self.folder.glob("*.bak-*")
+        self.assertEqual(backup.read_bytes(), before)
+        self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(self.target.stat().st_mode), 0o600)
+        self.apply(self.preview("--remove"))
+        self.assertEqual(json.loads(self.target.read_bytes()), original)
+        self.assertEqual(len(list(self.folder.glob("*.bak-*"))), 2)
+
+    def test_missing_settings_and_existing_statusline_recipe_only(self):
+        self.apply(self.preview())
+        self.assertEqual(json.loads(self.target.read_bytes()), {"statusLine": sl.statusline(host="antigravity")})
+        for value in (None, {}, "private" + "-command", sl.statusline(host="antigravity")):
+            self.target.write_text(json.dumps({"statusLine": value}))
+            before = self.target.read_bytes()
+            code, out, err = self.cli("preview")
+            self.assertEqual((code, err), (0, ""))
+            self.assertIn("record --host antigravity <", out)
+            self.assertNotIn("--line", out)
+            self.assertNotIn("private" + "-command", out)
+            self.assertNotIn("Digest:", out)
+            self.assertFalse(self.plan.exists())
+            self.assertEqual(self.target.read_bytes(), before)
+
+    def test_no_folder_or_host_substitution_on_apply(self):
+        self.refuse("preview", "--folder", str(self.folder))
+        self.assertFalse(self.plan.exists())
+        digest = self.preview()
+        code, _, _ = StatuslineSetupTest.cli(self, "apply", "--digest", digest, "--yes")
+        self.assertEqual(code, 1)
+        self.assertFalse(self.target.exists())
+        self.apply(digest)
+
+    def test_fixed_target_revalidated_even_for_rehashed_private_plan(self):
+        self.preview()
+        saved = json.loads(self.plan.read_bytes())
+        saved["plan"]["targets"][0]["path"] = str(self.home / ".claude" / "settings.json")
+        saved["digest"] = sl.common.digest(saved["plan"])
+        self.plan.write_text(json.dumps(saved))
+        self.refuse("apply", "--digest", saved["digest"], "--yes")
+        self.assertFalse(self.target.exists())
+        self.assertFalse((self.home / ".claude" / "settings.json").exists())
+
+    def test_self_contained_setup_copy_finds_whole_plugin_recorder(self):
+        with mock.patch.object(sl, "__file__", str(self.plugin / "skills" / "fnl-setup" / "scripts" / "statusline_setup.py")):
+            self.apply(self.preview())
+        self.assertEqual(shlex.split(json.loads(self.target.read_bytes())["statusLine"]["command"])[2],
+                         str(self.plugin / "scripts" / "context_snapshot.py"))
+
+    def test_unsafe_target_folder_and_symlinks_refuse_preview_and_apply(self):
+        self.target.write_bytes(b"{}")
+        for target in (self.target, self.folder, self.plugin, self.plugin / "scripts"):
+            for mode in (0o777, 0o775):
+                digest = self.preview()
+                original = stat.S_IMODE(target.stat().st_mode)
+                target.chmod(mode)
+                self.refuse("preview")
+                self.refuse("apply", "--digest", digest, "--yes")
+                self.assertEqual(self.target.read_bytes(), b"{}")
+                target.chmod(original)
+        for target in (self.target, self.folder, self.plugin, self.plugin / "scripts" / "context_snapshot.py"):
+            digest = self.preview()
+            other = target.with_name(target.name + "-original")
+            target.rename(other)
+            target.symlink_to(other, target_is_directory=other.is_dir())
+            self.refuse("preview")
+            self.refuse("apply", "--digest", digest, "--yes")
+            target.unlink()
+            other.rename(target)
+
+    def test_development_checkout_ancestor_git_and_git_pointer_refused(self):
+        other = self.home / "development-plugin"
+        shutil.copytree(self.plugin, other)
+        with mock.patch.object(sl, "__file__", str(other / "scripts" / "statusline_setup.py")):
+            self.refuse("preview")
+        for target in (self.home / ".gemini" / ".git", self.folder / ".git"):
+            target.mkdir()
+            self.refuse("preview")
+            target.rmdir()
+        (self.plugin / ".git").rmdir()
+        (self.plugin / ".git").write_text("gitdir: " + "elsewhere")
+        self.refuse("preview")
 
 
 if __name__ == "__main__":
