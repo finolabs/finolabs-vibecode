@@ -25,7 +25,7 @@ from tests.data_root_fixture import account
 
 FIXTURES = ROOT / "tests/fixtures/quota"
 COPIES = ["scripts/quota_probe.py", *[f"skills/{name}/scripts/quota_probe.py" for name in
-          ("fnl-setup", "fnl-delegate", "fnl-scan-agents", "fnl-update")]]
+          ("fnl-setup", "fnl-delegate", "fnl-scan-agents", "fnl-update", "fnl-review-gate")]]
 MEASURED = qp.timestamp("2026-11-05T09:00:00Z")
 
 
@@ -1175,12 +1175,8 @@ class AccountCommandTest(unittest.TestCase):
 class CopiesTest(unittest.TestCase):
     def test_all_copies_identical_and_listed(self):
         actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob("quota_probe.py")}
-        # Package A adds the self-contained review skill; integration owns
-        # adding its copy-group entry to validate.yml. Preserve the existing
-        # CI inventory assertions until that package lands.
-        packaged = [*COPIES, "skills/fnl-review-gate/scripts/quota_probe.py"]
-        self.assertEqual(actual, set(packaged))
-        for name in packaged:
+        self.assertEqual(actual, set(COPIES))
+        for name in COPIES:
             self.assertEqual((ROOT / name).read_bytes(), (ROOT / COPIES[0]).read_bytes())
         ci = (ROOT / ".github/workflows/validate.yml").read_text()
         for name in COPIES:

@@ -39,6 +39,17 @@ class ReviewConfigTest(unittest.TestCase):
             for skill in skills:
                 self.assertEqual((ROOT / "skills" / skill / "scripts" / name).read_bytes(), expected)
 
+    def test_review_copy_inventory_is_complete_and_listed_in_ci(self):
+        ci = (ROOT / ".github/workflows/validate.yml").read_text()
+        for name in ("review_route.py", "review_config.py", "post_review.py"):
+            skills = ("fnl-delegate", "fnl-review-gate") if name != "post_review.py" else ("fnl-review-gate",)
+            copies = {f"scripts/{name}", *[f"skills/{skill}/scripts/{name}" for skill in skills]}
+            actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob(name)}
+            with self.subTest(script=name):
+                self.assertEqual(actual, copies)
+                for path in copies:
+                    self.assertIn('"' + path + '"', ci)
+
     def test_review_skill_scripts_run_without_repository(self):
         # Copy only the installed skill, with no repository scripts or test
         # helpers on sys.path. Help exercises CLI imports without posting,
