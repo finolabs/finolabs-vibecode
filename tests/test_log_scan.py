@@ -212,8 +212,66 @@ class LogScanTest(unittest.TestCase):
             self.assertFalse(name in output, 'secret-shaped name exposed')
             self.assertTrue(sp.safe_name(name) is None, 'secret-shaped name accepted')
 
+    def test_large_benign_logs_and_planted_value(self):
+        from tests.scan_timing import timed_scan
+        import json
+        benign = ''.join(f'step {i}: ok\n' for i in range(5000))
+        events = ''.join(json.dumps({'event': 'step', 'index': i, 'status': 'ok'}) + '\n'
+                         for i in range(2000))
+        for text in (benign, 'name: value\n' * 5000, events):
+            self.write(text)
+            status = timed_scan(self, lambda: log_scan.scan(self.log)['status'])
+            self.assertEqual(status, 'no_findings')
+        for position in (0, len(benign) // 2, len(benign)):
+            before, after = benign[:position] + 'ACCOUNT_' + 'TOKEN=', '\n' + benign[position:]
+            self.write(before + self.planted() + after)
+            preview = log_scan.redact(self.log)
+            self.assertEqual(preview['status'], 'findings')
+            log_scan.redact(self.log, yes=True, digest=preview['digest'])
+            self.assert_output(self.log.read_text(), before + '[REDACTED]' + after)
+
+    def test_plain_pair_bound_refuses_without_a_finding(self):
+        from tests.scan_timing import timed_scan
+        self.write('a=b ' * 250000)
+        self.assertEqual(timed_scan(self, lambda: log_scan.scan(self.log)['status']), 'no_findings')
+        self.write('a=b ' * (sp.MAX_PAIRS + 1))
+        self.assertEqual(timed_scan(self, lambda: log_scan.scan(self.log)['status']), 'not_scanned')
+        self.assert_output(self.cli('show', str(self.log)), (2, 'not_scanned\n'))
+        with self.assertRaises(ValueError):
+            log_scan.redact(self.log, yes=True)
+
+    def test_dump_requires_distinct_environment_style_names(self):
+        self.assertFalse(sp.findings('NAME_0=value\n' * 2000), 'repeated name flagged')
+        self.assertFalse(sp.findings('\n'.join(f'NAME{i}=value' for i in range(20))),
+                         'names without underscores flagged')
+        pairs = [f'NAME_{i}=value' for i in range(10)]
+        self.assertFalse(sp.findings('\n'.join(pairs[:9] * 10)), 'nine distinct names flagged')
+        self.assertEqual(len(sp.findings('\n'.join(pairs))), 10)
+        self.assertEqual(len(sp.findings(pairs[0] + '\n' * 199 + ' '.join(pairs[1:]))), 10)
+        self.assertFalse(sp.findings(pairs[0] + '\n' * 200 + '\n'.join(pairs[1:])),
+                         'out-of-window names flagged')
+
+    def test_sensitive_name_parts(self):
+        value = 'fixture' * 4
+        for name in ('AUTHOR_NAME', 'PASSENGER', 'COMPASS', 'SESSIONS_DIR', 'PRIVATEER', 'COOKIEJAR'):
+            self.assertFalse(sp.findings(name + '=' + value), 'unrelated name flagged')
+        for name in ('AUTH_TOKEN', 'DB_PASS', 'AUTH', 'SESSION_ID', 'DB_PRIVATE'):
+            self.assertTrue(sp.findings(name + '=' + value), 'sensitive name missed')
+
+    def test_leading_bom_preserves_raw_spans(self):
+        for prefix in ('', '\x1b[31m'):
+            self.write('\ufeff' + prefix + self.planted() + '\nordinary')
+            result = log_scan.scan(self.log)
+            self.assertEqual(result['status'], 'findings')
+            self.assertEqual(result['hits'][0]['start'], 1 + len(prefix))
+            self.assert_output(log_scan.safe_view(result), '\ufeff' + prefix + '[REDACTED]\nordinary')
+        self.write('\ufeffordinary\n')
+        self.assertEqual(log_scan.scan(self.log)['status'], 'no_findings')
+        self.write('\ufeff\ufeffordinary')
+        self.assertEqual(log_scan.scan(self.log)['status'], 'not_scanned')
+
     def test_match_cap_redacts_whole_log(self):
-        self.write(('a=b ' * (sp.MAX_BYTES // 4)))
+        self.write((self.planted() + '\n') * sp.MAX_MATCHES)
         result = log_scan.scan(self.log)
         self.assertEqual(result['status'], 'findings')
         self.assertLessEqual(len(result['hits']), sp.MAX_MATCHES)

@@ -54,6 +54,16 @@ class RunEnvironmentTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             delegate_env.names_from_host(text.replace('; approved: yes', ''), 'codex')
 
+    def test_sensitive_names_use_underscore_parts_for_additions(self):
+        for name in ('AUTHOR_NAME', 'PASSENGER', 'COMPASS', 'SESSIONS_DIR'):
+            self.assertFalse(run_env.SENSITIVE.search(name), 'unrelated name flagged')
+            self.assertEqual(delegate_env.names_from_host('## Delegate environment\n- codex: ' + name + '\n',
+                                                          'codex'), [name])
+        for name in ('AUTH_TOKEN', 'DB_PASS'):
+            self.assertTrue(run_env.SENSITIVE.search(name), 'sensitive name missed')
+            with self.assertRaises(ValueError):
+                delegate_env.names_from_host('## Delegate environment\n- codex: ' + name + '\n', 'codex')
+
     def test_names_controls_duplicates_and_malformed_section_refuse(self):
         bad = ['lower', 'A-B', 'A*', 'A=value', 'A' * 65, 'LD_PRELOAD', 'DYLD_INSERT_LIBRARIES',
                'BASH_ENV', 'ENV', 'NODE_OPTIONS', 'PYTHONPATH', 'PERL5OPT', 'RUBYOPT',

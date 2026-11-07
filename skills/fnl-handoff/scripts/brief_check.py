@@ -14,13 +14,15 @@ ENV_RULE = ('never print, dump, log or assert on the process environment or any 
 
 
 def lint(text):
+    hits = sp.findings(text)
+    text = text.removeprefix('\ufeff')
     lines = text.splitlines()
     errors = [('rule_1_heading', 1) for name in HEADINGS if '## ' + name not in lines]
     constraints = text.split('## Constraints\n', 1)[-1].split('\n## ', 1)[0] if '## Constraints\n' in text else ''
     if ENV_RULE not in ' '.join(constraints.split()):
         errors.append(('rule_1_environment', next((i for i, line in enumerate(lines, 1)
                                                   if line == '## Constraints'), 1)))
-    errors.extend(('rule_4_secret', hit['line']) for hit in sp.findings(text))
+    errors.extend(('rule_4_secret', hit['line']) for hit in hits)
     return sorted(set(errors), key=lambda e: (e[1], e[0]))
 
 

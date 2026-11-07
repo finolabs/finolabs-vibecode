@@ -48,3 +48,5 @@ Base and new commit SHAs, the test output, uncommitted files, open points.
 ```
 
 **Secrets and environments.** Run `python3 -I <this skill folder>/scripts/brief_check.py <brief>` before dispatch. This rule-1 lint requires the headings and environment constraint and refuses rule-4 secret patterns; diagnostics name only the rule and line. It is a lint, not the allowlist control.
+
+**Unreadable briefs.** `rule_1_unreadable line=1` means the file could not be read safely: unreadable, invalid UTF-8, over 8 MiB, containing NUL, an unsupported escape, a C1 control or a Unicode format character (category Cf, including a zero-width joiner or BOM). One leading BOM is stripped before linting; any later BOM remains unreadable. These characters make a log `not_scanned`.

@@ -39,6 +39,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Keep benign log pairs out of the secret-hit cap, require ten distinct environment-style dump names, and match added sensitive words as underscore-delimited name parts. Accept one leading BOM while refusing later BOMs, other Unicode format characters and C1 controls.
+
 - Scan raw OSC payloads as well as normalized log text, bound candidate matches, refuse unsupported controls, and expand secret detection and child-environment guards. Replace process open-file queries with the 60-second mtime guard and final metadata recheck; distinguish dispatch refusal from child exits.
 
 - Enforce the judge network exception with canonical opt-in, closed capped payloads, refusal before sending secrets or machine paths, verified transport, a 24-call cap and explicit host fallback. Require meaningful host quotes, refuse module-based full-suite runners, and show accepted-without-verification counts per agent.

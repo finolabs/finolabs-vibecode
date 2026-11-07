@@ -35,7 +35,8 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    command variables, `*_PROXY`, `SSL_CERT_*`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`,
    `CURL_CA_BUNDLE`, `NODE_TLS_REJECT_UNAUTHORIZED`, `NODE_PATH`, `PERLLIB`, `SHELLOPTS`, `PS4`,
    `PROMPT_COMMAND`, `JAVA_TOOL_OPTIONS`). A name that looks secret (contains KEY, TOKEN, SECRET, PASSWORD,
-   CREDENTIAL, PASS, AUTH, COOKIE, SESSION or PRIVATE) needs its own neutral Yes and No in `fnl-setup` that names the variable and the receiving agent family.
+   CREDENTIAL, or has PASS, AUTH, COOKIE, SESSION or PRIVATE as an underscore-delimited name part)
+   needs its own neutral Yes and No in `fnl-setup` that names the variable and the receiving agent family.
    `--claude-config-dir` is Claude-only: absolute, no `..`, a current-user-owned directory, no symlink
    components, not group/world-writable and outside git work trees (including ancestor markers); ancestors
    must be root- or user-owned and not group/world-writable, as in the quota probe.
@@ -58,16 +59,24 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    `gho_`, `ghu_`, `ghs_`, `github_pat_`, `glpat-`, `xoxb-`, `xoxp-`, `npm_`, `AKIA`, `ASIA`, `AIza`
    followed by at least 16 token characters (`[A-Za-z0-9+/_=.-]`); private-key blocks from their
    `-----BEGIN` line; `Authorization: Bearer` followed by at least 16 token characters; and values of
-   at least 16 characters after a name containing KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, PASS, AUTH,
-   COOKIE, SESSION or PRIVATE (case-insensitive, including lowercase `name=value` and quoted values with
-   spaces or punctuation). Environment dumps are ten or more uppercase `NAME=value` or `'NAME': 'value'`
-   pairs within 200 raw lines. At 1,000 candidate matches across raw and normalized scans (including
-   non-secret pairs), stop with one `match_limit` finding covering the whole input; `show` and `redact`
-   then replace the whole log. Matches are iterated, never all materialized.
+   at least 16 characters after a name containing KEY, TOKEN, SECRET, PASSWORD or CREDENTIAL, or having
+   PASS, AUTH, COOKIE, SESSION or PRIVATE as an underscore-delimited name part (case-insensitive,
+   including lowercase `name=value` and quoted values with spaces or punctuation). Environment dumps
+   require at least ten distinct environment-style names (uppercase, containing an underscore) in
+   `NAME=value` or `'NAME': 'value'` pairs within 200 raw lines; repeating one name does not qualify.
+   At 1,000 candidate hits across raw and normalized scans (known prefixes, bearer lines, private-key
+   blocks, sensitive names with qualifying values, or pairs in a qualifying environment dump), stop with
+   one `match_limit` finding covering the whole input; `show` and `redact` then replace the whole log.
+   Harmless pairs do not count toward that cap. A separate limit of 250,000 pairs per scan pass bounds
+   pair matching; exceeding it gives `not_scanned`, without a finding or redaction. Matches are iterated;
+   only environment-style pairs are retained for the dump window.
    The stance is to prefer false positives; no ignore list exists. `no_findings` means only that nothing
    matched these rules. This is a best-effort filter, not proof. Binary, compressed, unreadable or oversize
    (over 8 MiB) logs, lone ESC, unrecognized escape forms, C1 controls and Unicode format characters
-   (including zero-width characters) give `not_scanned`. CR/LF token wrapping and other split-value
+   (category Cf, including zero-width joiners and BOMs) give `not_scanned` for a log and
+   `rule_1_unreadable` for a brief. One leading BOM is stripped for scanning, with raw log offsets and
+   line numbers preserved; any later BOM, other Cf character or C1 control remains a refusal.
+   CR/LF token wrapping and other split-value
    evasions remain outside these rules. Output contains fixed kinds, file and raw line number, and a
    variable name only if it matches rule 2 and is not itself secret-shaped: known prefixes or all-caps
    hex/base32 names of 20 or more characters are suppressed. No value, length, prefix or entropy is printed.

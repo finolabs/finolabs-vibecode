@@ -29,6 +29,20 @@ class BriefCheckTest(unittest.TestCase):
         errors = timed_scan(self, lambda: bool(brief_check.lint(text)))
         self.assertFalse(errors, 'unexpected lint findings; content suppressed')
 
+    def test_bom_and_unsupported_controls_vocabulary(self):
+        for char, accepted in (('\ufeff', True), ('\ufeff\ufeff', False),
+                               ('\u200d', False), ('\x85', False)):
+            with tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / 'brief.md'
+                path.write_text(char + self.brief())
+                output = io.StringIO()
+                with mock.patch.object(sys, 'argv', ['brief_check.py', str(path)]), contextlib.redirect_stdout(output):
+                    code = brief_check.main()
+                self.assertEqual(code, 0 if accepted else 1)
+                self.assertEqual(output.getvalue(), '' if accepted else 'rule_1_unreadable line=1\n')
+        with self.assertRaises(ValueError):
+            brief_check.lint(self.brief() + '\ufeff')
+
     def test_template_and_constraint_extension(self):
         text = (ROOT / 'skills/fnl-handoff/references/brief-template.md').read_text().split('```\n', 1)[1].split('\n```', 1)[0]
         self.assertEqual(brief_check.lint(text), [])
