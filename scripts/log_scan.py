@@ -6,14 +6,11 @@ import hashlib
 import os
 from pathlib import Path
 import stat
-import subprocess
 import sys
 import time
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import data_root as dr
-import run_env
 import secret_patterns as sp
 
 STATUSES = ('no_findings', 'findings', 'not_scanned')
@@ -109,9 +106,9 @@ def scan_descriptor(fd):
         text = raw.decode('utf-8')
         if any(ord(c) < 32 and c not in '\t\n\r\x1b' for c in text):
             raise ValueError()
+        hits = sp.findings(text)
     except (UnicodeError, ValueError):
         return dict(status='not_scanned', hits=[], text=None, digest=None)
-    hits = sp.findings(text)
     return dict(status='findings' if hits else 'no_findings', hits=hits, text=text,
                 digest=hashlib.sha256(raw).hexdigest())
 
@@ -133,48 +130,9 @@ def safe_view(result):
     return view
 
 
-def is_open(path, own_fd):
-    """Check descriptors without reading process arguments or environment."""
-    if sys.platform.startswith('linux'):
-        for process in Path('/proc').iterdir():
-            if not process.name.isdigit():
-                continue
-            try:
-                if process.stat().st_uid != os.getuid():
-                    continue
-                for entry in (process / 'fd').iterdir():
-                    if int(process.name) == os.getpid() and int(entry.name) == own_fd:
-                        continue
-                    try:
-                        if os.path.samefile(entry, path):
-                            return True
-                    except FileNotFoundError:
-                        pass
-            except FileNotFoundError:
-                pass
-        return False
-    # lsof is a read-only descriptor query; it receives the same minimal allowlist.
-    tool = '/usr/sbin/lsof'
-    if not Path(tool).is_file():
-        raise ValueError('refused')
-    done = subprocess.run([tool, '-Fpf', '--', str(path)], capture_output=True,
-                          timeout=5, env=run_env.environment())
-    if done.returncode not in (0, 1):
-        raise ValueError('refused')
-    pid = None
-    for line in done.stdout.decode('ascii', errors='strict').splitlines():
-        if line.startswith('p'):
-            pid = int(line[1:])
-        elif line.startswith('f'):
-            number = line[1:].rstrip('rwu')
-            if pid != os.getpid() or number != str(own_fd):
-                return True
-    return False
-
-
 def redact(path, *, yes=False, digest=None, root=None):
     with opened_log(path, root) as (folder, fd, info):
-        if time.time() - info.st_mtime < 60 or is_open(Path(path), fd):
+        if time.time() - info.st_mtime < 60:
             raise ValueError('refused')
         result = scan_descriptor(fd)
         view = safe_view(result)
@@ -197,8 +155,6 @@ def redact(path, *, yes=False, digest=None, root=None):
             # Recheck descriptor and pathname immediately before publication.
             check_file(fd)
             same_file(folder, Path(path).name, info)
-            if is_open(Path(path), fd):
-                raise ValueError('refused')
             os.replace(temporary, Path(path).name, src_dir_fd=folder, dst_dir_fd=folder)
             os.fsync(folder)
         finally:
@@ -254,7 +210,7 @@ def main():
                 print('digest=' + result['digest'])
                 print('transcript_stores: ~/.codex/sessions ~/.claude/projects')
         return 0
-    except (OSError, ValueError, UnicodeError, subprocess.SubprocessError):
+    except (OSError, ValueError, UnicodeError):
         print('not_scanned')
         return 2
 

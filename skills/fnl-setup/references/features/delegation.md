@@ -12,8 +12,10 @@ When more than one agent coordinates, recommend a host config and ledger path ev
 For each present agent family, ask: "Does <agent family> need any environment variable passed through?"
 Default none; neutral Yes and No, none preselected. After Yes ask for names only, never values or source files.
 Validate each name against `^[A-Z][A-Z0-9_]{0,63}$`; refuse duplicates and loader/interpreter/proxy controls
-(`LD_*`, `DYLD_*`, `BASH_ENV`, `ENV`, `NODE_OPTIONS`, `PYTHON*`, `PERL5*`, `RUBY*`, `GIT_*`, `*_PROXY`, `SSL_CERT_*`).
-For each name containing KEY, TOKEN, SECRET, PASSWORD or CREDENTIAL, ask separately:
+(`LD_*`, `DYLD_*`, `BASH_ENV`, `ENV`, `NODE_OPTIONS`, `PYTHON*`, `PERL5*`, `RUBY*`, `GIT_*`, `*_PROXY`, `SSL_CERT_*`,
+`NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`, `NODE_TLS_REJECT_UNAUTHORIZED`,
+`NODE_PATH`, `PERLLIB`, `SHELLOPTS`, `PS4`, `PROMPT_COMMAND`, `JAVA_TOOL_OPTIONS`).
+For each name containing KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, PASS, AUTH, COOKIE, SESSION or PRIVATE, ask separately:
 "Pass <VARIABLE_NAME> to <agent family>?" Offer neutral Yes and No with none preselected; only an explicit Yes
 records that name's `; approved: yes`. No, skip or timeout passes nothing. Store names only in canonical
 `## Delegate environment`: `- <family>: none` or one `- <family>: <NAME>` per line; sensitive names require

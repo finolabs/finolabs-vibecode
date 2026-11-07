@@ -76,3 +76,8 @@ A delegate the coordinator cannot reach is **unavailable** for routing; record i
 ## In-session subagents
 
 Every host has its own subagents (Claude Code's Agent tool, Codex agents, Antigravity agents). Use them for advisors, committee members and read-only lookups, whose results come back into the coordinator's turn. They never own an implementation task: their work and state disappear with the turn.
+
+`delegate_env.py --claude-config-dir` accepts only an absolute user-owned directory with no `..` or
+symlink components, no group/world write permission and no git work tree at it or an ancestor, matching
+the quota probe's directory checks. Refusal (including parsing) exits 125; child exit 2 stays 2.
+Other child codes pass through except 125 and signal termination, which map to 1 to keep refusal distinct.

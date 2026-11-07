@@ -11,13 +11,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
 import run_env
 
+REFUSED = 125
+
 FAMILIES = ('claude', 'codex', 'antigravity')
 
 
 class Parser(argparse.ArgumentParser):
     def error(self, message):
         print('delegate_env: refused', file=sys.stderr)
-        raise SystemExit(2)
+        raise SystemExit(REFUSED)
 
 
 def names_from_host(text, family):
@@ -61,9 +63,9 @@ def environment(family, source=None, host_text=None, config_dir=None):
         except FileNotFoundError:
             host_text = ''
     names = names_from_host(host_text, family)
-    if config_dir and family != 'claude':
+    if config_dir is not None and family != 'claude':
         raise ValueError('refused config directory')
-    return run_env.environment(source, names, {'CLAUDE_CONFIG_DIR': config_dir} if config_dir else None)
+    return run_env.environment(source, names, {'CLAUDE_CONFIG_DIR': config_dir} if config_dir is not None else None)
 
 
 def prepare_logs():
@@ -84,10 +86,11 @@ def main():
             raise ValueError('missing command')
         env = environment(args.family, config_dir=args.claude_config_dir)
         prepare_logs()
-        return subprocess.call(argv, env=env)
+        code = subprocess.call(argv, env=env)
+        return code if 0 <= code <= 255 and code != REFUSED else 1
     except (OSError, ValueError, UnicodeError):
         print('delegate_env: refused', file=sys.stderr)
-        return 2
+        return REFUSED
 
 
 if __name__ == '__main__':

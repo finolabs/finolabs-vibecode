@@ -17,12 +17,29 @@ import delegate_env
 
 
 class RunEnvironmentTest(unittest.TestCase):
+    def setUp(self):
+        # Production refuses writable ancestors. Simulate a trusted temporary
+        # parent so all fixtures remain in scratch space, never a real home.
+        parent = Path(tempfile.gettempdir()).resolve().stat()
+        original = os.fstat
+        def trusted_scratch(fd):
+            info = original(fd)
+            if (info.st_dev, info.st_ino) == (parent.st_dev, parent.st_ino):
+                fields = list(info)
+                fields[0] &= ~0o022
+                return os.stat_result(fields)
+            return info
+        patch = mock.patch.object(run_env.os, 'fstat', side_effect=trusted_scratch)
+        patch.start()
+        self.addCleanup(patch.stop)
+
     def test_only_allowlisted_names_and_explicit_form_names(self):
         source = {k: 'synthetic' for k in (*run_env.BASE_NAMES, 'EXTRA', 'ACCOUNT_TOKEN', 'CLAUDE_CONFIG_DIR')}
         env = run_env.environment(source)
         self.assertEqual(set(env), set(run_env.BASE_NAMES))
-        env = run_env.environment(source, ['EXTRA'], {'CLAUDE_CONFIG_DIR': '/' + 'synthetic/config'})
-        self.assertEqual(set(env), {*run_env.BASE_NAMES, 'EXTRA', 'CLAUDE_CONFIG_DIR'})
+        with tempfile.TemporaryDirectory() as folder:
+            env = run_env.environment(source, ['EXTRA'], {'CLAUDE_CONFIG_DIR': str(Path(folder).resolve())})
+            self.assertEqual(set(env), {*run_env.BASE_NAMES, 'EXTRA', 'CLAUDE_CONFIG_DIR'})
         self.assertEqual(set(run_env.environment({})), set())
         with self.assertRaises(ValueError):
             run_env.environment(source, explicit={'OTHER': 'value'})
@@ -99,9 +116,74 @@ class RunEnvironmentTest(unittest.TestCase):
             with mock.patch.object(sys, 'argv', argv), \
                     mock.patch.object(log_scan, 'run_log_folder', return_value=logs), \
                     mock.patch.object(delegate_env.subprocess, 'call') as call, contextlib.redirect_stderr(output):
-                self.assertEqual(delegate_env.main(), 2)
+                self.assertEqual(delegate_env.main(), 125)
             self.assertEqual(output.getvalue(), 'delegate_env: refused\n')
             call.assert_not_called()
+
+    def test_additional_denied_names_and_individual_secret_approval(self):
+        for name in ('NODE_EXTRA_CA_CERTS', 'REQUESTS_CA_BUNDLE', 'CURL_CA_BUNDLE',
+                     'NODE_TLS_REJECT_UNAUTHORIZED', 'NODE_PATH', 'PERLLIB', 'SHELLOPTS',
+                     'PS4', 'PROMPT_COMMAND', 'JAVA_TOOL_OPTIONS'):
+            with self.assertRaises(ValueError):
+                run_env.environment({name: 'synthetic'}, [name])
+        for word in ('PASS', 'AUTH', 'COOKIE', 'SESSION', 'PRIVATE'):
+            name = 'BUILD_' + word
+            text = '## Delegate environment\n- codex: ' + name
+            with self.assertRaises(ValueError):
+                delegate_env.names_from_host(text, 'codex')
+            self.assertEqual(delegate_env.names_from_host(text + '; approved: yes', 'codex'), [name])
+
+    def test_claude_config_directory_guards(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder).resolve()
+            config = root / 'config'
+            config.mkdir(mode=0o700)
+            def build(path, family='claude'):
+                return delegate_env.environment(family, {}, '', str(path))
+            self.assertEqual(set(build(config)), {'CLAUDE_CONFIG_DIR'})
+            for path in ('', 'relative' + '/config', str(config / '..' / 'config')):
+                with self.assertRaises(ValueError):
+                    build(path)
+            with self.assertRaises(ValueError):
+                build(config, 'codex')
+            link = root / 'link'
+            link.symlink_to(config, target_is_directory=True)
+            with self.assertRaises((OSError, ValueError)):
+                build(link)
+            for mode in (0o720, 0o702):
+                config.chmod(mode)
+                with self.assertRaises(ValueError):
+                    build(config)
+            config.chmod(0o700)
+            with mock.patch.object(run_env.os, 'getuid', return_value=os.getuid() + 1), self.assertRaises(ValueError):
+                build(config)
+            for ancestor in (root, config):
+                marker = ancestor / '.git'
+                marker.write_text('synthetic worktree marker')
+                with self.assertRaises(ValueError):
+                    build(config)
+                marker.unlink()
+            config.rmdir()
+            config.write_text('not a directory')
+            with self.assertRaises((OSError, ValueError)):
+                build(config)
+
+    def test_child_exit_is_distinct_from_wrapper_refusal(self):
+        for child, expected in ((0, 0), (2, 2), (125, 1), (-9, 1)):
+            output = io.StringIO()
+            with mock.patch.object(delegate_env, 'environment', return_value={}), \
+                    mock.patch.object(delegate_env, 'prepare_logs'), \
+                    mock.patch.object(delegate_env.subprocess, 'call', return_value=child), \
+                    mock.patch.object(sys, 'argv', ['delegate_env.py', '--family', 'codex', '--', 'synthetic']), \
+                    contextlib.redirect_stderr(output):
+                self.assertEqual(delegate_env.main(), expected)
+            self.assertEqual(output.getvalue(), '')
+        output = io.StringIO()
+        with mock.patch.object(sys, 'argv', ['delegate_env.py', '--unknown']), \
+                contextlib.redirect_stderr(output), self.assertRaises(SystemExit) as stopped:
+            delegate_env.main()
+        self.assertEqual(stopped.exception.code, 125)
+        self.assertEqual(output.getvalue(), 'delegate_env: refused\n')
 
     def test_template_strictly_parses_for_each_family(self):
         text = (ROOT / 'skills/fnl-delegate/references/host-template.md').read_text()

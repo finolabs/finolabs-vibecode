@@ -42,6 +42,9 @@ class LogScanTest(unittest.TestCase):
     def planted(self):
         return 'sk' + '-' + 'fixture' * 4
 
+    def assert_output(self, actual, expected):
+        self.assertTrue(actual == expected, 'output mismatch; content suppressed')
+
     def test_keys_private_block_ansi_and_named_base64_found(self):
         fixtures = [self.planted(), '-----' + 'BEGIN PRIVATE KEY-----\nfixture\n-----END PRIVATE KEY-----',
                     'sk' + '\x1b[31m-' + 'fixture' * 4 + '\x1b[0m',
@@ -72,7 +75,7 @@ class LogScanTest(unittest.TestCase):
             result = log_scan.scan(self.log)
             self.assertEqual(len([h for h in result['hits'] if h['kind'] == 'environment_dump']), 10)
             view = log_scan.safe_view(result)
-            self.assertNotIn('fixture', view)
+            self.assertFalse('fixture' in view, 'dump value exposed')
         self.assertFalse(sp.findings('\n'.join(pairs[:9])))
         self.assertFalse(sp.findings(pairs[0] + '\n' * 200 + '\n'.join(pairs[1:])))
 
@@ -85,19 +88,19 @@ class LogScanTest(unittest.TestCase):
         self.assertEqual(result['status'], 'findings')
         view = log_scan.safe_view(result)
         for value in ('a:b:c', 'two words', 'escaped'):
-            self.assertNotIn(value, view)
+            self.assertFalse(value in view, 'dump value exposed')
         self.assertEqual(len(result['hits']), 12)
         self.write('\n'.join(f'NAME_{i}=a:b:c' for i in range(10)))
-        self.assertNotIn('a:b:c', log_scan.safe_view(log_scan.scan(self.log)))
+        self.assertFalse('a:b:c' in log_scan.safe_view(log_scan.scan(self.log)), 'dump value exposed')
 
     def test_binary_compressed_oversize_unreadable_not_scanned_and_show_refuses(self):
         for raw in (b'\x00fixture', b'\x1f\x8bfixture', b'f' * (sp.MAX_BYTES + 1)):
             self.write(raw)
             self.assertEqual(log_scan.scan(self.log)['status'], 'not_scanned')
-            self.assertEqual(self.cli('show', str(self.log)), (2, 'not_scanned\n'))
-        self.assertEqual(self.cli('scan', str(self.root / 'missing')), (1, 'not_scanned file=1\n'))
+            self.assert_output(self.cli('show', str(self.log)), (2, 'not_scanned\n'))
+        self.assert_output(self.cli('scan', str(self.root / 'missing')), (1, 'not_scanned file=1\n'))
         with mock.patch.object(log_scan.os, 'read', side_effect=PermissionError):
-            self.assertEqual(self.cli('scan', str(self.log)), (1, 'not_scanned file=1\n'))
+            self.assert_output(self.cli('scan', str(self.log)), (1, 'not_scanned file=1\n'))
 
     def test_output_fixed_vocabulary_no_value_length_prefix_or_invalid_name(self):
         bad_name = 'ATTACK-NAME_TOKEN'
@@ -105,20 +108,20 @@ class LogScanTest(unittest.TestCase):
         self.write(bad_name + '=' + value + '\nACCOUNT_TOKEN=' + value + '\n' + self.planted())
         code, out = self.cli('scan', str(self.log))
         self.assertEqual(code, 1)
-        self.assertEqual(out, 'findings file=1\nnamed_token file=1 line=1\n'
+        self.assert_output(out, 'findings file=1\nnamed_token file=1 line=1\n'
                          'named_token file=1 line=2 name=ACCOUNT_TOKEN\nkey file=1 line=3\n')
         for fragment in (bad_name, value, value[:8], str(len(value)), self.planted()[:3]):
-            self.assertNotIn(fragment, out)
+            self.assertFalse(fragment in out, 'diagnostic exposed synthetic data')
         # A token-shaped name is itself redacted, never printed as a variable name.
         name = 'AK' + 'IA' + 'F' * 16
         self.write(name + '=' + value)
-        self.assertNotIn(name, self.cli('scan', str(self.log))[1])
+        self.assertFalse(name in self.cli('scan', str(self.log))[1], 'secret-shaped name exposed')
 
     def test_redact_preview_digest_yes_mode_excl_and_no_backup(self):
         self.write('ACCOUNT_TOKEN=' + 'fixture' * 4, mode=0o644)
         before = self.log.read_bytes()
         preview = log_scan.redact(self.log)
-        self.assertEqual(self.log.read_bytes(), before)
+        self.assertTrue(self.log.read_bytes() == before, 'preview changed the log')
         with self.assertRaises(ValueError):
             log_scan.redact(self.log, yes=True)
         with self.assertRaises(ValueError):
@@ -131,13 +134,13 @@ class LogScanTest(unittest.TestCase):
             return original(path, flags, *args, **kwargs)
         with mock.patch.object(log_scan.os, 'open', side_effect=opened):
             log_scan.redact(self.log, yes=True, digest=preview['digest'])
-        self.assertEqual(self.log.read_text(), 'ACCOUNT_TOKEN=[REDACTED]')
+        self.assertTrue(self.log.read_text() == 'ACCOUNT_' + 'TOKEN=[REDACTED]', 'redaction mismatch')
         self.assertEqual(stat.S_IMODE(self.log.stat().st_mode), 0o600)
         self.assertEqual([p.name for p in self.root.iterdir()], ['run.log'])
         self.assertTrue(calls[0][0] & os.O_EXCL)
         self.assertEqual(calls[0][1], 0o600)
 
-    def test_stale_digest_recent_open_log_refuse(self):
+    def test_stale_digest_recent_log_refuse(self):
         self.write(self.planted())
         digest = log_scan.redact(self.log)['digest']
         self.write('changed ' + self.planted())
@@ -146,9 +149,86 @@ class LogScanTest(unittest.TestCase):
         self.write(self.planted(), age=0)
         with self.assertRaises(ValueError):
             log_scan.redact(self.log)
+
+    def test_osc_raw_and_normalized_union_preserves_original_lines(self):
+        key = self.planted()
+        osc = '\x1b]8;;' + 'https' + '://' + 'example.invalid/?t=' + key + '\n\x1b\\'
+        self.write('before\n' + osc + 'link\x1b]8;;\x1b\\\n' + key)
+        result = log_scan.scan(self.log)
+        self.assertEqual(result['status'], 'findings')
+        self.assertEqual({h['line'] for h in result['hits']}, {2, 4})
+        code, output = self.cli('show', str(self.log))
+        self.assertEqual(code, 0)
+        self.assertFalse(key in output, 'show exposed a synthetic secret')
+        self.write(key[:2] + '\x1b[31m' + key[2:])
+        self.assertEqual(log_scan.scan(self.log)['status'], 'findings')
+        self.assertFalse(key[2:] in self.cli('show', str(self.log))[1], 'normalized secret exposed')
+
+    def test_unsupported_escapes_c1_and_format_characters_refuse(self):
+        samples = [self.planted()[:6] + char + self.planted()[6:]
+                   for char in ('\x1b', '\x1bX', '\x85', '\u200b', '\u200d', '\ufeff')]
+        samples.append(self.planted() + '\x1b[')
+        for text in samples:
+            self.write(text)
+            self.assertEqual(log_scan.scan(self.log)['status'], 'not_scanned')
+            self.assert_output(self.cli('show', str(self.log)), (2, 'not_scanned\n'))
+
+    def test_additional_secret_forms_and_safe_names(self):
+        value = 'fixture' * 4
+        for name in ('pass', 'auth', 'cookie', 'session', 'private', 'token'):
+            for separator in ('=', ': '):
+                self.write('db_' + name + separator + '"' + value + ' with spaces"')
+                result = log_scan.scan(self.log)
+                self.assertEqual(result['status'], 'findings')
+                self.assertFalse(value in log_scan.safe_view(result), 'quoted secret exposed')
+        for prefix in ('sk' + '_live_', 'sk' + '_test_', 'Authorization' + ': Bearer '):
+            self.write(prefix + value)
+            result = log_scan.scan(self.log)
+            self.assertEqual(result['status'], 'findings')
+            self.assertFalse(value in log_scan.safe_view(result), 'prefixed secret exposed')
+        for name in ('AB' * 10, 'A0' * 10, 'GZ' * 10):
+            self.write('\n'.join(name + '=' + value for _ in range(10)))
+            output = self.cli('scan', str(self.log))[1]
+            self.assertFalse(name in output, 'secret-shaped name exposed')
+            self.assertTrue(sp.safe_name(name) is None, 'secret-shaped name accepted')
+
+    def test_match_cap_redacts_whole_log(self):
+        self.write(('a=b ' * (sp.MAX_BYTES // 4)))
+        result = log_scan.scan(self.log)
+        self.assertEqual(result['status'], 'findings')
+        self.assertLessEqual(len(result['hits']), sp.MAX_MATCHES)
+        self.assertEqual(result['hits'][0]['kind'], 'match_limit')
+        self.assert_output(log_scan.safe_view(result), '[REDACTED]')
+
+    def test_redact_never_queries_process_files_or_launches_commands(self):
         self.write(self.planted())
-        with self.log.open('rb'), self.assertRaises(ValueError):
-            log_scan.redact(self.log)
+        with mock.patch.object(Path, 'iterdir', side_effect=PermissionError), \
+                mock.patch('subprocess.run', side_effect=AssertionError('unexpected subprocess')):
+            preview = log_scan.redact(self.log)
+            with self.log.open('rb'):
+                log_scan.redact(self.log, yes=True, digest=preview['digest'])
+        self.assert_output(self.log.read_text(), '[REDACTED]')
+
+    def test_metadata_changed_immediately_before_rename_refuses(self):
+        for change in ('replace', 'size', 'mtime'):
+            self.write(self.planted())
+            digest = log_scan.redact(self.log)['digest']
+            real_fsync = os.fsync
+            def changed(fd):
+                real_fsync(fd)
+                if change == 'replace':
+                    self.log.unlink()
+                    self.log.write_text('changed')
+                elif change == 'size':
+                    with self.log.open('a') as stream:
+                        stream.write('changed')
+                else:
+                    os.utime(self.log, None)
+            with mock.patch.object(log_scan.os, 'fsync', side_effect=changed), \
+                    mock.patch.object(log_scan.os, 'replace') as rename, self.assertRaises(ValueError):
+                log_scan.redact(self.log, yes=True, digest=digest)
+            rename.assert_not_called()
+            self.assertEqual(len(list(self.root.iterdir())), 1)
 
     def test_symlink_hardlink_outside_directory_and_wide_folder_refused(self):
         self.write(self.planted())
@@ -161,12 +241,12 @@ class LogScanTest(unittest.TestCase):
         for path in (link, hard, self.log, outside):
             with self.assertRaises((OSError, ValueError)):
                 log_scan.redact(path)
-            self.assertEqual(self.cli('show', str(path)), (2, 'not_scanned\n'))
+            self.assert_output(self.cli('show', str(path)), (2, 'not_scanned\n'))
         hard.unlink()
         self.root.chmod(0o755)
         with self.assertRaises(ValueError):
             log_scan.scan(self.log)
-        self.assertEqual(self.cli('show', str(self.log)), (2, 'not_scanned\n'))
+        self.assert_output(self.cli('show', str(self.log)), (2, 'not_scanned\n'))
 
     def test_descriptor_hardlink_swap_owner_and_regular_checks(self):
         self.write()
@@ -202,11 +282,11 @@ class LogScanTest(unittest.TestCase):
 
     def test_show_redacts_and_refuses_unlocatable_finding(self):
         self.write('ACCOUNT_TOKEN=' + 'fixture' * 4)
-        self.assertEqual(self.cli('show', str(self.log)), (0, 'ACCOUNT_TOKEN=[REDACTED]'))
+        self.assertTrue(self.cli('show', str(self.log)) == (0, 'ACCOUNT_' + 'TOKEN=[REDACTED]'), 'show mismatch')
         result = log_scan.scan(self.log)
         result['hits'][0].pop('start')
         with mock.patch.object(log_scan, 'scan', return_value=result):
-            self.assertEqual(self.cli('show', str(self.log)), (2, 'not_scanned\n'))
+            self.assert_output(self.cli('show', str(self.log)), (2, 'not_scanned\n'))
 
     def test_cli_parse_errors_never_echo_input(self):
         output = io.StringIO()
@@ -214,7 +294,7 @@ class LogScanTest(unittest.TestCase):
                 contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as stopped:
             log_scan.main()
         self.assertEqual(stopped.exception.code, 2)
-        self.assertEqual(output.getvalue(), 'not_scanned\n')
+        self.assert_output(output.getvalue(), 'not_scanned\n')
 
     def test_new_log_folder_is_private(self):
         new = self.root / 'new' / 'logs'

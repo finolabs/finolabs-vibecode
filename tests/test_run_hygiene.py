@@ -35,8 +35,6 @@ def unsafe_launches(source):
         local = ast.unparse(block)
         safe = any(word in command for word in ('REFRESH', '__file__', "'git'", '"git"', "'gh'", "'--version'"))
         safe |= command.startswith('[git,')
-        # Read-only metadata tools, never an arbitrary caller-supplied executable.
-        safe |= ('tool' == command and "'/usr/sbin/lsof'" in source)
         safe |= ('executable' in command and 'gh_environment()' in local and 'def gh_call(' in source)
         has_helper = ('run_env.environment(' in ast.unparse(call) or
                       (('env=environment(' in ast.unparse(call) or 'env=env' in ast.unparse(call)) and
@@ -66,7 +64,7 @@ class RunHygieneTest(unittest.TestCase):
     def test_setup_individual_neutral_consent_names_only(self):
         text = (ROOT / 'skills/fnl-setup/references/features/delegation.md').read_text()
         for expected in ('For each present agent family', 'Default none', 'names only, never values',
-                         'KEY, TOKEN, SECRET, PASSWORD or CREDENTIAL', 'ask separately',
+                         'KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, PASS, AUTH, COOKIE, SESSION or PRIVATE', 'ask separately',
                          'Pass <VARIABLE_NAME> to <agent family>?', 'neutral Yes and No with none preselected',
                          'only an explicit Yes', '; approved: yes'):
             self.assertIn(expected, text)

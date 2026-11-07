@@ -188,11 +188,12 @@ class CheckupTest(unittest.TestCase):
         self.assertIn("Briefs folder", row["reason"])
         self.assertIn("Agent roles", row["reason"])
         self.assertIn("Review posting", row["reason"])
+        self.assertIn("Delegate environment", row["reason"])
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)))
         self.assertEqual(self.setup_item("host config")["status"], "ok")
         template = (ROOT / "skills/fnl-delegate/references/host-template.md").read_text()
         self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Project labels"})
-        for heading in ("Agent roles", "Review posting"):
+        for heading in ("Agent roles", "Review posting", "Delegate environment"):
             with self.subTest(heading=heading):
                 config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS - {heading})))
                 row = self.setup_item("host config")
