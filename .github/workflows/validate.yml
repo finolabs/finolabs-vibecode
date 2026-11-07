@@ -82,6 +82,7 @@ jobs:
                     ["scripts/quota_probe.py", "skills/fnl-setup/scripts/quota_probe.py", "skills/fnl-delegate/scripts/quota_probe.py", "skills/fnl-scan-agents/scripts/quota_probe.py", "skills/fnl-update/scripts/quota_probe.py", "skills/fnl-review-gate/scripts/quota_probe.py"],
                     ["scripts/review_route.py", "skills/fnl-delegate/scripts/review_route.py", "skills/fnl-review-gate/scripts/review_route.py"],
                     ["scripts/review_config.py", "skills/fnl-delegate/scripts/review_config.py", "skills/fnl-review-gate/scripts/review_config.py"],
+                    ["scripts/git_metadata.py", "skills/fnl-delegate/scripts/git_metadata.py", "skills/fnl-review-gate/scripts/git_metadata.py"],
                     ["scripts/post_review.py", "skills/fnl-review-gate/scripts/post_review.py"],
                     ["scripts/project_progress.py", "skills/fnl-status/scripts/project_progress.py", "skills/fnl-setup/scripts/project_progress.py"],
                     ["scripts/agent_processes.py", "skills/fnl-status/scripts/agent_processes.py", "skills/fnl-setup/scripts/agent_processes.py"],

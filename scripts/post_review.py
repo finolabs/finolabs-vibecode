@@ -24,7 +24,6 @@ import os
 from pathlib import Path
 import re
 import secrets
-import shutil
 import stat
 import subprocess
 import sys
@@ -32,6 +31,7 @@ import sys
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
+import git_metadata as metadata
 
 CAP = 64 * 1024
 MARKER = re.compile(r"<!-- fnl-review kind=(code|security) head=([0-9a-f]{40}) verdict=(APPROVE|REWORK)( lane=yes)? -->")
@@ -71,46 +71,24 @@ No identity is inferred from the comment's claims or from a relay attribution.
     return any(isinstance(comment, dict) and isinstance(comment.get("author"), dict)
                and isinstance(comment["author"].get("login"), str)
                and comment["author"]["login"].casefold() == expected_identity.casefold()
+               and comment.get("includesCreatedEdit") is False
                and isinstance(comment.get("body"), str)
                and comment["body"].split("\n", 1)[0] == expected_marker
+               and not re.search(r"\brelay(?:ed)?\b", (comment["body"].splitlines() + ["", ""])[1], re.I)
                for comment in comments)
 
 
 def checkout_remote(checkout):
     """Read origin without invoking git, credential helpers, includes or hooks."""
-    for parent in (Path(checkout).absolute(), *Path(checkout).absolute().parents):
-        dot = parent / ".git"
-        if dot.is_dir():
-            git = dot
-        elif dot.is_file():
-            with dot.open() as stream:
-                line = stream.read(4097).strip()
-            if len(line) > 4096 or not line.startswith("gitdir: "):
-                raise ValueError("invalid checkout")
-            git = (parent / line[8:]).resolve()
-        else:
-            continue
-        common = git
-        if (git / "commondir").is_file():
-            with (git / "commondir").open() as stream:
-                relative = stream.read(4097).strip()
-            if len(relative) > 4096:
-                raise ValueError("invalid checkout")
-            common = (git / relative).resolve()
-        with (common / "config").open() as stream:
-            content = stream.read(262145)
-        if len(content) > 262144:
-            raise ValueError("oversized git config")
-        parser = configparser.RawConfigParser(strict=True)
-        parser.read_string(content)
-        remote = parser.get('remote "origin"', "url", fallback="")
-        # Never accept credentials, ports, enterprise hosts, query strings,
-        # command transports, config interpolation or an environment repository.
-        match = re.fullmatch(r"(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9_.-]+?)(?:\.git)?", remote)
-        if not match or match[2] in {".", ".."}:
-            raise ValueError("github.com origin required")
-        return "github.com/" + match[1] + "/" + match[2]
-    raise ValueError("no checkout")
+    _, common = metadata.git_dirs(checkout)
+    content = metadata.bounded(common / "config", 262144).decode()
+    parser = configparser.RawConfigParser(strict=True)
+    parser.read_string(content)
+    remote = parser.get('remote "origin"', "url", fallback="")
+    match = re.fullmatch(r"(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9_.-]+?)(?:\.git)?", remote)
+    if not match or match[2] in {".", ".."}:
+        raise ValueError("github.com origin required")
+    return "github.com/" + match[1] + "/" + match[2]
 
 
 def create_run_folder():
@@ -163,12 +141,43 @@ def read_body(path):
     return text
 
 
+def gh_environment():
+    # Only approved github.com token injection and canonical account auth survive.
+    # No ambient host/repo, proxy, socket, config, browser or loader overrides.
+    env = {key: os.environ[key] for key in ("GH_TOKEN", "GITHUB_TOKEN", "LANG", "LC_ALL") if key in os.environ}
+    env.update(HOME=str(dr.account_home()), PATH="/usr/bin:/bin", GH_PROMPT_DISABLED="1", GH_NO_UPDATE_NOTIFIER="1")
+    return env
+
+
+def trusted_gh():
+    # Search fixed installation locations, never workspace/relative PATH entries.
+    for folder in ("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"):
+        candidate = Path(folder) / "gh"
+        try:
+            resolved = candidate.resolve(strict=True)
+            # Homebrew symlinks may resolve into its Cellar, but not into a
+            # workspace, temporary directory or user-controlled download folder.
+            if not any(resolved.is_relative_to(root) for root in (Path("/opt/homebrew"), Path("/usr/local"), Path("/usr/bin"))):
+                continue
+            for path in (candidate.parent, resolved, *resolved.parents):
+                info = path.stat()
+                if info.st_uid not in {0, os.getuid()} or info.st_mode & 0o022 or (path / ".git").exists():
+                    raise ValueError("unsafe gh installation")
+            if not stat.S_ISREG(resolved.stat().st_mode) or not os.access(resolved, os.X_OK):
+                continue
+            return str(resolved)
+        except FileNotFoundError:
+            continue
+    raise CannotPost("no-cli")
+
+
 def gh_call(executable, args, body=None):
     """Only the two fixed call sites below supply argv; never a shell."""
     try:
         result = subprocess.run([executable, *args], input=body, text=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                timeout=30, shell=False)
+                                timeout=30, shell=False, env=gh_environment(),
+                                **({"stdin": subprocess.DEVNULL} if body is None else {}))
     except FileNotFoundError:
         raise CannotPost("no-cli") from None
     except subprocess.TimeoutExpired:
@@ -208,9 +217,7 @@ def post(pr, path, checkout):
     repo = checkout_remote(checkout)
     body = read_body(path)
     marker = marker_line(body)
-    executable = shutil.which("gh")
-    if executable is None:
-        raise CannotPost("no-cli")
+    executable = trusted_gh()
     before = view(executable, pr, repo)
     if MARKER.fullmatch(marker)[2] != before["headRefOid"]:
         raise ValueError("reviewed head changed")
@@ -222,6 +229,13 @@ def post(pr, path, checkout):
         raise CannotPost("other")
     if not any(isinstance(c, dict) and c.get("body") == body for c in after["comments"]):
         raise CannotPost("other")
+    # Delete only this validated run's draft, after observing the exact post.
+    root = dr.consent_root()
+    relative = Path(os.path.abspath(path)).relative_to(root / ROOT)
+    with dr.data_folder(ROOT, private=True) as parent:
+        with dr.descend(parent, relative.parts[0], private=True) as folder:
+            os.unlink("body.md", dir_fd=folder)
+        os.rmdir(relative.parts[0], dir_fd=parent)
 
 
 def positive_pr(value):

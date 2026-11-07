@@ -33,15 +33,15 @@ def host(present=("claude", "codex", "antigravity"), roles="", posting=""):
 
 class ReviewConfigTest(unittest.TestCase):
     def test_owned_script_copies_match(self):
-        for name in ("review_route.py", "review_config.py", "post_review.py", "data_root.py", "quota_probe.py"):
+        for name in ("review_route.py", "review_config.py", "post_review.py", "git_metadata.py", "data_root.py", "quota_probe.py"):
             expected = (ROOT / "scripts" / name).read_bytes()
-            skills = ("fnl-delegate", "fnl-review-gate") if name in {"review_route.py", "review_config.py"} else ("fnl-review-gate",)
+            skills = ("fnl-delegate", "fnl-review-gate") if name in {"review_route.py", "review_config.py", "git_metadata.py"} else ("fnl-review-gate",)
             for skill in skills:
                 self.assertEqual((ROOT / "skills" / skill / "scripts" / name).read_bytes(), expected)
 
     def test_review_copy_inventory_is_complete_and_listed_in_ci(self):
         ci = (ROOT / ".github/workflows/validate.yml").read_text()
-        for name in ("review_route.py", "review_config.py", "post_review.py"):
+        for name in ("review_route.py", "review_config.py", "post_review.py", "git_metadata.py"):
             skills = ("fnl-delegate", "fnl-review-gate") if name != "post_review.py" else ("fnl-review-gate",)
             copies = {f"scripts/{name}", *[f"skills/{skill}/scripts/{name}" for skill in skills]}
             actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob(name)}
@@ -176,7 +176,7 @@ class LocalEvidenceTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.base = Path(self.tmp.name)
+        self.base = Path(self.tmp.name).resolve()
         self.home = account(self, self.base / "account")
         self.checkout = self.base / "checkout"
         self.checkout.mkdir()
@@ -187,13 +187,20 @@ class LocalEvidenceTest(unittest.TestCase):
         self.git("add", ".")
         self.git("commit", "-q", "-m", "Add fixture\n\nCo-Authored-By: Codex <noreply@example.com>")
         self.first = self.git("rev-parse", "HEAD").strip()
+        self.git("commit", "--allow-empty", "-qm", "Prepare fixture\n\nCo-Authored-By: Codex <noreply@example.com>")
+        self.second = self.git("rev-parse", "HEAD").strip()
+        self.bind("codex")
+
+    def bind(self, family):
+        head = self.git("rev-parse", "HEAD").strip()
+        dr.write_data("ledger.jsonl", json.dumps(dict(head=head, agent=family)).encode())
 
     def git(self, *args):
         return subprocess.run(["git", *args], cwd=self.checkout, check=True, capture_output=True, text=True,
                               env={**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}).stdout
 
     def test_loose_packed_worktree_and_packet_match_git(self):
-        self.assertEqual(route.author_family(self.checkout), "codex")
+        self.assertEqual(route.author_family(self.checkout, base=self.first), "codex")
         (self.checkout / "sample.txt").write_text("first\nsecond\n")
         self.git("commit", "-qam", "Extend fixture\n\nCo-Authored-By: Claude <noreply@example.com>")
         head = self.git("rev-parse", "HEAD").strip()
@@ -201,11 +208,27 @@ class LocalEvidenceTest(unittest.TestCase):
         self.assertEqual(packet["diff_stat"], [{"file": "sample.txt", "added": 1, "removed": 0}])
         self.assertEqual(packet["acceptance_criteria"], ["criterion"])
         self.git("gc", "--prune=now")
-        self.assertEqual(route.author_family(self.checkout), "claude")
+        self.bind("claude")
+        self.assertEqual(route.author_family(self.checkout, base=self.second), "claude")
         self.assertEqual(packet, route.build_packet(self.checkout, self.first, head, ["criterion"], ["decision"], ["consumer"]))
         linked = self.base / "linked"
         self.git("worktree", "add", "--detach", str(linked), "HEAD")
-        self.assertEqual(route.author_family(linked), "claude")
+        self.assertEqual(route.author_family(linked, base=self.second), "claude")
+
+    def test_packet_refuses_control_names_and_excessive_text_diff(self):
+        name = self.checkout / "bad\nname.txt"
+        name.write_text("unsafe name\n")
+        self.git("add", ".")
+        self.git("commit", "-qm", "Add control name")
+        head = self.git("rev-parse", "HEAD").strip()
+        with self.assertRaisesRegex(ValueError, "tree name"):
+            route.build_packet(self.checkout, self.first, head, [], [], [])
+        self.git("rm", str(name))
+        (self.checkout / "sample.txt").write_text("line\n" * 1001)
+        self.git("commit", "-qam", "Add excessive text diff")
+        head = self.git("rev-parse", "HEAD").strip()
+        with self.assertRaisesRegex(ValueError, "text diff"):
+            route.build_packet(self.checkout, self.first, head, [], [], [])
 
     def test_pack_deltas_binary_modes_and_gitlinks(self):
         # Similar large blobs force pack delta objects, not only full objects.
@@ -237,8 +260,63 @@ class LocalEvidenceTest(unittest.TestCase):
         self.git("commit", "--allow-empty", "-qm", "A human-authored fixture")
         head = self.git("rev-parse", "HEAD").strip()
         with self.assertRaises(ValueError):
-            route.author_family(self.checkout, json.dumps({"agent": "codex", "project": "synthetic"}))
-        self.assertEqual(route.author_family(self.checkout, json.dumps({"head": head, "agent": "antigravity"})), "antigravity")
+            route.author_family(self.checkout, json.dumps({"agent": "codex", "project": "synthetic"}), base=self.first)
+        with self.assertRaisesRegex(ValueError, "trailers"):
+            route.author_family(self.checkout, json.dumps({"head": head, "agent": "antigravity"}), base=self.second)
+
+    def test_spoofed_trailer_cannot_override_ledger(self):
+        ledger = json.dumps({"head": self.second, "agent": "claude"})
+        with self.assertRaises(ValueError):
+            route.author_family(self.checkout, ledger, base=self.first)
+
+    def test_indented_and_unclosed_fences_do_not_expose_roles(self):
+        for fence in (" ```md", "  ~~~md", "   ````md"):
+            with self.subTest(fence=fence):
+                text = fence + "\n" + host(roles="- judge: jev") + "   " + fence.strip()[0] * 5 + "\n"
+                self.assertEqual(config.read_roles(text), {"judge": "host"})
+                self.assertEqual(config.section("```md\n" + host(), "Agents on this machine"), None)
+
+    def test_mixed_range_and_missing_evidence_cannot_pick(self):
+        self.git("commit", "--allow-empty", "-qm", "Spoof tip\n\nCo-Authored-By: Claude Opus 4.6 <noreply@example.com>")
+        self.bind("claude")
+        with self.assertRaisesRegex(ValueError, "trailers"):
+            route.author_family(self.checkout, base=self.first)
+        self.assertEqual(route.author_family(self.checkout, base=self.second), "claude")
+        with self.assertRaises(ValueError):
+            route.author_family(self.checkout, "", base=self.second)
+        with self.assertRaises(ValueError):
+            route.author_family(self.checkout)
+        output = io.StringIO()
+        dr.write_data("host.md", host(roles="- security review: codex").encode())
+        with mock.patch.object(route.Path, "cwd", return_value=self.checkout), contextlib.redirect_stdout(output):
+            self.assertEqual(route.main(["--base", self.first, "--security-trigger"]), 2)
+        self.assertEqual(output.getvalue(), "")
+
+    def test_crlf_model_trailer_and_conflicting_ledger(self):
+        self.git("commit", "--allow-empty", "-qm", "Claude fixture\r\n\r\nCo-Authored-By: Claude Opus 4.6 <noreply@example.com>\r\n")
+        self.bind("claude")
+        self.assertEqual(route.author_family(self.checkout, base=self.second), "claude")
+        ledger = dr.read_data("ledger.jsonl").decode()
+        ledger += "\n" + json.dumps(dict(head=self.git("rev-parse", "HEAD").strip(), agent="codex"))
+        with self.assertRaises(ValueError):
+            route.author_family(self.checkout, ledger, base=self.second)
+
+    def test_metadata_symlink_fifo_owner_and_object_paths_refused(self):
+        git = self.checkout / ".git"
+        for name in ("HEAD", "objects"):
+            path = git / name
+            moved = git / (name + "-saved")
+            path.rename(moved)
+            path.symlink_to(moved, target_is_directory=moved.is_dir())
+            with self.subTest(name=name), self.assertRaises((ValueError, OSError)):
+                route.author_family(self.checkout, base=self.first)
+            path.unlink()
+            moved.rename(path)
+        path = git / "HEAD"
+        path.unlink()
+        os.mkfifo(path)
+        with self.assertRaises(ValueError):
+            route.author_family(self.checkout, base=self.first)
 
     def test_quota_cache_depletion_and_marker_route_away(self):
         now = qp.now()
@@ -275,21 +353,21 @@ class LocalEvidenceTest(unittest.TestCase):
              mock.patch.object(os, "system", side_effect=AssertionError("shell forbidden")), \
              mock.patch.object(qp, "read_family", side_effect=AssertionError("quota read forbidden")), \
              contextlib.redirect_stdout(output):
-            self.assertEqual(route.main([]), 0)
+            self.assertEqual(route.main(["--base", self.first]), 0)
         self.assertEqual(output.getvalue().splitlines(), ["claude agent capability-one-run-two-comments"] * 2)
 
     def test_invalid_lane_and_missing_config_fail_without_output(self):
         output = io.StringIO()
         with mock.patch.object(route.Path, "cwd", return_value=self.checkout), contextlib.redirect_stdout(output):
             self.assertEqual(route.main(["--lane", "--security-trigger"]), 2)
-            self.assertEqual(route.main([]), 2)
+            self.assertEqual(route.main(["--base", self.first]), 2)
         self.assertEqual(output.getvalue(), "")
 
     def test_security_same_family_requires_decision(self):
         dr.write_data("host.md", host(("codex",)).encode())
         output = io.StringIO()
         with mock.patch.object(route.Path, "cwd", return_value=self.checkout), contextlib.redirect_stdout(output):
-            self.assertEqual(route.main(["--security-trigger"]), 1)
+            self.assertEqual(route.main(["--base", self.first, "--security-trigger"]), 1)
         self.assertEqual(len(output.getvalue().splitlines()), 2)
         self.assertIn("same-family", output.getvalue())
 

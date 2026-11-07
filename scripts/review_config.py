@@ -20,7 +20,20 @@ AGENTS = {"Claude Code": "claude", "Codex": "codex", "Antigravity": "antigravity
 
 def section(text, heading, maximum=10):
     """Ignore fenced examples; refuse duplicate headings and oversized sections."""
-    text = re.sub(r"^(`{3,}|~{3,}).*?^\1[^\n]*$", "", text, flags=re.M | re.S)
+    visible, fence = [], None
+    for line in text.splitlines():
+        match = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+        if fence:
+            if match and match[1][0] == fence[0] and len(match[1]) >= len(fence) and not match[2].strip():
+                fence = None
+            continue
+        if match:
+            fence = match[1]
+        else:
+            visible.append(line)
+    if fence:
+        return None
+    text = "\n".join(visible)
     parts = re.split(r"^## ([^\r\n]+?)[ \t]*\r?$", text, flags=re.M)
     found = [parts[i + 1] for i in range(1, len(parts), 2) if parts[i] == heading]
     if len(found) != 1:

@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
 import quota_probe
 import review_config as config
+import git_metadata as metadata
 
 ORDER = config.FAMILIES
 FORMS = {"claude": "agent", "codex": "headless", "antigravity": "headless"}
@@ -35,31 +36,10 @@ MAX_OBJECT = 16 * 1024 * 1024
 
 
 def bounded(path, cap=MAX_OBJECT):
-    with Path(path).open("rb") as stream:
-        data = stream.read(cap + 1)
-    if len(data) > cap:
-        raise ValueError("oversized git data")
-    return data
+    return metadata.bounded(path, cap)
 
 
-def git_dirs(checkout):
-    """Resolve a regular checkout or linked worktree without running git."""
-    for folder in (Path(checkout).absolute(), *Path(checkout).absolute().parents):
-        dot = folder / ".git"
-        if dot.is_dir():
-            git = dot
-        elif dot.is_file():
-            line = bounded(dot, 4096).decode().strip()
-            if not line.startswith("gitdir: "):
-                raise ValueError("invalid gitdir")
-            git = (folder / line[8:]).resolve()
-        else:
-            continue
-        common = git
-        if (git / "commondir").is_file():
-            common = (git / bounded(git / "commondir", 4096).decode().strip()).resolve()
-        return git, common
-    raise ValueError("no checkout")
+git_dirs = metadata.git_dirs
 
 
 def resolve_ref(git, common, ref="HEAD", depth=0):
@@ -150,7 +130,7 @@ def delta(base, patch):
 def packed_object(common, pack, offset, depth):
     if depth > 50:
         raise ValueError("delta depth")
-    with pack.open("rb") as stream:
+    with metadata.opened(pack) as fd, os.fdopen(os.dup(fd), "rb") as stream:
         stream.seek(offset)
         byte = stream.read(1)[0]
         kind, size, shift = (byte >> 4) & 7, byte & 15, 4
@@ -197,7 +177,13 @@ def git_object(common, oid, depth=0):
     except FileNotFoundError:
         pass
     target = bytes.fromhex(oid)
-    for index in sorted((common / "objects/pack").glob("*.idx")):
+    try:
+        with metadata.opened(common / "objects/pack", directory=True) as fd:
+            indexes = sorted(name for name in os.listdir(fd) if name.endswith(".idx"))
+    except FileNotFoundError:
+        indexes = []
+    for name in indexes:
+        index = common / "objects/pack" / name
         raw = bounded(index, 64 * 1024 * 1024)
         if raw[:8] != b"\xfftOc\0\0\0\2" or len(raw) < 1032:
             raise ValueError("unsupported pack index")
@@ -225,32 +211,21 @@ def git_object(common, oid, depth=0):
     raise ValueError("missing object")
 
 
-def author_family(checkout, ledger_text=None):
+def author_family(checkout, ledger_text=None, *, base=None, head="HEAD"):
+    """Require a head-bound local ledger and consistent trailers across base..head.
+
+Trailers are corroboration only: repository authors cannot choose their family.
+Legacy ledger records without an exact head never establish authorship.
+"""
     git, common = git_dirs(checkout)
-    head = resolve_ref(git, common)
-    kind, commit = git_object(common, head)
-    if kind != "commit":
-        raise ValueError("not a commit")
-    message = commit.split(b"\n\n", 1)[1].decode("utf-8", "replace").rstrip()
-    trailers = message.split("\n\n")[-1].splitlines()
-    families = set()
-    names = {"codex": "codex", "claude": "claude", "antigravity": "antigravity"}
-    for line in trailers:
-        match = re.fullmatch(r"Co-Authored-By: (Codex|Claude|Antigravity) <[^<>\s]+>", line, re.I)
-        if match:
-            families.add(names[match[1].lower()])
-    if len(families) == 1:
-        return families.pop()
-    if len(families) > 1:
-        raise ValueError("ambiguous authors")
-    # Only exact head-bound ledger records can identify this commit. Legacy
-    # project/task labels cannot establish authorship and are never guessed.
+    head = resolve_ref(git, common, head)
     if ledger_text is None:
         try:
             ledger_text = dr.read_data("ledger.jsonl", MAX_OBJECT).decode()
         except FileNotFoundError:
             ledger_text = ""
-    for line in reversed(ledger_text.splitlines()):
+    families = set()
+    for line in ledger_text.splitlines():
         try:
             record = json.loads(line)
         except ValueError:
@@ -258,10 +233,49 @@ def author_family(checkout, ledger_text=None):
         if not isinstance(record, dict) or record.get("head") != head:
             continue
         family = record.get("agent")
-        family = "claude" if family in {"claude-session", "subagent"} else family
-        if family in ORDER:
-            return family
-    raise ValueError("unverified author")
+        family = "claude" if family in ("claude-session", "subagent") else family
+        if family not in ORDER:
+            raise ValueError("unverified ledger author")
+        families.add(family)
+    if len(families) != 1:
+        raise ValueError("unverified ledger author")
+    author = families.pop()
+    if base is None:
+        raise ValueError("review base required")
+    base = resolve_ref(git, common, base)
+
+    def ancestry(start):
+        seen, pending = set(), [start]
+        while pending:
+            oid = pending.pop()
+            if oid in seen:
+                continue
+            if len(seen) >= 10000:
+                raise ValueError("oversized commit range")
+            seen.add(oid)
+            kind, commit = git_object(common, oid)
+            if kind != "commit":
+                raise ValueError("not a commit")
+            headers = commit.split(b"\n\n", 1)[0]
+            pending.extend(p.decode() for p in re.findall(rb"^parent ([0-9a-f]{40})$", headers, re.M))
+        return seen
+
+    excluded = ancestry(base)
+    reviewed = ancestry(head) - excluded
+    if not reviewed:
+        raise ValueError("empty review range")
+    for oid in reviewed:
+        _, commit = git_object(common, oid)
+        message = commit.split(b"\n\n", 1)[1].decode("utf-8", "replace").replace("\r\n", "\n").rstrip()
+        trailers = message.split("\n\n")[-1].splitlines()
+        found = set()
+        for line in trailers:
+            match = re.fullmatch(r"Co-Authored-By: (Codex|Claude(?: [A-Za-z0-9.-]+)*|Antigravity) <[^<>\s]+>", line, re.I)
+            if match:
+                found.add(match[1].split()[0].lower())
+        if found != {author}:
+            raise ValueError("unverified or conflicting trailers")
+    return author
 
 
 def blocked_families(lines, current=None):
@@ -343,6 +357,8 @@ def build_packet(checkout, base, head, criteria, decisions, known_consumers):
                 end = data.index(b"\0", cursor)
                 mode, name = data[cursor:end].split(b" ", 1)
                 name = name.decode("utf-8", "replace")
+                if name in {".", ".."} or "/" in name or any(ord(c) < 32 or ord(c) == 127 for c in name):
+                    raise ValueError("unsafe tree name")
                 child = data[end + 1:end + 21].hex()
                 cursor = end + 21
                 path = prefix + name
@@ -364,8 +380,11 @@ def build_packet(checkout, base, head, criteria, decisions, known_consumers):
         if any(b"\0" in v for v in versions):
             stat.append({"file": name, "binary": True})
         else:
+            lines = [v.decode("utf-8", "replace").splitlines() for v in versions]
+            if any(len(v) > 256 * 1024 for v in versions) or any(len(v) > 1000 for v in lines):
+                raise ValueError("oversized text diff")
             added = removed = 0
-            for line in difflib.ndiff(*[v.decode("utf-8", "replace").splitlines() for v in versions]):
+            for line in difflib.ndiff(*lines):
                 added += line.startswith("+ ")
                 removed += line.startswith("- ")
             stat.append({"file": name, "added": added, "removed": removed})
@@ -376,13 +395,14 @@ def build_packet(checkout, base, head, criteria, decisions, known_consumers):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--kind", choices=("code", "security", "both"), default="both")
+    parser.add_argument("--base", help="reviewed base ref; missing base cannot route")
     parser.add_argument("--lane", action="store_true", help="coordinator must first pass merge_check.py --lane")
     parser.add_argument("--security-trigger", action="store_true")
     args = parser.parse_args(argv)
     if args.lane and args.security_trigger:
         return 2
     try:
-        rows = route(author_family(Path.cwd()), config.host_text(), quota_probe.status_lines(),
+        rows = route(author_family(Path.cwd(), base=args.base), config.host_text(), quota_probe.status_lines(),
                      lane=args.lane, kinds=("code", "security") if args.kind == "both" else (args.kind,))
         for row in rows:
             print(" ".join(row))

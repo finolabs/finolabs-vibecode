@@ -28,7 +28,7 @@ class PostingTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.base = Path(self.tmp.name)
+        self.base = Path(self.tmp.name).resolve()
         self.home = account(self, self.base / "account")
         self.checkout = self.base / "checkout"
         (self.checkout / ".git").mkdir(parents=True)
@@ -53,7 +53,7 @@ if args[:2] == ["pr", "view"]:
     print(json.dumps(dict(headRefOid=head, comments=comments)))
 elif args[:2] == ["pr", "comment"]:
     assert args[-2:] == ["--body-file", "-"]
-    comments.append(dict(body=sys.stdin.read(), author=dict(login="sample-reviewer")))
+    comments.append(dict(body=sys.stdin.read(), author=dict(login="sample-reviewer"), includesCreatedEdit=False))
     comments_path.write_text(json.dumps(comments))
     if (root / "move-head").exists():
         (root / "head").write_text("f" * 40)
@@ -64,7 +64,22 @@ else:
         self.fake.chmod(0o700)
         (self.base / "head").write_text(HEAD)
         patch = mock.patch.dict(os.environ, {"PATH": str(self.bin), "FAKE_GH_STATE": str(self.base),
-                                           "GH_REPO": "malicious.example/other/repo", "GH_HOST": "malicious.example"})
+                                           "GH_REPO": "malicious.example/other/repo", "GH_HOST": "malicious.example",
+                                           "GH_TOKEN": "synthetic-gh-token", "GITHUB_TOKEN": "synthetic-github-token"})
+        patch.start()
+        self.addCleanup(patch.stop)
+        environment = post.gh_environment
+        def fake_environment():
+            return {**environment(), "FAKE_GH_STATE": str(self.base)}
+        patch = mock.patch.object(post, "gh_environment", side_effect=fake_environment)
+        patch.start()
+        self.addCleanup(patch.stop)
+        def fake_executable():
+            if not self.fake.exists():
+                raise post.CannotPost("no-cli")
+            return str(self.fake)
+        self.real_trusted_gh = post.trusted_gh
+        patch = mock.patch.object(post, "trusted_gh", side_effect=fake_executable)
         patch.start()
         self.addCleanup(patch.stop)
         self.body = post.create_run_folder()
@@ -199,7 +214,64 @@ else:
         linked = self.base / "linked"
         linked.mkdir()
         (linked / ".git").write_text("gitdir: " + str(git) + "\n")
+        (git / "gitdir").write_text(str(linked / ".git") + "\n")
         self.assertEqual(post.checkout_remote(linked), "github.com/sample/repo")
+
+    def test_git_entry_redirect_fifo_and_owner_checks(self):
+        git = self.checkout / ".git"
+        original = self.base / "saved-git"
+        git.rename(original)
+        for kind in ("symlink", "fifo", "internal", "external"):
+            with self.subTest(kind=kind):
+                if kind == "symlink":
+                    git.symlink_to(original, target_is_directory=True)
+                elif kind == "fifo":
+                    os.mkfifo(git)
+                else:
+                    target = self.checkout / "fake" if kind == "internal" else original
+                    git.write_text("gitdir: " + str(target))
+                self.assertEqual(self.main(["31", "--body-file", str(self.body)])[0], 2)
+                git.unlink()
+        original.rename(git)
+        path = git / "config"
+        path.unlink()
+        os.mkfifo(path)
+        self.assertEqual(self.main(["31", "--body-file", str(self.body)])[0], 2)
+        path.unlink()
+        self.remote("https://github.com/sample/repo")
+        original_fstat = os.fstat
+        def wrong_owner(fd):
+            info = original_fstat(fd)
+            if info.st_ino == path.stat().st_ino:
+                values = list(info)
+                values[4] = os.getuid() + 1
+                return os.stat_result(values)
+            return info
+        with mock.patch.object(os, "fstat", side_effect=wrong_owner):
+            self.assertEqual(self.main(["31", "--body-file", str(self.body)])[0], 2)
+        self.assertEqual(self.calls(), [])
+
+    def test_linked_metadata_links_and_back_pointer_refused(self):
+        common = self.checkout / ".git"
+        git = common / "worktrees/linked"
+        git.mkdir(parents=True)
+        linked = self.base / "linked"
+        linked.mkdir()
+        (linked / ".git").write_text("gitdir: " + str(git))
+        (git / "commondir").write_text("../..")
+        (git / "gitdir").write_text(str(linked / ".git"))
+        for name in ("commondir", "gitdir"):
+            path = git / name
+            moved = git / (name + "-saved")
+            path.rename(moved)
+            path.symlink_to(moved)
+            with self.subTest(name=name), self.assertRaises((ValueError, OSError)):
+                post.checkout_remote(linked)
+            path.unlink()
+            moved.rename(path)
+        (git / "gitdir").write_text(str(self.base / "wrong"))
+        with self.assertRaises(ValueError):
+            post.checkout_remote(linked)
 
     def test_changed_head_refuses_comment(self):
         (self.base / "head").write_text("f" * 40)
@@ -231,8 +303,55 @@ else:
         self.assertEqual(self.main(["31", "--body-file", str(self.body)])[:2], (1, "cannot-post: other\n"))
         self.assertEqual(sum(c[:2] == ["pr", "comment"] for c in self.calls()), 1)
 
+    def test_same_login_relay_and_missing_edit_evidence_do_not_verify(self):
+        for body, edited in ((MARKER + "\nRelayed by coordinator; reviewer: codex; approval: record\n", False), (BODY, None)):
+            comment = dict(body=body, author=dict(login="sample-reviewer"), includesCreatedEdit=edited)
+            self.assertFalse(post.posting_verified([comment], "sample-reviewer", MARKER))
+
+    def test_untrusted_path_does_not_select_executable(self):
+        # Exercise the actual selector, outside setUp's fake-gh seam.
+        with mock.patch.dict(os.environ, {"PATH": ".:" + str(self.bin)}), \
+             mock.patch.object(Path, "resolve", side_effect=FileNotFoundError):
+            with self.assertRaises(post.CannotPost) as raised:
+                self.real_trusted_gh()
+            self.assertEqual(raised.exception.reason, "no-cli")
+        self.assertEqual(self.calls(), [])
+
+    def test_edited_comment_does_not_verify_posting(self):
+        comment = dict(body=BODY, author=dict(login="sample-reviewer"), includesCreatedEdit=True)
+        self.assertFalse(post.posting_verified([comment], "sample-reviewer", MARKER))
+
+    def test_successful_post_removes_private_draft(self):
+        post.post(31, self.body, self.checkout)
+        self.assertFalse(self.body.parent.exists())
+
+    def test_symlinked_config_is_refused_before_gh(self):
+        config = self.checkout / ".git/config"
+        target = self.base / "external-config"
+        config.rename(target)
+        config.symlink_to(target)
+        self.assertEqual(self.main(["31", "--body-file", str(self.body)])[0], 2)
+        self.assertEqual(self.calls(), [])
+
+    def test_gh_redirect_environment_is_not_inherited(self):
+        hostile = {"GH_HTTP_UNIX_SOCKET": "/tmp/hostile.sock", "HTTPS_PROXY": "https://hostile.invalid",
+                   "GH_ENTERPRISE_TOKEN": "synthetic", "GH_CONFIG_DIR": "/tmp/hostile",
+                   "GH_HOST": "hostile.invalid", "GH_REPO": "hostile/repo", "HTTP_PROXY": "https://hostile.invalid",
+                   "ALL_PROXY": "https://hostile.invalid", "https_proxy": "https://hostile.invalid",
+                   "LD_PRELOAD": "/tmp/hostile", "DYLD_INSERT_LIBRARIES": "/tmp/hostile"}
+        with mock.patch.dict(os.environ, hostile), mock.patch.object(subprocess, "run") as run:
+            run.return_value = subprocess.CompletedProcess([], 0, "{}", "")
+            post.gh_call(str(self.fake), ["pr", "view", "31"])
+        kwargs = run.call_args.kwargs
+        self.assertFalse(set(hostile) & set(kwargs.get("env", os.environ)))
+        self.assertEqual(kwargs["env"]["GH_PROMPT_DISABLED"], "1")
+        self.assertEqual(kwargs["env"]["GH_TOKEN"], "synthetic-gh-token")
+        self.assertEqual(kwargs["env"]["GITHUB_TOKEN"], "synthetic-github-token")
+        self.assertEqual(kwargs["env"]["HOME"], str(self.home))
+        self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)
+
     def test_yes_requires_both_marker_and_expected_identity(self):
-        own = dict(body=BODY, author=dict(login="sample-reviewer"))
+        own = dict(body=BODY, author=dict(login="sample-reviewer"), includesCreatedEdit=False)
         relay = dict(body=BODY, author=dict(login="sample-coordinator"))
         self.assertTrue(post.posting_verified([own], "sample-reviewer", MARKER))
         for comments, expected, marker in (([relay], "sample-reviewer", MARKER), ([own], "other", MARKER),
