@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from unittest import mock
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -361,6 +362,130 @@ else:
                     (None, "sample-reviewer", MARKER), ([{}, None], "sample-reviewer", MARKER)):
             with self.subTest(comments=comments):
                 self.assertFalse(post.posting_verified(comments, expected, marker))
+
+
+class TrustedGhSelectionTest(unittest.TestCase):
+    def check(self, folder, *, mode=0o755, gid=80, uid=None, repository=False, target=None):
+        candidate = Path(folder) / "gh"
+        resolved = target or candidate
+        def resolve(path, **kwargs):
+            if path != candidate:
+                raise FileNotFoundError
+            return resolved
+        info = SimpleNamespace(st_uid=os.getuid() if uid is None else uid,
+                               st_gid=gid, st_mode=0o100000 | mode)
+        with mock.patch.object(Path, "resolve", resolve), \
+             mock.patch.object(Path, "stat", return_value=info), \
+             mock.patch.object(Path, "exists", return_value=repository), \
+             mock.patch.object(os, "access", return_value=True):
+            return post.trusted_gh()
+
+    def test_other_fixed_locations_stay_strict(self):
+        for folder in ("/usr" + "/local/bin", "/usr" + "/bin"):
+            with self.subTest(folder=folder):
+                self.assertEqual(self.check(folder), str(Path(folder) / "gh"))
+                for kwargs in ({"mode": 0o775}, {"mode": 0o757},
+                               {"uid": os.getuid() + 1000}, {"repository": True}):
+                    with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                        self.check(folder, **kwargs)
+
+    def test_fixed_locations_cannot_resolve_to_temporary_or_other_prefix(self):
+        for target in (Path("/tmp" + "/gh"), Path("/opt" + "/other/bin/gh")):
+            with self.subTest(target=target), self.assertRaises(post.CannotPost):
+                self.check("/usr" + "/local/bin", target=target)
+
+
+class HomebrewGhTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name).resolve()
+        self.prefix = self.base / "homebrew"
+        self.target = self.prefix / "Cellar" / "gh" / "1.0" / "bin" / "gh"
+        self.target.parent.mkdir(parents=True)
+        self.target.touch(mode=0o755)
+        self.candidate = self.prefix / "bin" / "gh"
+        self.candidate.parent.mkdir()
+        self.candidate.symlink_to(self.target)
+        (self.prefix / ".git").mkdir()
+        self.overrides = {}
+
+    def stat_path(self, path):
+        info = path.stat()
+        # Model Homebrew's admin-writable directories without chown or a
+        # dependency on the test machine's groups; all writes stay in tmp.
+        mode = info.st_mode | 0o020 if path.is_dir() else info.st_mode
+        fields = dict(st_mode=mode, st_uid=os.getuid(), st_gid=80)
+        fields.update(self.overrides.get(path, {}))
+        return SimpleNamespace(**fields)
+
+    def check(self):
+        return post.homebrew_gh(self.candidate, self.prefix, os.getuid(), self.stat_path)
+
+    def test_admin_writable_prefix_repository_and_cellar_symlink_allowed(self):
+        self.assertEqual(self.check(), self.target)
+
+    def test_nested_repository_refused_on_both_paths(self):
+        for folder in (self.target.parent, self.candidate.parent):
+            with self.subTest(folder=folder):
+                marker = folder / ".git"
+                marker.touch()
+                with self.assertRaises(ValueError):
+                    self.check()
+                marker.unlink()
+
+    def test_repository_above_prefix_refused(self):
+        (self.base / ".git").mkdir()
+        with self.assertRaises(ValueError):
+            self.check()
+
+    def test_world_write_other_group_and_other_owner_refused(self):
+        for path in (self.prefix, self.candidate.parent, self.target.parent, self.target):
+            for fields in ({"st_mode": path.stat().st_mode | 0o002},
+                           {"st_mode": path.stat().st_mode | 0o020, "st_gid": 81},
+                           {"st_uid": os.getuid() + 1000}):
+                with self.subTest(path=path, fields=fields):
+                    self.overrides[path] = fields
+                    with self.assertRaises(ValueError):
+                        self.check()
+                    self.overrides.clear()
+
+    def test_root_owned_components_allowed(self):
+        self.overrides[self.prefix] = {"st_uid": 0}
+        self.assertEqual(self.check(), self.target)
+
+    def test_symlink_escaping_prefix_refused(self):
+        outside = self.base / "outside"
+        outside.touch(mode=0o755)
+        self.candidate.unlink()
+        self.candidate.symlink_to(outside)
+        with self.assertRaises(ValueError):
+            self.check()
+
+    def test_intermediate_symlink_leaving_then_reentering_prefix_refused(self):
+        outside = self.base / "outside"
+        outside.mkdir()
+        (outside / "back").symlink_to(self.target.parent, target_is_directory=True)
+        self.candidate.unlink()
+        self.candidate.parent.rmdir()
+        self.candidate.parent.symlink_to(outside / "back", target_is_directory=True)
+        with self.assertRaises(ValueError):
+            self.check()
+
+    def test_symlinked_prefix_refused(self):
+        alias = self.base / "alias"
+        alias.symlink_to(self.prefix, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            post.homebrew_gh(alias / "bin" / "gh", alias, os.getuid(), self.stat_path)
+
+    def test_installed_homebrew_gh(self):
+        prefix = Path("/opt" + "/homebrew")
+        if not (prefix / "bin" / "gh").exists():
+            self.skipTest("Homebrew gh is not installed")
+        selected = Path(post.trusted_gh())
+        self.assertTrue(selected.is_relative_to(prefix))
+        self.assertTrue(selected.is_file())
+        self.assertTrue(os.access(selected, os.X_OK))
 
 
 if __name__ == "__main__":

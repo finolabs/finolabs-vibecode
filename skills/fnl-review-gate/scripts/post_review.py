@@ -149,14 +149,62 @@ def gh_environment():
     return env
 
 
+def homebrew_gh(candidate, prefix, uid, stat_path=Path.stat):
+    """Check a Homebrew path; injectable root/stat keep fixtures outside real installs.
+
+    Walk symlink destinations as well as the final path: even an intermediate
+    link leaving the prefix and returning through another link is refused.
+    """
+    if not prefix.is_absolute() or prefix.resolve(strict=True) != prefix:
+        raise ValueError("unsafe gh installation")
+    for parent in prefix.parents:
+        marker = parent / ".git"
+        if marker.exists() or marker.is_symlink():
+            raise ValueError("unsafe gh installation")
+    pending = list(candidate.relative_to(prefix).parts)
+    current, links = prefix, 0
+    while True:
+        info = stat_path(current)
+        if (info.st_uid not in {0, uid} or info.st_mode & 0o002
+                or (info.st_mode & 0o020 and info.st_gid != 80)):
+            raise ValueError("unsafe gh installation")
+        marker = current / ".git"
+        if current != prefix and (marker.exists() or marker.is_symlink()):
+            raise ValueError("unsafe gh installation")
+        if not pending:
+            return current
+        part = pending.pop(0)
+        path = current / part
+        if part == "..":
+            if current == prefix:
+                raise ValueError("unsafe gh installation")
+            current = current.parent
+        elif path.is_symlink():
+            links += 1
+            if links > 40:
+                raise ValueError("unsafe gh installation")
+            target = path.readlink()
+            if target.is_absolute():
+                # relative_to refuses targets outside this exact prefix.
+                target = target.relative_to(prefix)
+                current = prefix
+            pending = list(target.parts) + pending
+        else:
+            current = path
+
+
 def trusted_gh():
     # Search fixed installation locations, never workspace/relative PATH entries.
     for folder in ("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"):
         candidate = Path(folder) / "gh"
         try:
+            if folder == "/opt/homebrew/bin":
+                resolved = homebrew_gh(candidate, Path("/opt/homebrew"), os.getuid())
+                if stat.S_ISREG(resolved.stat().st_mode) and os.access(resolved, os.X_OK):
+                    return str(resolved)
+                continue
             resolved = candidate.resolve(strict=True)
-            # Homebrew symlinks may resolve into its Cellar, but not into a
-            # workspace, temporary directory or user-controlled download folder.
+            # Other fixed locations retain the strict ancestor checks.
             if not any(resolved.is_relative_to(root) for root in (Path("/opt/homebrew"), Path("/usr/local"), Path("/usr/bin"))):
                 continue
             for path in (candidate.parent, resolved, *resolved.parents):
