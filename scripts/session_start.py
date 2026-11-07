@@ -176,7 +176,8 @@ def main():
         raw = sys.stdin.buffer.read(64 * 1024 + 1)
         if len(raw) <= 64 * 1024:
             event = json.loads(raw.decode("utf-8"))
-            if isinstance(event, dict) and isinstance(event.get("session_id"), str) and event["session_id"]:
+            if (isinstance(event, dict) and event.get("source") != "compact"
+                    and isinstance(event.get("session_id"), str) and event["session_id"]):
                 try:
                     from context_snapshot import read as read_context
                     context = read_context(event["session_id"])

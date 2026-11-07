@@ -21,7 +21,7 @@ A plugin cannot declare `statusLine`. Setup must offer a user-owned settings com
 - `read --session <id> [--max-age-seconds N]` prints exactly `used`, `window`, `percent`, integer `age_seconds` and `stale: false` as JSON. Default maximum age is 3600 seconds, inclusive; an explicit integer from 0 to 86400 is accepted. Missing, unsafe, invalid, future-dated or older snapshots return exit 3 and the same fixed stderr message, with no JSON. `stale: true` is never returned because stale numbers are refused. Expiry does not automatically delete snapshots.
 - `check --session <id> --threshold <tokens> [--boundary yes|no|unknown]` reads with the same freshness policy, imports the unchanged `context_steward.check` and prints its JSON `action` and `reason`. It accepts `--max-age-seconds` too. Missing counts or an invalid threshold return exit 3 with the same refusal, never invented numbers. The script never compacts or starts a session.
 
-Both `read` and `check` also accept `--latest`, mutually exclusive with `--session`. It selects the newest safe snapshot by mtime, breaking ties by hashed filename; an invalid or stale newest reading is refused, without falling back to older data. Unsafe snapshot entries make latest selection fail closed.
+Both `read` and `check` also accept `--latest`, mutually exclusive with `--session`. It selects the newest safe snapshot by mtime, breaking ties by hashed filename; an invalid or stale newest reading is refused, without falling back to older data. It reads whichever session wrote last: after a session's own snapshot is cleared (after `/compact`), `--latest` can return another session's fresh reading, which is the stated parallel-session limit. Unsafe snapshot entries make latest selection fail closed.
 
 ### Why latest
 
@@ -33,7 +33,7 @@ The existing `scripts/session_start.py` reads its bounded hook stdin, uses that 
 
 `Context: 62% of a 200000 window, read 12s ago (status line)`
 
-Any source qualifies, not just resume or compact. Missing ids/readings, expired snapshots, unsafe state, invalid or oversized stdin and all errors add nothing. It makes no network call, starts no process, writes no state and still exits 0. Existing handover re-injection remains scoped to source `compact`; hook declarations are unchanged. The Context line is a start-time observation, not a promise of current usage later in the session.
+Every source qualifies except `compact`: right after a compaction the only snapshot is the pre-compact one, so no Context line is printed until the status line records a new reading. Missing ids/readings, expired snapshots, unsafe state, invalid or oversized stdin and all errors add nothing. It makes no network call, starts no process, writes no state and still exits 0. Existing handover re-injection remains scoped to source `compact`; hook declarations are unchanged. The Context line is a start-time observation, not a promise of current usage later in the session.
 
 ## 3. Session hygiene
 

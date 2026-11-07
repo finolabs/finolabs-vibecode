@@ -175,6 +175,18 @@ class ContextSnapshotTest(unittest.TestCase):
         self.assertEqual(self.cli("record", "--line"), (0, "", ""))
         self.assertEqual((real / self.path.name).read_bytes(), before)
 
+    def test_hard_linked_snapshot_is_refused_for_read_latest_and_record(self):
+        self.seed()
+        before = self.path.read_bytes()
+        link = self.folder / "alias"
+        os.link(self.path, link)
+        self.refused("read", "--session", "synthetic")
+        self.refused("read", "--latest")
+        self.assertEqual(self.cli("record", "--line"), (0, "", ""))
+        self.assertEqual(self.path.read_bytes(), before)
+        link.unlink()
+        self.assertEqual(self.cli("read", "--session", "synthetic")[0], 0)
+
     def test_wrong_owner_folder_target_and_other_user_snapshot(self):
         self.seed()
         before = self.path.read_bytes()

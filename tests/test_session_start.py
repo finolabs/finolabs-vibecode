@@ -143,17 +143,20 @@ class SessionStartTest(SyntheticStateTest):
             out, _ = self.run_hook(b"")
         self.assertEqual(out, self.baseline("on")[:-len(STATE_BASELINE)])
 
-    def test_context_line_only_for_this_session_fresh_safe_reading_any_source(self):
+    def test_context_line_only_for_this_session_fresh_safe_reading_except_after_compact(self):
         import context_snapshot as ctx
         from tests.test_context_snapshot import fixture
         current = 2000000000
         with mock.patch.object(ctx.time, "time", return_value=current):
             ctx.record(json.dumps(fixture()).encode())
-            for source in ("startup", "resume", "compact", "clear", None):
+            for source in ("startup", "resume", "clear", None):
                 raw = json.dumps({"source": source, "session_id": "synthetic"}).encode()
                 out, _ = self.run_hook(raw, reader=mock.Mock(return_value=""))
                 self.assertEqual(out, self.baseline("on") +
                                  b"Context: 62% of a 200000 window, read 0s ago (status line)\n")
+            raw = json.dumps({"source": "compact", "session_id": "synthetic"}).encode()
+            out, _ = self.run_hook(raw, reader=mock.Mock(return_value=""))
+            self.assertEqual(out, self.baseline("on"))  # a pre-compact reading is never shown after a compaction
             for event in ({"source": "startup", "session_id": "another"}, {}, {"session_id": 1}):
                 out, _ = self.run_hook(json.dumps(event).encode())
                 self.assertEqual(out, self.baseline("on"))
