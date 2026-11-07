@@ -1,6 +1,6 @@
 # Agent roles: routed reviews, verification without an agent, and a navigator
 
-Status: draft; owner decisions recorded on 2026-11-07 (see "Decisions settled"); target release open (part H); implementation not started.
+Status: accepted; owner decisions recorded on 2026-11-07 in two rounds (see "Decisions settled"); ships in the release that removes the retired agents, 0.2.0 under `fnl-versioning` (part H); implementation not started.
 
 ## Why
 
@@ -33,6 +33,11 @@ on 2026-11-07 showed four problems:
   removes the need for a standing relay of security reviews.
 - Jev is a recommendation, not a requirement. Every semantic judgment goes through one judge interface; when the user
   does not choose Jev at setup, or Jev is unavailable, a small model of the host takes its place (part I).
+- Second round (same day): `fnl-verifier`, `fnl-steward` and the skill `fnl-setup-instructions` are removed in the same
+  release, without a deprecation period; instructions become a module of `fnl-setup` (a separate spec restructures
+  setup). `merge_check.py` requires a router marker in the pull request body in repositories that adopted
+  `fnl-review-gate`; other repositories are not blocked (part K). The verification-receipt gate of the ledger applies
+  only to delegated work recorded in the ledger; the coordinator's own work stays under the review gate.
 - Payloads to the judge are written in English; criteria written in another language are restated in English by the small
   model and both texts are kept in the report.
 
@@ -168,9 +173,11 @@ and records the agreement; that result is part of acceptance.
 
 ## H. Retirement, compatibility, scope
 
-- Removing two agents changes the public surface: CHANGELOG entries under Removed and Changed, a note that callers by
-  name (`fnl-verifier`, `fnl-steward`) now follow the skill text, and the agent counts in README, `fnl-ask` and the
-  manifests updated. The release number is the owner's call (open decision 1).
+- Removing two agents and one skill changes the public surface: CHANGELOG entries under Removed and Changed with the
+  consumer action for each (`fnl-verifier` and `fnl-steward` callers follow the skill text; `fnl-setup-instructions`
+  callers use `fnl-setup`), and the agent and skill counts in README, `fnl-ask` and the manifests updated. In Phase 0
+  `fnl-versioning` makes a breaking change a MINOR bump, so the release that removes them is 0.2.0 and carries the
+  work planned for 0.1.11; the owner confirms the number at release.
 - `fnl-delegate` Accept step, `fnl-verification`, `fnl-review-gate` ("Instruments", "Who reviews"), `fnl-setup` (roles
   and posting steps), `fnl-session-hygiene`, `host-template.md` and the two reviewer agent files change in the same
   work. Skills stay self-contained: scripts used by two skills are copied and compared in CI.
@@ -202,6 +209,12 @@ requests, and records agreement. A judge with no recorded agreement is labelled 
 First measurement (Jev, 2026-11-07, 12 cases from pull requests 138, 139 and 141, thresholds 0.7 and 0.3): 9 agree,
 2 unsure, 1 wrong (a contradiction between two documents, accepted at 0.88); all six corrected-version cases passed.
 The result drives the rules above: a judge is a filter, and cross-document consistency is decided in code.
+Second measurement (small host model, a Haiku-class subagent, same 12 cases, `yes` only with a quoted line checked by
+script): 10 agree, 2 insufficient, 0 wrong, including the cross-document case Jev accepted. This supports `host` as the
+default, with caveats: a small sample, one repository, answers known to the author, the same model family as most of
+the changes judged, and an unrecorded read scope for the subagent. A claim of absence ("no hook starts a worker") has
+no line to quote, so it is phrased as the removal that proves it ("the worker start was removed from each hook") or it
+ends as `insufficient`.
 
 ## J. Setup and instruction changes this spec needs
 
@@ -221,6 +234,23 @@ The result drives the rules above: a judge is a filter, and cross-document consi
 - Both skills use the same scope names in their text: user scope (everything under the user's account: host config,
   consent, user-level instruction files) and project scope (one repository). The wider restructure of the setup skill
   (a short core path with optional features loaded on demand) is a separate spec.
+
+## K. Enforcement at the end of the work
+
+Starting a task cannot be enforced; evidence at the end can. Three pieces:
+
+1. **Cheaper start.** The `SessionStart` hook already runs a script. It prints, from local files only, the state an agent
+   would otherwise call `fnl-delegate` to learn: delegation mode, the roles, the cached quota summary and the count of
+   open ledger entries. It never blocks and fails closed.
+2. **`route_task.py`** (script): applies the decision matrix of `fnl-delegate` to a kind and a grade and prints the
+   agent, model and effort. Grading difficulty is the one semantic judgment; it goes to the judge (part I) with the
+   coordinator free to override. The agent runs one command.
+3. **Router marker.** A pull request body carries `<!-- fnl-router depth=<MIN|NORMAL|DEEP> trigger=<trigger> -->`, the
+   values `record.py router` already accepts. `merge_check.py` reads the repository's adoption (the `## Agent skills`
+   block naming `fnl-review-gate`) from the base branch, never from the pull request head, so a change cannot exempt
+   itself; when adopted it reports a missing or malformed marker as blocking, otherwise it does nothing. The reviewer
+   compares the stated depth with the diff. A false marker is a visible claim a reviewer can contradict, not a silent
+   omission.
 
 ## Not in scope
 
@@ -245,13 +275,16 @@ judgments listed.
 - Navigator: `nav_state.py` output limited to the allowed fields, payload check, English restatement kept with the
   original, the validation over merged pull requests recorded, and a test that a finding without evidence is rejected.
 - `PRIVACY.md` lists any new stored value (the posting state, the relay count, the receipts) as metadata only.
+- `route_task.py` returns the matrix row for each kind and grade; the `SessionStart` output is read-only and cannot
+  block; `merge_check.py` blocks a missing marker only when the base branch adopted the gate, and ignores a head that
+  adds or removes the adoption line.
 - Each implementation pull request gets its own code and security review; the posting setup is shown to the user
   and confirmed before any write.
 
 ## Open decisions
 
-1. Release number: removing two agents may justify 0.2.0; the owner decides before the first implementation pull
-   request.
-2. Where the project `Outcome` line lives if a repository has no agent context file.
-3. Whether a repository may name its own default roles that override the user's (not in this spec; the user's host
+1. Where the project `Outcome` line lives if a repository has no agent context file.
+2. Whether a repository may name its own default roles that override the user's (not in this spec; the user's host
    config is the only source).
+3. The exact adoption line that `merge_check.py` looks for in the base branch's agent context file, and what happens
+   when the repository has none of the two files.
