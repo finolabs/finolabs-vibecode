@@ -22,7 +22,7 @@ reference and 0.166 binary, and Antigravity changelog and installed binary:
   `model_auto_compact_token_limit_scope` and
   `model_post_turn_compact_threshold_percent`; the range 1000 to 10000000 is the
   writer's own bound, not a host range.
-- Antigravity: refuse with “no documented setting; /compact only”.
+- Antigravity: the writer refuses with the current message “no documented setting; /compact only”. Vendor docs and release notes through 1.5.3 (installed at research time, 07/11/2026) document automatic compaction but no threshold or off switch. `/compact` was not found and may not exist; use `/new` or `/fork`, with `/context` for usage. The writer's message is a code gap, unchanged by this docs-only package. Sources: [context commands](https://antigravity.google/docs/cli/commands/context/), [hooks](https://antigravity.google/docs/hooks).
 These sources were named in the supplied evidence, not fetched for this change.
 Codex default and effect on a running session remain unverified.
 ## Consent and preview

@@ -1,11 +1,19 @@
 # Antigravity compaction stop
 
-Status: implemented; local size-only hook and previewed installer; user-level hooks, TUI delivery and the usefulness of a byte limit remain unverified.
+Status: implemented; local size-only hook and previewed installer; live user-level hook delivery, TUI behavior and the usefulness of a byte limit remain unverified.
 
 Decision: 2026-11-06, owner: a second blocking hook, scoped by the second
 exception in `CLAUDE.md` (merged). This spec comes before any code and carries the
 `PRIVACY.md`, README and `fnl-setup` changes. Claude Code and Codex use host
-thresholds written by `fnl-setup` (`compaction-threshold.md`); Antigravity has none.
+thresholds written by `fnl-setup` (`compaction-threshold.md`); no Antigravity threshold is documented through 1.5.3.
+
+## Vendor contracts researched 07/11/2026 (Antigravity 1.5.3)
+
+Official [hooks docs](https://antigravity.google/docs/hooks) confirm the user-level file `~/.gemini/config/hooks.json`; `~/.gemini/antigravity-cli/settings.json` is not loaded for hooks. Payload fields are `conversationId`, `workspacePaths`, `transcriptPath`, `artifactDirectoryPath`, `modelName`, `lastUserInput`; PreInvocation and PostInvocation add 0-indexed `invocationNum` and `initialNumSteps`, with no token or context fields. Whether `invocationNum` resets per user turn is not documented: the implementation's first-call-of-turn assumption remains unverified.
+
+Hook stdout is JSON: PreInvocation supports `injectSteps` and `terminationBehavior` (`terminate` or default). Plain printed text is not documented as reaching the model. Release 1.5.3, installed at research time, adds `PLUGIN_ROOT` and `PLUGIN_DATA` environment variables for plugin hook commands; these documentation facts do not verify this plugin live. The 1.5.1 observations below remain historical observations, not 1.5.3 runs.
+
+The [context-command docs](https://antigravity.google/docs/cli/commands/context/) and release notes through 1.5.3 document automatic compaction, `/context` usage and `/clear`, `/new`, `/fork`, `/rewind` context controls; no threshold or off switch. `/compact` was not found and may not exist; offer `/new` or `/fork`. The fixed hook message below still names `/compact`; changing that script string needs an owner decision and is outside this docs-only package.
 
 ## Verified on 2026-11-06 (throwaway workspace, Antigravity 1.5.1, `agy -p`)
 
@@ -27,7 +35,7 @@ thresholds written by `fnl-setup` (`compaction-threshold.md`); Antigravity has n
   byte limit is a rough proxy and must be presented as one.
 - Consistent with, not proof of: `invocationNum` was 0 on both resumed turns, so it appears to restart
   at each user turn.
-- Not verified: the same hook in the user-level `~/.gemini/config/hooks.json`, and the interactive TUI;
+- Not verified live: the same hook in the documented user-level `~/.gemini/config/hooks.json`, and the interactive TUI;
   setup text must therefore say "set up", not "enforced", until it is.
 
 ## Parts
@@ -36,8 +44,7 @@ thresholds written by `fnl-setup` (`compaction-threshold.md`); Antigravity has n
 
 Runs on Antigravity `PreInvocation` only. Reads the event from stdin (64 KiB bound,
 select with a 0.5 s wait, as `session_start.py` does). It acts only when
-`invocationNum` is 0, so it can end the start of a new user turn and never the middle of
-one. Always exits 0 and prints exactly `{}` unless it stops the turn.
+`invocationNum` is 0, before that model invocation. This is intended to select the start of a user turn, but the reset semantics are undocumented; the claim that it never stops mid-turn remains unverified. Always exits 0 and prints exactly `{}` unless it stops the turn.
 
 Decision, in this order; any failure allows:
 1. `FNL_COMPACT_STOP=off` allows.
@@ -130,5 +137,5 @@ says so, and a coordinator treats it as "context limit", not a model failure.
 - Whether the byte limit is a usable proxy in long real sessions: measure the
   transcript size against `usage` over a few real conversations before recommending a
   default; setup recommends none.
-- The same hook from the user-level hooks file and in the TUI: verify with the first
-  real install.
+- Live delivery of this hook from the documented user-level hooks file and in the TUI: verify with a real install.
+- Owner: decide the fixed `/compact` message wording and address the unverified `invocationNum == 0` first-call-of-turn assumption before claiming that boundary is enforced.
