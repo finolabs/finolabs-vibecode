@@ -81,6 +81,15 @@ class NavStateTest(unittest.TestCase):
         text += '## Work tracking\nOutcome: Confirmed\n- AC3: Confirmed criterion\n## Plan\n- AC4: Plan only\n'
         self.assertEqual([c['id'] for c in ns.parse_criteria_from_markdown(text)], ['OUTCOME-1', 'AC3'])
 
+    def test_outcome_requires_work_tracking_section(self):
+        text = ('Outcome: Before any section\n- AC1: Unconfirmed\n'
+                '## Other\nOutcome: Unrelated\n- AC2: Unconfirmed\n'
+                '## Work tracking\nOutcome: Confirmed\n- AC3: Confirmed criterion\n'
+                '## Plan\nOutcome: Plan only\n- AC4: Unconfirmed\n')
+        criteria = ns.parse_criteria_from_markdown(text)
+        self.assertEqual([(c['id'], c['criterion']) for c in criteria],
+                         [('OUTCOME-1', 'Confirmed'), ('AC3', 'Confirmed criterion')])
+
     def test_reader_refuses_symlink_components_oversize_nonregular_and_wrong_owner(self):
         link = self.repo / 'link.md'
         link.symlink_to(self.anchors)
@@ -111,7 +120,9 @@ class NavStateTest(unittest.TestCase):
     def test_git_argv_env_pr_suffixes_and_identifier_linking(self):
         subjects = ['AC1 fix #12', 'AC1 issue #13 in prose', 'AC1 work (#146)',
                     'AC1 merge pull request #147', 'AC1 merge PR #148', 'AC1 work (#149) trailing',
-                    'AC1 ' + 'x' * 150 + ' (#150)']
+                    'AC1 ' + 'x' * 150 + ' (#150)',
+                    'Merge pull request #144 from finolabs/setup-restructure-spec',
+                    'AC1 ' + 'x' * 110 + ' (#151) trailing']
         raw = ''.join(f'{i + 1:040x}\t{s}\n' for i, s in enumerate(subjects)).encode()
         with mock.patch.object(ns.shutil, 'which', return_value='/custom/git/bin/git'), \
                 mock.patch.dict(os.environ, {'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'bad', 'SECRET': 'private'}), \
@@ -124,7 +135,7 @@ class NavStateTest(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs['env'], {
             'PATH': os.defpath + os.pathsep + '/custom/git/bin', 'GIT_CONFIG_NOSYSTEM': '1',
             'GIT_CONFIG_GLOBAL': '/dev/null', 'GIT_TERMINAL_PROMPT': '0'})
-        self.assertEqual(payload['evidence']['pull_requests'], ['#146', '#147', '#148', '#150'])
+        self.assertEqual(payload['evidence']['pull_requests'], ['#146', '#147', '#148', '#150', '#144'])
         ac1 = next(c for c in payload['criteria'] if c['id'] == 'AC1')
         self.assertIn('#146', ac1['evidence_refs'])
         self.assertNotIn('#12', ac1['evidence_refs'])
@@ -193,7 +204,8 @@ class NavStateTest(unittest.TestCase):
 
     def test_screen_preserves_language_caps_and_removes_paths_tokens(self):
         private = ['/Users/fio/private.txt', '/home/user/private', r'C:\Users\fio\private',
-                   'a' * 64, 'QWxhZGRpbjpvcGVuIHNlc2FtZQ' * 3, 'sk-privateToken', 'ghp_privateToken']
+                   'a' * 64, 'VGhpcyBpcyBhIHN5bnRoZXRpYyBzZWNyZXQgZm9yIHRlc3RzLg==',
+                   'sk-privateToken', 'ghp_privateToken', 'github_pat_privateToken']
         phrase = 'Đảm bảo có dẫn chứng'
         for value in private:
             with self.subTest(value=value):
@@ -206,8 +218,24 @@ class NavStateTest(unittest.TestCase):
                 self.assertEqual(screened['criterion'], phrase + ' [removed]')
                 self.assertEqual(screened['question'], 'Check [removed]')
                 self.assertNotIn(value, out)
-        self.assertLessEqual(len(ns.parse_criteria_from_markdown('Outcome: ' + 'word ' * 100)[0]['criterion']), 300)
+        self.assertLessEqual(len(ns.parse_criteria_from_markdown('## Work tracking\nOutcome: ' + 'word ' * 100)[0]['criterion']), 300)
         self.assertNotIn('\u202e', ns.sanitize_text('safe\u202etext'))
+
+    def test_long_words_and_identifiers_preserve_criterion_wording(self):
+        for token in ('pneumonoultramicroscopicsilicovolcanoconiosis',
+                      'NavigatorAcceptanceCriterionPreservesOriginalWording',
+                      'navigator-acceptance-criterion-preserves-original-wording',
+                      'navigator_acceptance_criterion_preserves_original_wording',
+                      'NavigatorAcceptanceCriterionPreservesOriginalWording123'):
+            with self.subTest(token=token):
+                wording = 'Verify ' + token + ' remains readable'
+                criteria = ns.parse_criteria_from_markdown('## Goal and acceptance\n- AC1: ' + wording)
+                self.assertEqual(criteria[0]['criterion'], wording)
+                code, out, err = self.cli('validate-payload', payload={
+                    'id': 'AC1', 'criterion': wording, 'restated_criterion': wording,
+                    'question': wording, 'evidence_refs': ['#146']})
+                self.assertEqual((code, err), (0, ''))
+                self.assertEqual(json.loads(out)['criterion'], wording)
 
     def test_payload_refuses_unknown_fields_controls_counts_and_absolute_refs(self):
         good = self.collection()

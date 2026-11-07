@@ -23,12 +23,17 @@ STATUS_WORDS = ('draft', 'accepted', 'in progress', 'implemented', 'released', '
 OUTCOME_WORDS = ('accepted', 'rejected', 'timeout', 'stalled', 'error', 'blocked',
                  'needs-permission', 'quota', 'cancelled')
 CONTROL = re.compile(r'[\x00-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]')
+# Length alone does not identify a secret: preserve long words and identifiers.
+# Unprefixed base64 candidates need padding to distinguish them from prose.
 PRIVATE = re.compile(r'(?:/(?:Users|home)/[^\s`"<>]+|[A-Za-z]:[\\/][^\s`"<>]+|'
                      r'\b(?:sk-|ghp_|github_pat_)[A-Za-z0-9_-]+|'
-                     r'\b[0-9a-fA-F]{32,}\b|(?<![\w/])[A-Za-z0-9_+/=-]{40,}(?!\w))')
+                     r'\b[0-9a-fA-F]{32,}\b|'
+                     r'(?<![\w/+=-])[A-Za-z0-9+/]{40,}={1,2}(?![\w/+=-]))')
 SAFE_ID = re.compile(r'[A-Za-z0-9._:-]{1,80}\Z')
 SAFE_REF = re.compile(r'(?:[A-Za-z0-9#._:/-]{1,120}|[A-Za-z0-9._:-]{1,80}:in progress)\Z')
-PR_IN_SUBJECT = re.compile(r'(?:\bpull request #([0-9]{1,8})|\bPR #([0-9]{1,8})|\(#([0-9]{1,8})\))\Z', re.I)
+PR_IN_SUBJECT = re.compile(
+    r'(?:^Merge pull request #([0-9]{1,8}) from \S.*|'
+    r'\bpull request #([0-9]{1,8})|\bPR #([0-9]{1,8})|\(#([0-9]{1,8})\))\Z', re.I)
 
 
 def has_control_chars(text):
@@ -99,7 +104,7 @@ def parse_criteria_from_markdown(text, prefix='C', spec_ref=None,
                 section, active = '', False
             continue
         outcome = re.match(r'^(?:[-*]\s*)?(?:\*\*)?Outcome(?:\*\*)?(?:\s*\([^)]*\))?\s*:\s*(.*)$', line.strip(), re.I)
-        if outcome and 'work tracking' in sections and section in ('', 'work tracking'):
+        if outcome and section == 'work tracking':
             active, wording = True, outcome[1]
             default_id = 'OUTCOME-1'
         else:
