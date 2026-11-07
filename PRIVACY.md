@@ -1,6 +1,6 @@
 # Privacy
 
-`finolabs-vibecode` is a set of Agent Skills: Markdown instructions plus small local Python scripts. It has no server. Its only network call is the update check described below; it sends nothing about you or your sessions. If you choose, it records usage metadata on your machine so you can see how the practice performs; that record never leaves the machine, and it is off until you consent.
+`finolabs-vibecode` is a set of Agent Skills: Markdown instructions plus small local Python scripts. It has no server. Its network calls are the update check described below and, only if you choose Jev as your judge in `fnl-setup`, the judge call to TypeSafe described under "Judge" below; it sends nothing else about you or your sessions. If you choose, it records usage metadata on your machine so you can see how the practice performs; that record never leaves the machine, and it is off until you consent.
 
 The agent scan script itself uses no network and runs `--version` only on three fixed executables (`claude`, `codex`, `agy`) without a shell and reads `host.md`; it stores nothing outside `host.md`.
 
@@ -95,7 +95,7 @@ The first stable release carrying the checker gives no notice of itself: older i
 
 ## Quota probe
 
-For the quota probe, the plugin itself makes no network call. The user's own `agy`, `claude` and `codex` programs contact their providers with the user's own accounts; the plugin sends nothing about the user. This is separate from the update check above.
+For the quota probe, the plugin itself makes no network call (the judge call below is separate). The user's own `agy`, `claude` and `codex` programs contact their providers with the user's own accounts; the plugin sends nothing about the user. This is separate from the update check above.
 
 The probe stays off until setup records the dated opt-in in the canonical `<data root>/host.md`, under `## Quota probe`. That section lists selected agents, confirmed absolute executable and interpreter paths, and labelled Claude config folders. For the default Claude Code install, `CLAUDE_CONFIG_DIR` is left unset so the program resolves its own folder and login; it is set only to config folders the user listed. Each Claude install starts with its usual configuration, including hooks, plugins and servers. `FNL_QUOTA_PROBE=off` stops probing; metrics consent neither enables nor disables it.
 
@@ -115,3 +115,7 @@ The probe stays off until setup records the dated opt-in in the canonical `<data
 ## Reporting issues
 
 Public issues and pull requests are visible to everyone. Remove credentials, personal data and private repository content from any transcript, brief or log before you post it. Report security problems privately as described in [SECURITY.md](SECURITY.md).
+
+## Judge (TypeSafe), only if you choose it
+
+If you choose Jev as the judge in `fnl-setup` and set `TYPESAFE_API_KEY` in your environment, `judge.py` sends one HTTPS request per judgment to `https://api.typesafe.ai/v1/systemone` when the coordinator or you run it. The request holds only a bounded English question and the evidence the question needs (verification criteria with the supporting lines, a navigator question, an uncertain compaction boundary, a delegation grade); a field with a secret or machine-path hit makes the call refuse. The key is read only from the environment and is never printed, stored or passed on. TypeSafe processes the payload under your organization's agreement. Nothing is sent when the judge is the host model (the default), and `FNL_JUDGE=off` stops the call.

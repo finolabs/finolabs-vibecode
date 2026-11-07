@@ -204,9 +204,14 @@ and records the agreement; that result is part of acceptance.
 All semantic judgments of this spec (parts E, F and G) use one interface: a narrow question and its evidence in, one of
 `yes`, `no`, `insufficient` out. Two implementations:
 
-- **Jev** through the user's `typesafe-ai` skill, with its probability kept. Chosen at setup by a separate neutral Yes
-  and No in `fnl-setup` (it needs the user's own authorization and API budget; the skill being installed grants
-  neither) and recorded as `judge: jev`. Only a validated reply counts as Jev use.
+- **Jev**, with its probability kept, called by the plugin's `judge.py` (owner decision 07/11/2026: the fourth scoped
+  exception in `CLAUDE.md` governs the call; the user's `typesafe-ai` skill remains the place to read the cookbooks and
+  is not on the call path). One HTTPS POST per judgment to the fixed endpoint, the key only from `TYPESAFE_API_KEY`,
+  a closed per-site payload schema with size caps and a refusal on a secret or path hit, no redirect or proxy, TLS
+  verified, a loopback base URL only through a user-typed flag for tests, a per-run call cap, and `FNL_JUDGE=off`.
+  Chosen at setup by a separate neutral Yes and No in `fnl-setup` (it needs the user's own authorization and API
+  budget; the skill being installed grants neither) and recorded as `judge: jev`. Only a validated reply counts as
+  Jev use; a timeout, 401, 429, missing key, DNS or TLS failure falls back to the host model and the report says so.
 - **A small model of the host** (the fast tier of `fnl-delegate` `models.md`: a Haiku-class model on Claude, a mini
   model on Codex, a flash model on Antigravity), the default when `judge` is absent or `host`. The question and the
   evidence are in English, the answer is constrained to the three values, and for a `yes` the model must quote the
@@ -242,7 +247,7 @@ Jev-to-host fallback. Receipts hold the answer and an identifier, not the criter
 - `fnl-setup`, user scope: after the scan, one question for the judge with three neutral choices (Jev, a small host
   model, none), recorded as `judge`; the route-judge reference is replaced by it. Choosing Jev when `typesafe-ai` is
   missing prints the install command (checked against the skill's official source at the time of writing, never
-  guessed), says that the user's own API key and budget are needed, and never reads, stores or searches for the key;
+  guessed), says that the user's own API key and budget are needed, and says that `judge.py` sends the bounded payload to TypeSafe with that key (the PRIVACY.md text), never reads, stores or searches for the key;
   a read-only `--check` may report whether the variable is set without printing it. `companions.md` lists TypeSafe with
   the condition "wants an external judge" and the data-processor note. README says the judge is optional and how to pick.
 - `fnl-setup`, user scope: asks for the three roles with defaults from the scan, and per family whether review posting is
