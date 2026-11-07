@@ -1,6 +1,6 @@
 # Agent roles: routed reviews, verification without an agent, and a navigator
 
-Status: accepted; owner decisions recorded on 2026-11-07 in two rounds (see "Decisions settled"); ships in 0.2.0 together with the work planned for 0.1.11 (owner decision, 2026-11-07); implementation not started.
+Status: in progress; release 0.2.0 scripts and local tests are implemented; relay receipt/dashboard counters remain unimplemented; independent navigator/judge validation and live-host routing, posting and SessionStart delivery remain unverified.
 
 ## Why
 

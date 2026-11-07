@@ -27,6 +27,15 @@ class InstructionStandardTests(unittest.TestCase):
         self.assertIn("200 lines", skill)
         self.assertIn("advisory", skill)
 
+    def test_explicit_yes_step_is_labelled_advisory(self):
+        procedure = text("fnl-setup", "references", "instructions", "procedure.md")
+        step = next(line for line in procedure.splitlines() if line.startswith("3. ") and "Ask for each file" in line)
+        self.assertIn("**Advisory (agent judgment):**", step)
+        self.assertIn("explicit yes", step)
+        hosts = text("fnl-setup", "references", "instructions", "hosts.md")
+        self.assertIn("ignores `CODEX_HOME`", hosts)
+        self.assertIn("account-derived", hosts)
+
     def test_check_lists_exactly_twenty_items_with_types(self):
         check = text("fnl-setup", "references", "check.md")
         rows = re.findall(r"^\| (I\d+) \| [^|]+ \| ([SJ]) \|", check, re.M)

@@ -136,7 +136,7 @@ class RunEnvironmentTest(unittest.TestCase):
                      'PS4', 'PROMPT_COMMAND', 'JAVA_TOOL_OPTIONS'):
             with self.assertRaises(ValueError):
                 run_env.environment({name: 'synthetic'}, [name])
-        for word in ('PASS', 'AUTH', 'COOKIE', 'SESSION', 'PRIVATE'):
+        for word in ('PASS', 'AUTH', 'COOKIE', 'SESSION', 'PRIVATE', 'PASSWD', 'PASSPHRASE', 'SESSIONID', 'COOKIES'):
             name = 'BUILD_' + word
             text = '## Delegate environment\n- codex: ' + name
             with self.assertRaises(ValueError):

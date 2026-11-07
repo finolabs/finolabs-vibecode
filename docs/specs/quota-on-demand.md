@@ -1,6 +1,6 @@
 # Quota reading on demand, with a rate-limit marker (release 0.2.0)
 
-Status: in progress; owner decisions recorded on 2026-11-07; implementation underway.
+Status: implemented; release 0.2.0 on-demand reads and rate-limit markers have local fixture tests; live StopFailure payload and provider readings remain unverified.
 
 ## Why
 

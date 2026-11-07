@@ -19,8 +19,12 @@ hook = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(hook)
 
 # With every reader mocked out, the state block falls back to fixed words.
+ROLES_UNKNOWN = ("Roles: code review unknown; security review unknown; navigator unknown; judge unknown; "
+                 "posting claude unknown, codex unknown, antigravity unknown\n")
+ROLES_DEFAULT = ("Roles: code review unassigned; security review unassigned; navigator unassigned; judge host; "
+                 "posting claude unverified, codex unverified, antigravity unverified\n")
 STATE_UNKNOWN = ("\nPlugin state (local files; fixed words and counts only)\n"
-                 "Delegation mode: unknown\nQuota (cached): unknown\nOpen ledger dispatches: unknown\n")
+                 "Delegation mode: unknown\n" + ROLES_UNKNOWN + "Quota (cached): unknown\nOpen ledger dispatches: unknown\n")
 
 
 class SessionStartTest(unittest.TestCase):
@@ -169,7 +173,7 @@ class StateBlockTest(unittest.TestCase):
         return text.split("\nPlugin state (local files; fixed words and counts only)\n", 1)[1]
 
     def test_no_host_config_no_quota_and_no_ledger(self):
-        self.assertEqual(self.state(), "Delegation mode: suggest\nQuota (cached): no reading\n"
+        self.assertEqual(self.state(), "Delegation mode: suggest\n" + ROLES_DEFAULT + "Quota (cached): no reading\n"
                                        "Open ledger dispatches: 0\n")
 
     def test_a_hostile_host_config_and_ledger_leave_no_trace(self):
@@ -179,12 +183,31 @@ class StateBlockTest(unittest.TestCase):
         self.write("state/quota/quota.json", json.dumps({"claude": {HOSTILE: {"measured": HOSTILE}}}))
         output = self.state()
         # The oversized cache fails the reader's size check: unknown, not a reading.
-        self.assertEqual(output, "Delegation mode: suggest\nQuota (cached): unknown\n"
+        self.assertEqual(output, "Delegation mode: suggest\n" + ROLES_DEFAULT + "Quota (cached): unknown\n"
                                  "Open ledger dispatches: 3\n")
         self.write("state/quota/quota.json", json.dumps({"claude": {"bad label": {"measured": "x\x1b"}}}))
         self.assertIn("Quota (cached): no reading\n", self.state())
         for fragment in ("\x1b", "\x07", "owned", "ignore previous", "ZZZ"):
             self.assertNotIn(fragment, output)
+
+    def test_roles_and_posting_are_read_only_fixed_words(self):
+        self.write("host.md", "## Agents on this machine\n"
+                   "| Claude Code | yes | x | x | x |\n| Codex | yes | x | x | x |\n"
+                   "## Agent roles\n- code review: codex\n- security review: claude\n"
+                   "- navigator: claude\n- judge: jev\n"
+                   "## Review posting\n- codex: yes (checked 2026-01-01)\n"
+                   "- claude: no (checked 2026-01-01)\n")
+        self.assertIn("Roles: code review codex; security review claude; navigator claude; judge jev; "
+                      "posting claude no, codex yes, antigravity unverified\n", self.state())
+        original = (self.root / "host.md").read_bytes()
+        self.state()
+        self.assertEqual((self.root / "host.md").read_bytes(), original)
+
+    def test_role_reader_failure_prints_only_unknown_words(self):
+        with mock.patch.dict(sys.modules, {"review_config": mock.Mock()}):
+            self.assertIn(ROLES_UNKNOWN, self.state())
+        with mock.patch.dict(sys.modules, {"review_config": None}):
+            self.assertIn(ROLES_UNKNOWN, self.state())
 
     def test_a_valid_mode_is_printed(self):
         self.write("host.md", "## Delegation mode\n\nauto\n")
@@ -227,7 +250,7 @@ class StateBlockTest(unittest.TestCase):
         with mock.patch.object(subprocess, "Popen", side_effect=AssertionError("process")) as popen, \
                 mock.patch.object(os, "fork", side_effect=AssertionError("fork")) as fork, \
                 mock.patch.object(os, "posix_spawn", side_effect=AssertionError("spawn")) as spawn:
-            self.assertEqual(self.state(), "Delegation mode: manual\nQuota (cached): no reading\n"
+            self.assertEqual(self.state(), "Delegation mode: manual\n" + ROLES_DEFAULT + "Quota (cached): no reading\n"
                                            "Open ledger dispatches: 1\n")
         popen.assert_not_called()
         fork.assert_not_called()

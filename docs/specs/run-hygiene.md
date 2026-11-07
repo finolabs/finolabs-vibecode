@@ -1,6 +1,6 @@
 # Run hygiene: keep credentials out of delegated runs (release 0.2.0)
 
-Status: draft; owner direction recorded on 2026-11-07; implementation after package B (`agent-roles.md`) lands.
+Status: implemented; release 0.2.0 brief lint, environment allowlists, guarded log scan/redaction and ledger states have local tests; real-host dispatch remains unverified and private HOME is deferred.
 
 ## Why
 
@@ -35,7 +35,7 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    command variables, `*_PROXY`, `SSL_CERT_*`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`,
    `CURL_CA_BUNDLE`, `NODE_TLS_REJECT_UNAUTHORIZED`, `NODE_PATH`, `PERLLIB`, `SHELLOPTS`, `PS4`,
    `PROMPT_COMMAND`, `JAVA_TOOL_OPTIONS`). A name that looks secret (contains KEY, TOKEN, SECRET, PASSWORD,
-   CREDENTIAL, or has PASS, AUTH, COOKIE, SESSION or PRIVATE as an underscore-delimited name part)
+   CREDENTIAL, or has PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION, SESSIONID or PRIVATE as an underscore-delimited name part)
    needs its own neutral Yes and No in `fnl-setup` that names the variable and the receiving agent family.
    `--claude-config-dir` is Claude-only: absolute, no `..`, a current-user-owned directory, no symlink
    components, not group/world-writable and outside git work trees (including ancestor markers); ancestors
@@ -60,7 +60,7 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    followed by at least 16 token characters (`[A-Za-z0-9+/_=.-]`); private-key blocks from their
    `-----BEGIN` line; `Authorization: Bearer` followed by at least 16 token characters; and values of
    at least 16 characters after a name containing KEY, TOKEN, SECRET, PASSWORD or CREDENTIAL, or having
-   PASS, AUTH, COOKIE, SESSION or PRIVATE as an underscore-delimited name part (case-insensitive,
+   PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION, SESSIONID or PRIVATE as an underscore-delimited name part (case-insensitive,
    including lowercase `name=value` and quoted values with spaces or punctuation). Environment dumps
    require at least ten distinct environment-style names (uppercase, containing an underscore) in
    `NAME=value` or `'NAME': 'value'` pairs within 200 raw lines; repeating one name does not qualify.
@@ -72,7 +72,7 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    only environment-style pairs are retained for the dump window.
    The stance is to prefer false positives; no ignore list exists. `no_findings` means only that nothing
    matched these rules. This is a best-effort filter, not proof. Binary, compressed, unreadable or oversize
-   (over 8 MiB) logs, lone ESC, unrecognized escape forms, C1 controls and Unicode format characters
+   (over 8 MiB or the 250,000-pair per-pass limit) logs, lone ESC, unrecognized escape forms, C1 controls and Unicode format characters
    (category Cf, including zero-width joiners and BOMs) give `not_scanned` for a log and
    `rule_1_unreadable` for a brief. One leading BOM is stripped for scanning, with raw log offsets and
    line numbers preserved; any later BOM, other Cf character or C1 control remains a refusal.

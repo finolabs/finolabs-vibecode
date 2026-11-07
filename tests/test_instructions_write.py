@@ -196,38 +196,51 @@ class InstructionsWriteTest(unittest.TestCase):
             self.assertEqual(self.apply(digest, "--yes")[0], 0, rel)
             self.assertTrue((self.home / rel).is_file())
 
-    def test_custom_codex_home_and_antigravity_rules(self):
+    def test_codex_home_override_cannot_expand_allowed_targets(self):
         custom = self.outside / "codex"
-        with mock.patch.dict(os.environ, {"CODEX_HOME": str(custom)}):
-            for target in (custom / "AGENTS.md", custom / "AGENTS.override.md",
-                           self.home / ".gemini/config/rules/vibecode.md"):
-                digest, _ = self.preview(target)
+        for configured in (str(custom), "relative/" + "codex", str(self.home / ".codex")):
+            with mock.patch.dict(os.environ, {"CODEX_HOME": configured}):
+                self.refused("preview", "--target", str(custom / "AGENTS.md"),
+                             "--content-file", str(self.content))
+                digest, _ = self.preview(self.home / ".codex" / "AGENTS.md")
                 self.assertEqual(self.apply(digest, "--yes")[0], 0)
-                self.assertEqual(target.read_text(), self.content.read_text())
-            for target in (custom / "config.toml", custom / "nested/AGENTS.md",
-                           self.home / ".codex/AGENTS.md",
-                           self.home / ".gemini/config/rules/nested/rule.md",
-                           self.home / ".gemini/config/rules/rule.txt"):
-                self.refused("preview", "--target", str(target), "--content-file", str(self.content))
+                (self.home / ".codex" / "AGENTS.md").unlink()
+        self.assertFalse(custom.exists())
 
-    def test_relative_codex_home_falls_back_to_account_default(self):
-        with mock.patch.dict(os.environ, {"CODEX_HOME": "relative/codex"}):
-            digest, _ = self.preview(self.home / ".codex/AGENTS.md")
+    def test_codex_home_override_cannot_redirect_a_stored_preview(self):
+        target = self.home / ".codex" / "AGENTS.md"
+        digest, _ = self.preview(target)
+        with mock.patch.dict(os.environ, {"CODEX_HOME": str(self.outside / "codex")}):
             self.assertEqual(self.apply(digest, "--yes")[0], 0)
-            self.refused("preview", "--target", str(self.repo / "relative/codex/AGENTS.md"),
-                         "--content-file", str(self.content))
+        self.assertEqual(target.read_text(), self.content.read_text())
+        self.assertEqual(list(self.outside.iterdir()), [])
 
-    def test_codex_home_symlinks_and_changes_after_preview_are_refused(self):
-        custom = self.home / ".config/codex"
-        with mock.patch.dict(os.environ, {"CODEX_HOME": str(custom)}):
-            digest, _ = self.preview(custom / "AGENTS.md")
-            with mock.patch.dict(os.environ, {"CODEX_HOME": str(self.home / "other")}):
-                self.refused("apply", "--digest", digest, "--yes")
-            custom.parent.mkdir()
-            custom.symlink_to(self.outside)
-            self.refused("preview", "--target", str(custom / "AGENTS.md"), "--content-file", str(self.content))
-            self.refused("apply", "--digest", digest, "--yes")
-            self.assertEqual(list(self.outside.iterdir()), [])
+    def test_antigravity_global_rules_are_allowed(self):
+        target = self.home / ".gemini" / "config" / "rules" / "vibecode.md"
+        digest, _ = self.preview(target)
+        self.assertEqual(self.apply(digest, "--yes")[0], 0)
+        self.assertEqual(target.read_text(), self.content.read_text())
+
+    def test_preview_refuses_fifo_without_waiting_for_a_writer(self):
+        target = self.repo / "AGENTS.md"
+        os.mkfifo(target, 0o600)
+        real_open = os.open
+        def checked_open(path, flags, *args, **kwargs):
+            if path == target.name:
+                # Refuse before opening in a regressed implementation, avoiding a hung test.
+                self.assertTrue(flags & os.O_NONBLOCK)
+            return real_open(path, flags, *args, **kwargs)
+        with mock.patch.object(iw.os, "open", side_effect=checked_open):
+            err = self.refused("preview", "--target", str(target), "--content-file", str(self.content))
+        self.assertIn("not a regular file", err)
+        self.assertFalse(self.plans.exists())
+
+    def test_default_codex_and_antigravity_target_lists_remain_closed(self):
+        for target in (self.home / ".codex" / "config.toml", self.home / ".codex" / "nested" / "AGENTS.md",
+                       self.home / ".gemini" / "config" / "rules" / "nested" / "rule.md",
+                       self.home / ".gemini" / "config" / "rules" / "rule.txt"):
+            self.refused("preview", "--target", str(target), "--content-file", str(self.content))
+        self.assertFalse(self.plans.exists())
 
     def test_antigravity_rules_symlink_is_refused(self):
         rules = self.home / ".gemini/config/rules"

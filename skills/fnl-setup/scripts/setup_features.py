@@ -81,9 +81,18 @@ def render(features):
     return HEADING + "\n\n" + "".join("- %s: declined\n" % name for name in FEATURES if name in features) + "\n"
 
 
+def checked_headings(text):
+    headings, fence = split(text)
+    indexes = [i for i, (_, heading) in enumerate(headings) if heading == HEADING]
+    if fence is not None or len(indexes) > 1 or (indexes and parse(text) is None):
+        raise ValueError("malformed Setup features section; repair it before changing the record")
+    return headings, indexes
+
+
 def write(features, dry_run):
     section = render(features) if features else ""
     if dry_run:
+        checked_headings(read_host())
         return section or "(section removed)\n"
     with dr.root_folder(create=True) as folder:
         fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -91,10 +100,7 @@ def write(features, dry_run):
             text = dr.read_file(folder, "host.md", CAP).decode()
         except FileNotFoundError:
             text = ""
-        headings, fence = split(text)
-        indexes = [i for i, (_, heading) in enumerate(headings) if heading == HEADING]
-        if len(indexes) > 1 or fence is not None:
-            raise ValueError("ambiguous host")
+        headings, indexes = checked_headings(text)
         newline = "\r\n" if "\r\n" in text else "\n"
         section = section.replace("\n", newline)
         if indexes:
@@ -133,8 +139,9 @@ def main(argv=None):
         result = write(wanted, args.dry_run)
         print(result if args.dry_run else "Setup feature record saved (%s %s); nothing else was changed." % (args.action, args.feature))
         return 0
-    except (OSError, ValueError, UnicodeError):
-        print("Setup feature record refused; nothing saved.", file=sys.stderr)
+    except (OSError, ValueError, UnicodeError) as error:
+        detail = " malformed Setup features section; repair it first;" if str(error).startswith("malformed Setup features") else ""
+        print("Setup feature record refused;" + detail + " nothing saved.", file=sys.stderr)
         return 1
 
 

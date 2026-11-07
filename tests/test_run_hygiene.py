@@ -100,6 +100,10 @@ def unsafe_launches(source, filename=''):
 
 
 class RunHygieneTest(unittest.TestCase):
+    def test_log_size_rule_names_both_limits_together(self):
+        spec = (ROOT / 'docs/specs/run-hygiene.md').read_text()
+        self.assertIn('(over 8 MiB or the 250,000-pair per-pass limit)', spec)
+
     def test_scripts_start_delegates_and_tests_only_through_run_env(self):
         paths = [*(ROOT / 'scripts').glob('*.py'), *(ROOT / 'skills').glob('*/scripts/*.py')]
         for path in paths:

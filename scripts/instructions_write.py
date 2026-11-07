@@ -6,7 +6,7 @@ preview --target <path> --content-file <path> [--block "Agent skills"|"Work trac
 apply --digest <64 hex> --yes
     Re-checks the plan and writes atomically, keeping a backup that never overwrites an earlier one.
 
-Allowed targets are a closed list: the user-level files `hosts.md` lists (including absolute CODEX_HOME), and
+Allowed targets are a closed list: the user-level files `hosts.md` lists (Codex uses the account-derived default only), and
 AGENTS.md, CLAUDE.md and CLAUDE.local.md at the git top level of the working folder. Symlinks are refused
 at the target and at every folder below the allowed base. Metadata only: nothing is sent anywhere.
 """
@@ -74,8 +74,8 @@ def allowed(target):
     rel = Path(path).relative_to(home).parts if path.startswith(home.rstrip("/") + "/") else None
     if rel is not None and rel in USER_TARGETS:
         return home, rel
-    configured = os.environ.get("CODEX_HOME", "")
-    codex = configured if os.path.isabs(configured) else os.path.join(home, ".codex")
+    # Environment overrides cannot expand the instruction writer's closed target list.
+    codex = os.path.join(home, ".codex")
     if (".." not in Path(codex).parts and os.path.dirname(path) == str(Path(codex))
             and Path(path).name in ("AGENTS.md", "AGENTS.override.md")):
         # Start at the filesystem anchor so no custom-folder ancestor bypasses O_NOFOLLOW.
@@ -118,7 +118,7 @@ def open_dir(base, rel, create):
 def read_existing(folder, name):
     """Return the current bytes, or None when the file is absent. A symlink or non-regular file is refused."""
     try:
-        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=folder)
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=folder)
     except FileNotFoundError:
         return None
     except OSError:

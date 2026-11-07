@@ -2,7 +2,7 @@
 """Read-only SessionStart reminder for Claude Code and Codex; fail open, exit 0.
 
 After the reminder it prints the plugin's state from local files only: the
-delegation mode, the cached quota summary and the count of open ledger
+delegation mode, roles and posting state, cached quota and the count of open ledger
 dispatches. Every value printed is a fixed word or a capped integer, never text
 read from a file, because the hook also runs in untrusted repositories. It
 starts no process, makes no network call and writes nothing.
@@ -27,6 +27,33 @@ def delegation_word():
         return value if isinstance(value, str) and value in MODES else "unknown"
     except Exception:
         return "unknown"
+
+
+def roles_words():
+    """Read canonical roles once; render only closed enumerations, never config text."""
+    families = ("claude", "codex", "antigravity")
+    keys = ("code review", "security review", "navigator", "judge")
+    try:
+        import review_config as config
+        text = config.host_text()
+        if not isinstance(text, str):
+            raise ValueError("host")
+        roles, posting = config.read_roles(text), config.read_posting(text)
+        parts = []
+        for key in keys:
+            allowed = ("host", "jev") if key == "judge" else families
+            value = roles.get(key, "host" if key == "judge" else "unassigned")
+            word = value if isinstance(value, str) and value in (*allowed, "unassigned") else "unknown"
+            parts.append(f"{key} {word}")
+        posts = []
+        for family in families:
+            value = posting.get(family, "unverified")
+            word = value if isinstance(value, str) and value in ("yes", "no", "unverified") else "unknown"
+            posts.append(f"{family} {word}")
+        return "; ".join(parts) + "; posting " + ", ".join(posts)
+    except Exception:
+        return ("code review unknown; security review unknown; navigator unknown; judge unknown; "
+                "posting claude unknown, codex unknown, antigravity unknown")
 
 
 def family_quota(probe, agent, labels, marked, current):
@@ -106,6 +133,7 @@ def open_dispatches():
 def state_block():
     return ("\nPlugin state (local files; fixed words and counts only)\n"
             f"Delegation mode: {delegation_word()}\n"
+            f"Roles: {roles_words()}\n"
             f"Quota (cached): {quota_words()}\n"
             f"Open ledger dispatches: {open_dispatches()}\n")
 

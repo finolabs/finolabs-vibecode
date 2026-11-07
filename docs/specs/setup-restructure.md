@@ -1,6 +1,6 @@
 # Setup restructure: a short core, features on demand, instructions inside (release 0.2.0)
 
-Status: accepted; owner decisions recorded on 2026-11-07; ships in 0.2.0 with the agent roles work; implementation not started.
+Status: implemented; release 0.2.0 core, features, Quick/Advanced companions and guarded instructions writer have local tests; live-host interviews and Codex word passing remain unverified.
 
 ## Why
 

@@ -6,62 +6,43 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
-- Add headless environment allowlists, brief lint, local guarded log scan/show/redaction and ledger scan status; HOME credential-file access remains a reported residual risk.
-
-- Add `verify_claim.py` for scoped mechanical checks and bounded criterion judgments, with private metadata receipts and a receipt gate for accepted ledger runs. `--head` must match the verified head; `--accept-unverified --reason` records and counts an explicit exception.
-
-- Add the navigator agent and `nav_state.py` for bounded course-check evidence, screened judge payloads and collected-reference report checks; the agent requires `judge.py` from the verification package.
-- Add `route_task.py` to print the delegation matrix row for a task kind and grade.
-- Print a read-only plugin state block at session start with delegation mode, cached quota and open ledger count; failures never block the session.
-
-- Record opt-in Claude Code StopFailure rate-limit markers as family and time only; Claude Code asks to trust the changed hooks. Codex and Antigravity receive no new hook entry; the live payload remains unverified.
-
-- Add consent-gated per-repository ledger/task settings and bounded one-file work-record pipelines with a shared reader and parser-checked template.
-- Add a project Work tracking interview to `/fnl-setup instructions`, writing only a confirmed agent-context block; `/fnl-setup` separately confirms repository ledger and task-file settings for the dashboard.
-- Show delivery pipelines in the Now project pane from Spec Kit artefacts, repository specs/packages and exact-project ledger outcomes, with metadata-only states and a searched-sources fallback tooltip.
+- Add user-assigned code review, security review, navigator and judge roles, with deterministic review routing that prefers another author family and reports same-family fallbacks.
+- Add a guarded review-posting wrapper that checks the repository, marker, draft location and size, with observed posting state and an explicit coordinator relay procedure.
+- Add `fnl-navigator` and bounded course-check evidence to compare work against confirmed outcome anchors and report drift without editing the project.
+- Add verification receipts bound to the checkout and current head, with targeted test results and criterion judgments, and require a passing receipt before accepting delegated ledger work unless an explicit reason-digested exception is recorded.
+- Add one judge interface with a small host model by default and optional Jev under the scoped network exception, with judgments that grant neither authority nor acceptance.
+- Add `route_task.py` for the delegation matrix and a read-only session-start summary of delegation, roles, posting state, cached quota and open dispatches.
+- Add brief lint, allowlisted headless environments and guarded local log scanning, display and redaction, with fixed ledger scan states and a stated residual risk from reachable HOME credential files.
+- Add per-repository work tracking, confirmed outcome anchors and bounded one-file work records alongside Spec Kit artifacts.
 
 ### Changed
 
-- Rename Detailed setup to Advanced and `review-tools` to `companions`; add Quick selection, Advanced interviews and checked install commands (including markmap), with separate neutral offers that install nothing.
-
-- Fold threshold checks into `fnl-session-hygiene` with its self-contained `context_steward.py`; ask the configured judge about an uncertain safe boundary only after the script reports `compact`.
-- Fold setup into a short core with optional features and the `instructions`, `scan` and `mode` subcommands; update current command references and skill counts while preserving retired names in historical specs and released entries.
-- Require exactly one valid fnl-router marker line in pull request bodies at merge when the base commit adopted `fnl-review-gate`; missing, malformed or duplicate markers now block. Adoption uses the GitHub contents API without a clone; unreadable adoption data or body, invalid base SHAs, files over 256 KiB or outside UTF-8, and unsupported file types or symlink targets exit 2.
-
-- Read quota on demand before routing with a 15-minute minimum and bounded synchronous per-install commands; replace hook-started workers with advisory rate-limit markers and allow only the checked Homebrew prefix exception.
-
-- Document host-only project settings, recent live activity counts and per-pool quota reset details; show an amber mark when completed tasks outpace the work-record status.
-- Split setup and Check into machine and project scopes while preserving separate opt-ins.
-- Compose the none workflow's existing planning steps with work records; Spec Kit keeps its own artifacts and installed phase tools fill the record.
-
-- Show recent usage-session counts beside slots and every cached quota pool by family, with unread placeholders and per-pool reset/freshness details.
-- Draw project stages as SVG chevron chains beside identity, keep story lanes for one active item, and replace the truncated storyless label with a dashed tag icon.
-
-### Fixed
-
-- Keep benign log pairs out of the secret-hit cap, require ten distinct environment-style dump names, and match added sensitive words as underscore-delimited name parts. Accept one leading BOM while refusing later BOMs, other Unicode format characters and C1 controls.
-
-- Scan raw OSC payloads as well as normalized log text, bound candidate matches, refuse unsupported controls, and expand secret detection and child-environment guards. Replace process open-file queries with the 60-second mtime guard and final metadata recheck; distinguish dispatch refusal from child exits.
-
-- Enforce the judge network exception with canonical opt-in, closed capped payloads, refusal before sending secrets or machine paths, verified transport, a 24-call cap and explicit host fallback. Require meaningful host quotes, refuse module-based full-suite runners, and show accepted-without-verification counts per agent.
-
-- Restore native-question and neutral-consent wording throughout the restructured setup flow; defaults, timeouts and auto-selected options never grant approval.
-
-- Correct setup starter commands and retired-pointer checks; accept custom Codex instruction folders and Antigravity global rules through the guarded writer. Count all core references against the setup budget while preserving separate consent questions.
-
-- Reject non-ASCII package ordinals and negated completion wording, resolve index status headers, retain progress failure reasons and use “pool” for unnamed quota tooltips.
-- Use the shared done theme token for pipeline package bricks in dark and light themes.
-- Match pipeline stages to theme-aware task colours, back striped labels with solid chips, and use compact review glyphs and icon-first ledger/summary counts.
-- Replace dense Agents and Project text with KPI tiles, dispatch budget lanes, cached quota meters and unfinished project/task graphics; retain data tables and collapsed limits. Keep up to five local project snapshots, read only story priority numbers from `spec.md`, skip `specs/archive`, and offer user-set local project labels through setup.
-- Keep Reviews labels on one line, use project labels, and cap dot chains at eight plus a remaining-round count. Cover fragment-only navigation and ship the page code as a local script with no inline handlers or scripts; reduced-motion mode disables all animation.
+- Restructure `/fnl-setup` into a short core with `add <feature>`, `instructions`, `check`, `scan` and `mode`, using user and project scopes and separate consent for every grant.
+- Offer Quick setup with recommended inert defaults and companion selection, or Advanced interviews and optional features, with checked install commands that install nothing automatically.
+- Fold compaction threshold checks and the safe-boundary procedure into `fnl-session-hygiene` with the configured judge for uncertain boundaries.
+- Require exactly one valid router marker before merging when the base commit adopted the review gate, without relaxing code or security review requirements.
+- Read quota on demand before routing with a 15-minute minimum, bounded per-install commands and advisory Claude Code StopFailure rate-limit markers instead of hook-started workers.
+- Show per-install quota labels, all cached pools, reset times and freshness alongside recent activity and running-agent budget lanes.
+- Show named projects with delivery pipelines, task and package states, exact-project ledger outcomes and a visible warning when checked tasks outpace the work-record status.
+- Keep dashboard review chains bounded and theme-aware, retain the detailed tables and five local project snapshots, and support fragment navigation and reduced motion.
 
 ### Removed
 
-- `fnl-verifier` → `fnl-verification`: callers run its self-contained `verify_claim.py`, read the evidence and decide acceptance as coordinator.
-- `fnl-steward` → `fnl-session-hygiene`: callers follow its Context pressure procedure and threshold script; no separate agent is invoked.
+- `fnl-verifier` → `fnl-verification`: callers run its `verify_claim.py`, then read the evidence and decide acceptance as coordinator.
+- `fnl-steward` → `fnl-session-hygiene`: callers follow its Context pressure procedure and threshold script.
+- `fnl-scan-agents` → `/fnl-setup scan`: refresh the agent inventory.
+- `fnl-set-mode` → `/fnl-setup mode`: show or change Delegation mode and Routing.
 - `fnl-setup-instructions` → `/fnl-setup instructions`: use the instructions component in the same setup session.
-- `fnl-scan-agents` → `/fnl-setup scan`: use setup to refresh the agent inventory.
-- `fnl-set-mode` → `/fnl-setup mode`: use setup to show or change Delegation mode and Routing.
+
+### Deprecated
+
+- Deprecate global `Ledger project:` and `Task file:` lines in favor of per-repository settings, keeping them readable in 0.2.0 and 0.2.1 and removing them in 0.3.0.
+
+### Security
+
+- Refuse secret-shaped and machine-path judge payloads before transmission, require canonical opt-in and verified transport, cap outbound attempts and disclose host fallback on unavailable Jev calls.
+- Refuse malformed declined-feature records, nonregular instruction targets and environment-selected custom Codex instruction folders, preserving existing text and preventing FIFO hangs.
+- Expand secret-name screening and child-environment controls, scan raw and normalized logs with bounded matching, and require digest-bound redaction with file-identity and recent-write checks.
 
 ## [0.1.10] - 2026-11-06
 

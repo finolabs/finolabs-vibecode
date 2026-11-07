@@ -131,6 +131,20 @@ class SetupFeaturesTest(unittest.TestCase):
         self.assertEqual(sf.declined(), [])
         self.assertEqual(self.run_cli("show")[1].strip(), "declined: none")
 
+    def test_malformed_records_refuse_writes_and_previews_without_losing_foreign_text(self):
+        self.host.parent.mkdir(parents=True)
+        for body in ("- quota: yes\nkeep this foreign line\n", "- quota: declined\n- quota: declined\n",
+                     "- review-tools: declined\n- companions: declined\n"):
+            original = "## Routing\non\n\n## Setup features\n" + body + "\n## Other\nkeep\n"
+            self.host.write_text(original)
+            for action in ("decline", "clear"):
+                for flag in ("--yes", "--dry-run"):
+                    code, out, err = self.run_cli(action, "metrics", flag)
+                    self.assertEqual(code, 1)
+                    self.assertIn("malformed Setup features", err)
+                    self.assertNotIn("nothing else was changed", out)
+                    self.assertEqual(self.host.read_text(), original)
+
     def test_declined_is_not_a_consent_for_anything(self):
         self.run_cli("decline", "metrics", "--yes")
         self.assertFalse((self.home / ".finolabs/vibecode/state/consent.json").exists())

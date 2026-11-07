@@ -2,7 +2,7 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "finolabs-vibecode",
   "displayName": "Finolabs Vibecode",
-  "description": "Engineering practice for AI coding agents: routing, delegation, review and security gates, verification, versioning, agent scans and mode settings.",
+  "description": "17 skills and 3 agents (fnl-reviewer, fnl-security-reviewer, fnl-navigator) for review routing, verification, setup, run hygiene and quota on demand.",
   "version": "0.2.0-dev",
   "logo": "assets/icon.svg",
   "author": {
@@ -25,6 +25,7 @@
   "suggestedPrompts": [
     "Route this change through the coding router and tell me the depth you chose.",
     "Use fnl-delegate to coordinate this spec with one session per task.",
-    "Use /fnl-setup scan to refresh my local agent inventory, then /fnl-setup mode to show effective settings."
+    "Use /fnl-setup scan to refresh my local agent inventory, then /fnl-setup mode to show effective settings.",
+    "Use /fnl-setup to choose Quick or Advanced, then show add <feature>, instructions and check."
   ]
 }

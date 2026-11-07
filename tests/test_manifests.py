@@ -24,6 +24,20 @@ class ManifestTest(unittest.TestCase):
             self.assertIn(prefix + "fnl-setup scan", json.dumps(doc))
             self.assertIn(prefix + "fnl-setup mode", json.dumps(doc))
 
+    def test_release_surface_counts_and_agents_match_the_folders(self):
+        skills = list((ROOT / "skills").glob("*/SKILL.md"))
+        agents = {p.stem for p in (ROOT / "agents").glob("fnl-*.md")}
+        self.assertEqual(len(skills), 17)
+        self.assertEqual(agents, {"fnl-reviewer", "fnl-security-reviewer", "fnl-navigator"})
+        readme = (ROOT / "README.md").read_text()
+        ask = (ROOT / "skills/fnl-ask/references/map.md").read_text()
+        display = (ROOT / "agents/openai.yaml").read_text()
+        for doc in self.docs:
+            self.assertIn("17 skills and 3 agents", doc["description"])
+        for agent in agents:
+            for public_text in (readme, ask, display, *(doc["description"] for doc in self.docs)):
+                self.assertIn(agent, public_text)
+
     def test_description_length_fits_the_catalog_standard(self):
         # The shared catalog (finolabs/plugins) lists 120-160 characters and repeats them exactly.
         n = len(self.docs[0]["description"])

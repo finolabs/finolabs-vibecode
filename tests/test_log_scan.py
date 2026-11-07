@@ -255,7 +255,8 @@ class LogScanTest(unittest.TestCase):
         value = 'fixture' * 4
         for name in ('AUTHOR_NAME', 'PASSENGER', 'COMPASS', 'SESSIONS_DIR', 'PRIVATEER', 'COOKIEJAR'):
             self.assertFalse(sp.findings(name + '=' + value), 'unrelated name flagged')
-        for name in ('AUTH_TOKEN', 'DB_PASS', 'AUTH', 'SESSION_ID', 'DB_PRIVATE'):
+        for name in ('AUTH_TOKEN', 'DB_PASS', 'AUTH', 'SESSION_ID', 'DB_PRIVATE',
+                     'DB_' + 'PASSWD', 'DB_' + 'PASSPHRASE', 'WEB_' + 'SESSIONID', 'HTTP_' + 'COOKIES'):
             self.assertTrue(sp.findings(name + '=' + value), 'sensitive name missed')
 
     def test_leading_bom_preserves_raw_spans(self):

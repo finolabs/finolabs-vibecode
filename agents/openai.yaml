@@ -1,7 +1,7 @@
 interface:
   display_name: "Finolabs Vibecode"
-  short_description: "One engineering practice for coding agents"
+  short_description: "17 skills, 3 agents: routing, reviews and verification"
   icon_small: "./assets/icon.svg"
   icon_large: "./assets/icon.svg"
   brand_color: "#9750C4"
-  default_prompt: "Route this change through the coding router and tell me the depth you chose."
+  default_prompt: "Explain the 17 skills and fnl-reviewer, fnl-security-reviewer, fnl-navigator; use fnl-setup for Quick or Advanced, add <feature>, instructions, check, scan and mode."
