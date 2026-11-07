@@ -10,8 +10,8 @@ Find hosts, canonical `host.md` via `scripts/data_root.py`, knowledge base.
 2. **Scan.** `references/scan.md`.
 3. **Mode/Routing.** `references/mode.md`.
 4. **Knowledge base.** Save judge/date, coordinators/limit/host path through the access those instructions approve; follow `fnl-session-hygiene` "Remember or recall". It asks nothing new; no consent row; report any write that failed.
-5. **Read-back.** Confirm inert notes. Nothing that grants something is in it.
-6. **Report.** List writes/skips/pending/reasons. **After your first result**: instructions (before coding on Codex), missing [companions.md](companions.md), `/fnl-setup check`; ask what to build.
+5. **Read-back.** Quick confirms inert defaults once; Advanced asks each inert item. Confirm inert notes. Nothing that grants something is in it.
+6. **Report.** List writes/skips/pending/reasons. **After your first result**: instructions (before coding on Codex), known missing companion reminders (questions belong to the `companions` feature, after the core), `/fnl-setup check`; ask what to build.
 
 ## Project scope
 

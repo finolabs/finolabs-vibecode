@@ -45,11 +45,14 @@ INVENTORY = [
     (19, "Save this task file line?", "features/project.md"),
     (20, "Set this project label?", "features/project.md"),
     (21, "Write this instruction file?", "instructions/procedure.md"),
+    (22, "What do you do with this plugin?", "features/companions.md"),
+    (23, "For this companion, show the install command?", "features/companions.md"),
+    (24, "Show this review instrument's install or update command?", "features/companions.md"),
 ]
 PREREQUISITES = {
     "delegation": "the agent scan", "quota": "the agent scan", "roles": "the agent scan",
     "metrics": "the plugin's hooks installed", "project": "metrics consent",
-    "compaction": "nothing for the native threshold", "review-tools": "nothing",
+    "compaction": "nothing for the native threshold", "companions": "nothing",
 }
 
 
@@ -78,7 +81,8 @@ class SizeLimitTests(unittest.TestCase):
 
     def test_bare_run_static_budget(self):
         # Follow the literal references from the bare entry, including conditional beginner
-        # and closing material. Optional command/feature dispatch targets are not core loads.
+        # and closing material. Companion tables load only in the post-core feature,
+        # along with the other command/feature dispatch targets; they are not core loads.
         skill = (SKILL / "SKILL.md").read_text()
         # Before Menu, table rows dispatch explicit commands; prose runs for bare setup.
         entry = "\n".join(line for line in skill.split("## Menu\n", 1)[0].splitlines()
@@ -102,7 +106,7 @@ class SizeLimitTests(unittest.TestCase):
             loaded.add(path)
             text = path.read_text()
             pending += references(text, path.parent)
-        for name in ("core.md", "scan.md", "mode.md", "work-tracking.md", "interview.md", "plain-language.md", "companions.md"):
+        for name in ("core.md", "scan.md", "mode.md", "work-tracking.md", "interview.md", "plain-language.md"):
             self.assertIn(REFS / name, loaded)
         total = sum(len(p.read_bytes()) for p in loaded)
         self.assertLessEqual(total, 15000, {str(p.relative_to(SKILL)): p.stat().st_size for p in loaded})
@@ -116,7 +120,7 @@ class ConsentInventoryTests(unittest.TestCase):
             self.assertEqual(hits, [REFS / home], "row %d: %r" % (row, sentence))
 
     def test_inventory_covers_every_row(self):
-        self.assertEqual({row for row, _, _ in INVENTORY}, set(range(1, 22)))
+        self.assertEqual({row for row, _, _ in INVENTORY}, set(range(1, 25)))
 
     def test_core_read_back_holds_inert_facts_only(self):
         core = (REFS / "core.md").read_text()
@@ -131,12 +135,12 @@ class ConsentInventoryTests(unittest.TestCase):
 
     def test_quick_and_beginner_still_ask_the_own_question_rows(self):
         skill = (SKILL / "SKILL.md").read_text()
-        sentence = skill.split("In every mode these keep their own question:", 1)[1].split(". In quick mode", 1)[0]
+        sentence = skill.split("In every mode these keep their own question:", 1)[1].split(". In Quick mode", 1)[0]
         for words in ("moving the data root and its copy", "arming `auto` and the auto gate", "filling host config",
                       "each Antigravity test-command grant", "roles and review posting",
                       "the Antigravity hook write", "each instruction-file write"):
             self.assertIn(words, sentence)
-        self.assertIn("beginner and quick included, with no default", skill)
+        self.assertIn("beginner and Quick included, with no default", skill)
 
     def test_knowledge_base_step_follows_the_users_access_and_asks_nothing_new(self):
         core = (REFS / "core.md").read_text()

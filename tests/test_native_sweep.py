@@ -44,10 +44,10 @@ class NativeSweepTest(unittest.TestCase):
                     self.assertIn("free text", contract)
                     self.assertIn("advisory", contract)
 
-    def test_detailed_or_quick_choice_uses_the_native_form(self):
+    def test_advanced_or_quick_choice_uses_the_native_form(self):
         content = text("skills", "fnl-setup", "SKILL.md")
-        choice = content.split("Otherwise **detailed**", 1)[1].split("## Menu", 1)[0]
-        self.assertIn("**quick**", choice)
+        choice = content.split("Otherwise **Advanced**", 1)[1].split("## Menu", 1)[0]
+        self.assertIn("**Quick**", choice)
         self.assertIn("native question tool", content)
         self.assertIn("references/interview.md", content)
 
