@@ -245,9 +245,8 @@ Jev-to-host fallback. Receipts hold the answer and an identifier, not the criter
 ## J. Setup and instruction changes this spec needs
 
 - `fnl-setup`, user scope: after the scan, one question for the judge with three neutral choices (Jev, a small host
-  model, none), recorded as `judge`; the route-judge reference is replaced by it. Choosing Jev when `typesafe-ai` is
-  missing prints the install command (checked against the skill's official source at the time of writing, never
-  guessed), says that the user's own API key and budget are needed, and says that `judge.py` sends the bounded payload to TypeSafe with that key (the PRIVACY.md text), never reads, stores or searches for the key;
+  model, none), recorded as `judge`; the route-judge reference is replaced by it. The optional `typesafe-ai` skill is for cookbooks only and is not required for calls. Choosing Jev says
+  that the user's own API key and budget are needed, and that `judge.py` sends the bounded payload to TypeSafe with that key (the PRIVACY.md text), never reads, stores or searches for the key;
   a read-only `--check` may report whether the variable is set without printing it. `companions.md` lists TypeSafe with
   the condition "wants an external judge" and the data-processor note. README says the judge is optional and how to pick.
 - `fnl-setup`, user scope: asks for the three roles with defaults from the scan, and per family whether review posting is
@@ -303,7 +302,12 @@ judgments listed.
 - Posting: the `cannot-post` reasons, one relay per run, the receipt count, and `yes` recorded only after a seen marker.
 - `verify_claim.py` and the ledger check: refusal without a receipt, acceptance with one, the escape hatch recorded and
   counted, and the fallback from Jev to the host judge reported in the receipt.
-- The judge: the quote check turns an unquoted or misquoted `yes` into `insufficient`; the harness runs both judges on
+- The judge: `tests.test_judge` covers every closed per-site schema, field and total byte caps, secret and machine-path
+  refusals (field name only), the 24-call per-run cap, canonical opt-in and invalid root pointers, `FNL_JUDGE=off`,
+  user-typed literal loopback HTTP overrides (never environment URLs), verified TLS ignoring proxy/certificate
+  overrides, no redirects, header-only keys and explicit host fallback on timeout, 401, 429, missing key, DNS/TLS
+  errors and invalid replies. Quotes need at least 8 alphanumeric characters and 8 trimmed characters;
+  shorter, whitespace-only, punctuation-only, unquoted or misquoted `yes` becomes `insufficient`; the harness runs both judges on
   the same cases; `judge` absent means `host`.
 - `fnl-steward` and `fnl-verifier` files gone, no manifest or text still names them as callable, `fnl-ask` map and
   counts updated, `check-references.py` and the manifests test green.

@@ -81,13 +81,13 @@ The data folder can be relocated through `fnl-setup`; the fixed pointer `~/.fino
 
 The skills run inside a host agent such as Claude Code or Codex, which processes your conversation under its provider's policy. When you follow the delegation skills and delegate work to another agent (for example Codex or Antigravity), the brief, the files that agent reads and anything it produces are processed by that agent's provider under that provider's terms. Delegate only work over files you are allowed to share with that provider.
 
-When the user has recorded a judge and the instruction check is on, `fnl-setup` Check can send instruction-file lines to the judge through the user's own evaluator skill: line text only, with a size cap, lines with a secret or machine-path hit dropped, nothing from a file with a secret finding, and never `.bak-*` backups, scan results or `CLAUDE.local.md`; the user consented to the judge separately.
+When the user has recorded a judge and the instruction check is on, `fnl-setup` Check can send instruction-file lines through the configured judge: line text only, with a size cap, lines with a secret or machine-path hit dropped, nothing from a file with a secret finding, and never `.bak-*` backups, scan results or `CLAUDE.local.md`; the user consented to the judge separately.
 
-## Verification and judge
+## Verification receipts
 
 `verify_claim.py` runs the targeted commands approved in the brief and prints their evidence locally. Semantic checks use the configured judge described under "Judge" below. Host judging makes no network call from the script; evidence supplied to a host model follows that host's provider policy.
 
-`record.py verify` stores `<data root>/state/verification/<dispatch id>.json`, mode 0600 in a 0700 folder. It holds the dispatch id, head, SHA-256 checkout identity, test and mechanical results, optional evidence-packet digest, and criterion identifiers, answers, sources and fallback flags. It stores no questions, commands, evidence text, test output or paths, and never enters usage events. Receipts remain until replaced or manually deleted; metrics purge does not remove them.
+`record.py verify` stores `<data root>/state/verification/<dispatch id>.json`, mode 0600 in a 0700 folder. It holds the dispatch id, head, SHA-256 checkout identity, test and mechanical results, optional evidence-packet digest, and criterion identifiers, answers, sources and fallback flags. It stores no questions, commands, evidence text, test output or paths, and never enters usage events. Receipts remain until replaced or manually deleted; metrics purge does not remove them. The dashboard copies only per-agent accepted-without-verification counts from the ledger into its overwritten local `data.js`; it sends nothing and purge removes that dashboard copy.
 
 When requested, `verify_claim.py --requests-out` also writes an owner-only local packet containing the questions and evidence for host completion. This is a private work artifact at the caller's chosen path, outside plugin state and metrics; retain and delete it with the task's other private artifacts. It can contain source and test output. The script sends none of that packet automatically to a host model.
 

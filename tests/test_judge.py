@@ -10,6 +10,8 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import ssl
+import urllib.error
 import threading
 import unittest
 from unittest import mock
@@ -26,6 +28,10 @@ class JudgeTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.home = account(self, Path(self.tmp.name) / 'home')
+        judge._calls = 0
+        clean = mock.patch.dict(os.environ, {}, clear=True)
+        clean.start()
+        self.addCleanup(clean.stop)
 
     def test_host_quotes_are_verbatim_and_nonempty(self):
         for quote, expected in [('added guard', 'yes'), ('guard added', 'insufficient'),
@@ -42,10 +48,10 @@ class JudgeTest(unittest.TestCase):
         for value in ([], {}, dict(answer='maybe'), dict(answer='yes', extra=True)):
             with self.assertRaises(ValueError):
                 judge.check_host(value, '')
-        packet = dict(answer='yes', quote='guard', evidence_sha256=hashlib.sha256(b'guard').hexdigest(), question='Q')
-        self.assertEqual(judge.check_host(packet, 'guard', 'Q')['answer'], 'yes')
+        packet = dict(answer='yes', quote='added guard', evidence_sha256=hashlib.sha256(b'added guard').hexdigest(), question='Q')
+        self.assertEqual(judge.check_host(packet, 'added guard', 'Q')['answer'], 'yes')
         self.assertEqual(judge.check_host(packet, 'guard changed', 'Q')['answer'], 'insufficient')
-        self.assertEqual(judge.check_host(packet, 'guard', 'other')['answer'], 'insufficient')
+        self.assertEqual(judge.check_host(packet, 'added guard', 'other')['answer'], 'insufficient')
 
     def test_absent_and_malformed_judge_configuration_default_to_host(self):
         self.assertEqual(judge.configured_judge(), 'host')
@@ -77,7 +83,8 @@ class JudgeTest(unittest.TestCase):
         thread = threading.Thread(target=server.serve_forever)
         thread.start()
         try:
-            with mock.patch.dict(os.environ, {'TYPESAFE_API_KEY': 'synthetic-test-key'}):
+            with mock.patch.dict(os.environ, {'TYPESAFE_API_KEY': 'synthetic-test-key'}, clear=True), \
+                    mock.patch.object(judge, 'configured_judge', return_value='jev'):
                 yield f'http://127.0.0.1:{server.server_port}/v1/systemone', received
         finally:
             server.shutdown()
@@ -103,14 +110,26 @@ class JudgeTest(unittest.TestCase):
     def test_errors_probabilities_redirects_are_unavailable(self):
         for response, status in [({}, 200), ({'answers': {'q': {'noul': True}}}, 200),
                                  ({'answers': {'q': {'noul': 2}}}, 200),
-                                 ({'answers': {'q': {'noul': float('nan')}}}, 200), ({}, 500), ({}, 302)]:
-            with self.subTest(response=response, status=status), self.server(response, status, {'Location': 'https://example.com'}) as (url, _):
+                                 ({'answers': {'q': {'noul': float('nan')}}}, 200),
+                                 ({'answers': {'q': {'noul': .9, 'extra': True}}}, 200),
+                                 ({'answers': {'q': {'noul': .9}}, 'extra': True}, 200),
+                                 ({}, 401), ({}, 429), ({}, 500), ({}, 302)]:
+            with self.subTest(response=response, status=status), self.server(response, status, {'Location': 'http://127.0.0.1:1/never'}) as (url, _):
                 with self.assertRaises(judge.Unavailable):
                     judge.ask_jev('Q', 'E', base_url=url)
-        with mock.patch.dict(os.environ, {}, clear=True), mock.patch('urllib.request.build_opener') as opener:
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(judge, 'configured_judge', return_value='jev'), \
+                mock.patch('urllib.request.build_opener') as opener:
             with self.assertRaises(judge.Unavailable):
                 judge.ask_jev('Q', 'E')
             opener.assert_not_called()
+
+    def test_redirect_never_reaches_another_loopback_server(self):
+        with self.server({'answers': {'q': {'noul': .9}}}) as (target, target_seen):
+            with self.server({}, 302, {'Location': target}) as (source, source_seen):
+                with self.assertRaises(judge.Unavailable):
+                    judge.ask_jev('Q', 'E', base_url=source)
+                self.assertEqual(len(source_seen), 1)
+                self.assertEqual(target_seen, [])
 
     def test_validation_harness_uses_identical_cases_and_records_agreement(self):
         cases = [dict(id='case1', question='A guard was added.', evidence='added guard', expected='yes'),
@@ -146,6 +165,207 @@ class JudgeTest(unittest.TestCase):
         self.assertEqual(unavailable.returncode, 3)
         self.assertEqual(json.loads(unavailable.stdout)['answer'], 'insufficient')
         self.assertIn('unavailable', unavailable.stderr)
+
+    def test_short_and_punctuation_quotes_do_not_support_yes(self):
+        for quote in ('guard', 'a', '        ', '...........', ' a.....b ', 'abcdefg'):
+            with self.subTest(length=len(quote)):
+                self.assertEqual(judge.check_host(dict(answer='yes', quote=quote), quote)['answer'], 'insufficient')
+        self.assertEqual(judge.check_host(dict(answer='yes', quote='abcdefgh'), 'abcdefgh')['answer'], 'yes')
+
+    def test_closed_site_schemas_and_utf8_field_and_body_caps(self):
+        for site, schema in judge.SITE_SCHEMAS.items():
+            with self.subTest(site=site):
+                judge.payload('The guard was added.', 'added guard', site)
+                for fields in ({'question': 'Q', 'evidence': 'E', 'extra': 'x'}, {'question': 'Q'}):
+                    with self.assertRaises(judge.Unavailable):
+                        judge.site_fields(site, fields)
+                for name, cap in schema.items():
+                    fields = dict(question='Q', evidence='E')
+                    fields[name] = 'é' * (cap // 2 + 1)
+                    with self.assertRaises(judge.Unavailable):
+                        judge.site_fields(site, fields)
+        judge.payload('The guard was added.', json.dumps({'head': 'a' * 40}))
+        for site in ('unknown', 'instructions', ''):
+            with self.assertRaises(judge.Unavailable):
+                judge.payload('Q', 'E', site)
+        # Escaping can overflow the body even when each input field fits.
+        with self.assertRaises(judge.Unavailable):
+            judge.payload('Q', '\x01' * 12000)
+
+    def test_sensitive_payload_refuses_before_send_and_names_only_field(self):
+        secrets = ('sk-' + 'x' * 24, 'password=synthetic-password',
+                   'ghp_' + 's' * 30, '-----BEGIN PRIVATE KEY-----',
+                   'https://person:synthetic-pass@example.com')
+        paths = ('/Users/synthetic/private', '/home/synthetic/private',
+                 r'C:\Users\synthetic\private', '~/private', '/root/private')
+        with mock.patch.object(judge, 'configured_judge', return_value='jev'), \
+                mock.patch.dict(os.environ, {'TYPESAFE_API_KEY': 'synthetic-key'}, clear=True), \
+                mock.patch('urllib.request.build_opener') as opener:
+            for site in judge.SITE_SCHEMAS:
+                for field in ('question', 'evidence'):
+                    for value in (*secrets, *paths, 'synthetic-key'):
+                        fields = dict(question='Q', evidence='E')
+                        fields[field] = value
+                        with self.assertRaises(judge.Unavailable) as raised:
+                            judge.ask_jev(**fields, site=site)
+                        self.assertEqual(str(raised.exception), 'field: ' + field)
+            opener.assert_not_called()
+
+    def test_only_literal_loopback_http_override_and_never_environment(self):
+        for url in ('http://127.0.0.1.evil.com', 'http://localhost', 'http://192.0.2.1',
+                    'https://127.0.0.1', 'http://user:pass@127.0.0.1',
+                    'http://127.0.0.1/?key=value', 'http://127.0.0.1/#fragment', 'http://[::1%lo0]'):
+            with self.subTest(url=url), mock.patch.object(judge, 'configured_judge', return_value='jev'), \
+                    mock.patch.dict(os.environ, {'TYPESAFE_API_KEY': 'synthetic-key'}, clear=True), \
+                    mock.patch('urllib.request.build_opener') as factory:
+                with self.assertRaises(judge.Unavailable):
+                    judge.ask_jev('Q', 'E', base_url=url)
+                factory.assert_not_called()
+        self.assertEqual(judge.endpoint('http://[::1]:1234/v1/systemone'), 'http://[::1]:1234/v1/systemone')
+        with mock.patch.object(judge, 'configured_judge', return_value='jev'), \
+                mock.patch.dict(os.environ, {'TYPESAFE_API_KEY': 'synthetic-key',
+                    'FNL_JUDGE_BASE_URL': 'http://127.0.0.1:1', 'TYPESAFE_BASE_URL': 'http://127.0.0.1:1'}, clear=True), \
+                mock.patch('urllib.request.build_opener') as factory:
+            factory.return_value.open.side_effect = OSError('synthetic failure')
+            with self.assertRaises(judge.Unavailable):
+                judge.ask_jev('Q', 'E')
+            request = factory.return_value.open.call_args.args[0]
+            self.assertEqual(request.full_url, judge.ENDPOINT)
+            self.assertEqual(factory.return_value.open.call_args.kwargs['timeout'], 15)
+
+    def test_canonical_opt_in_disable_unresolved_and_invalid_pointer(self):
+        host = self.home / '.finolabs/vibecode/host.md'
+        host.parent.mkdir(parents=True)
+        host.write_text('## Agent roles\n- judge: jev\n')
+        self.assertEqual(judge.configured_judge(), 'jev')
+        with mock.patch.dict(os.environ, {'FNL_JUDGE': 'off', 'TYPESAFE_API_KEY': 'synthetic-key'}, clear=True), \
+                mock.patch('urllib.request.build_opener') as opener:
+            self.assertEqual(judge.configured_judge(), 'host')
+            with self.assertRaises(judge.Unavailable):
+                judge.ask_jev('Q', 'E')
+            opener.assert_not_called()
+        (host.parent / 'root.json').write_text('{"root":"relative","id":"invalid"}')
+        self.assertEqual(judge.configured_judge(), 'host')
+        (host.parent / 'root.json').unlink()
+        with mock.patch('data_root.read_data', side_effect=KeyError('unresolved')):
+            self.assertEqual(judge.configured_judge(), 'host')
+        with mock.patch('data_root.account_home', side_effect=ValueError('unresolved')):
+            self.assertEqual(judge.configured_judge(), 'host')
+        host.unlink()
+        outside = Path(self.tmp.name) / 'other-host.md'
+        outside.write_text('## Agent roles\n- judge: jev\n')
+        with mock.patch.dict(os.environ, {'ORCHESTRATION_HOST_CONFIG': str(outside),
+                'FNL_JUDGE': 'jev', 'TYPESAFE_API_KEY': 'synthetic-key'}, clear=True), \
+                mock.patch('urllib.request.build_opener') as opener:
+            self.assertEqual(judge.configured_judge(), 'host')
+            with self.assertRaises(judge.Unavailable):
+                judge.ask_jev('Q', 'E')
+            opener.assert_not_called()
+
+    def test_call_cap_counts_failed_attempts(self):
+        with mock.patch.object(judge, 'configured_judge', return_value='jev'), \
+                mock.patch.dict(os.environ, {'TYPESAFE_API_KEY': 'synthetic-key'}, clear=True), \
+                mock.patch('urllib.request.build_opener') as factory:
+            factory.return_value.open.side_effect = TimeoutError()
+            for _ in range(judge.MAX_CALLS):
+                with self.assertRaises(judge.Unavailable):
+                    judge.ask_jev('Q', 'E')
+            with self.assertRaisesRegex(judge.Unavailable, '^call cap$'):
+                judge.ask_jev('Q', 'E')
+            self.assertEqual(factory.return_value.open.call_count, 24)
+
+    def test_transport_ignores_overrides_verifies_tls_and_never_exposes_key(self):
+        synthetic = {'TYPESAFE_API_KEY': 'synthetic-header-only-key', 'HTTPS_PROXY': 'http://127.0.0.1:1',
+            'HTTP_PROXY': 'http://127.0.0.1:1', 'ALL_PROXY': 'http://127.0.0.1:1',
+            'https_proxy': 'http://127.0.0.1:1', 'SSL_CERT_FILE': '/synthetic/cert',
+            'SSL_CERT_DIR': '/synthetic/certs', 'REQUESTS_CA_BUNDLE': '/synthetic/cert',
+            'CURL_CA_BUNDLE': '/synthetic/cert', 'PYTHONHTTPSVERIFY': '0'}
+        with mock.patch.dict(os.environ, synthetic, clear=True), \
+                mock.patch.object(judge, 'configured_judge', return_value='jev'), \
+                mock.patch('urllib.request.build_opener') as factory:
+            factory.return_value.open.side_effect = OSError(synthetic['TYPESAFE_API_KEY'])
+            with self.assertRaises(judge.Unavailable) as raised:
+                judge.ask_jev('Q', 'E')
+            request = factory.return_value.open.call_args.args[0]
+            self.assertEqual(request.get_header('Authorization'), 'Bearer ' + synthetic['TYPESAFE_API_KEY'])
+            for value in (request.full_url, request.data.decode(), str(raised.exception), str(sys.argv)):
+                self.assertNotIn(synthetic['TYPESAFE_API_KEY'], value)
+            handlers = factory.call_args.args
+            self.assertEqual(handlers[0].proxies, {})
+            self.assertIsInstance(handlers[1], judge.NoRedirect)
+            context = handlers[2]._context
+            self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+            self.assertTrue(context.check_hostname)
+        # Prove trust loading selects compiled paths rather than override paths.
+        with mock.patch.dict(os.environ, synthetic, clear=True), \
+                mock.patch.object(ssl.SSLContext, 'load_verify_locations') as load:
+            judge.tls_context()
+            locations = load.call_args.kwargs
+            self.assertNotIn('/synthetic/cert', locations.values())
+            self.assertNotIn('/synthetic/certs', locations.values())
+
+    def test_reply_byte_cap_and_duplicate_keys_fall_back(self):
+        for raw in (b'x' * (judge.LIMIT + 1), b'[' * 2000 + b'0' + b']' * 2000,
+                    b'{"answers":{"q":{"noul":0.9,"noul":0.1}}}'):
+            with mock.patch.object(judge, 'configured_judge', return_value='jev'), \
+                    mock.patch.dict(os.environ, {'TYPESAFE_API_KEY': 'synthetic-key'}, clear=True), \
+                    mock.patch('urllib.request.build_opener') as factory:
+                response = factory.return_value.open.return_value.__enter__.return_value
+                response.read.return_value = raw
+                with self.assertRaises(judge.Unavailable):
+                    judge.ask_jev('Q', 'E')
+                response.read.assert_called_once_with(judge.LIMIT + 1)
+
+    def test_harness_refusal_falls_back_to_the_same_host_cases(self):
+        cases = [dict(id='case1', question='The guard was added.', evidence='added guard', expected='yes')]
+        answers = {'case1': dict(answer='yes', quote='added guard')}
+        with mock.patch.object(judge, 'ask_jev', side_effect=judge.Unavailable('provider failure')) as client:
+            report = judge.validate_cases(cases, 'jev', answers, client=client)
+        self.assertEqual(report['source'], 'host')
+        self.assertEqual(report['requested_source'], 'jev')
+        self.assertTrue(report['fallback'])
+        self.assertEqual(report['cases'][0]['source'], 'host')
+        self.assertTrue(report['cases'][0]['fallback'])
+        self.assertEqual(report['counts']['agree'], 1)
+        self.assertEqual(client.call_args.args, ('The guard was added.', 'added guard'))
+
+
+    def test_cli_loopback_flag_and_failure_host_fallback(self):
+        host = self.home / '.finolabs/vibecode/host.md'
+        host.parent.mkdir(parents=True)
+        host.write_text('## Agent roles\n- judge: jev\n')
+        evidence = Path(self.tmp.name) / 'cli-evidence'
+        evidence.write_text('added guard')
+        answers = Path(self.tmp.name) / 'cli-answers'
+        answers.write_text(json.dumps(dict(answer='yes', quote='added guard')))
+        with self.server({'answers': {'q': {'noul': .9}}}) as (url, seen):
+            argv = ['judge.py', 'ask', '--question', 'The guard was added.', '--evidence-file', str(evidence), '--base-url', url]
+            with mock.patch.object(sys, 'argv', argv), contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(judge.main(), 0)
+            self.assertEqual(json.loads(output.getvalue())['source'], 'jev')
+            self.assertEqual(len(seen), 1)
+        failures = (TimeoutError(), urllib.error.HTTPError(judge.ENDPOINT, 401, 'refused', {}, None),
+                    urllib.error.HTTPError(judge.ENDPOINT, 429, 'limited', {}, None),
+                    urllib.error.URLError('DNS failure'), ssl.SSLError('TLS failure'), ValueError('invalid reply'))
+        for error in failures:
+            argv = ['judge.py', 'ask', '--question', 'Q', '--evidence-file', str(evidence), '--judge', 'jev', '--answers', str(answers)]
+            with mock.patch.dict(os.environ, {'TYPESAFE_API_KEY': 'synthetic-header-only-key'}, clear=True), \
+                    mock.patch('urllib.request.build_opener') as factory, \
+                    mock.patch.object(sys, 'argv', argv), \
+                    contextlib.redirect_stdout(io.StringIO()) as output, contextlib.redirect_stderr(io.StringIO()) as errors:
+                factory.return_value.open.side_effect = error
+                self.assertEqual(judge.main(), 0)
+                out = json.loads(output.getvalue())
+                self.assertEqual((out['source'], out['answer'], out['fallback']), ('host', 'yes', True))
+                self.assertIn('host judge', errors.getvalue())
+                for value in (output.getvalue(), errors.getvalue(), str(argv)):
+                    self.assertNotIn('synthetic-header-only-key', value)
+        # Missing key also produces the same explicit fallback result.
+        with mock.patch.object(sys, 'argv', argv), contextlib.redirect_stdout(io.StringIO()) as output, \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(judge.main(), 0)
+            self.assertTrue(json.loads(output.getvalue())['fallback'])
+
 
 
 if __name__ == '__main__':

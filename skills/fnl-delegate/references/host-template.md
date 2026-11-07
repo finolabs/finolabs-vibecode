@@ -72,9 +72,9 @@ Which agent can coordinate on this machine, and which delegates each one can rea
 
 ## Route judgment
 
-- Judge: <none | the skill name, for example `typesafe-ai`>. The user approved sending task summaries to this service on <DD/MM/YYYY>. When one is named, the coordinator and the coding router ask it first for grade, route, depth and next activity.
-- Spend limit: <the judge skill's own guard, or a per-day cap>.
-- Instruction check: <on | off>. Default off. `on` means the user approved, on <DD/MM/YYYY>, sending lines of their private instruction files to the judge (TypeSafe) for the Check judgment items; retention is the provider's. It is separate from the routing approval and is global to this machine; turning it off takes effect on the next run.
+Judge selection now lives only in canonical `## Agent roles`; this legacy heading retains instruction-check consent. `judge.py` caps calls at 24 per run, and no skill install is required for calls.
+
+- Instruction check: <on | off>. Default off. `on` means the user approved, on <DD/MM/YYYY>, sending lines of their private instruction files to the configured judge for the Check judgment items. Instruction checks use the small host fallback because they are outside the four outbound sites; retention is the host provider's. It is separate from the routing approval and is global to this machine; turning it off takes effect on the next run.
 
 ## Dispatch marker
 

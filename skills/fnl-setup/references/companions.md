@@ -6,7 +6,7 @@ Recommend missing matches with commands; install nothing. Optional (advisory, ag
 | --- | --- | --- |
 | `agybird` ([finolabs](https://github.com/finolabs/agybird), MIT) | Claude Code/Codex delegates to Antigravity | Dispatch modes/quota/status; `/fnl-setup add delegation` test grants; never installed in Antigravity |
 | `vietnamizer` ([finolabs](https://github.com/finolabs/vietnamizer), MIT) | Vietnamese documents/posts for people | Preserves meaning/voice; excludes agent text/logs/code |
-| `typesafe-ai` (TypeSafe) | User chooses external judge in roles | Jev judgments/probabilities. Approved only for this user; minimal data, no secrets. User key/budget required; never access keys. Verify official install; fallback: host |
+| `typesafe-ai` (TypeSafe) | User chooses external judge in roles | Optional cookbooks; not required for judge calls. `judge.py` owns calls and guards; user key/budget required; fallback: host |
 | `diagram-design` ([author](https://github.com/cathrynlavery/diagram-design), MIT) | Architecture/flow/data diagrams | HTML/SVG/PNG, brand profile; Google Fonts requests, no author telemetry |
 
 agybird/vietnamizer: Claude Code `claude plugin marketplace add finolabs/plugins`, then `claude plugin install <skill>@finolabs`; Codex `codex plugin marketplace add finolabs/plugins`, then `codex plugin add <skill>@finolabs`. Others (vietnamizer): `npx skills add finolabs/vietnamizer --skill vietnamizer -a <agent>`.

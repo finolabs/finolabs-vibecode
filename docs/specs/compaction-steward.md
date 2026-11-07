@@ -1,3 +1,5 @@
+> Retirement: `fnl-steward` is retired. Follow `fnl-session-hygiene` Context pressure and its `context_steward.py` script; this document retains the historical design.
+
 # Compaction steward (option B)
 
 Status: implemented; option B: local handover storage, threshold decision and compact re-injection (release 0.1.10, package 2, pull request 99); real-host delivery remains unverified.

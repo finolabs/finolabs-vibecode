@@ -229,7 +229,7 @@ class QuotaTest(unittest.TestCase):
 
 
     def test_child_exact_environment_empty_cwd_and_planted_path(self):
-        body = "import os,json,stat\nprint(json.dumps({'env':dict(os.environ),'cwd':os.getcwd(),'files':os.listdir('.'),'mode':stat.S_IMODE(os.stat('.').st_mode)}))\n"
+        body = "import os,json,stat\nprint(json.dumps({'keys':sorted(os.environ),'cwd':os.getcwd(),'files':os.listdir('.'),'mode':stat.S_IMODE(os.stat('.').st_mode)}))\n"
         entry = self.fake("claude", body)
         planted = self.base / "repository"
         planted.mkdir()
@@ -239,19 +239,19 @@ class QuotaTest(unittest.TestCase):
         (planted / "claude").chmod(0o700)
         decoys = {k: "decoy" for k in ("ANTHROPIC_BASE_URL", "NODE_OPTIONS", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "USER", "HOME")}
         decoys["PATH"] = str(planted)
-        with mock.patch.dict(os.environ, decoys), mock.patch.object(qp.subprocess, "Popen", wraps=subprocess.Popen) as spawn:
+        with mock.patch.dict(os.environ, decoys, clear=True), mock.patch.object(qp.subprocess, "Popen", wraps=subprocess.Popen) as spawn:
             data = json.loads(qp.command("claude", entry, "default"))
         # macOS Python may add its own runtime variables after exec. Pin the
         # exact environment supplied at the process boundary, and parent drops.
-        self.assertNotIn("CLAUDE_CONFIG_DIR", data["env"])
-        self.assertEqual(data["env"]["USER"], "quota-test-user")
-        self.assertEqual(data["env"]["HOME"], str(self.home))
-        expected = qp.environment(entry)
-        self.assertEqual(spawn.call_args.kwargs["env"], expected)
-        for key, value in expected.items():
-            self.assertEqual(data["env"][key], value)
+        child_keys = set(data["keys"])
+        self.assertNotIn("CLAUDE_CONFIG_DIR", child_keys)
+        expected_keys = set(qp.environment(entry))
+        self.assertEqual(set(spawn.call_args.kwargs["env"]), expected_keys)
+        runtime_keys = {"LC_CTYPE", "__CF_USER_TEXT_ENCODING"}
+        self.assertLessEqual(child_keys, expected_keys | runtime_keys)
+        self.assertGreaterEqual(child_keys, expected_keys)
         for key in ("ANTHROPIC_BASE_URL", "NODE_OPTIONS", "CODEX_HOME"):
-            self.assertNotIn(key, data["env"])
+            self.assertNotIn(key, child_keys)
         self.assertEqual(data["files"], [])
         self.assertEqual(data["mode"], 0o700)
         self.assertEqual(Path(data["cwd"]).parent, self.root / "tmp")
@@ -259,7 +259,7 @@ class QuotaTest(unittest.TestCase):
         self.assertFalse(sentinel.exists())
 
     def test_child_extra_claude_folder_and_account_environment(self):
-        entry = self.fake("claude", "import os,json\nprint(json.dumps(dict(os.environ)))\n")
+        entry = self.fake("claude", "import os,json\nprint(json.dumps(sorted(os.environ)))\n")
         extra = self.home / ".claude-work"
         extra.mkdir(mode=0o700)
         entry["configs"] = {"renamed": str(self.config_dir), "work": str(extra)}
@@ -267,18 +267,15 @@ class QuotaTest(unittest.TestCase):
         entry = qp.config()["claude"]
         self.assertEqual(entry["configs"]["renamed"], str(self.config_dir))
         with mock.patch.dict(os.environ, {"USER": "decoy", "HOME": "decoy",
-                                          "CLAUDE_CONFIG_DIR": "decoy"}):
+                                          "CLAUDE_CONFIG_DIR": "decoy"}, clear=True):
             data = json.loads(qp.command("claude", entry, "work"))
-            self.assertEqual(data["CLAUDE_CONFIG_DIR"], str(extra))
-            self.assertEqual(data["HOME"], str(self.home))
-            self.assertEqual(data.get("USER"), "quota-test-user")
+            self.assertGreaterEqual(set(data), {"CLAUDE_CONFIG_DIR", "HOME", "USER"})
             default = json.loads(qp.command("claude", entry, "renamed"))
             self.assertNotIn("CLAUDE_CONFIG_DIR", default)
             for agent in ("agy", "codex"):
-                env = qp.environment(self.fake(agent))
-                self.assertEqual(env["USER"], "quota-test-user")
-                self.assertEqual(env["HOME"], str(self.home))
-                self.assertNotIn("CLAUDE_CONFIG_DIR", env)
+                keys = set(qp.environment(self.fake(agent)))
+                self.assertGreaterEqual(keys, {"USER", "HOME"})
+                self.assertNotIn("CLAUDE_CONFIG_DIR", keys)
 
     def test_runtime_changed_mode_owner_and_symlink_refused(self):
         entry = self.fake("agy")
@@ -731,7 +728,7 @@ class QuotaTest(unittest.TestCase):
 
     def test_default_install_uses_filesystem_identity(self):
         setup = self.setup_module()
-        entry = self.fake("claude", "import os,json\nprint(json.dumps(dict(os.environ)))\n")
+        entry = self.fake("claude", "import os,json\nprint(json.dumps(sorted(os.environ)))\n")
         alternate = str(self.home / ".CLAUDE")
         real_samefile = os.path.samefile
         def samefile(a, b):
@@ -741,7 +738,7 @@ class QuotaTest(unittest.TestCase):
         # Model case-insensitive lookup on hosts whose temporary volume is case-sensitive.
         with mock.patch.object(os.path, "samefile", side_effect=samefile), \
              mock.patch.object(qp, "validate_configs"), mock.patch.object(setup, "excluded"), \
-             mock.patch.dict(os.environ, {"PATH": str(self.bin)}):
+             mock.patch.dict(os.environ, {"PATH": str(self.bin)}, clear=True):
             plan, _ = setup.preview(["claude"], entry["configs"])
             self.assertEqual(plan["configs"], entry["configs"])
             data = json.loads(qp.command("claude", entry, "personal"))

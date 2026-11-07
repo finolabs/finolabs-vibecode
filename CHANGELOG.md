@@ -35,6 +35,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- Enforce the judge network exception with canonical opt-in, closed capped payloads, refusal before sending secrets or machine paths, verified transport, a 24-call cap and explicit host fallback. Require meaningful host quotes, refuse module-based full-suite runners, and show accepted-without-verification counts per agent.
+
 - Restore native-question and neutral-consent wording throughout the restructured setup flow; defaults, timeouts and auto-selected options never grant approval.
 
 - Correct setup starter commands and retired-pointer checks; accept custom Codex instruction folders and Antigravity global rules through the guarded writer. Count all core references against the setup budget while preserving separate consent questions.

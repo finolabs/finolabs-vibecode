@@ -92,7 +92,7 @@ class DashboardPageTest(unittest.TestCase):
         self.assertEqual(set(sample), set(built))
         self.assertEqual(set(sample["kpi"]), set(built["kpi"]))
         self.assertEqual(set(sample["kpi"]["spark"]), set(built["kpi"]["spark"]))
-        self.assertEqual(set(sample["delegation"][0]), {"agent", "model", "grade", "runs", "first_pass", "quota", "error", "median_min", "rework"})
+        self.assertEqual(set(sample["delegation"][0]), {"agent", "model", "grade", "runs", "first_pass", "quota", "error", "median_min", "rework", "accepted_unverified"})
 
     def test_rich_fixture_covers_infographic_acceptance(self):
         data = json.loads(FIXTURE.read_text())
@@ -702,6 +702,22 @@ class DashboardScriptTest(unittest.TestCase):
             self.assertAlmostEqual(float(self.marks(out, 'budget-tick')[0]['attrs']['x'].rstrip('%')), round(budget / cap * 560 * 2) / 2 / 560 * 100)
             self.assertEqual(self.marks(out, 'lane-stud'), [])
             self.assertEqual(self.marks(out, 'lane')[0]['attrs']['data-state'], 'cap' if age > cap else 'over')
+
+    def test_accepted_without_verification_is_visible_per_agent(self):
+        data = self.sample()
+        data['accepted_unverified'] = [{'agent': 'codex', 'count': 2}, {'agent': 'claude', 'count': 0}]
+        out = self.render_freshness(data)
+        tables = self.marks(out, 'tbl', 'show the data as tables')
+        table = next(row for row in tables if row['text'].startswith('accepted without verification'))
+        self.assertEqual(table['panel'], 'panel-overview')
+        for value in ('codex', '2', 'claude', '0'):
+            self.assertIn(value, table['text'])
+        self.assertIn('accepted without verification', out['panels'][0]['text'])
+        bars = [m for m in self.marks(out, 'r') if 'accepted without verification' in m['tooltip']]
+        self.assertEqual([m['tooltip'] for m in bars], ['codex: 2 accepted without verification',
+                                                     'claude: 0 accepted without verification'])
+        data['accepted_unverified'] = []
+        self.assertIn('no finished runs in this period', self.render_freshness(data)['text'])
 
     def test_review_gate_and_moved_tables(self):
         out = self.render(FIXTURE, {'hash': '#agents', 'actions': [{'hash': '#reviews'}, {'hash': '#project'}, {'hash': '#__proto__'}, {'hash': '#reviews'}, dict(scope='overview', tooltip='focus', target='review-summary')]})

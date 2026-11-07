@@ -19,7 +19,7 @@ Before `finish --outcome accepted`, run the self-contained `verify_claim.py` fro
 
 `--grade` is one of `easy`, `medium`, `hard`, `very-hard` and `ultra-hard` (`SKILL.md` "Grade" defines them); lines written before `ultra-hard` existed still read.
 
-Record why a route was taken: `--reason fallback-quota` for a quota fallback, `--reason fallback-failure` for a reroute after a failed run, `--reason user-choice --route-by user` for a route the user named, and `--route-by judge` when the route judge settled it.
+Record why a route was taken: `--reason fallback-quota` for a quota fallback, `--reason fallback-failure` for a reroute after a failed run, `--reason user-choice --route-by user` for a route the user named, and `--route-by judge` when a validated configured-judge response informed it.
 
 Under Delegation mode `manual`, `start` refuses a cross-family record without `--route-by user`, writes nothing and exits 1. Claude, `claude-session` and `subagent` are the Claude family; own-family records remain allowed. This check blocks the record, not the dispatch itself; an unavailable or invalid mode leaves the previous behavior unchanged.
 

@@ -734,6 +734,30 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(block["usable_answers"]["share"], 0)
         self.assertIsNone(block["followed"]["share"])
 
+    def test_accepted_without_verification_aggregates_models_per_agent(self):
+        self.consent()
+        self.fixture_ledger()
+        lines = [json.loads(line) for line in self.ledger.read_text().splitlines()]
+        # Three unverified accepts across models; one verified and one rejected
+        # finish must not inflate the escape-hatch count.
+        start = next(row for row in lines if row['event'] == 'start')
+        finish = next(row for row in lines if row['event'] == 'finish')
+        rows = []
+        for index, (agent, model, outcome, flag) in enumerate([
+                ('codex', 'model-a', 'accepted', True), ('codex', 'model-b', 'accepted', True),
+                ('codex', 'model-b', 'accepted', False), ('claude', 'model-c', 'accepted', True),
+                ('claude', 'model-c', 'error', True)]):
+            identifier = 'd20261107-000000-' + f'{index:04x}'
+            rows.extend([dict(start, id=identifier, agent=agent, model=model),
+                         dict(finish, id=identifier, outcome=outcome, accept_unverified=flag)])
+        self.ledger.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+        self.refresh('run')
+        self.assertEqual(self.data()['accepted_unverified'],
+                         [{'agent': 'claude', 'count': 1}, {'agent': 'codex', 'count': 2}])
+        self.ledger.unlink()
+        self.refresh('run')
+        self.assertEqual(self.data()['accepted_unverified'], [])
+
     def test_the_metrics_match_a_hand_computation(self):
         self.consent()
         self.fixture_store()

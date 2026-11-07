@@ -32,6 +32,37 @@ def relative(value):
             and ".." not in Path(value).parts and not value.startswith("-") and "\x00" not in value)
 
 
+def full_suite(argv):
+    """Recognize direct and Python module runners; require explicit test selectors."""
+    runner, args = Path(argv[0]).name, argv[1:]
+    if re.fullmatch(r"python(?:[0-9]+(?:\.[0-9]+)*)?t?", runner):
+        for index, arg in enumerate(args):
+            if arg == "-m":
+                runner, args = (args[index + 1], args[index + 2:]) if index + 1 < len(args) else ("", [])
+                break
+            module_flag = re.fullmatch(r"-[IBEOqsuUvVbPdiR]*m(.*)", arg)
+            if module_flag:
+                module = module_flag[1]
+                runner, args = ((module, args[index + 1:]) if module else
+                                ((args[index + 1], args[index + 2:]) if index + 1 < len(args) else ("", [])))
+                break
+            if arg in ("-c", "--"):
+                return False  # custom commands remain the coordinator's coverage responsibility
+    if runner not in ("pytest", "py.test", "unittest") and not runner.startswith("unittest."):
+        return False
+    if runner.startswith("unittest.") or "discover" in args:
+        return True
+    targets, skip = [], False
+    for arg in args:
+        if skip:
+            skip = False
+        elif arg in ("-k", "-m", "--maxfail", "--tb", "--durations", "-p"):
+            skip = True
+        elif not arg.startswith("-"):
+            targets.append(arg)
+    return not targets or any(not re.search(r"(?:^|[/.])test_[A-Za-z0-9_]", arg) for arg in targets)
+
+
 def load_brief(path):
     brief = json.loads(judge.read_text(path))
     if not isinstance(brief, dict) or set(brief) != {"scope", "tests", "criteria"}:
@@ -46,8 +77,7 @@ def load_brief(path):
             raise ValueError("tests must be argv arrays")
         words = [Path(a).name for a in argv]
         if (words[0] in ("sh", "bash", "zsh", "fish", "cmd", "powershell")
-                or "discover" in argv or ("unittest" in argv and argv[-1] == "unittest")
-                or (words[0] in ("pytest", "py.test") and not any("test_" in a for a in argv[1:]))):
+                or full_suite(argv)):
             raise ValueError("shells and full-suite discovery are refused")
     if not isinstance(brief["criteria"], list) or len(brief["criteria"]) > 50:
         raise ValueError("invalid criteria")
@@ -195,7 +225,6 @@ def verify(brief, base, head, dispatch, checkout, source, answers, timeout=300):
                 check(f"{identifier} evidence", False, "unavailable or exceeds byte limit; judgment insufficient")
                 answer = dict(id=identifier, answer="insufficient", source="host", fallback=False)
             else:
-                judge.payload(question, supplied)  # same bounded payload for either implementation
                 requests[identifier] = {"question": question, "evidence": supplied,
                                         "evidence_sha256": hashlib.sha256(supplied.encode()).hexdigest()}
                 answer = ask(question, supplied, identifier, source, answers)

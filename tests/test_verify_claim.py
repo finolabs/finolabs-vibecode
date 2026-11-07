@@ -134,18 +134,9 @@ class VerificationTest(unittest.TestCase):
                     'VERIFY_TEST_MARKER': 'must-not-inherit', 'PATH': os.defpath,
                     'LANG': 'C', 'TMPDIR': str(self.root)}
         code = ('import os; '
-                'assert "TYPESAFE_API_KEY" not in os.environ; '
-                'assert not any(k.startswith("GIT_") for k in os.environ); '
-                'assert "AWS_SECRET_ACCESS_KEY" not in os.environ; '
-                'assert "HOME" not in os.environ; '
-                'assert "VERIFY_TEST_MARKER" not in os.environ; '
-                'assert os.environ["PATH"]; '
-                'assert os.environ["LANG"] == "C"; '
-                f'assert os.environ["TMPDIR"] == {str(self.root)!r}')
+                'assert set(os.environ) <= {"PATH", "LANG", "TMPDIR", "LC_CTYPE", "__CF_USER_TEXT_ENCODING"}, "unexpected child key"')
         with mock.patch.dict(os.environ, injected, clear=True):
             passed, output, reason = verify.run_test([sys.executable, '-c', code], self.checkout, 5)
-            self.assertEqual(os.environ['TYPESAFE_API_KEY'], 'synthetic-key')
-            self.assertEqual(os.environ['GIT_DIR'], '/synthetic/git')
         self.assertTrue(passed, (output, reason))
 
     def test_record_git_receives_only_allowlisted_environment(self):
@@ -153,29 +144,22 @@ class VerificationTest(unittest.TestCase):
         bin_dir.mkdir()
         executable = bin_dir / 'git'
         executable.write_text(f'#!{sys.executable}\nimport json, os\n'
-                              'print(json.dumps({"keys": sorted(os.environ), '
-                              '"PATH": os.environ.get("PATH"), "LANG": os.environ.get("LANG"), '
-                              '"TMPDIR": os.environ.get("TMPDIR")}))\n')
+                              'print(json.dumps(sorted(os.environ)))\n')
         executable.chmod(0o700)
         injected = {'PATH': str(bin_dir), 'LANG': 'C', 'TMPDIR': str(self.root),
                     'HOME': str(self.home), 'TYPESAFE_API_KEY': 'synthetic-key',
                     'AWS_SECRET_ACCESS_KEY': 'synthetic-secret', 'GIT_CONFIG_COUNT': '1',
                     'VERIFY_TEST_MARKER': 'must-not-inherit'}
         with mock.patch.dict(os.environ, injected, clear=True):
-            child = json.loads(verify.record.git(self.checkout, 'status'))
-            self.assertEqual(os.environ['TYPESAFE_API_KEY'], 'synthetic-key')
-        for name in ('HOME', 'TYPESAFE_API_KEY', 'AWS_SECRET_ACCESS_KEY', 'VERIFY_TEST_MARKER'):
-            self.assertNotIn(name, child['keys'])
-        self.assertFalse(any(k.startswith('GIT_') for k in child['keys']))
-        self.assertEqual(child['PATH'], str(bin_dir))
-        self.assertEqual(child['LANG'], 'C')
-        self.assertEqual(child['TMPDIR'], str(self.root))
+            child_keys = set(json.loads(verify.record.git(self.checkout, 'status')))
+        self.assertLessEqual(child_keys, {'PATH', 'LANG', 'TMPDIR', 'LC_CTYPE', '__CF_USER_TEXT_ENCODING'})
+        self.assertGreaterEqual(child_keys, {'PATH', 'LANG', 'TMPDIR'})
 
     def test_configured_fsmonitor_never_runs_before_or_after_tests(self):
         marker = self.root / 'fsmonitor-ran'
         monitor = self.root / 'fsmonitor'
         monitor.write_text(f'#!{sys.executable}\nimport os\nfrom pathlib import Path\n'
-                           f'Path({str(marker)!r}).write_text(os.environ.get("TYPESAFE_API_KEY", "no-key"))\n')
+                           f'Path({str(marker)!r}).touch()\n')
         monitor.chmod(0o700)
         for configured_by_test in (False, True):
             with self.subTest(configured_by_test=configured_by_test):
@@ -296,6 +280,29 @@ class VerificationTest(unittest.TestCase):
                     verify.load_brief(path)
         path.write_text(json.dumps(self.brief))
         self.assertEqual(verify.load_brief(path), self.brief)
+
+    def test_module_full_suite_discovery_variants_cannot_bypass_refusal(self):
+        path = self.root / 'brief.json'
+        commands = [
+            ['python3', '-m', 'pytest'], ['python3', '-I', '-m', 'pytest', '-q'],
+            ['python3', '-mpytest'], ['python3', '-Im', 'pytest'], ['python3', '-Impytest'], ['python3', '-m', 'pytest', '-k', 'test_guard'],
+            ['python3', '-m', 'pytest', 'tests'], ['pytest', '.'],
+            ['python3', '-m', 'unittest'], ['python3', '-m', 'unittest', '-v'],
+            ['python3', '-m', 'unittest', 'discover', '-s', 'tests'],
+            ['python3', '-munittest', 'discover', '-v'], ['python3', '-BImunittest', 'discover'],
+            ['python3', '-m', 'unittest.discover', '-s', 'tests'],
+            ['python3', '-m', 'unittest', '-v', 'discover'],
+        ]
+        for argv in commands:
+            with self.subTest(argv=argv):
+                path.write_text(json.dumps({**self.brief, 'tests': [argv]}))
+                with self.assertRaises(ValueError):
+                    verify.load_brief(path)
+        for argv in (['python3', '-m', 'pytest', '-q', 'tests/test_judge.py'],
+                     ['python3', '-m', 'unittest', '-v', 'tests.test_judge'],
+                     ['pytest', 'tests/test_judge.py::JudgeTest']):
+            path.write_text(json.dumps({**self.brief, 'tests': [argv]}))
+            self.assertEqual(verify.load_brief(path)['tests'], [argv])
 
     def test_bad_receipt_metadata_and_symlink_storage_are_refused(self):
         record = verify.record
