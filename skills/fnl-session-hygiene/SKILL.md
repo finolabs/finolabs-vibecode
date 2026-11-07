@@ -28,7 +28,7 @@ An agent can read its own context percentage when a fresh, correctly identified 
 - A wholly new, independent task starts in a fresh, correctly named session in the matching checkout, with a short verified handover.
 - A finished user story, with its review gate closed, is a natural boundary: prefer a fresh session for the next story with a short handover. A coordinator session whose context is still light may continue (`fnl-delegate`).
 - Delegated agents follow the same rule: start a fresh run with a short handover brief rather than resuming a run that has used much of its window.
-- Without usage telemetry, say so; never invent a percentage or interrupt active work. Claude Code readings: [references/context-reading.md](references/context-reading.md) (advisory, agent judgment; `context_snapshot.py` enforces storage and freshness).
+- Without usage telemetry, say so; never invent a percentage or interrupt active work. Claude Code and Antigravity readings: [references/context-reading.md](references/context-reading.md) (advisory, agent judgment; `context_snapshot.py` enforces storage and freshness).
 
 Before a compaction, a fresh session or the end of the work, write back a decision or lesson that would change what an agent does next time, through the knowledge-base procedure below. A compaction with nothing new to keep carries only the handover.
 
