@@ -37,6 +37,10 @@ and measurement times are validated timestamps or a missing reset. Quota data ol
 is unverified. Empty families retain placeholders. These fields stay in overwritten `data.js`, never
 usage events; purge removes them. The refresh builders enforce these bounds and shapes.
 
+## Parallel capacity
+
+`parallel_slots.py` reads the configured total (1–32, default 5 for a missing/invalid total), optional per-family caps and open ledger starts. It writes nothing. Refresh projects `running.parallel_limit`, `running.family_slots` and `running.parallel_source` into overwritten local `data.js`; these are fixed family names, bounded counts/caps and a closed source word, never event fields. Purge removes the dashboard copy and leaves host config/ledger intact. Checks are advisory snapshots, not reservations; ledger starts do not enforce caps. See the [parallel-slots contract](docs/specs/parallel-instances.md).
+
 ## Project settings
 
 `project_progress.py settings --set ledger=<name>` or `settings --set tasks=<path>`, run inside a
@@ -81,7 +85,7 @@ The data folder can be relocated through `fnl-setup`; the fixed pointer `~/.fino
 
 The skills run inside a host agent such as Claude Code or Codex, which processes your conversation under its provider's policy. When you follow the delegation skills and delegate work to another agent (for example Codex or Antigravity), the brief, the files that agent reads and anything it produces are processed by that agent's provider under that provider's terms. Delegate only work over files you are allowed to share with that provider.
 
-When the user has recorded a judge and the instruction check is on, `fnl-setup` Check can send instruction-file lines through the configured judge: line text only, with a size cap, lines with a secret or machine-path hit dropped, nothing from a file with a secret finding, and never `.bak-*` backups, scan results or `CLAUDE.local.md`; the user consented to the judge separately.
+Only after separate instruction-check consent, `fnl-setup` Check may supply screened instruction-file lines to a small host model. This is outside `judge.py`'s four outbound sites, so choosing Jev does not send these lines to TypeSafe. `checkup.py --judge-payload` only prepares local line text: size capped, secret or machine-path lines dropped, nothing from a file with a secret finding, and never `.bak-*` backups, scan results or `CLAUDE.local.md`. Supplying that packet to a model is an advisory agent action under the host provider's policy; the read-only script makes no network call.
 
 ## Verification receipts
 
@@ -90,6 +94,10 @@ When the user has recorded a judge and the instruction check is on, `fnl-setup` 
 `record.py verify` stores `<data root>/state/verification/<dispatch id>.json`, mode 0600 in a 0700 folder. It holds the dispatch id, head, SHA-256 checkout identity (`checkout_id`), test and mechanical results, optional SHA-256 evidence-packet digest (`evidence_id`), and criterion identifiers, answers, sources and fallback flags. It stores no questions, commands, evidence text, test output or paths, and never enters usage events. Receipts remain until replaced or manually deleted; metrics purge does not remove them. The dashboard copies only per-agent accepted-without-verification counts from the ledger into its overwritten local `data.js`; it sends nothing and purge removes that dashboard copy.
 
 When requested, `verify_claim.py --requests-out` also writes an owner-only local packet containing the questions and evidence for host completion. This is a private work artifact at the caller's chosen path, outside plugin state and metrics; retain and delete it with the task's other private artifacts. It can contain source and test output. The script sends none of that packet automatically to a host model.
+
+## Restore points
+
+Only when requested, `fnl-restore-point create` stores a working-tree snapshot in the repository's git object store under `refs/finolabs/restore/`. It includes tracked files and non-ignored untracked files, including `.env` if it is not ignored; these are file contents, not usage metadata. The helper makes no network call, but Git can run repository-configured filters. The private ref does not isolate the objects from someone who can read or copy that repository. Never push `refs/finolabs/*`; mirror clones and bundles can carry them. Restore requires a preview and approval, makes a `pre-restore` snapshot and keeps extra current files. These objects/refs are outside the data root and metrics purge, with no automatic retention expiry. See the [procedure and partial-restore limits](skills/fnl-restore-point/SKILL.md).
 
 ## Update check
 

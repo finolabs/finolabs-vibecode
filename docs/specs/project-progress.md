@@ -1,6 +1,6 @@
 # Project progress on the dashboard
 
-Status: implemented; for 0.1.10: bounded local reader, exact identifier joins, consent/default notice and Project tab; duplicate task ids leave manual sessions unlinked. The 0.2.0 pipeline extension (Spec Kit stages, work records, repository state, ledger) is implemented with local parser, refresh and page checks; real-host delivery remains unverified.
+Status: implemented; for 0.1.10: bounded local reader, exact identifier joins, consent/default notice and the project pane (now inside Now); duplicate task ids leave manual sessions unlinked. The 0.2.0 pipeline extension (Spec Kit stages, work records, repository state, ledger) is implemented with local parser, refresh and page checks; real-host delivery remains unverified.
 
 Idea: owner, 2026-11-06. Most projects that use this pack also use Spec Kit, or another method that splits
 the work into stories and tasks, and sessions are created to carry that work. The dashboard shows how far

@@ -4,23 +4,23 @@
 | --- | --- |
 | [Agent scan, mode command and consolidation](agent-scan-and-consolidation.md) | implemented; for 0.1.7; local script tests on macOS from Codex, behavior eval execution pending. |
 | [Usage metrics](usage-metrics.md) | implemented; see its verification and host limits. |
-| [Update check](update-check.md) | implemented; see its verification and host limits. |
-| [Release 0.1.8: spec and plan](release-0.1.8.md) | released; as 0.1.8; the status line lists the pull request behind each package and what stays open. |
+| [Update check](update-check.md) | implemented; `fnl-update` shows cached versions and asks before an update; see verification and host limits. |
+| [Release 0.1.8: spec and plan](release-0.1.8.md) | released; as 0.1.8, including restore points; the status line lists the pull request behind each package and what stays open. |
 | [Compaction threshold](compaction-threshold.md) | implemented; checked setup writer; running-session effect and Codex default unverified. |
 | [Compaction steward](compaction-steward.md) | implemented; option B: local handover storage, threshold decision and compact re-injection; real-host delivery remains unverified. |
-| [Antigravity compaction stop](compaction-stop.md) | implemented; local size-only hook and previewed installer; user-level hooks, TUI delivery and the usefulness of a byte limit remain unverified. |
+| [Antigravity compaction stop](compaction-stop.md) | implemented; local size-only hook and previewed installer; live user-level hook delivery, TUI behavior and the usefulness of a byte limit remain unverified. |
 | [Dashboard tabs](dashboard-tabs.md) | implemented; splits the status page into two tabs, Overview and Now. |
 | [Dashboard infographics](dashboard-infographics.md) | implemented; locally: Agents KPI tiles, budget lanes and quota meters; priority-ordered unfinished projects and task cells; bounded Reviews chains and fragment navigation. Targeted fixture checks; coordinator browser screenshots at 1280 and 390 remain required. |
-| [Project progress](project-progress.md) | implemented; for 0.1.10: bounded local reader, exact identifier joins, consent/default notice and Project tab; duplicate task ids leave manual sessions unlinked. Local fixture checks only; real-host delivery remains unverified. |
+| [Project progress](project-progress.md) | implemented; for 0.1.10: bounded local reader, exact identifier joins, consent/default notice and the project pane (now inside Now); duplicate task ids leave manual sessions unlinked. The 0.2.0 pipeline extension (Spec Kit stages, work records, repository state, ledger) is implemented with local parser, refresh and page checks; real-host delivery remains unverified. |
 | [Release 0.1.10: spec and plan](release-0.1.10.md) | released; the package table lists the pull request behind each package. |
-| [Merge guard](merge-guard.md) | deferred; to 0.2.0 (autopilot's backstop); permission rules written by setup for Claude Code and Codex. |
+| [Merge guard](merge-guard.md) | deferred; accepted permission-rule design for Claude Code and Codex, with no shipped writer; the recorded 0.2.0 target needs an owner scheduling decision alongside autopilot. |
 | [Running agents](running-agents.md) | implemented; phase 1: ledger and opt-in process snapshot in Running now; liveness remains advisory, CLI name observations and real-host UI verification remain open. |
 | [Dashboard freshness](dashboard-freshness.md) | implemented; audit of what is current and the rebuild triggers that fix the gaps. |
-| [Autopilot (0.2.0)](autopilot.md) | accepted; owner decisions recorded on 2026-11-06; opt-in agent that coordinates the repository while the user is away, governed by setup. |
+| [Autopilot (0.2.0)](autopilot.md) | accepted; owner decisions recorded on 2026-11-06 for release 0.2.0; design only, with no shipped autopilot skill/script, setup feature or live-refresh lease. Implementation and release scheduling need an owner decision; open questions are listed under "Open". |
 | [Work tracking facts per repository](work-tracking.md) | implemented; release 0.2.0 per-repository settings, work records and project progress have local tests; real-host dashboard delivery remains unverified. |
 | [Quota reading on demand](quota-on-demand.md) | implemented; release 0.2.0 on-demand reads and rate-limit markers have local fixture tests; live StopFailure payload and provider readings remain unverified. |
 | [Agent roles](agent-roles.md) | in progress; release 0.2.0 scripts and local tests are implemented; relay receipt/dashboard counters remain unimplemented; independent navigator/judge validation and live-host routing, posting and SessionStart delivery remain unverified. |
 | [Setup restructure](setup-restructure.md) | implemented; release 0.2.0 core, features, Quick/Advanced companions and guarded instructions writer have local tests; live-host interviews and Codex word passing remain unverified. |
 | [Run hygiene](run-hygiene.md) | implemented; release 0.2.0 brief lint, environment allowlists, guarded log scan/redaction and ledger states have local tests; real-host dispatch remains unverified and private HOME is deferred. |
 | [Context snapshot](context-snapshot.md) | implemented; release 0.2.0 local Claude Code and Antigravity status-line recorder, fresh context reads, steward checks and previewed settings writer; live status-line delivery and user-owned composition remain unverified. |
-| [Parallel agent instances](parallel-instances.md) | implemented; targeted local verification recorded in the spec; integration and live-host behavior remain unverified. |
+| [Parallel agent instances](parallel-instances.md) | implemented; shared helper, setup, SessionStart, dashboard, CI copy group and documentation are integrated locally; targeted verification is recorded in the spec, while live-host scheduling and UI behavior remain unverified. |
