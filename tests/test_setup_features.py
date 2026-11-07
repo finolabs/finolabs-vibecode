@@ -73,8 +73,22 @@ class SetupFeaturesTest(unittest.TestCase):
         self.assertNotIn("Setup features", self.host.read_text())
         self.assertEqual(self.run_cli("show")[1].strip(), "declined: none")
 
+    def test_companions_decline_is_distinct_and_closed(self):
+        self.assertEqual(set(sf.FEATURES),
+                         {"delegation", "roles", "quota", "metrics", "compaction", "companions", "project"})
+        self.assertEqual(self.run_cli("decline", "companions", "--yes")[0], 0)
+        self.assertEqual(self.run_cli("show")[1].strip(), "declined: companions")
+        self.assertEqual(self.host.read_text(), "## Setup features\n\n- companions: declined\n\n")
+        self.assertFalse((self.home / ".finolabs/vibecode/state/consent.json").exists())
+        self.assertEqual(self.run_cli("clear", "companions", "--yes")[0], 0)
+        self.assertEqual(self.run_cli("show")[1].strip(), "declined: none")
+
     def test_unknown_feature_is_refused(self):
-        self.assertEqual(self.run_cli("decline", "everything", "--yes")[0], 2)
+        for name in ("everything", "review-tools", "markmap", "vietnamizer"):
+            with self.subTest(feature=name):
+                self.assertEqual(self.run_cli("decline", name, "--yes")[0], 2)
+                self.assertIsNone(sf.parse("## Setup features\n- " + name + ": declined\n"))
+        self.assertFalse(self.host.exists())
 
     def test_strict_parser_rejects_every_malformed_shape(self):
         good = "## Setup features\n\n- quota: declined\n"

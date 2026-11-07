@@ -1,6 +1,6 @@
 # Plain language
 
-Use the beginner register in the user's language on explicit beginner/plain-words request or acceptance, not plugin inexperience. For bare `/fnl-ask` (Codex `$fnl-ask`), ask through the native question tool: "Do you write code, or would you like it in plain words?" Choose register/Start mode; keep until technical detail requested. All gates/rules apply.
+Use the beginner register in the user's language on explicit beginner/plain-words request or acceptance, not plugin inexperience. For bare `/fnl-ask` (Codex `$fnl-ask`), ask through the native question tool: "Do you write code, or would you like it in plain words?" Choose register/Start mode; keep until technical detail requested. All gates/rules apply. In setup, beginner keeps Quick inert defaults and skips companion questions; Advanced asks each item.
 
 1. Lead with result and where it appears.
 2. Say what the step does; name files/skills/commands only if requested or needed to type.

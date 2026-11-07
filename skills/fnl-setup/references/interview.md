@@ -6,3 +6,5 @@ Ask every question through the host's native question tool when the session has 
 Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes. All approvals/offers, every mode.
 
 Ask in text only when no tool exists, the tool is refused or fails, nobody can answer, or the decision is free text (model IDs). Headless: record open decisions, invent nothing. Clarify vague answers. Finish with no silent assumptions; read back, get explicit yes before writes. Grilling: same rules.
+
+Companions: the Quick selection and every offer follow these rules; none preselected. "Install everything" never answers a companion question. A Yes only requests a printed command, never installation or a stored consent.

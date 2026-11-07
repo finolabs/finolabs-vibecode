@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
 
-FEATURES = ("delegation", "roles", "quota", "metrics", "compaction", "review-tools", "project")
+FEATURES = ("delegation", "roles", "quota", "metrics", "compaction", "companions", "project")
 HEADING = "## Setup features"
 LINE = re.compile(r"- (" + "|".join(FEATURES) + r"): declined")
 CAP = 262144
