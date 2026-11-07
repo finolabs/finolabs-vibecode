@@ -1,12 +1,12 @@
 # Delegation mode and Routing (`/fnl-setup mode`)
 
-Script: preview, atomic sections, no symlinks/network/model. Questions: `interview.md` (advisory). Authority/gates apply.
+Script: preview, atomic sections, no symlinks/network/model. Questions: `interview.md` (advisory). Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes. Authority/gates apply.
 
 1. Run `python3 -I <this skill folder>/scripts/mode.py show`; show values/sources/overrides. `FNL_DELEGATION_MODE`/`FNL_ROUTING` wins, then host config, then suggest/on; invalid values use defaults. Auto gate needs canonical `## Auto gate` on; environment cannot enable it; `FNL_AUTO_GATE=off|0|false|no` disables.
 2. Ask the preferences question in every mode: "When should other AI helpers join, and should the coding guide start with each session?"
-Description: Choose requested-only (manual), ask-first (suggest), or independent tested handoffs (auto); coding guide on/off. Later approval saves local host.md. Undecided keeps preferences; change them later via mode. Helpers use their providers.
+Description: Choose requested-only (manual), ask-first (suggest) or independent tested handoffs (auto); coding guide on/off. Nothing is saved before a later approval; change via mode. Helpers use their providers.
 Default suggest/on; offer manual/suggest; ask auto separately: "Let the lead AI hand independent tasks to other AI helpers without asking each time?"
-Yes: Save auto in local host.md; helpers get tasks via providers. Authority/tests apply.
+Yes: Save auto in local host.md; helpers get tasks via providers.
 No: Keep the mode; ask later.
 Undo: /fnl-setup mode manual or suggest.
 Choices: "Yes, allow handoffs" / "No, keep the mode".

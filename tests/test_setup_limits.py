@@ -151,6 +151,9 @@ class ConsentInventoryTests(unittest.TestCase):
                 explanation = block.group()
                 self.assertIn('Choices:', explanation)
                 self.assertRegex(explanation, r'"Yes, [^"\n]+" / "No, [^"\n]+"')
+                choices = explanation.split('Choices:', 1)[1].lower()
+                for word in ('recommend', 'default', 'preselect'):
+                    self.assertNotIn(word, choices)  # approval labels stay neutral
 
         texts = {path: path.read_text() for path in MARKDOWN}
         for sentence, home in EXTRA_APPROVALS:
@@ -159,6 +162,9 @@ class ConsentInventoryTests(unittest.TestCase):
                 self.assertEqual(hits, [home])
                 following = texts[home].split(sentence, 1)[1]
                 self.assertRegex(following, r'^[^\n]*\nYes: [^\n]+\nNo: [^\n]+\nUndo: [^\n]+\nChoices: "Yes, [^"\n]+" / "No, [^"\n]+"')
+                extra_choices = following.split('Choices:', 1)[1].split('\n', 1)[0].lower()
+                for word in ('recommend', 'default', 'preselect'):
+                    self.assertNotIn(word, extra_choices)
 
     def test_every_consent_sentence_appears_once_in_its_home(self):
         texts = {path: path.read_text() for path in MARKDOWN}
