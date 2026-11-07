@@ -6,11 +6,13 @@ Owner decisions: Fio, 07/11/2026: measure the context window with a script, surf
 
 ## Goal and host limits
 
-Give the agent real context counts for the existing steward table, without reading conversation content. No hook payload carries context size. Claude Code exposes it only to the user's status-line command as JSON on stdin: `context_window.used_percentage`, `context_window.context_window_size`, `context_window.current_usage` with `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `output_tokens`, plus `session_id`, `transcript_path` and `version`.
+Give the agent real context counts for the existing steward table, without reading conversation content. No hook payload supplies both usage and context-window size. Claude Code [statusline docs](https://code.claude.com/docs/en/statusline.md), researched 07/11/2026, expose these to the user's command as JSON on stdin: `context_window.used_percentage`, `context_window.context_window_size`, `context_window.current_usage` with `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `output_tokens`, plus `session_id`, `transcript_path` and `version`.
 
 Used tokens are input + cache creation + cache read of the last main-conversation response. Output is excluded; percentage is calculated from those counts rather than trusting `used_percentage`. The reading is not a cumulative conversation sum or a continuously updated meter. `current_usage` is null before the first call and immediately after `/compact`; the status line runs after each assistant message, after `/compact` and on resume. These are the documented input contract supplied for this build; this package has not verified live delivery on the installed version.
 
-A plugin cannot declare `statusLine`. Setup must offer a user-owned settings command. No transcript JSONL is read: its internal format and content are outside this design. Antigravity is covered by the extension in part 5. Codex has no equivalent status-line signal and stays out of scope; Antigravity retains its separate transcript-size proxy stop.
+A plugin cannot declare `statusLine`. Setup must offer a user-owned settings command. No transcript JSONL is read: its internal format and content are outside this design. Antigravity is covered by the extension in part 5 and retains its separate transcript-size proxy stop. Claude desktop app Code-tab support for `statusLine` is undocumented and remains unverified: the owner's desktop session recorded no snapshot while a terminal session did. That observation does not establish delivery for every terminal session.
+
+Codex 0.167.0 [app-server docs](https://learn.chatgpt.com/docs/app-server), [config reference](https://learn.chatgpt.com/docs/config-reference) and pinned [rust-v0.167.0 source](https://github.com/openai/codex/tree/rust-v0.167.0), researched 07/11/2026, expose context telemetry through app-server `thread/tokenUsage/updated` (`tokenUsage.last.totalTokens`, `modelContextWindow`) and TUI built-ins `context-used`, `context-remaining`, `context-window-size`. There is no external status-line command receiving JSON, so this recorder does not cover Codex. `notify` carries no token fields; PostModelRequest carries nullable `token_usage` without a window size. `codex exec --json` reports execution usage, not a context snapshot; no standalone per-session usage command was found. This package implements no app-server reader and verifies no live Codex context integration.
 
 ## 1. Recorder, reader and steward input
 
@@ -34,6 +36,8 @@ The existing `scripts/session_start.py` reads its bounded hook stdin, uses that 
 `Context: 62% of a 200000 window, read 12s ago (status line)`
 
 Every source qualifies except `compact`: right after a compaction the only snapshot is the pre-compact one, so no Context line is printed until the status line records a new reading. Missing ids/readings, expired snapshots, unsafe state, invalid or oversized stdin and all errors add nothing. It makes no network call, starts no process, writes no state and still exits 0. Existing handover re-injection remains scoped to source `compact`; hook declarations are unchanged. The Context line is a start-time observation, not a promise of current usage later in the session.
+
+Vendor docs researched 07/11/2026 document SessionStart `source: compact` as the delivery path on both hosts: Claude Code [context-window docs](https://code.claude.com/docs/en/context-window.md) add stdout to model context; Codex 0.167.0 [hooks docs](https://learn.chatgpt.com/docs/hooks) and pinned source deliver plain stdout or JSON `additionalContext` as developer context before the next model request. This verifies the contract, not this plugin's live delivery/order. Claude Code PreCompact stdout feeds summary instructions (up to 10,000 characters); on Codex a plain-text reminder does not reach the model because PreCompact and PostCompact ignore plain stdout.
 
 ## 3. Session hygiene
 
