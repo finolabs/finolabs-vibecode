@@ -1,6 +1,6 @@
 # Agent roles: routed reviews, verification without an agent, and a navigator
 
-Status: accepted; owner decisions recorded on 2026-11-07 in two rounds (see "Decisions settled"); release number open (part H, open decision 1); implementation not started.
+Status: accepted; owner decisions recorded on 2026-11-07 in two rounds (see "Decisions settled"); ships in 0.2.0 together with the work planned for 0.1.11 (owner decision, 2026-11-07); implementation not started.
 
 ## Why
 
@@ -189,8 +189,9 @@ and records the agreement; that result is part of acceptance.
 - Removing two agents and one skill changes the public surface: CHANGELOG entries under Removed and Changed with the
   consumer action for each (`fnl-verifier` and `fnl-steward` callers follow the skill text; `fnl-setup-instructions`
   callers use `fnl-setup`), and the agent and skill counts in README, `fnl-ask` and the manifests updated. In Phase 0
-  `fnl-versioning` makes a breaking change a MINOR bump, so a release that removes them is at least 0.2.0 (open
-  decision 1). The owner waived "deprecate first" for this removal.
+  `fnl-versioning` makes a breaking change a MINOR bump, so a release that removes them is at least 0.2.0 (the
+  owner chose 0.2.0 on 2026-11-07 and moved all work planned for 0.1.11 into it). The owner waived "deprecate first"
+  for this removal.
 - `fnl-delegate` Accept step and Route text, `fnl-verification`, `fnl-review-gate` ("Instruments", "Who reviews", the
   rules about relay and the low-risk lane), `fnl-coding-router` (the router marker), `fnl-setup` (roles, judge and
   posting steps), `fnl-session-hygiene`, `host-template.md`, the two reviewer agent files, `merge_check.py` with its
@@ -317,10 +318,6 @@ judgments listed.
 
 ## Open decisions
 
-1. The release number. Removal is a breaking change, so `fnl-versioning` requires at least 0.2.0, but the autopilot,
-   merge-guard and dashboard live-mode specs already claim 0.2.0, and the quota-on-demand and work-tracking specs say
-   "for 0.1.11". The owner decides whether this release is 0.2.0 with those specs following it, and the specs' targets
-   are corrected at that point.
-2. Where the project `Outcome` line lives if a repository has no agent context file.
-3. Whether a repository may name its own default roles that override the user's (not in this spec; the user's host
+1. Where the project `Outcome` line lives if a repository has no agent context file.
+2. Whether a repository may name its own default roles that override the user's (not in this spec; the user's host
    config is the only source).
