@@ -19,11 +19,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
-<<<<<<< HEAD
 - Refresh the architecture and task-lifecycle diagrams (dark and light, and the README images) for parallel agent pools, context snapshots, the newest skills and the status board.
-=======
 - Rewrite every setup approval question in plain words: each one says what saying yes changes and where, what stays untouched on no, and how to undo it, with outcome-worded neutral choices (nothing preselected or recommended). A new test keeps the shape from rotting. The plain-words term list moves to `plain-terms.md`.
->>>>>>> origin/main
 - State that a delegated run's label carries the agent family and its short model name in the task description, wrapper and log names, and note that the process snapshot shows the family only while dispatch lanes show the model.
 - Let the status board page scroll with the browser's own scrollbar (no inner height cap), and scope the `fnl-status` skill's reply to the repository it runs in; `ledger.py open` takes `--project` for that, and other repositories stay on the dashboard.
 - Correct the documented host contracts for compaction delivery, context telemetry, hook trust and StopFailure against vendor documentation, keeping the live-verification limits stated.
