@@ -1,6 +1,6 @@
 # Agent roles: routed reviews, verification without an agent, and a navigator
 
-Status: accepted; owner decisions recorded on 2026-11-07 in two rounds (see "Decisions settled"); ships in the release that removes the retired agents, 0.2.0 under `fnl-versioning` (part H); implementation not started.
+Status: accepted; owner decisions recorded on 2026-11-07 in two rounds (see "Decisions settled"); release number open (part H, open decision 1); implementation not started.
 
 ## Why
 
@@ -34,8 +34,9 @@ on 2026-11-07 showed four problems:
 - Jev is a recommendation, not a requirement. Every semantic judgment goes through one judge interface; when the user
   does not choose Jev at setup, or Jev is unavailable, a small model of the host takes its place (part I).
 - Second round (same day): `fnl-verifier`, `fnl-steward` and the skill `fnl-setup-instructions` are removed in the same
-  release, without a deprecation period; instructions become a module of `fnl-setup` (a separate spec restructures
-  setup). `merge_check.py` requires a router marker in the pull request body in repositories that adopted
+  release, without a deprecation period (an explicit owner exception to the "deprecate first" rule of
+  `fnl-versioning`, 2026-11-07); instructions become a module of `fnl-setup` (the separate setup restructure spec must
+  be accepted before the pull request that removes the skill). `merge_check.py` requires a router marker in the pull request body in repositories that adopted
   `fnl-review-gate`; other repositories are not blocked (part K). The verification-receipt gate of the ledger applies
   only to delegated work recorded in the ledger; the coordinator's own work stays under the review gate.
 - Payloads to the judge are written in English; criteria written in another language are restated in English by the small
@@ -76,9 +77,11 @@ coordinator's). The section never grants access or posting rights.
 `review_route.py` (script, no model tokens; one copy per skill that needs it, kept identical by CI) decides before any
 review starts:
 
-1. Inputs it reads locally: the author family of the head (commit trailers, else the ledger), `## Agent roles`,
-   `## Agents on this machine`, `## Review posting` (part D) and the canonical quota cache (`quota_probe.py read`
-   first when a candidate cache is older than 15 minutes, per `quota-on-demand.md`).
+1. Inputs it reads locally, with no model and no network: the author family of the head (commit trailers, else the
+   ledger), `## Agent roles`, `## Agents on this machine`, `## Review posting` (part D) and the quota cache with its
+   rate-limit markers, through `quota_probe.py status` only. A reading is started by the coordinator before routing
+   (`quota_probe.py read --family <f>` when a candidate's cache is older than 15 minutes, as the quota rule in
+   `CLAUDE.md` allows), never by this script.
 2. For each review kind it picks the assigned family if it differs from the author family, is present and not out of
    quota. Otherwise the next present family that differs from the author family, in the capability order of
    `fnl-delegate`. With none left it picks the author's family in a fresh context and prints `same-family` so the
@@ -96,7 +99,7 @@ acceptance criteria and decisions the coordinator supplies. A re-review resumes 
 security gate runs `security-audit` when `fnl-security-review-gate` says so; the brief says it explicitly.
 
 Enforcers: the script for the choice; `fnl-review-gate` text and agent judgment (advisory) for calling it first;
-`merge_check.py` for the markers, unchanged.
+`merge_check.py` for the review markers, which keep their meaning (part K3 adds one check beside them).
 
 ## D. Posting
 
@@ -105,11 +108,21 @@ Enforcers: the script for the choice; `fnl-review-gate` text and agent judgment 
 - The coordinator relays that comment once (the existing relay rules of `CLAUDE.md` and `fnl-review-gate` still decide
   whether it may), and tells the user the exact missing capability and the setup below. It never accepts relay as the
   steady state.
-- Setup, after the user's yes, one family at a time, by `fnl-setup`: Codex gets a GitHub token limited to pull
-  requests (write) on the repository, supplied through the credential injection the user approves; the plugin never
-  reads, stores or searches for it. If the sandbox already reads the user's `gh` login, that is used instead.
-  Antigravity gets remembered allow-rules for exactly `gh pr comment` and `gh pr view`, recorded in the host config
-  like the test-command grants; no wildcard.
+- One posting path for every family: `post_review.py` (script, one copy where needed). It takes the pull request
+  number, takes the repository from the checkout's remote (never from an argument), reads the comment from a file
+  inside the run folder, requires the first line to match the review marker pattern exactly, caps the size, refuses
+  every other option, and runs only `gh pr comment` and `gh pr view`. Tests: `--repo`, a body file outside the run
+  folder, `--web`, `--edit-last`, a missing or malformed marker and an oversized body are refused.
+- Setup, after the user's yes, one family at a time, by `fnl-setup`. Codex: a fine-grained GitHub token limited to this
+  one repository with an expiry, supplied through the credential injection the user approves; the plugin never reads,
+  stores or searches for it; network limited to the GitHub API host where the host allows it; the brief allows only
+  comment and view. A token with pull-request write can also approve, dismiss, close and edit the pull request body,
+  and a reviewer reads attacker-controlled text, so the wrapper is the only intended path and the residual risk is
+  stated to the user at setup. If the sandbox already reads the user's `gh` login, that is used instead.
+  Antigravity: a remembered allow-rule for the exact argv of `post_review.py`, never for `gh` itself; recorded in the
+  host config like the test-command grants; no wildcard.
+- Before `yes` is recorded for a family, the coordinator checks that the comment's author is the expected identity
+  as well as that the family's marker appears.
 - `## Review posting` in `host.md` holds one line per family: `- codex: unverified`, `yes` or `no`, with the check
   date. `yes` is recorded only after the coordinator sees the family's own marker on a pull request; enabling a
   setting does not count. `review_route.py` prefers a `yes` family only between two otherwise valid candidates;
@@ -176,11 +189,12 @@ and records the agreement; that result is part of acceptance.
 - Removing two agents and one skill changes the public surface: CHANGELOG entries under Removed and Changed with the
   consumer action for each (`fnl-verifier` and `fnl-steward` callers follow the skill text; `fnl-setup-instructions`
   callers use `fnl-setup`), and the agent and skill counts in README, `fnl-ask` and the manifests updated. In Phase 0
-  `fnl-versioning` makes a breaking change a MINOR bump, so the release that removes them is 0.2.0 and carries the
-  work planned for 0.1.11; the owner confirms the number at release.
-- `fnl-delegate` Accept step, `fnl-verification`, `fnl-review-gate` ("Instruments", "Who reviews"), `fnl-setup` (roles
-  and posting steps), `fnl-session-hygiene`, `host-template.md` and the two reviewer agent files change in the same
-  work. Skills stay self-contained: scripts used by two skills are copied and compared in CI.
+  `fnl-versioning` makes a breaking change a MINOR bump, so a release that removes them is at least 0.2.0 (open
+  decision 1). The owner waived "deprecate first" for this removal.
+- `fnl-delegate` Accept step and Route text, `fnl-verification`, `fnl-review-gate` ("Instruments", "Who reviews", the
+  rules about relay and the low-risk lane), `fnl-coding-router` (the router marker), `fnl-setup` (roles, judge and
+  posting steps), `fnl-session-hygiene`, `host-template.md`, the two reviewer agent files, `merge_check.py` with its
+  tests and the `SessionStart` script change in the same work. Skills stay self-contained: scripts used by two skills are copied and compared in CI.
 - `CLAUDE.md` is not edited by this work. If the owner later wants the "Standing relay" paragraph reworded as
   temporary, that is a separate pull request.
 
@@ -214,7 +228,13 @@ script): 10 agree, 2 insufficient, 0 wrong, including the cross-document case Je
 default, with caveats: a small sample, one repository, answers known to the author, the same model family as most of
 the changes judged, and an unrecorded read scope for the subagent. A claim of absence ("no hook starts a worker") has
 no line to quote, so it is phrased as the removal that proves it ("the worker start was removed from each hook") or it
-ends as `insufficient`.
+ends as `insufficient`. The measurement stays labelled unvalidated until cases from other authors are run: these
+cases come from the findings of this project's own reviews.
+
+The quote check proves that a line is present, not that it supports the answer, and attacker-controlled diff text can
+contain any line. The evidence is therefore passed as data, never as instructions, and quotes are preferred from added
+lines and test output. For both judges the payload holds only the fields the question needs, and it is the same on the
+Jev-to-host fallback. Receipts hold the answer and an identifier, not the criterion text, as `PRIVACY.md` requires.
 
 ## J. Setup and instruction changes this spec needs
 
@@ -229,11 +249,12 @@ ends as `insufficient`.
   rewritten for the new agent set.
 - `fnl-setup`, `references/check.md`: reports roles, judge and posting state, each as configured, unverified or
   missing.
-- `fnl-setup-instructions`, project scope: the `## Work tracking` block gains the `Outcome` line (goal and three to five
-  success criteria, dated), written only after the user's yes. User scope text stays free of machine settings.
-- Both skills use the same scope names in their text: user scope (everything under the user's account: host config,
-  consent, user-level instruction files) and project scope (one repository). The wider restructure of the setup skill
-  (a short core path with optional features loaded on demand) is a separate spec.
+- The instructions module of `fnl-setup` (the successor of `fnl-setup-instructions`, which the same release removes):
+  its project-scope `## Work tracking` block gains the `Outcome` line (goal and three to five success criteria,
+  dated), written only after the user's yes. User scope text stays free of machine settings.
+- The setup restructure is a separate spec (a short core path, optional features and the instructions module loaded on
+  demand, one set of scope names: user scope for everything under the user's account, project scope for one
+  repository). That spec is accepted before the pull request that removes `fnl-setup-instructions`.
 
 ## K. Enforcement at the end of the work
 
@@ -241,20 +262,28 @@ Starting a task cannot be enforced; evidence at the end can. Three pieces:
 
 1. **Cheaper start.** The `SessionStart` hook already runs a script. It prints, from local files only, the state an agent
    would otherwise call `fnl-delegate` to learn: delegation mode, the roles, the cached quota summary and the count of
-   open ledger entries. It never blocks and fails closed.
+   open ledger entries, as fixed enumerated words and capped integers, never text read from a file (it runs in
+   untrusted repositories). It never blocks and fails closed.
 2. **`route_task.py`** (script): applies the decision matrix of `fnl-delegate` to a kind and a grade and prints the
    agent, model and effort. Grading difficulty is the one semantic judgment; it goes to the judge (part I) with the
    coordinator free to override. The agent runs one command.
-3. **Router marker.** A pull request body carries `<!-- fnl-router depth=<MIN|NORMAL|DEEP> trigger=<trigger> -->`, the
-   values `record.py router` already accepts. `merge_check.py` reads the repository's adoption (the `## Agent skills`
-   block naming `fnl-review-gate`) from the base branch, never from the pull request head, so a change cannot exempt
-   itself; when adopted it reports a missing or malformed marker as blocking, otherwise it does nothing. The reviewer
-   compares the stated depth with the diff. A false marker is a visible claim a reviewer can contradict, not a silent
-   omission.
+3. **Router marker.** A pull request body carries one line matching exactly
+   `^<!-- fnl-router depth=(MIN|NORMAL|DEEP) trigger=(none|contract|security|privacy|permission|migration|dependency|uncertainty|consumers|irreversible|calculation|prediction|input) -->$`
+   (the values `record.py router` accepts). `merge_check.py` gains the field `body` and checks the marker at merge time;
+   the body can be edited after a review, so only the state at merge counts. Adoption is read from the pull request's
+   base commit with `git show <base oid>:<path>`, never from the head or a local branch, so a change cannot exempt
+   itself: a repository has adopted the gate when `CLAUDE.md` or `AGENTS.md` at the base commit has a `## Agent skills`
+   section whose text contains the token `fnl-review-gate`. A file that does not exist means not adopted; a file or a
+   body that cannot be read, or a `git show` that fails, makes `merge_check.py` exit 2 (an error, not a pass). When
+   adopted, a missing or malformed marker is blocking, for the low-risk lane and for bot pull requests as well. The
+   marker never changes which review markers or lane apply: `depth=MIN` on a diff that hits a security trigger still
+   needs the security marker, and a test pins that. The reviewer compares the stated depth with the diff. A false marker
+   is a visible claim a reviewer can contradict, not a silent omission.
 
 ## Not in scope
 
-A forced rule that author and reviewer families differ; changing the review markers or `merge_check.py`; a hook for the
+A forced rule that author and reviewer families differ; changing what the review markers mean or which of them a
+change needs; a hook for the
 navigator; reading quota or accounts of the review families beyond the existing on-demand reading; Jev outside the
 judgments listed.
 
@@ -275,6 +304,11 @@ judgments listed.
 - Navigator: `nav_state.py` output limited to the allowed fields, payload check, English restatement kept with the
   original, the validation over merged pull requests recorded, and a test that a finding without evidence is rejected.
 - `PRIVACY.md` lists any new stored value (the posting state, the relay count, the receipts) as metadata only.
+- `post_review.py` refuses the cases listed in part D; the identity check precedes `yes`.
+- `fnl-setup-instructions` is gone from the plugin, the manifests and the maps, with its CHANGELOG consumer action, and the
+  setup restructure spec is accepted before that pull request.
+- `merge_check.py`: the marker cannot relax review requirements; adoption comes from the base commit; an unreadable
+  file or body exits 2; a missing file means not adopted.
 - `route_task.py` returns the matrix row for each kind and grade; the `SessionStart` output is read-only and cannot
   block; `merge_check.py` blocks a missing marker only when the base branch adopted the gate, and ignores a head that
   adds or removes the adoption line.
@@ -283,8 +317,10 @@ judgments listed.
 
 ## Open decisions
 
-1. Where the project `Outcome` line lives if a repository has no agent context file.
-2. Whether a repository may name its own default roles that override the user's (not in this spec; the user's host
+1. The release number. Removal is a breaking change, so `fnl-versioning` requires at least 0.2.0, but the autopilot,
+   merge-guard and dashboard live-mode specs already claim 0.2.0, and the quota-on-demand and work-tracking specs say
+   "for 0.1.11". The owner decides whether this release is 0.2.0 with those specs following it, and the specs' targets
+   are corrected at that point.
+2. Where the project `Outcome` line lives if a repository has no agent context file.
+3. Whether a repository may name its own default roles that override the user's (not in this spec; the user's host
    config is the only source).
-3. The exact adoption line that `merge_check.py` looks for in the base branch's agent context file, and what happens
-   when the repository has none of the two files.
