@@ -467,7 +467,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertIn('--warn: #e3b341; --crit: #ff7b72;', css)
         self.assertIn('--lane-track: var(--line)', css)
         self.assertEqual(css.count('--lane-track: #eeebf0'), 2)
-        out = self.render(FIXTURE)
+        out = self.render(FIXTURE, {'now': '2026-11-06T10:00:00Z'})
         for index, mark in enumerate(out['picture']):
             if mark['tag'] == 'pattern':
                 stripes = []
