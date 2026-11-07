@@ -14,10 +14,10 @@ svg{width:100%;min-width:900px;display:block}
 </style></head><body><div class="frame">
 <p class="eyebrow">State machine · finolabs-vibecode</p>
 <h1>Life of a change under the coding router</h1>
-<p class="sub">From a coding request to a published release. Depth sets ceremony and writes the PR body marker; the gates (verification with judge, routed review and posting, merge_check) hold at every depth. Two failed fixes of one invariant stop at Checkpoint.</p>
+<p class="sub">From a coding request to a published release. Depth sets ceremony and writes the PR body marker; the gates hold at every depth. Tasks fan out to parallel pools within user limits; context snapshots feed the compaction steward. Two failed fixes stop at Checkpoint.</p>
 <svg viewBox="0 0 1280 610" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d">
 <title id="t">Life of a change under the coding router</title>
-<desc id="d">State machine: Inspect (quota on demand), Path, Depth (PR marker), Red, Change, Proof (verify_claim and judge), Review (review_route and post_review), Merged (merge_check), Released. Review sends blocking findings back to Change, max 2 rounds. Two failed fixes move Change to Checkpoint, returning to Red with a design and a new failing test. Delegation runs with delegate_env allowlist and log_scan.</desc>
+<desc id="d">State machine: Inspect (quota on demand), Path (pool fan-out), Depth (PR marker), Red, Change (context snapshot), Proof (verify_claim and judge), Review (review_route and post_review), Merged (navigator &amp; compaction check, merge_check), Released. Review sends blocking findings back to Change, max 2 rounds. Two failed fixes move Change to Checkpoint, returning to Red with a design and a new failing test. Delegation runs with parallel pools (limits/caps), delegate_env allowlist and log_scan.</desc>
 <defs>
 <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#BCBCD0"/></marker>
 <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#E5D2F4"/></marker>
@@ -71,7 +71,7 @@ svg{width:100%;min-width:900px;display:block}
 <rect x="320" y="110" width="160" height="64" rx="8" fill="#16162A" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
 <text x="400.0" y="134" fill="#FFFFFF" font-size="13" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Path</text>
 <text x="400.0" y="150" fill="#BCBCD0" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Spec Kit, pack, none</text>
-<text x="400.0" y="163" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">work records</text>
+<text x="400.0" y="163" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">work records · pool fan-out</text>
 <rect x="600" y="110" width="160" height="64" rx="8" fill="#050510"/>
 <rect x="600" y="110" width="160" height="64" rx="8" fill="#16162A" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
 <text x="680.0" y="134" fill="#FFFFFF" font-size="13" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Depth</text>
@@ -83,8 +83,9 @@ svg{width:100%;min-width:900px;display:block}
 <text x="960.0" y="153" fill="#BCBCD0" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">failing test, right reason</text>
 <rect x="880" y="320" width="160" height="64" rx="8" fill="#050510"/>
 <rect x="880" y="320" width="160" height="64" rx="8" fill="#16162A" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
-<text x="960.0" y="346" fill="#FFFFFF" font-size="13" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Change</text>
-<text x="960.0" y="363" fill="#BCBCD0" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">smallest change, green</text>
+<text x="960.0" y="340" fill="#FFFFFF" font-size="13" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Change</text>
+<text x="960.0" y="356" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">smallest change, green</text>
+<text x="960.0" y="369" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">snapshot feeds steward</text>
 <rect x="600" y="320" width="160" height="64" rx="8" fill="#050510"/>
 <rect x="600" y="320" width="160" height="64" rx="8" fill="#16162A" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
 <text x="680.0" y="340" fill="#FFFFFF" font-size="13" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Proof</text>
@@ -99,7 +100,7 @@ svg{width:100%;min-width:900px;display:block}
 <rect x="40" y="320" width="160" height="64" rx="8" fill="#16162A" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
 <text x="120.0" y="340" fill="#FFFFFF" font-size="13" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Merged</text>
 <text x="120.0" y="356" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">pinned to reviewed head</text>
-<text x="120.0" y="369" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">navigator course check</text>
+<text x="120.0" y="369" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">navigator &amp; compaction</text>
 <rect x="40" y="500" width="160" height="64" rx="8" fill="#050510"/>
 <rect x="40" y="500" width="160" height="64" rx="8" fill="#16162A" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
 <text x="120.0" y="526" fill="#FFFFFF" font-size="13" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Released</text>
@@ -113,7 +114,7 @@ svg{width:100%;min-width:900px;display:block}
 <circle cx="330" cy="532" r="8" fill="none" stroke="#FFFFFF" stroke-width="1.2"/><circle cx="330" cy="532" r="5" fill="#FFFFFF"/>
 <rect x="480" y="486" width="760" height="92" rx="8" fill="none" stroke="rgba(255,255,255,0.55)" stroke-opacity="0.5" stroke-width="1" stroke-dasharray="4,3"/>
 <text x="500" y="508" fill="#8B8BA6" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.18em">FROM ANY STATE</text>
-<text x="500" y="528" fill="#FFFFFF" font-size="12" font-family="'Space Grotesk', system-ui, sans-serif">Independent tasks with clear acceptance tests can go to another agent (fnl-delegate).</text>
-<text x="500" y="546" fill="#FFFFFF" font-size="12" font-family="'Space Grotesk', system-ui, sans-serif">Run hygiene: delegate_env.py allowlist, log_scan.py scan; receipts gate ledger.py finish.</text>
-<text x="500" y="564" fill="#BCBCD0" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace">Judge (Jev/host) informs route, grade &amp; criteria; merges, pushes and releases stay the owner's.</text>
+<text x="500" y="528" fill="#FFFFFF" font-size="12" font-family="'Space Grotesk', system-ui, sans-serif">Tasks fan out to parallel pool runs within user limit &amp; caps (fnl-delegate).</text>
+<text x="500" y="546" fill="#FFFFFF" font-size="12" font-family="'Space Grotesk', system-ui, sans-serif">Context snapshots (status line: Claude/Agy) feed compaction check; steward checks size.</text>
+<text x="500" y="564" fill="#BCBCD0" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace">Run hygiene: allowlist, log scan; receipts gate ledger. Judge (Jev/host); releases stay owner's.</text>
 </svg></div></body></html>
