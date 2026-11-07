@@ -153,7 +153,10 @@ class CheckupTest(unittest.TestCase):
     def test_retired_pointers_in_user_and_project_context(self):
         for suffix, path in (("committee", self.home / ".claude/CLAUDE.md"),
                              ("coordinator-sessions", self.home / ".codex/AGENTS.override.md"),
-                             ("knowledge", self.repo / "AGENTS.md")):
+                             ("knowledge", self.repo / "AGENTS.md"),
+                             ("setup-instructions", self.home / ".claude/CLAUDE.md"),
+                             ("scan-agents", self.home / ".codex/AGENTS.md"),
+                             ("set-mode", self.repo / "AGENTS.md")):
             with self.subTest(name=suffix):
                 self.write(path, "Use fnl-" + suffix + ".\n")
                 row = self.setup_item("retired skill pointers")
@@ -569,9 +572,17 @@ class CheckupTest(unittest.TestCase):
         self.assertIn("mtime", next(r for r in rows if r["pattern"] == "file-age")["reason"])
 
     def test_i14_retired_check_keeps_its_id(self):
-        self.write(self.repo / "AGENTS.md", "Use fnl-" + "knowledge" + ".\n")
-        rows = self.instruction_rows("I14")
-        self.assertEqual([(r["file"], r["line"], r["pattern"]) for r in rows], [("AGENTS.md", 1, "retired-skill")])
+        for suffix in ("knowledge", "setup-instructions", "scan-agents", "set-mode"):
+            for path in (self.repo / "AGENTS.md", self.home / ".claude/CLAUDE.md"):
+                with self.subTest(name=suffix, file=str(path)):
+                    self.write(path, "Use fnl-" + suffix + ".\n")
+                    rows = self.instruction_rows("I14")
+                    label = "AGENTS.md" if path.parent == self.repo else "~/.claude/CLAUDE.md"
+                    self.assertEqual([(r["file"], r["line"], r["pattern"]) for r in rows],
+                                     [(label, 1, "retired-skill")])
+                    path.write_text("Use fnl-" + suffix + "-extra.\n")
+                    self.assertFalse([r for r in self.instruction_rows("I14") if r["pattern"] == "retired-skill"])
+                    path.unlink()
 
     def test_payload_consent_is_separate_scoped_and_fail_closed(self):
         self.write(self.repo / "AGENTS.md", "SAFE LINE\n")

@@ -30,11 +30,8 @@ RETIRED = {"fnl-" + old: "fnl-" + new for old, new in (
     ("knowledge", "session-hygiene"))}
 # Setup commands were folded into one skill in 0.2.0. Keep the original
 # decisions in these specs; current surfaces must use the replacement commands.
-SETUP_RETIRED = {
-    "fnl-setup-instructions": "/fnl-setup instructions",
-    "fnl-scan-agents": "/fnl-setup scan",
-    "fnl-set-mode": "/fnl-setup mode",
-}
+SETUP_RETIRED = {"fnl-" + old: "/fnl-setup " + new for old, new in (
+    ("setup-instructions", "instructions"), ("scan-agents", "scan"), ("set-mode", "mode"))}
 SETUP_HISTORY = {
     "docs/specs/agent-roles.md", "docs/specs/agent-scan-and-consolidation.md",
     "docs/specs/release-0.1.8.md", "docs/specs/setup-restructure.md",
@@ -292,6 +289,17 @@ def check_skill_inventory(root, problems):
                 version, heading = line, ""
             elif line.startswith("### "):
                 heading = line
+            # Check every tracked consumer, including manifests and HTML labels.
+            # Test fixtures may define retired names as input data.
+            if not relative.startswith("tests/"):
+                for old, new in SETUP_RETIRED.items():
+                    if not re.search(r"(?<![\w-])" + re.escape(old) + r"(?![\w-])", line):
+                        continue
+                    released = relative == "CHANGELOG.md" and RELEASED.fullmatch(version)
+                    mapping = (relative == "CHANGELOG.md" and version == "## [Unreleased]"
+                               and heading == "### Removed" and f"`{old}` → `{new}`" in line)
+                    if relative not in SETUP_HISTORY and not released and not mapping:
+                        problems.append(f"{relative}:{n}: retired skill name {old}")
             for old, new in RETIRED.items():
                 if old not in line:
                     continue

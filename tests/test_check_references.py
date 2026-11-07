@@ -68,7 +68,7 @@ class CheckReferencesTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
         self.root = Path(self.dir.name)
-        for name in ["skills", "agents", "rules", "scripts", "docs"]:
+        for name in ["skills", "agents", "rules", "scripts", "docs", ".codex-plugin", ".antigravity-plugin"]:
             if (ROOT / name).exists():
                 shutil.copytree(ROOT / name, self.root / name)
         for path in ROOT.iterdir():
@@ -131,6 +131,23 @@ class CheckReferencesTest(unittest.TestCase):
                     finally:
                         path.write_text(original)
                     self.assertEqual(not problems, allowed, problems)
+
+    def test_unquoted_setup_retirements_are_caught_on_current_surfaces(self):
+        for suffix in ("setup-instructions", "scan-agents", "set-mode"):
+            old = "fnl-" + suffix
+            for relative in ("README.md", ".codex-plugin/plugin.json", ".antigravity-plugin/plugin.json",
+                             "docs/diagrams/skills-architecture-light.html",
+                             "docs/diagrams/skills-architecture-dark.html"):
+                with self.subTest(name=old, file=relative):
+                    path = self.root / relative
+                    original = path.read_text()
+                    path.write_text(original + "\nUse " + old + " to configure setup.\n")
+                    try:
+                        result = self.check()
+                    finally:
+                        path.write_text(original)
+                    self.assertEqual(result.returncode, 1, result.stdout)
+                    self.assertIn("retired skill name " + old, result.stdout)
 
     def test_clean_tree_passes(self):
         result = self.check()

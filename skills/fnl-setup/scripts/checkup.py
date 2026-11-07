@@ -250,7 +250,8 @@ def agents_evidence(status, text):
 
 def retired_evidence(paths, reader=read):
     # Construct the historical names so the repository's retired-name rule still applies.
-    names = ["fnl-" + suffix for suffix in ("committee", "coordinator-sessions", "knowledge")]
+    names = ["fnl-" + suffix for suffix in ("committee", "coordinator-sessions", "knowledge",
+                                         "setup-instructions", "scan-agents", "set-mode")]
     evidence = [reader(path) for path in paths]
     found = sorted({name for status, text in evidence if status == "ok"
                     for name in names if re.search(r"(?<![\w-])" + re.escape(name) + r"(?![\w-])", text)})
@@ -595,7 +596,8 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
                 in_comment = True
             if "-->" in visible:
                 in_comment = False
-            for suffix in ("committee", "coordinator-sessions", "knowledge"):
+            for suffix in ("committee", "coordinator-sessions", "knowledge",
+                           "setup-instructions", "scan-agents", "set-mode"):
                 if re.search(r"(?<![\w-])fnl-" + suffix + r"(?![\w-])", line):
                     add("I14", "warn", path, number, "retired-skill", "retired skill pointer")
         try:

@@ -77,13 +77,35 @@ class SizeLimitTests(unittest.TestCase):
         self.assertLessEqual(len(frontmatter()["description"]), 600)
 
     def test_bare_run_static_budget(self):
-        # SKILL.md plus the references the core path names: core, interview rules, work-tracking look-first.
-        names = ["core.md", "interview.md", "work-tracking.md"]
-        total = len((SKILL / "SKILL.md").read_bytes()) + sum(len((REFS / n).read_bytes()) for n in names)
-        self.assertLessEqual(total, 15000)
-        # The scan and mode procedures the core path runs are bounded on their own.
-        for name in ("scan.md", "mode.md"):
-            self.assertLessEqual(len((REFS / name).read_bytes()), 4000, name)
+        # Follow the literal references from the bare entry, including conditional beginner
+        # and closing material. Optional command/feature dispatch targets are not core loads.
+        skill = (SKILL / "SKILL.md").read_text()
+        # Before Menu, table rows dispatch explicit commands; prose runs for bare setup.
+        entry = "\n".join(line for line in skill.split("## Menu\n", 1)[0].splitlines()
+                          if not line.startswith("|"))
+        def references(text, base):
+            names = re.findall(r"references/[\w/.-]+\.md", text)
+            paths = [SKILL / name for name in names]
+            paths += [base / name for name in re.findall(r"\]\(([^)#]+\.md)(?:#[^)]*)?\)", text)]
+            # Relative code pointers (e.g. instructions/procedure.md) also load text.
+            paths += [base / name for name in re.findall(r"`((?:[\w.-]+/)+[\w.-]+\.md)`", text)
+                      if not name.startswith("references/")]
+            return paths
+
+        pending = references(entry, SKILL)
+        loaded = {SKILL / "SKILL.md"}
+        while pending:
+            path = pending.pop().resolve()
+            if path in loaded:
+                continue
+            self.assertTrue(path.is_relative_to(SKILL), str(path))
+            loaded.add(path)
+            text = path.read_text()
+            pending += references(text, path.parent)
+        for name in ("core.md", "scan.md", "mode.md", "work-tracking.md", "interview.md", "plain-language.md", "companions.md"):
+            self.assertIn(REFS / name, loaded)
+        total = sum(len(p.read_bytes()) for p in loaded)
+        self.assertLessEqual(total, 15000, {str(p.relative_to(SKILL)): p.stat().st_size for p in loaded})
 
 
 class ConsentInventoryTests(unittest.TestCase):
@@ -178,11 +200,17 @@ class EntryAndVocabularyTests(unittest.TestCase):
                          (SKILL / "scripts/instructions_write.py").read_bytes())
 
     def test_vocabulary_is_user_scope_and_project_scope(self):
-        for path in [SKILL / "SKILL.md", REFS / "core.md", REFS / "check.md", *FEATURES]:
+        for path in [*MARKDOWN, ROOT / "README.md", ROOT / "skills/fnl-delegate/references/host-template.md"]:
             text = path.read_text()
             self.assertNotRegex(text, r"(?i)machine scope|scope: machine|machine,? project|machine step|machine consent", path.name)
+            self.assertNotRegex(text, r"fnl-setup`? (?:\(section [A-G]\)|section [A-G]|Check)|the remembered grants of section A", path.name)
             for old in ("fnl-setup-instructions", "fnl-scan-agents", "fnl-set-mode"):
                 self.assertNotIn(old, text, path.name)
+
+    def test_readme_discloses_host_invocation_limit(self):
+        text = (ROOT / "README.md").read_text()
+        self.assertIn("Codex and Antigravity have no verified equivalent", text)
+        self.assertIn("disable-model-invocation: true", text)
 
     def test_check_reports_features_with_the_three_words(self):
         check = (REFS / "check.md").read_text()

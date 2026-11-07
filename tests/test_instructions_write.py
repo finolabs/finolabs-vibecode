@@ -196,6 +196,46 @@ class InstructionsWriteTest(unittest.TestCase):
             self.assertEqual(self.apply(digest, "--yes")[0], 0, rel)
             self.assertTrue((self.home / rel).is_file())
 
+    def test_custom_codex_home_and_antigravity_rules(self):
+        custom = self.outside / "codex"
+        with mock.patch.dict(os.environ, {"CODEX_HOME": str(custom)}):
+            for target in (custom / "AGENTS.md", custom / "AGENTS.override.md",
+                           self.home / ".gemini/config/rules/vibecode.md"):
+                digest, _ = self.preview(target)
+                self.assertEqual(self.apply(digest, "--yes")[0], 0)
+                self.assertEqual(target.read_text(), self.content.read_text())
+            for target in (custom / "config.toml", custom / "nested/AGENTS.md",
+                           self.home / ".codex/AGENTS.md",
+                           self.home / ".gemini/config/rules/nested/rule.md",
+                           self.home / ".gemini/config/rules/rule.txt"):
+                self.refused("preview", "--target", str(target), "--content-file", str(self.content))
+
+    def test_relative_codex_home_falls_back_to_account_default(self):
+        with mock.patch.dict(os.environ, {"CODEX_HOME": "relative/codex"}):
+            digest, _ = self.preview(self.home / ".codex/AGENTS.md")
+            self.assertEqual(self.apply(digest, "--yes")[0], 0)
+            self.refused("preview", "--target", str(self.repo / "relative/codex/AGENTS.md"),
+                         "--content-file", str(self.content))
+
+    def test_codex_home_symlinks_and_changes_after_preview_are_refused(self):
+        custom = self.home / ".config/codex"
+        with mock.patch.dict(os.environ, {"CODEX_HOME": str(custom)}):
+            digest, _ = self.preview(custom / "AGENTS.md")
+            with mock.patch.dict(os.environ, {"CODEX_HOME": str(self.home / "other")}):
+                self.refused("apply", "--digest", digest, "--yes")
+            custom.parent.mkdir()
+            custom.symlink_to(self.outside)
+            self.refused("preview", "--target", str(custom / "AGENTS.md"), "--content-file", str(self.content))
+            self.refused("apply", "--digest", digest, "--yes")
+            self.assertEqual(list(self.outside.iterdir()), [])
+
+    def test_antigravity_rules_symlink_is_refused(self):
+        rules = self.home / ".gemini/config/rules"
+        rules.parent.mkdir(parents=True)
+        rules.symlink_to(self.outside)
+        self.refused("preview", "--target", str(rules / "rule.md"), "--content-file", str(self.content))
+        self.assertEqual(list(self.outside.iterdir()), [])
+
     def test_refuses_digest_mismatch(self):
         target = self.repo / "AGENTS.md"
         digest, _ = self.preview(target)

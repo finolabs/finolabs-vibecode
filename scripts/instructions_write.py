@@ -6,7 +6,7 @@ preview --target <path> --content-file <path> [--block "Agent skills"|"Work trac
 apply --digest <64 hex> --yes
     Re-checks the plan and writes atomically, keeping a backup that never overwrites an earlier one.
 
-Allowed targets are a closed list: the user-level files `hosts.md` lists under the account home, and
+Allowed targets are a closed list: the user-level files `hosts.md` lists (including absolute CODEX_HOME), and
 AGENTS.md, CLAUDE.md and CLAUDE.local.md at the git top level of the working folder. Symlinks are refused
 at the target and at every folder below the allowed base. Metadata only: nothing is sent anywhere.
 """
@@ -29,7 +29,7 @@ import data_root as dr
 LIMIT = 262144
 EXPIRY = 3600
 USER_TARGETS = {
-    (".claude", "CLAUDE.md"), (".codex", "AGENTS.override.md"), (".codex", "AGENTS.md"),
+    (".claude", "CLAUDE.md"),
     (".gemini", "GEMINI.md"), (".gemini", "AGENTS.md"), (".agents", "instructions.md"),
 }
 PROJECT_TARGETS = ("AGENTS.md", "CLAUDE.md", "CLAUDE.local.md")
@@ -73,6 +73,15 @@ def allowed(target):
     home = str(dr.account_home())
     rel = Path(path).relative_to(home).parts if path.startswith(home.rstrip("/") + "/") else None
     if rel is not None and rel in USER_TARGETS:
+        return home, rel
+    configured = os.environ.get("CODEX_HOME", "")
+    codex = configured if os.path.isabs(configured) else os.path.join(home, ".codex")
+    if (".." not in Path(codex).parts and os.path.dirname(path) == str(Path(codex))
+            and Path(path).name in ("AGENTS.md", "AGENTS.override.md")):
+        # Start at the filesystem anchor so no custom-folder ancestor bypasses O_NOFOLLOW.
+        return "/", Path(path).parts[1:]
+    if (rel is not None and len(rel) == 4 and rel[:3] == (".gemini", "config", "rules")
+            and rel[-1].endswith(".md") and rel[-1] != ".md"):
         return home, rel
     top = git_top()
     parent = os.path.dirname(path)
