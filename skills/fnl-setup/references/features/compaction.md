@@ -14,7 +14,8 @@ The host enforces the threshold; it applies to sessions started afterwards, and 
 
 ## Context reading
 
-Offer Claude Code context reading with its own neutral Yes/No question: "Would you like a local status-line command to record context counts and show ctx N%?" A No leaves it off. After a yes follow [../context-reading.md](../context-reading.md): the previewed `statusline_setup.py` plan with its own separate approval, including in Quick setup, or the printed recipe when a status line already exists. Asking is advisory (agent judgment); the script enforces the plan, digest, expiry and safe writes. The reading is no compaction trigger; Codex and Antigravity are not covered.
+Offer Claude Code context reading, and Antigravity context reading when present, each with its own neutral Yes/No question: "Would you like a local status-line command to record context counts and show ctx N%?" A No leaves it off.
+After a yes follow [../context-reading.md](../context-reading.md): the previewed `statusline_setup.py` plan with its own separate approval, including in Quick setup, or the printed recipe when a status line already exists. Asking is advisory (agent judgment); the script enforces the plan, digest, expiry and safe writes. The reading is no compaction trigger; Codex is not covered. Antigravity uses `--host antigravity` and keeps its separate byte-proxy stop.
 
 ## Antigravity stop
 

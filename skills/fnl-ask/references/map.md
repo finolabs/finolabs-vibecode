@@ -70,7 +70,7 @@ The 17 skill folders and their purposes match the README.
 | `scripts/brief_check.py` | Lints headings, the environment rule and secret patterns without quoting matches. | `fnl-handoff` |
 | `scripts/verify_claim.py` | Checks the reported head, changed-file scope and targeted tests, then records verification metadata. | `fnl-verification` (accepting delegated work) |
 | `scripts/context_steward.py` | Checks supplied usage against the chosen threshold; the working agent handles the safe boundary and handover. | `fnl-session-hygiene` |
-| `scripts/context_snapshot.py` | Records and reads the Claude Code context size from the user's status line (counts only); feeds the steward. | `fnl-session-hygiene` |
+| `scripts/context_snapshot.py` | Records and reads the Claude Code or Antigravity context size from the user's status line (counts only); feeds the steward. | `fnl-session-hygiene` |
 | `fnl-reviewer` agent | Is the change good? Reads the diff, then its callers, contracts and tests. | `fnl-review-gate` |
 | `fnl-security-reviewer` agent | Is the change safe? Reads the diff, then every trust path that reaches it. | `fnl-security-review-gate` |
 | `fnl-navigator` agent | Is the project on course? Compares confirmed anchors with bounded evidence and proposes up to three corrections without editing. | `fnl-delegate` |
