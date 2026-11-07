@@ -1,6 +1,6 @@
 # Privacy
 
-`finolabs-vibecode` is a set of Agent Skills: Markdown instructions plus small local Python scripts. It has no server. Its scripts use the network for the update check and, when explicitly chosen and authorized, the Jev judge described below. If you choose, it records usage metadata on your machine so you can see how the practice performs; that record never leaves the machine, and it is off until you consent.
+`finolabs-vibecode` is a set of Agent Skills: Markdown instructions plus small local Python scripts. It has no server. Its network calls are the update check described below and, only if you choose Jev as your judge in `fnl-setup`, the judge call to TypeSafe described under "Judge" below; it sends nothing else about you or your sessions. If you choose, it records usage metadata on your machine so you can see how the practice performs; that record never leaves the machine, and it is off until you consent.
 
 The agent scan script itself uses no network and runs `--version` only on three fixed executables (`claude`, `codex`, `agy`) without a shell and reads `host.md`; it stores nothing outside `host.md`.
 
@@ -85,7 +85,7 @@ When the user has recorded a judge and the instruction check is on, `fnl-setup` 
 
 ## Verification and judge
 
-`verify_claim.py` runs the targeted commands approved in the brief and prints their evidence locally. With Jev chosen in `## Agent roles` and separately authorized, `judge.py` sends the supplied English question, bounded evidence and fixed judging instructions to TypeSafe at `https://api.typesafe.ai/v1/systemone`, using the API key supplied in the environment. The provider receives this payload under its terms. Proxies and redirects are disabled; the script reads no credential file. Host judging makes no network call from the script; evidence supplied to a host model follows that host's provider policy. Choose only evidence you are authorized to share and keep spend guards on.
+`verify_claim.py` runs the targeted commands approved in the brief and prints their evidence locally. Semantic checks use the configured judge described under "Judge" below. Host judging makes no network call from the script; evidence supplied to a host model follows that host's provider policy.
 
 `record.py verify` stores `<data root>/state/verification/<dispatch id>.json`, mode 0600 in a 0700 folder. It holds the dispatch id, head, SHA-256 checkout identity, test and mechanical results, optional evidence-packet digest, and criterion identifiers, answers, sources and fallback flags. It stores no questions, commands, evidence text, test output or paths, and never enters usage events. Receipts remain until replaced or manually deleted; metrics purge does not remove them.
 
@@ -123,3 +123,7 @@ The probe stays off until setup records the dated opt-in in the canonical `<data
 ## Reporting issues
 
 Public issues and pull requests are visible to everyone. Remove credentials, personal data and private repository content from any transcript, brief or log before you post it. Report security problems privately as described in [SECURITY.md](SECURITY.md).
+
+## Judge (TypeSafe), only if you choose it
+
+If you choose Jev as the judge in `fnl-setup` and set `TYPESAFE_API_KEY` in your environment, `judge.py` sends one HTTPS request per judgment to `https://api.typesafe.ai/v1/systemone` when the coordinator or you run it. The request holds only a bounded English question and the evidence the question needs (verification criteria with the supporting lines, a navigator question, an uncertain compaction boundary, a delegation grade); a field with a secret or machine-path hit makes the call refuse. The key is read only from the environment and is never printed, stored or passed on. TypeSafe processes the payload under your organization's agreement. Nothing is sent when the judge is the host model (the default), and `FNL_JUDGE=off` stops the call.
