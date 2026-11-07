@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from tests.data_root_fixture import account
 from unittest import mock
@@ -33,19 +34,24 @@ class HookTest(unittest.TestCase):
         self.dir = self.home / ".finolabs/vibecode/state"
         self.repo = Path(self.tmp.name) / "repo"
         (self.repo / ".git").mkdir(parents=True)
-        patcher = mock.patch.dict(os.environ, {"FNL_STATE_DIR": str(self.dir)})  # in-process calls must never reach the real state
+        self.env = {"PATH": os.defpath, "FNL_STATE_DIR": str(self.dir)}
+        patcher = mock.patch.dict(os.environ, self.env, clear=True)  # in-process calls must never reach the real state
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.env = {**os.environ, "FNL_STATE_DIR": str(self.dir)}
-        self.env.pop("FNL_METRICS", None)
-        self.env.pop("FNL_DISPATCH_ID", None)
 
     def consent(self, days=90):
         fm.write_consent(days)
 
     def run_hook(self, payload, env=None, raw=None, args=(), stdout=""):
-        result = subprocess.run([sys.executable, "-I", str(HOOK), *args], input=raw if raw is not None else json.dumps(payload),
-                                capture_output=True, text=True, env=env or self.env)
+        with ExitStack() as stack:
+            if "antigravity" in args and self.dir.is_dir():
+                import fcntl
+                # Recording tests must not leave a detached writer racing cleanup.
+                # Use the documented lock probe; DetachedFreshnessTest owns rebuilds.
+                held = stack.enter_context((self.dir / "refresh.lock").open("a"))
+                fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = subprocess.run([sys.executable, "-I", str(HOOK), *args], input=raw if raw is not None else json.dumps(payload),
+                                    capture_output=True, text=True, env=env or self.env)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, stdout)
         return result
@@ -199,6 +205,21 @@ class HookTest(unittest.TestCase):
         self.assertEqual(started["sid"], "31357bed-2c92-4bc3-ad3d-23c9545c7b3e")
         self.assertEqual((edited["event"], committed["event"]), ("first_edit", "commit"))
 
+    def test_antigravity_recording_holds_the_refresh_lock_until_hook_exit(self):
+        import fcntl
+        self.consent()
+
+        def run(*args, **kwargs):
+            with (self.dir / "refresh.lock").open("a") as probe:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return subprocess.CompletedProcess(args[0], 0, "{}\n", "")
+
+        with mock.patch.object(subprocess, "run", side_effect=run):
+            self.agy("post_tool_use", {"name": "run_command", "args": {"CommandLine": "ls"}})
+        with (self.dir / "refresh.lock").open("a") as probe:
+            fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
     def test_an_antigravity_hook_still_answers_with_an_empty_object_when_off_or_given_garbage(self):
         self.run_hook(None, raw="garbage", args=("--host", "antigravity", "--event", "post_tool_use"), stdout="{}\n")
         self.assertFalse(self.dir.exists())
@@ -224,7 +245,7 @@ class HookTest(unittest.TestCase):
         config = json.loads((ROOT / ".codex-plugin/hooks.json").read_text())
         commands = {h["command"] for groups in config["hooks"].values() for g in groups for h in g["hooks"]}
         [metrics] = [c for c in commands if "metrics_hook.py" in c]  # the other hooks are independent reminders and checks
-        bare = {"PATH": os.environ["PATH"]}
+        bare = {"PATH": os.defpath}
         for command in commands:
             self.assertEqual(subprocess.run(["sh", "-c", command], input="{}", env=bare, capture_output=True, text=True).returncode, 0)
         self.consent()
@@ -582,7 +603,7 @@ class DetachedFreshnessTest(unittest.TestCase):
                         [sys.executable, "-I", str(self.hook.REFRESH), "run", "--throttle", "10", "--cwd", str(self.repo)],
                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                         start_new_session=True, close_fds=True, cwd=str(self.hook.REFRESH.parent),
-                        env={k: os.environ[k] for k in ("SYSTEMROOT",) if k in os.environ})
+                        env={})
                     synchronous.assert_not_called()
 
     def test_progress_off_switch_and_payload_working_folder_reach_detached_refresh(self):
@@ -602,7 +623,7 @@ class DetachedFreshnessTest(unittest.TestCase):
                     mock.patch.object(subprocess, 'Popen') as start:
                 self.hook.start_detached_refresh()
                 env = start.call_args.kwargs['env']
-                expected = {k: os.environ[k] for k in ('SYSTEMROOT',) if k in os.environ}
+                expected = {}
                 if value.lower() == 'off':
                     expected['FNL_AGENT_SNAPSHOT'] = 'off'
                 self.assertEqual(env, expected)
