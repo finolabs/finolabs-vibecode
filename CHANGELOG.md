@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-07
+
 ### Added
 
 - Add user-assigned code review, security review, navigator and judge roles, with deterministic review routing that prefers another author family and reports same-family fallbacks.
@@ -368,7 +370,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.10...v0.2.0
 [0.1.10]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.7...v0.1.8
