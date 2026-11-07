@@ -6,137 +6,201 @@ Status: accepted; owner decisions recorded on 2026-11-07; ships in 0.2.0 with th
 
 Reading `fnl-setup` and `fnl-setup-instructions` on 2026-11-07, against what the plugin now does, showed seven problems:
 
-1. `fnl-setup/SKILL.md` is 33.8 KB in 132 lines, many over 1500 characters (quota, metrics, compaction, snapshot), and all
-   of it loads on every run, though a user usually wants one thing. The repository's own convention is to disclose
-   reference material into `references/`.
-2. Three questions come before any work (scope, set up or check, beginner or mode), then at least nine separate consents
-   (quota, metrics, snapshot, compaction twice, compaction stop, judge twice, label). A new user meets a wall of prompts.
+1. `fnl-setup/SKILL.md` is 33,793 bytes in 132 lines, five of them over 1,500 characters (quota, metrics, compaction,
+   snapshot), and all of it loads on every run though a user usually wants one thing. The repository's convention is to
+   disclose reference material into `references/`.
+2. Three questions come before any work (scope, set up or check, beginner or mode), then twenty-odd separate consents
+   (the inventory below). A new user meets a wall of prompts.
 3. The two skills name the same idea differently: `fnl-setup` says machine and project, `fnl-setup-instructions` says
    user and project.
-4. New features have no place: agent roles, review posting, the judge, TypeSafe install guidance
-   (`agent-roles.md` part J), and old text is stale (the review-tools section and the steward explanation).
+4. New features have no place: agent roles, review posting, the judge and TypeSafe guidance (`agent-roles.md` part J);
+   the review-tools section and the steward explanation are stale.
 5. Section labels A to G run out of order across the two scopes.
-6. The two skills are not connected. Setup ends by asking the user to type a second command (on Codex, immediately),
-   and the two copies of `interview.md` and `work-tracking.md` must be kept identical by CI.
-7. `fnl-scan-agents` (20 lines) and `fnl-set-mode` (19 lines) are thin wrappers over scripts that only setup, ask and
-   delegate point to.
+6. The two skills are not connected: setup ends by asking the user to type a second command (on Codex, immediately),
+   and the copies of `interview.md` and `work-tracking.md` must be kept identical by CI.
+7. `fnl-scan-agents` (4,451 bytes) and `fnl-set-mode` (3,940 bytes) are thin wrappers over scripts that only setup, ask
+   and delegate point to.
 
 ## Decisions settled (owner, 2026-11-07)
 
 - Instructions become a component of `fnl-setup`; the skill `fnl-setup-instructions` is removed in the same release
   without a deprecation period (the owner exception recorded in `agent-roles.md`).
-- `fnl-scan-agents` and `fnl-set-mode` fold into `fnl-setup` as subcommands (proposal accepted by the owner).
+- `fnl-scan-agents` and `fnl-set-mode` fold into `fnl-setup` as subcommands.
 - The words are user scope (everything under the user's account: host config, consent, user-level instruction files) and
   project scope (one repository). "Machine" is retired from the text.
-- The shape is a short core plus features loaded on demand, with each consent still asked on its own.
+- The shape is a short core plus features loaded on demand, each consent still asked on its own.
 - A project-scope default for roles or the judge is not part of this work.
 - The release is 0.2.0.
+- The question "set up, or check?" on a bare run is dropped; Check is `/fnl-setup check`, and a bare run says in one
+  line where it is.
+- Declined features are remembered (part C) so a later bare run does not ask again; an explicit `add <feature>` always
+  asks again.
 
 ## A. Entry and commands
 
-`/fnl-setup` takes an optional first word; the skill documents the grammar in its `argument-hint`:
+`/fnl-setup` takes an optional first word, documented in the skill's `argument-hint`:
 
 | Command | Does |
 | --- | --- |
 | `/fnl-setup` | the core path (part B) for the chosen scope, then the menu (part C) |
-| `/fnl-setup add <feature>` | one feature on its own (part C) |
+| `/fnl-setup add <feature>` | one feature on its own |
 | `/fnl-setup instructions` | the instructions component (part D) |
-| `/fnl-setup check` | Check, per scope and per feature |
+| `/fnl-setup check` | Check, per scope and per feature (read-only) |
 | `/fnl-setup scan` | the agent inventory refresh (the old `fnl-scan-agents`) |
 | `/fnl-setup mode [args]` | Delegation mode and Routing (the old `fnl-set-mode`) |
 
-On Codex the user types `$fnl-setup <word>`; whether Codex passes the word to a skill is unverified on the installed
-version, so the skill also accepts the choice as a plain sentence ("add quota", "set up my instruction files"). The
-skill stays user-invoked only (`disable-model-invocation: true`).
+On Codex the user types `$fnl-setup <word>`. Whether Codex passes the word to a skill is unverified, so the skill also
+accepts a plain sentence ("add quota", "set up my instruction files"). A sentence only selects what to present; it never
+answers a consent question. A sweeping or ambiguous sentence ("set up everything") gets one clarifying question and
+opens the core path, never several features at once.
+
+The skill stays user-invoked. On Claude Code that is `disable-model-invocation: true`, which a test asserts. Codex and
+Antigravity have no equivalent flag in this repository today; whether they honour one is unverified and recorded as a
+limitation in the README. Because the `description` is widened to name both groups of triggers (host configuration and
+instruction files), it stays short and states that the user runs it.
 
 ## B. The core path
 
-Short, with a fixed number of decisions. For each scope:
+A fixed, short list of decisions per scope. The final read-back covers **inert facts only** (what will be shown or
+written that grants nothing). A step that grants something keeps its own question in every mode, beginner and quick
+included, with no default.
 
-- **User scope**: (1) the effective data root and whether to keep it (data location stays its own approved step if the
-  user wants to move it); (2) the agent scan (`scan`) and the host config it needs; (3) Delegation mode and Routing
-  (`mode`); (4) a read-back of every file the core will write, with one yes.
+- **User scope**: (1) show the effective data root and whether to keep it; moving it is its own question, and the copy
+  is a second one; (2) the agent scan (`scan`) with its model confirmation and preview; (3) Delegation mode and Routing
+  (`mode`), including the guideline on or off; arming `auto` and the auto gate are each their own question; (4) record
+  settled decisions in the user's knowledge base when their instructions name one (through the access those
+  instructions approve; failed writes are reported); (5) a read-back and one yes for the inert items; (6) the report and
+  the closing "After your first result" list with companion reminders.
 - **Project scope**: (1) the repository facts (look first); (2) the `.finolabs/` exclude line; (3) the `## Agent skills`
-  block; (4) the workflow detection; (5) a read-back and one yes.
+  block; (4) workflow detection; (5) a read-back and one yes; (6) the report.
 
-A bare invocation asks one scope question (user, project, both) with the recommendation first, then runs the core.
-Check is `/fnl-setup check`, not a second question on every bare run; a bare run says in one line where Check is.
-The beginner path and quick or detailed modes keep their meaning for the core only: beginner and quick take defaults and
-write after one confirmation; detailed asks each decision. No mode bundles a consent that belongs to a feature.
+A bare invocation asks one scope question (user, project, both), recommendation first, then runs the core. The beginner
+path and quick or detailed modes apply to the core only: beginner and quick take defaults for inert items and write after
+one confirmation; detailed asks each inert item. The Preferences "effort" and routing handling lives in `mode`.
 
 ## C. Features
 
-Each feature is a file under `references/features/` that the skill loads only when the user picks it, from the menu
-that ends the core ("Add anything now?", each item with one line saying what it does and what it costs, neutral Yes and
-No per item, none preselected) or by `add <feature>`:
+Each feature is a file under `references/features/` loaded only when the user picks it, from the menu that ends the core
+(each item with one line on what it does and costs, a neutral Yes and No per item, none preselected) or by
+`add <feature>`:
 
 | Feature | Scope | Holds |
 | --- | --- | --- |
-| `delegation` | user | host template fill, test-command grants for Antigravity (today's section A) |
+| `delegation` | user | host template fill, test-command grants for Antigravity |
 | `roles` | user | agent roles, the judge choice and TypeSafe guidance, review posting (`agent-roles.md` parts B, D, I, J) |
-| `quota` | user | the on-demand quota reading and its preview (today's quota text) |
+| `quota` | user | the on-demand quota reading and its preview |
 | `metrics` | user | usage metrics consent and retention, project progress, the process snapshot, the Antigravity hook |
 | `compaction` | user | native threshold plan and the Antigravity stop |
-| `review-tools` | user | the review instruments and companion skills (today's sections E and G), rewritten for the new agent set |
+| `review-tools` | user | review instruments and companion skills (recommendations only, nothing installed) |
 | `project` | project | work tracking settings, project label |
 
-Every feature keeps its consent exactly as today: a separate neutral Yes and No, a preview with a digest where a script
-writes, nothing bundled, nothing opted in by a scope choice. Moving text must not weaken it; a feature's file starts by
-saying what it needs from another feature (for example `project` needs metrics consent) and asks that step first.
+A feature starts by naming what it needs from another feature and asks that prerequisite as its own consent; declining
+it ends the dependent feature and never records consent as given. The judge defaults to `host` when `roles` is never
+run. A declined feature is recorded as `declined` in the canonical host config, distinct from any consent, and a bare
+run does not offer it again until the user asks.
 
-Size limits, enforced by a test: `SKILL.md` at most 70 lines and 10 KB; each feature file at most 80 lines; a bare run
-loads `SKILL.md` and at most the references the core names (interview rules, work-tracking look-first).
+### Consent inventory
+
+Every consent below keeps its own neutral Yes and No (none preselected), is asked once, and has exactly one home.
+
+| # | Consent | Today (`fnl-setup` section) | New home | Prerequisite |
+| --- | --- | --- | --- | --- |
+| 1 | Move the data root; copy to the target | Data location | core, user | none |
+| 2 | Write Delegation mode and Routing values | Preferences | core `mode` | none |
+| 3 | Arm `auto`; the auto gate | `fnl-set-mode` | core `mode`, own questions | 2 |
+| 4 | Write the agent scan section; confirm models | A | core `scan` | none |
+| 5 | Fill host config; each Antigravity test-command grant | A | `delegation` | 4 |
+| 6 | Quota probe opt-in; exact-path preview | Quota probe | `quota` | 4 |
+| 7 | Judge choice (Jev, host, none) | route judge | `roles` | none |
+| 8 | Instruction check may send lines to the judge | route judge, second question | `roles` | 7 not none |
+| 9 | Roles; review posting per family (token or allow-rule) | `agent-roles.md` J | `roles` | 4 |
+| 10 | Usage metrics and retention | F | `metrics` | hooks installed |
+| 11 | Antigravity metrics hook write | F | `metrics` | 10 |
+| 12 | Project progress on or off | project progress preference | `metrics` | 10 |
+| 13 | Process snapshot | Agent snapshot | `metrics` | 10 |
+| 14 | Native threshold help; the value; the plan approval (three) | Compaction suggestion, plan approval | `compaction` | none |
+| 15 | Antigravity compaction stop; its preview approval (two) | Compaction stop | `compaction` | Antigravity present |
+| 16 | `.finolabs/` exclude line | B | core, project | none |
+| 17 | `## Agent skills` block write | C | core, project | none |
+| 18 | Workflow detection confirmation | Workflow detection | core, project | none |
+| 19 | Ledger name; task file (two) | Work tracking settings | `project` | 10, 12 |
+| 20 | Project label | Project label | `project` | 10 |
+| 21 | Instruction-file writes (one per file) | `fnl-setup-instructions` | instructions component | none |
+
+Review tools and companions (today's E and G) ask nothing: they recommend and install nothing, so they have no row.
+
+### Size limits (enforced by a test)
+
+`SKILL.md` at most 70 lines and 10,000 bytes; each feature file at most 80 lines and 8,000 bytes; no line in any of
+them over 600 characters. The budget for a bare run is a static sum: `SKILL.md` plus every reference the core path names
+(interview rules, work-tracking look-first, the core feature text) at most 15,000 bytes, against 37,549 bytes today
+(`SKILL.md` plus `interview.md`).
 
 ## D. The instructions component
 
 `/fnl-setup instructions` runs what `fnl-setup-instructions` does today, from `references/instructions/`
-(`contract-template.md`, `hosts.md`, the work-tracking block text), with the same behaviour: ask the scope, explore the
-existing files, draft, show a diff for every file, back up as `<file>.bak-YYYYMMDD`, write only after a yes per file,
-`AGENTS.md` as the project source with an include in `CLAUDE.md`, no machine settings in instruction files. The
-project-scope `## Work tracking` block gains the `Outcome` line (`agent-roles.md` part J). The core ends by offering this
-component in the same session (a neutral Yes and No) instead of dispatching the user to another command. There is one
-`interview.md` and one `work-tracking.md` after the merge, so the CI copy pairs for them go away.
+(`contract-template.md`, `hosts.md`, the work-tracking block text): ask the scope, explore the existing files, draft,
+show a diff for every file, write only after a yes per file, `AGENTS.md` as the project source with an include in
+`CLAUDE.md`, no machine settings in instruction files. The project-scope `## Work tracking` block gains the `Outcome`
+line (`agent-roles.md` part J). The core ends by offering the component in the same session (neutral Yes and No) instead
+of sending the user to another command. There is one `interview.md` and one `work-tracking.md` afterwards.
 
-The skill's `description` leads with what the whole skill does and lists both groups of triggers, host configuration
-and instruction files. A trigger check pins it: representative prompts for each group fire it, and an unrelated coding
-prompt does not.
+The writes become script-enforced. `instructions_write.py` (new, `preview` and `apply --digest`, like the other setup
+scripts) takes the drafted content, shows the diff and a full digest, and on apply: refuses a symlink and any target
+outside the allowed set (the user-level files `hosts.md` lists, and files in the repository root), refuses when the
+content digest differs from the one shown, writes atomically, and makes a backup that never overwrites an earlier one
+(`<file>.bak-YYYYMMDD`, then `-2`, `-3`). Drafted content is the template plus the user's answers, never text copied from
+repository files.
 
-## E. Removals and compatibility
+The skill's `description` names both groups of triggers; a test checks that it does, since no prompt fires a
+user-invoked skill implicitly.
+
+## E. Removals, moves and compatibility
 
 Removed in 0.2.0: the skills `fnl-setup-instructions`, `fnl-scan-agents` and `fnl-set-mode`. CHANGELOG entries under
-Removed give the consumer action for each (`/fnl-setup instructions`, `/fnl-setup scan`, `/fnl-setup mode`). References
-to the old names are updated in `fnl-delegate` (its text and references), `fnl-ask` (map, contents, start and explain
-references and the skill count), the README, CONTRIBUTING, `docs/diagrams`, the manifests, `build-parity-plugins.sh`,
-`check-references.py` and its tests, the CI copy groups, `checkup.py` messages and the evals that name them. `fnl-delegate`
-used standalone has no scan command; it says to fill the inventory by hand in that case.
+Removed give the consumer action for each (`/fnl-setup instructions`, `/fnl-setup scan`, `/fnl-setup mode`).
 
-The removal of `fnl-setup-instructions` ships after this restructure is built, so the component exists before the
-skill goes (`agent-roles.md` part H). The removal of the other two ships in the same change that adds `scan` and `mode`.
+Script moves: `agent_scan.py` moves to `skills/fnl-setup/scripts/`; the `data_root.py`, `quota_probe.py` and `mode.py`
+copies in the removed skills are deleted and the CI copy groups in `validate.yml` updated. The folded scripts keep their
+preview-and-digest behaviour.
+
+Consumers to update (none is optional): `fnl-delegate` (its `SKILL.md` and `references/{agents,models,modes,host-template}.md`;
+used standalone it says to fill the inventory by hand), `fnl-ask` (map, contents, start and explain references and the skill
+count), `fnl-setup/references/{check,companions}.md`, the README, CONTRIBUTING, `docs/diagrams`, the manifests,
+`build-parity-plugins.sh`, `check-references.py` and its tests, `checkup.py` messages, other specs that name the old skills,
+the evals `parity-interview-ours`, `parity-interview-with-grilling`, `quality-fnl-set-mode-env-override`,
+`quality-fnl-setup-instructions-interview`, `quality-fnl-ask-contents` and `quality-fnl-ask-start`, and the tests
+`test_agent_scan`, `test_data_root`, `test_delegation_mode`, `test_instruction_standard`, `test_quota_probe`,
+`test_work_tracking_skills` and `test_check_references`.
+
+The removal of `fnl-setup-instructions` ships after the component and `instructions_write.py` are built
+(`agent-roles.md` part H); the other two are removed in the same change that adds `scan` and `mode`.
 
 ## Not in scope
 
-A project-scope default for roles or the judge; changing what any script writes or its previews and digests; new
-consents; the dashboard; changing the scope chosen for existing data (host config stays where it is).
+A project-scope default for roles or the judge; changing what any other script writes, its previews or digests; new
+consents; the dashboard; moving existing data (host config stays where it is).
 
 ## Acceptance
 
-- `SKILL.md` and every feature file stay within the limits of part C, checked by a test; a bare run's loaded size is at
-  most 40% of today's 33.8 KB `SKILL.md` plus the references it loads now.
-- Every consent of today exists in exactly one feature or core step, asked separately; a test checks that each consent
-  sentence still appears once and that none is bundled with another.
-- `scan`, `mode`, `check`, `instructions` and `add <feature>` work for the three hosts' entry forms; Codex plain-sentence
-  choices work where a word is not passed.
-- The instructions component keeps its backup, diff, per-file yes and `AGENTS.md` source behaviour (an eval covers it,
-  as the existing interview eval does); there is one copy of `interview.md` and `work-tracking.md`.
-- The trigger check of part D passes; the old three skills are gone with the references updated and the counts correct
-  in `fnl-ask` and the README; `check-references.py`, the manifests test and the copy checks are green.
-- The vocabulary is user scope and project scope in the skill, the references, `check.md`, the report headings and the
-  README.
-- `check.md` reports each feature as configured, unconfigured or unverified, including roles, judge and posting.
+- The size limits of part C hold, checked by a test, including the static budget for a bare run.
+- The consent inventory is the oracle: a test lists each row's consent sentence and checks it appears exactly once, in
+  its home, never in the core read-back; quick and beginner modes still ask rows 1, 3, 5, 9, 11 and 21 on their own.
+- Prerequisites: declining one ends the dependent feature without recording consent; a declined feature is recorded
+  distinctly and an explicit `add <feature>` asks again.
+- `scan` and `mode` still refuse to write without the preview digest (behaviour tests on the folded scripts).
+- `instructions_write.py` refuses a symlink, an out-of-scope target and a digest mismatch, never overwrites a backup, and
+  its content comes from the template and the answers (tests, plus the existing interview eval for the flow).
+- One eval per entry form: slash command, `$` with a word, `$` without a word (plain sentence), including that a
+  sweeping sentence gets one clarifying question and a sentence never answers a consent.
+- The Claude flag `disable-model-invocation: true` is asserted by a test; the Codex and Antigravity limitation is in
+  the README.
+- The three old skills are gone with every consumer in part E updated and the counts correct; `check-references.py`,
+  the manifests test and the copy checks are green.
+- The vocabulary is user scope and project scope throughout; `check.md` reports each feature as `configured`, `missing`
+  or `unverified` (the words of `agent-roles.md` J), including roles, judge and posting.
 
 ## Open decisions
 
-1. Whether `scan` and `mode` keep thin alias skills for one release (the owner approved the fold; the default here is no
-   alias, as for `fnl-setup-instructions`).
+1. Whether `scan` and `mode` keep thin alias skills for one release (the default here is no alias).
 2. Whether Codex passes a word after `$fnl-setup`; until verified, the plain-sentence path is the contract.
-3. Whether the menu at the end of the core remembers what the user declined, so a later bare run does not ask again.
