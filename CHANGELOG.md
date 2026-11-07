@@ -20,6 +20,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Rename Detailed setup to Advanced and `review-tools` to `companions`; add Quick selection, Advanced interviews and checked install commands (including markmap), with separate neutral offers that install nothing.
+
 - Fold threshold checks into `fnl-session-hygiene` with its self-contained `context_steward.py`; ask the configured judge about an uncertain safe boundary only after the script reports `compact`.
 - Fold setup into a short core with optional features and the `instructions`, `scan` and `mode` subcommands; update current command references and skill counts while preserving retired names in historical specs and released entries.
 - Require exactly one valid fnl-router marker line in pull request bodies at merge when the base commit adopted `fnl-review-gate`; missing, malformed or duplicate markers now block. Adoption uses the GitHub contents API without a clone; unreadable adoption data or body, invalid base SHAs, files over 256 KiB or outside UTF-8, and unsupported file types or symlink targets exit 2.

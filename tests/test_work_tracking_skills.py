@@ -21,7 +21,7 @@ class WorkTrackingSkillsTests(unittest.TestCase):
     def test_every_feature_has_exactly_one_scope(self):
         text = read()
         expected = {'delegation': 'user', 'roles': 'user', 'quota': 'user', 'metrics': 'user',
-                    'compaction': 'user', 'review-tools': 'user', 'project': 'project'}
+                    'compaction': 'user', 'companions': 'user', 'project': 'project'}
         for name, scope in expected.items():
             row = next(line for line in text.splitlines() if line.startswith('| `%s` |' % name))
             self.assertIn('| %s |' % scope, row)
