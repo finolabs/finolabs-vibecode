@@ -1,6 +1,6 @@
 # Work tracking facts per repository (release 0.2.0)
 
-Status: draft; scope settled by the owner on 2026-11-06 (see "Decisions settled"). Implementation not started.
+Status: implemented; release 0.2.0 per-repository settings, work records and project progress have local tests; real-host dashboard delivery remains unverified.
 
 ## Why
 

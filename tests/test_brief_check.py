@@ -48,6 +48,11 @@ class BriefCheckTest(unittest.TestCase):
         self.assertEqual(brief_check.lint(text), [])
         self.assertIn('never read env or credential files; ' + brief_check.ENV_RULE, text)
 
+    def test_additional_secret_words_are_refused_without_echoing_values(self):
+        for word in ('PASSWD', 'PASSPHRASE', 'SESSIONID', 'COOKIES'):
+            text = self.brief() + '\n' + 'SERVICE_' + word + '=' + 'fixture' * 4
+            self.assertEqual(brief_check.lint(text), [('rule_4_secret', len(text.splitlines()))])
+
     def test_secret_diagnostic_contains_only_rule_and_line(self):
         planted = 'sk' + '-' + 'fixture' * 4
         with tempfile.TemporaryDirectory() as folder:

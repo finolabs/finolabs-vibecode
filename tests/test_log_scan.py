@@ -17,6 +17,19 @@ import secret_patterns as sp
 
 
 class LogScanTest(unittest.TestCase):
+    def test_session_cookie_substrings_are_found_and_redacted(self):
+        value = 'fixture' * 4
+        for name in ('J' + 'SESSIONID', 'PHP' + 'SESSID', 'WEB_' + 'SESSID', 'X' + 'SESSID' + 'Y',
+                     'j' + 'sessionid', 'php' + 'sessid'):
+            with self.subTest(case=name):
+                self.write(name + '=' + value)
+                result = log_scan.scan(self.log)
+                self.assertEqual(result['status'], 'findings')
+                self.assertEqual([hit['kind'] for hit in result['hits']], ['named_token'])
+                self.assert_output(log_scan.safe_view(result), name + '=[REDACTED]')
+        self.write('AUTHOR' + '_NAME=' + value)
+        self.assertEqual(log_scan.scan(self.log)['status'], 'no_findings')
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -255,7 +268,8 @@ class LogScanTest(unittest.TestCase):
         value = 'fixture' * 4
         for name in ('AUTHOR_NAME', 'PASSENGER', 'COMPASS', 'SESSIONS_DIR', 'PRIVATEER', 'COOKIEJAR'):
             self.assertFalse(sp.findings(name + '=' + value), 'unrelated name flagged')
-        for name in ('AUTH_TOKEN', 'DB_PASS', 'AUTH', 'SESSION_ID', 'DB_PRIVATE'):
+        for name in ('AUTH_TOKEN', 'DB_PASS', 'AUTH', 'SESSION_ID', 'DB_PRIVATE',
+                     'DB_' + 'PASSWD', 'DB_' + 'PASSPHRASE', 'WEB_' + 'SESSIONID', 'HTTP_' + 'COOKIES'):
             self.assertTrue(sp.findings(name + '=' + value), 'sensitive name missed')
 
     def test_leading_bom_preserves_raw_spans(self):

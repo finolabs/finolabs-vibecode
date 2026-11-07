@@ -44,3 +44,5 @@ Use `AGENTS.md` as the sole repository source, with only the include and Claude-
 **Default recommendation** for a user who runs Claude Code most: its file `~/.claude/CLAUDE.md` is the source. A host with an include (Antigravity) points at it with that include. A host without one (Codex today) gets a managed copy that records its source and warns that a change to the source must be applied to the copy by hand.
 
 Keep the agent inventory and host settings out of instruction files: `/fnl-setup scan` refreshes the local agent section, and `/fnl-setup mode` shows or changes Delegation mode and Routing with environment overrides explained. Both ask before writing host config.
+
+The guarded `instructions_write.py` writer supports only the account-derived `~/.codex` instruction folder: it ignores `CODEX_HOME`, including an absolute override unless it equals that default, so the environment cannot expand the target list. A custom host instruction folder can be reported during discovery but is outside this writer’s allowed targets. Existing targets are opened nonblocking and must be regular files; a FIFO is refused without waiting for a writer.

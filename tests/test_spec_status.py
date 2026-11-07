@@ -54,6 +54,22 @@ class SpecStatusTest(unittest.TestCase):
                         self.assert_status(row[header.index("Status")])
         self.assertEqual(seen, {p.name for p in SPECS.glob("*.md") if p.name != "index.md"})
 
+    def test_integrated_statuses_match_the_index_and_preserve_host_limits(self):
+        indexed = {}
+        for header, rows in tables(SPECS / "index.md"):
+            for row in rows:
+                filename = re.search(r"\]\(([^)]+\.md)\)", row[0]).group(1)
+                indexed[filename] = row[header.index("Status")]
+        for name, state in (("agent-roles", "in progress"), ("setup-restructure", "implemented"),
+                            ("quota-on-demand", "implemented"), ("run-hygiene", "implemented"),
+                            ("work-tracking", "implemented")):
+            status = next(line[len("Status:"):].strip()
+                          for line in (SPECS / (name + ".md")).read_text().splitlines()
+                          if line.startswith("Status:"))
+            self.assertEqual(indexed[name + ".md"], status)
+            self.assertTrue(status.startswith(state + ";"))
+            self.assertIn("unverified", status)
+
     def test_release_package_tables(self):
         for filename in ("release-0.1.8.md", "release-0.1.10.md"):
             package_tables = [(header, rows) for header, rows in tables(SPECS / filename)

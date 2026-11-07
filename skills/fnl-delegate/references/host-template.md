@@ -27,8 +27,10 @@ The `Delegate environment` section accepts only blank lines and `- <family>: non
 `- <family>: <NAME>` per variable; replace `none` when adding names. Families are `claude`, `codex`,
 `antigravity`. Names match `^[A-Z][A-Z0-9_]{0,63}$`, with no duplicates, values or wildcards.
 Loader/interpreter controls, `GIT_*`, `*_PROXY`, `SSL_CERT_*` are refused by `delegate_env.py`.
-A name containing KEY/TOKEN/SECRET/PASSWORD/CREDENTIAL/PASS/AUTH/COOKIE/SESSION/PRIVATE needs its own setup Yes and No naming
-both name and family; only that Yes records `- <family>: <NAME>; approved: yes`.
+A name containing KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, SESSIONID or SESSID anywhere, or
+PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION or PRIVATE as a complete
+underscore-delimited part, needs its own setup Yes and No naming both name and family;
+only that Yes records `- <family>: <NAME>; approved: yes`.
 The wrapper reads canonical host config, not an environment-selected file. Default: none.
 HOME remains: protection is environment-only; credential files remain reachable. Report this residual risk.
 Private HOME is an open owner decision and is not offered or created in this package.

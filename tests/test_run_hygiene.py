@@ -100,6 +100,10 @@ def unsafe_launches(source, filename=''):
 
 
 class RunHygieneTest(unittest.TestCase):
+    def test_log_size_rule_names_both_limits_together(self):
+        spec = (ROOT / 'docs/specs/run-hygiene.md').read_text()
+        self.assertIn('(over 8 MiB or the 250,000-pair per-pass limit)', spec)
+
     def test_scripts_start_delegates_and_tests_only_through_run_env(self):
         paths = [*(ROOT / 'scripts').glob('*.py'), *(ROOT / 'skills').glob('*/scripts/*.py')]
         for path in paths:
@@ -171,7 +175,9 @@ class RunHygieneTest(unittest.TestCase):
     def test_setup_individual_neutral_consent_names_only(self):
         text = (ROOT / 'skills/fnl-setup/references/features/delegation.md').read_text()
         for expected in ('For each present agent family', 'Default none', 'names only, never values',
-                         'KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, PASS, AUTH, COOKIE, SESSION or PRIVATE', 'ask separately',
+                         'KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, SESSIONID or SESSID anywhere',
+                         'PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION or PRIVATE as a complete',
+                         'underscore-delimited part', 'ask separately',
                          'Pass <VARIABLE_NAME> to <agent family>?', 'neutral Yes and No with none preselected',
                          'only an explicit Yes', '; approved: yes'):
             self.assertIn(expected, text)

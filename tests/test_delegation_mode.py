@@ -31,6 +31,10 @@ class DelegationModeTest(unittest.TestCase):
                                 capture_output=True, text=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "")
+        if script == HOOK:
+            self.assertIn("Roles: code review unassigned; security review unassigned; navigator unassigned; "
+                          "judge host; posting claude unverified, codex unverified, antigravity unverified\n",
+                          result.stdout)
         return result.stdout
 
     def values(self):
@@ -222,7 +226,10 @@ class DelegationModeTest(unittest.TestCase):
         copy = self.home / "plugin/scripts/session_start.py"
         copy.parent.mkdir(parents=True)
         copy.write_bytes(HOOK.read_bytes())
-        self.assertIn("fnl-coding-router", self.run_script(copy))
+        output = self.run_script(copy)
+        self.assertIn("fnl-coding-router", output)
+        self.assertIn("Roles: code review unknown; security review unknown; navigator unknown; judge unknown; "
+                      "posting claude unknown, codex unknown, antigravity unknown\n", output)
 
 
 if __name__ == "__main__":

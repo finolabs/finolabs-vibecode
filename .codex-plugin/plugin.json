@@ -1,7 +1,7 @@
 {
   "name": "finolabs-vibecode",
   "version": "0.2.0-dev",
-  "description": "Engineering practice for AI coding agents: routing, delegation, review and security gates, verification, versioning, agent scans and mode settings.",
+  "description": "17 skills and 3 agents (fnl-reviewer, fnl-security-reviewer, fnl-navigator) for review routing, verification, setup, run hygiene and quota on demand.",
   "author": {
     "name": "FINOLABS",
     "url": "https://github.com/finolabs"
@@ -25,13 +25,13 @@
     "displayName": "Finolabs Vibecode",
     "shortDescription": "Engineering rules for agents",
     "developerName": "FINOLABS",
-    "longDescription": "A skill set that gives coding agents one engineering practice. Route each change at the right depth, through Spec Kit, another workflow skill pack or a built-in procedure. Coordinate Codex, Antigravity and Claude Code agents with self-contained briefs, time budgets and verify-before-accept. Version and tag releases by SemVer, and write atomic commits. Gate each user story on an independent code and security review, and verify with targeted tests whose output is read before anything is accepted. Get one second opinion or a committee through fnl-advisor, run spec task sessions through fnl-delegate, and preserve handovers and shared decisions through fnl-session-hygiene. Before a repository goes public, review its open source readiness. Refresh present agent families with $fnl-setup scan and show or change Delegation mode and Routing with $fnl-setup mode; both ask before writing local host config.",
+    "longDescription": "17 skills and three read-only agents: fnl-reviewer, fnl-security-reviewer and fnl-navigator. Route coding work, assign review families, post guarded reviews and verify delegated work with current-head receipts before ledger acceptance. A small host judge is the default; optional Jev uses the scoped network exception and disclosed fallback. Use $fnl-setup for Quick defaults or Advanced interviews, add <feature>, instructions, check, scan and mode. Keep headless runs allowlisted, lint briefs and scan logs locally. Read quota on demand and track project progress per repository; retain handovers through fnl-session-hygiene.",
     "category": "Coding",
     "capabilities": [],
     "defaultPrompt": [
       "Route this change through the coding router and tell me the depth you chose.",
       "Use fnl-delegate to coordinate this spec with one session per task.",
-      "Prepare the version bump and changelog for the next release.",
+      "Use $fnl-setup to choose Quick or Advanced, then show add <feature>, instructions and check.",
       "Use $fnl-setup scan to refresh my local agent inventory, then $fnl-setup mode to show effective settings."
     ],
     "websiteURL": "https://github.com/finolabs/finolabs-vibecode",

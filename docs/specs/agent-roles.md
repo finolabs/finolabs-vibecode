@@ -1,6 +1,6 @@
 # Agent roles: routed reviews, verification without an agent, and a navigator
 
-Status: accepted; owner decisions recorded on 2026-11-07 in two rounds (see "Decisions settled"); ships in 0.2.0 together with the work planned for 0.1.11 (owner decision, 2026-11-07); implementation not started.
+Status: in progress; release 0.2.0 scripts and local tests are implemented; relay receipt/dashboard counters remain unimplemented; independent navigator/judge validation and live-host routing, posting and SessionStart delivery remain unverified.
 
 ## Why
 
@@ -277,7 +277,12 @@ Starting a task cannot be enforced; evidence at the end can. Three pieces:
 1. **Cheaper start.** The `SessionStart` hook already runs a script. It prints, from local files only, the state an agent
    would otherwise call `fnl-delegate` to learn: delegation mode, the roles, the cached quota summary and the count of
    open ledger entries, as fixed enumerated words and capped integers, never text read from a file (it runs in
-   untrusted repositories). It never blocks and fails closed.
+   untrusted repositories). It never blocks and fails closed. Missing or invalid role sections, a missing host config
+   or an invalid canonical data root print `unassigned` for code review, security review and navigator, and `host` for
+   judge, as the reader's fallback in part B specifies. Valid assignments print the recorded family (`claude`, `codex`
+   or `antigravity`); judge prints `host` or `jev`. Metrics consent is not required to read these local settings.
+   Posting defaults to `unverified`. `unknown` means the role reader is unavailable, raises an error or returns a value
+   outside its closed vocabulary; it does not mean an absent assignment.
 2. **`route_task.py`** (script): applies the decision matrix of `fnl-delegate` to a kind and a grade and prints the
    agent, model and effort. Grading difficulty is the one semantic judgment; it goes to the judge (part I) with the
    coordinator free to override. The agent runs one command.
