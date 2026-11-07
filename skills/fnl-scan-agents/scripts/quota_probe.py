@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Opt-in, bounded usage reads. Provider output is never persisted verbatim."""
 
+import argparse
 import fcntl
 import hashlib
 import json
@@ -26,12 +27,16 @@ import data_root as dr
 
 LIMIT = 65536
 TIMEOUT = 30
-FRESH = 4 * 3600
-MARKER_AGE = 300
+MIN_AGE = 15 * 60
+MAX_INSTALLS = 4
+# Four sequential provider limits plus a bounded parsing/publication allowance.
+MARKER_AGE = MAX_INSTALLS * TIMEOUT + 30
 SOURCES = {"agy": "agy-usage", "claude": "claude-usage", "codex": "codex-rate-limits"}
 NAMES = {"agy": {"gemini", "argon", "claude-gpt", "other"},
          "claude": {"session", "week-all", "week-model", "other"}, "codex": {"codex"}}
 LABEL = re.compile(r"[a-z0-9-]{1,20}")
+HOMEBREW_PREFIX = Path("/opt/homebrew")
+ADMIN_GID = 80
 SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 
 
@@ -194,6 +199,11 @@ def section(text):
 def config():
     if os.environ.get("FNL_QUOTA_PROBE", "").lower() == "off":
         return {}
+    return canonical_config()
+
+
+def canonical_config():
+    """Read recorded installs for display; this alone never authorizes execution."""
     try:
         text = dr.read_data("host.md").decode()
         # Preserve non-CR/LF separators while locating the section so they
@@ -251,30 +261,65 @@ def config():
         return {}
 
 
+def in_homebrew(path):
+    path = Path(path)
+    return path == HOMEBREW_PREFIX or HOMEBREW_PREFIX in path.parents
+
+
+def brew_links(path):
+    """Validate the lexical Homebrew path as well as its resolved target."""
+    path = Path(path)
+    if not in_homebrew(path):
+        raise ValueError("outside Homebrew")
+    for component in [*reversed(path.parents), path]:
+        if not in_homebrew(component):
+            continue
+        info = component.lstat()
+        if info.st_uid != os.getuid():
+            raise ValueError("Homebrew owner")
+        if stat.S_ISLNK(info.st_mode):
+            if not in_homebrew(component.resolve(strict=True)):
+                raise ValueError("Homebrew symlink leaves prefix")
+        elif info.st_mode & 0o002 or (info.st_mode & 0o020 and info.st_gid != ADMIN_GID):
+            raise ValueError("Homebrew mode")
+        if component != path and os.path.lexists(component / ".git") and component != HOMEBREW_PREFIX:
+            raise ValueError("nested repository")
+
+
+def path_permissions(info, path, *, directory=False):
+    if in_homebrew(path) and not directory:
+        return (info.st_uid == os.getuid() and not info.st_mode & 0o002
+                and (not info.st_mode & 0o020 or info.st_gid == ADMIN_GID))
+    return info.st_uid in ({os.getuid()} if directory else {0, os.getuid()}) and not info.st_mode & 0o022
+
+
 def checked_path(value, *, directory=False):
-    """No symlink or git work tree at any component; root/user-owned ancestors."""
+    """No-follow component walk, with the single numeric-gid Homebrew exception."""
     path = Path(value)
     if not path.is_absolute() or ".." in path.parts:
         raise ValueError("absolute path required")
     fd = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
+        walked = Path(path.anchor)
         for index, part in enumerate(path.parts[1:]):
             info = os.fstat(fd)
-            if info.st_uid not in {0, os.getuid()} or info.st_mode & 0o022:
+            if not path_permissions(info, walked, directory=directory and in_homebrew(walked)):
                 raise ValueError("unsafe ancestor")
             try:
                 os.stat(".git", dir_fd=fd, follow_symlinks=False)
             except FileNotFoundError:
                 pass
             else:
-                raise ValueError("repository")
+                if directory or walked != HOMEBREW_PREFIX:
+                    raise ValueError("repository")
             last = index == len(path.parts) - 2
             child = os.open(part, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK |
                             (os.O_DIRECTORY if directory or not last else 0), dir_fd=fd)
             os.close(fd)
             fd = child
+            walked /= part
         info = os.fstat(fd)
-        if info.st_uid not in ({os.getuid()} if directory else {0, os.getuid()}) or info.st_mode & 0o022:
+        if not path_permissions(info, path, directory=directory):
             raise ValueError("unsafe owner or mode")
         if directory:
             if not stat.S_ISDIR(info.st_mode):
@@ -314,8 +359,13 @@ def checked_executable(agent, entry):
     executable = entry.get("resolved")
     if not executable:
         raise ValueError("missing resolved target; preview again")
+    excluded(Path(entry["executable"]))
     if str(Path(entry["executable"]).resolve(strict=True)) != executable:
         raise ValueError("executable target changed; preview again")
+    if in_homebrew(Path(entry["executable"])):
+        brew_links(entry["executable"])
+        if not in_homebrew(Path(executable)):
+            raise ValueError("Homebrew target leaves prefix")
     excluded(Path(executable))
     first = checked_path(executable)
     interpreter = entry.get("interpreter")
@@ -323,6 +373,10 @@ def checked_executable(agent, entry):
         words = first[2:].decode().strip().split()
         if not words or not Path(words[0]).is_absolute() or not interpreter:
             raise ValueError("recorded interpreter required")
+        if in_homebrew(Path(executable)):
+            brew_links(interpreter)
+            if words[0] != "/usr/bin/env":
+                brew_links(words[0])
         excluded(Path(interpreter))
         checked_path(interpreter)
         if words[0] == "/usr/bin/env":
@@ -356,8 +410,7 @@ def state_folder(*, create=False, writer=False, read_only=False):
         if read_only:
             yield folder
             return
-        # Hooks never wait. A just-spawned worker can briefly contend with its
-        # parent publishing the reservation, as in the auto-gate writer.
+        # Hooks never wait; synchronous readers retry brief publication contention.
         for attempt in range(3 if writer else 1):
             try:
                 fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -370,11 +423,22 @@ def state_folder(*, create=False, writer=False, read_only=False):
 
 
 def read_json(folder, name):
-    # Trust-bearing quota files must be private, not merely non-writable.
-    info = os.stat(name, dir_fd=folder, follow_symlinks=False)
-    if stat.S_IMODE(info.st_mode) != 0o600:
-        raise ValueError("private file required")
-    return json.loads(dr.read_file(folder, name, LIMIT))
+    # Check privacy on the descriptor actually read, never on a separate stat.
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=folder)
+    try:
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > LIMIT):
+            raise ValueError("private regular file required")
+        data = bytearray()
+        while len(data) <= LIMIT:
+            chunk = os.read(fd, min(4096, LIMIT + 1 - len(data)))
+            if not chunk:
+                return json.loads(data)
+            data.extend(chunk)
+        raise ValueError("file too large")
+    finally:
+        os.close(fd)
 
 
 def write_json(folder, name, value):
@@ -382,9 +446,9 @@ def write_json(folder, name, value):
 
 
 def read_cache(folder, repair=False):
-    # Status reads raise on an unsafe, capped or unparsable file. Spawning and the worker
+    # Status reads raise on an unsafe, capped or unparsable file. On-demand readings
     # pass repair=True: nothing here trusts the content, cadence comes from backoff.json,
-    # and the worker's atomic write replaces the file.
+    # and the reading's atomic write replaces the file.
     try:
         data = read_json(folder, "quota.json")
     except FileNotFoundError:
@@ -413,7 +477,7 @@ def read_cache(folder, repair=False):
                     group(item["name"], item["window"], item["remaining_fraction"], item["reset_time"])
         return data
     except (ValueError, TypeError, KeyError, AttributeError):
-        return {}  # content that fails validation counts as no reading; the worker replaces it
+        return {}  # content that fails validation counts as no reading; the next reading replaces it
 
 
 def backoff(folder, configs, current):
@@ -452,57 +516,27 @@ def backoff(folder, configs, current):
 
 def marker(folder, current):
     try:
-        saved = read_json(folder, "worker.json")
-        if (set(saved) != {"nonce", "heartbeat"} or not isinstance(saved["nonce"], str)
-                or not re.fullmatch(r"[0-9a-f]{48}", saved["nonce"])):
+        saved = read_json(folder, "inflight.json")
+        if (not isinstance(saved, dict) or set(saved) != {"token", "started"}
+                or not isinstance(saved["token"], str)
+                or not re.fullmatch(r"[0-9a-f]{48}", saved["token"])):
             return None
-        age = (current - timestamp(saved["heartbeat"])).total_seconds()
-        return saved if 0 <= age < MARKER_AGE else None
+        age = (current - timestamp(saved["started"])).total_seconds()
+        return saved if age < MARKER_AGE else None
     except (OSError, ValueError, TypeError, KeyError):
         return None
 
 
-def worker_guard():
-    nonce = os.environ.get("FNL_QUOTA_WORKER", "")
-    if not re.fullmatch(r"[0-9a-f]{48}", nonce):
-        return False
-    try:
-        # A reader must not contend with a heartbeat writer and miss its guard.
-        with dr.data_folder("state/quota", private=True) as folder:
-            saved = marker(folder, now())
-            return bool(saved and saved["nonce"] == nonce)
-    except (OSError, ValueError):
-        return False
-
-
 def claim_marker(folder, current):
+    # Caller holds the directory flock across check and atomic replacement.
     if marker(folder, current):
         return None
-    value = {"nonce": os.urandom(24).hex(), "heartbeat": stamp(current)}
-    try:
-        fd = os.open("worker.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=folder)
-    except FileExistsError:
-        # Caller holds flock; re-read before the atomic stale replacement.
-        if marker(folder, current):
-            return None
-        write_json(folder, "worker.json", value)
-    else:
-        with os.fdopen(fd, "w") as stream:
-            json.dump(value, stream)
-            stream.flush()
-            os.fsync(stream.fileno())
-    return value["nonce"]
+    value = {"token": os.urandom(24).hex(), "started": stamp(current)}
+    write_json(folder, "inflight.json", value)
+    return value["token"]
 
 
-def heartbeat(nonce):
-    with state_folder(writer=True) as folder:
-        saved = marker(folder, now())
-        if not saved or saved["nonce"] != nonce:
-            raise ValueError("worker retired")
-        write_json(folder, "worker.json", {"nonce": nonce, "heartbeat": stamp(now())})
-
-
-def due(configs, cache, delays, current):
+def due(configs, cache, delays, current, max_age=MIN_AGE):
     result = []
     for agent, entry in configs.items():
         for label in entry["configs"]:
@@ -510,18 +544,18 @@ def due(configs, cache, delays, current):
             retry = delays.get(agent, {}).get(label)
             if retry and timestamp(retry["retry_after"]) > current:
                 continue
-            if saved and 0 <= (current - timestamp(saved["measured"])).total_seconds() < FRESH:
+            if saved and 0 <= (current - timestamp(saved["measured"])).total_seconds() < max(MIN_AGE, max_age):
                 continue
             result.append((agent, label))
     return result
 
 
-def environment(entry, nonce, config_path=None):
+def environment(entry, config_path=None):
     folders = [str(Path(entry["interpreter"]).parent)] if entry.get("interpreter") else []
     folders.append(str(Path(entry.get("resolved", entry["executable"])).parent))
     env = {"HOME": str(dr.account_home()), "PATH": ":".join(dict.fromkeys([*folders, *SYSTEM_PATH.split(":")])),
            "USER": pwd.getpwuid(os.getuid()).pw_name,
-           "LANG": "C.UTF-8", "FNL_QUOTA_WORKER": nonce, "FNL_METRICS": "off"}
+           "LANG": "C.UTF-8", "FNL_METRICS": "off", "FNL_UPDATE_CHECK": "off"}
     if config_path is not None:
         env["CLAUDE_CONFIG_DIR"] = config_path
     return env
@@ -539,7 +573,7 @@ def working_folder():
             shutil.rmtree(name, dir_fd=parent)
 
 
-def command(agent, entry, label, nonce):
+def command(agent, entry, label):
     argv = checked_executable(agent, entry)
     folder = None
     if agent == "claude":
@@ -551,11 +585,11 @@ def command(agent, entry, label, nonce):
     with working_folder() as cwd:
         process = subprocess.Popen(argv, stdin=subprocess.PIPE if agent == "codex" else subprocess.DEVNULL,
                                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=cwd,
-                                   env=environment(entry, nonce, folder), start_new_session=True, close_fds=True)
+                                   env=environment(entry, folder), start_new_session=True, close_fds=True)
         try:
             selector = selectors.DefaultSelector()
             selector.register(process.stdout, selectors.EVENT_READ)
-            start, beat, output, pending, initialized = time.monotonic(), time.monotonic(), bytearray(), bytearray(), False
+            start, output, pending, initialized = time.monotonic(), bytearray(), bytearray(), False
             def send(value):
                 process.stdin.write((json.dumps(value) + "\n").encode())
                 process.stdin.flush()
@@ -565,9 +599,6 @@ def command(agent, entry, label, nonce):
                 elapsed = time.monotonic() - start
                 if elapsed >= TIMEOUT:
                     raise TimeoutError("timeout")
-                if time.monotonic() - beat >= 30:
-                    heartbeat(nonce)
-                    beat = time.monotonic()
                 for key, _ in selector.select(min(0.1, TIMEOUT - elapsed)):
                     chunk = os.read(key.fd, min(4096, LIMIT + 1 - len(output)))
                     if not chunk:
@@ -613,92 +644,153 @@ def command(agent, entry, label, nonce):
                 selector.close()
 
 
-def trigger():
-    """Reserve backoff before spawn; return immediately, even on contention."""
-    try:
-        configs = config()
-        if not configs or worker_guard():
-            return False
-        current = now()
-        with state_folder(create=True) as folder:
-            delays = backoff(folder, configs, current)
-            jobs = due(configs, read_cache(folder, repair=True), delays, current)
-            if not jobs or marker(folder, current):
-                return False
-            for agent, label in jobs:
-                delays.setdefault(agent, {})[label] = {"retry_after": stamp(current + timedelta(minutes=30)), "error": "unfinished"}
-            write_json(folder, "backoff.json", delays)
-            # The worker claims its marker under this same lock. Backoff reserves
-            # the handoff while it starts, including when it dies before claiming.
-            subprocess.Popen([sys.executable, "-I", str(Path(__file__).resolve()), "--worker",
-                              json.dumps(jobs, separators=(",", ":"))], stdin=subprocess.DEVNULL,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True,
-                             start_new_session=True, cwd=str(Path(__file__).resolve().parent),
-                             env={"HOME": str(dr.account_home()), "PATH": SYSTEM_PATH, "LANG": "C.UTF-8"})
-        return True
-    except Exception:
-        return False
-
-
-def worker(jobs):
+def read_family(family, max_age_minutes=15):
+    """Synchronous, opt-in reading; all reservations are local and locked."""
     configs = config()
-    if not configs or not isinstance(jobs, list) or len(jobs) > 6:
-        return
-    valid = {(a, label) for a, entry in configs.items() for label in entry["configs"]}
-    if any(not isinstance(job, list) or len(job) != 2 or tuple(job) not in valid for job in jobs):
-        return
-    with state_folder(create=True, writer=True) as folder:
-        nonce = claim_marker(folder, now())
-    if not nonce:
-        return
+    entry = configs.get(family)
+    if entry is None:
+        recorded = canonical_config().get(family, {})
+        labels = recorded.get("configs", {"default": None})
+        try:
+            with state_folder(read_only=True) as folder:
+                cache = read_cache(folder)
+        except (OSError, ValueError, TypeError, KeyError):
+            cache = {}
+        return read_lines(family, labels, {label: "off" for label in labels}, cache)
+    configs = {family: entry}
+    cache, states, token = {}, {}, None
+    labels = entry["configs"]
     try:
-        for agent, label in jobs:
-            # Re-read consent before each provider invocation.
-            current_configs = config()
-            if current_configs.get(agent) != configs[agent]:
-                continue
-            heartbeat(nonce)
-            measured = now()
-            with state_folder(writer=True) as folder:
-                delays = backoff(folder, configs, measured)
-                delays.setdefault(agent, {})[label] = {"retry_after": stamp(measured + timedelta(minutes=30)), "error": "unfinished"}
-                write_json(folder, "backoff.json", delays)
-            groups, error, seconds = None, "", FRESH
-            try:
-                groups = parse(agent, command(agent, configs[agent], label, nonce), measured)
-            except PromptError:
-                error, seconds = "prompt", 7 * 86400
-            except ShapeError:
-                error, seconds = "unverified", 86400
-            except (TimeoutError, subprocess.TimeoutExpired):
-                error, seconds = "timeout", 1800
-            except OverflowError:
-                error, seconds = "output-limit", 1800
-            except (OSError, ValueError, UnicodeError):
-                error, seconds = "execution", 1800
-            with state_folder(writer=True) as folder:
-                delays = backoff(folder, configs, now())
-                if groups is not None:
-                    try:
-                        cache = read_cache(folder, repair=True)
-                        cache.setdefault(agent, {})[label] = {"measured": stamp(measured), "source": SOURCES[agent], "groups": groups}
-                        write_json(folder, "quota.json", cache)
-                    except (OSError, ValueError):
-                        error, seconds = "execution", 1800
-                delays.setdefault(agent, {})[label] = {"retry_after": stamp(now() + timedelta(seconds=seconds)), "error": error}
-                write_json(folder, "backoff.json", delays)
+        with state_folder(create=True) as folder:
+            current = now()
+            cache = read_cache(folder, repair=True)
+            if marker(folder, current):
+                states = {label: "busy" for label in labels}
+            else:
+                delays = backoff(folder, configs, current)
+                jobs = due(configs, cache, delays, current, max(15, max_age_minutes) * 60)
+                for label in labels:
+                    saved = cache.get(family, {}).get(label)
+                    retry = delays.get(family, {}).get(label)
+                    states[label] = ("backoff" if retry and timestamp(retry["retry_after"]) > current
+                                     and retry["error"] else "fresh" if saved else "unverified")
+                if jobs:
+                    token = claim_marker(folder, current)
+                    for agent, label in jobs:
+                        delays.setdefault(agent, {})[label] = {
+                            "retry_after": stamp(current + timedelta(minutes=30)), "error": "unfinished"}
+                    write_json(folder, "backoff.json", delays)
+        if token:
+            for agent, label in jobs:
+                # Recheck consent and the reservation before every invocation.
+                if config().get(agent) != entry:
+                    states[label] = "off"
+                    continue
+                with state_folder(writer=True) as folder:
+                    saved = marker(folder, now())
+                    if not saved or saved["token"] != token:
+                        states[label] = "busy"
+                        continue
+                measured = now()
+                groups, error, seconds = None, "", MIN_AGE
+                try:
+                    groups = parse(agent, command(agent, entry, label), measured)
+                except PromptError:
+                    error, seconds = "prompt", 7 * 86400
+                except ShapeError:
+                    error, seconds = "unverified", 86400
+                except (TimeoutError, subprocess.TimeoutExpired):
+                    error, seconds = "timeout", 1800
+                except OverflowError:
+                    error, seconds = "output-limit", 1800
+                except (OSError, ValueError, UnicodeError):
+                    error, seconds = "execution", 1800
+                with state_folder(writer=True) as folder:
+                    saved = marker(folder, now())
+                    if not saved or saved["token"] != token:
+                        states[label] = "busy"
+                        continue
+                    delays = backoff(folder, configs, now())
+                    if groups is not None:
+                        try:
+                            cache = read_cache(folder, repair=True)
+                            cache.setdefault(agent, {})[label] = {
+                                "measured": stamp(measured), "source": SOURCES[agent], "groups": groups}
+                            write_json(folder, "quota.json", cache)
+                        except (OSError, ValueError):
+                            error, seconds = "execution", 1800
+                    delays.setdefault(agent, {})[label] = {
+                        "retry_after": stamp(now() + timedelta(seconds=seconds)), "error": error}
+                    write_json(folder, "backoff.json", delays)
+                    states[label] = "unverified" if error else "read"
+    except BlockingIOError:
+        states = {label: "busy" for label in labels}
+    except (OSError, ValueError, TypeError, KeyError):
+        states = {label: "unverified" for label in labels}
     finally:
-        with state_folder(writer=True) as folder:
-            saved = marker(folder, now())
-            if saved and saved["nonce"] == nonce:
-                os.unlink("worker.json", dir_fd=folder)
+        if token:
+            try:
+                with state_folder(writer=True) as folder:
+                    saved = read_json(folder, "inflight.json")
+                    if saved.get("token") == token:
+                        os.unlink("inflight.json", dir_fd=folder)
+            except (OSError, ValueError, TypeError, AttributeError):
+                pass
+    return read_lines(family, labels, states, cache)
+
+
+def read_lines(family, labels, states, cache):
+    lines = []
+    for label in labels:
+        saved = cache.get(family, {}).get(label)
+        age = int((now() - timestamp(saved["measured"])).total_seconds()) if saved else None
+        state = states.get(label, "unverified")
+        if state == "fresh" and (age is None or age < 0 or age > 8 * 3600):
+            state = "unverified"
+        lines.append(f"Quota {family}/{label}: {state}; age " +
+                     (f"{age}s" if age is not None else "unknown"))
+    return lines
+
+
+def limit_markers(folder):
+    try:
+        values = read_json(folder, "limits.json")
+    except FileNotFoundError:
+        return {}
+    if not isinstance(values, dict) or values.keys() - {"claude"}:
+        raise ValueError("limits")
+    for value in values.values():
+        timestamp(value)
+    return values
+
+
+def limited_until(agent, marked, cache, current):
+    started = timestamp(marked)
+    if started > current:
+        return None
+    entries = list(cache.get(agent, {}).values())
+    if any(timestamp(e["measured"]) > started for e in entries):
+        return None
+    # Only depleted pools supply a reset; unrelated weekly pools cannot extend it.
+    # Ignore percent-to-fraction round-off at exactly 10% without changing parsers.
+    resets = [timestamp(g["reset_time"]) for e in entries for g in e["groups"]
+              if g["remaining_fraction"] < .1
+              and not math.isclose(g["remaining_fraction"], .1, rel_tol=0, abs_tol=1e-15)]
+    reset = min(resets) if resets else None
+    end = reset if reset and current < reset <= started + timedelta(hours=5) else started + timedelta(hours=1)
+    return end if current < end <= started + timedelta(hours=5) else None
 
 
 def status_lines():
     try:
         with state_folder(read_only=True) as folder:
             cache = read_cache(folder)
+            limits = limit_markers(folder)
         lines = []
+        for agent, marked in limits.items():
+            end = limited_until(agent, marked, cache, now())
+            if end:
+                lines.append(f"Quota {agent}: rate-limit marker {marked}; out of quota until {stamp(end)} (advisory)")
         for agent, labels in cache.items():
             for label, entry in labels.items():
                 age = (now() - timestamp(entry["measured"])).total_seconds()
@@ -712,13 +804,19 @@ def status_lines():
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="action", required=True)
+    sub.add_parser("status")
+    read = sub.add_parser("read")
+    read.add_argument("--family", choices=tuple(SOURCES), required=True)
+    read.add_argument("--max-age-minutes", type=int, default=15)
+    args = parser.parse_args()
     try:
-        if len(sys.argv) == 3 and sys.argv[1] == "--worker":
-            worker(json.loads(sys.argv[2]))
-        elif sys.argv[1:] == ["status"]:
-            print("\n".join(status_lines()))
+        lines = status_lines() if args.action == "status" else read_family(args.family, args.max_age_minutes)
+        print("\n".join(lines))
     except Exception:
-        pass
+        if args.action == "read":
+            print(f"Quota {args.family}/default: unverified; age unknown")
     return 0
 
 

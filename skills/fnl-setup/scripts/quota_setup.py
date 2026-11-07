@@ -15,6 +15,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
 import quota_probe as qp
 
+ON_DEMAND_CONSENT = (
+    "When the coordinator is about to delegate, and a reading is older than 15 minutes, "
+    "it runs each agent's own read-only usage command (`agy`, `claude`, `codex`) once; "
+    "those programs contact their providers with your own accounts, and the plugin sends nothing about you."
+)
+
 
 def excluded(path):
     path = Path(path)
@@ -25,7 +31,8 @@ def excluded(path):
         roots.append(root / "tmp")
     if any(path == base or base in path.parents for base in roots) or any(p.lower() == "downloads" for p in path.parts):
         raise ValueError("temporary or downloads path")
-    if any(os.path.lexists(p / ".git") for p in [path.parent, *path.parents]):
+    if any(os.path.lexists(p / ".git") and not (qp.in_homebrew(path) and p == qp.HOMEBREW_PREFIX)
+           for p in path.parents):
         raise ValueError("repository path")
 
 
@@ -264,6 +271,8 @@ def main():
                     raise ValueError("duplicate label")
                 folders[label] = path
             plan, value = preview(args.agents, folders, args.off)
+            if plan["choice"] == "on":
+                print(ON_DEMAND_CONSENT)
             print(render(plan), end="")
             print("Plan: " + json.dumps(plan, separators=(",", ":")))
             print("Digest: " + value)

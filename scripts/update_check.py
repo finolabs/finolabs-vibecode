@@ -164,9 +164,6 @@ def run(argv):
 
 def main(argv=None):
     try:
-        from quota_probe import worker_guard
-        if worker_guard():
-            return 0
         run(sys.argv[1:] if argv is None else argv)
     except Exception:
         pass  # hooks never emit errors, response text or tracebacks

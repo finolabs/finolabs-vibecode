@@ -203,46 +203,28 @@ class QuotaTest(unittest.TestCase):
             dr.write_data("host.md", body)
             self.assertEqual(qp.config(), {})
 
-    def test_throttle_backoff_and_detached_spawn(self):
+    def test_read_throttle_and_age_floor(self):
         self.configure({"agy": self.fake("agy")})
-        with mock.patch.object(qp.subprocess, "Popen") as spawn:
-            # The first reading starts now; reserve its retry before spawning.
-            def reserved(*args, **kwargs):
-                saved = json.loads((self.root / "state/quota/backoff.json").read_text())
-                self.assertEqual(saved["agy"]["default"]["error"], "unfinished")
-                self.assertGreater(qp.timestamp(saved["agy"]["default"]["retry_after"]), qp.now())
-                return mock.Mock()
-            spawn.side_effect = reserved
-            self.assertTrue(qp.trigger())
-            self.assertFalse(qp.trigger())
-            self.assertEqual(spawn.call_count, 1)
-            self.assertTrue(spawn.call_args.kwargs["start_new_session"])
-            spawn.return_value.wait.assert_not_called()
-        with qp.state_folder() as folder:
-            qp.write_json(folder, "backoff.json", {})
-            qp.write_json(folder, "quota.json", {"agy": {"default": {"measured": qp.stamp(qp.now()),
-                          "source": "agy-usage", "groups": qp.parse_agy(json.loads((FIXTURES / "agy-usage.json").read_text()))}}})
-        with mock.patch.object(qp.subprocess, "Popen") as spawn:
-            self.assertFalse(qp.trigger())
-            spawn.assert_not_called()
+        with mock.patch.object(qp, "command", wraps=qp.command) as command, mock.patch.object(qp, "now", return_value=MEASURED):
+            self.assertIn(": read;", qp.read_family("agy", 0)[0])
+            self.assertIn(": fresh;", qp.read_family("agy", 0)[0])
+            self.assertEqual(command.call_count, 1)
+        with mock.patch.object(qp, "now", return_value=MEASURED + qp.timedelta(minutes=14, seconds=59)), mock.patch.object(qp, "command") as command:
+            qp.read_family("agy", 0)
+            command.assert_not_called()
+        with mock.patch.object(qp, "now", return_value=MEASURED + qp.timedelta(minutes=15)), mock.patch.object(qp, "command", wraps=qp.command) as command:
+            self.assertIn(": read;", qp.read_family("agy", 0)[0])
+            self.assertEqual(command.call_count, 1)
 
-    def test_fresh_marker_stale_marker_and_decoys(self):
-        nonce = "f" * 48
-        decoy = self.base / "decoy"
-        decoy.mkdir()
-        (decoy / "worker.json").write_text(json.dumps({"nonce": nonce, "heartbeat": qp.stamp(qp.now())}))
-        with mock.patch.dict(os.environ, {"FNL_QUOTA_WORKER": nonce, "FNL_STATE_DIR": str(decoy),
-                                        "HOME": str(decoy), "XDG_STATE_HOME": str(decoy)}):
-            self.assertFalse(qp.worker_guard())
-            with qp.state_folder(create=True) as folder:
-                real = qp.claim_marker(folder, qp.now())
-                self.assertIsNone(qp.claim_marker(folder, qp.now()))
-            self.assertFalse(qp.worker_guard())
-            os.environ["FNL_QUOTA_WORKER"] = real
-            self.assertTrue(qp.worker_guard())
-            with qp.state_folder() as folder:
-                qp.write_json(folder, "worker.json", {"nonce": real, "heartbeat": qp.stamp(qp.now() - qp.timedelta(minutes=5))})
-            self.assertFalse(qp.worker_guard())
+
+    def test_marker_bound_and_stale_replacement(self):
+        self.assertEqual(qp.MARKER_AGE, qp.MAX_INSTALLS * qp.TIMEOUT + 30)
+        self.assertEqual(qp.MARKER_AGE, 150)
+        with qp.state_folder(create=True) as folder:
+            token = qp.claim_marker(folder, MEASURED)
+            self.assertIsNone(qp.claim_marker(folder, MEASURED + qp.timedelta(seconds=149)))
+            self.assertNotEqual(qp.claim_marker(folder, MEASURED + qp.timedelta(seconds=150)), token)
+
 
     def test_child_exact_environment_empty_cwd_and_planted_path(self):
         body = "import os,json,stat\nprint(json.dumps({'env':dict(os.environ),'cwd':os.getcwd(),'files':os.listdir('.'),'mode':stat.S_IMODE(os.stat('.').st_mode)}))\n"
@@ -256,13 +238,13 @@ class QuotaTest(unittest.TestCase):
         decoys = {k: "decoy" for k in ("ANTHROPIC_BASE_URL", "NODE_OPTIONS", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "USER", "HOME")}
         decoys["PATH"] = str(planted)
         with mock.patch.dict(os.environ, decoys), mock.patch.object(qp.subprocess, "Popen", wraps=subprocess.Popen) as spawn:
-            data = json.loads(qp.command("claude", entry, "default", "a" * 48))
+            data = json.loads(qp.command("claude", entry, "default"))
         # macOS Python may add its own runtime variables after exec. Pin the
         # exact environment supplied at the process boundary, and parent drops.
         self.assertNotIn("CLAUDE_CONFIG_DIR", data["env"])
         self.assertEqual(data["env"]["USER"], "quota-test-user")
         self.assertEqual(data["env"]["HOME"], str(self.home))
-        expected = qp.environment(entry, "a" * 48)
+        expected = qp.environment(entry)
         self.assertEqual(spawn.call_args.kwargs["env"], expected)
         for key, value in expected.items():
             self.assertEqual(data["env"][key], value)
@@ -284,14 +266,14 @@ class QuotaTest(unittest.TestCase):
         self.assertEqual(entry["configs"]["renamed"], str(self.config_dir))
         with mock.patch.dict(os.environ, {"USER": "decoy", "HOME": "decoy",
                                           "CLAUDE_CONFIG_DIR": "decoy"}):
-            data = json.loads(qp.command("claude", entry, "work", "a" * 48))
+            data = json.loads(qp.command("claude", entry, "work"))
             self.assertEqual(data["CLAUDE_CONFIG_DIR"], str(extra))
             self.assertEqual(data["HOME"], str(self.home))
             self.assertEqual(data.get("USER"), "quota-test-user")
-            default = json.loads(qp.command("claude", entry, "renamed", "a" * 48))
+            default = json.loads(qp.command("claude", entry, "renamed"))
             self.assertNotIn("CLAUDE_CONFIG_DIR", default)
             for agent in ("agy", "codex"):
-                env = qp.environment(self.fake(agent), "a" * 48)
+                env = qp.environment(self.fake(agent))
                 self.assertEqual(env["USER"], "quota-test-user")
                 self.assertEqual(env["HOME"], str(self.home))
                 self.assertNotIn("CLAUDE_CONFIG_DIR", env)
@@ -338,7 +320,7 @@ class QuotaTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             qp.validate_configs({"default": str(self.config_dir)})
 
-    def test_worker_cache_fields_labels_permissions_and_backoff(self):
+    def test_read_cache_fields_labels_permissions_and_backoff(self):
         entry = self.fake("claude")
         second = self.home / "second"
         second.mkdir(mode=0o700)
@@ -347,11 +329,11 @@ class QuotaTest(unittest.TestCase):
         self.ready()
         self.assertEqual(qp.dr.account_home(), self.home)
         self.assertEqual(qp.dr.consent_root(), self.root)
-        # This test covers worker/cache isolation. Real IANA conversion is tested
+        # This test covers read/cache isolation. Real IANA conversion is tested
         # separately; a fixed offset keeps the cache test independent of tzdata.
         with mock.patch.object(qp, "now", return_value=MEASURED), \
              mock.patch.object(qp, "ZoneInfo", return_value=qp.timezone(qp.timedelta(hours=7))):
-            qp.worker([["claude", "default"], ["claude", "personal"]])
+            qp.read_family("claude")
         with qp.state_folder() as folder:
             cache = qp.read_cache(folder)
             self.assertEqual(set(cache["claude"]), {"default", "personal"})
@@ -360,7 +342,7 @@ class QuotaTest(unittest.TestCase):
             self.assertEqual(delays["claude"]["default"]["error"], "")
         self.assertEqual(stat.S_IMODE((self.root / "state/quota/quota.json").stat().st_mode), 0o600)
         self.assertNotIn(str(self.home), json.dumps(cache))
-        self.assertFalse((self.root / "state/quota/worker.json").exists())
+        self.assertFalse((self.root / "state/quota/inflight.json").exists())
 
     def test_failure_backoffs(self):
         entry = self.fake("claude")
@@ -369,8 +351,9 @@ class QuotaTest(unittest.TestCase):
         for failure, error, seconds in ((qp.ShapeError(), "unverified", 86400),
                                         (qp.PromptError(), "prompt", 7 * 86400),
                                         (TimeoutError(), "timeout", 1800), (OSError(), "execution", 1800)):
+            self.ready()
             with mock.patch.object(qp, "command", side_effect=failure), mock.patch.object(qp, "now", return_value=MEASURED):
-                qp.worker([["claude", "default"]])
+                qp.read_family("claude")
             with qp.state_folder() as folder:
                 record = qp.read_json(folder, "backoff.json")["claude"]["default"]
             self.assertEqual(record, {"retry_after": qp.stamp(MEASURED + qp.timedelta(seconds=seconds)), "error": error})
@@ -380,7 +363,7 @@ class QuotaTest(unittest.TestCase):
         # The child exits on EOF itself. Isolate classification from platform
         # killpg behavior (covered separately) so cleanup cannot mask the error.
         with mock.patch.object(qp, "now", return_value=MEASURED), mock.patch.object(qp.os, "killpg"):
-            qp.worker([["codex", "default"]])
+            qp.read_family("codex")
         with qp.state_folder() as folder:
             self.assertEqual(qp.read_json(folder, "backoff.json")["codex"]["default"],
                              {"retry_after": qp.stamp(MEASURED + qp.timedelta(minutes=30)), "error": "execution"})
@@ -398,7 +381,7 @@ class QuotaTest(unittest.TestCase):
         with mock.patch.object(qp.subprocess, "Popen", side_effect=spawn), \
              mock.patch.object(qp.os, "killpg", side_effect=denied_group):
             with self.assertRaisesRegex(OSError, "missing reply"):
-                qp.command("codex", entry, "default", "a" * 48)
+                qp.command("codex", entry, "default")
         self.assertEqual(processes[0].returncode, 0)
         self.assertTrue(processes[0].stdin.closed)
         self.assertTrue(processes[0].stdout.closed)
@@ -406,7 +389,7 @@ class QuotaTest(unittest.TestCase):
     def test_status_reads_atomic_cache_while_hook_holds_lock(self):
         self.configure({"agy": self.fake("agy")})
         with mock.patch.object(qp, "now", return_value=MEASURED):
-            qp.worker([["agy", "default"]])
+            qp.read_family("agy")
             with qp.state_folder() as folder:
                 self.assertIn("Quota agy/default: measured", qp.status_lines()[0])
 
@@ -422,17 +405,17 @@ class QuotaTest(unittest.TestCase):
                 "time.sleep(60)\n")
         entry = self.fake("codex", body)
         started = time.monotonic()
-        result = qp.command("codex", entry, "default", "a" * 48)
+        result = qp.command("codex", entry, "default")
         self.assertEqual(len(qp.parse("codex", result)), 1)
         self.assertLess(time.monotonic() - started, 5)
 
     def test_timeout_and_output_cap(self):
         entry = self.fake("agy", "import time\ntime.sleep(60)\n")
         with mock.patch.object(qp, "TIMEOUT", .1), self.assertRaises(TimeoutError):
-            qp.command("agy", entry, "default", "a" * 48)
+            qp.command("agy", entry, "default")
         entry = self.fake("agy", "print('x'*70000)\n")
         with self.assertRaises(OverflowError):
-            qp.command("agy", entry, "default", "a" * 48)
+            qp.command("agy", entry, "default")
 
     def test_unsafe_state_cache_is_never_read(self):
         self.ready()
@@ -451,30 +434,27 @@ class QuotaTest(unittest.TestCase):
                 qp.read_cache(folder)
 
 
-    def test_manifest_hooks_nonce_guard_and_forgery(self):
+    def test_all_manifest_hooks_start_no_process_with_quota_on(self):
         import shlex
-        repo = self.base / "repository"
-        repo.mkdir()
-        (repo / ".git").mkdir()
-        dr.write_data("host.md", b"## Delegation mode\nauto\n## Auto gate\non\n")
-        with qp.state_folder(create=True) as folder:
-            nonce = qp.claim_marker(folder, qp.now())
-        boot = ("import runpy,sys,subprocess,unittest; "
+        self.configure({"agy": self.fake("agy")})
+        self.ready()
+        boot = ("import runpy,sys,subprocess,unittest,os; "
                 f"sys.path.insert(0,{str(ROOT)!r}); "
                 "from tests.data_root_fixture import account; "
                 f"account(unittest.TestCase(), {str(self.home)!r}); "
-                f"sys.path.insert(0,{str(ROOT / 'scripts')!r}); "
-                "import quota_probe,fnl_metrics; "
-                "quota_probe.trigger=lambda: print('TRIGGER'); "
                 "subprocess.Popen=lambda *a,**k: print('SPAWN'); "
                 "subprocess.run=lambda *a,**k: print('RUN'); "
-                "fnl_metrics.enabled=lambda: True; fnl_metrics.valid_id=lambda x: True; "
-                "fnl_metrics.record=lambda *a,**k: print('METRIC'); "
+                "os.system=lambda *a,**k: print('SPAWN'); "
+                "os.fork=lambda *a,**k: print('SPAWN'); "
+                "os.posix_spawn=lambda *a,**k: print('SPAWN'); "
+                "os.posix_spawnp=lambda *a,**k: print('SPAWN'); "
                 "sys.argv=sys.argv[1:]; runpy.run_path(sys.argv[0],run_name='__main__')")
         seen = set()
-        invocation = 0
-        for manifest in (".claude-plugin/hooks.json", ".codex-plugin/hooks.json"):
-            hooks = json.loads((ROOT / manifest).read_text())["hooks"]
+        # Includes the Antigravity manifest even though it currently has no hooks.
+        for manifest in sorted(ROOT.glob(".*-plugin/*.json")):
+            hooks = json.loads(manifest.read_text()).get("hooks", {})
+            if not isinstance(hooks, dict):
+                continue
             for event, entries in hooks.items():
                 for entry in entries:
                     for hook in entry["hooks"]:
@@ -482,57 +462,27 @@ class QuotaTest(unittest.TestCase):
                         seen.add(command.split("/scripts/")[1].split(".py")[0])
                         command = command.replace("python3 -I ", shlex.join([sys.executable, "-I", "-c", boot]) + " ")
                         env = {"PATH": os.defpath, "CLAUDE_PLUGIN_ROOT": str(ROOT), "PLUGIN_ROOT": str(ROOT),
-                               "FNL_QUOTA_WORKER": nonce, "FNL_UPDATE_CHECK": "on"}
-                        invocation += 1
-                        data = {"hook_event_name": event, "tool_name": "Write", "cwd": str(repo), "session_id": f"hook-{invocation}"}
-                        payload = json.dumps(data)
-                        with self.subTest(manifest=manifest, event=event, command=hook["command"]):
-                            result = subprocess.run(["sh", "-c", command], input=payload, env=env, text=True, capture_output=True, timeout=30)
+                               "FNL_METRICS": "off", "FNL_UPDATE_CHECK": "off"}
+                        payload = json.dumps({"hook_event_name": event, "error": "rate_limit", "tool_name": "Write",
+                                              "cwd": str(self.base), "session_id": "hook-test"})
+                        with self.subTest(manifest=manifest.name, event=event):
+                            result = subprocess.run(["sh", "-c", command], input=payload, env=env, text=True, capture_output=True, timeout=10)
                             self.assertEqual(result.returncode, 0)
-                            self.assertEqual(result.stdout, "")
+                            self.assertNotIn("SPAWN", result.stdout)
+                            self.assertNotIn("RUN", result.stdout)
                             self.assertEqual(result.stderr, "")
-                            env["FNL_QUOTA_WORKER"] = "b" * 48
-                            # Keep the first-write gate fresh for each independent command.
-                            gate = self.root / "state/auto-gate"
-                            if gate.exists():
-                                for file in gate.glob("*.json"):
-                                    file.unlink()
-                            result = subprocess.run(["sh", "-c", command], input=payload, env=env, text=True, capture_output=True, timeout=30)
-                            self.assertEqual(result.returncode, 0)
-                            if "metrics_hook" not in hook["command"] or event == "SessionStart":
-                                self.assertTrue(result.stdout, result.stderr)
-                            expected = result.stdout
-                            try:
-                                with qp.state_folder() as folder:
-                                    qp.write_json(folder, "worker.json", {"nonce": nonce, "heartbeat": qp.stamp(qp.now() - qp.timedelta(minutes=5))})
-                                if gate.exists():
-                                    for file in gate.glob("*.json"):
-                                        file.unlink()
-                                env["FNL_QUOTA_WORKER"] = nonce
-                                # Each comparison starts before its own first edit.
-                                data["session_id"] += "-stale"
-                                stale = subprocess.run(["sh", "-c", command], input=json.dumps(data), env=env, text=True, capture_output=True, timeout=30)
-                                self.assertEqual(stale.returncode, 0)
-                                self.assertEqual(stale.stderr, "")
-                                self.assertEqual(stale.stdout, expected)
-                            finally:
-                                with qp.state_folder() as folder:
-                                    qp.write_json(folder, "worker.json", {"nonce": nonce, "heartbeat": qp.stamp(qp.now())})
-        self.assertEqual(seen, {"session_start", "metrics_hook", "auto_gate_hook", "update_check", "precompact"})
+        self.assertEqual(seen, {"session_start", "metrics_hook", "auto_gate_hook", "update_check", "precompact", "quota_limit_hook"})
 
-    def test_metrics_consent_does_not_select_probe(self):
-        import importlib.util
-        import io
-        spec = importlib.util.spec_from_file_location("quota_metrics_test", ROOT / "scripts/metrics_hook.py")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+
+    def test_metrics_consent_never_starts_a_reading(self):
+        module = self.metrics_module()
         self.configure({"agy": self.fake("agy")})
         for metrics in (True, False):
             payload = json.dumps({"hook_event_name": "PostToolUse", "session_id": "test", "cwd": str(self.base)}).encode()
-            with mock.patch.object(sys, "stdin", io.TextIOWrapper(io.BytesIO(payload))), mock.patch.object(qp, "trigger") as trigger, \
+            with mock.patch.object(sys, "stdin", io.TextIOWrapper(io.BytesIO(payload))), mock.patch.object(qp, "command") as command, \
                  mock.patch.object(module.fm, "enabled", return_value=metrics), mock.patch.object(module.fm, "valid_id", return_value=False):
                 module.main()
-                trigger.assert_called_once()
+                command.assert_not_called()
 
 
     def metrics_module(self):
@@ -541,7 +491,7 @@ class QuotaTest(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
-    def test_large_hook_payload_records_and_triggers(self):
+    def test_large_hook_payload_records_without_reading(self):
         module = self.metrics_module()
         module.fm.write_consent(90)
         payload = json.dumps({"hook_event_name": "PostToolUse", "session_id": "large-hook",
@@ -549,12 +499,12 @@ class QuotaTest(unittest.TestCase):
                               "tool_input": {"skill": "fnl-setup"}, "tool_response": "x" * 70000}).encode()
         stream = io.BytesIO(payload)
         with mock.patch.object(sys, "stdin", SimpleNamespace(buffer=stream)), \
-             mock.patch.object(qp, "trigger") as trigger, mock.patch.object(module, "refresh_if_stale"):
+             mock.patch.object(qp, "command") as command, mock.patch.object(module, "refresh_if_stale"):
             module.main()
         events = [json.loads(line) for path in (self.root / "state").glob("events-*.jsonl")
                   for line in path.read_text().splitlines()]
         self.assertEqual([(e["event"], e["name"]) for e in events], [("skill", "fnl-setup")])
-        trigger.assert_called_once()
+        command.assert_not_called()
         self.assertLessEqual(stream.tell(), 65536)
 
     def test_bounded_payload_copies_only_linear_text(self):
@@ -587,7 +537,7 @@ class QuotaTest(unittest.TestCase):
         raw = json.dumps(payload).encode()[:65536]
         self.assertNotIn("tool_input", module.bounded_payload(raw))
         with mock.patch.object(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(raw))), \
-             mock.patch.object(qp, "trigger"), mock.patch.object(module, "refresh_if_stale"):
+             mock.patch.object(qp, "command"), mock.patch.object(module, "refresh_if_stale"):
             module.main()
         events = [json.loads(line) for path in (self.root / "state").glob("events-*.jsonl")
                   for line in path.read_text().splitlines()]
@@ -602,7 +552,7 @@ class QuotaTest(unittest.TestCase):
         with qp.state_folder() as folder:
             self.assertEqual(qp.read_cache(folder), {})
 
-    def test_worker_repairs_unsafe_or_corrupt_cache_but_hooks_refuse_it(self):
+    def test_read_repairs_unsafe_or_corrupt_cache_but_hooks_refuse_it(self):
         self.ready()
         path = self.root / "state/quota/quota.json"
         for content, mode in ((b"{not json", 0o600), (b"{}", 0o666), (b" " * (qp.LIMIT + 1), 0o600)):
@@ -613,17 +563,17 @@ class QuotaTest(unittest.TestCase):
                     qp.read_cache(folder)
                 self.assertEqual(qp.read_cache(folder, repair=True), {})
 
-    def test_capped_cache_schedules_one_repair_then_backs_off(self):
+    def test_capped_cache_is_repaired_once(self):
         self.configure({"agy": self.fake("agy")})
         self.ready()
         path = self.root / "state/quota/quota.json"
         path.write_bytes(b" " * (qp.LIMIT + 1))
         path.chmod(0o600)
-        with mock.patch.object(qp.subprocess, "Popen") as spawn:
-            self.assertTrue(qp.trigger())
-            self.assertEqual(spawn.call_count, 1)
-            self.assertFalse(qp.trigger())
-            self.assertEqual(spawn.call_count, 1)
+        with mock.patch.object(qp, "command", wraps=qp.command) as command:
+            self.assertIn(": read;", qp.read_family("agy")[0])
+            self.assertIn(": fresh;", qp.read_family("agy")[0])
+            self.assertEqual(command.call_count, 1)
+
 
     def test_corrupt_cache_is_replaced_by_the_next_reading(self):
         entry = self.fake("claude")
@@ -635,7 +585,7 @@ class QuotaTest(unittest.TestCase):
         path.symlink_to(outside)
         with mock.patch.object(qp, "now", return_value=MEASURED), \
              mock.patch.object(qp, "ZoneInfo", return_value=qp.timezone(qp.timedelta(hours=7))):
-            qp.worker([["claude", "default"]])
+            qp.read_family("claude")
         self.assertFalse(path.is_symlink())
         self.assertEqual(outside.read_text(), "untouched")
         self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
@@ -699,7 +649,7 @@ class QuotaTest(unittest.TestCase):
         self.ready()
         (self.root / "state/quota/quota.json").mkdir()
         with mock.patch.object(qp, "now", return_value=MEASURED), mock.patch.object(qp, "command", return_value=(FIXTURES / "agy-usage.json").read_text()):
-            qp.worker([["agy", "default"]])
+            qp.read_family("agy")
         with qp.state_folder() as folder:
             self.assertEqual(qp.read_json(folder, "backoff.json")["agy"]["default"],
                              {"retry_after": qp.stamp(MEASURED + qp.timedelta(seconds=1800)), "error": "execution"})
@@ -792,7 +742,7 @@ class QuotaTest(unittest.TestCase):
              mock.patch.dict(os.environ, {"PATH": str(self.bin)}):
             plan, _ = setup.preview(["claude"], entry["configs"])
             self.assertEqual(plan["configs"], entry["configs"])
-            data = json.loads(qp.command("claude", entry, "personal", "a" * 48))
+            data = json.loads(qp.command("claude", entry, "personal"))
             self.assertNotIn("CLAUDE_CONFIG_DIR", data)
 
     def test_legacy_record_requires_repreview(self):
@@ -802,7 +752,7 @@ class QuotaTest(unittest.TestCase):
         self.configure({"agy": entry})
         with mock.patch.object(qp.subprocess, "Popen") as spawn:
             self.assertNotIn("agy", qp.config())
-            self.assertFalse(qp.trigger())
+            self.assertIn(": off;", qp.read_family("agy")[0])
             spawn.assert_not_called()
         with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), \
              mock.patch.object(setup, "excluded"), mock.patch.object(sys, "stderr", new_callable=io.StringIO) as errors:
@@ -813,10 +763,10 @@ class QuotaTest(unittest.TestCase):
     def test_no_consent_hook_never_reads_stdin_or_writes(self):
         module = self.metrics_module()
         stream = mock.Mock()
-        with mock.patch.object(sys, "stdin", stream), mock.patch.object(qp, "trigger") as trigger:
+        with mock.patch.object(sys, "stdin", stream), mock.patch.object(qp, "command") as command:
             module.main()
         stream.buffer.read.assert_not_called()
-        trigger.assert_not_called()
+        command.assert_not_called()
         self.assertFalse(self.root.exists())
 
     def test_setup_wrong_filename_refused_by_preview_and_validation(self):
@@ -947,7 +897,7 @@ class QuotaTest(unittest.TestCase):
         recorded = qp.config()["claude"]
         self.assertEqual(recorded["resolved"], target)
         self.assertEqual(qp.checked_executable("claude", recorded), [self.interpreter, target])
-        self.assertEqual(qp.command("claude", recorded, "default", "a" * 48).strip(), b"versioned")
+        self.assertEqual(qp.command("claude", recorded, "default").strip(), b"versioned")
 
     def test_setup_versioned_target_safety_checks(self):
         setup = self.setup_module()
@@ -980,7 +930,7 @@ class QuotaTest(unittest.TestCase):
         self.configure({"codex": entry})
         with mock.patch.object(qp.subprocess, "Popen", side_effect=AssertionError("must not spawn")) as spawn:
             with self.assertRaisesRegex(ValueError, "wrong name"):
-                qp.command("codex", qp.config()["codex"], "default", "a" * 48)
+                qp.command("codex", qp.config()["codex"], "default")
             spawn.assert_not_called()
 
     def test_setup_preview_expires_after_sixty_minutes(self):
@@ -1107,7 +1057,7 @@ class QuotaTest(unittest.TestCase):
         Path(entry["executable"]).write_text("#!/usr/bin/env " + Path(self.interpreter).name + "\nprint('ok')\n")
         self.assertEqual(qp.checked_executable("agy", entry), [entry["interpreter"], entry["executable"]])
         with mock.patch.dict(os.environ, {"PATH": str(self.base / "decoy")}):
-            self.assertEqual(qp.command("agy", entry, "default", "a" * 48).strip(), b"ok")
+            self.assertEqual(qp.command("agy", entry, "default").strip(), b"ok")
         Path(entry["executable"]).write_text("#!/usr/bin/env -S python3\n")
         with self.assertRaises(ValueError):
             qp.checked_executable("agy", entry)
@@ -1122,7 +1072,7 @@ class QuotaTest(unittest.TestCase):
                 "time.sleep(60)\n")
         entry = self.fake("agy", body)
         with mock.patch.object(qp, "TIMEOUT", .2), self.assertRaises(TimeoutError):
-            qp.command("agy", entry, "default", "a" * 48)
+            qp.command("agy", entry, "default")
         time.sleep(.7)
         self.assertFalse(sentinel.exists())
 
@@ -1130,7 +1080,7 @@ class QuotaTest(unittest.TestCase):
         self.configure({"agy": self.fake("agy")})
         self.ready()
         with mock.patch.object(qp, "now", return_value=MEASURED):
-            qp.worker([["agy", "default"]])
+            qp.read_family("agy")
         with mock.patch.object(qp, "now", return_value=MEASURED + qp.timedelta(hours=9)):
             lines = qp.status_lines()
         self.assertIn("measured 2026-11-05T09:00:00Z", lines[0])
@@ -1142,7 +1092,7 @@ class QuotaTest(unittest.TestCase):
         self.configure({"agy": self.fake("agy")})
         self.ready()
         with mock.patch.object(qp, "now", return_value=MEASURED):
-            qp.worker([["agy", "default"]])
+            qp.read_family("agy")
         # Empty PATH ensures the scan can never find a real agent executable.
         env = {"HOME": str(self.home), "PATH": ""}
         for script, args in (("fnl-scan-agents/scripts/agent_scan.py", ["--host", "codex"]),
@@ -1153,7 +1103,7 @@ class QuotaTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("measured 2026-11-05T09:00:00Z", result.stdout)
                 self.assertIn("gemini weekly", result.stdout)
-        self.assertFalse((self.root / "state/quota/worker.json").exists())
+        self.assertFalse((self.root / "state/quota/inflight.json").exists())
 
     def test_foreign_config_folder_refused(self):
         original = os.fstat
@@ -1178,7 +1128,7 @@ class QuotaTest(unittest.TestCase):
         self.assertEqual(qp.status_lines(), ["Quota: unverified (no reading)."])
 
 
-    def test_worker_lock_contention_is_bounded_but_hook_never_waits(self):
+    def test_read_lock_contention_is_bounded_but_hook_never_waits(self):
         self.ready()
         with mock.patch.object(qp.fcntl, "flock", side_effect=[BlockingIOError(), None]), mock.patch.object(qp.time, "sleep") as sleep:
             with qp.state_folder(writer=True):
@@ -1199,7 +1149,7 @@ class QuotaTest(unittest.TestCase):
     def test_codex_malformed_reply_is_shape_error(self):
         entry = self.fake("codex", "import sys,time\nsys.stdin.readline()\nprint('not-json',flush=True)\ntime.sleep(60)\n")
         with self.assertRaises(qp.ShapeError):
-            qp.command("codex", entry, "default", "a" * 48)
+            qp.command("codex", entry, "default")
 
     def test_direct_shebang_symlink_keeps_recorded_real_interpreter(self):
         entry = self.fake("agy")
@@ -1257,7 +1207,7 @@ class DocumentationTest(unittest.TestCase):
 
     def test_setup_consent_and_displays(self):
         text = (ROOT / "skills/fnl-setup/SKILL.md").read_text()
-        self.assertIn("Every 4 hours a background step runs each agent's own read-only usage command", text)
+        self.assertIn("When the coordinator is about to delegate, and a reading is older than 15 minutes", text)
         self.assertIn("its hooks, plugins and servers run", text)
         self.assertIn("neutral Yes and No", text)
         for file in ("skills/fnl-setup/scripts/checkup.py", "skills/fnl-scan-agents/scripts/agent_scan.py"):

@@ -7,21 +7,6 @@ from pathlib import Path
 
 
 def main():
-    try:
-        import sys
-        from pathlib import Path
-        sys.dont_write_bytecode = True
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from quota_probe import worker_guard
-        if worker_guard():
-            return 0
-    except Exception:
-        pass
-    try:
-        from quota_probe import trigger
-        trigger()
-    except Exception:
-        pass
     routing = "on"
     try:
         sys.dont_write_bytecode = True

@@ -567,7 +567,6 @@ class DetachedFreshnessTest(unittest.TestCase):
                    "toolCall": {"name": "run_command", "args": {"command": "ls"}}}
         with mock.patch.object(sys, "argv", [str(HOOK), "--host", "antigravity", "--event", event]), \
                 mock.patch.object(sys, "stdin", io.TextIOWrapper(io.BytesIO(json.dumps(payload).encode()))), \
-                mock.patch("quota_probe.trigger"), mock.patch("quota_probe.worker_guard", return_value=False), \
                 mock.patch("sys.stdout", new_callable=io.StringIO) as out:
             self.hook.main()
         self.assertEqual(out.getvalue(), "{}\n")

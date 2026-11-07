@@ -14,7 +14,7 @@ loop that runs while no session does) is a separate, opt-in piece for 0.2.0, bec
   after `Stop`. Observed: `data.js` and the newest event had the same minute while a session ran.
 - Not current: Antigravity events (its hook is not asynchronous, so it never starts a rebuild); ledger writes
   (`ledger.py start` and `finish` start nothing); anything while no session runs a tool; Codex events while its
-  hooks are not trusted (no hook runs, so no event); quota readings (every 4 hours by design); the new panels
+  hooks are not trusted (no hook runs, so no event); quota readings (on demand before delegation, at least 15 minutes apart; see `quota-on-demand.md`); the new panels
   (processes, progress), which depend on a rebuild.
 - A hidden tab polls nothing; the page cannot tell the user that its data is old.
 
@@ -47,7 +47,7 @@ fire-and-forget.
 
 ## Not in scope
 
-A local web server; a push channel; per-second updates; changing the 4-hour quota cadence.
+A local web server; a push channel; per-second updates; starting quota readings from dashboard hooks.
 
 ## Acceptance
 
