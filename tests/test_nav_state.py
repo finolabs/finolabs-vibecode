@@ -256,8 +256,8 @@ class NavStateTest(unittest.TestCase):
 
     def test_additional_private_material_is_masked(self):
         private = ('AKIA' + 'X' * 16, 'xoxb-' + 'synthetic-token',
-                   '-----BEGIN PRIVATE KEY-----\nsynthetic-key\n-----END PRIVATE KEY-----',
-                   '-----BEGIN PRIVATE KEY-----\nunterminated-key',
+                   '-----BEGIN ' + 'PRIVATE KEY-----\nsynthetic-key\n-----END ' + 'PRIVATE KEY-----',
+                   '-----BEGIN ' + 'PRIVATE KEY-----\nunterminated-key',
                    '/root/private', '~/.ssh/id_test', '/private/var/synthetic/file')
         for value in private:
             with self.subTest(value=value):
