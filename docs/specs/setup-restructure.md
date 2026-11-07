@@ -176,6 +176,40 @@ the evals `parity-interview-ours`, `parity-interview-with-grilling`, `quality-fn
 The removal of `fnl-setup-instructions` ships after the component and `instructions_write.py` are built
 (`agent-roles.md` part H); the other two are removed in the same change that adds `scan` and `mode`.
 
+## F. Quick and Advanced modes, and companion questions (owner, 2026-11-07)
+
+Owner direction: a recommendation without a question process leaves the user nothing to decide with. The detailed mode
+is renamed **Advanced**; **Quick** keeps only what the plugin needs to work well; everything that widens it moves to
+Advanced. Companion skills get a real question process in both.
+
+Decisions settled (owner, 2026-11-07):
+
+- **Quick** asks the inert items once with their recommended defaults, plus **one multiple-choice companion question**:
+  "What do you do with this plugin?" with choices (writing Vietnamese for readers, delegating work to Antigravity,
+  drawing architecture or flow diagrams, mind maps and outlines, none). A choice selects companions; Quick then
+  presents each selected companion with one line of reason and its install command, and the user answers a neutral Yes
+  and No per companion (none preselected). Installing stays the user's act; no choice installs anything.
+- **Advanced** asks, per companion, a short interview: what the companion does for this user, a concrete example in
+  their stack, what it costs or sends (telemetry, fonts, accounts), the fallback the plugin keeps without it, and
+  then the neutral Yes and No. It also holds the other widening features: review tools, roles and judge, quota,
+  metrics, compaction, project settings.
+- **Renaming**: the word "detailed" becomes "Advanced" in `fnl-setup`, `plain-language.md`, `fnl-ask`, README and tests;
+  the beginner path stays as it is and takes the Quick defaults without the companion question.
+- **Companion list** (`references/companions.md`): `agybird`, `vietnamizer`, `diagram-design` stay; **`markmap`**
+  (mind maps and outlines) is added after the source, license and install command are checked against its official
+  repository at writing time and recorded in the file with the check date. Each row gains an `Ask` column: the
+  one-line question text, the condition that selects it in Quick, and the data note. Rows remain data; the procedure
+  lives in `references/features/review-tools.md`, renamed `companions.md`-driven "companions" feature.
+- **Consent**: the Quick question and every Yes and No follow the consent rules of section B (neutral choices, no
+  default, a timeout never counts). A sentence such as "install everything" never answers a companion question.
+- **Enforcer**: the selection table lives in data; a test asserts each companion row has its question, condition,
+  install command and data note, that Quick asks exactly one multiple-choice question for companions, and that no
+  script or command installs a companion. The questioning itself is agent judgment (advisory).
+
+Acceptance additions: the size limits of section C hold after the rename and the added rows; `test_native_sweep`
+and `test_agent_scan` stay green; Quick's total question count is reported in the spec's consent inventory; the
+README table of modes says Quick and Advanced.
+
 ## Not in scope
 
 A project-scope default for roles or the judge; changing what any other script writes, its previews or digests; new
