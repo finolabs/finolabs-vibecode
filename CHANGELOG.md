@@ -6,6 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add the navigator agent and `nav_state.py` for bounded course-check evidence, screened judge payloads and collected-reference report checks; the agent requires `judge.py` from the verification package.
 - Add `route_task.py` to print the delegation matrix row for a task kind and grade.
 - Print a read-only plugin state block at session start with delegation mode, cached quota and open ledger count; failures never block the session.
 
