@@ -187,6 +187,8 @@ def cmd_open(args):
     starts, finishes = load()
     current = datetime.now(timezone.utc)
     for dispatch_id, s in starts.items():
+        if args.project is not None and s["project"] != args.project:
+            continue
         if dispatch_id not in finishes:
             age = (current - datetime.fromisoformat(s["ts"])).total_seconds() / 60
             print(f"{dispatch_id}  {s['ts']}  age {age:.0f}/{s.get('budget_min', '?')} min  "
@@ -280,6 +282,7 @@ def build_parser():
     f.set_defaults(func=cmd_finish)
 
     o = sub.add_parser("open", help="list dispatches with no finish line")
+    o.add_argument("--project", help="only dispatches of this exact project name")
     o.set_defaults(func=cmd_open)
 
     m = sub.add_parser("summary", help="acceptance and timing per agent, model, kind and grade")
