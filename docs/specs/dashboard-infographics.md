@@ -18,7 +18,7 @@ counts, Judge receipts and full Reviews become tables only in Overview's bottom 
 Legacy fragments redirect through literal maps as specified in the tab spec. Historical references
 to Agents and Project tabs below describe the unchanged panes now stacked inside `now`.
 
-## Project pipeline decision (owner, 2026-11-06; 0.1.11)
+## Project pipeline decision (owner, 2026-11-06; 0.2.0)
 
 This section supersedes the historical story-only project layout and 0.1.10 release target below.
 The project pane recognises Spec Kit, repository indexes/status lines/packages, then exact-project

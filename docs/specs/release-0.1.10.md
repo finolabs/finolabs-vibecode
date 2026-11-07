@@ -76,7 +76,7 @@ changelog, so they run one at a time, each through its own pull request with bot
   Alternative to measure first: inject the reminder and read the skip rate from the existing metrics.
 - Session rename by a hook on Codex and Antigravity (no documented mechanism); Claude Code has a
   `sessionTitle` hook output that could set a baseline title (project and branch) without touching the
-  other hosts: candidate for 0.1.11.
+  other hosts: candidate for 0.2.0.
 - Antigravity permission rules (storage unverified).
 - Multi-account support (spec first), the beginner screenshot, instruction hygiene on the owner's machine.
 
