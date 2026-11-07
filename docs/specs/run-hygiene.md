@@ -63,10 +63,13 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    file created with `O_EXCL` in the same directory, mode copied from the original and never wider than 0600, then
    fsync and rename; no backup is made (a backup would keep the value). It refuses while a process still has the log
    open or its mtime is under 60 seconds, and the digest binds the previewed bytes. The run-log folder is created
-   0700. The agents' own transcript stores (for example `~/.codex/sessions`, `~/.claude/projects`) hold the same
+   0700, and an existing folder with a wider mode is refused. All file checks (regular file, `st_nlink == 1`, owner) run
+   on the opened descriptor (`O_NOFOLLOW`, then `fstat`), not on the path, for `redact`, `show` and the log-path
+   argument of `ledger.py finish`. The agents' own transcript stores (for example `~/.codex/sessions`, `~/.claude/projects`) hold the same
    copy; `log_scan.py` lists them as places the user may need to clean and never touches them.
 6. **Logs are read through the scan.** `log_scan.py show <log>` prints a redacted view and is the sanctioned way to
-   read a delegate log. `ledger.py finish --log <path>` (new optional argument; the path must be a regular file inside the run-log folder,
+   read a delegate log; on a `not_scanned` log, or one with findings the redaction cannot cover, it refuses and prints only
+   the status. `ledger.py finish` with a new optional log-path argument (the path must be a regular file inside the run-log folder,
    else the command refuses) imports `log_scan.py` and runs the scan before it stores or prints anything about the
    run, records `log_scan` in the ledger line (a local file; the metrics `SCHEMA` is not touched and `PRIVACY.md` lists the
    field) and never copies log text. Reading a raw log first is advisory; the scripts do not read raw logs into any record.
@@ -111,6 +114,8 @@ is listed in the CI copy groups and in the test that compares them, so each skil
   run-log folder and a log written in the last 60 seconds, creates its temp file `O_EXCL` with the original mode
   never wider than 0600, makes no backup and leaves no value in the file.
 - `ledger.py finish` records `log_scan` (`no_findings`, `findings` or `not_scanned`) and warns without reproducing content.
+- `log_scan.py show` refuses a `not_scanned` log; a run-log folder wider than 0700 is refused; a descriptor-level check
+  fails a hardlinked or swapped file (tests).
 - Setup consent for pass-through names is a separate neutral Yes and No; none preselected.
 - Rule 8 (the lesson) has an acceptance line: `fnl-session-hygiene` cites the incident as a corrected-lesson example
   (a test greps the sentence).
