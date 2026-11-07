@@ -1,5 +1,6 @@
 """Context readings use synthetic account state, never transcripts or host settings."""
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -24,6 +25,15 @@ def fixture(session="synthetic"):
             "context_window": {"used_percentage": 99, "context_window_size": 200000,
                                "current_usage": {"input_tokens": 100000, "cache_creation_input_tokens": 20000,
                                                  "cache_read_input_tokens": 4000, "output_tokens": 9999}}}
+
+
+def agy_fixture(session="synthetic"):
+    event = fixture(session)
+    event["conversation_id"] = event.pop("session_id")
+    event["context_window"].update(total_input_tokens=999999, total_output_tokens=888888,
+                                   remaining_percentage=1)
+    event["exceeds_200k_tokens"] = True
+    return event
 
 
 class ContextSnapshotTest(unittest.TestCase):
@@ -73,6 +83,89 @@ class ContextSnapshotTest(unittest.TestCase):
         data = json.loads(out)
         self.assertEqual(set(data), {"used", "window", "percent", "age_seconds", "stale"})
         self.assertEqual((data["used"], data["window"], data["percent"], data["stale"]), (124000, 200000, 62, False))
+
+    def test_antigravity_records_conversation_id_and_namespaces_filename(self):
+        self.seed()
+        event = agy_fixture()
+        event["session_id"] = "compatibility-id-is-ignored"
+        self.assertEqual(self.cli("record", "--host", "antigravity", "--line", raw=json.dumps(event).encode()),
+                         (0, "ctx 62%\n", ""))
+        name = hashlib.sha256(b"antigravity:" + b"synthetic").hexdigest()[:16] + ".json"
+        self.assertEqual(ctx.filename("synthetic", "antigravity"), name)
+        self.assertEqual(ctx.filename("synthetic"), hashlib.sha256(b"synthetic").hexdigest()[:16] + ".json")
+        other = self.folder / name
+        self.assertNotEqual(other, self.path)
+        data = json.loads(other.read_bytes())
+        self.assertEqual(set(data), ctx.FIELDS)
+        self.assertEqual((data["host"], data["used"], data["percent"]), ("antigravity", 124000, 62))
+        self.assertEqual(json.loads(self.path.read_bytes())["host"], "claude")
+        self.assertEqual(self.cli("read", "--session", "synthetic", "--host", "antigravity")[0], 0)
+        self.assertFalse((self.folder / ctx.filename(event["session_id"], "antigravity")).exists())
+
+    def test_antigravity_unknown_window_missing_id_and_null_usage(self):
+        event = agy_fixture()
+        event["context_window"]["context_window_size"] = 0
+        self.assertEqual(self.cli("record", "--host", "antigravity", raw=json.dumps(event).encode()), (0, "", ""))
+        self.assertFalse(self.folder.exists())
+        event["context_window"]["context_window_size"] = 200000
+        self.cli("record", "--host", "antigravity", raw=json.dumps(event).encode())
+        path = self.folder / ctx.filename("synthetic", "antigravity")
+        before = path.read_bytes()
+        for window in (0, -1, True, 1.5, None, 10000001):
+            event["context_window"]["context_window_size"] = window
+            self.assertEqual(self.cli("record", "--host", "antigravity", "--line", raw=json.dumps(event).encode()), (0, "", ""))
+            self.assertEqual(path.read_bytes(), before)
+        event = fixture()  # session_id cannot substitute for conversation_id
+        self.assertEqual(self.cli("record", "--host", "antigravity", raw=json.dumps(event).encode()), (0, "", ""))
+        self.assertEqual(path.read_bytes(), before)
+        self.seed()
+        event = agy_fixture()
+        event["context_window"].update(current_usage=None, context_window_size=0)
+        self.assertEqual(self.cli("record", "--host", "antigravity", raw=json.dumps(event).encode()), (0, "", ""))
+        self.assertFalse(path.exists())
+        self.assertTrue(self.path.exists())
+
+    def test_latest_host_filter_and_unfiltered_latest_keep_output_contract(self):
+        for newest in ("claude", "antigravity"):
+            for host, used in (("claude", 100000), ("antigravity", 120000)):
+                event = fixture() if host == "claude" else agy_fixture()
+                event["context_window"]["current_usage"]["input_tokens"] = used
+                self.cli("record", "--host", host, raw=json.dumps(event).encode())
+                path = self.folder / ctx.filename("synthetic", host)
+                os.utime(path, (2000 if host == newest else 1000,) * 2)
+            for host, used in (("claude", 124000), ("antigravity", 144000), (None, 124000 if newest == "claude" else 144000)):
+                args = ("--host", host) if host else ()
+                code, out, err = self.cli("read", "--latest", *args)
+                self.assertEqual((code, err), (0, ""))
+                data = json.loads(out)
+                self.assertEqual(set(data), {"used", "window", "percent", "age_seconds", "stale"})
+                self.assertEqual(data["used"], used)
+                code, out, err = self.cli("check", "--latest", "--threshold", "150000", *args)
+                self.assertEqual((code, err), (0, ""))
+                self.assertEqual(set(json.loads(out)), {"action", "reason"})
+
+    def test_host_filter_refuses_missing_stale_or_invalid_matching_latest(self):
+        self.seed()
+        self.refused("read", "--latest", "--host", "antigravity")
+        self.cli("record", "--host", "antigravity", raw=json.dumps(agy_fixture()).encode())
+        path = self.folder / ctx.filename("synthetic", "antigravity")
+        valid = path.read_bytes()
+        for data in ({**json.loads(valid), "measured": "2000-01-01T00:00:00Z"},
+                     {**json.loads(valid), "percent": -1}):
+            path.write_text(json.dumps(data))
+            self.refused("read", "--latest", "--host", "antigravity")
+        path.write_bytes(valid)
+        path.chmod(0o644)
+        self.refused("read", "--latest", "--host", "antigravity")
+
+    def test_session_host_must_match_snapshot_and_unknown_host_is_refused(self):
+        self.seed()
+        data = json.loads(self.path.read_bytes())
+        data["host"] = "antigravity"
+        self.path.write_text(json.dumps(data))
+        self.refused("read", "--session", "synthetic")
+        self.refused("read", "--latest", "--host", "codex")
+        self.assertEqual(self.cli("record", "--host", "codex"), (0, "", ""))
 
     def test_null_or_noninteger_usage_removes_stale_snapshot_without_a_line(self):
         for usage in (None, {}, {"input_tokens": True}, {"input_tokens": 1.2}, "invalid"):
