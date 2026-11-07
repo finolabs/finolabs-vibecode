@@ -136,7 +136,7 @@ Enforcers: the script for the choice; `fnl-review-gate` text and agent judgment 
   date. `yes` is recorded only after the coordinator sees the family's own marker on a pull request; enabling a
   setting does not count. `review_route.py` prefers a `yes` family only between two otherwise valid candidates;
   independence of family comes first.
-- Each relay is counted by a receipt (`record.py`) and the dashboard shows relayed reviews per family.
+- Relay receipts and dashboard counters per family are not built in 0.2.0. They remain in the [0.2.1 backlog](release-0.2.0.md#deferred-to-021); relay is not yet counted.
 
 ## E. Verification without an agent
 
@@ -217,7 +217,7 @@ All semantic judgments of this spec (parts E, F and G) use one interface: a narr
   exception in `CLAUDE.md` governs the call; the user's `typesafe-ai` skill remains the place to read the cookbooks and
   is not on the call path). One HTTPS POST per judgment to the fixed endpoint, the key only from `TYPESAFE_API_KEY`,
   a closed per-site payload schema with size caps and a refusal on a secret or path hit, no redirect or proxy, TLS
-  verified, a loopback base URL only through a user-typed flag for tests, a per-run call cap, and `FNL_JUDGE=off`.
+  verified, a loopback base URL only through a user-typed flag for tests, at most 24 outbound attempts in one process, including failed attempts (`MAX_CALLS` in `judge.py`), and `FNL_JUDGE=off`.
   Chosen at setup by a separate neutral Yes and No in `fnl-setup` (it needs the user's own authorization and API
   budget; the skill being installed grants neither) and recorded as `judge: jev`. Only a validated reply counts as
   Jev use; a timeout, 401, 429, missing key, DNS or TLS failure falls back to the host model and the report says so.

@@ -52,7 +52,7 @@ Claude Code [official hooks docs](https://code.claude.com/docs/en/hooks.md), res
 - The marker is advisory. A repository can influence the error (for example through a project `ANTHROPIC_BASE_URL`), and the marker is per family, so one limited install marks all Claude installs. Therefore a newer successful `read` of the family overrides the marker, it excludes the family only from routing offers, and the user's statement wins.
 - Expiry, single rule: out of quota until the family's cached reset time when that lies in the future and within five hours after the marker; otherwise one hour after the marker; never longer than five hours. A test pins both cases and the override.
 - Codex and Antigravity get no marker (no documented equivalent was found); their on-demand reading is the signal.
-- Adding a hook entry to the Claude manifest makes Claude Code ask the user to trust the changed hooks; Codex and Antigravity read their own manifests and get no new prompt. This is called out in the release notes and the PR.
+- Adding a hook entry to the Claude manifest makes Claude Code ask the user to trust the changed hooks. Codex and Antigravity get no new hook entry, but Codex hook trust also covers the plugin bundle's file contents: changed bundled scripts can require renewed trust even with unchanged hook declarations (vendor documentation and source researched 07/11/2026, recorded in README's hook-trust guidance). This is called out in the release notes and the PR.
 
 ## C. The Homebrew exception to the executable check
 

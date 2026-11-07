@@ -151,7 +151,7 @@ is listed in the CI copy groups and in the test that compares them, so each skil
 
 ## Open decisions
 
-- Whether the private `HOME` option ships in 0.2.0 or only the statement of the residual risk; owner to settle when the
-  package is briefed (it needs evidence of what each agent's login store requires).
+- The private `HOME` decision remains open and the option is not implemented in 0.2.0; the owner needs evidence of
+  what each agent's login store requires before settling the isolation design.
 
 None other. Names of the scripts and the `log_scan` field may change in review.
