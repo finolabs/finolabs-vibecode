@@ -487,9 +487,20 @@ class RouterMarkerTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertIn("UNKNOWN the pull request body could not be read", result.stdout)
 
-    def test_cli_a_symlinked_adoption_file_is_unknown(self):
+    def test_cli_a_link_to_the_other_adoption_file_counts_through_its_target(self):
         def setup(repo):
             (repo / "CLAUDE.md").symlink_to("AGENTS.md")
+            return git_commit(repo, {})
+        # A link to the other adoption file is read through its target.
+        result = run_cli(pr(body=ROUTED), base_files={"AGENTS.md": ADOPTED}, setup=setup)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        result = run_cli(pr(), base_files={"AGENTS.md": ADOPTED}, setup=setup)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("BLOCK router marker: missing", result.stdout)
+
+    def test_cli_a_link_to_anything_else_is_unknown(self):
+        def setup(repo):
+            (repo / "CLAUDE.md").symlink_to("docs/NOTES.md")
             return git_commit(repo, {})
         result = run_cli(pr(body=ROUTED), base_files={"AGENTS.md": ADOPTED}, setup=setup)
         self.assertEqual(result.returncode, 2, result.stdout)

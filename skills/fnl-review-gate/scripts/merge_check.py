@@ -328,6 +328,14 @@ def adopted_at(base):
             continue  # absent at the base: this file does not adopt the gate
         meta, _, name = entries[0].partition(b"\t")
         fields = meta.split(b" ")
+        if len(entries) == 1 and name == path.encode() and fields[0] == b"120000" and len(fields) == 3 \
+                and re.fullmatch(rb"[0-9a-f]{40}|[0-9a-f]{64}", fields[2]):
+            # A link to the other adoption file (the common CLAUDE.md -> AGENTS.md layout) adds
+            # nothing of its own: the target is read on its own turn. Any other link is unreadable.
+            target = run_git("cat-file", "blob", fields[2].decode("ascii"))
+            other = [x for x in ADOPTION_FILES if x != path]
+            if target.returncode == 0 and target.stdout.strip().decode("utf-8", "replace") in other:
+                continue
         if (len(entries) != 1 or name != path.encode() or len(fields) != 3
                 or fields[0] not in (b"100644", b"100755") or fields[1] != b"blob"
                 or not re.fullmatch(rb"[0-9a-f]{40}|[0-9a-f]{64}", fields[2])):
