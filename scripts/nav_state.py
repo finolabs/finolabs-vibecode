@@ -11,6 +11,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import unicodedata
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -22,11 +23,13 @@ MAX_LEDGER_IDS = 200
 STATUS_WORDS = ('draft', 'accepted', 'in progress', 'implemented', 'released', 'deferred', 'unknown')
 OUTCOME_WORDS = ('accepted', 'rejected', 'timeout', 'stalled', 'error', 'blocked',
                  'needs-permission', 'quota', 'cancelled')
-CONTROL = re.compile(r'[\x00-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]')
 # Length alone does not identify a secret: preserve long words and identifiers.
 # Unprefixed base64 candidates need padding to distinguish them from prose.
-PRIVATE = re.compile(r'(?:/(?:Users|home)/[^\s`"<>]+|[A-Za-z]:[\\/][^\s`"<>]+|'
-                     r'\b(?:sk-|ghp_|github_pat_)[A-Za-z0-9_-]+|'
+PRIVATE = re.compile(r'(?:-----BEGIN[\s\S]*?(?:-----END[^\r\n]*?-----|\Z)|'
+                     r'(?:/(?:Users|home|root|private/var)/|~/\.ssh/)[^\s`"<>]*|'
+                     r'[A-Za-z]:[\\/][^\s`"<>]+|'
+                     r'\b(?:sk-|ghp_|github_pat_|xoxb-)[A-Za-z0-9_-]+|'
+                     r'\bAKIA[A-Z0-9]{16}\b|'
                      r'\b[0-9a-fA-F]{32,}\b|'
                      r'(?<![\w/+=-])[A-Za-z0-9+/]{40,}={1,2}(?![\w/+=-]))')
 SAFE_ID = re.compile(r'[A-Za-z0-9._:-]{1,80}\Z')
@@ -36,12 +39,21 @@ PR_IN_SUBJECT = re.compile(
     r'\bpull request #([0-9]{1,8})|\bPR #([0-9]{1,8})|\(#([0-9]{1,8})\))\Z', re.I)
 
 
+def unsafe_character(char):
+    category = unicodedata.category(char)
+    # Variation selectors are Mn, so the C-category rule alone misses them.
+    return (category.startswith('C') or category in ('Zl', 'Zp')
+            or '\ufe00' <= char <= '\ufe0f' or '\U000e0100' <= char <= '\U000e01ef')
+
+
 def has_control_chars(text):
-    return not isinstance(text, str) or CONTROL.search(text) is not None
+    return not isinstance(text, str) or any(unsafe_character(char) for char in text)
 
 
 def sanitize_text(text, max_len=300):
-    return ' '.join(PRIVATE.sub('[removed]', CONTROL.sub(' ', text)).split())[:max_len]
+    text = ''.join(' ' if unicodedata.category(char) in ('Zl', 'Zp') else ''
+                   if unsafe_character(char) else char for char in text)
+    return ' '.join(PRIVATE.sub('[removed]', text).split())[:max_len]
 
 
 def validate_since(value):
@@ -51,7 +63,7 @@ def validate_since(value):
     return value
 
 
-def read_safe_file(path, limit=MAX_FILE_BYTES):
+def read_safe_file(path, limit=MAX_FILE_BYTES, reject_writable=False):
     """One bounded reader: no symlink components, regular file, current owner."""
     path = Path(os.path.abspath(path))
     fd = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY)
@@ -66,6 +78,8 @@ def read_safe_file(path, limit=MAX_FILE_BYTES):
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_size > limit:
             raise ValueError('unsafe or oversized file')
+        if reject_writable and info.st_mode & 0o022:
+            raise ValueError('group or world writable file')
         with os.fdopen(os.dup(fd), 'rb') as stream:
             raw = stream.read(limit + 1)
         if len(raw) > limit:
@@ -199,13 +213,15 @@ def collect_ledger_evidence(since, project=None):
         root = dr.consent_root()
         if root is None:
             return absent
-        raw = read_safe_file(root / 'ledger.jsonl', 16 * 1024 * 1024)
+        raw = read_safe_file(root / 'ledger.jsonl', 16 * 1024 * 1024, reject_writable=True)
     except (OSError, ValueError):
         return absent
     starts, finishes = {}, {}
     for line in raw.splitlines():
         try:
             row = json.loads(line)
+        except RecursionError:
+            return absent
         except ValueError:
             continue
         if not isinstance(row, dict) or not isinstance(row.get('id'), str) or not SAFE_ID.fullmatch(row['id']):
@@ -354,7 +370,10 @@ def read_json(path):
         return result
     raw = read_safe_file(path) if path else sys.stdin.read(MAX_FILE_BYTES + 1)
     require(len(raw.encode('utf-8')) <= MAX_FILE_BYTES, 'input too large')
-    return json.loads(raw, object_pairs_hook=unique)
+    try:
+        return json.loads(raw, object_pairs_hook=unique)
+    except RecursionError as error:
+        raise ValueError('JSON nesting too deep') from error
 
 
 def main(argv=None):

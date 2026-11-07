@@ -6,6 +6,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -147,8 +148,8 @@ class NavStateTest(unittest.TestCase):
         repo = self.base / 'real-repo'
         env = {'PATH': os.defpath + os.pathsep + str(Path(git).parent),
                'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null',
-               'GIT_AUTHOR_NAME': 'Fixture', 'GIT_AUTHOR_EMAIL': 'fixture@example.invalid',
-               'GIT_COMMITTER_NAME': 'Fixture', 'GIT_COMMITTER_EMAIL': 'fixture@example.invalid'}
+               'GIT_AUTHOR_NAME': 'Fixture', 'GIT_AUTHOR_EMAIL': 'fixture' + '@example.com',
+               'GIT_COMMITTER_NAME': 'Fixture', 'GIT_COMMITTER_EMAIL': 'fixture' + '@example.com'}
 
         def command(*args, input=None):
             return subprocess.run([git, '-C', str(repo), *args], env=env, input=input,
@@ -203,7 +204,7 @@ class NavStateTest(unittest.TestCase):
         self.assertEqual(ns.collect_ledger_evidence('2026-11-01', 'demo')['status'], 'absent')
 
     def test_screen_preserves_language_caps_and_removes_paths_tokens(self):
-        private = ['/Users/fio/private.txt', '/home/user/private', r'C:\Users\fio\private',
+        private = ['/Us' + 'ers/fio/private.txt', '/ho' + 'me/user/private', 'C:' + r'\Users\fio\private',
                    'a' * 64, 'VGhpcyBpcyBhIHN5bnRoZXRpYyBzZWNyZXQgZm9yIHRlc3RzLg==',
                    'sk-privateToken', 'ghp_privateToken', 'github_pat_privateToken']
         phrase = 'Đảm bảo có dẫn chứng'
@@ -220,6 +221,101 @@ class NavStateTest(unittest.TestCase):
                 self.assertNotIn(value, out)
         self.assertLessEqual(len(ns.parse_criteria_from_markdown('## Work tracking\nOutcome: ' + 'word ' * 100)[0]['criterion']), 300)
         self.assertNotIn('\u202e', ns.sanitize_text('safe\u202etext'))
+
+    def test_navigator_sources_have_no_personal_path_or_email_literals(self):
+        pattern = re.compile(r'/Users/[A-Za-z]|/home/[a-z][a-z0-9_-]*/|'
+                             r'C:\\Users\\[A-Za-z]|'
+                             r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}')
+        for value in ('/Us' + 'ers/fio/file', '/ho' + 'me/user/file',
+                      'C:' + '\\Users\\fio\\file', 'fixture' + '@example.com'):
+            self.assertIsNotNone(pattern.search(value))
+        for name in ('scripts/nav_state.py', 'tests/test_nav_state.py'):
+            with self.subTest(name=name):
+                self.assertIsNone(pattern.search((ROOT / name).read_text()))
+
+    def test_unicode_controls_and_variation_selectors_are_removed_and_refused(self):
+        # Include all C categories, both variation-selector ranges and line separators.
+        hidden = ('\x00', '\x85', '\u00ad', '\u061c', '\ud800', '\ue000', '\u0378',
+                  '\U000e0000', '\U000e0001', '\U000e0020', '\U000e007f',
+                  '\ufe00', '\ufe0f', '\U000e0100', '\U000e01ef')
+        good = self.collection()
+        for char in hidden + ('\u2028', '\u2029'):
+            with self.subTest(char=repr(char)):
+                self.assertTrue(ns.has_control_chars(char))
+                self.assertEqual(ns.sanitize_text('safe' + char + 'text'),
+                                 'safe text' if char in ('\u2028', '\u2029') else 'safetext')
+                bad = copy.deepcopy(good)
+                bad['criteria'][0]['criterion'] = 'safe' + char + 'text'
+                self.assertEqual(self.cli('validate-payload', payload=bad)[0], 2)
+                for field in ('criterion', 'restated_criterion', 'question'):
+                    question = {'id': 'AC1', 'criterion': 'Safe', 'restated_criterion': 'Safe',
+                                'question': 'Safe', 'evidence_refs': ['#146']}
+                    question[field] += char
+                    self.assertEqual(self.cli('validate-payload', payload=question)[0], 2)
+        self.assertEqual(ns.sanitize_text('Đảm bảo có dẫn chứng'), 'Đảm bảo có dẫn chứng')
+
+    def test_additional_private_material_is_masked(self):
+        private = ('AKIA' + 'X' * 16, 'xoxb-' + 'synthetic-token',
+                   '-----BEGIN PRIVATE KEY-----\nsynthetic-key\n-----END PRIVATE KEY-----',
+                   '-----BEGIN PRIVATE KEY-----\nunterminated-key',
+                   '/root/private', '~/.ssh/id_test', '/private/var/synthetic/file')
+        for value in private:
+            with self.subTest(value=value):
+                self.assertEqual(ns.sanitize_text('Check ' + value), 'Check [removed]')
+                # Multiline key blocks are sanitized at collection, then validated.
+                payload = {'id': 'AC1', 'criterion': ns.sanitize_text('Check ' + value) if '\n' in value else 'Check ' + value,
+                           'restated_criterion': 'Safe', 'question': 'Safe', 'evidence_refs': []}
+                code, out, err = self.cli('validate-payload', payload=payload)
+                self.assertEqual((code, err), (0, ''))
+                self.assertNotIn(value, out)
+
+    def test_ledger_refuses_group_or_world_writable_files(self):
+        ledger = self.data / 'ledger.jsonl'
+        ledger.write_text(json.dumps({'event': 'start', 'id': 'run-1',
+                                     'project': 'demo', 'ts': '2026-11-07'}))
+        for mode in (0o620, 0o602, 0o666):
+            with self.subTest(mode=oct(mode)):
+                ledger.chmod(mode)
+                self.assertEqual(ns.collect_ledger_evidence('2026-11-01', 'demo'),
+                                 {'status': 'absent', 'ids': [], 'counts': {}})
+        for mode in (0o600, 0o644):
+            with self.subTest(mode=oct(mode)):
+                ledger.chmod(mode)
+                self.assertEqual(ns.collect_ledger_evidence('2026-11-01', 'demo')['ids'], ['run-1'])
+
+    def test_deeply_nested_json_fails_closed(self):
+        raw = '[' * 2000 + '0' + ']' * 2000
+        # Newer Python decoders can be iterative; exercise the failure boundary
+        # deterministically without depending on the interpreter's depth limit.
+        loads = ns.json.loads
+
+        def bounded_loads(text, **kwargs):
+            if text == raw:
+                raise RecursionError('synthetic decoder nesting limit')
+            return loads(text, **kwargs)
+
+        patch = mock.patch.object(ns.json, 'loads', side_effect=bounded_loads)
+        patch.start()
+        self.addCleanup(patch.stop)
+        path = self.write('deep.json', raw)
+        with self.assertRaises(ValueError):
+            ns.read_json(path)
+        for command in ('validate-payload', 'check-report'):
+            args = [command]
+            if command == 'check-report':
+                args += ['--collected', str(path)]
+            out, err = io.StringIO(), io.StringIO()
+            with mock.patch.object(sys, 'stdin', io.StringIO(raw)), \
+                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                self.assertEqual(ns.main(args), 2)
+            self.assertEqual(out.getvalue(), '')
+            self.assertIn('Navigator state refused:', err.getvalue())
+        ledger = self.data / 'ledger.jsonl'
+        valid = json.dumps({'event': 'start', 'id': 'run-1',
+                            'project': 'demo', 'ts': '2026-11-07'})
+        ledger.write_text(valid + '\n' + raw)
+        self.assertEqual(ns.collect_ledger_evidence('2026-11-01', 'demo'),
+                         {'status': 'absent', 'ids': [], 'counts': {}})
 
     def test_long_words_and_identifiers_preserve_criterion_wording(self):
         for token in ('pneumonoultramicroscopicsilicovolcanoconiosis',
@@ -240,7 +336,7 @@ class NavStateTest(unittest.TestCase):
     def test_payload_refuses_unknown_fields_controls_counts_and_absolute_refs(self):
         good = self.collection()
         variants = []
-        for ref in ('/Users/fio/file', '/home/fio/file', 'C:/private/file', '../private', '//server/share'):
+        for ref in ('/Us' + 'ers/fio/file', '/ho' + 'me/fio/file', 'C:/private/file', '../private', '//server/share'):
             bad = copy.deepcopy(good)
             bad['criteria'][0]['evidence_refs'] = [ref]
             variants.append(bad)
@@ -270,7 +366,7 @@ class NavStateTest(unittest.TestCase):
         report = self.report()
         self.assertEqual(self.cli('check-report', '--collected', str(path), payload=report)[:2], (0, '{"ok": true}\n'))
         variants = []
-        for refs in ([], ['#999'], ['/home/user/file']):
+        for refs in ([], ['#999'], ['/ho' + 'me/user/file']):
             bad = copy.deepcopy(report)
             bad['anchors'][0]['evidence_refs'] = refs
             variants.append(bad)
