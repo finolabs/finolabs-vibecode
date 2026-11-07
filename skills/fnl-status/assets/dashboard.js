@@ -199,7 +199,8 @@
       icon.appendChild(s("circle", Object.assign({cx: 8, cy: 8, r: 6}, ink)));
       icon.appendChild(s("path", Object.assign({d: "M8 4V8L11 10"}, ink)));
     }
-    return icon;
+    var model = name.replace(/\b(weekly|week|5h|five.hour|session)\b/ig, " ").replace(/^[\s-]+|[\s-]+$/g, "").replace(/\s+/g, " ");
+    return model ? h("span", "quota-pool-mark", [t("span", "quota-pool-model", model.slice(0, 10)), icon]) : icon;
   }
   function runningPanel() {
     if (!D.running) return null;
@@ -241,7 +242,7 @@
           height: 14, fill: "var(--faint)"}), item[2]));
       });
       var label = h("div", "lane-label", [t("span", "lane-identity", (run.agent || "other") + " " + (run.model || "—")),
-        t("span", "lane-task", run.task || "—")]);
+        t("span", "lane-task", (run.project ? run.project + " · " : "") + (run.task || "—"))]);
       if (run.no_process_found) {
         var marker = tipOn(brick("todo", 12, 6, "no-process"), {title: "no process", items: ["No process found."]});
         marker.setAttribute("aria-hidden", "false"); marker.setAttribute("role", "img");
@@ -251,7 +252,7 @@
       var lane = h("div", "lane" + (run.no_process_found ? "" : " live"), [label, track,
         t("span", "lane-value", age + "/" + (budget == null ? "?" : budget) + " m")]);
       lane.setAttribute("data-run", run.id || ""); lane.setAttribute("data-state", state);
-      tipOn(lane, {title: (run.agent || "other") + " " + (run.model || "—"), sub: run.task || "—",
+      tipOn(lane, {title: (run.agent || "other") + " " + (run.model || "—"), sub: (run.project ? run.project + " · " : "") + (run.task || "—"),
         rows: [["elapsed", age + " min"], ["budget", budget == null ? "unknown" : budget + " min"],
           ["check at", budget == null ? "unknown" : budget / 2 + " min"], ["cap", cap == null ? "unknown" : cap + " min"]],
         bar: {value: age, max: cap, marks: budget == null ? [] : [budget / 2, budget]}});
@@ -297,12 +298,12 @@
         if (stale) meter.appendChild(t("span", "quota-unknown", "?"));
         meter.setAttribute("role", "img"); meter.setAttribute("tabindex", "0");
         tipOn(meter, q ? {title: family.agent + " quota", sub: (q.name || "pool") + (stale ? " · unverified" : ""),
-          rows: [["remaining", Math.round(fraction * 100) + "%"], ["resets", q.resets || "unknown"], ["measured", q.measured]],
+          rows: [["remaining", Math.round(fraction * 100) + "%"], ["resets", q.resets ? whenRelative(q.resets) : "unknown"], ["measured", when(q.measured)]],
           bar: {value: fraction, max: 1, marks: [.1]}} : {title: family.agent + " quota", sub: "not read",
           items: ["quota probe off or no reading yet; turn on in fnl-setup"]});
         var label = q ? quotaPoolMark(q.name || "pool") : t("span", "quota-pool-name", "—");
         group.appendChild(h("div", "quota-pool", [label, meter]));
-        if (q) quotaRows.push([family.agent, q.name, pct(fraction), q.resets || "unknown", q.measured, stale ? "unverified" : "verified"]);
+        if (q) quotaRows.push([family.agent, q.name, pct(fraction), q.resets ? whenRelative(q.resets) : "unknown", when(q.measured), stale ? "unverified" : "verified"]);
       });
       capacity.appendChild(h("div", "quota-block capacity-block", [t("div", "capacity-caption", family.agent + " quota"), group]));
     });
@@ -333,7 +334,7 @@
       lines.push(tableOf("pipeline items", itemStates, [itemStates.map(function (state) {
         return (p.features || []).filter(function (f) { return f.state === state; }).length;
       })]));
-    } else lines.push(tableOf("project completion", ["done", "total", "completion", "an agent is on it", "to do"],
+    } else lines.push(tableOf("repository completion", ["done", "total", "completion", "an agent is on it", "to do"],
       [[done, total, completionPercent(done, total) + "%", active, total - done - active]]));
     if (p.reason) line(p.reason);
     (p.features || []).forEach(function (feature) {
@@ -377,7 +378,7 @@
     line("Delegated runs · " + Object.keys(p.outcomes || {}).map(function (kind) { return kind + ": " + p.outcomes[kind]; }).join(" · "));
     line("label without a feature: " + (p.labels_without_feature || 0) + " · unlinked runs: " + (p.unlinked_runs || 0));
     line("Sessions without a task");
-    (p.sessions_without_task || []).forEach(function (session) { line(session.id + " · " + session.host + " · last activity " + session.last); });
+    (p.sessions_without_task || []).forEach(function (session) { line(session.id + " · " + session.host + " · last activity " + when(session.last)); });
     line("Last reviews · " + Object.keys(p.reviews || {}).map(function (kind) { return kind + ": " + p.reviews[kind]; }).join(" · ") + " · manifest " + (p.version || "unknown"));
     if (p.work_records && p.work_records.skipped) line("Work records skipped: " + p.work_records.skipped);
     (p.skipped || []).forEach(function (reason) { line(reason); });
@@ -416,6 +417,31 @@
       return activityTime(b.last) - activityTime(a.last) || String(a.repo).localeCompare(String(b.repo));
     }).slice(0, 12);
   }
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  // Human-readable local time: "today 18:09", "yesterday 18:09", "7 Nov, 18:09" or "7 Nov 2025, 18:09".
+  // A date without a time stays a date; anything unparseable is shown as it came.
+  function when(value) {
+    if (typeof value !== "string" || !value) return "unknown";
+    var dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (dateOnly) return Number(dateOnly[3]) + " " + MONTHS[Number(dateOnly[2]) - 1] + " " + dateOnly[1];
+    var ms = Date.parse(value);
+    if (!Number.isFinite(ms)) return value;
+    var d = new Date(ms), now = new Date(), clock = pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    var days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+    if (days === 0) return "today " + clock;
+    if (days === 1) return "yesterday " + clock;
+    if (days === -1) return "tomorrow " + clock;
+    return d.getDate() + " " + MONTHS[d.getMonth()] + (d.getFullYear() === now.getFullYear() ? "" : " " + d.getFullYear()) + ", " + clock;
+  }
+  // "in 2d 5h · 14 Nov, 16:54" for a reset time, "3h 10m ago · today 14:59" for a past one.
+  function whenRelative(value) {
+    var ms = Date.parse(value);
+    if (!Number.isFinite(ms)) return when(value);
+    var diff = Math.abs(ms - Date.now()) / 60000, d = Math.floor(diff / 1440), h = Math.floor(diff % 1440 / 60), m = Math.floor(diff % 60);
+    var span = d > 0 ? d + "d " + h + "h" : h > 0 ? h + "h " + m + "m" : Math.max(1, m) + "m";
+    return (ms >= Date.now() ? "in " + span : span + " ago") + " · " + when(value);
+  }
   function activityTime(value) {
     var at = Date.parse(typeof value === "string" ? value : "");
     return Number.isFinite(at) ? at : 0;
@@ -427,12 +453,12 @@
   }
   function activeProjects(block) {
     var rows = namedActivity(block), list = h("div", "active-projects"), motion = {index: 0};
-    if (!rows.length) list.appendChild(t("div", "meta", "No named project active in the last 24 hours. Run fnl-status inside a repository to add it."));
+    if (!rows.length) list.appendChild(t("div", "meta", "No named repository active in the last 24 hours. Run fnl-status inside a repository to add it."));
     rows.forEach(function (project) {
       var hosts = h("span", "active-hosts");
       activityHosts(project.hosts).forEach(function (host) {
         var shape = {claude: "●", codex: "◆", antigravity: "▲"}[host];
-        hosts.appendChild(tipOn(t("span", "active-host", shape), {title: host, sub: "project total · 24h", rows: [["sessions", project.sessions]]}));
+        hosts.appendChild(tipOn(t("span", "active-host", shape), {title: host, sub: "repository total · 24h", rows: [["sessions", project.sessions]]}));
       });
       var at = activityTime(project.last), age = Math.max(0, Math.floor((Date.now() - at) / 60000));
       var last = age < 60 ? age + " min" : age < 1440 ? Math.floor(age / 60) + " hr" : Math.floor(age / 1440) + " d";
@@ -444,7 +470,7 @@
         h("div", "active-meta", [hosts, t("span", "active-last", at ? "last " + last + " ago" : "last unavailable")])])]);
       row.setAttribute("data-repo", project.repo);
       if (pipeline) row.className += " pipeline-project";
-      tipOn(row, pipeline || !hasTasks ? sourceTip(snapshot, project.label) : project.label + " · " + (at ? String(project.last) : "last unavailable"));
+      tipOn(row, pipeline || !hasTasks ? sourceTip(snapshot, project.label) : project.label + " · " + (at ? when(project.last) : "last unavailable"));
       var percent = Number(project.percent), percentCell;
       if (hasTasks && !unfinished) {
         percentCell = brick("done", 22, 14, "project-done");
@@ -461,9 +487,9 @@
       list.appendChild(row);
     });
     list.appendChild(taskLegend());
-    TABS.get("now").tableRows.push(tableOf("active projects", ["project", "hosts", "sessions · 24h", "last", "done"], rows.map(function (row) {
+    TABS.get("now").tableRows.push(tableOf("active repositories", ["repository", "hosts", "sessions · 24h", "last", "done"], rows.map(function (row) {
       var percent = Number(row.percent);
-      return [row.label, activityHosts(row.hosts).join(", "), row.sessions, activityTime(row.last) ? String(row.last) : "unavailable",
+      return [row.label, activityHosts(row.hosts).join(", "), row.sessions, activityTime(row.last) ? when(row.last) : "unavailable",
         row.percent == null || !Number.isFinite(percent) ? "—" : Math.max(0, Math.min(100, Math.floor(percent))) + "%"];
     })));
     return list;
@@ -675,7 +701,7 @@
   }
   function projectLimits() {
     return {title: "How to read this", items: [
-      "Named projects show local activity in the last 24 hours.",
+      "Named repositories show local activity in the last 24 hours.",
       "Pipelines show recognised artefacts or repository states; small bricks show tasks or packages.",
       "Task done means ticked; not accepted remains unfinished. Features need verify artefacts.",
       "At most five unfinished items; finished items collapse into a count. Tables keep details.",
@@ -814,7 +840,7 @@
       return source.name + (source.ok ? "" : " (unavailable)") + (source.note ? ": " + source.note : "");
     }).join(" · "),
       "sessions " + num(sess.total) + " · with edits " + num(sess.with_edits) + " · unclassified " + num(sess.unclassified) +
-      " · writer errors " + num(D.errors) + " · generated " + (D.generated || "—"), "built " + (f.built_at || "—")];
+      " · writer errors " + num(D.errors) + " · generated " + (D.generated ? when(D.generated) : "—"), "built " + (f.built_at ? when(f.built_at) : "—")];
     Object.keys(hosts).forEach(function (host) {
       var hostAge = (now - Date.parse(hosts[host])) / 1000;
       var quiet = hostAge > 900;
@@ -822,7 +848,7 @@
       var otherActive = Object.keys(hosts).some(function (other) {
         return other !== host && (now - Date.parse(hosts[other])) / 1000 <= 900;
       });
-      lines.push((Object.prototype.hasOwnProperty.call(names, host) ? names[host] : host) + ": last event " + hosts[host] +
+      lines.push((Object.prototype.hasOwnProperty.call(names, host) ? names[host] : host) + ": last event " + when(hosts[host]) +
                  (quiet && otherActive ? "; hooks may need trust" : ""));
     });
     lines.push("ledger: " + age(f.ledger_age_seconds), "quota: " + age(f.quota_age_seconds));
@@ -861,7 +887,7 @@
   var sess = D.sessions || {}, k = D.kpi || {}, sp = k.spark || {};
   app.appendChild(tipOn(h("div", "cmd", [
     t("span", "ps", "$"), t("span", "", "fnl-status" + (D.period ? " --since " + D.period.days + "d" : "")), h("span", "cursor"),
-    t("span", "meta", D.period ? D.period.from + " → " + D.period.to : "")
+    t("span", "meta", D.period ? when(D.period.from) + " → " + when(D.period.to) : "")
   ]), {title: "~/finolabs-vibecode — fnl-status", items: ["Local usage metadata and dispatch ledger."]}));
   if (emptyNotice) app.appendChild(emptyNotice);
 
@@ -884,7 +910,7 @@
   drawTabs();
   var overview = TABS.get("overview").panel;
   TABS.get("now").panel.appendChild(pane("running now", infoButton(runningLimits() || "not available yet"), "", runningPanel(), "not available yet"));
-  TABS.get("now").panel.appendChild(pane("projects, last 24 h", infoButton(projectLimits()), "", projectPanel(), "not available yet"));
+  TABS.get("now").panel.appendChild(pane("repositories, last 24 h", infoButton(projectLimits()), "", projectPanel(), "not available yet"));
 
   /* Overview: activity and router composition beside depth and load cost. */
   var band1 = h("div", "g2");

@@ -145,7 +145,7 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render(FIXTURE)
         self.assertEqual([t['text'] for t in out['tabs']], ['Overview', 'Now 7'])
         expected = [['activity', 'router coverage', 'review gate', 'skill and agent use', 'depth vs outcome', 'load cost'],
-                    ['running now', 'projects, last 24 h']]
+                    ['running now', 'repositories, last 24 h']]
         for index, (tab, panel, panes) in enumerate(zip(out['tabs'], out['panels'], expected)):
             self.assertEqual(tab['attrs']['role'], 'tab')
             self.assertTrue(tab['inTitleBar'])
@@ -158,7 +158,7 @@ class DashboardScriptTest(unittest.TestCase):
             self.assertEqual(tab['tabIndex'], 0 if index == 0 else -1)
             for pane in panes: self.assertIn(pane, panel['text'])
         headers = [m['text'].split(' ⓘ')[0] for m in out['picture'] if m['tag'] == 'h2' and m['panel'] == 'panel-now']
-        self.assertEqual(headers, ['running now', 'projects, last 24 h'])
+        self.assertEqual(headers, ['running now', 'repositories, last 24 h'])
         ids = [n['attrs'].get('id') for n in out['dom']]
         for old in ('agents', 'project', 'delegation', 'reviews'):
             self.assertNotIn('panel-' + old, ids)
@@ -360,8 +360,10 @@ class DashboardScriptTest(unittest.TestCase):
         for text in ('not read', 'quota probe off or no reading yet', 'turn on in fnl-setup'):
             self.assertIn(text, meters[3]['tooltip'])
         for meter in (meters[0], meters[1], meters[2], meters[4]):
-            for text in ('remaining', '68%', 'resets', pool['resets'], 'measured', pool['measured']):
+            for text in ('remaining', '68%', 'resets', 'measured'):
                 self.assertIn(text, meter['tooltip'])
+            self.assertNotIn(pool['resets'], meter['tooltip'])  # times are shown human-readable, never as raw ISO
+            self.assertNotIn(pool['measured'], meter['tooltip'])
         table = next(m for m in self.marks(out, 'tbl', 'show the data as tables') if m['text'].startswith('quota'))
         self.assertIn('long-pool-name', table['text'])
         self.assertIn('resets', table['text'])
@@ -688,7 +690,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(len({m['text'] for m in self.marks(out, 'active-host')}), 3)
         self.assertNotIn('img', out['tags'])
         data['progress']['active'] = []
-        self.assertIn('No named project active in the last 24 hours. Run fnl-status inside a repository to add it.', self.render_freshness(data)['text'])
+        self.assertIn('No named repository active in the last 24 hours. Run fnl-status inside a repository to add it.', self.render_freshness(data)['text'])
 
     def test_short_and_long_budget_track_uses_hard_cap(self):
         data = self.sample()
@@ -1081,7 +1083,7 @@ class DashboardScriptTest(unittest.TestCase):
         tips = [p['tooltip'] for p in cells]
         self.assertTrue(any(all(t in tip for t in ('T002', 'agent on it', 'codex', 'session1', '</script>')) for tip in tips))
         tables = [p for p in out['picture'] if p['disclosure'] == 'show the data as tables']
-        self.assertTrue(any('project completion' in p['text'] and '46%' in p['text'] for p in tables))
+        self.assertTrue(any('repository completion' in p['text'] and '46%' in p['text'] for p in tables))
         self.assertTrue(any('T090' in p['text'] for p in tables), 'finished feature remains in tables')
         self.assertTrue(all(p['disclosure'] == 'show the data as tables' for p in out['picture'] if p['tag'] == 'table'))
         self.assertNotIn('img', out['tags'])
@@ -1161,7 +1163,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual([p['attrs']['data-repo'] for p in self.marks(out, 'active-project')], ['cccccccc', 'aaaaaaaa', 'eeeeeeee'])
         data['progress']['active'] = [dict(repo='bbbbbbbb', label='', hosts=[], sessions=1, last='2026-11-06T10:00:00Z')]
         out = self.render_freshness(data, {'hash': '#project'})
-        self.assertIn('No named project active in the last 24 hours. Run fnl-status inside a repository to add it.', out['panels'][1]['text'])
+        self.assertIn('No named repository active in the last 24 hours. Run fnl-status inside a repository to add it.', out['panels'][1]['text'])
         self.assertEqual(self.marks(out, 'active-project'), [])
         self.assertEqual(self.marks(out, 'project-disclosure'), [])
         self.assertEqual(out['tabs'][1]['text'], 'Now 4')
@@ -1317,14 +1319,14 @@ class DashboardScriptTest(unittest.TestCase):
     def test_freshness_line_and_quiet_warning_advance_with_fake_clock(self):
         data = self.freshness_data()
         initial = self.render_freshness(data, {"now": "2026-11-06T10:00:00Z"})
-        for value in ("built 2026-11-06T10:00:00Z", "Codex: last event 2026-11-06T09:45:00Z",
+        for value in ("built today 10:00", "Codex: last event today 09:45",
                       "ledger: 2 minutes old", "quota: 240 minutes old"):
             self.assertIn(value, self.footer_text(initial))
         self.assertNotIn("hooks may need trust", self.footer_text(initial))
         self.assertNotIn("it updates while a session runs tools", self.footer_text(initial))
         later = self.render_freshness(data, {"now": "2026-11-06T10:00:00Z", "advance_ms": 65000, "fail": True})
-        self.assertIn("Codex: last event 2026-11-06T09:45:00Z; hooks may need trust", self.footer_text(later))
-        self.assertNotIn("Claude Code: last event 2026-11-06T10:00:00Z; hooks may need trust", self.footer_text(later))
+        self.assertIn("Codex: last event today 09:45; hooks may need trust", self.footer_text(later))
+        self.assertNotIn("Claude Code: last event today 10:00; hooks may need trust", self.footer_text(later))
         self.assertIn("data is 1 minute old; it updates while a session runs tools", self.footer_text(later))
         self.assertIn("ledger: 3 minutes old", self.footer_text(later))
         self.assertFalse(later["redrawn"])
@@ -1369,9 +1371,9 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertIn('updated 0 min ago', self.marks(out, 'status')[0]['text'])
         self.assertEqual(out['tip']['text'], self.footer_text(out))
         self.assertFalse(out['tip']['hidden'])
-        self.assertIn("generated 2099-01-01T00:00:00+07:00", self.footer_text(out))
-        self.assertIn("built 2099-01-01T00:00:00+07:00", self.footer_text(out))
-        self.assertIn("Antigravity: last event 2099-01-01T00:00:00+07:00", self.footer_text(out))
+        self.assertIn("generated 31 Dec 2098, 17:00", self.footer_text(out))
+        self.assertIn("built 31 Dec 2098, 17:00", self.footer_text(out))
+        self.assertIn("Antigravity: last event 31 Dec 2098, 17:00", self.footer_text(out))
         self.assertIn("ledger: 3 minutes old", self.footer_text(out))
 
     def test_a_hidden_tab_loads_nothing(self):
