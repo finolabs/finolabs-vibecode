@@ -55,8 +55,9 @@ def dispatch_id(value):
 
 
 def git(checkout, *args):
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     done = subprocess.run(["git", "-C", str(checkout), *args], capture_output=True,
-                          text=True, timeout=15, check=True)
+                          text=True, timeout=15, check=True, env=env)
     return done.stdout.strip()
 
 

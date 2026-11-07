@@ -127,6 +127,72 @@ class VerificationTest(unittest.TestCase):
         self.assertTrue(passed)
         self.assertFalse(marker.exists())
 
+    def test_test_process_cannot_inherit_judge_key_or_git_overrides(self):
+        injected = {'TYPESAFE_API_KEY': 'synthetic-key', 'GIT_DIR': '/synthetic/git',
+                    'GIT_WORK_TREE': '/synthetic/tree', 'GIT_CONFIG_COUNT': '1',
+                    'VERIFY_TEST_MARKER': 'preserved'}
+        code = ('import os; '
+                'assert "TYPESAFE_API_KEY" not in os.environ; '
+                'assert not any(k.startswith("GIT_") for k in os.environ); '
+                'assert os.environ["VERIFY_TEST_MARKER"] == "preserved"')
+        with mock.patch.dict(os.environ, injected):
+            passed, output, reason = verify.run_test([sys.executable, '-c', code], self.checkout, 5)
+            self.assertEqual(os.environ['TYPESAFE_API_KEY'], 'synthetic-key')
+            self.assertEqual(os.environ['GIT_DIR'], '/synthetic/git')
+        self.assertTrue(passed, (output, reason))
+
+    def test_record_git_ignores_inherited_repository_and_config_overrides(self):
+        other = self.root / 'other'
+        other.mkdir()
+        subprocess.run(['git', 'init', '-q', str(other)], check=True)
+        expected_id = verify.record.checkout_identity(self.checkout)
+        injected = {'GIT_DIR': str(other / '.git'), 'GIT_WORK_TREE': str(other),
+                    'GIT_INDEX_FILE': str(other / 'index'),
+                    'GIT_OBJECT_DIRECTORY': str(other / '.git/objects'),
+                    'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': 'core.bare',
+                    'GIT_CONFIG_VALUE_0': 'true'}
+        with mock.patch.dict(os.environ, injected):
+            self.assertEqual(verify.record.checkout_identity(self.checkout), expected_id)
+            self.assertEqual(verify.record.current_head(self.checkout), self.head)
+            self.assertEqual(verify.record.git(self.checkout, 'rev-parse', '--is-bare-repository'), 'false')
+
+    def test_oversized_combined_evidence_records_failure_without_judging(self):
+        for text, count in [('a' * 34000, 2), ('a' * 65500, 1), ('\u1ebf' * 11000, 2)]:
+            with self.subTest(size=len(text.encode()), count=count):
+                self.brief['tests'] = [[sys.executable, '-c', f'print({text!r})']] * count
+                with mock.patch.object(verify, 'ask', side_effect=AssertionError('must not judge incomplete evidence')):
+                    passed, requests = self.run_verify(source='jev')
+                self.assertFalse(passed)
+                self.assertEqual(requests, {})
+                receipt = self.receipt()
+                self.assertEqual(receipt['tests'], 'passed')
+                self.assertEqual(receipt['mechanical'], 'failed')
+                self.assertEqual(receipt['criteria'][0]['answer'], 'insufficient')
+                self.assertNotIn(text, json.dumps(receipt))
+
+    def test_oversized_committed_document_is_not_loaded_or_judged(self):
+        (self.checkout / 'target.txt').write_text('\u1ebf' * 22000)
+        self.git('commit', '-qam', 'Add oversized document')
+        self.head = self.git('rev-parse', 'HEAD')
+        self.brief['criteria'] = [{'id': 'C1', 'documents': [
+            {'path': 'target.txt', 'question': 'The document describes the guard.'},
+            {'path': 'target.txt', 'question': 'The document describes the guard.'}]}]
+        original_git = verify.record.git
+
+        def git(checkout, *args):
+            self.assertNotEqual(args[0], 'show', 'oversized blob must not be loaded')
+            return original_git(checkout, *args)
+
+        with mock.patch.object(verify.record, 'git', side_effect=git), \
+                mock.patch.object(verify, 'ask', side_effect=AssertionError('must not judge oversized document')):
+            passed, requests = self.run_verify(source='jev')
+        self.assertFalse(passed)
+        self.assertEqual(requests, {})
+        receipt = self.receipt()
+        self.assertEqual(receipt['tests'], 'passed')
+        self.assertEqual(receipt['mechanical'], 'failed')
+        self.assertEqual([c['answer'] for c in receipt['criteria']], ['insufficient'] * 3)
+
     def test_json_brief_refuses_shell_full_suite_and_bad_shape(self):
         path = self.root / 'brief.json'
         for tests in [[['sh', '-c', 'test true']], [['python3', '-m', 'unittest', 'discover']], ['python3 test.py'], []]:

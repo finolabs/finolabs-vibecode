@@ -74,8 +74,10 @@ def load_brief(path):
 
 def run_test(argv, checkout, timeout):
     """No shell; cap combined output and kill descendants on timeout or overflow."""
+    env = {k: v for k, v in os.environ.items()
+           if k != "TYPESAFE_API_KEY" and not k.startswith("GIT_")}
     process = subprocess.Popen(argv, cwd=checkout, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                               start_new_session=True)
+                               start_new_session=True, env=env)
     chunks, total, failed = [], 0, False
     deadline = time.monotonic() + timeout
     selector = selectors.DefaultSelector()
@@ -181,14 +183,21 @@ def verify(brief, base, head, dispatch, checkout, source, answers, timeout=300):
         if "documents" in criterion:
             for i, doc in enumerate(criterion["documents"], 1):
                 # Read each document independently from the named commit, never a working file.
-                text = record.git(checkout, "show", f"{head}:{doc['path']}")
+                blob = f"{head}:{doc['path']}"
+                size = int(record.git(checkout, "cat-file", "-s", blob))
+                text = record.git(checkout, "show", blob) if size <= LIMIT else None
                 pieces.append((f"{cid}.{i}", doc["question"], text))
         judged = []
         for identifier, question, supplied in pieces:
-            judge.payload(question, supplied)  # same bounded payload for either implementation
-            requests[identifier] = {"question": question, "evidence": supplied,
-                                    "evidence_sha256": hashlib.sha256(supplied.encode()).hexdigest()}
-            answer = ask(question, supplied, identifier, source, answers)
+            if supplied is None or len(supplied.encode()) > LIMIT:
+                # Never judge truncated evidence or lose the run's failure receipt.
+                check(f"{identifier} evidence", False, "exceeds byte limit; judgment insufficient")
+                answer = dict(id=identifier, answer="insufficient", source="host", fallback=False)
+            else:
+                judge.payload(question, supplied)  # same bounded payload for either implementation
+                requests[identifier] = {"question": question, "evidence": supplied,
+                                        "evidence_sha256": hashlib.sha256(supplied.encode()).hexdigest()}
+                answer = ask(question, supplied, identifier, source, answers)
             judged.append(answer)
             criteria.append(answer)
             print(f"{identifier}: {answer['answer']} source={answer['source']} fallback={str(answer['fallback']).lower()}")
