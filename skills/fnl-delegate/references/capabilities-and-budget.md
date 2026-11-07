@@ -1,0 +1,6 @@
+## Capabilities and budget
+
+- Discover what the target actually offers (models, effort, tools, context, resume) from its CLI or a current catalog; respect pins and restrictions. A control the target lacks falls back to its default: say so. Record the requested and the effective configuration in the `finish` line's `--note`. Unknown cost is not zero.
+- Before dispatching, budget the whole run: the root and its children, context, retries, evaluator calls, time, and a reserve for verification and review.
+- Start every headless run through the host's own background mechanism (on Claude Code, the Bash tool's background mode), never a detached shell job (`nohup … &`, `disown`). A detached job is invisible in the host's task list and sends no completion notice, so the coordinator neither shows nor notices the run; if one was started that way, attach a background waiter that blocks until the process is gone or the runner's own log records its exit status (a wrapper that appends `exit=<code>` to the log makes this simple on any host). Enforcer: agent judgment, advisory.
+- Wait through supported completion notices; leave no orphan runs and no busy polling. When a run falls short, tell a setup gap (missing tool, permission, quota) from a model failure before rerouting.

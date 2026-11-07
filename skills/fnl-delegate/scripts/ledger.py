@@ -124,6 +124,14 @@ def cmd_start(args):
 
 
 def cmd_finish(args):
+    # Scan before ledger reads can warn or anything about the run is stored.
+    status = "not_scanned"
+    if args.log_path is not None:
+        try:
+            import log_scan
+            status = log_scan.scan(args.log_path)["status"]
+        except (ImportError, OSError, ValueError):
+            sys.exit("ledger: log refused")
     starts, finishes = load()
     if args.id not in starts:
         sys.exit(f"ledger: no start line for {args.id}")
@@ -159,11 +167,14 @@ def cmd_finish(args):
             except (ImportError, OSError, ValueError, TypeError, subprocess.SubprocessError):
                 sys.exit("ledger: acceptance refused: current checkout head needs a passing verify receipt; "
                          "or use --accept-unverified --reason")
+    if status != "no_findings":
+        print("ledger: log_scan: " + status, file=sys.stderr)
     append({
         **extra,
         **({"head": args.head, "agent": starts[args.id]["agent"]} if args.head is not None else {}),
         "event": "finish", "id": args.id, "ts": now(), "outcome": args.outcome,
         "rework_rounds": args.rework_rounds, "tests": args.tests, "note": args.note,
+        "log_scan": status,
     })
 
 
@@ -257,6 +268,7 @@ def build_parser():
 
     f = sub.add_parser("finish", help="record how a dispatch ended")
     f.add_argument("id")
+    f.add_argument("--log-path", help="regular file inside the private run-log folder")
     f.add_argument("--head", help="exact reviewed implementation head for trusted review routing")
     f.add_argument("--outcome", required=True, choices=OUTCOMES)
     f.add_argument("--rework-rounds", type=int, default=0)

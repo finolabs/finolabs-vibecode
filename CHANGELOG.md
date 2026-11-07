@@ -6,6 +6,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add headless environment allowlists, brief lint, local guarded log scan/show/redaction and ledger scan status; HOME credential-file access remains a reported residual risk.
+
 - Add `verify_claim.py` for scoped mechanical checks and bounded criterion judgments, with private metadata receipts and a receipt gate for accepted ledger runs. `--head` must match the verified head; `--accept-unverified --reason` records and counts an explicit exception.
 
 - Add the navigator agent and `nav_state.py` for bounded course-check evidence, screened judge payloads and collected-reference report checks; the agent requires `judge.py` from the verification package.

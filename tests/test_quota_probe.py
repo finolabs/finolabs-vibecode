@@ -1190,7 +1190,7 @@ class CopiesTest(unittest.TestCase):
 
 class DocumentationTest(unittest.TestCase):
     def test_routing_thresholds_and_advisory(self):
-        text = (ROOT / "skills/fnl-delegate/SKILL.md").read_text()
+        text = (ROOT / "skills/fnl-delegate/references/route.md").read_text()
         step = text.split("4. **Reachability and quota**", 1)[1].split("5. **Effort**", 1)[0]
         for phrase in ("advisory, agent judgment", "Below 10%", "reset time still ahead", "older than 8 hours",
                        "excludes nothing", "week-all", "user's own statement", "wins", "state/quota/quota.json"):

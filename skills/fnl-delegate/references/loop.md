@@ -1,0 +1,18 @@
+# Delegation loop
+
+Run this loop for every delegated task. Each step ends on its criterion.
+
+1. **Grade** the task: kind and difficulty (below). Done when both are named.
+2. **Route** it to an agent and model (below). Done when you can state the choice and its reason in one line.
+3. **Brief** it with the `fnl-handoff` template, saved as "Where files go" says. Without `fnl-handoff`, use its headings: Task, Checkout, Context, Relevant files, Current state, What was tried, Acceptance criteria, Tests to run, Constraints, Budget, Report. Done when an agent with zero context could finish the task from the brief alone.
+4. **Dispatch** it with a hard time cap, named by its runner and what it does (`fnl-session-hygiene` "Titles": `<runner>: <project> <scope> <activity>`) in the host's name field, the ledger task and the log file names, and record it in the ledger. Start the command with `FNL_DISPATCH_ID=<ledger id>`, the id `ledger.py start` printed (a host config written before this variable existed lacks it), so the usage metrics can tell the run from a session the user started. Done when the process is running and the ledger has its `start` line.
+5. **Watch** liveness at the check deadline from artifacts. Done when the run has ended or been stopped. An Antigravity compaction stop ends a delegated headless `agy -p` run with `status: ERROR` and the fixed message "The conversation is large. Run /compact, or start a fresh session with a short handover, then continue.", which the coordinator treats as "context limit", not a model failure.
+6. **Accept**: run `scripts/log_scan.py scan <log>`, read it only with `show <log>`, then accept after verifying the diff and the tests yourself. Done when the work is accepted, sent back for rework, or rejected.
+7. **Record** with `ledger.py finish <id> --log-path <log>`; the descriptor-checked scan runs before any run record or warning. Record the outcome in the ledger. A dispatch sent back for rework stays open; it gets one `finish` line when it is finally accepted, rejected or stopped, with `--rework-rounds <n>`. Done when the dispatch has its `finish` line.
+
+Report a leak by name, never chase it (advisory, agent judgment): tell the user only validated variable names
+and that provider/model copies cannot be undone. Redact local logs with `log_scan.py redact <log>`;
+apply with `log_scan.py redact <log> --yes --digest <preview digest>` after the run closes and 60 seconds pass. Report transcript
+stores for the owner to clean; never touch them or look for a credential's source. Rotation belongs to the owner.
+Report: protection is environment-only; HOME credential files remain reachable, and interactive, desktop-app
+sessions and in-session subagents are not covered. Private HOME remains an open owner decision.

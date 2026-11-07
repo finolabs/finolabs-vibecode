@@ -389,11 +389,11 @@ class CompactStopSetupTest(unittest.TestCase):
         self.assertIn('neutral Yes and No', interview)
         self.assertIn('set up', stop)
         self.assertNotIn('--config', feature)
-        delegate = (ROOT / 'skills/fnl-delegate/SKILL.md').read_text()
+        delegate = (ROOT / 'skills/fnl-delegate/references/loop.md').read_text()
         for text in ('agy -p', 'status: ERROR', 'context limit', 'not a model failure',
                      'The conversation is large. Run /compact, or start a fresh session with a short handover, then continue.'):
             self.assertIn(text, delegate)
-        for name, token in (('skills/fnl-session-hygiene/SKILL.md', 'Antigravity compaction stop'),
+        for name, token in (('skills/fnl-session-hygiene/references/context-settings.md', 'Antigravity compaction stop'),
                             ('PRIVACY.md', 'state/compact-stop/'), ('README.md', 'compaction-stop.md'),
                             ('CHANGELOG.md', 'opt-in Antigravity pre-invocation compaction stop'),
                             ('docs/specs/index.md', '(compaction-stop.md)')):

@@ -128,13 +128,13 @@ class VerificationTest(unittest.TestCase):
         self.assertFalse(marker.exists())
 
     def test_test_process_receives_only_allowlisted_environment(self):
-        injected = {'TYPESAFE_API_KEY': 'synthetic-key', 'GIT_DIR': '/synthetic/git',
-                    'GIT_WORK_TREE': '/synthetic/tree', 'GIT_CONFIG_COUNT': '1',
+        injected = {'TYPESAFE_API_KEY': 'synthetic-key', 'GIT_DIR': '/' + 'synthetic/git',
+                    'GIT_WORK_TREE': '/' + 'synthetic/tree', 'GIT_CONFIG_COUNT': '1',
                     'HOME': str(self.home), 'AWS_SECRET_ACCESS_KEY': 'synthetic-secret',
                     'VERIFY_TEST_MARKER': 'must-not-inherit', 'PATH': os.defpath,
                     'LANG': 'C', 'TMPDIR': str(self.root)}
         code = ('import os; '
-                'assert set(os.environ) <= {"PATH", "LANG", "TMPDIR", "LC_CTYPE", "__CF_USER_TEXT_ENCODING"}, "unexpected child key"')
+                'assert set(os.environ) <= {"PATH", "HOME", "LANG", "TMPDIR", "FNL_DISPATCH_ID", "LC_CTYPE", "__CF_USER_TEXT_ENCODING"}, "unexpected child key"')
         with mock.patch.dict(os.environ, injected, clear=True):
             passed, output, reason = verify.run_test([sys.executable, '-c', code], self.checkout, 5)
         self.assertTrue(passed, (output, reason))

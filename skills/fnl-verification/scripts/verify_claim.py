@@ -23,6 +23,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import judge
 import record
+import run_env
 
 LIMIT = 65536
 
@@ -105,7 +106,7 @@ def load_brief(path):
 def run_test(argv, checkout, timeout):
     """No shell; cap combined output and kill descendants on timeout or overflow."""
     process = subprocess.Popen(argv, cwd=checkout, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                               start_new_session=True, env=record.child_environment())
+                               start_new_session=True, env=run_env.environment())
     chunks, total, failed = [], 0, False
     deadline = time.monotonic() + timeout
     selector = selectors.DefaultSelector()

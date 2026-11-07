@@ -179,7 +179,7 @@ class AgentScanTest(unittest.TestCase):
     def test_neutral_yes_clause(self):
         clause = "Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes."
         for name in ("fnl-setup/references/interview.md", "fnl-setup/references/scan.md", "fnl-setup/references/mode.md",
-                     "fnl-delegate/SKILL.md"):
+                     "fnl-delegate/references/delegation-mode.md"):
             self.assertIn(clause, (ROOT / "skills" / name).read_text(), name)
 
 

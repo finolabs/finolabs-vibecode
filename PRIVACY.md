@@ -127,3 +127,16 @@ Public issues and pull requests are visible to everyone. Remove credentials, per
 ## Judge (TypeSafe), only if you choose it
 
 If you choose Jev as the judge in `fnl-setup` and set `TYPESAFE_API_KEY` in your environment, `judge.py` sends one HTTPS request per judgment to `https://api.typesafe.ai/v1/systemone` when the coordinator or you run it. The request holds only a bounded English question and the evidence the question needs (verification criteria with the supporting lines, a navigator question, an uncertain compaction boundary, a delegation grade); a field with a secret or machine-path hit makes the call refuse. The key is read only from the environment and is never printed, stored or passed on. TypeSafe processes the payload under your organization's agreement. Nothing is sent when the judge is the host model (the default), and `FNL_JUDGE=off` stops the call.
+
+## Run hygiene
+
+Log scanning and redaction are local; no scan data is sent anywhere. `ledger.py finish --log-path <log>`
+scans a descriptor-checked regular file inside the private run-log folder before recording the run.
+The ledger's `log_scan` is one of three fixed words: `no_findings`, `findings`, `not_scanned`, never `clean`.
+It copies no log text and is not a usage-metrics field. Binary, unreadable and over-8-MiB logs are `not_scanned`.
+`log_scan.py show` prints only a located redacted view and refuses unsupported logs; scan output contains
+fixed kinds, file ordinals and line numbers, plus safe variable names only, never values or value fragments.
+Redaction requires a preview digest and `--yes`, refuses recent or open logs, and atomically replaces the
+original without a backup. Agents' own transcript stores remain untouched and may require owner cleanup;
+provider copies cannot be undone. HOME remains reachable: the protection is environment-only for headless
+command forms, excluding interactive, desktop-app sessions and in-session subagents. Private HOME is deferred.

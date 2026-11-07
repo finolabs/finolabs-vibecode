@@ -11,7 +11,7 @@ def read(*parts):
 
 class RunNamesTest(unittest.TestCase):
     def test_titles_defines_the_run_name_and_its_enforcer(self):
-        text = read("skills", "fnl-session-hygiene", "SKILL.md")
+        text = " ".join(read("skills", "fnl-session-hygiene", "SKILL.md").split())
         self.assertIn("**Background runs and agents.**", text)
         self.assertIn(FORMAT, text)
         self.assertIn("The enforcer is agent judgment", text)
