@@ -1,5 +1,6 @@
 """Tests for skills/fnl-review-gate/scripts/merge_check.py."""
 
+import base64
 import importlib.util
 import json
 import os
@@ -9,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parent.parent / "skills/fnl-review-gate/scripts/merge_check.py"
 spec = importlib.util.spec_from_file_location("merge_check", SCRIPT)
@@ -45,9 +47,10 @@ def pr(comments=None, reviews=None, author="owner", checks=None, merge_state="CL
 
 
 def run(data):
-    return mc.evaluate(data, lambda who: who in WRITERS)
+    return mc.evaluate(data, lambda who: who in WRITERS, adopted=False)
 
 
+BASE = "d" * 40
 FAKE_GH = """#!/usr/bin/env python3
 import json, os, sys
 args = sys.argv[1:]
@@ -59,7 +62,15 @@ elif args[0] == 'api' and '/compare/' in args[1]:
     files = [{'filename': name, 'status': 'modified'} for name in os.environ['FAKE_FILES'].split(',')]
     print(json.dumps({'merge_base_commit': {'sha': 'c' * 40}, 'files': files}))
 elif args[0] == 'api' and '/contents/' in args[-1]:
-    print(json.dumps({'name': 'demo', 'version': '1' if 'c' * 40 in args[-1] else '2'}))
+    endpoint = args[-1]
+    if len(args) > 2:  # the low-risk lane reads raw manifest content
+        print(json.dumps({'name': 'demo', 'version': '1' if 'c' * 40 in endpoint else '2'}))
+    else:
+        entries = json.loads(@CONTENTS@)
+        entry = entries.get(endpoint, {'error': 'gh: Not Found (HTTP 404)'})
+        if isinstance(entry, dict) and 'error' in entry:
+            sys.stderr.write(entry['error']); sys.exit(1)
+        print(json.dumps(entry))
 elif args[0] == 'api':
     who = args[1].split('/')[4]
     if who == 'owner':
@@ -75,51 +86,37 @@ else:
 
 ADOPTED = "# Demo\n\n## Agent skills\n\nPull requests follow `fnl-review-gate`.\n"
 ROUTED = "Summary\n<!-- fnl-router depth=NORMAL trigger=none -->\n"
-GIT_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com", "GIT_COMMITTER_NAME": "t",
-           "GIT_COMMITTER_EMAIL": "t@example.com", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 
 
-def git_commit(repo, files):
-    """Commit `files` ({path: text or bytes, or None to delete}) in `repo`, creating it; return the id."""
-    env = {**os.environ, **GIT_ENV}
-
-    def git(*args):
-        return subprocess.run(["git", *args], cwd=repo, env=env, check=True,
-                              capture_output=True, text=True).stdout.strip()
-    if not (repo / ".git").exists():
-        repo.mkdir(parents=True, exist_ok=True)
-        git("init", "-q")
-    for path, content in files.items():
-        target = repo / path
-        if content is None:
-            target.unlink()
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if isinstance(content, bytes):
-            target.write_bytes(content)
-        else:
-            target.write_text(content)
-    git("add", "-A")
-    git("commit", "-q", "--allow-empty", "-m", "commit")
-    return git("rev-parse", "HEAD")
+def contents_file(content):
+    raw = content if isinstance(content, bytes) else content.encode("utf-8")
+    return {"type": "file", "size": len(raw), "encoding": "base64",
+            "content": base64.encodebytes(raw).decode("ascii")}
 
 
-def run_cli(data, *extra, files="CHANGELOG.md", base_files=None, base=None, head_files=None, setup=None):
+def run_cli(data, *extra, files="CHANGELOG.md", base_files=None, base=None, head_files=None, cwd=None):
+    """Serve base/head contents through fake gh; run without creating any git repository.
+
+    Strings/bytes become file responses, dictionaries model API responses or errors,
+    and an absent key (or None) serves a clean 404.
+    """
+    contents = {}
+    for ref, entries in ((BASE, base_files or {}), (HEAD, head_files or {})):
+        for path, content in entries.items():
+            if content is not None:
+                contents[f"repos/acme/demo/contents/{path}?ref={ref}"] = (
+                    contents_file(content) if isinstance(content, (str, bytes)) else content)
     with tempfile.TemporaryDirectory() as tmp:
-        bin_dir, repo = Path(tmp) / "bin", Path(tmp) / "repo"
+        bin_dir = Path(tmp) / "bin"
         bin_dir.mkdir()
-        oid = git_commit(repo, base_files or {"README.md": "demo\n"})
-        if setup:
-            oid = setup(repo)
-        if head_files is not None:
-            git_commit(repo, head_files)
         fake = bin_dir / "gh"
-        fake.write_text(FAKE_GH.replace("@PR@", json.dumps(json.dumps(data))))
+        fake.write_text(FAKE_GH.replace("@PR@", json.dumps(json.dumps(data)))
+                        .replace("@CONTENTS@", json.dumps(json.dumps(contents))))
         fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
         env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "FAKE_FILES": files,
-               "FAKE_BASE": base or oid}
+               "FAKE_BASE": BASE if base is None else base, "GIT_CEILING_DIRECTORIES": tmp}
         return subprocess.run([sys.executable, "-I", str(SCRIPT), "7", "--repo", "acme/demo", *extra],
-                              capture_output=True, text=True, env=env, cwd=repo)
+                              capture_output=True, text=True, env=env, cwd=cwd or tmp)
 
 
 class MergeCheckTest(unittest.TestCase):
@@ -215,7 +212,7 @@ class MergeCheckTest(unittest.TestCase):
         def can_write(who):
             raise mc.Unknown("lookup failed")
         with self.assertRaises(mc.Unknown):
-            mc.evaluate(pr(), can_write)
+            mc.evaluate(pr(), can_write, adopted=False)
 
     def test_an_uncomputed_merge_state_is_unknown(self):
         for state in ("UNKNOWN", None):
@@ -238,11 +235,11 @@ class MergeCheckTest(unittest.TestCase):
     def test_a_lane_verdict_needs_a_lane_pull_request(self):
         data = pr(comments=[comment(marker("code", "APPROVE")),
                             comment(marker("security", "APPROVE").replace(" -->", " lane=yes -->"))])
-        self.assertTrue(mc.evaluate(data, lambda who: who in WRITERS, lambda: (True, []))[0])
-        ok, lines = mc.evaluate(data, lambda who: who in WRITERS, lambda: (False, ["README.md: outside the lane"]))
+        self.assertTrue(mc.evaluate(data, lambda who: who in WRITERS, lambda: (True, []), adopted=False)[0])
+        ok, lines = mc.evaluate(data, lambda who: who in WRITERS, lambda: (False, ["README.md: outside the lane"]), adopted=False)
         self.assertFalse(ok)
         self.assertTrue(any("took the low-risk lane" in line for line in lines), lines)
-        self.assertFalse(mc.evaluate(data, lambda who: who in WRITERS)[0])
+        self.assertFalse(mc.evaluate(data, lambda who: who in WRITERS, adopted=False)[0])
 
     def test_lane_files(self):
         base = '{"name": "demo", "version": "0.1.2", "author": {"name": "x"}}'
@@ -283,11 +280,9 @@ class MergeCheckTest(unittest.TestCase):
         self.assertIn("MERGE OK", result.stdout)
         self.assertIn("repo acme/demo", result.stdout)
 
-    def cli(self, data, *extra, files="CHANGELOG.md", base_files=None, base=None, head_files=None, setup=None):
-        """Run the CLI with a fake `gh` inside a temporary git repository whose base
-        commit holds `base_files`; `head_files` become a later commit on top of it."""
-        return run_cli(data, *extra, files=files, base_files=base_files, base=base,
-                       head_files=head_files, setup=setup)
+    def cli(self, data, *extra, **kwargs):
+        """Run the CLI with fake gh contents, without a local clone."""
+        return run_cli(data, *extra, **kwargs)
 
     def test_cli_lane_check(self):
         result = self.cli(pr(), "--lane", files="CHANGELOG.md,.claude-plugin/plugin.json")
@@ -403,7 +398,7 @@ class RouterMarkerTest(unittest.TestCase):
     def test_the_marker_is_not_required_without_adoption(self):
         ok, lines = run(pr(body=""))
         self.assertTrue(ok, lines)
-        self.assertTrue(any("router marker: not required" in line for line in lines), lines)
+        self.assertFalse(any("router marker" in line for line in lines), lines)
 
     def test_an_unreadable_body_is_unknown_when_adopted(self):
         data = pr()
@@ -442,7 +437,7 @@ class RouterMarkerTest(unittest.TestCase):
         bot["body"] = ROUTED
         self.assertTrue(self.adopted(bot)[0])
 
-    # The command line: adoption read from the base commit with git.
+    # The command line: adoption read from the base commit through the contents API.
 
     def test_cli_adopted_base_blocks_a_missing_marker(self):
         for name in ("CLAUDE.md", "AGENTS.md"):
@@ -458,69 +453,121 @@ class RouterMarkerTest(unittest.TestCase):
         for files in ({"README.md": "x\n"}, {"CLAUDE.md": "# Demo\n## Reviews\nfnl-review-gate\n"}):
             result = run_cli(pr(), base_files=files)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn("router marker: not required", result.stdout)
+            self.assertNotIn("router marker", result.stdout)
 
     def test_cli_a_head_that_adds_or_removes_adoption_does_not_count(self):
         result = run_cli(pr(), base_files={"README.md": "x\n"}, head_files={"CLAUDE.md": ADOPTED})
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("router marker: not required", result.stdout)
+        self.assertNotIn("router marker", result.stdout)
         for head in ({"CLAUDE.md": None}, {"CLAUDE.md": "# Demo\n"}):
             result = run_cli(pr(), base_files={"CLAUDE.md": ADOPTED}, head_files=head)
             self.assertEqual(result.returncode, 1, result.stdout)
             self.assertIn("BLOCK router marker: missing", result.stdout)
 
     def test_cli_unreadable_adoption_or_body_is_unknown(self):
-        result = run_cli(pr(body=ROUTED), base="e" * 40)
-        self.assertEqual(result.returncode, 2, result.stdout)
-        self.assertIn("UNKNOWN base commit", result.stdout)
-        result = run_cli(pr(body=ROUTED), base="main")
-        self.assertEqual(result.returncode, 2, result.stdout)
-        result = run_cli(pr(body=ROUTED), base_files={"CLAUDE.md/inner.md": ADOPTED})
-        self.assertEqual(result.returncode, 2, result.stdout)
-        self.assertIn("CLAUDE.md at the base commit is not a regular file", result.stdout)
+        for base in ("main", "", "d" * 39, "d" * 41, "d" * 39 + "g"):
+            with self.subTest(base=base):
+                result = run_cli(pr(body=ROUTED), base=base)
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("UNKNOWN the pull request has no base commit", result.stdout)
+        for entry in ({"type": "dir"}, {"type": "submodule"}, {"type": "other"}, []):
+            with self.subTest(entry=entry):
+                result = run_cli(pr(body=ROUTED), base_files={"CLAUDE.md": entry})
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("CLAUDE.md at the base commit is not a regular file", result.stdout)
         result = run_cli(pr(body=ROUTED), base_files={"AGENTS.md": b"## Agent skills\n\xff\n"})
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertIn("AGENTS.md at the base commit is not UTF-8", result.stdout)
+        for body in (None, 7, ["x"]):
+            result = run_cli(pr(body=body))  # unreadable even without adoption
+            self.assertEqual(result.returncode, 2, result.stdout)
         data = pr(body=ROUTED)
         del data["body"]
-        result = run_cli(data)  # unreadable even when the base has not adopted the gate
+        result = run_cli(data)
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertIn("UNKNOWN the pull request body could not be read", result.stdout)
 
+    def test_cli_clean_404_is_absent_but_other_errors_are_unknown(self):
+        result = run_cli(pr(), base_files={"CLAUDE.md": {"error": "gh: Not Found (HTTP 404)"}})
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("router marker", result.stdout)
+        for error in ("gh: Forbidden (HTTP 403)", "gh: Bad Gateway (HTTP 502)", "404 without HTTP status"):
+            with self.subTest(error=error):
+                # Read both files even when the first already adopts the gate.
+                result = run_cli(pr(body=ROUTED), base_files={
+                    "CLAUDE.md": ADOPTED, "AGENTS.md": {"error": error}})
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("UNKNOWN AGENTS.md at the base commit could not be read", result.stdout)
+
+    def test_cli_invalid_file_content_is_unknown(self):
+        valid = contents_file(ADOPTED)
+        for changes in ({"size": 256 * 1024 + 1}, {"size": -1}, {"size": True},
+                        {"size": "10"}, {"encoding": "none"}, {"content": "!!!"},
+                        {"content": None}, {"size": 0}):
+            with self.subTest(changes=changes):
+                result = run_cli(pr(body=ROUTED), base_files={"CLAUDE.md": {**valid, **changes}})
+                self.assertEqual(result.returncode, 2, result.stdout)
+        result = run_cli(pr(body=ROUTED), base_files={"CLAUDE.md": "x" * (256 * 1024)})
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_size_cap_is_checked_before_decoding(self):
+        payload = {"type": "file", "size": 256 * 1024 + 1, "encoding": "base64", "content": ""}
+        response = subprocess.CompletedProcess([], 0, json.dumps(payload), "")
+        with patch.object(mc, "run_gh", return_value=response), patch.object(mc.base64, "b64decode") as decode:
+            with self.assertRaises(mc.Unknown):
+                mc.adopted_at("acme/demo", BASE)
+            decode.assert_not_called()
+
     def test_cli_a_link_to_the_other_adoption_file_counts_through_its_target(self):
-        def setup(repo):
-            (repo / "CLAUDE.md").symlink_to("AGENTS.md")
-            return git_commit(repo, {})
-        # A link to the other adoption file is read through its target.
-        result = run_cli(pr(body=ROUTED), base_files={"AGENTS.md": ADOPTED}, setup=setup)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        result = run_cli(pr(), base_files={"AGENTS.md": ADOPTED}, setup=setup)
-        self.assertEqual(result.returncode, 1, result.stdout)
-        self.assertIn("BLOCK router marker: missing", result.stdout)
+        for name, target in (("CLAUDE.md", "AGENTS.md"), ("AGENTS.md", "CLAUDE.md")):
+            with self.subTest(name=name):
+                files = {name: {"type": "symlink", "target": target}, target: ADOPTED}
+                result = run_cli(pr(body=ROUTED), base_files=files)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                result = run_cli(pr(), base_files=files)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("BLOCK router marker: missing", result.stdout)
 
     def test_cli_a_link_to_anything_else_is_unknown(self):
-        def setup(repo):
-            (repo / "CLAUDE.md").symlink_to("docs/NOTES.md")
-            return git_commit(repo, {})
-        result = run_cli(pr(body=ROUTED), base_files={"AGENTS.md": ADOPTED}, setup=setup)
-        self.assertEqual(result.returncode, 2, result.stdout)
-        self.assertIn("CLAUDE.md at the base commit is not a regular file", result.stdout)
+        for target in ("docs/NOTES.md", "./AGENTS.md", "AGENTS.md\n", "CLAUDE.md", None):
+            with self.subTest(target=target):
+                result = run_cli(pr(body=ROUTED), base_files={
+                    "CLAUDE.md": {"type": "symlink", "target": target}, "AGENTS.md": ADOPTED})
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("CLAUDE.md at the base commit is not a regular file", result.stdout)
 
-    def test_cli_outside_a_repository_is_unknown(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            bin_dir = Path(tmp) / "bin"
-            bin_dir.mkdir()
-            fake = bin_dir / "gh"
-            fake.write_text(FAKE_GH.replace("@PR@", json.dumps(json.dumps(pr(body=ROUTED)))))
-            fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
-            env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "FAKE_FILES": "CHANGELOG.md",
-                   "GIT_CEILING_DIRECTORIES": tmp}
-            result = subprocess.run([sys.executable, "-I", str(SCRIPT), "7", "--repo", "acme/demo"],
-                                    capture_output=True, text=True, env=env, cwd=bin_dir)
-        self.assertEqual(result.returncode, 2, result.stdout)
+    def test_cli_runs_from_an_unrelated_working_directory(self):
+        with tempfile.TemporaryDirectory() as unrelated:
+            for files in ({}, {"CLAUDE.md": ADOPTED}):
+                result = run_cli(pr(body=ROUTED), base_files=files, cwd=unrelated)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_cli_unadopted_output_is_byte_identical(self):
+        result = run_cli(pr())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.encode(), (
+            "repo acme/demo pull request #7\n"
+            f"head {HEAD}\n"
+            "ok    code review: APPROVE (2026-11-02T01:00:00Z)\n"
+            "ok    security review: APPROVE (2026-11-02T01:00:00Z)\n"
+            "ok    author has write access\n"
+            "ok    checks: all passed\n"
+            "MERGE OK: merge pinned to the head above\n").encode())
+        self.assertEqual(result.stderr, "")
+
+    def test_two_identical_marker_lines_block(self):
+        body = ROUTED + ROUTED
+        self.assertMarkerBlocks(self.adopted(pr(body=body)))
+        result = run_cli(pr(body=body), base_files={"CLAUDE.md": ADOPTED})
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("BLOCK router marker", result.stdout)
+
+    def test_evaluate_requires_an_explicit_adoption_decision(self):
+        with self.assertRaises(TypeError):
+            mc.evaluate(pr(), lambda who: True)
 
     def test_the_lane_check_does_not_read_adoption(self):
-        result = run_cli(pr(), "--lane", base="e" * 40)
+        result = run_cli(pr(), "--lane", base_files={"CLAUDE.md": {"error": "gh: Forbidden (HTTP 403)"}})
         self.assertEqual(result.returncode, 0, result.stdout)
 
 
