@@ -224,9 +224,9 @@ def agents_evidence(status, text):
         return item("agents inventory", "unverified", "host config unreadable or symlink refused")
     sections = re.findall(r"^## Agents on this machine[ \t]*\r?$.*?(?=^#{1,2} |\Z)", text, re.M | re.S)
     if not sections:
-        return item("agents inventory", "missing", "section absent; run /fnl-scan-agents")
+        return item("agents inventory", "missing", "section absent; run /fnl-setup scan")
     if len(sections) != 1:
-        return item("agents inventory", "unverified", "duplicate section; run /fnl-scan-agents")
+        return item("agents inventory", "unverified", "duplicate section; run /fnl-setup scan")
     rows = {}
     for line in sections[0].splitlines():
         cells = [v.strip() for v in line.strip().strip("|").split("|")]
@@ -242,9 +242,9 @@ def agents_evidence(status, text):
         if max(dates) > today:
             raise ValueError("future check")
     except ValueError:
-        return item("agents inventory", "unverified", "incomplete rows or invalid Checked dates; run /fnl-scan-agents")
+        return item("agents inventory", "unverified", "incomplete rows or invalid Checked dates; run /fnl-setup scan")
     if (today - min(dates)).days > 30:
-        return item("agents inventory", "missing", "section stale (older than 30 days); run /fnl-scan-agents")
+        return item("agents inventory", "missing", "section stale (older than 30 days); run /fnl-setup scan")
     return item("agents inventory", "ok", "recent file inventory only; live access unverified")
 
 

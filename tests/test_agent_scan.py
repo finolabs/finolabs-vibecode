@@ -13,7 +13,7 @@ from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = ROOT / "skills/fnl-scan-agents/scripts/agent_scan.py"
+SCRIPT = ROOT / "skills/fnl-setup/scripts/agent_scan.py"
 spec = importlib.util.spec_from_file_location("agent_scan", SCRIPT)
 scan = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(scan)
@@ -178,8 +178,9 @@ class AgentScanTest(unittest.TestCase):
 
     def test_neutral_yes_clause(self):
         clause = "Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes."
-        for skill in ("fnl-scan-agents", "fnl-set-mode", "fnl-setup", "fnl-delegate"):
-            self.assertIn(clause, (ROOT / "skills" / skill / "SKILL.md").read_text())
+        for name in ("fnl-setup/SKILL.md", "fnl-setup/references/scan.md", "fnl-setup/references/mode.md",
+                     "fnl-delegate/SKILL.md"):
+            self.assertIn(clause, (ROOT / "skills" / name).read_text(), name)
 
 
 if __name__ == "__main__":

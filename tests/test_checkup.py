@@ -304,7 +304,7 @@ class CheckupTest(unittest.TestCase):
         legacy.unlink()
 
     def test_review_adoption_inside_the_generated_paragraph(self):
-        skill = (ROOT / "skills/fnl-setup/SKILL.md").read_text()
+        skill = (ROOT / "skills/fnl-setup/references/core.md").read_text()
         paragraph = next(line for line in skill.splitlines() if line.startswith("This repository uses the finolabs-vibecode skills."))
         self.write(self.repo / "AGENTS.md", "## Agent skills\n\n" + paragraph + "\n")
         self.assertEqual(self.setup_item("review adoption")["status"], "ok")

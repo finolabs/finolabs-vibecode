@@ -383,8 +383,6 @@ class DataRootTest(unittest.TestCase):
 COPIES = ["scripts/data_root.py",
           "skills/fnl-coding-router/scripts/data_root.py",
           "skills/fnl-delegate/scripts/data_root.py",
-          "skills/fnl-scan-agents/scripts/data_root.py",
-          "skills/fnl-set-mode/scripts/data_root.py",
           "skills/fnl-setup/scripts/data_root.py",
           "skills/fnl-status/scripts/data_root.py",
           "skills/fnl-restore-point/scripts/data_root.py", "skills/fnl-update/scripts/data_root.py"]

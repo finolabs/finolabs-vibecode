@@ -25,7 +25,7 @@ from tests.data_root_fixture import account
 
 FIXTURES = ROOT / "tests/fixtures/quota"
 COPIES = ["scripts/quota_probe.py", *[f"skills/{name}/scripts/quota_probe.py" for name in
-          ("fnl-setup", "fnl-delegate", "fnl-scan-agents", "fnl-update")]]
+          ("fnl-setup", "fnl-delegate", "fnl-update")]]
 MEASURED = qp.timestamp("2026-11-05T09:00:00Z")
 
 
@@ -1095,7 +1095,7 @@ class QuotaTest(unittest.TestCase):
             qp.read_family("agy")
         # Empty PATH ensures the scan can never find a real agent executable.
         env = {"HOME": str(self.home), "PATH": ""}
-        for script, args in (("fnl-scan-agents/scripts/agent_scan.py", ["--host", "codex"]),
+        for script, args in (("fnl-setup/scripts/agent_scan.py", ["--host", "codex"]),
                              ("fnl-setup/scripts/checkup.py", ["--json"])):
             with self.subTest(script=script):
                 result = subprocess.run([sys.executable, "-I", str(ROOT / "skills" / script), *args],
@@ -1206,9 +1206,9 @@ class DocumentationTest(unittest.TestCase):
             self.assertIn(phrase, text)
 
     def test_setup_consent_and_displays(self):
-        text = (ROOT / "skills/fnl-setup/SKILL.md").read_text()
+        text = (ROOT / "skills/fnl-setup/references/features/quota.md").read_text()
         self.assertIn("When the coordinator is about to delegate, and a reading is older than 15 minutes", text)
         self.assertIn("its hooks, plugins and servers run", text)
         self.assertIn("neutral Yes and No", text)
-        for file in ("skills/fnl-setup/scripts/checkup.py", "skills/fnl-scan-agents/scripts/agent_scan.py"):
+        for file in ("skills/fnl-setup/scripts/checkup.py", "skills/fnl-setup/scripts/agent_scan.py"):
             self.assertIn("status_lines()", (ROOT / file).read_text())
