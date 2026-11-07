@@ -6,10 +6,12 @@ in the resolved data root. Environment variables cannot redirect the ledger.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import secrets
 import statistics
+import subprocess
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -92,7 +94,13 @@ def cmd_start(args):
     if manual and family != args.coordinator and args.route_by != "user":
         sys.exit("Delegation mode is manual: another agent family needs --route-by user")
     dispatch_id = datetime.now().strftime("d%Y%m%d-%H%M%S-") + secrets.token_hex(2)
+    try:
+        from record import checkout_identity
+        checkout_id = checkout_identity(args.checkout)
+    except (ImportError, OSError, ValueError, subprocess.SubprocessError):
+        checkout_id = None  # non-code tasks can still end through the explicit escape hatch
     append({
+        "checkout_id": checkout_id,
         "event": "start", "id": dispatch_id, "ts": now(),
         "project": args.project, "task": args.task, "kind": args.kind,
         "grade": args.grade, "coordinator": args.coordinator, "agent": args.agent,
@@ -120,7 +128,33 @@ def cmd_finish(args):
         sys.exit(f"ledger: no start line for {args.id}")
     if args.id in finishes:
         sys.exit(f"ledger: {args.id} already has a finish line")
+    extra = {}
+    if args.accept_unverified and args.outcome != "accepted":
+        sys.exit("ledger: --accept-unverified requires accepted")
+    if args.reason and not args.accept_unverified:
+        sys.exit("ledger: --reason requires --accept-unverified")
+    if args.outcome == "accepted":
+        if args.accept_unverified:
+            if not args.reason or not args.reason.strip() or len(args.reason) > 4096:
+                sys.exit("ledger: --accept-unverified requires a bounded nonempty --reason")
+            # Free text is never persisted. The digest identifies the coordinator's report.
+            extra = {"accept_unverified": True,
+                     "reason_id": hashlib.sha256(args.reason.encode()).hexdigest()}
+        else:
+            try:
+                from record import checkout_identity, current_head, read_verification
+                receipt = read_verification(args.id)
+                identity = checkout_identity(args.checkout)
+                if (starts[args.id].get("checkout_id") != identity or receipt["checkout_id"] != identity
+                        or receipt["head"] != current_head(args.checkout)
+                        or receipt["mechanical"] != "passed" or receipt["tests"] != "passed"):
+                    raise ValueError("verification mismatch")
+                extra = {"verified_head": receipt["head"], "accept_unverified": False}
+            except (ImportError, OSError, ValueError, TypeError, subprocess.SubprocessError):
+                sys.exit("ledger: acceptance refused: current checkout head needs a passing verify receipt; "
+                         "or use --accept-unverified --reason")
     append({
+        **extra,
         "event": "finish", "id": args.id, "ts": now(), "outcome": args.outcome,
         "rework_rounds": args.rework_rounds, "tests": args.tests, "note": args.note,
     })
@@ -170,6 +204,7 @@ def summary_rows(keys=SUMMARY_KEYS, since=None, project=None):
             **dict(zip(keys, key)), "n": n,
             "first_pass": len([f for f in accepted if f["rework_rounds"] == 0]) / n,
             "accepted": len(accepted) / n,
+            "accepted_unverified": sum(f.get("accept_unverified") is True for f in accepted),
             "timeout": len([f for _, f in pairs if f["outcome"] in ("timeout", "stalled")]),
             "fallback": len([s for s, _ in pairs if s["reason"].startswith("fallback")]),
             "quota": len([f for _, f in pairs if f["outcome"] == "quota"]),
@@ -188,11 +223,11 @@ def cmd_summary(args):
     if not rows:
         print("ledger: no finished dispatches match")
         return
-    header = f"{'agent':<16}{'model':<24}{'kind':<10}{'grade':<10}{'n':>4}{'1st-pass':>10}{'accepted':>10}{'timeout':>9}{'fallback':>10}{'median min':>12}"
+    header = f"{'agent':<16}{'model':<24}{'kind':<10}{'grade':<10}{'n':>4}{'1st-pass':>10}{'accepted':>10}{'timeout':>9}{'fallback':>10}{'median min':>12}{'unverified':>12}"
     print(header)
     for r in rows:
         print(f"{r['agent']:<16}{r['model']:<24}{r['kind']:<10}{r['grade']:<10}{r['n']:>4}{r['first_pass']:>10.0%}{r['accepted']:>10.0%}"
-              f"{r['timeout']:>9}{r['fallback']:>10}{r['median_min']:>12.0f}")
+              f"{r['timeout']:>9}{r['fallback']:>10}{r['median_min']:>12.0f}{r['accepted_unverified']:>12}")
 
 
 def build_parser():
@@ -210,6 +245,7 @@ def build_parser():
     s.add_argument("--reason", default="routing", choices=REASONS)
     s.add_argument("--route-by", default="table", choices=ROUTE_BY)
     s.add_argument("--budget", type=int, required=True, help="time budget in minutes")
+    s.add_argument("--checkout", default=".", help="delegated checkout; only its hash is stored")
     s.set_defaults(func=cmd_start)
 
     f = sub.add_parser("finish", help="record how a dispatch ended")
@@ -218,6 +254,9 @@ def build_parser():
     f.add_argument("--rework-rounds", type=int, default=0)
     f.add_argument("--tests", default="not-run", choices=TESTS)
     f.add_argument("--note", default="")
+    f.add_argument("--checkout", default=".", help="the checkout named at dispatch")
+    f.add_argument("--accept-unverified", action="store_true")
+    f.add_argument("--reason", help="reason retained only as a digest; keep text in the coordinator report")
     f.set_defaults(func=cmd_finish)
 
     o = sub.add_parser("open", help="list dispatches with no finish line")

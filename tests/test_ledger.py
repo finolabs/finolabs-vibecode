@@ -40,7 +40,7 @@ class LedgerTest(unittest.TestCase):
     def test_low_oversized_ledger_has_one_error_line(self):
         with self.path.open("wb") as stream:
             stream.truncate(16 * 1024 * 1024 + 1)
-        for args in (("summary",), ("finish", "missing", "--outcome", "accepted"), ("open",)):
+        for args in (("summary",), ("finish", "missing", "--outcome", "accepted", "--accept-unverified", "--reason", "Synthetic fixture"), ("open",)):
             with self.subTest(command=args[0]):
                 result = self.run_ledger(*args, check=False)
                 self.assertEqual(result.returncode, 1)
@@ -106,7 +106,7 @@ class LedgerTest(unittest.TestCase):
             args = [a if a != "medium" else grade for a in START]
             ids[grade] = self.run_ledger(*args).stdout.strip()
         self.assertNotEqual(self.run_ledger(*[a if a != "medium" else "extreme" for a in START], check=False).returncode, 0)
-        self.run_ledger("finish", ids["ultra-hard"], "--outcome", "accepted")  # a summary counts finished runs only
+        self.run_ledger("finish", ids["ultra-hard"], "--outcome", "accepted", "--accept-unverified", "--reason", "Synthetic fixture")  # a summary counts finished runs only
         rows = json.loads(self.run_ledger("summary", "--json").stdout)
         self.assertEqual([(r["grade"], r["n"]) for r in rows], [("ultra-hard", 1)])
         self.assertIn("ultra-hard", self.run_ledger("summary").stdout)
@@ -125,15 +125,15 @@ class LedgerTest(unittest.TestCase):
         out = self.run_ledger("open").stdout
         self.assertIn(dispatch_id, out)
         self.assertIn("/40 min", out)
-        self.run_ledger("finish", dispatch_id, "--outcome", "accepted")
+        self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--accept-unverified", "--reason", "Synthetic fixture")
         self.assertEqual(self.run_ledger("open").stdout, "")
 
     def test_finish_needs_a_start_and_happens_once(self):
-        missing = self.run_ledger("finish", "d-missing", "--outcome", "accepted", check=False)
+        missing = self.run_ledger("finish", "d-missing", "--outcome", "accepted", "--accept-unverified", "--reason", "Synthetic fixture", check=False)
         self.assertNotEqual(missing.returncode, 0)
         self.assertIn("no start line", missing.stderr)
         dispatch_id = self.run_ledger(*START).stdout.strip()
-        self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--rework-rounds", "1")
+        self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--accept-unverified", "--reason", "Synthetic fixture", "--rework-rounds", "1")
         again = self.run_ledger("finish", dispatch_id, "--outcome", "rejected", check=False)
         self.assertNotEqual(again.returncode, 0)
         self.assertIn("already has a finish line", again.stderr)
@@ -145,7 +145,7 @@ class LedgerTest(unittest.TestCase):
     def test_route_by_is_groupable_without_changing_default_summary(self):
         for route, rework in (("judge", 0), ("judge", 1), ("table", 0)):
             dispatch_id = self.run_ledger(*START, "--route-by", route).stdout.strip()
-            self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--rework-rounds", str(rework))
+            self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--accept-unverified", "--reason", "Synthetic fixture", "--rework-rounds", str(rework))
         spec = importlib.util.spec_from_file_location("judge_ledger", LEDGER)
         ledger = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ledger)
@@ -163,15 +163,15 @@ class LedgerTest(unittest.TestCase):
     def test_summary_counts_first_pass_and_fallbacks(self):
         first = self.run_ledger(*START).stdout.strip()
         second = self.run_ledger(*START, "--reason", "fallback-quota").stdout.strip()
-        self.run_ledger("finish", first, "--outcome", "accepted")
-        self.run_ledger("finish", second, "--outcome", "accepted", "--rework-rounds", "2")
+        self.run_ledger("finish", first, "--outcome", "accepted", "--accept-unverified", "--reason", "Synthetic fixture")
+        self.run_ledger("finish", second, "--outcome", "accepted", "--accept-unverified", "--reason", "Synthetic fixture", "--rework-rounds", "2")
         row = self.run_ledger("summary").stdout.splitlines()[1].split()
         self.assertEqual(row[:5], ["codex", "m1", "implement", "medium", "2"])
         self.assertEqual(row[5:9], ["50%", "100%", "0", "1"])
 
     def test_summary_json_reports_the_same_counts_with_quota_and_error(self):
         ids = [self.run_ledger(*START).stdout.strip() for _ in range(3)]
-        self.run_ledger("finish", ids[0], "--outcome", "accepted")
+        self.run_ledger("finish", ids[0], "--outcome", "accepted", "--accept-unverified", "--reason", "Synthetic fixture")
         self.run_ledger("finish", ids[1], "--outcome", "quota")
         self.run_ledger("finish", ids[2], "--outcome", "error")
         [row] = json.loads(self.run_ledger("summary", "--json").stdout)
@@ -200,6 +200,68 @@ class LedgerTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             for n in (1, 2, 3, 4):
                 self.assertIn(f"malformed line {n}", result.stderr)
+
+    def test_accepted_refuses_without_receipt_and_does_not_finish(self):
+        dispatch = self.run_ledger(*START).stdout.strip()
+        done = self.run_ledger("finish", dispatch, "--outcome", "accepted", check=False)
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("passing verify receipt", done.stderr)
+        self.assertEqual(len(self.records()), 1)
+
+    def test_matching_head_receipt_passes_but_stale_failed_or_other_checkout_refuses(self):
+        checkout = Path(self.dir.name) / "checkout"
+        checkout.mkdir()
+        def git(*args):
+            return subprocess.run(["git", "-C", str(checkout), *args], capture_output=True,
+                                  text=True, check=True).stdout.strip()
+        git("init", "-q")
+        git("config", "user.name", "Synthetic Author")
+        git("config", "user.email", "author@example.com")
+        (checkout / "file").write_text("before")
+        git("add", ".")
+        git("commit", "-qm", "Create fixture")
+        head = git("rev-parse", "HEAD")
+        dispatch = self.run_ledger(*START, "--checkout", str(checkout)).stdout.strip()
+        record = LEDGER.parent / "record.py"
+        criteria = Path(self.dir.name) / "criteria.json"
+        criteria.write_text("[]")
+        def receipt(mechanical="passed"):
+            done = subprocess.run([sys.executable, "-I", str(record), "verify", "--id", dispatch,
+                "--head", git("rev-parse", "HEAD"), "--tests", "passed", "--mechanical", mechanical,
+                "--criteria-file", str(criteria), "--checkout", str(checkout)], capture_output=True, text=True)
+            self.assertEqual(done.returncode, 0, done.stderr)
+        def finish(path=checkout):
+            return self.run_ledger("finish", dispatch, "--outcome", "accepted", "--checkout", str(path), check=False)
+        receipt("failed")
+        self.assertNotEqual(finish().returncode, 0)
+        receipt()
+        self.assertNotEqual(finish(LEDGER.parents[3]).returncode, 0)
+        (checkout / "file").write_text("after")
+        git("commit", "-qam", "Change fixture")
+        self.assertNotEqual(finish().returncode, 0)
+        receipt()
+        self.assertEqual(finish().returncode, 0)
+        self.assertEqual(self.records()[-1]["verified_head"], git("rev-parse", "HEAD"))
+        self.assertNotEqual(head, self.records()[-1]["verified_head"])
+
+    def test_escape_requires_reason_and_is_private_and_counted(self):
+        dispatch = self.run_ledger(*START).stdout.strip()
+        for args in [("--accept-unverified",), ("--accept-unverified", "--reason", " ")]:
+            done = self.run_ledger("finish", dispatch, "--outcome", "accepted", *args, check=False)
+            self.assertNotEqual(done.returncode, 0)
+        self.run_ledger("finish", dispatch, "--outcome", "accepted", "--accept-unverified", "--reason", "No runnable checks")
+        rec = self.records()[-1]
+        self.assertTrue(rec["accept_unverified"])
+        self.assertEqual(len(rec["reason_id"]), 64)
+        self.assertNotIn("No runnable checks", self.path.read_text())
+        [row] = json.loads(self.run_ledger("summary", "--json").stdout)
+        self.assertEqual(row["accepted_unverified"], 1)
+
+    def test_all_other_outcomes_need_no_verification(self):
+        for outcome in ("rejected", "timeout", "stalled", "error", "blocked", "needs-permission", "quota", "cancelled"):
+            dispatch = self.run_ledger(*START).stdout.strip()
+            self.run_ledger("finish", dispatch, "--outcome", outcome)
+            self.assertNotIn("accept_unverified", self.records()[-1])
 
 
 class LedgerLocationTest(unittest.TestCase):

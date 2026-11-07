@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
-"""Print a router, keep, judge or task receipt.
+"""Print a metadata receipt or persist delegated verification.
 
 When the user has turned usage metrics on, the plugin's hook reads this command
 after it runs and records only the receipt's metadata with the session.
 
-Only for keep, when the auto gate is enabled, this command also writes its local repository
+The verify command writes private local metadata, never a usage event.
+For keep, when the auto gate is enabled, this command also writes its local repository
 decision file. A failed decision write never changes the receipt or exit code.
 """
 
 import argparse
+import hashlib
+import json
+import subprocess
 import os
 import re
 import sys
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # receipts never write import caches
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
 
 DEPTHS = ("MIN", "NORMAL", "DEEP")
 TRIGGERS = ("none", "contract", "security", "privacy", "permission", "migration", "dependency",
@@ -42,6 +47,70 @@ def task_id(value):
     return value
 
 
+
+def dispatch_id(value):
+    if re.fullmatch(r"d[0-9]{8}-[0-9]{6}-[0-9a-f]{4}", value) is None:
+        raise ValueError("invalid dispatch id")
+    return value
+
+
+def git(checkout, *args):
+    done = subprocess.run(["git", "-C", str(checkout), *args], capture_output=True,
+                          text=True, timeout=15, check=True)
+    return done.stdout.strip()
+
+
+def checkout_identity(checkout):
+    root = git(checkout, "rev-parse", "--show-toplevel")
+    return hashlib.sha256(os.fsencode(Path(root).resolve())).hexdigest()
+
+
+def current_head(checkout):
+    return git(checkout, "rev-parse", "--verify", "HEAD^{commit}")
+
+
+def validate_verification(rec):
+    if (not isinstance(rec, dict) or set(rec) !=
+            {"kind", "id", "head", "checkout_id", "tests", "mechanical", "criteria", "evidence_id"}
+            or rec["kind"] != "verify" or dispatch_id(rec["id"]) != rec["id"]
+            or not isinstance(rec["head"], str) or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", rec["head"])
+            or not isinstance(rec["checkout_id"], str) or not re.fullmatch(r"[0-9a-f]{64}", rec["checkout_id"])
+            or (rec["evidence_id"] is not None and (not isinstance(rec["evidence_id"], str) or not re.fullmatch(r"[0-9a-f]{64}", rec["evidence_id"])))
+            or rec["tests"] not in ("passed", "failed", "not-run")
+            or rec["mechanical"] not in ("passed", "failed")
+            or not isinstance(rec["criteria"], list) or len(rec["criteria"]) > 150):
+        raise ValueError("invalid verification receipt")
+    seen = set()
+    for item in rec["criteria"]:
+        if (not isinstance(item, dict) or set(item) != {"id", "answer", "source", "fallback"}
+                or not isinstance(item["id"], str) or not re.fullmatch(r"C[0-9]{1,4}(?:\.[12])?", item["id"])
+                or item["id"] in seen or item["answer"] not in ("yes", "no", "insufficient")
+                or item["source"] not in ("jev", "host") or type(item["fallback"]) is not bool
+                or (item["fallback"] and item["source"] != "host")):
+            raise ValueError("invalid criterion metadata")
+        seen.add(item["id"])
+    return rec
+
+
+def write_verification(dispatch, head, tests, mechanical, criteria, checkout, evidence_id=None):
+    import data_root as dr
+    rec = validate_verification(dict(kind="verify", id=dispatch, head=head, tests=tests,
+                                    mechanical=mechanical, criteria=criteria, evidence_id=evidence_id,
+                                    checkout_id=checkout_identity(checkout)))
+    if current_head(checkout) != head:
+        raise ValueError("checkout head changed")
+    with dr.data_folder("state/verification", create=True, private=True) as folder:
+        dr.atomic_write(folder, dispatch + ".json", json.dumps(rec).encode())
+    return rec
+
+
+def read_verification(dispatch):
+    import data_root as dr
+    dispatch_id(dispatch)
+    with dr.data_folder("state/verification", private=True) as folder:
+        rec = json.loads(dr.read_file(folder, dispatch + ".json", 65536))
+    return validate_verification(rec)
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -59,7 +128,27 @@ def main():
     judge.add_argument("--grader", required=True, choices=JUDGE_GRADERS)
     judge.add_argument("--result", required=True, choices=JUDGE_RESULTS)
     judge.add_argument("--followed", required=True, choices=JUDGE_FOLLOWED)
+    verify = sub.add_parser("verify", help="write a local verification receipt", allow_abbrev=False)
+    verify.add_argument("--id", required=True)
+    verify.add_argument("--head", required=True)
+    verify.add_argument("--tests", required=True, choices=("passed", "failed", "not-run"))
+    verify.add_argument("--mechanical", required=True, choices=("passed", "failed"))
+    verify.add_argument("--criteria-file", required=True, help="JSON metadata, never criterion text")
+    verify.add_argument("--checkout", default=".")
+    verify.add_argument("--evidence-id", help="optional SHA-256 of the private host request packet")
     args = parser.parse_args()
+    if args.command == "verify":
+        try:
+            with open(args.criteria_file, "rb") as stream:
+                raw = stream.read(65537)
+            if len(raw) > 65536:
+                raise ValueError("criteria too large")
+            write_verification(args.id, args.head, args.tests, args.mechanical,
+                               json.loads(raw), args.checkout, args.evidence_id)
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+            parser.exit(2, "record: verification refused\n")
+        print("verify receipt: recorded")
+        return
     if args.command == "router":
         print("router receipt: depth=%s trigger=%s" % (args.depth, args.trigger))
         return

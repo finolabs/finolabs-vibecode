@@ -72,29 +72,29 @@ class ContextStewardTest(unittest.TestCase):
         self.assertEqual(self.cli("check", "--used", "100", "--window", "100"),
                          (2, "", "Context steward refused: invalid input.\n"))
 
-    def test_agent_frontmatter_and_enforcers(self):
-        text = (ROOT / "agents/fnl-steward.md").read_text()
-        front = text.split("---", 2)[1]
-        for line in ("name: fnl-steward", "model: inherit", "disallowedTools: [Write, Edit, NotebookEdit]"):
-            self.assertIn(line, front)
-        for phrase in ("fast", "host config", "context_steward.py", "typesafe-ai", "unknown",
-                       "spend guard", "validated reply", "supplied summary", "starts no session"):
-            self.assertIn(phrase, " ".join(text.split()))
-        hygiene = (ROOT / "skills/fnl-session-hygiene/SKILL.md").read_text().split("## Context pressure", 1)[1].split("\n## ", 1)[0]
-        for phrase in ("fnl-steward", "prepare", "context_steward.py", "handover_state.py",
-                       "host enforces", "advisory (agent judgment)", "unverified on every host", "standalone"):
+    def test_retired_agent_procedure_is_self_contained(self):
+        self.assertFalse((ROOT / "agents/fnl-steward.md").exists())
+        self.assertFalse((ROOT / "agents/fnl-verifier.md").exists())
+        folder = ROOT / "skills/fnl-session-hygiene"
+        self.assertEqual((folder / "scripts/context_steward.py").read_bytes(),
+                         (ROOT / "scripts/context_steward.py").read_bytes())
+        hygiene = (folder / "SKILL.md").read_text().split("## Context pressure", 1)[1].split("\n## ", 1)[0]
+        for phrase in ("prepare", "context_steward.py", "handover_state.py", "judge.py",
+                       "host enforces", "advisory, agent judgment", "unverified on every host", "standalone",
+                       "Only when the script says `compact`", "then run `context_steward.py check` again",
+                       "small host model", "unvalidated"):
             self.assertIn(phrase, hygiene)
-        for path in ("fnl-delegate", "fnl-setup"):
-            text = (ROOT / "skills" / path / "SKILL.md").read_text()
-            paragraph = next(p for p in text.split("\n\n") if "fnl-steward" in p)
-            self.assertIn("advisory (agent judgment)", paragraph)
+        self.assertNotIn("fnl-steward", hygiene)
+        delegate = (ROOT / "skills/fnl-delegate/SKILL.md").read_text()
+        self.assertNotIn("fnl-verifier", delegate)
+        self.assertNotIn("fnl-steward", delegate)
+        self.assertIn("route reviews with `review_route.py`", delegate)
 
     def test_public_docs_and_spec_index_describe_local_handover(self):
         privacy = (ROOT / "PRIVACY.md").read_text()
         paragraph = next(p for p in privacy.split("\n\n") if "state/handover" in p)
         for phrase in ("0600", "0700", "user's own text", "never sent", "24-hour", "20", "8 KiB"):
             self.assertIn(phrase, paragraph)
-        self.assertIn("fnl-steward", (ROOT / "README.md").read_text())
         changelog = (ROOT / "CHANGELOG.md").read_text().split("## [Unreleased]", 1)[1]
         self.assertIn("steward", changelog)
         self.assertIn("compaction-steward.md", (ROOT / "docs/specs/index.md").read_text())

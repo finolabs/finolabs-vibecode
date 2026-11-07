@@ -661,7 +661,8 @@ class RefreshTest(unittest.TestCase):
         ids = [subprocess.run([sys.executable, "-I", str(LEDGER), *start], capture_output=True, text=True, env=env).stdout.strip()
                for _ in range(2)]
         for dispatch_id, outcome in zip(ids, ("accepted", "quota")):
-            subprocess.run([sys.executable, "-I", str(LEDGER), "finish", dispatch_id, "--outcome", outcome], check=True, env=env)
+            extra = ["--accept-unverified", "--reason", "Synthetic dashboard fixture"] if outcome == "accepted" else []
+            subprocess.run([sys.executable, "-I", str(LEDGER), "finish", dispatch_id, "--outcome", outcome, *extra], check=True, env=env)
 
     def judge_ledger(self, rows):
         lines = []
