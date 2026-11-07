@@ -65,6 +65,9 @@ The 17 skill folders and their purposes match the README.
 
 | Piece | What it answers or does | Where it comes from |
 | --- | --- | --- |
+| `scripts/delegate_env.py` | Starts headless forms with an environment allowlist; HOME remains reachable. | `fnl-delegate` |
+| `scripts/log_scan.py` | Scans, shows redacted logs and applies digest-bound local redaction. | `fnl-delegate` |
+| `scripts/brief_check.py` | Lints headings, the environment rule and secret patterns without quoting matches. | `fnl-handoff` |
 | `scripts/verify_claim.py` | Checks the reported head, changed-file scope and targeted tests, then records verification metadata. | `fnl-verification` (accepting delegated work) |
 | `scripts/context_steward.py` | Checks supplied usage against the chosen threshold; the working agent handles the safe boundary and handover. | `fnl-session-hygiene` |
 | `fnl-reviewer` agent | Is the change good? Reads the diff, then its callers, contracts and tests. | `fnl-review-gate` |

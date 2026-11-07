@@ -188,16 +188,33 @@ class CheckupTest(unittest.TestCase):
         self.assertIn("Briefs folder", row["reason"])
         self.assertIn("Agent roles", row["reason"])
         self.assertIn("Review posting", row["reason"])
+        self.assertIn("Delegate environment", row["reason"])
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)))
         self.assertEqual(self.setup_item("host config")["status"], "ok")
         template = (ROOT / "skills/fnl-delegate/references/host-template.md").read_text()
         self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Project labels"})
-        for heading in ("Agent roles", "Review posting"):
+        for heading in ("Agent roles", "Review posting", "Delegate environment"):
             with self.subTest(heading=heading):
                 config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS - {heading})))
                 row = self.setup_item("host config")
                 self.assertEqual(row["status"], "missing")
                 self.assertEqual(row["reason"], "required headings absent: " + heading)
+
+    def test_template_structure_and_instruction_consent(self):
+        template = (ROOT / "skills/fnl-delegate/references/host-template.md").read_text()
+        headings = re.findall(r"^## (.+)$", template, re.M)
+        expected = ['Delegation mode', 'Routing', 'Agents on this machine', 'Delegate environment',
+                    'Agent roles', 'Review posting', 'Quota probe', 'Project labels', 'Limits',
+                    'Effort preference', 'Briefs folder', 'Coordinators and reach', 'Route judgment',
+                    'Dispatch marker', 'Claude Code', 'Codex', 'Antigravity']
+        self.assertEqual(headings, expected)
+        self.assertTrue(all('`' not in heading and len(heading) <= 60 for heading in headings))
+        config = template.replace('Instruction check: <on | off>', 'Instruction check: on')
+        self.assertTrue(checkup.instruction_consent(config))
+        route = template.split('## Route judgment\n', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('canonical `## Agent roles`; this legacy heading retains instruction-check consent.', route)
+        environment = template.split('## Delegate environment\n', 1)[1].split('\n## ', 1)[0]
+        self.assertIn('The `Delegate environment` section accepts only', environment)
 
     def test_effective_settings_and_enforcement_limits(self):
         self.env.update(FNL_DELEGATION_MODE="auto", FNL_ROUTING="off")

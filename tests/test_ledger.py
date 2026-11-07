@@ -1,6 +1,8 @@
 """Tests for skills/fnl-delegate/scripts/ledger.py, run through its CLI."""
 
 import importlib.util
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -36,6 +38,67 @@ class LedgerTest(unittest.TestCase):
         if check:
             self.assertEqual(result.returncode, 0, result.stderr)
         return result
+
+    def test_log_scan_records_only_status_and_preserves_head_and_receipt_gate(self):
+        logs = Path(self.dir.name).resolve() / '.finolabs' / 'logs'
+        logs.mkdir(parents=True, mode=0o700)
+        path = logs / 'run.log'
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('hygiene_ledger', LEDGER)
+        ledger = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ledger)
+        import log_scan
+        for raw, status in ((b'ordinary output', 'no_findings'),
+                            (('sk' + '-' + 'fixture' * 4).encode(), 'findings'),
+                            (b'\x00fixture', 'not_scanned')):
+            path.write_bytes(raw)
+            dispatch = self.run_ledger(*START).stdout.strip()
+            args = ledger.build_parser().parse_args(['finish', dispatch, '--outcome', 'accepted',
+                '--head', 'a' * 40, '--log-path', str(path), '--accept-unverified', '--reason', 'Synthetic fixture'])
+            output, warning = io.StringIO(), io.StringIO()
+            with mock.patch.object(log_scan, 'run_log_folder', return_value=logs), \
+                    mock.patch.dict(os.environ, self.env), contextlib.redirect_stdout(output), \
+                    contextlib.redirect_stderr(warning):
+                args.func(args)
+            self.assertEqual(output.getvalue(), '')
+            self.assertEqual(warning.getvalue(), '' if status == 'no_findings' else
+                             'ledger: log_scan: ' + status + '\n')
+            done = self.records()[-1]
+            self.assertEqual(done['log_scan'], status)
+            self.assertEqual(done['head'], 'a' * 40)
+            self.assertNotIn('fixturefixture', self.path.read_text())
+        dispatch = self.run_ledger(*START).stdout.strip()
+        args = ledger.build_parser().parse_args(['finish', dispatch, '--outcome', 'accepted',
+                                                '--log-path', str(path), '--head', 'a' * 40])
+        count = len(self.records())
+        with mock.patch.object(log_scan, 'run_log_folder', return_value=logs), self.assertRaises(SystemExit):
+            args.func(args)
+        self.assertEqual(len(self.records()), count)
+
+    def test_log_path_refuses_outside_symlink_hardlink_and_scans_before_ledger_read(self):
+        logs = Path(self.dir.name).resolve() / '.finolabs' / 'logs'
+        logs.mkdir(parents=True, mode=0o700)
+        path = logs / 'run.log'
+        path.write_text('ordinary')
+        alias = logs / 'alias.log'
+        alias.symlink_to(path)
+        outside = Path(self.dir.name).resolve() / 'outside.log'
+        outside.write_text('ordinary')
+        spec = importlib.util.spec_from_file_location('hygiene_ledger', LEDGER)
+        ledger = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ledger)
+        import log_scan
+        for bad in (alias, outside):
+            args = ledger.build_parser().parse_args(['finish', 'missing', '--outcome', 'error', '--log-path', str(bad)])
+            with mock.patch.object(log_scan, 'run_log_folder', return_value=logs), \
+                    mock.patch.object(ledger, 'load') as load, self.assertRaises(SystemExit):
+                args.func(args)
+            load.assert_not_called()
+        alias.unlink()
+        os.link(path, alias)
+        args = ledger.build_parser().parse_args(['finish', 'missing', '--outcome', 'error', '--log-path', str(path)])
+        with mock.patch.object(log_scan, 'run_log_folder', return_value=logs), self.assertRaises(SystemExit):
+            args.func(args)
 
     def test_low_oversized_ledger_has_one_error_line(self):
         with self.path.open("wb") as stream:
@@ -129,6 +192,7 @@ class LedgerTest(unittest.TestCase):
                         "--accept-unverified", "--reason", "Head binding fixture")
         finish = self.records()[-1]
         self.assertEqual((finish["head"], finish["agent"]), ("a" * 40, "codex"))
+        self.assertEqual(finish["log_scan"], "not_scanned")
 
     def test_review_dispatch_cannot_claim_implementation_head(self):
         args = ["review" if a == "implement" else a for a in START]

@@ -32,8 +32,16 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    sessions and in-session subagents inherit the user's environment and are **not covered** (the report says so). The coordinator's other variables never reach the child. Names obey a strict pattern
    (`^[A-Z][A-Z0-9_]{0,63}$`, no wildcard, no value, no duplicate) and are refused when they are loader or
    interpreter controls (`LD_*`, `DYLD_*`, `BASH_ENV`, `ENV`, `NODE_OPTIONS`, `PYTHON*`, `PERL5*`, `RUBY*`, `GIT_*`
-   command variables, `*_PROXY`, `SSL_CERT_*`). A name that looks secret (contains KEY, TOKEN, SECRET, PASSWORD or
-   CREDENTIAL) needs its own neutral Yes and No in `fnl-setup` that names the variable and the receiving agent family.
+   command variables, `*_PROXY`, `SSL_CERT_*`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`,
+   `CURL_CA_BUNDLE`, `NODE_TLS_REJECT_UNAUTHORIZED`, `NODE_PATH`, `PERLLIB`, `SHELLOPTS`, `PS4`,
+   `PROMPT_COMMAND`, `JAVA_TOOL_OPTIONS`). A name that looks secret (contains KEY, TOKEN, SECRET, PASSWORD,
+   CREDENTIAL, or has PASS, AUTH, COOKIE, SESSION or PRIVATE as an underscore-delimited name part)
+   needs its own neutral Yes and No in `fnl-setup` that names the variable and the receiving agent family.
+   `--claude-config-dir` is Claude-only: absolute, no `..`, a current-user-owned directory, no symlink
+   components, not group/world-writable and outside git work trees (including ancestor markers); ancestors
+   must be root- or user-owned and not group/world-writable, as in the quota probe.
+   The wrapper exits 125 on refusal (including argument errors); child exits 0–255 pass through except
+   125, which maps to 1 so it cannot look like refusal. Signal termination also maps to 1.
    Enforcer: the script; the host config only holds names.
    **Residual risk (stated, not solved):** `HOME` stays, so credential files the child can read under it
    (`~/.npmrc`, `~/.aws`, `~/.netrc`, the GitHub CLI hosts file, other agents' config folders, the plugin's data root,
@@ -45,24 +53,43 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    environment for `delegate_env.py` and `verify_claim.py`. A test greps the plugin's scripts and fails when a script
    starts a delegate or a test command without it. Two commands keep their own scoped allowlists under their
    `CLAUDE.md` exceptions: the quota probe and the `ps` snapshot.
-4. **A finished run's log is scanned.** `log_scan.py scan <log>...` looks for secret-shaped values (known key
-   prefixes, private-key blocks, tokens after a name containing KEY, TOKEN, SECRET, PASSWORD or CREDENTIAL, also
-   after ANSI sequences are stripped and for base64 of 32 or more characters next to such a name) and environment
-   dumps (ten or more `NAME=value` or `'NAME': 'value'` pairs within 200 lines). Thresholds, fixed in `secret_patterns.py`:
-   prefixes `sk-`, `sk-ant-`, `ghp_`, `gho_`, `ghu_`, `ghs_`, `github_pat_`, `glpat-`, `xoxb-`, `xoxp-`, `npm_`, `AKIA`,
-   `ASIA`, `AIza` each followed by at least 16 token characters; a private-key block by its `-----BEGIN` line; a name
-   with KEY, TOKEN, SECRET, PASSWORD or CREDENTIAL followed by a value of at least 16 characters from
-   `[A-Za-z0-9+/_=.-]`. The stance is to prefer false positives: a finding is reviewed by the coordinator, and no
-   ignore list exists. It is a best-effort filter, not proof: a binary,
-   compressed, unreadable or oversize (over 8 MiB) log is reported `not scanned`. Output is a fixed vocabulary of
-   kinds plus the file and line, and a variable name only when it matches the name pattern of rule 2 and is not
-   itself secret-shaped; no value, length, prefix or entropy is ever printed. The result recorded by
-   `ledger.py finish` is `log_scan: no_findings | findings | not_scanned`, never `clean`.
+4. **A finished run's log is scanned.** `log_scan.py scan <log>...` looks for secret-shaped values in
+   both raw text and ANSI-normalized text, unions their spans and reports line numbers from the raw input.
+   Thresholds, fixed in `secret_patterns.py`: prefixes `sk-`, `sk-ant-`, `sk_live_`, `sk_test_`, `ghp_`,
+   `gho_`, `ghu_`, `ghs_`, `github_pat_`, `glpat-`, `xoxb-`, `xoxp-`, `npm_`, `AKIA`, `ASIA`, `AIza`
+   followed by at least 16 token characters (`[A-Za-z0-9+/_=.-]`); private-key blocks from their
+   `-----BEGIN` line; `Authorization: Bearer` followed by at least 16 token characters; and values of
+   at least 16 characters after a name containing KEY, TOKEN, SECRET, PASSWORD or CREDENTIAL, or having
+   PASS, AUTH, COOKIE, SESSION or PRIVATE as an underscore-delimited name part (case-insensitive,
+   including lowercase `name=value` and quoted values with spaces or punctuation). Environment dumps
+   require at least ten distinct environment-style names (uppercase, containing an underscore) in
+   `NAME=value` or `'NAME': 'value'` pairs within 200 raw lines; repeating one name does not qualify.
+   At 1,000 candidate hits across raw and normalized scans (known prefixes, bearer lines, private-key
+   blocks, sensitive names with qualifying values, or pairs in a qualifying environment dump), stop with
+   one `match_limit` finding covering the whole input; `show` and `redact` then replace the whole log.
+   Harmless pairs do not count toward that cap. A separate limit of 250,000 pairs per scan pass bounds
+   pair matching; exceeding it gives `not_scanned`, without a finding or redaction. Matches are iterated;
+   only environment-style pairs are retained for the dump window.
+   The stance is to prefer false positives; no ignore list exists. `no_findings` means only that nothing
+   matched these rules. This is a best-effort filter, not proof. Binary, compressed, unreadable or oversize
+   (over 8 MiB) logs, lone ESC, unrecognized escape forms, C1 controls and Unicode format characters
+   (category Cf, including zero-width joiners and BOMs) give `not_scanned` for a log and
+   `rule_1_unreadable` for a brief. One leading BOM is stripped for scanning, with raw log offsets and
+   line numbers preserved; any later BOM, other Cf character or C1 control remains a refusal.
+   CR/LF token wrapping and other split-value
+   evasions remain outside these rules. Output contains fixed kinds, file and raw line number, and a
+   variable name only if it matches rule 2 and is not itself secret-shaped: known prefixes or all-caps
+   hex/base32 names of 20 or more characters are suppressed. No value, length, prefix or entropy is printed.
+   `ledger.py finish` records `log_scan: no_findings | findings | not_scanned`, never `clean`.
 5. **Redaction is a guarded write.** `log_scan.py redact <log>` previews and, with `--yes --digest`, rewrites only a
    regular file (lstat; no symlink, no hardlink, owner is the current user) inside the run-log folder, using a temp
    file created with `O_EXCL` in the same directory, mode copied from the original and never wider than 0600, then
-   fsync and rename; no backup is made (a backup would keep the value). It refuses while a process still has the log
-   open or its mtime is under 60 seconds, and the digest binds the previewed bytes. The run-log folder is created
+   fsync and rename; no backup is made (a backup would keep the value). It refuses if mtime is under
+   60 seconds and rechecks device, inode, size and mtime_ns (also owner, link count and ctime_ns) immediately
+   before rename, refusing any change. The digest binds the previewed bytes. No process-descriptor query
+   or new command runs: `/proc` may be inaccessible and `lsof` has no scoped command exception. An idle
+   open descriptor alone is not detected; writers must finish before redaction, and a concurrent same-user
+   write after the last recheck remains a race. The run-log folder is created
    0700, and an existing folder with a wider mode is refused. All file checks (regular file, `st_nlink == 1`, owner) run
    on the opened descriptor (`O_NOFOLLOW`, then `fstat`), not on the path, for `redact`, `show` and the log-path
    argument of `ledger.py finish`. The agents' own transcript stores (for example `~/.codex/sessions`, `~/.claude/projects`) hold the same

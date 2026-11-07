@@ -20,6 +20,24 @@ Coordinator: unverified
 | Codex | unverified | unverified | unverified | unverified |
 | Antigravity | unverified | unverified | unverified | unverified |
 
+## Delegate environment
+
+<!--
+The `Delegate environment` section accepts only blank lines and `- <family>: none` or one
+`- <family>: <NAME>` per variable; replace `none` when adding names. Families are `claude`, `codex`,
+`antigravity`. Names match `^[A-Z][A-Z0-9_]{0,63}$`, with no duplicates, values or wildcards.
+Loader/interpreter controls, `GIT_*`, `*_PROXY`, `SSL_CERT_*` are refused by `delegate_env.py`.
+A name containing KEY/TOKEN/SECRET/PASSWORD/CREDENTIAL/PASS/AUTH/COOKIE/SESSION/PRIVATE needs its own setup Yes and No naming
+both name and family; only that Yes records `- <family>: <NAME>; approved: yes`.
+The wrapper reads canonical host config, not an environment-selected file. Default: none.
+HOME remains: protection is environment-only; credential files remain reachable. Report this residual risk.
+Private HOME is an open owner decision and is not offered or created in this package.
+-->
+
+- claude: none
+- codex: none
+- antigravity: none
+
 ## Agent roles
 
 - code review: antigravity
@@ -82,7 +100,7 @@ Each headless command below starts with `FNL_DISPATCH_ID=<ledger id>`, the id `l
 
 ## Claude Code
 
-- Headless command: FNL_DISPATCH_ID=<ledger id> <hard-cap wrapper> <claude path> -p "$(cat "$B")" --model <full model id> --effort <level> --output-format json --max-turns <n> --max-budget-usd <cap> --allowedTools "<tools the brief needs>" < /dev/null
+- First lint the brief with `brief_check.py` from `fnl-handoff`; set `umask 077` and create the private log folder as the common procedure in `agents.md` requires; the wrapper checks its mode. Headless command: FNL_DISPATCH_ID=<ledger id> python3 -I <delegate skill folder>/scripts/delegate_env.py --family claude -- <hard-cap wrapper> <claude path> -p "$(cat "$B")" --model <full model id> --effort <level> --output-format json --max-turns <n> --max-budget-usd <cap> --allowedTools "<tools the brief needs>" < /dev/null
 - Allowed models: <full model ids>.
 - How task sessions start on this host: <desktop app session tools | `claude -p` headless>.
 - Session title convention: <`<project> <scope>: <activity>` as `fnl-session-hygiene` says, or this machine's own>.
@@ -93,18 +111,21 @@ Invocation with a hard cap and the extra directories the toolchain needs:
 
 ```bash
 B="<brief file>"; O="<logs folder>"; W="<worktree>"; T="<ledger id>-<slug>"  # slug: a-z, 0-9, -, at most 40 characters
-FNL_DISPATCH_ID="<ledger id>" <hard-cap wrapper, e.g. perl -e 'alarm 5400; exec @ARGV'> <codex path> exec \
+umask 077
+# Prepare the private log folder first, as the common procedure in agents.md requires.
+python3 -I <handoff skill folder>/scripts/brief_check.py "$B" || exit 1
+FNL_DISPATCH_ID="<ledger id>" python3 -I <delegate skill folder>/scripts/delegate_env.py --family codex -- <hard-cap wrapper, e.g. perl -e 'alarm 5400; exec @ARGV'> <codex path> exec \
   -m <model> -c model_reasoning_effort=<level> -s workspace-write -C "$W" -o "$O/$T-last.txt" "$(cat "$B")" \
   < /dev/null > "$O/$T-codex.log" 2>&1; echo "$T=$?"
 ```
 
 - Allowed models: <list>.
-- Reviews and advice: `-s read-only`, or `codex review`.
+- Reviews and advice: `-s read-only`, or `delegate_env.py --family codex -- codex review`.
 - Machine quirks: <e.g. broken Node shim on PATH, missing `timeout`>.
 
 ## Antigravity
 
-- Command: FNL_DISPATCH_ID=<ledger id> <agy path> -p "$(cat "$B")" --model <model id> --mode accept-edits --output-format json --print-timeout 30m, or the `agybird` runner when installed: <how to look up the runner's install path at each dispatch, for example a command that reads it from the host's plugin list; not a path>. Resolve it at each dispatch, never from a pinned version folder or the highest folder in the plugin cache, which keeps old versions after an upgrade.
+- First lint with `brief_check.py` from `fnl-handoff`; set `umask 077` and create the private log folder as the common procedure in `agents.md` requires; the wrapper checks its mode. Command: FNL_DISPATCH_ID=<ledger id> python3 -I <delegate skill folder>/scripts/delegate_env.py --family antigravity -- <hard-cap wrapper> <agy path> -p "$(cat "$B")" --model <model id> --mode accept-edits --output-format json --print-timeout 30m, or the `agybird` runner through the same `delegate_env.py --family antigravity --` wrapper when installed: <how to look up the runner's install path at each dispatch, for example a command that reads it from the host's plugin list; not a path>. Resolve it at each dispatch, never from a pinned version folder or the highest folder in the plugin cache, which keeps old versions after an upgrade.
 - Allowed models and their pools: <list>.
 - Per-run settings file with allow-rules: <path>. Global allow-rules: <file path and the command prefixes allowed>. Everything else is soft-denied.
 - Rules the user granted per repository (test and check commands), as a record only: the grant itself lives in Antigravity's settings or the user's answer. <repository: literal commands, date approved>.

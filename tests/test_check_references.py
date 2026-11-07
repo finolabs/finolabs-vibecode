@@ -30,7 +30,7 @@ BREAKS = [
     ("skills/fnl-delegate/references/ledger.md", "--reason fallback-quota", "--reason FALLBACK",
      "--reason FALLBACK is not one of"),
     ("skills/fnl-delegate/references/dispatch.md", "## Heavy-job lock", "## Heavy job lock",
-     '`references/dispatch.md` has no section "Heavy-job lock"'),
+     '`dispatch.md` has no section "Heavy-job lock"'),
     ("skills/fnl-delegate/references/ledger.md", 'python3 -I "$L" open', 'python3 -I "$L" opn',
      "ledger.py has no subcommand opn"),
     ("skills/fnl-delegate/references/ledger.md", 'python3 -I "$L" open', 'python3 -I "$L" open --outcome accepted',

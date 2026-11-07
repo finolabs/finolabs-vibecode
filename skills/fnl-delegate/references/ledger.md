@@ -26,3 +26,5 @@ Under Delegation mode `manual`, `start` refuses a cross-family record without `-
 `--agent claude-session` records a Claude Code app or interactive session, `claude` a headless `claude -p` run, `subagent` an in-session subagent. Task labels are short names; the ledger holds no task data, secrets or personal data. `summary` reports, per agent, model, kind and grade, the first-pass acceptance rate, timeouts and stalls, fallbacks and median duration.
 
 For task progress, use labels of the form `<feature> T<id>` (for example `003 T012`); include the exact three-digit feature number. Multiple ids or ranges of at most 20 ids link each task; labels without a feature remain unlinked. The rest of the label is discarded by the dashboard.
+
+`finish` accepts `--log-path <log>` inside the private `.finolabs/logs/` folder of the current checkout; it scans before recording and stores only `log_scan: no_findings|findings|not_scanned`. Omit the path to record `not_scanned`. The `--head` and verification-receipt gate still apply.

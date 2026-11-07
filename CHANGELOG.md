@@ -6,6 +6,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add headless environment allowlists, brief lint, local guarded log scan/show/redaction and ledger scan status; HOME credential-file access remains a reported residual risk.
+
 - Add `verify_claim.py` for scoped mechanical checks and bounded criterion judgments, with private metadata receipts and a receipt gate for accepted ledger runs. `--head` must match the verified head; `--accept-unverified --reason` records and counts an explicit exception.
 
 - Add the navigator agent and `nav_state.py` for bounded course-check evidence, screened judge payloads and collected-reference report checks; the agent requires `judge.py` from the verification package.
@@ -36,6 +38,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Draw project stages as SVG chevron chains beside identity, keep story lanes for one active item, and replace the truncated storyless label with a dashed tag icon.
 
 ### Fixed
+
+- Keep benign log pairs out of the secret-hit cap, require ten distinct environment-style dump names, and match added sensitive words as underscore-delimited name parts. Accept one leading BOM while refusing later BOMs, other Unicode format characters and C1 controls.
+
+- Scan raw OSC payloads as well as normalized log text, bound candidate matches, refuse unsupported controls, and expand secret detection and child-environment guards. Replace process open-file queries with the 60-second mtime guard and final metadata recheck; distinguish dispatch refusal from child exits.
 
 - Enforce the judge network exception with canonical opt-in, closed capped payloads, refusal before sending secrets or machine paths, verified transport, a 24-call cap and explicit host fallback. Require meaningful host quotes, refuse module-based full-suite runners, and show accepted-without-verification counts per agent.
 
