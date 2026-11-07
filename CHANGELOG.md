@@ -25,10 +25,10 @@ This release makes delegated work easier to direct, review and check, with a sho
 - Run `/fnl-setup check` after updating (`$fnl-setup check` on Codex); it reports configured, missing and unverified features without changing them.
 - Use `/fnl-setup add delegation` to review the new `## Limits` lines: `- Parallel dispatches: at most 6 at one time.` and optional `- Parallel per family: claude=2, codex=3` are examples, not prescribed values; missing or invalid totals use 5, and older parenthetical wording needs replacement.
 - Use `/fnl-setup add roles` to choose review families and the judge; assignments grant no posting rights, and each posting grant needs its own approval and observed check.
+- Claude Code may ask you to trust the changed plugin hooks after updating (a new `StopFailure` entry records rate-limit markers only when the quota probe is on).
 - On Codex, open `/hooks` and check trust again: changed bundle contents can require renewed trust even when hook declarations are unchanged.
 - Context recording needs a status-line command in your own host settings; setup previews a new command or gives a recipe to compose with an existing one, which it leaves untouched.
 - Follow the replacements under Removed; data-root location and existing consent remain unchanged, and new opt-ins still need separate approval.
-- `fnl-update` and `fnl-restore-point` remain available from earlier releases; neither is new in 0.2.0.
 
 ### Added
 
@@ -39,6 +39,7 @@ This release makes delegated work easier to direct, review and check, with a sho
 - **Judge:** One interface supports a small host model by default and optional Jev, with explicit fallback and judgments that grant neither authority nor acceptance.
 - **Context:** Opt-in Claude Code and Antigravity status-line recorders supply fresh token counts to the compaction steward without reading conversation content.
 - **Delegation:** A task-routing helper applies the grade matrix, and a read-only Claude Code/Codex startup summary shows roles, posting state, cached quota and open dispatch counts.
+- **Quota:** An advisory Claude Code rate-limit marker (family and time only, recorded from the `StopFailure` event while the quota probe is on) steers routing away from a limited family until its reset.
 - **Capacity:** Advisory parallel-slot checks expose a user-selected total from 1 to 32 and optional per-family caps in setup, session start and the dashboard.
 - **Work tracking:** Per-repository settings, dated outcome anchors and bounded one-file work records complement Spec Kit artifacts.
 
