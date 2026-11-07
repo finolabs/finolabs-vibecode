@@ -54,10 +54,18 @@ def dispatch_id(value):
     return value
 
 
+def child_environment():
+    """Keep coordinator credentials and home/config overrides out of children."""
+    env = {k: os.environ[k] for k in ("PATH", "LANG", "TMPDIR") if k in os.environ}
+    env.setdefault("PATH", os.defpath)
+    return env
+
+
 def git(checkout, *args):
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    done = subprocess.run(["git", "-C", str(checkout), *args], capture_output=True,
-                          text=True, timeout=15, check=True, env=env)
+    done = subprocess.run(["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
+                           "-c", "core.untrackedCache=false", "-C", str(checkout), *args],
+                          capture_output=True, text=True, encoding="utf-8", timeout=15,
+                          check=True, env=child_environment())
     return done.stdout.strip()
 
 

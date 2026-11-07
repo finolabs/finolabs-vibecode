@@ -127,19 +127,113 @@ class VerificationTest(unittest.TestCase):
         self.assertTrue(passed)
         self.assertFalse(marker.exists())
 
-    def test_test_process_cannot_inherit_judge_key_or_git_overrides(self):
+    def test_test_process_receives_only_allowlisted_environment(self):
         injected = {'TYPESAFE_API_KEY': 'synthetic-key', 'GIT_DIR': '/synthetic/git',
                     'GIT_WORK_TREE': '/synthetic/tree', 'GIT_CONFIG_COUNT': '1',
-                    'VERIFY_TEST_MARKER': 'preserved'}
+                    'HOME': str(self.home), 'AWS_SECRET_ACCESS_KEY': 'synthetic-secret',
+                    'VERIFY_TEST_MARKER': 'must-not-inherit', 'PATH': os.defpath,
+                    'LANG': 'C', 'TMPDIR': str(self.root)}
         code = ('import os; '
                 'assert "TYPESAFE_API_KEY" not in os.environ; '
                 'assert not any(k.startswith("GIT_") for k in os.environ); '
-                'assert os.environ["VERIFY_TEST_MARKER"] == "preserved"')
-        with mock.patch.dict(os.environ, injected):
+                'assert "AWS_SECRET_ACCESS_KEY" not in os.environ; '
+                'assert "HOME" not in os.environ; '
+                'assert "VERIFY_TEST_MARKER" not in os.environ; '
+                'assert os.environ["PATH"]; '
+                'assert os.environ["LANG"] == "C"; '
+                f'assert os.environ["TMPDIR"] == {str(self.root)!r}')
+        with mock.patch.dict(os.environ, injected, clear=True):
             passed, output, reason = verify.run_test([sys.executable, '-c', code], self.checkout, 5)
             self.assertEqual(os.environ['TYPESAFE_API_KEY'], 'synthetic-key')
             self.assertEqual(os.environ['GIT_DIR'], '/synthetic/git')
         self.assertTrue(passed, (output, reason))
+
+    def test_record_git_receives_only_allowlisted_environment(self):
+        bin_dir = self.root / 'bin'
+        bin_dir.mkdir()
+        executable = bin_dir / 'git'
+        executable.write_text(f'#!{sys.executable}\nimport json, os\n'
+                              'print(json.dumps({"keys": sorted(os.environ), '
+                              '"PATH": os.environ.get("PATH"), "LANG": os.environ.get("LANG"), '
+                              '"TMPDIR": os.environ.get("TMPDIR")}))\n')
+        executable.chmod(0o700)
+        injected = {'PATH': str(bin_dir), 'LANG': 'C', 'TMPDIR': str(self.root),
+                    'HOME': str(self.home), 'TYPESAFE_API_KEY': 'synthetic-key',
+                    'AWS_SECRET_ACCESS_KEY': 'synthetic-secret', 'GIT_CONFIG_COUNT': '1',
+                    'VERIFY_TEST_MARKER': 'must-not-inherit'}
+        with mock.patch.dict(os.environ, injected, clear=True):
+            child = json.loads(verify.record.git(self.checkout, 'status'))
+            self.assertEqual(os.environ['TYPESAFE_API_KEY'], 'synthetic-key')
+        for name in ('HOME', 'TYPESAFE_API_KEY', 'AWS_SECRET_ACCESS_KEY', 'VERIFY_TEST_MARKER'):
+            self.assertNotIn(name, child['keys'])
+        self.assertFalse(any(k.startswith('GIT_') for k in child['keys']))
+        self.assertEqual(child['PATH'], str(bin_dir))
+        self.assertEqual(child['LANG'], 'C')
+        self.assertEqual(child['TMPDIR'], str(self.root))
+
+    def test_configured_fsmonitor_never_runs_before_or_after_tests(self):
+        marker = self.root / 'fsmonitor-ran'
+        monitor = self.root / 'fsmonitor'
+        monitor.write_text(f'#!{sys.executable}\nimport os\nfrom pathlib import Path\n'
+                           f'Path({str(marker)!r}).write_text(os.environ.get("TYPESAFE_API_KEY", "no-key"))\n')
+        monitor.chmod(0o700)
+        for configured_by_test in (False, True):
+            with self.subTest(configured_by_test=configured_by_test):
+                marker.unlink(missing_ok=True)
+                if configured_by_test:
+                    self.git('config', '--unset', 'core.fsmonitor')
+                    code = ('import subprocess; '
+                            f'subprocess.run(["git", "config", "core.fsmonitor", {str(monitor)!r}], check=True)')
+                    self.brief['tests'] = [[sys.executable, '-c', code]]
+                else:
+                    self.git('config', 'core.fsmonitor', str(monitor))
+                with mock.patch.dict(os.environ, {'TYPESAFE_API_KEY': 'synthetic-key',
+                                                 'PATH': os.defpath, 'TMPDIR': str(self.root)}, clear=True), \
+                        mock.patch.object(verify.judge, 'ask_jev', side_effect=verify.judge.Unavailable):
+                    passed, _ = self.run_verify(source='jev')
+                self.assertTrue(passed, self.output.getvalue())
+                self.assertFalse(marker.exists(), 'fsmonitor executed with coordinator environment')
+                self.assertEqual(self.receipt()['mechanical'], 'passed')
+
+    def test_record_git_disables_checkout_hooks(self):
+        marker = self.root / 'hook-ran'
+        hooks = self.root / 'hooks'
+        hooks.mkdir()
+        hook = hooks / 'pre-commit'
+        hook.write_text(f'#!{sys.executable}\nfrom pathlib import Path\n'
+                        f'Path({str(marker)!r}).touch()\n')
+        hook.chmod(0o700)
+        self.git('config', 'core.hooksPath', str(hooks))
+        verify.record.git(self.checkout, 'commit', '--allow-empty', '-qm', 'Check disabled hooks')
+        self.assertFalse(marker.exists())
+        self.assertNotEqual(verify.record.current_head(self.checkout), self.head)
+
+    def test_invalid_utf8_document_records_insufficient_without_judging(self):
+        (self.checkout / 'target.txt').write_bytes(b'guard\xff\n')
+        self.git('commit', '-qam', 'Add invalid UTF-8 document')
+        self.head = self.git('rev-parse', 'HEAD')
+        self.brief['criteria'] = [{'id': 'C1', 'documents': [
+            {'path': 'target.txt', 'question': 'The document describes the guard.'},
+            {'path': 'target.txt', 'question': 'The document describes the guard.'}]}]
+        with mock.patch.object(verify, 'ask', side_effect=AssertionError('must not judge invalid UTF-8')):
+            passed, requests = self.run_verify(source='jev')
+        self.assertFalse(passed)
+        self.assertEqual(requests, {})
+        receipt = self.receipt()
+        self.assertEqual(receipt['tests'], 'passed')
+        self.assertEqual(receipt['mechanical'], 'failed')
+        self.assertEqual([c['answer'] for c in receipt['criteria']], ['insufficient'] * 3)
+        brief = self.root / 'brief.json'
+        brief.write_text(json.dumps(self.brief))
+        for script in (SCRIPTS / 'verify_claim.py', ROOT / 'skills/fnl-verification/scripts/verify_claim.py'):
+            with self.subTest(script=script):
+                done = subprocess.run([sys.executable, '-I', str(script), '--brief', str(brief),
+                                       '--base', self.base, '--head', self.head, '--ledger-id', self.dispatch,
+                                       '--checkout', str(self.checkout), '--judge', 'host'],
+                                      capture_output=True, text=True)
+                self.assertEqual(done.returncode, 1, done.stderr)
+                self.assertEqual(self.receipt()['mechanical'], 'failed')
+                self.assertEqual([c['answer'] for c in self.receipt()['criteria']], ['insufficient'] * 3)
 
     def test_record_git_ignores_inherited_repository_and_config_overrides(self):
         other = self.root / 'other'

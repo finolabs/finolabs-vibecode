@@ -74,10 +74,8 @@ def load_brief(path):
 
 def run_test(argv, checkout, timeout):
     """No shell; cap combined output and kill descendants on timeout or overflow."""
-    env = {k: v for k, v in os.environ.items()
-           if k != "TYPESAFE_API_KEY" and not k.startswith("GIT_")}
     process = subprocess.Popen(argv, cwd=checkout, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                               start_new_session=True, env=env)
+                               start_new_session=True, env=record.child_environment())
     chunks, total, failed = [], 0, False
     deadline = time.monotonic() + timeout
     selector = selectors.DefaultSelector()
@@ -185,13 +183,16 @@ def verify(brief, base, head, dispatch, checkout, source, answers, timeout=300):
                 # Read each document independently from the named commit, never a working file.
                 blob = f"{head}:{doc['path']}"
                 size = int(record.git(checkout, "cat-file", "-s", blob))
-                text = record.git(checkout, "show", blob) if size <= LIMIT else None
+                try:
+                    text = record.git(checkout, "show", blob) if size <= LIMIT else None
+                except UnicodeDecodeError:
+                    text = None  # Invalid UTF-8 is unavailable evidence, never a partial judgment.
                 pieces.append((f"{cid}.{i}", doc["question"], text))
         judged = []
         for identifier, question, supplied in pieces:
             if supplied is None or len(supplied.encode()) > LIMIT:
                 # Never judge truncated evidence or lose the run's failure receipt.
-                check(f"{identifier} evidence", False, "exceeds byte limit; judgment insufficient")
+                check(f"{identifier} evidence", False, "unavailable or exceeds byte limit; judgment insufficient")
                 answer = dict(id=identifier, answer="insufficient", source="host", fallback=False)
             else:
                 judge.payload(question, supplied)  # same bounded payload for either implementation
