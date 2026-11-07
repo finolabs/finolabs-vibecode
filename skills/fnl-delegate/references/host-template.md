@@ -20,6 +20,19 @@ Coordinator: unverified
 | Codex | unverified | unverified | unverified | unverified |
 | Antigravity | unverified | unverified | unverified | unverified |
 
+## Agent roles
+
+- code review: antigravity
+- security review: codex
+- navigator: claude
+- judge: host
+
+## Review posting
+
+- claude: unverified (checked 2026-11-07)
+- codex: unverified (checked 2026-11-07)
+- antigravity: unverified (checked 2026-11-07)
+
 ## Quota probe
 
 - Quota probe: off
