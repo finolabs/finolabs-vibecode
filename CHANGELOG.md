@@ -39,7 +39,7 @@ This release makes delegated work easier to direct, review and check, with a sho
 - **Judge:** One interface supports a small host model by default and optional Jev, with explicit fallback and judgments that grant neither authority nor acceptance.
 - **Context:** Opt-in Claude Code and Antigravity status-line recorders supply fresh token counts to the compaction steward without reading conversation content.
 - **Delegation:** A task-routing helper applies the grade matrix, and a read-only Claude Code/Codex startup summary shows roles, posting state, cached quota and open dispatch counts.
-- **Quota:** An advisory Claude Code rate-limit marker (family and time only, recorded from the `StopFailure` event while the quota probe is on) steers routing away from a limited family until its reset.
+- **Quota:** An advisory Claude Code rate-limit marker (family and time only, recorded from the `StopFailure` event while the quota probe is on) steers routing away from a limited family for at most five hours; a newer reading or your own statement overrides it.
 - **Capacity:** Advisory parallel-slot checks expose a user-selected total from 1 to 32 and optional per-family caps in setup, session start and the dashboard.
 - **Work tracking:** Per-repository settings, dated outcome anchors and bounded one-file work records complement Spec Kit artifacts.
 
