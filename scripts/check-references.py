@@ -25,6 +25,9 @@ OTHER_NAMES = {"fnl-review"}  # the review marker in pull request comments
 RETIRED = {"fnl-" + old: "fnl-" + new for old, new in (
     ("committee", "advisor"), ("coordinator-sessions", "delegate"),
     ("knowledge", "session-hygiene"))}
+# Historical specs and released entries retain these names; current callers use the replacements.
+RETIRED_AGENTS = {"fnl-" + old: "fnl-" + new for old, new in (
+    ("verifier", "verification"), ("steward", "session-hygiene"))}
 RELEASED = re.compile(r"^## \[\d[^\]]*\] - \d{4}-\d{2}-\d{2}$")
 # Agent CLI flags that fnl-delegate cites beside the ledger's.
 AGENT_FLAGS = {"print-timeout", "timeout", "max-turns"}
@@ -93,6 +96,12 @@ def check_names_and_sections(root, docs, problems):
         for n, line in lines(path):
             for name in NAME.findall(line):
                 if name not in known and name not in OTHER_NAMES:
+                    if name in RETIRED_AGENTS:
+                        if rel.parts[:2] == ("docs", "specs"):
+                            continue  # preserve design history, including the retirement decision
+                        if (path == root / "CHANGELOG.md"
+                                and f"`{name}` → `{RETIRED_AGENTS[name]}`" in line):
+                            continue  # explicit migration mapping in Unreleased
                     if (path == root / "CHANGELOG.md" and name in RETIRED
                             and f"`{name}` → `{RETIRED[name]}`" in line):
                         continue  # the inventory check enforces the mapping's section

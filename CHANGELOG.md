@@ -6,6 +6,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add `verify_claim.py` for scoped mechanical checks and bounded criterion judgments, with private metadata receipts and a receipt gate for accepted ledger runs. `--head` must match the verified head; `--accept-unverified --reason` records and counts an explicit exception.
+
 - Add the navigator agent and `nav_state.py` for bounded course-check evidence, screened judge payloads and collected-reference report checks; the agent requires `judge.py` from the verification package.
 - Add `route_task.py` to print the delegation matrix row for a task kind and grade.
 - Print a read-only plugin state block at session start with delegation mode, cached quota and open ledger count; failures never block the session.
@@ -17,6 +19,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Show delivery pipelines in the Now project pane from Spec Kit artefacts, repository specs/packages and exact-project ledger outcomes, with metadata-only states and a searched-sources fallback tooltip.
 
 ### Changed
+
+- Fold threshold checks into `fnl-session-hygiene` with its self-contained `context_steward.py`; ask the configured judge about an uncertain safe boundary only after the script reports `compact`.
 
 - Require exactly one valid fnl-router marker line in pull request bodies at merge when the base commit adopted `fnl-review-gate`; missing, malformed or duplicate markers now block. Adoption uses the GitHub contents API without a clone; unreadable adoption data or body, invalid base SHAs, files over 256 KiB or outside UTF-8, and unsupported file types or symlink targets exit 2.
 
@@ -36,6 +40,11 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Match pipeline stages to theme-aware task colours, back striped labels with solid chips, and use compact review glyphs and icon-first ledger/summary counts.
 - Replace dense Agents and Project text with KPI tiles, dispatch budget lanes, cached quota meters and unfinished project/task graphics; retain data tables and collapsed limits. Keep up to five local project snapshots, read only story priority numbers from `spec.md`, skip `specs/archive`, and offer user-set local project labels through setup.
 - Keep Reviews labels on one line, use project labels, and cap dot chains at eight plus a remaining-round count. Cover fragment-only navigation and ship the page code as a local script with no inline handlers or scripts; reduced-motion mode disables all animation.
+
+### Removed
+
+- `fnl-verifier` → `fnl-verification`: callers run its self-contained `verify_claim.py`, read the evidence and decide acceptance as coordinator.
+- `fnl-steward` → `fnl-session-hygiene`: callers follow its Context pressure procedure and threshold script; no separate agent is invoked.
 
 ## [0.1.10] - 2026-11-06
 

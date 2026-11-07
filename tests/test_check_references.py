@@ -45,7 +45,7 @@ BREAKS = [
      "--route-by tables is not one of"),
     ("skills/fnl-delegate/references/host-template.md", "--max-turns <n>", "--max-turnz <n>",
      "--max-turnz is not described in agents.md"),
-    ("agents/fnl-verifier.md", '`fnl-verification` ("Accepting someone else\'s work")', '`fnl-verification` ("No such heading")',
+    ("skills/fnl-delegate/SKILL.md", '`fnl-verification` "Accepting someone else\'s work"', '`fnl-verification` "No such heading"',
      '`fnl-verification` has no section "No such heading"'),
     ("skills/fnl-status/SKILL.md", '`fnl-delegate` "Ledger"', "`fnl-delegate`'s \"Nope\"",
      '`fnl-delegate` has no section "Nope"'),
@@ -143,6 +143,38 @@ class CheckReferencesTest(unittest.TestCase):
         path.write_text(text.replace("### Changed", "### Changed\n\n- `fnl-" + "committee` → `fnl-advisor`", 1))
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_retired_agents_are_allowed_only_in_history_or_migration_mapping(self):
+        for suffix, replacement in (("verifier", "verification"), ("steward", "session-hygiene")):
+            name, target = "fnl-" + suffix, "fnl-" + replacement
+            for relative in ("docs/specs/agent-roles.md", "docs/specs/compaction-steward.md",
+                             "README.md", "skills/fnl-ask/references/map.md", "skills/fnl-setup/SKILL.md"):
+                with self.subTest(name=name, file=relative):
+                    path = self.root / relative
+                    original = path.read_text()
+                    path.write_text(original + f"\nRetired: `{name}`\n")
+                    try:
+                        result = self.check()
+                    finally:
+                        path.write_text(original)
+                    if relative.startswith("docs/specs/"):
+                        self.assertEqual(result.returncode, 0, result.stdout)
+                    else:
+                        self.assertEqual(result.returncode, 1, result.stdout)
+                        self.assertIn(f"unknown skill or agent `{name}`", result.stdout)
+            path = self.root / "CHANGELOG.md"
+            original = path.read_text()
+            for text, expected in (
+                    (original + f"\n## [0.1.4] - 2026-11-01\n\nRetired: `{name}`\n", 0),
+                    (original.replace("### Changed", f"### Changed\n\n- `{name}` → `{target}`", 1), 0),
+                    (original.replace("### Changed", f"### Changed\n\n- `{name}`", 1), 1)):
+                with self.subTest(name=name, changelog=text[-80:]):
+                    path.write_text(text)
+                    try:
+                        result = self.check()
+                    finally:
+                        path.write_text(original)
+                    self.assertEqual(result.returncode, expected, result.stdout)
 
     def test_untracked_retired_names_do_not_fail(self):
         for ignored in (False, True):
