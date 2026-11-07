@@ -15,7 +15,9 @@ import data_root as dr
 
 FEATURES = ("delegation", "roles", "quota", "metrics", "compaction", "companions", "project")
 HEADING = "## Setup features"
-LINE = re.compile(r"- (" + "|".join(FEATURES) + r"): declined")
+# Read the old name only; CLI choices and rendered records stay canonical.
+ALIASES = {"review-tools": "companions"}
+LINE = re.compile(r"- (" + "|".join((*FEATURES, *ALIASES)) + r"): declined")
 CAP = 262144
 
 
@@ -51,9 +53,12 @@ def parse(text):
     found = []
     for line in lines:
         match = LINE.fullmatch(line)
-        if not match or match[1] in found:
+        if not match:
             return None
-        found.append(match[1])
+        name = ALIASES.get(match[1], match[1])
+        if name in found:
+            return None
+        found.append(name)
     return found
 
 

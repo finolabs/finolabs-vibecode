@@ -84,11 +84,36 @@ class SetupFeaturesTest(unittest.TestCase):
         self.assertEqual(self.run_cli("show")[1].strip(), "declined: none")
 
     def test_unknown_feature_is_refused(self):
-        for name in ("everything", "review-tools", "markmap", "vietnamizer"):
+        for name in ("everything", "markmap", "vietnamizer"):
             with self.subTest(feature=name):
                 self.assertEqual(self.run_cli("decline", name, "--yes")[0], 2)
                 self.assertIsNone(sf.parse("## Setup features\n- " + name + ": declined\n"))
         self.assertFalse(self.host.exists())
+
+    def test_legacy_review_tools_is_read_as_companions_and_rewritten_canonically(self):
+        self.host.parent.mkdir(parents=True)
+        self.host.write_text("## Routing\non\n\n## Setup features\n- review-tools: declined\n- quota: declined\n\n## Other\nkeep\n")
+        self.assertEqual(sf.declined(), ["companions", "quota"])
+        self.assertEqual(self.run_cli("show")[1].strip(), "declined: companions, quota")
+        self.assertEqual(self.run_cli("decline", "metrics", "--yes")[0], 0)
+        saved = self.host.read_text()
+        self.assertIn("- companions: declined", saved)
+        self.assertIn("- quota: declined", saved)
+        self.assertIn("- metrics: declined", saved)
+        self.assertNotIn("review-tools", saved)
+        self.assertTrue(saved.startswith("## Routing\non\n\n"))
+        self.assertTrue(saved.endswith("## Other\nkeep\n"))
+        self.assertEqual(self.run_cli("clear", "companions", "--yes")[0], 0)
+        self.assertNotIn("companions", self.host.read_text())
+        self.assertEqual(self.run_cli("decline", "review-tools", "--yes")[0], 2)
+
+    def test_legacy_alias_keeps_duplicate_and_malformed_records_strict(self):
+        for names in (("review-tools", "companions"), ("companions", "review-tools"),
+                      ("review-tools", "review-tools")):
+            section = "## Setup features\n" + "".join("- " + name + ": declined\n" for name in names)
+            self.assertIsNone(sf.parse(section))
+        for line in ("- review-tools: yes", "- review-tools: declined extra", "review-tools: declined"):
+            self.assertIsNone(sf.parse("## Setup features\n" + line + "\n"))
 
     def test_strict_parser_rejects_every_malformed_shape(self):
         good = "## Setup features\n\n- quota: declined\n"
