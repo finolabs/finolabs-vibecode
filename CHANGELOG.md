@@ -6,6 +6,9 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Add `route_task.py` to print the delegation matrix row for a task kind and grade.
+- Print a read-only plugin state block at session start with delegation mode, cached quota and open ledger count; failures never block the session.
+
 - Record opt-in Claude Code StopFailure rate-limit markers as family and time only; Claude Code asks to trust the changed hooks. Codex and Antigravity receive no new hook entry; the live payload remains unverified.
 
 - Add consent-gated per-repository ledger/task settings and bounded one-file work-record pipelines with a shared reader and parser-checked template.
@@ -13,6 +16,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Show delivery pipelines in the Now project pane from Spec Kit artefacts, repository specs/packages and exact-project ledger outcomes, with metadata-only states and a searched-sources fallback tooltip.
 
 ### Changed
+
+- Require exactly one valid fnl-router marker line in pull request bodies at merge when the base commit adopted `fnl-review-gate`; missing, malformed or duplicate markers now block. Adoption uses the GitHub contents API without a clone; unreadable adoption data or body, invalid base SHAs, files over 256 KiB or outside UTF-8, and unsupported file types or symlink targets exit 2.
 
 - Read quota on demand before routing with a 15-minute minimum and bounded synchronous per-install commands; replace hook-started workers with advisory rate-limit markers and allow only the checked Homebrew prefix exception.
 

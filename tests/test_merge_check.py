@@ -1,5 +1,6 @@
 """Tests for skills/fnl-review-gate/scripts/merge_check.py."""
 
+import base64
 import importlib.util
 import json
 import os
@@ -9,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parent.parent / "skills/fnl-review-gate/scripts/merge_check.py"
 spec = importlib.util.spec_from_file_location("merge_check", SCRIPT)
@@ -32,7 +34,7 @@ def review(state, who="owner", oid=HEAD, at="2026-11-02T02:00:00Z"):
     return {"author": {"login": who}, "state": state, "commit": {"oid": oid}, "submittedAt": at}
 
 
-def pr(comments=None, reviews=None, author="owner", checks=None, merge_state="CLEAN"):
+def pr(comments=None, reviews=None, author="owner", checks=None, merge_state="CLEAN", body=""):
     if comments is None:
         comments = [comment(marker("code", "APPROVE") + "\nreport"),
                     comment(marker("security", "APPROVE") + "\nreport")]
@@ -40,26 +42,35 @@ def pr(comments=None, reviews=None, author="owner", checks=None, merge_state="CL
         "state": "OPEN", "headRefOid": HEAD, "author": {"login": author},
         "comments": comments, "reviews": reviews or [],
         "statusCheckRollup": checks if checks is not None else [{"name": "validate", "conclusion": "SUCCESS"}],
-        "mergeStateStatus": merge_state,
+        "mergeStateStatus": merge_state, "body": body,
     }
 
 
 def run(data):
-    return mc.evaluate(data, lambda who: who in WRITERS)
+    return mc.evaluate(data, lambda who: who in WRITERS, adopted=False)
 
 
+BASE = "d" * 40
 FAKE_GH = """#!/usr/bin/env python3
 import json, os, sys
 args = sys.argv[1:]
 if args[0] == 'pr':
     data = json.loads(@PR@)
-    data['baseRefOid'] = 'd' * 40
+    data['baseRefOid'] = os.environ.get('FAKE_BASE', 'd' * 40)
     print(json.dumps(data))
 elif args[0] == 'api' and '/compare/' in args[1]:
     files = [{'filename': name, 'status': 'modified'} for name in os.environ['FAKE_FILES'].split(',')]
     print(json.dumps({'merge_base_commit': {'sha': 'c' * 40}, 'files': files}))
 elif args[0] == 'api' and '/contents/' in args[-1]:
-    print(json.dumps({'name': 'demo', 'version': '1' if 'c' * 40 in args[-1] else '2'}))
+    endpoint = args[-1]
+    if len(args) > 2:  # the low-risk lane reads raw manifest content
+        print(json.dumps({'name': 'demo', 'version': '1' if 'c' * 40 in endpoint else '2'}))
+    else:
+        entries = json.loads(@CONTENTS@)
+        entry = entries.get(endpoint, {'error': 'gh: Not Found (HTTP 404)'})
+        if isinstance(entry, dict) and 'error' in entry:
+            sys.stderr.write(entry['error']); sys.exit(1)
+        print(json.dumps(entry))
 elif args[0] == 'api':
     who = args[1].split('/')[4]
     if who == 'owner':
@@ -71,6 +82,41 @@ elif args[0] == 'api':
 else:
     sys.exit(1)
 """
+
+
+ADOPTED = "# Demo\n\n## Agent skills\n\nPull requests follow `fnl-review-gate`.\n"
+ROUTED = "Summary\n<!-- fnl-router depth=NORMAL trigger=none -->\n"
+
+
+def contents_file(content):
+    raw = content if isinstance(content, bytes) else content.encode("utf-8")
+    return {"type": "file", "size": len(raw), "encoding": "base64",
+            "content": base64.encodebytes(raw).decode("ascii")}
+
+
+def run_cli(data, *extra, files="CHANGELOG.md", base_files=None, base=None, head_files=None, cwd=None):
+    """Serve base/head contents through fake gh; run without creating any git repository.
+
+    Strings/bytes become file responses, dictionaries model API responses or errors,
+    and an absent key (or None) serves a clean 404.
+    """
+    contents = {}
+    for ref, entries in ((BASE, base_files or {}), (HEAD, head_files or {})):
+        for path, content in entries.items():
+            if content is not None:
+                contents[f"repos/acme/demo/contents/{path}?ref={ref}"] = (
+                    contents_file(content) if isinstance(content, (str, bytes)) else content)
+    with tempfile.TemporaryDirectory() as tmp:
+        bin_dir = Path(tmp) / "bin"
+        bin_dir.mkdir()
+        fake = bin_dir / "gh"
+        fake.write_text(FAKE_GH.replace("@PR@", json.dumps(json.dumps(data)))
+                        .replace("@CONTENTS@", json.dumps(json.dumps(contents))))
+        fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+        env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "FAKE_FILES": files,
+               "FAKE_BASE": BASE if base is None else base, "GIT_CEILING_DIRECTORIES": tmp}
+        return subprocess.run([sys.executable, "-I", str(SCRIPT), "7", "--repo", "acme/demo", *extra],
+                              capture_output=True, text=True, env=env, cwd=cwd or tmp)
 
 
 class MergeCheckTest(unittest.TestCase):
@@ -166,7 +212,7 @@ class MergeCheckTest(unittest.TestCase):
         def can_write(who):
             raise mc.Unknown("lookup failed")
         with self.assertRaises(mc.Unknown):
-            mc.evaluate(pr(), can_write)
+            mc.evaluate(pr(), can_write, adopted=False)
 
     def test_an_uncomputed_merge_state_is_unknown(self):
         for state in ("UNKNOWN", None):
@@ -189,11 +235,11 @@ class MergeCheckTest(unittest.TestCase):
     def test_a_lane_verdict_needs_a_lane_pull_request(self):
         data = pr(comments=[comment(marker("code", "APPROVE")),
                             comment(marker("security", "APPROVE").replace(" -->", " lane=yes -->"))])
-        self.assertTrue(mc.evaluate(data, lambda who: who in WRITERS, lambda: (True, []))[0])
-        ok, lines = mc.evaluate(data, lambda who: who in WRITERS, lambda: (False, ["README.md: outside the lane"]))
+        self.assertTrue(mc.evaluate(data, lambda who: who in WRITERS, lambda: (True, []), adopted=False)[0])
+        ok, lines = mc.evaluate(data, lambda who: who in WRITERS, lambda: (False, ["README.md: outside the lane"]), adopted=False)
         self.assertFalse(ok)
         self.assertTrue(any("took the low-risk lane" in line for line in lines), lines)
-        self.assertFalse(mc.evaluate(data, lambda who: who in WRITERS)[0])
+        self.assertFalse(mc.evaluate(data, lambda who: who in WRITERS, adopted=False)[0])
 
     def test_lane_files(self):
         base = '{"name": "demo", "version": "0.1.2", "author": {"name": "x"}}'
@@ -229,25 +275,14 @@ class MergeCheckTest(unittest.TestCase):
             self.assertFalse(mc.version_only(base, head), head)
 
     def test_cli_reads_gh_and_exits_by_result(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            fake = Path(tmp) / "gh"
-            fake.write_text(FAKE_GH.replace("@PR@", json.dumps(json.dumps(pr()))))
-            fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
-            env = {**os.environ, "PATH": f"{tmp}{os.pathsep}{os.environ['PATH']}", "FAKE_FILES": "CHANGELOG.md"}
-            result = subprocess.run([sys.executable, "-I", str(SCRIPT), "7", "--repo", "acme/demo"],
-                                    capture_output=True, text=True, env=env)
+        result = self.cli(pr())
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("MERGE OK", result.stdout)
         self.assertIn("repo acme/demo", result.stdout)
 
-    def cli(self, data, *extra, files="CHANGELOG.md"):
-        with tempfile.TemporaryDirectory() as tmp:
-            fake = Path(tmp) / "gh"
-            fake.write_text(FAKE_GH.replace("@PR@", json.dumps(json.dumps(data))))
-            fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
-            env = {**os.environ, "PATH": f"{tmp}{os.pathsep}{os.environ['PATH']}", "FAKE_FILES": files}
-            return subprocess.run([sys.executable, "-I", str(SCRIPT), "7", "--repo", "acme/demo", *extra],
-                                  capture_output=True, text=True, env=env)
+    def cli(self, data, *extra, **kwargs):
+        """Run the CLI with fake gh contents, without a local clone."""
+        return run_cli(data, *extra, **kwargs)
 
     def test_cli_lane_check(self):
         result = self.cli(pr(), "--lane", files="CHANGELOG.md,.claude-plugin/plugin.json")
@@ -295,6 +330,245 @@ class MergeCheckTest(unittest.TestCase):
         result = subprocess.run([sys.executable, "-I", str(SCRIPT), "main", "--repo", "acme/demo"],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 2)
+
+
+class RouterMarkerTest(unittest.TestCase):
+    """Part K3: the router marker, required only when the base commit adopted the gate."""
+
+    def adopted(self, data, lane_ok=None):
+        return mc.evaluate(data, lambda who: who in WRITERS, lane_ok, adopted=True)
+
+    def assertMarkerBlocks(self, result):
+        ok, lines = result
+        self.assertFalse(ok, lines)
+        self.assertTrue(any(line.startswith("BLOCK router marker") for line in lines), lines)
+
+    def test_adopts_reads_only_the_agent_skills_section(self):
+        self.assertTrue(mc.adopts(ADOPTED))
+        self.assertTrue(mc.adopts("## Agent skills\n- fnl-review-gate\n## Other\n"))
+        self.assertTrue(mc.adopts("## Agent skills\n```sh\n# a shell comment\n```\nfnl-review-gate\n"))
+        for text in ("", "fnl-review-gate\n", "## Reviews\nfnl-review-gate\n",
+                     "## Agent skills\n## Reviews\nfnl-review-gate\n",
+                     "## Agent skills\n# Other\nfnl-review-gate\n",
+                     "## Agent skills\nfnl-review-gates\n", "## Agent skills\nmy-fnl-review-gate\n",
+                     "### Agent skills\nfnl-review-gate\n", "## Agent skills extra\nfnl-review-gate\n"):
+            self.assertFalse(mc.adopts(text), text)
+
+    def test_a_valid_marker_passes_when_adopted(self):
+        for depth in mc.DEPTHS:
+            for trigger in mc.TRIGGERS:
+                body = f"text\r\n<!-- fnl-router depth={depth} trigger={trigger} -->\r\n"
+                ok, lines = self.adopted(pr(body=body))
+                self.assertTrue(ok, lines)
+                self.assertIn(f"ok    router marker: depth={depth} trigger={trigger}", lines)
+
+    def test_the_values_match_the_router_receipt(self):
+        path = SCRIPT.parents[2] / "fnl-delegate/scripts/record.py"
+        record_spec = importlib.util.spec_from_file_location("record_for_merge_check", path)
+        record = importlib.util.module_from_spec(record_spec)
+        record_spec.loader.exec_module(record)
+        self.assertEqual(mc.DEPTHS, record.DEPTHS)
+        self.assertEqual(mc.TRIGGERS, record.TRIGGERS)
+
+    def test_a_missing_or_malformed_marker_blocks_when_adopted(self):
+        for body in ("", "no marker here",
+                     " <!-- fnl-router depth=MIN trigger=none -->",
+                     "<!-- fnl-router depth=MIN trigger=none --> trailing",
+                     "> <!-- fnl-router depth=MIN trigger=none -->",
+                     "<!-- fnl-router depth=min trigger=none -->",
+                     "<!-- fnl-router depth=SHALLOW trigger=none -->",
+                     "<!-- fnl-router depth=MIN trigger=other -->",
+                     "<!-- fnl-router depth=MIN -->",
+                     "<!-- fnl-router  depth=MIN trigger=none -->",
+                     "<!-- fnl-router depth=MIN trigger=none -->\n<!-- fnl-router depth=MIN trigger=nonee -->",
+                     "<!-- fnl-router depth=MIN trigger=none -->\n<!-- fnl-router depth=DEEP trigger=security -->"):
+            with self.subTest(body=body):
+                self.assertMarkerBlocks(self.adopted(pr(body=body)))
+
+    def test_prose_mentioning_the_marker_name_is_not_malformed(self):
+        ok, lines = self.adopted(pr(body="About the fnl-router marker.\n" + ROUTED))
+        self.assertTrue(ok, lines)
+
+    def test_block_lines_never_echo_the_body(self):
+        body = "<!-- fnl-router depth=MIN trigger=SECRET-TEXT -->"
+        ok, lines = self.adopted(pr(body=body))
+        self.assertFalse(ok)
+        self.assertFalse(any("SECRET-TEXT" in line for line in lines), lines)
+
+    def test_the_marker_is_not_required_without_adoption(self):
+        ok, lines = run(pr(body=""))
+        self.assertTrue(ok, lines)
+        self.assertFalse(any("router marker" in line for line in lines), lines)
+
+    def test_an_unreadable_body_is_unknown_when_adopted(self):
+        data = pr()
+        for body in (None, 7, ["x"]):
+            data["body"] = body
+            with self.assertRaises(mc.Unknown):
+                self.adopted(data)
+        del data["body"]
+        with self.assertRaises(mc.Unknown):
+            self.adopted(data)
+
+    def test_the_marker_never_relaxes_the_review_markers(self):
+        # depth=MIN on a change that hits a security trigger still needs the security marker.
+        only_code = [comment(marker("code", "APPROVE"))]
+        for body in ("<!-- fnl-router depth=MIN trigger=security -->", "<!-- fnl-router depth=MIN trigger=none -->"):
+            ok, lines = self.adopted(pr(comments=only_code, body=body))
+            self.assertFalse(ok)
+            self.assertIn("BLOCK security review: no counted verdict for this head", lines)
+        # Nor the lane: a lane verdict on a pull request outside the lane still blocks.
+        lane = [comment(marker("code", "APPROVE")),
+                comment(marker("security", "APPROVE").replace(" -->", " lane=yes -->"))]
+        ok, lines = self.adopted(pr(comments=lane, body="<!-- fnl-router depth=MIN trigger=none -->"),
+                                 lambda: (False, ["skills/x/SKILL.md: outside the lane"]))
+        self.assertFalse(ok)
+        self.assertTrue(any("took the low-risk lane" in line for line in lines), lines)
+        # Nor an outside author's need for an owner approval.
+        self.assertFalse(self.adopted(pr(author="stranger", body=ROUTED))[0])
+
+    def test_a_lane_or_bot_pull_request_still_needs_the_marker(self):
+        lane = [comment(marker("code", "APPROVE")),
+                comment(marker("security", "APPROVE").replace(" -->", " lane=yes -->"))]
+        self.assertMarkerBlocks(self.adopted(pr(comments=lane), lambda: (True, [])))
+        self.assertTrue(self.adopted(pr(comments=lane, body=ROUTED), lambda: (True, []))[0])
+        bot = pr(author="dependabot[bot]", reviews=[review("APPROVED")])
+        self.assertMarkerBlocks(self.adopted(bot))
+        bot["body"] = ROUTED
+        self.assertTrue(self.adopted(bot)[0])
+
+    # The command line: adoption read from the base commit through the contents API.
+
+    def test_cli_adopted_base_blocks_a_missing_marker(self):
+        for name in ("CLAUDE.md", "AGENTS.md"):
+            with self.subTest(name=name):
+                result = run_cli(pr(), base_files={name: ADOPTED})
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("BLOCK router marker: missing", result.stdout)
+                result = run_cli(pr(body=ROUTED), base_files={name: ADOPTED})
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("ok    router marker: depth=NORMAL trigger=none", result.stdout)
+
+    def test_cli_missing_files_mean_not_adopted(self):
+        for files in ({"README.md": "x\n"}, {"CLAUDE.md": "# Demo\n## Reviews\nfnl-review-gate\n"}):
+            result = run_cli(pr(), base_files=files)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertNotIn("router marker", result.stdout)
+
+    def test_cli_a_head_that_adds_or_removes_adoption_does_not_count(self):
+        result = run_cli(pr(), base_files={"README.md": "x\n"}, head_files={"CLAUDE.md": ADOPTED})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("router marker", result.stdout)
+        for head in ({"CLAUDE.md": None}, {"CLAUDE.md": "# Demo\n"}):
+            result = run_cli(pr(), base_files={"CLAUDE.md": ADOPTED}, head_files=head)
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("BLOCK router marker: missing", result.stdout)
+
+    def test_cli_unreadable_adoption_or_body_is_unknown(self):
+        for base in ("main", "", "d" * 39, "d" * 41, "d" * 39 + "g"):
+            with self.subTest(base=base):
+                result = run_cli(pr(body=ROUTED), base=base)
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("UNKNOWN the pull request has no base commit", result.stdout)
+        for entry in ({"type": "dir"}, {"type": "submodule"}, {"type": "other"}, []):
+            with self.subTest(entry=entry):
+                result = run_cli(pr(body=ROUTED), base_files={"CLAUDE.md": entry})
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("CLAUDE.md at the base commit is not a regular file", result.stdout)
+        result = run_cli(pr(body=ROUTED), base_files={"AGENTS.md": b"## Agent skills\n\xff\n"})
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("AGENTS.md at the base commit is not UTF-8", result.stdout)
+        for body in (None, 7, ["x"]):
+            result = run_cli(pr(body=body))  # unreadable even without adoption
+            self.assertEqual(result.returncode, 2, result.stdout)
+        data = pr(body=ROUTED)
+        del data["body"]
+        result = run_cli(data)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("UNKNOWN the pull request body could not be read", result.stdout)
+
+    def test_cli_clean_404_is_absent_but_other_errors_are_unknown(self):
+        result = run_cli(pr(), base_files={"CLAUDE.md": {"error": "gh: Not Found (HTTP 404)"}})
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("router marker", result.stdout)
+        for error in ("gh: Forbidden (HTTP 403)", "gh: Bad Gateway (HTTP 502)", "404 without HTTP status"):
+            with self.subTest(error=error):
+                # Read both files even when the first already adopts the gate.
+                result = run_cli(pr(body=ROUTED), base_files={
+                    "CLAUDE.md": ADOPTED, "AGENTS.md": {"error": error}})
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("UNKNOWN AGENTS.md at the base commit could not be read", result.stdout)
+
+    def test_cli_invalid_file_content_is_unknown(self):
+        valid = contents_file(ADOPTED)
+        for changes in ({"size": 256 * 1024 + 1}, {"size": -1}, {"size": True},
+                        {"size": "10"}, {"encoding": "none"}, {"content": "!!!"},
+                        {"content": None}, {"size": 0}):
+            with self.subTest(changes=changes):
+                result = run_cli(pr(body=ROUTED), base_files={"CLAUDE.md": {**valid, **changes}})
+                self.assertEqual(result.returncode, 2, result.stdout)
+        result = run_cli(pr(body=ROUTED), base_files={"CLAUDE.md": "x" * (256 * 1024)})
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_size_cap_is_checked_before_decoding(self):
+        payload = {"type": "file", "size": 256 * 1024 + 1, "encoding": "base64", "content": ""}
+        response = subprocess.CompletedProcess([], 0, json.dumps(payload), "")
+        with patch.object(mc, "run_gh", return_value=response), patch.object(mc.base64, "b64decode") as decode:
+            with self.assertRaises(mc.Unknown):
+                mc.adopted_at("acme/demo", BASE)
+            decode.assert_not_called()
+
+    def test_cli_a_link_to_the_other_adoption_file_counts_through_its_target(self):
+        for name, target in (("CLAUDE.md", "AGENTS.md"), ("AGENTS.md", "CLAUDE.md")):
+            with self.subTest(name=name):
+                files = {name: {"type": "symlink", "target": target}, target: ADOPTED}
+                result = run_cli(pr(body=ROUTED), base_files=files)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                result = run_cli(pr(), base_files=files)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("BLOCK router marker: missing", result.stdout)
+
+    def test_cli_a_link_to_anything_else_is_unknown(self):
+        for target in ("docs/NOTES.md", "./AGENTS.md", "AGENTS.md\n", "CLAUDE.md", None):
+            with self.subTest(target=target):
+                result = run_cli(pr(body=ROUTED), base_files={
+                    "CLAUDE.md": {"type": "symlink", "target": target}, "AGENTS.md": ADOPTED})
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("CLAUDE.md at the base commit is not a regular file", result.stdout)
+
+    def test_cli_runs_from_an_unrelated_working_directory(self):
+        with tempfile.TemporaryDirectory() as unrelated:
+            for files in ({}, {"CLAUDE.md": ADOPTED}):
+                result = run_cli(pr(body=ROUTED), base_files=files, cwd=unrelated)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_cli_unadopted_output_is_byte_identical(self):
+        result = run_cli(pr())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.encode(), (
+            "repo acme/demo pull request #7\n"
+            f"head {HEAD}\n"
+            "ok    code review: APPROVE (2026-11-02T01:00:00Z)\n"
+            "ok    security review: APPROVE (2026-11-02T01:00:00Z)\n"
+            "ok    author has write access\n"
+            "ok    checks: all passed\n"
+            "MERGE OK: merge pinned to the head above\n").encode())
+        self.assertEqual(result.stderr, "")
+
+    def test_two_identical_marker_lines_block(self):
+        body = ROUTED + ROUTED
+        self.assertMarkerBlocks(self.adopted(pr(body=body)))
+        result = run_cli(pr(body=body), base_files={"CLAUDE.md": ADOPTED})
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("BLOCK router marker", result.stdout)
+
+    def test_evaluate_requires_an_explicit_adoption_decision(self):
+        with self.assertRaises(TypeError):
+            mc.evaluate(pr(), lambda who: True)
+
+    def test_the_lane_check_does_not_read_adoption(self):
+        result = run_cli(pr(), "--lane", base_files={"CLAUDE.md": {"error": "gh: Forbidden (HTTP 403)"}})
+        self.assertEqual(result.returncode, 0, result.stdout)
 
 
 if __name__ == "__main__":
