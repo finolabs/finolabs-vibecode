@@ -49,7 +49,7 @@ Brief preamble that lets a delegated agent skip its own workflow entry read: "<p
 
 ## Coordinators and reach
 
-Which agent can coordinate on this machine, and which delegates each one can reach (`agents.md` "When an agent coordinates"). A delegate marked unreachable is skipped by routing. `/fnl-scan-agents` prefills suggested reach with present agents other than the recorded coordinator; the user still confirms reachability and permission. Presence in `Agents on this machine` restricts this table: a reach entry never makes an absent family eligible.
+Which agent can coordinate on this machine, and which delegates each one can reach (`agents.md` "When an agent coordinates"). A delegate marked unreachable is skipped by routing. `/fnl-setup scan` prefills suggested reach with present agents other than the recorded coordinator; the user still confirms reachability and permission. Presence in `Agents on this machine` restricts this table: a reach entry never makes an absent family eligible.
 
 | Coordinator | Claude Code | Codex | Antigravity |
 | --- | --- | --- | --- |

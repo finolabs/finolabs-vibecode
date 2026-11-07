@@ -1,5 +1,6 @@
 """Tests for scripts/check-references.py: a clean tree passes, each planted break is caught."""
 
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -83,6 +84,54 @@ class CheckReferencesTest(unittest.TestCase):
         return subprocess.run([sys.executable, "-I", str(self.root / CHECKER), str(self.root)],
                               capture_output=True, text=True)
 
+    def test_setup_retired_names_have_bounded_historical_allowance(self):
+        spec = importlib.util.spec_from_file_location("references", ROOT / CHECKER)
+        checker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(checker)
+        replacements = {
+            "fnl-setup-instructions": "/fnl-setup instructions",
+            "fnl-scan-agents": "/fnl-setup scan",
+            "fnl-set-mode": "/fnl-setup mode",
+        }
+        for old, replacement in replacements.items():
+            for relative, allowed in (
+                ("docs/specs/setup-restructure.md", True),
+                ("docs/specs/agent-roles.md", True),
+                ("docs/specs/agent-scan-and-consolidation.md", True),
+                ("docs/specs/release-0.1.8.md", True),
+                ("docs/specs/work-tracking.md", True),
+                ("docs/specs/new-feature.md", False),
+                ("README.md", False),
+                ("skills/fnl-ask/references/map.md", False),
+                ("skills/fnl-setup/SKILL.md", False),
+            ):
+                with self.subTest(name=old, file=relative):
+                    path = self.root / relative
+                    original = path.read_text() if path.exists() else None
+                    path.write_text(f"Historical command: `{old}`\n")
+                    problems = []
+                    try:
+                        checker.check_names_and_sections(self.root, [path], problems)
+                    finally:
+                        if original is None:
+                            path.unlink()
+                        else:
+                            path.write_text(original)
+                    self.assertEqual(not problems, allowed, problems)
+            for mapping, allowed in ((f"`{old}` → `{replacement}`", True),
+                                     (f"`{old}`", False),
+                                     (f"`{old}` → `/fnl-setup wrong`", False)):
+                with self.subTest(mapping=mapping):
+                    path = self.root / "CHANGELOG.md"
+                    original = path.read_text()
+                    path.write_text("## [Unreleased]\n\n### Removed\n\n- " + mapping + "\n")
+                    problems = []
+                    try:
+                        checker.check_names_and_sections(self.root, [path], problems)
+                    finally:
+                        path.write_text(original)
+                    self.assertEqual(not problems, allowed, problems)
+
     def test_clean_tree_passes(self):
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stdout)
@@ -93,6 +142,20 @@ class CheckReferencesTest(unittest.TestCase):
         path.write_text(path.read_text().replace(old, new, 1))
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_skill_counts_match_folders(self):
+        for relative in ("README.md", "skills/fnl-ask/references/map.md"):
+            with self.subTest(file=relative):
+                path = self.root / relative
+                original = path.read_text()
+                self.assertIn("17 skill folders", original)
+                path.write_text(original.replace("17 skill folders", "19 skill folders", 1))
+                try:
+                    result = self.check()
+                finally:
+                    path.write_text(original)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("skill count 19 does not match 17 folders", result.stdout)
 
     def test_skill_lists_match_folders(self):
         for relative in ("README.md", "skills/fnl-ask/references/map.md"):

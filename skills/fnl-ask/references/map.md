@@ -2,7 +2,7 @@
 
 ## Skills
 
-The 20 skill folders and their purposes match the README.
+The 17 skill folders and their purposes match the README.
 
 | Skill | Use it when |
 | --- | --- |
@@ -18,10 +18,7 @@ The 20 skill folders and their purposes match the README.
 | `fnl-security-review-gate` | A change touches auth, permissions, private data, untrusted input or payments: a permission-boundary review, with negative tests proving that not even a record's existence leaks. |
 | `fnl-verification` | Choosing targeted tests, reading the evidence, accepting someone else's work, claiming done. |
 | `fnl-plugin-packaging` | Packaging skills as a plugin for Claude Code, Codex and Antigravity from one repository: layout, manifests, icon, marketplaces, checks. |
-| `fnl-scan-agents` | Refreshing the local inventory of Claude Code, Codex and Antigravity, with user-confirmed allowed models and a yes before writing host config. |
-| `fnl-set-mode` | Showing or changing Delegation mode and Routing, their sources and environment overrides, with a yes before writing. |
-| `fnl-setup` | Choose machine, project or both: machine host config and opt-ins; repository Agent skills block, workflow detection and consent-gated ledger/task settings for project progress. |
-| `fnl-setup-instructions` | Interview for user contracts, project context or both; project Work tracking records workflow, spec location, task method and ledger name in agent context only, then points to `/fnl-setup` for dashboard settings. |
+| `fnl-setup` | Configure user scope, project scope or both through a short core and optional features; `scan` refreshes the agent inventory, `mode` manages Delegation mode and Routing, and `instructions` interviews for user contracts and project context with approval per file. |
 | `fnl-status` | Opening the usage dashboard: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, from the usage events (after you consent in setup) and the dispatch ledger. It also lists delegated runs still open. |
 | `fnl-update` | Showing installed and cached available versions, updating through the host after a clear yes, skipping a release, or stopping update notices. |
 | `fnl-ask` | You are new and do not know where to start, want to know what the plugin holds, or have a question about a skill, agent or script: it gives the first steps, lists the contents, explains the piece you name, or maps your situation to the next command, including companion skills from other packs. |
@@ -32,12 +29,12 @@ The 20 skill folders and their purposes match the README.
 | Situation | Skill | Companion skills and native commands |
 | --- | --- | --- |
 | New to the plugin, or not sure what it holds | `fnl-ask`, "Start" or "Contents" | |
-| "Is it set up right?" or what happens automatically on this host | `/fnl-setup` Check mode | |
+| "Is it set up right?" or what happens automatically on this host | `/fnl-setup check` | |
 | First time in this repository or on this machine | `/fnl-setup` | `/setup-matt-pocock-skills` if that pack is installed |
-| Writing or revising your own instructions for every agent and repository | `/fnl-setup-instructions` | |
-| Adding or removing an agent, or refreshing allowed models | `/fnl-scan-agents` | |
+| Writing or revising your own instructions for every agent and repository | `/fnl-setup instructions` | |
+| Adding or removing an agent, or refreshing allowed models | `/fnl-setup scan` | |
 | Saving the working tree before the agent edits, or going back to a saved point | `/fnl-restore-point` | |
-| Showing or changing Delegation mode or Routing, including environment overrides | `/fnl-set-mode` | |
+| Showing or changing Delegation mode or Routing, including environment overrides | `/fnl-setup mode` | |
 | Starting, resuming or redirecting coding work | `fnl-coding-router` | |
 | Requirements unclear | `fnl-coding-router` (workflow adapter's clarification step, with questions put through the host's native question tool; advisory, agent judgment) | `/grill-me`, or `/grill-with-docs` to keep a glossary and ADRs |
 | A design question only code can answer | `fnl-coding-router` | `prototype` |
@@ -71,8 +68,8 @@ The 20 skill folders and their purposes match the README.
 | `fnl-verifier` agent | Is the report true? Reruns targeted tests and checks each acceptance criterion. | `fnl-delegate` (accepting delegated work) |
 | `fnl-reviewer` agent | Is the change good? Reads the diff, then its callers, contracts and tests. | `fnl-review-gate` |
 | `fnl-security-reviewer` agent | Is the change safe? Reads the diff, then every trust path that reaches it. | `fnl-security-review-gate` |
-| `scripts/agent_scan.py` | Previews the local agent inventory; writes only after a yes. | `fnl-scan-agents` |
-| `scripts/mode.py` | Shows effective settings and sources; previews or writes confirmed changes. | `fnl-set-mode` |
+| `scripts/agent_scan.py` | Previews the local agent inventory; writes only after a yes. | `/fnl-setup scan` |
+| `scripts/mode.py` | Shows effective settings and sources; previews or writes confirmed changes. | `/fnl-setup mode` |
 | `scripts/ledger.py` | Records delegated runs and lists the open ones. | `fnl-delegate` |
 | `scripts/merge_check.py` | Checks a pull request's posted reviews before merge, and the low-risk lane. | `fnl-review-gate` |
 | `scripts/refresh.py` | Rebuilds the dashboard data; also consent and purge for usage metrics. | `fnl-status` |

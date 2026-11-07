@@ -9,10 +9,12 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Record opt-in Claude Code StopFailure rate-limit markers as family and time only; Claude Code asks to trust the changed hooks. Codex and Antigravity receive no new hook entry; the live payload remains unverified.
 
 - Add consent-gated per-repository ledger/task settings and bounded one-file work-record pipelines with a shared reader and parser-checked template.
-- Add a project Work tracking interview to `fnl-setup-instructions`, writing only a confirmed agent-context block; `/fnl-setup` separately confirms repository ledger and task-file settings for the dashboard.
+- Add a project Work tracking interview to `/fnl-setup instructions`, writing only a confirmed agent-context block; `/fnl-setup` separately confirms repository ledger and task-file settings for the dashboard.
 - Show delivery pipelines in the Now project pane from Spec Kit artefacts, repository specs/packages and exact-project ledger outcomes, with metadata-only states and a searched-sources fallback tooltip.
 
 ### Changed
+
+- Fold setup into a short core with optional features and the `instructions`, `scan` and `mode` subcommands; update current command references and skill counts while preserving retired names in historical specs and released entries.
 
 - Read quota on demand before routing with a 15-minute minimum and bounded synchronous per-install commands; replace hook-started workers with advisory rate-limit markers and allow only the checked Homebrew prefix exception.
 
@@ -30,6 +32,12 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Match pipeline stages to theme-aware task colours, back striped labels with solid chips, and use compact review glyphs and icon-first ledger/summary counts.
 - Replace dense Agents and Project text with KPI tiles, dispatch budget lanes, cached quota meters and unfinished project/task graphics; retain data tables and collapsed limits. Keep up to five local project snapshots, read only story priority numbers from `spec.md`, skip `specs/archive`, and offer user-set local project labels through setup.
 - Keep Reviews labels on one line, use project labels, and cap dot chains at eight plus a remaining-round count. Cover fragment-only navigation and ship the page code as a local script with no inline handlers or scripts; reduced-motion mode disables all animation.
+
+### Removed
+
+- `fnl-setup-instructions` → `/fnl-setup instructions`: use the instructions component in the same setup session.
+- `fnl-scan-agents` → `/fnl-setup scan`: use setup to refresh the agent inventory.
+- `fnl-set-mode` → `/fnl-setup mode`: use setup to show or change Delegation mode and Routing.
 
 ## [0.1.10] - 2026-11-06
 
