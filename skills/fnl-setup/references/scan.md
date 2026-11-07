@@ -9,5 +9,5 @@ Yes: Replace only Agents on this machine in local host.md; nothing sent.
 No: Keep saved list; ask later.
 Undo: Approve a rescan or restore prior section.
 Choices: "Yes, save it" / "No, keep it unchanged".
-After clear yes repeat with confirmed IDs, `--yes --digest <printed Digest prefix, at least 8 hex>`. Mismatch writes nothing. Only canonical `## Agents on this machine` changes; preview coordinator changes. Overrides/legacy read this inventory; user owns their settings.
+After clear yes repeat with confirmed IDs, `--yes --digest <printed Digest prefix, at least 8 hex>`. Mismatch writes nothing. Only canonical `## Agents on this machine` changes; preview coordinator changes. Overrides/legacy settings read this inventory.
 4. Report changes/limits; suggest present families for reach, confirm separately; never write `Coordinators and reach`. Refresh after CLI changes; stale after 30 days.

@@ -7,7 +7,7 @@ argument-hint: "[add <feature> | instructions | check | scan | mode [args]]"
 
 # Set up finolabs-vibecode
 
-Show user-account `host.md` (local settings) and data root (settings/records folder) before approvals. Project scope: repository.
+Show `host.md` (local settings) and data root (settings/records folder) before approvals. Scopes: user account, project repository.
 
 | Command (Codex: `$fnl-setup <word>`) | Loads |
 | --- | --- |
@@ -19,7 +19,7 @@ Show user-account `host.md` (local settings) and data root (settings/records fol
 
 A plain sentence selects, never answers a consent question; "install everything" grants nothing. Ambiguous: one clarifying question, core, never several features at once. Codex forwarding is unverified; use sentences. User invocation: Claude Code enforced; otherwise advisory.
 
-**Advisory (agent judgment):** Speak the user’s language; keep technical names. All questions: native question tool/shape in `references/interview.md`; headless stays open.
+**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged. All questions: native question tool/shape in `references/interview.md`; headless stays open.
 
 ## Core path
 

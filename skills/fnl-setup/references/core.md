@@ -7,7 +7,7 @@ Unavailable checks stay unverified; reads grant nothing. Enforcers: scripts, oth
 Find hosts/knowledge base; resolve canonical `host.md` via `scripts/data_root.py`.
 
 1. **Data root.** Show root/source: "Move this plugin’s saved settings and records to another folder?"
-Yes: Choose a folder; separate copy approval precedes local file/pointer changes (the pointer records the location). Nothing is sent.
+Yes: Choose a folder; a separate copy approval precedes any file/pointer change. Nothing is sent.
 No: Keep this folder; ask later.
 Undo: Use this step to move back.
 Choices: "Yes, choose a folder" / "No, keep it here".

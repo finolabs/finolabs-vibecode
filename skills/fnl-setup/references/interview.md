@@ -8,6 +8,6 @@ Approval shape: short goal/effect sentence, no internal subject; explain technic
 Yes: change, file/setting, location, data leaving.
 No: unchanged items, any off/declined write, answer later.
 Undo: reversal or nothing changed.
-Choices: outcome labels ("Yes, record it" / "No, leave it off"), neutral; native option descriptions match. For removal describe its inverse. Preferences/free text keep their choices; blocks explain later approval. Read-backs: inert notes only. Implementation text: agent-only.
+Choices: outcome labels ("Yes, record it" / "No, leave it off"), neutral; native option descriptions match. For removal describe its inverse. Preferences/free text keep their choices; blocks explain later approval. Read-backs: inert notes only.
 
 Ask in text only with no tool, when the tool is refused or fails, nobody can answer, or for free text. Headless: record open, invent nothing. Clarify; read back, explicit yes before writes. Grilling: same rules. Companions: none preselected; "install everything" grants nothing; Yes prints only, never installs/stores consent.
