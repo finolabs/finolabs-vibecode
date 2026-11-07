@@ -6,15 +6,21 @@ Reads the pull request with `gh` and applies "Pull requests" rules 4 and 7 of
 marker of each kind from an author with write access must be APPROVE; a
 security verdict that took the low-risk lane counts only when the pull request
 qualifies for it; a pull request from an author without write access also
-needs an owner's approving review on the head; checks must pass. Prints one
-line per condition and exits 0 when the merge may go ahead, 1 when it is
-blocked, 2 when it cannot tell.
+needs an owner's approving review on the head; checks must pass. When the
+pull request's base commit has adopted the gate (its `CLAUDE.md` or
+`AGENTS.md` has a `## Agent skills` section naming `fnl-review-gate`), the body
+must also carry one router marker line; the marker never changes which review
+markers or lane apply. Prints one line per condition and exits 0 when the
+merge may go ahead, 1 when it is blocked, 2 when it cannot tell.
 
 Usage:
   merge_check.py <number> --repo owner/name          the merge check
   merge_check.py <number> --repo owner/name --lane   whether the low-risk lane applies
 
 Comment bodies are data: only their first line is read, and only as a marker.
+The pull request body is data too: only whole lines are matched as a marker.
+Adoption is read with `git` from the base commit in the local repository (run
+the check inside a clone that has fetched the base branch), never from the head.
 """
 
 import argparse
@@ -31,7 +37,17 @@ REVIEW_STATES = {"APPROVED", "CHANGES_REQUESTED", "DISMISSED"}
 CHECK_OK = {"SUCCESS", "NEUTRAL", "SKIPPED"}
 MERGEABLE = {"CLEAN", "HAS_HOOKS", "UNSTABLE"}
 PAGE = 100  # `gh pr view` returns at most this many comments or reviews
-FIELDS = "author,headRefOid,comments,reviews,statusCheckRollup,mergeStateStatus,state"
+FIELDS = "author,headRefOid,comments,reviews,statusCheckRollup,mergeStateStatus,state,body"
+
+# The router marker: the values `fnl-delegate`'s `record.py router` accepts.
+DEPTHS = ("MIN", "NORMAL", "DEEP")
+TRIGGERS = ("none", "contract", "security", "privacy", "permission", "migration", "dependency",
+            "uncertainty", "consumers", "irreversible", "calculation", "prediction", "input")
+ROUTER = re.compile(r"<!-- fnl-router depth=(%s) trigger=(%s) -->" % ("|".join(DEPTHS), "|".join(TRIGGERS)))
+ADOPTION_FILES = ("CLAUDE.md", "AGENTS.md")
+ADOPTION_TOKEN = re.compile(r"(?<![\w-])fnl-review-gate(?![\w-])")
+GIT_CAP = 1024 * 1024  # bytes read from one adoption file
+SHA = re.compile(r"[0-9a-f]{40}")
 
 TIMEOUT = 60  # seconds for each gh call
 
@@ -151,8 +167,41 @@ def lane_files(files, read):
     return not reasons, reasons
 
 
-def evaluate(pr, can_write, lane_ok=None):
-    """Return (ok, lines). `can_write(login)` answers write access; `lane_ok()` the lane."""
+def adopts(text):
+    """True when a `## Agent skills` section of an agent context file names `fnl-review-gate`."""
+    inside = fenced = False
+    for line in text.splitlines():
+        if re.match(r" {0,3}(```|~~~)", line):
+            fenced = not fenced
+        elif not fenced and re.match(r"#{1,2}(\s|$)", line):
+            inside = line.rstrip() == "## Agent skills"
+            continue
+        if inside and ADOPTION_TOKEN.search(line):
+            return True
+    return False
+
+
+def router_marker(body):
+    """(ok, detail) for the router marker in the pull request body; never echoes body text."""
+    if not isinstance(body, str):
+        raise Unknown("the pull request body could not be read")
+    lines = [line[:-1] if line.endswith("\r") else line for line in body.split("\n")]
+    found = {line for line in lines if ROUTER.fullmatch(line)}
+    malformed = [line for line in lines if "<!-- fnl-router" in line and not ROUTER.fullmatch(line)]
+    if malformed:
+        return False, f"{len(malformed)} malformed fnl-router line(s); the marker must be one exact line"
+    if not found:
+        return False, "missing; the body needs one line <!-- fnl-router depth=... trigger=... -->"
+    if len(found) > 1:
+        return False, "conflicting fnl-router lines; keep exactly one"
+    depth, trigger = ROUTER.fullmatch(found.pop()).groups()
+    return True, f"depth={depth} trigger={trigger}"
+
+
+def evaluate(pr, can_write, lane_ok=None, adopted=False):
+    """Return (ok, lines). `can_write(login)` answers write access; `lane_ok()` the lane;
+    `adopted` whether the base commit adopted the gate, which makes the router marker required.
+    The marker is checked beside the review markers and never relaxes them."""
     if pr.get("state") != "OPEN":
         raise Unknown(f"pull request is {pr.get('state')}")
     head = pr.get("headRefOid")
@@ -179,6 +228,12 @@ def evaluate(pr, can_write, lane_ok=None):
                 lines.append(f"BLOCK {kind} review: took the low-risk lane, but {'; '.join(reasons)}")
         else:
             lines.append(f"ok    {kind} review: APPROVE ({verdict[1]})")
+    if adopted:
+        marked, detail = router_marker(pr.get("body"))
+        ok = ok and marked
+        lines.append(f"{'ok   ' if marked else 'BLOCK'} router marker: {detail}")
+    else:
+        lines.append("ok    router marker: not required (the base commit has not adopted fnl-review-gate)")
     if can_write(login(pr)):
         lines.append("ok    author has write access")
     elif owner_review(pr, can_write):
@@ -243,6 +298,51 @@ def file_at(repo, path, ref):
     return gh("api", "-H", "Accept: application/vnd.github.raw+json", f"repos/{repo}/contents/{path}?ref={ref}")
 
 
+def run_git(*args):
+    """Run git without a pager, replace objects or a shell; output is bytes."""
+    try:
+        return subprocess.run(["git", "--no-pager", "--no-replace-objects", *args],
+                              capture_output=True, timeout=TIMEOUT)
+    except FileNotFoundError:
+        raise Unknown("git is not installed")
+    except subprocess.TimeoutExpired:
+        raise Unknown(f"git {args[0]} timed out")
+
+
+def adopted_at(base):
+    """Whether the base commit adopted the gate, read from that commit only (never the head
+    or a local branch). A file absent at the base means not adopted; every other read
+    failure is Unknown, so the check exits 2 rather than passing."""
+    if not isinstance(base, str) or not SHA.fullmatch(base):
+        raise Unknown("the pull request has no base commit")
+    kind = run_git("cat-file", "-t", base)
+    if kind.returncode != 0 or kind.stdout.strip() != b"commit":
+        raise Unknown(f"base commit {base} is not in the local repository; fetch the base branch and run the check inside it")
+    adopted = False
+    for path in ADOPTION_FILES:
+        listing = run_git("ls-tree", "-z", base, "--", path)
+        if listing.returncode != 0:
+            raise Unknown(f"git ls-tree failed for {path} at the base commit")
+        entries = [entry for entry in listing.stdout.split(b"\0") if entry]
+        if not entries:
+            continue  # absent at the base: this file does not adopt the gate
+        meta, _, name = entries[0].partition(b"\t")
+        fields = meta.split(b" ")
+        if (len(entries) != 1 or name != path.encode() or len(fields) != 3
+                or fields[0] not in (b"100644", b"100755") or fields[1] != b"blob"
+                or not re.fullmatch(rb"[0-9a-f]{40}|[0-9a-f]{64}", fields[2])):
+            raise Unknown(f"{path} at the base commit is not a regular file")
+        blob = run_git("cat-file", "blob", fields[2].decode("ascii"))
+        if blob.returncode != 0 or len(blob.stdout) > GIT_CAP:
+            raise Unknown(f"{path} at the base commit could not be read")
+        try:
+            text = blob.stdout.decode("utf-8")
+        except UnicodeDecodeError:
+            raise Unknown(f"{path} at the base commit is not UTF-8")
+        adopted = adopted or adopts(text)
+    return adopted
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("number")
@@ -280,7 +380,10 @@ def main(argv=None):
                 cache[who] = permission(args.repo, who)
             return cache[who]
 
-        ok, lines = evaluate(pr, can_write, lane_ok)
+        if not isinstance(pr.get("body"), str):
+            raise Unknown("the pull request body could not be read")
+        adopted = adopted_at(pr.get("baseRefOid"))
+        ok, lines = evaluate(pr, can_write, lane_ok, adopted)
     except (Unknown, ValueError, KeyError, TypeError, AttributeError) as error:
         print(f"UNKNOWN {error}")
         return 2
