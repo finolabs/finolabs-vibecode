@@ -27,6 +27,20 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Show named projects with delivery pipelines, task and package states, exact-project ledger outcomes and a visible warning when checked tasks outpace the work-record status.
 - Keep dashboard review chains bounded and theme-aware, retain the detailed tables and five local project snapshots, and support fragment navigation and reduced motion.
 
+### Fixed
+
+- Accept standard macOS Homebrew `gh` in the review posting wrapper, limiting the git-root and admin-group write exceptions to `/opt/homebrew`.
+
+- Keep benign log pairs out of the secret-hit cap, require ten distinct environment-style dump names, and match added sensitive words as underscore-delimited name parts. Accept one leading BOM while refusing later BOMs, other Unicode format characters and C1 controls.
+
+- Scan raw OSC payloads as well as normalized log text, bound candidate matches, refuse unsupported controls, and expand secret detection and child-environment guards. Replace process open-file queries with the 60-second mtime guard and final metadata recheck; distinguish dispatch refusal from child exits.
+
+- Enforce the judge network exception with canonical opt-in, closed capped payloads, refusal before sending secrets or machine paths, verified transport, a 24-call cap and explicit host fallback. Require meaningful host quotes, refuse module-based full-suite runners, and show accepted-without-verification counts per agent.
+
+- Restore native-question and neutral-consent wording throughout the restructured setup flow; defaults, timeouts and auto-selected options never grant approval.
+
+- Correct setup starter commands and retired-pointer checks; accept custom Codex instruction folders and Antigravity global rules through the guarded writer. Count all core references against the setup budget while preserving separate consent questions.
+
 ### Removed
 
 - `fnl-verifier` → `fnl-verification`: callers run its `verify_claim.py`, then read the evidence and decide acceptance as coordinator.

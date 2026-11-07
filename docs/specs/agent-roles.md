@@ -113,6 +113,15 @@ Enforcers: the script for the choice; `fnl-review-gate` text and agent judgment 
   inside the run folder, requires the first line to match the review marker pattern exactly, caps the size, refuses
   every other option, and runs only `gh pr comment` and `gh pr view`. Tests: `--repo`, a body file outside the run
   folder, `--web`, `--edit-last`, a missing or malformed marker and an oversized body are refused.
+- The wrapper searches for `gh` only in `/opt/homebrew/bin`, `/usr/local/bin` and `/usr/bin`, never relative or
+  workspace PATH entries or temporary folders. Its executable check mirrors the quota-probe **Execution** exception
+  in `CLAUDE.md`: under `/opt/homebrew`, only the git work tree rooted at exactly that prefix is allowed; nested
+  repositories (including taps and clones) are refused. The resolved target and every component from the prefix to
+  the file must stay inside that prefix, with no symlink leaving it, be owned by root or the current user, and not be
+  world-writable; group write is allowed only for numeric gid 80 (`admin`, without a name lookup). Outside that
+  prefix, `/usr/local` and `/usr/bin` retain the strict check: root or current-user ownership, no group or world write,
+  and no `.git` in any ancestor. Tests cover the prefix-root repository, nested repositories, ownership, write bits,
+  escaping symlinks and the installed Homebrew `gh` when present.
 - Setup, after the user's yes, one family at a time, by `fnl-setup`. Codex: a fine-grained GitHub token limited to this
   one repository with an expiry, supplied through the credential injection the user approves; the plugin never reads,
   stores or searches for it; network limited to the GitHub API host where the host allows it; the brief allows only
