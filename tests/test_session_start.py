@@ -23,7 +23,6 @@ class SessionStartTest(unittest.TestCase):
     def run_hook(self, raw, routing="on", reader=None):
         out = io.StringIO()
         quota = mock.Mock()
-        quota.worker_guard.return_value = False
         mode = mock.Mock()
         mode.effective.return_value = {"routing": routing}
         handover = mock.Mock()
@@ -47,7 +46,6 @@ class SessionStartTest(unittest.TestCase):
         self.addCleanup(os.close, write_fd)
         out = io.StringIO()
         quota = mock.Mock()
-        quota.worker_guard.return_value = False
         mode = mock.Mock()
         mode.effective.return_value = {"routing": "on"}
         with os.fdopen(read_fd, "r", encoding="utf-8") as idle, \
@@ -102,7 +100,6 @@ class SessionStartTest(unittest.TestCase):
         self.assertIn(b"Handover before compaction", out)
         # A failed stdin read is also tested with the real hook entry point.
         quota = mock.Mock()
-        quota.worker_guard.return_value = False
         mode = mock.Mock()
         mode.effective.return_value = {"routing": "on"}
         out = io.StringIO()
@@ -112,10 +109,17 @@ class SessionStartTest(unittest.TestCase):
             self.assertEqual(hook.main(), 0)
         self.assertEqual(out.getvalue().encode(), self.baseline("on"))
 
-    def test_hook_declarations_retain_pre_steward_bytes(self):
+    def test_existing_hook_declarations_retain_pre_steward_bytes(self):
         # Baseline main 421b2d0; changing Codex declarations requires renewed trust.
         expected = {"claude": "72844c7d76488bf4b60a78ef28826a86269772c79423c6835197c1562086dc9b",
                     "codex": "9ca626fd3230421f47b945aa7b33cd0582acb2072926a226a0cc3f95fb07861e"}
         for host, digest in expected.items():
             raw = (ROOT / f".{host}-plugin/hooks.json").read_bytes()
+            if host == "claude":
+                # quota-on-demand adds only StopFailure; existing declarations
+                # retain the pre-steward bytes after removing that single entry.
+                import json
+                manifest = json.loads(raw)
+                self.assertEqual(len(manifest["hooks"].pop("StopFailure")), 1)
+                raw = (json.dumps(manifest, indent=2) + "\n").encode()
             self.assertEqual(hashlib.sha256(raw).hexdigest(), digest)

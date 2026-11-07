@@ -8,16 +8,6 @@ import sys
 
 def main():
     try:
-        import sys
-        from pathlib import Path
-        sys.dont_write_bytecode = True
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from quota_probe import worker_guard
-        if worker_guard():
-            return 0
-    except Exception:
-        pass
-    try:
         signal.signal(signal.SIGALRM, lambda *_: os._exit(0))
         signal.alarm(2)
         if os.environ.get("FNL_AUTO_GATE", "").lower() in {"off", "0", "false", "no"}:

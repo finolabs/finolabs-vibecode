@@ -6,11 +6,15 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- Record opt-in Claude Code StopFailure rate-limit markers as family and time only; Claude Code asks to trust the changed hooks. Codex and Antigravity receive no new hook entry; the live payload remains unverified.
+
 - Add consent-gated per-repository ledger/task settings and bounded one-file work-record pipelines with a shared reader and parser-checked template.
 - Add a project Work tracking interview to `fnl-setup-instructions`, writing only a confirmed agent-context block; `/fnl-setup` separately confirms repository ledger and task-file settings for the dashboard.
 - Show delivery pipelines in the Now project pane from Spec Kit artefacts, repository specs/packages and exact-project ledger outcomes, with metadata-only states and a searched-sources fallback tooltip.
 
 ### Changed
+
+- Read quota on demand before routing with a 15-minute minimum and bounded synchronous per-install commands; replace hook-started workers with advisory rate-limit markers and allow only the checked Homebrew prefix exception.
 
 - Document host-only project settings, recent live activity counts and per-pool quota reset details; show an amber mark when completed tasks outpace the work-record status.
 - Split setup and Check into machine and project scopes while preserving separate opt-ins.

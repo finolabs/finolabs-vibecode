@@ -1,6 +1,6 @@
 # Quota reading on demand, with a rate-limit marker (release 0.1.11)
 
-Status: accepted; owner decisions recorded on 2026-11-07; implementation not started.
+Status: in progress; owner decisions recorded on 2026-11-07; implementation underway.
 
 ## Why
 
@@ -30,7 +30,7 @@ Codex probe: `/opt/homebrew` is a git work tree, and the executable check refuse
   neutral empty working folder, 30-second limit with the process group killed, 64 KiB cap) and writes the cache.
   It waits for its own run, starts no detached worker and prints one line per install: family (and the user's label), state
   (`fresh`, `read`, `backoff`, `off`, `busy`, `unverified`) and age; never provider text. `agy` and `codex` run one command; `claude` runs one command per listed install (at most four, one after the other), each within its own 30-second limit, so a call is bounded by 30 seconds times the installs.
-- At most one reading runs at a time, kept by a single in-flight marker that holds a per-run random token and its start time (the old nonce guard is replaced by it); a marker older than 150 seconds is stale and replaced. A second command finding a live marker prints `busy` and reads the cache. Tests: two concurrent reads, and a killed run whose marker goes stale.
+- At most one reading runs at a time, kept by a single in-flight marker that holds a per-run random token and its start time (the old nonce guard is replaced by it); the stale bound derives from the maximum listed installs times the per-command limit plus 30 seconds for parsing and publication: `MAX_INSTALLS * TIMEOUT + 30 = 4 * 30 + 30 = 150 seconds`. A marker at or beyond that age is stale and replaced. A second command finding a live marker prints `busy` and reads the cache. Tests: two concurrent reads, and a killed run whose marker goes stale.
 - The child `claude -p` run keeps `FNL_METRICS=off` and runs with the update check off (`FNL_UPDATE_CHECK=off` in its allowlisted environment), because the nonce that quieted its hooks is gone; the other hooks only read local files. The setup consent sentence about the usual configuration running stays.
 - Reading is still opt-in and never turns on from the environment. The setup text changes (no 4-hour background step):
   "When the coordinator is about to delegate, and a reading is older than 15 minutes, it runs each agent's own
@@ -64,8 +64,8 @@ start; any new network call by the plugin; changing which commands are run or th
 ## Acceptance
 
 - `read` runs nothing with probe off, with `FNL_QUOTA_PROBE=off`, with a fresh reading, inside a backoff, or with a
-  live in-flight marker; it runs exactly one command per call otherwise, kills the process group on timeout, and
-  never starts a detached process (a fake executable that forks is reaped or reported); output is one line without
+  live in-flight marker; it runs exactly one command per due install otherwise (one for `agy` or `codex`, up to four sequential commands for `claude`), kills the process group on timeout, and
+  never starts a detached process (a fake executable that forks is reaped or reported); output is one line per install without
   provider text; fixtures with fake `agy`, `claude`, `codex` as in 0.1.8.
 - Hooks start no process and make no reading (the guard test iterates the hook commands of every manifest); the worker
   code and nonce are gone, and a test shows a child `claude` run triggers no update-check request.

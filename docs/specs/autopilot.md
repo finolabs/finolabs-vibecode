@@ -89,7 +89,7 @@ case). The dashboard shows a tail of the log through `data.js`, escaped and rend
 | Rule | Enforcer |
 | --- | --- |
 | Tier of an action | `autopilot.py check` from the real argv or paths (script) |
-| Lease expiry, limits, quota floor, actions per hour | `autopilot.py` at each tick (script); the quota source is `state/quota/quota.json` and a missing or older-than-8-hours reading means stop |
+| Lease expiry, limits, quota floor, actions per hour | `autopilot.py` at each tick (script); first run `quota_probe.py read --family <f>` for each routed family, then `quota_probe.py status`; the quota source is `state/quota/quota.json`, advisory family rate-limit markers apply, and a missing or older-than-8-hours reading means stop |
 | The agent cannot extend the lease or change setup | host deny rules installed while autopilot is on (below); a lease or setup whose hash differs from the one recorded stops the tick; against a fully compromised agent this is a tripwire, not a barrier |
 | Third-party text is data; the advisor never grants authority | agent judgment, advisory, backed by the tier classification and the untrusted-input rules above |
 | An unattended merge or release stalls | host permission rules (below) |
