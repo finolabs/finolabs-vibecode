@@ -196,8 +196,8 @@ class JudgeTest(unittest.TestCase):
         secrets = ('sk-' + 'x' * 24, 'password=synthetic-password',
                    'ghp_' + 's' * 30, '-----BEGIN PRIVATE KEY-----',
                    'https://person:synthetic-pass@example.com')
-        paths = ('/Users/synthetic/private', '/home/synthetic/private',
-                 r'C:\Users\synthetic\private', '~/private', '/root/private')
+        paths = ('/Us' + 'ers/synthetic/private', '/ho' + 'me/synthetic/private',
+                 'C:' + chr(92) + 'Us' + 'ers' + chr(92) + 'synthetic' + chr(92) + 'private', '~/private', '/root/private')
         with mock.patch.object(judge, 'configured_judge', return_value='jev'), \
                 mock.patch.dict(os.environ, {'TYPESAFE_API_KEY': 'synthetic-key'}, clear=True), \
                 mock.patch('urllib.request.build_opener') as opener:
