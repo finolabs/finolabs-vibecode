@@ -7,13 +7,13 @@ YES = "Offer neutral Yes and No choices with none preselected or marked recommen
 QUESTIONS = {
     "fnl-setup/SKILL.md": ("A bare run says", "Offer the beginner path"),
     "fnl-setup/references/mode.md": ("2. Ask the preferences question",),
-    "fnl-setup/references/features/metrics.md": ("Write the Antigravity metrics hook?",),
+    "fnl-setup/references/features/metrics.md": ("Let Antigravity record plugin usage for your private dashboard?",),
     "fnl-setup/references/features/compaction.md": (
-        "Would you like help setting a native compaction threshold?", "Apply this compaction plan?",
-        "Would you like a local hook", "Apply this compaction stop preview?",
+        "Choose when Claude Code or Codex shortens a long conversation to make room?", "Save the shown limit for shortening future conversations?",
+        "Set up Antigravity to ask for a fresh session when a saved conversation grows too large?", "Save the shown Antigravity session stop and its size limit?",
     ),
     "fnl-setup/references/check.md": ("4. Offer one small smoke task",),
-    "fnl-setup/references/features/roles.md": ("Which judge", "May Check send lines"),
+    "fnl-setup/references/features/roles.md": ("Who should help check whether task evidence meets a requirement?", "Let your AI provider review your saved instructions during setup checks?"),
     "fnl-update/SKILL.md": ("2. If the user only asked",),
     "fnl-status/SKILL.md": ("When the argument is `purge`", "Their consent record stays"),
 }

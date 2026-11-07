@@ -1,6 +1,6 @@
 # Parallel agent instances
 
-Status: implemented; targeted local verification recorded below; integration and live-host behavior remain unverified.
+Status: implemented; shared helper, setup, SessionStart, dashboard, CI copy group and documentation are integrated locally; targeted verification is recorded below, while live-host scheduling and UI behavior remain unverified.
 
 Owner decision: 2026-11-07. A model family (Claude Code, Codex, Antigravity) is a pool of agents, not one seat. Independent tasks may use any number of runs of the same family within the user's total and optional per-family caps. This supersedes the former ceiling of five.
 
@@ -76,4 +76,4 @@ Tests run through `python3 -I scripts/run_env.py -- python3 -I -c ...`, explicit
 
 ## Integration and limits
 
-The integrator adds the CI copy group for the three `parallel_slots.py` files; updates the README and `fnl-ask` map's five-run wording; records the public change in CHANGELOG. Those files are outside this package's write scope. No manifests, hooks, privacy policy, ledger behavior or real account state change here. Live UI, cross-process scheduling, user setup and independent reviews remain unverified in this package; checks never imply slot reservation.
+Integration now includes the CI copy group for the three `parallel_slots.py` files, the README and `fnl-ask` map, and the public CHANGELOG entry. The preceding evidence records the original package's local checks; it does not establish live-host scheduling or UI behavior. No manifests, hooks, privacy policy, ledger behavior or real account state change here. Live UI, cross-process scheduling, user setup and independent reviews remain unverified in this package; checks never imply slot reservation.

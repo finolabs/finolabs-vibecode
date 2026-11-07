@@ -178,7 +178,7 @@ class RunHygieneTest(unittest.TestCase):
                          'KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, SESSIONID or SESSID anywhere',
                          'PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION or PRIVATE as a complete',
                          'underscore-delimited part', 'ask separately',
-                         'Pass <VARIABLE_NAME> to <agent family>?', 'neutral Yes and No with none preselected',
+                         'Let <agent family> receive the value of <VARIABLE_NAME> when it starts?', 'neutral Yes and No with none preselected',
                          'only an explicit Yes', '; approved: yes'):
             self.assertIn(expected, text)
 
