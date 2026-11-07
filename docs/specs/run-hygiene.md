@@ -68,7 +68,7 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    argument of `ledger.py finish`. The agents' own transcript stores (for example `~/.codex/sessions`, `~/.claude/projects`) hold the same
    copy; `log_scan.py` lists them as places the user may need to clean and never touches them.
 6. **Logs are read through the scan.** `log_scan.py show <log>` prints a redacted view and is the sanctioned way to
-   read a delegate log; on a `not_scanned` log, or one with findings the redaction cannot cover, it refuses and prints only
+   read a delegate log; on a `not_scanned` log, or one with a finding whose value `redact` cannot locate (a finding reported by line that the redactor does not replace), it refuses and prints only
    the status. `ledger.py finish` with a new optional log-path argument (the path must be a regular file inside the run-log folder,
    else the command refuses) imports `log_scan.py` and runs the scan before it stores or prints anything about the
    run, records `log_scan` in the ledger line (a local file; the metrics `SCHEMA` is not touched and `PRIVACY.md` lists the
@@ -94,7 +94,7 @@ is listed in the CI copy groups and in the test that compares them, so each skil
   `## Delegate environment`; "Accept" gains the log scan; `ledger.py finish` records `log_scan`.
 - `fnl-setup`: `delegation` feature asks, per present agent family, whether any variable must pass through (default
   none), with a neutral Yes and No; names only.
-- `fnl-verification`: states that the environment helper is the only way to start an untrusted command.
+- `fnl-verification`: states that the environment helper (`run_env.py`) is the only way the plugin starts a delegate or a test command; the quota probe and the `ps` snapshot keep their own scoped allowlists.
 - `PRIVACY.md`: the log scan and redaction are local; `log_scan` is one of three fixed words.
 - `CHANGELOG.md`, README, `fnl-ask` map: current-surface wording.
 - No change to `CLAUDE.md`: no network call, no new class of command (the helper starts the same agent commands the

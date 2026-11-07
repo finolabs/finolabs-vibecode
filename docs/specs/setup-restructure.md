@@ -128,6 +128,9 @@ Every consent below keeps its own neutral Yes and No (none preselected), is aske
 | 21 | Instruction-file writes (one per file) | `fnl-setup-instructions` | instructions component | none |
 
 Review tools and companions (today's E and G) install nothing, but section F gives companions a question process, so rows 22 to 24 below cover it.
+
+| # | Consent | Today (`fnl-setup` section) | New home | Prerequisite |
+| --- | --- | --- | --- | --- |
 | 22 | Companion selection (Quick: one multi-select question; Advanced: skipped, each companion is interviewed) | `fnl-setup` | `companions` | none |
 | 23 | Per-companion "Show me how to install" and "Not now" (Quick: at most one per selected companion, at most four; Advanced: after its interview) | `fnl-setup` | `companions` | none; a Yes only prints the pinned install command and records nothing, a No records nothing (answering No to row 22 alone records `companions: declined` with `setup_features.py`) |
 | 24 | Advanced review-tool recommendation (same Yes and No shape as row 23) | `fnl-setup` | `companions` | none |
