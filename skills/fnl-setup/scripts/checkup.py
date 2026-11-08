@@ -967,6 +967,37 @@ def other_claude_homes(home, active):
                  "; ".join(rows[:8]) + notes + "; launch commands are not inspected")]
 
 
+def claude_plugin_enablement(home, active):
+    """Inert settings facts only: home labels and this plugin's boolean state."""
+    names, truncated = claude_home_names(home)
+    homes = [(".claude", home / ".claude")]
+    if active != home / ".claude":
+        label = active.name if active.parent == home and active.name in names else "selected home"
+        homes.append((label, active))
+    homes.extend((name, home / name) for name in names
+                 if home / name not in {folder for _, folder in homes}
+                 and "plugins" in folders(home / name))
+    rows, unverified = [], truncated
+    for label, folder in homes:
+        status, settings = read_json(folder / "settings.json")
+        plugins = settings.get("enabledPlugins", {})
+        state = "unverified"
+        if status == "ok" and isinstance(plugins, dict):
+            values = [value for key, value in plugins.items()
+                      if key.startswith(PLUGIN + "@") and key[len(PLUGIN) + 1:]]
+            if not values:
+                state = "absent"
+            elif all(value is True for value in values):
+                state = "enabled"
+            elif all(value is False for value in values):
+                state = "disabled"
+        unverified |= state == "unverified"
+        rows.append(label + ": " + state)
+    if truncated:
+        rows.append("more than 4096 home entries; list may be incomplete")
+    return [item("claude plugin enablement", "unverified" if unverified else "ok", "; ".join(rows))]
+
+
 def collect(payload=False):
     # A local copy keeps this skill usable when installed alone, including under -I.
     sys.dont_write_bytecode = True
@@ -1049,6 +1080,7 @@ def collect(payload=False):
     return {"principle": PRINCIPLE, "hosts": hosts, "instructions": instruction_block, "setup": [
             item("data root", data_source, str(data_path)), host_config, inventory, quota,
             *other_claude_homes(home, claude_home),
+            *claude_plugin_enablement(home, claude_home),
             retired_evidence([*user_context, *context], reader=context_read),
             item("effective settings", "ok", "delegation mode=" + settings["delegation_mode"] +
                  "; routing=" + settings["routing"] + "; auto gate=" + settings["auto_gate"] + "; selected values only, not runtime proof"), *repository]}

@@ -34,6 +34,8 @@ Compare the agent-context Work tracking block with this repository's host-config
 
 ## Settings
 
+`checkup.py` reports `enabledPlugins` for `finolabs-vibecode@<any marketplace>` in the default Claude home, the selected home and the other Claude homes discovered above. It prints only home labels and `enabled`, `disabled`, `absent` or `unverified`, never other settings or project paths. Missing, unreadable, malformed or unsafe settings and conflicting plugin entries stay `unverified`. These are non-blocking file facts, not runtime proof; the script changes nothing (enforcer: `checkup.py`).
+
 Advisory (agent judgment): report a compaction key as present only when its settings file was inspected, as a file fact, never proof of the effective threshold; `checkup.py` does not inspect these settings.
 
 Use `/fnl-setup mode` to show or change these preferences with their sources and environment overrides; `/fnl-setup scan` refreshes the inventory. The preferences question applies even when the delegation feature is complete or skipped. The host config's two headings are optional; omitting them keeps suggest/on and must not fail Check. Create a minimal file containing the two confirmed headings when there is no host config; preserve other sections when updating one. Do not create the rest of a delegation setup just to store preferences. If `fnl-delegate` is absent, explain manual as user-requested handoff, suggest as asking first and auto as guideline-led handoff of independent tasks with clear tests. Safety gates and authority are unchanged; auto is never 100%.
