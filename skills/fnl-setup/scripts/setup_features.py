@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
 
-FEATURES = ("delegation", "roles", "quota", "metrics", "compaction", "companions", "project")
+FEATURES = ("delegation", "roles", "quota", "autopilot", "metrics", "compaction", "companions", "project")
 HEADING = "## Setup features"
 # Read the old name only; CLI choices and rendered records stay canonical.
 ALIASES = {"review-tools": "companions"}
