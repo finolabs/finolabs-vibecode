@@ -93,14 +93,16 @@ class SizeLimitTests(unittest.TestCase):
                 self.assertLessEqual(len(line), 600, "%s:%d" % (path.name, number))
         self.assertLessEqual(len(frontmatter()["description"]), 600)
 
-    def test_delegation_asks_total_and_optional_family_caps_with_validator(self):
+    def test_delegation_asks_project_limit_and_optional_family_caps_with_validator(self):
         text = (REFS / 'features/delegation.md').read_text()
-        for sentence in ('How many agent runs may work at the same time on this computer?',
-                         'Any per-family caps for claude, codex or antigravity?',
-                         'free text', 'such as 3', '1 to 32', 'share quota pools',
+        for sentence in ('How many agent runs may work at the same time in this repository?',
+                         'Any per-family caps for claude, codex or antigravity in this repository?',
+                         'free text', 'such as 3', '1 to 32', 'share quota pools', 'default of 5',
+                         'settings --set parallel=<n>', '--set parallel-caps=<list>',
                          'parallel_slots.py check-config', 'advisory (agent judgment)'):
             self.assertIn(sentence, text)
         self.assertNotIn('5 or fewer', text)
+        self.assertNotIn('on this computer?', text)
 
     def test_bare_run_static_budget(self):
         # Follow the literal references from the bare entry, including conditional beginner

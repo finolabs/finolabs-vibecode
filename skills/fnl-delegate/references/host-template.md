@@ -64,8 +64,7 @@ Advisory (agent judgment): use `/fnl-setup add quota` to opt in after the scan a
 
 ## Limits
 
-- Parallel dispatches: at most <N> at one time.
-- Parallel per family: claude=<n>, codex=<n>, antigravity=<n>
+- The parallel run limit is per project and lives in `## Project settings` (set with `fnl-setup add delegation`); lines here are ignored.
 
 - Machine role: <daily workstation | CI box>. Heavy jobs at one time: <1>.
 - Heavy jobs: <container-backed suites, scale measurements, end-to-end suites>.
