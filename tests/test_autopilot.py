@@ -276,6 +276,26 @@ class AutopilotTest(unittest.TestCase):
                 self.check(paths=[path], tier=3, code='protected')
                 self.check(['git', 'add', '--', path], tier=3, code='protected')
 
+    def test_linked_sibling_skill_folders_are_protected_by_target_and_wrapper_refused(self):
+        # A synthetic install whose review-gate skill is a link to another checkout.
+        install = self.home / 'install/skills'
+        (install / 'fnl-delegate/scripts').mkdir(parents=True)
+        checkout = self.home / 'other/skills/fnl-review-gate/scripts'
+        checkout.mkdir(parents=True)
+        (checkout / 'merge_check.py').write_text('# synthetic')
+        (install / 'fnl-review-gate').symlink_to(self.home / 'other/skills/fnl-review-gate')
+        ap = self.load()
+        copy = install / 'fnl-delegate/scripts/autopilot.py'
+        copy.write_text(SCRIPT.read_text())
+        spec = importlib.util.spec_from_file_location('autopilot_linked', copy)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with patch('os.getcwd', return_value=str(self.home / 'other')):
+            self.assertTrue(module.plugin_code('skills/fnl-review-gate/scripts/difflib.py'))
+        applied = dict(module.DEFAULTS, Merge='yes')
+        wrapper = ['python3', '-I', str(install / 'fnl-review-gate/scripts/merge_check.py'), '7', '--independent']
+        self.assertEqual(module.script_command(wrapper, applied), 'unknown')
+
     def test_merge_and_push_settings(self):
         self.start(SETUP.replace('- Merge: yes', '- Merge: no').replace('requests: yes', 'requests: no'))
         self.check(['gh', 'pr', 'merge', '7', '--match-head-commit', 'a' * 40], tier=3, code='merge-disabled')

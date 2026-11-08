@@ -265,8 +265,10 @@ def plugin_code(name):
     try:
         full = os.path.abspath(os.path.join(os.getcwd(), name)).casefold()
         base = Path(__file__).resolve().parent.parent.parent
+        # Both the lexical folder and, for a linked sibling skill, the checkout it resolves to hold trusted modules.
+        folders = {folder for scripts in base.glob('*/scripts') for folder in (scripts, scripts.resolve())}
         return any(full == str(folder).casefold() or full.startswith(str(folder).casefold() + os.sep)
-                   for folder in base.glob('*/scripts'))
+                   for folder in folders)
     except (OSError, ValueError):
         return True
 
@@ -365,8 +367,9 @@ def script_command(argv, applied):
     own = Path(__file__).resolve().parent
     merge = own.parent.parent / 'fnl-review-gate/scripts/merge_check.py'
     allowed = {own / name for name in ('ledger.py', 'record.py', 'heavy_run.py')} | {merge}
-    if path not in allowed or path.is_symlink() or not path.is_file():
-        return 'unknown'
+    if (path not in allowed or path.is_symlink() or not path.is_file()
+            or any(parent.is_symlink() for parent in (path.parent, path.parent.parent))):
+        return 'unknown'  # a linked skill folder could supply a different import namespace
     tail = argv[index + 1:]
     if path.name == 'heavy_run.py':
         if tail == ['status']:
