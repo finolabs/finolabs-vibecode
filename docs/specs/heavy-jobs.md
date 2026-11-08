@@ -35,36 +35,40 @@ Two gaps caused it:
 
 `skills/fnl-delegate/scripts/heavy_run.py` runs one command while holding the machine-wide lock.
 
-- Usage: `heavy_run.py run -- <command> [args...]`, plus `status` (lock owner, age, load, free memory) and `clear-stale`
-  (removes a lock only when the wrapper, the child and the protected process group are all gone, after checking `ps -p`
-  and `os.killpg(pgid, 0)`).
-- Lock: an atomic `mkdir` under the data root's private state folder, named `heavy.lock`, with an `owner` file of
-  wrapper pid, child pid, protected process-group id, start time and a short label. Owner-only permissions, no symlink followed, refused if the path is not a
-  directory owned by the user.
+- Usage: `heavy_run.py run -- <command> [args...]` and `status` (whether the lock is held, the holder's label and
+  age when known, load, free memory). There is no stale-lock cleanup command: the lock cannot go stale.
+- Lock (design settled after four review rounds on a PID-and-directory scheme): a regular file `heavy.lock` in the data
+  root's private state folder, created with `O_NOFOLLOW`, mode 0600, and refused unless `fstat` shows a regular file
+  owned by the user. It is held with `fcntl.flock(fd, LOCK_EX | LOCK_NB)`, polled every 15 seconds. The file is never
+  unlinked or replaced, so its identity is stable, and the kernel serialises every acquisition: exactly one process
+  holds it, and no check-then-remove step exists to race. The descriptor stays inheritable, so the child and every
+  descendant that keeps it open keep the lock after the wrapper dies; the kernel releases it when the last holder
+  exits. After acquiring, the holder writes a one-line best-effort record (wrapper pid, start time, label) into the file
+  for `status`. `status` never trusts that record: held or free is the result of a non-blocking `flock` probe, and a
+  missing or partial record (a crash between acquiring and writing) shows "held, owner unknown". flock on a network
+  filesystem is unverified; the data root is assumed local.
 - Gate before start: wait while the lock is held, the one-minute load average is at or above the limit, or free memory
   is below the minimum. Poll every 15 seconds up to a wait cap (default 40 minutes), then exit 75 with a message that
   names the holder's label and age. Load and memory come from `os.getloadavg()` and `vm_stat`, run once per poll as
   fixed argv with no shell; on a platform without `vm_stat` only load is checked and `status` says so.
 - Protected job: the whole foreground lifecycle of the work (container start, tests and cleanup), not a launcher that
-  returns while the work continues. `run` refuses a command that asks for detached work: `-d` or `--detach` as an option of `up` or `run`
-  in any Compose spelling (`docker compose`, `docker-compose`) or of `docker run` and `docker container run`; exit 64
-  with a fixed message that tells the caller to wrap a foreground script that starts, tests and tears down. The lock is held until the child's process group is empty, checked with
-  `os.killpg(pgid, 0)`, so a launcher that exits while a descendant in its group still runs keeps protection. Work
-  that escapes the group (a container owned by the Docker daemon) is outside what the script can see, which is why
-  detached launches are refused instead of tracked.
+  returns while the work continues. `run` refuses a command that asks for detached work: `-d` or `--detach` as an option
+  of `up` or `run` in any Compose spelling (`docker compose`, `docker-compose`) or of `docker run` and `docker container
+  run`; exit 64 with a fixed message that tells the caller to wrap a foreground script that starts, tests and tears
+  down. Protection lasts while any process holds the inherited lock descriptor, so a launcher that exits while a
+  descendant still runs keeps it. Work that closes the descriptor or is owned by another daemon (a container owned by
+  the Docker daemon) is outside what the script can see, which is why detached launches are refused instead of tracked.
 - Environment: the child and the script's own `vm_stat` launches start with the allowlisted environment of
   `run_env.py` (`run_env.environment()`), the same helper that `verify_claim.py` and `delegate_env.py` use, plus only
   the variable names the caller lists in `--pass-env NAME`; the structural launch-site test in `test_run_hygiene.py`
   covers the new script. The script never prints, logs or stores the environment, the command's arguments beyond a
   40-character label passed with `--label`, or any output. Working folder is the caller's, no shell.
-- Release and exclusion: only the process that acquired the lock removes it, and only after its child has ended. A
-  waiter whose wait cap ends exits 75 and never touches the lock. On SIGINT or SIGTERM the wrapper forwards the signal
-  to the child's process group, keeps the lock until the child has actually exited, then removes it. The `owner` file
-  records the wrapper pid, the child pid and the protected process-group id (also in the owner-only description of the
-  lock above); the lock is stale only when the wrapper, the child and every process in that group are gone, for the
-  automatic cleanup of the next run and for `clear-stale` alike. A wrapper killed by SIGKILL with a surviving child or
-  grandchild keeps the lock held. A crash with all of them gone leaves a stale lock that the next run clears after
-  confirming that.
+- Release and exclusion: the kernel releases the lock when the last process holding the descriptor exits; the script
+  removes nothing. A waiter whose wait cap ends exits 75 and closes only its own descriptor, which cannot affect the
+  holder. On SIGINT or SIGTERM the wrapper forwards the signal to the child's process group and keeps running, still
+  holding the descriptor, until the child has exited. A wrapper killed by SIGKILL with a surviving child or grandchild
+  keeps the lock held through the inherited descriptor, and the next run acquires it as soon as the last holder exits,
+  with no cleanup step.
 - No network, no hook, no background process.
 
 ## B. Which commands are heavy
@@ -114,25 +118,26 @@ A `PreToolUse` hook on the `Bash` tool, in its own group in the user's Claude Co
 
 ## Acceptance
 
-1. With the lock held by a live owner, a second `run` waits and then exits 75 when the cap ends, never starting its
-   command and never removing the lock; a third waiter queued behind it still cannot start while the owner lives.
+1. With the lock held by a live holder, a second `run` waits and then exits 75 when the cap ends, never starting its
+   command; the holder's lock is unaffected, and a third waiter still cannot start while the holder lives.
 2. With the load or free memory beyond the limit, `run` waits; below it, `run` starts. Tests inject the readings.
-3. A stale lock (wrapper, child and the protected group all gone) is cleared once; a lock with any of them alive is never cleared.
-4. A signal sent only to the wrapper is forwarded to the child group and the lock stays until the child has exited;
+3. Two processes racing for a free lock: exactly one acquires it (the other waits), checked with real `flock` between
+   short synthetic Python processes. There is no cleanup path to race, and no test pauses a stale-cleanup step.
+4. A signal sent only to the wrapper is forwarded to the child's group and the lock stays until the child has exited;
    a wrapper killed with SIGKILL while a child survives leaves the lock held. Tests use short synthetic commands.
-5. A symlinked or foreign-owned lock path is refused.
-6. `status` prints owner label, age, load and free memory, and nothing from the environment or the command.
+5. A symlinked, non-regular or foreign-owned lock path is refused.
+6. `status` prints held or free, the holder's label and age when known, load and free memory, and nothing from the
+   environment or the command; a missing or partial record shows "held, owner unknown".
 7. The child's environment contains only the allowlisted names plus the `--pass-env` names; tests compare variable
    names only and never print or inspect values.
-8. A launcher that exits while a descendant in its process group is still alive keeps the lock held until the group is
-   empty. A command with detached flags is refused with exit 64 before the lock is taken: fixtures `docker compose up -d`,
+8. A command with detached flags is refused with exit 64 before the lock is taken: fixtures `docker compose up -d`,
    `docker-compose up -d`, `docker compose run -d SERVICE` and `docker run --detach IMAGE`. Tests use short synthetic
    commands and never start Docker.
-9. Combined case: a launcher starts a grandchild in its group and exits, then the wrapper is killed with SIGKILL; the
-   lock stays held while the grandchild lives, and neither the next `run` nor `clear-stale` removes it until the group
-   is gone.
+9. Combined case: a launcher starts a grandchild that keeps the descriptor and exits, then the wrapper is killed with
+   SIGKILL; the lock stays held while the grandchild lives and a next `run` acquires it as soon as the grandchild
+   exits, with no cleanup step.
 10. The tests start no real heavy work: they use fake readers and short commands, and the module runs in under two
-   seconds.
+    seconds.
 
 ## Out of scope
 
