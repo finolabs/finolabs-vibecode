@@ -221,8 +221,10 @@ def independent_families(pr):
         import review_route
         import review_config
         author = review_route.author_family(Path.cwd(), base=pr.get("baseRefOid"), head=pr["headRefOid"])
-        roles = review_config.read_roles(review_config.host_text())
-        result = {"author": author, "code": roles.get("code review"), "security": roles.get("security review")}
+        # The families routing would pick for this author (assigned role, else the capability fallback), ignoring
+        # live quota; a same-family pick means no other family is present. Who posted a marker stays a caller duty.
+        rows = review_route.route(author, review_config.host_text(), [])
+        result = {"author": author, "code": rows[0][0], "security": rows[1][0]}
         if any(value not in review_config.FAMILIES for value in result.values()):
             raise ValueError("unknown family")
         return result

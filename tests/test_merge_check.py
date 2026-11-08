@@ -616,17 +616,32 @@ class IndependentMergeTest(unittest.TestCase):
             self.assertEqual(actual, status, output.getvalue())
             self.assertEqual("MERGE OK" in output.getvalue(), status == 0)
 
-    def test_resolver_uses_head_bound_author_route_and_canonical_roles(self):
+    def test_resolver_uses_head_bound_author_and_the_families_routing_would_pick(self):
         sys.path.insert(0, str(SCRIPT.parent))
         import review_route
         import review_config
-        roles = {"code review": "claude", "security review": "antigravity"}
         with patch.object(review_route, "author_family", return_value="codex") as author, \
              patch.object(review_config, "host_text", return_value="synthetic"), \
-             patch.object(review_config, "read_roles", return_value=roles):
+             patch.object(review_config, "present_families", return_value={"claude", "codex", "antigravity"}), \
+             patch.object(review_config, "read_roles", return_value={"code review": "claude", "security review": "antigravity"}), \
+             patch.object(review_config, "read_posting", return_value={}):
             data = dict(pr(), baseRefOid=BASE)
             self.assertEqual(mc.independent_families(data), dict(author="codex", code="claude", security="antigravity"))
             self.assertEqual(author.call_args.kwargs, dict(base=BASE, head=HEAD))
+        with patch.object(review_route, "author_family", return_value="codex"), \
+             patch.object(review_config, "host_text", return_value="synthetic"), \
+             patch.object(review_config, "present_families", return_value={"claude", "codex"}), \
+             patch.object(review_config, "read_roles", return_value={"code review": "codex", "security review": "codex"}), \
+             patch.object(review_config, "read_posting", return_value={}):
+            # Roles that name the author's own family fall back to another present family, as routing does.
+            self.assertEqual(mc.independent_families(data), dict(author="codex", code="claude", security="claude"))
+        with patch.object(review_route, "author_family", return_value="codex"), \
+             patch.object(review_config, "host_text", return_value="synthetic"), \
+             patch.object(review_config, "present_families", return_value={"codex"}), \
+             patch.object(review_config, "read_roles", return_value={}), \
+             patch.object(review_config, "read_posting", return_value={}):
+            # With no other family present the pick is the author's own, so the independent check refuses it.
+            self.assertEqual(mc.independent_families(data), dict(author="codex", code="codex", security="codex"))
         with patch.object(review_route, "author_family", side_effect=ValueError("unverified ledger author")):
             self.assertIsNone(mc.independent_families(data))
         with patch.object(review_route, "author_family", return_value="codex"), \

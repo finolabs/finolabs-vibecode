@@ -62,6 +62,9 @@ BRANCH = re.compile(r'(?:refs/heads/)?[A-Za-z0-9][A-Za-z0-9._/-]{0,160}')
 ROOTS = {'src', 'lib', 'app', 'tests', 'docs', 'scripts', 'skills'}
 EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yaml', '.yml'}
 MAX_LOG = 8 * 1024 * 1024
+ENFORCERS = {'autopilot.py', 'data_root.py', 'parallel_slots.py', 'secret_patterns.py', 'merge_check.py',
+             'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
+             'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py'}
 
 
 def now():
@@ -262,8 +265,7 @@ def classify_paths(paths):
         if not isinstance(name, str) or protected(name):
             return 'protected'
         path = Path(name)
-        if path.name in {'autopilot.py', 'data_root.py', 'parallel_slots.py', 'secret_patterns.py',
-                         'merge_check.py', 'review_config.py', 'post_review.py', 'heavy_gate.py', 'run_env.py'}:
+        if path.name in ENFORCERS or path.name.upper() in slots.INSTRUCTION_FILES:
             return 'protected'
         if (not re.fullmatch(r'[A-Za-z0-9_./-]{1,240}', name) or path.is_absolute()
                 or any(p in {'', '.', '..'} for p in name.split('/'))
@@ -275,6 +277,9 @@ def classify_paths(paths):
             candidate /= part
             if candidate.is_symlink():
                 return 'protected'
+        # A directory operand would stage everything below it, so only single files are a known path.
+        if candidate.is_dir():
+            return 'unknown'
     return 'allowed'
 
 
@@ -350,8 +355,17 @@ def script_command(argv, applied):
     if path not in allowed or path.is_symlink() or not path.is_file():
         return 'unknown'
     tail = argv[index + 1:]
-    if path.name == 'heavy_run.py' and '--' in tail:
-        return classify_argv(tail[tail.index('--') + 1:], applied)
+    if path.name == 'heavy_run.py':
+        if tail == ['status']:
+            return 'allowed'
+        # Only the canonical form `run [--label L] [--pass-env N] [--max-minutes M] -- <command>`; the command
+        # is always classified on its own, and any other spelling (including one with no separator) is unknown.
+        if tail[:1] != ['run'] or '--' not in tail:
+            return 'unknown'
+        head, command = tail[1:tail.index('--')], tail[tail.index('--') + 1:]
+        if not command or options(head, set(), {'--label', '--pass-env', '--max-minutes'}, positional=False) != []:
+            return 'unknown'
+        return classify_argv(command, applied)
     return 'allowed'
 
 
@@ -383,6 +397,10 @@ def classify_argv(argv, applied):
             refspec = operands[1].split(':')
             if len(refspec) > 2 or any(not BRANCH.fullmatch(b) or '..' in b or b.endswith('/') for b in refspec):
                 return 'unknown'
+            # Only the branch namespace: tags, remotes, notes and other full ref names are Tier 3.
+            if any(b.startswith('refs/') and not b.startswith('refs/heads/')
+                   or b.split('/')[0] in {'tags', 'remotes', 'notes', 'replace', 'stash', 'changes'} for b in refspec):
+                return 'forbidden'
             try:
                 current, default = branch_context()
             except (OSError, ValueError):

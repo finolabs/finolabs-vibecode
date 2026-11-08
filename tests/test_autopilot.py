@@ -177,8 +177,9 @@ class AutopilotTest(unittest.TestCase):
                      ['gh', 'pr', 'merge', '7', '--squash', '--match-head-commit', 'a' * 40]):
             with self.subTest(argv=argv):
                 self.check(argv)
-        for name in ('ledger.py', 'record.py', 'heavy_run.py'):
+        for name in ('ledger.py', 'record.py'):
             self.check(['python3', '-I', str(SCRIPT.parent / name), 'start' if name == 'ledger.py' else 'run'])
+        self.check(['python3', '-I', str(SCRIPT.parent / 'heavy_run.py'), 'run', '--label', 'tests', '--', 'gh', 'pr', 'view', '7'])
         self.check(['python3', '-I', str(ROOT / 'skills/fnl-review-gate/scripts/merge_check.py'), '7', '--independent'])
         self.check(paths=['src/example.py', 'tests/test_example.py', 'docs/guide.md'])
         self.assertEqual(self.lease()['counters']['runs'], 1)
@@ -221,6 +222,31 @@ class AutopilotTest(unittest.TestCase):
                      'skills/fnl-delegate/scripts/autopilot.py', 'skills/fnl-review-gate/scripts/merge_check.py'):
             with self.subTest(path=path):
                 self.check(paths=[path], tier=3, code='unknown' if path in {'unknown/file.py', '../src/example.py', '/tmp/example.py'} else 'protected')
+
+    def test_review_findings_round_one(self):
+        self.start(SETUP.replace('- Merge: yes', '- Merge: no'))
+        wrapper = ['python3', '-I', str(SCRIPT.parent / 'heavy_run.py')]
+        pin = ['gh', 'pr', 'merge', '7', '--match-head-commit', 'a' * 40]
+        # The wrapper grammar: a command with no separator, or anything unknown, is never allowed.
+        self.check(wrapper + ['run'] + pin, tier=3, code='unknown')
+        self.check(wrapper + ['run', 'echo', 'safe'], tier=3, code='unknown')
+        self.check(wrapper + ['run', '--poll', '1', '--'] + pin, tier=3, code='unknown')
+        self.check(wrapper + ['run', '--label', 'x', '--'] + pin, tier=3, code='merge-disabled')
+        self.check(wrapper + ['run', '--', 'echo', 'safe'], tier=3, code='unknown')
+        self.check(wrapper + ['status'])
+        # A push to a tag or any other non-branch ref namespace is a Tier 3 action.
+        for refspec in ('topic:refs/tags/v-example', 'topic:tags/v-example', 'topic:refs/remotes/origin/x',
+                        'topic:refs/notes/x', 'refs/tags/v1:topic'):
+            self.check(['git', 'push', 'origin', refspec], tier=3, code='forbidden')
+        self.check(['git', 'push', 'origin', 'topic:refs/heads/topic'])
+        # Instruction files and review enforcers are protected wherever they live.
+        for path in ('docs/CONVENTIONS.md', 'docs/copilot-instructions.md', 'skills/fnl-review-gate/scripts/review_route.py'):
+            self.check(paths=[path], tier=3, code='protected')
+        # A directory operand would stage everything below it, including a protected descendant.
+        (self.repo / 'src/bundle.py').mkdir(parents=True)
+        (self.repo / 'src/bundle.py/settings.json').write_text('{}')
+        self.check(['git', 'add', '--', 'src/bundle.py'], tier=3, code='unknown')
+        self.check(paths=['src/bundle.py/settings.json'], tier=3, code='protected')
 
     def test_merge_and_push_settings(self):
         self.start(SETUP.replace('- Merge: yes', '- Merge: no').replace('requests: yes', 'requests: no'))
