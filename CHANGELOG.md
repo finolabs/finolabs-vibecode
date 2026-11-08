@@ -4,69 +4,92 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-08
+
+### Highlights
+
+This release makes delegated work easier to direct, review and check, with a shorter setup and clearer evidence of what each host can actually do.
+
+- Assign code and security review roles, prefer a family other than the author’s and post through one guarded path.
+- Check project direction with the navigator and use one judge interface, with a small host model by default and optional Jev.
+- Require verification receipts for delegated ledger acceptance, bound to the checkout and current commit.
+- Start headless runs with environment allowlists and inspect finished logs through local scanning and redaction.
+- Track repository outcomes, one-file work records and delivery progress alongside Spec Kit.
+- Choose Quick or Advanced setup, with plain-language approvals and optional features loaded when needed.
+- Record opt-in context snapshots from Claude Code and Antigravity status lines for compaction decisions.
+- Run parallel agent pools within advisory total/family limits and see capacity, quota pools and readable times on the status board.
+- Read corrected host contracts that distinguish documented support, local checks and unverified live delivery.
+
+### Upgrade notes
+
+- Run `/fnl-setup check` after updating (`$fnl-setup check` on Codex); it reports configured, missing and unverified features without changing them.
+- Use `/fnl-setup add delegation` to review the new `## Limits` lines: `- Parallel dispatches: at most 6 at one time.` and optional `- Parallel per family: claude=2, codex=3` are examples, not prescribed values; missing or invalid totals use 5, and older parenthetical wording needs replacement.
+- Use `/fnl-setup add roles` to choose review families and the judge; assignments grant no posting rights, and each posting grant needs its own approval and observed check.
+- Claude Code may ask you to trust the changed plugin hooks after updating (a new `StopFailure` entry records rate-limit markers only when the quota probe is on).
+- On Codex, open `/hooks` and check trust again: changed bundle contents can require renewed trust even when hook declarations are unchanged.
+- Context recording needs a status-line command in your own host settings; setup previews a new command or gives a recipe to compose with an existing one, which it leaves untouched.
+- Follow the replacements under Removed; data-root location and existing consent remain unchanged, and new opt-ins still need separate approval.
+
 ### Added
 
-- Add advisory parallel-slot reporting and checks (`parallel_slots.py`) with a user-selected total and optional per-family caps.
-- Add user-assigned code review, security review, navigator and judge roles, with deterministic review routing that prefers another author family and reports same-family fallbacks.
-- Add a guarded review-posting wrapper that checks the repository, marker, draft location and size, with observed posting state and an explicit coordinator relay procedure. Relay receipts and dashboard relay counters are not built yet; the temporary relay fallback is uncounted until they are.
-- Add `fnl-navigator` and bounded course-check evidence to compare work against confirmed outcome anchors and report drift without editing the project.
-- Add verification receipts bound to the checkout and current head, with targeted test results and criterion judgments, and require a passing receipt before accepting delegated ledger work unless an explicit reason-digested exception is recorded.
-- Add one judge interface with a small host model by default and optional Jev under the scoped network exception, with judgments that grant neither authority nor acceptance.
-- Add `route_task.py` for the delegation matrix and a read-only session-start summary of delegation, roles, posting state, cached quota and open dispatches.
-- Add brief lint, allowlisted headless environments and guarded local log scanning, display and redaction, with fixed ledger scan states and a stated residual risk from reachable HOME credential files.
-- Add per-repository work tracking, confirmed outcome anchors and bounded one-file work records alongside Spec Kit artifacts.
-- Add opt-in Claude Code context snapshots: a status-line recorder stores only token counts, `read` and `check` give the compaction steward a fresh real reading, and session start shows it. Setup writes the status line only when none exists, after a previewed, digest-approved plan, and otherwise prints a recipe for a user-owned one. Antigravity is covered through its own status line with a separate previewed installer; Codex is not covered.
+- **Review gate:** User-assigned review roles and deterministic routing prefer a family other than the author’s and disclose same-family fallbacks.
+- **Review posting:** A guarded wrapper binds review comments to the checkout repository and checked drafts, while posting status needs an observed author and marker.
+- **Navigator:** Bounded course checks compare confirmed outcome anchors with repository evidence and suggest up to three ways to address drift.
+- **Verification:** Current-head receipts record targeted tests and criterion judgments before delegated ledger work can be accepted, with a reason-digested exception counted separately.
+- **Judge:** One interface supports a small host model by default and optional Jev, with explicit fallback and judgments that grant neither authority nor acceptance.
+- **Context:** Opt-in Claude Code and Antigravity status-line recorders supply fresh token counts to the compaction steward without reading conversation content.
+- **Delegation:** A task-routing helper applies the grade matrix, and a read-only Claude Code/Codex startup summary shows roles, posting state, cached quota and open dispatch counts.
+- **Quota:** An advisory Claude Code rate-limit marker (family and time only, recorded from the `StopFailure` event while the quota probe is on) steers routing away from a limited family for at most five hours; a newer reading or your own statement overrides it.
+- **Capacity:** Advisory parallel-slot checks expose a user-selected total from 1 to 32 and optional per-family caps in setup, session start and the dashboard.
+- **Work tracking:** Per-repository settings, dated outcome anchors and bounded one-file work records complement Spec Kit artifacts.
 
 ### Changed
 
-- Refresh the architecture and task-lifecycle diagrams (dark and light, and the README images) for parallel agent pools, context snapshots, the newest skills and the status board.
-- Rewrite every setup approval question in plain words: each one says what saying yes changes and where, what stays untouched on no, and how to undo it, with outcome-worded neutral choices (nothing preselected or recommended). A new test keeps the shape from rotting. The plain-words term list moves to `plain-terms.md`.
-- State that a delegated run's label carries the agent family and its short model name in the task description, wrapper and log names, and note that the process snapshot shows the family only while dispatch lanes show the model.
-- Let the status board page scroll with the browser's own scrollbar (no inner height cap), and scope the `fnl-status` skill's reply to the repository it runs in; `ledger.py open` takes `--project` for that, and other repositories stay on the dashboard.
-- Correct the documented host contracts for compaction delivery, context telemetry, hook trust and StopFailure against vendor documentation, keeping the live-verification limits stated.
-- Treat agent families as pools of concurrent runs: independent tasks may use several runs of one family up to the limit, and capacity appears in setup, session start and the dashboard.
-- Make the status board easier to read: running dispatches show their repository, quota pools show the model name beside the window icon, times appear as local, human-readable text (today 18:09, in 2d 5h), and the word project becomes repositories.
-- Restructure `/fnl-setup` into a short core with `add <feature>`, `instructions`, `check`, `scan` and `mode`, using user and project scopes and separate consent for every grant.
-- Offer Quick setup with recommended inert defaults and companion selection, or Advanced interviews and optional features, with checked install commands that install nothing automatically.
-- Fold compaction threshold checks and the safe-boundary procedure into `fnl-session-hygiene` with the configured judge for uncertain boundaries.
-- Require exactly one valid router marker before merging when the base commit adopted the review gate, without relaxing code or security review requirements.
-- Read quota on demand before routing with a 15-minute minimum, bounded per-install commands and advisory Claude Code StopFailure rate-limit markers instead of hook-started workers.
-- Claude Code asks the user to re-trust the changed hooks because of the new `StopFailure` entry. Codex and Antigravity get no new hook; the live `StopFailure` payload shape is unverified.
-- Show per-install quota labels, all cached pools, reset times and freshness alongside recent activity and running-agent budget lanes.
-- Show named projects with delivery pipelines, task and package states, exact-project ledger outcomes and a visible warning when checked tasks outpace the work-record status.
-- Keep dashboard review chains bounded and theme-aware, retain the detailed tables and five local project snapshots, and support fragment navigation and reduced motion.
-
-### Fixed
-
-- Accept standard macOS Homebrew `gh` in the review posting wrapper, limiting the git-root and admin-group write exceptions to `/opt/homebrew`.
-
-- Keep benign log pairs out of the secret-hit cap, require ten distinct environment-style dump names, and match added sensitive words as underscore-delimited name parts. Accept one leading BOM while refusing later BOMs, other Unicode format characters and C1 controls.
-
-- Scan raw OSC payloads as well as normalized log text, bound candidate matches, refuse unsupported controls, and expand secret detection and child-environment guards. Replace process open-file queries with the 60-second mtime guard and final metadata recheck; distinguish dispatch refusal from child exits.
-
-- Enforce the judge network exception with canonical opt-in, closed capped payloads, refusal before sending secrets or machine paths, verified transport, a 24-call cap and explicit host fallback. Require meaningful host quotes, refuse module-based full-suite runners, and show accepted-without-verification counts per agent.
-
-- Restore native-question and neutral-consent wording throughout the restructured setup flow; defaults, timeouts and auto-selected options never grant approval.
-
-- Correct setup starter commands and retired-pointer checks; accept custom Codex instruction folders and Antigravity global rules through the guarded writer. Count all core references against the setup budget while preserving separate consent questions.
-
-### Removed
-
-- `fnl-verifier` → `fnl-verification`: callers run its `verify_claim.py`, then read the evidence and decide acceptance as coordinator.
-- `fnl-steward` → `fnl-session-hygiene`: callers follow its Context pressure procedure and threshold script.
-- `fnl-scan-agents` → `/fnl-setup scan`: refresh the agent inventory.
-- `fnl-set-mode` → `/fnl-setup mode`: show or change Delegation mode and Routing.
-- `fnl-setup-instructions` → `/fnl-setup instructions`: use the instructions component in the same setup session.
+- **Setup:** A short core uses user/project scopes, Quick/Advanced modes and on-demand features, with plain-language approvals explaining the effects of yes, no and undo.
+- **Setup:** Companion questions show checked install commands without installing anything, and explicitly declined features stay declined until requested again.
+- **Delegation:** Agent families act as pools of concurrent runs, with family/model labels and the coordinator retaining model selection, quota and permission decisions.
+- **Quota:** Opt-in readings happen on demand before routing, at least 15 minutes apart, replacing hook-started periodic workers and adding advisory Claude Code rate-limit markers.
+- **Review gate:** Adopted repositories require exactly one valid router marker in the pull request body at merge time, in addition to current-head code and security review comments.
+- **Session hygiene:** Compaction decisions and the safe-boundary procedure move into the session-hygiene skill, informed by the configured judge when needed.
+- **Dashboard:** Repository pipelines, task/package states, ledger mismatches, quota pool models and local readable times appear on a page that scrolls with the browser.
+- **Dashboard:** Repository-scoped status replies retain cross-repository detail on the board, with bounded review chains, detailed tables and five retained repository snapshots.
+- **Docs:** Host contracts and architecture/lifecycle illustrations distinguish advisory instructions from enforcement and documented contracts from live proof.
 
 ### Deprecated
 
-- Deprecate global `Ledger project:` and `Task file:` lines in favor of per-repository settings, keeping them readable in 0.2.0 and 0.2.1 and removing them in 0.3.0.
+- **Work tracking:** Global `Ledger project:` and `Task file:` lines remain readable in 0.2.0 and 0.2.1; move them to per-repository settings before their planned removal in 0.3.0.
+
+### Removed
+
+- **Verification:** The `fnl-verifier` agent is replaced by `fnl-verification`; run its `verify_claim.py`, read the evidence and decide acceptance as coordinator.
+- **Session hygiene:** The `fnl-steward` agent is replaced by the Context pressure procedure and threshold script in `fnl-session-hygiene`.
+- **Setup:** The `fnl-scan-agents` skill is replaced by `/fnl-setup scan` for inventory refresh.
+- **Setup:** The `fnl-set-mode` skill is replaced by `/fnl-setup mode` for Delegation mode and Routing.
+- **Setup:** The `fnl-setup-instructions` skill is replaced by `/fnl-setup instructions` in the same setup session.
+
+### Fixed
+
+- **Review gate:** The posting wrapper accepts standard macOS Homebrew `gh` while retaining narrow prefix, ownership and nested-repository checks.
+- **Setup:** Correct starter commands and retired-pointer checks support custom Codex instruction folders and Antigravity global rules through the guarded writer.
+- **Run hygiene:** Benign log pairs no longer consume the secret-hit cap, and environment-dump detection requires ten distinct environment-style names.
 
 ### Security
 
-- Refuse secret-shaped and machine-path judge payloads before transmission, require canonical opt-in and verified transport, cap outbound attempts and disclose host fallback on unavailable Jev calls.
-- Refuse malformed declined-feature records, nonregular instruction targets and environment-selected custom Codex instruction folders, preserving existing text and preventing FIFO hangs.
-- Expand secret-name screening and child-environment controls, scan raw and normalized logs with bounded matching, and require digest-bound redaction with file-identity and recent-write checks.
+- **Judge:** Canonical opt-in, capped closed payloads, secret/path screening, verified transport and a 24-attempt process cap bound external judgments, with explicit host fallback.
+- **Run hygiene:** Brief lint, child-environment controls, bounded raw/normalized log scans and digest-bound redaction reduce exposure while checking file identity and recent writes.
+- **Setup:** Malformed declined-feature records, nonregular instruction targets and environment-selected custom Codex targets are refused before writing.
+
+### Known limits
+
+- Local fixtures and vendor documentation do not prove live hook, setup, review-posting or status-line delivery on each host; navigator/judge validation remains limited and not independently established.
+- Codex has no external status-line command for this recorder; Claude desktop Code-tab delivery and composition with user-owned status lines remain unverified, and latest-snapshot selection can be ambiguous across parallel sessions.
+- Antigravity `invocationNum == 0`, interactive stop delivery and `/compact` availability remain unverified; the fixed stop message still names `/compact`, with `/new` or `/fork` documented as alternatives.
+- Relay receipts and dashboard relay counters are not built; temporary relays are uncounted and still subject to existing approval rules.
+- Run hygiene covers allowlisted headless command forms; reachable HOME credential files, interactive/app sessions and in-session subagents remain outside that protection, and a private HOME is not implemented.
+- Parallel-slot checks are snapshots, not reservations or ledger enforcement; live scheduling, provider quota reads and the Claude Code StopFailure payload remain unverified.
+- The update check remains on by default, independently of metrics consent, and contacts the fixed public GitHub endpoint; `FNL_UPDATE_CHECK=off` disables it, while Codex check/notice delivery and Codex/Antigravity update procedures remain unverified.
+- Optional Jev calls send bounded English evidence to TypeSafe only when invoked with opt-in and authorized key/budget; live network behavior is not established by this release's local checks, and unavailable calls require host fallback.
+- Autopilot, the merge permission guard and the goal skill are deferred to 0.2.1; multi-account agent routing, relay accounting, private HOME and the Antigravity stop-message/Codex PreCompact decisions also remain deferred.
 
 ## [0.1.10] - 2026-11-06
 
@@ -88,7 +111,6 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - Consolidate the dashboard into title-bar `overview` and `now` tabs, add a compact review gate, and move delegation, Judge receipts and full Reviews into Overview tables.
 - Flatten dashboard lanes into two flush colours, add structured tooltips, and refine light warning colours, freshness thresholds and story spacing.
-
 - Move dashboard limits and footer details behind accessible info buttons, show compact freshness and finished-project check bricks, and bound lane/quota marks while separating wrapped story runs.
 - Replace Agents tiles and Project text rows with lego budget lanes, slot/quota bricks and visible story runs, following the approved prototype; retain tables behind the existing disclosure.
 - Make Project a compact list of named repositories active in the last 24 hours, register local folder names only when status is run there with consent, and move unfinished task detail into closed disclosures.
@@ -377,7 +399,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.10...v0.2.0
 [0.1.10]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.7...v0.1.8

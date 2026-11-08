@@ -16,7 +16,7 @@ Open an issue describing the problem or the rule you want to change, with an exa
 
 ## Checks
 
-CI runs the full script suite and the reference/copy checks on every pull request (`.github/workflows/validate.yml`). Locally, run whole targeted modules covering the change and traced consumers; the full suite requires an owner request. For example, for a documentation/reference change:
+CI runs the full script suite and the reference/copy checks on every pull request (`.github/workflows/validate.yml`). Locally, run whole targeted modules covering the change and traced consumers; running the full suite is optional for contributors because CI runs it. Agents follow `fnl-verification` and run the full suite only when the owner requests it. For example, for a documentation/reference change:
 
 ```bash
 claude plugin validate .
@@ -29,6 +29,10 @@ python3 -I scripts/check-references.py .
 - Script tests use temporary account homes/data roots via `tests/data_root_fixture.py` and module-local helpers. Never print, dump, log or assert on the process environment or read credentials; use synthetic mappings and compare only names. Build secret- or path-shaped test literals by concatenation. `HOME` does not redirect canonical state, and `FNL_STATE_DIR` redirects only events/dashboard, so neither isolates consent, quota, receipts or other canonical data. A live `claude --plugin-dir .` session can still touch real state and contact providers; it is a separate, explicitly authorized check.
 - `check-references.py` keeps the skills consistent with each other: every `fnl-` name exists, every `fnl-<name>` "Section" and `<file>.md` "Section" reference names a real heading, relative links resolve, ledger flags cited in the skills exist in `ledger.py`, and every flag in the host config template is described in the agent contracts. It also checks that the README skill list and `fnl-ask` map match every skill folder, and rejects retired skill names in tracked files except dated changelog releases and the Unreleased migration mapping. When consolidating skills, update both lists, the guides, manifests, trigger evals and fixtures in the same change. When you rename a heading or a flag, fix what it reports.
 - When you change a skill's `description`, run a trigger check: start an agent with the plugin loaded (`claude --plugin-dir .`), give it a representative prompt for the skill, and confirm the skill loads; then give it an unrelated prompt and confirm it does not. The suite in `evals/` runs with `claude plugin eval`; after changing a skill's rules, run its behavior cases (`claude plugin eval . --tag behavior --scaffold`).
+
+## Review and merge
+
+Code and security reviews are posted as pull request comments with the gate's current-head markers; the low-risk lane lets one reviewer post both comments when `merge_check.py --lane` confirms eligibility. The repository ruleset requires the `validate` check and zero GitHub approving reviews; `skills/fnl-review-gate/scripts/merge_check.py` enforces the separate comment-based review gate, passing checks and any required router marker before merge. A contributor without write access also needs an owner's approving review on the current head; changed bytes need fresh review.
 
 ## Adding a host
 

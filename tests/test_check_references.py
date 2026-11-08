@@ -245,8 +245,8 @@ class CheckReferencesTest(unittest.TestCase):
             original = path.read_text()
             for text, expected in (
                     (original + f"\n## [0.1.4] - 2026-11-01\n\nRetired: `{name}`\n", 0),
-                    (original.replace("### Changed", f"### Changed\n\n- `{name}` → `{target}`", 1), 0),
-                    (original.replace("### Changed", f"### Changed\n\n- `{name}`", 1), 1)):
+                    (original.replace("## [Unreleased]\n", f"## [Unreleased]\n\n### Changed\n\n- `{name}` → `{target}`\n", 1), 0),
+                    (original.replace("## [Unreleased]\n", f"## [Unreleased]\n\n### Changed\n\n- `{name}`\n", 1), 1)):
                 with self.subTest(name=name, changelog=text[-80:]):
                     path.write_text(text)
                     try:

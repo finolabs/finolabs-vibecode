@@ -4,7 +4,7 @@ Status: implemented; ledger and Antigravity rebuild triggers and the per-host fr
 
 Owner concern, 2026-11-06: the dashboard must show current information. Audit of what is current today and
 what is not, and the fix for the parts that can be fixed without a background process. A live mode (a refresh
-loop that runs while no session does) is a separate, opt-in piece for 0.2.0, because autopilot monitoring needs it.
+loop that runs while no session does) is not built in 0.2.0; it is a separate, opt-in piece in the 0.2.1 backlog with autopilot.
 
 ## Audit (code and measurement, 2026-11-06)
 
@@ -43,7 +43,7 @@ fire-and-forget.
    minutes while another host is active ("Codex: last event 09:12; hooks may need trust"). When `data.js` itself is
    older than 60 seconds and the tab is visible, the page says "data is N minutes old; it updates while a session
    runs tools". All values are text from the data, rendered with `textContent`.
-4. **Not done here:** live mode (0.2.0); fixing Codex trust (the host owns it).
+4. **Not done here:** live mode (0.2.1 backlog); fixing Codex trust (the host owns it).
 
 ## Not in scope
 

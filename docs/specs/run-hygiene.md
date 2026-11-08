@@ -35,7 +35,7 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    command variables, `*_PROXY`, `SSL_CERT_*`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`,
    `CURL_CA_BUNDLE`, `NODE_TLS_REJECT_UNAUTHORIZED`, `NODE_PATH`, `PERLLIB`, `SHELLOPTS`, `PS4`,
    `PROMPT_COMMAND`, `JAVA_TOOL_OPTIONS`). A name that looks secret (contains KEY, TOKEN, SECRET, PASSWORD,
-   CREDENTIAL, or has PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION, SESSIONID or PRIVATE as an underscore-delimited name part)
+   CREDENTIAL, SESSIONID or SESSID anywhere, or has PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION or PRIVATE as an underscore-delimited name part)
    needs its own neutral Yes and No in `fnl-setup` that names the variable and the receiving agent family.
    `--claude-config-dir` is Claude-only: absolute, no `..`, a current-user-owned directory, no symlink
    components, not group/world-writable and outside git work trees (including ancestor markers); ancestors
@@ -60,8 +60,8 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    `gho_`, `ghu_`, `ghs_`, `github_pat_`, `glpat-`, `xoxb-`, `xoxp-`, `npm_`, `AKIA`, `ASIA`, `AIza`
    followed by at least 16 token characters (`[A-Za-z0-9+/_=.-]`); private-key blocks from their
    `-----BEGIN` line; `Authorization: Bearer` followed by at least 16 token characters; and values of
-   at least 16 characters after a name containing KEY, TOKEN, SECRET, PASSWORD or CREDENTIAL, or having
-   PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION, SESSIONID or PRIVATE as an underscore-delimited name part (case-insensitive,
+   at least 16 characters after a name containing KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, SESSIONID or SESSID, or having
+   PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION or PRIVATE as an underscore-delimited name part (case-insensitive,
    including lowercase `name=value` and quoted values with spaces or punctuation). Environment dumps
    require at least ten distinct environment-style names (uppercase, containing an underscore) in
    `NAME=value` or `'NAME': 'value'` pairs within 200 raw lines; repeating one name does not qualify.
@@ -151,7 +151,7 @@ is listed in the CI copy groups and in the test that compares them, so each skil
 
 ## Open decisions
 
-- Whether the private `HOME` option ships in 0.2.0 or only the statement of the residual risk; owner to settle when the
-  package is briefed (it needs evidence of what each agent's login store requires).
+- The private `HOME` decision remains open and the option is not implemented in 0.2.0; the owner needs evidence of
+  what each agent's login store requires before settling the isolation design.
 
 None other. Names of the scripts and the `log_scan` field may change in review.

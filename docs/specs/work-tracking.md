@@ -26,7 +26,7 @@ repository showed three gaps:
   dropped: its per-change artefact count is close to Spec Kit's, so it is not the lighter option the owner wanted,
   and its `tasks.md` checkbox syntax is undocumented. Instead the plugin defines a one-file work record (part E),
   composed with the phase tools of mattpocock/skills, which it points to and does not copy.
-- `fnl-setup` separates machine scope from project scope, like `fnl-setup-instructions` (part F).
+- `fnl-setup` separates user scope from project scope; `/fnl-setup instructions` uses the same split (part F).
 
 ## A. Per-repository settings in the host config
 
@@ -70,7 +70,7 @@ ledger source and says so in its tooltip.
 
 ## B. Who asks, who writes (each skill stays self-contained)
 
-- **`fnl-setup-instructions`** (project scope) gains a "Work tracking" interview, asked once per repository. It looks
+- **`/fnl-setup instructions`** (project scope) carries a "Work tracking" interview, asked once per repository. It looks
   first (`specs/NNN-*/tasks.md` and `.specify/`, work records or spec documents in `docs/specs`, a checkbox file,
   ledger runs whose project resembles the folder name) and recommends an answer. Questions: the workflow (Spec Kit,
   work records as in part E, none); where specs live; how tasks are tracked (Spec Kit `tasks.md`, the `## Tasks`
@@ -178,21 +178,21 @@ plain spec documents. New work from 0.2.0 on uses the template, including the im
 
 ## F. The `fnl-setup` scope split
 
-`fnl-setup` asks first, through the host's native question tool when there is one: "Which scope: machine, project, or
-both?", with a recommendation (machine on a first run on a new computer, project inside a repository that is not set
+`fnl-setup` asks first, through the host's native question tool when there is one: "Which scope: user, project, or
+both?", with a recommendation (user on a first run on a new computer, project inside a repository that is not set
 up, both when unsure). Mapping of every current item:
 
 | Item | Scope |
 | --- | --- |
-| Data location; setup section A host config (delegation, agent scan); quota probe | machine |
-| Setup section D user-scoped instructions (points to `fnl-setup-instructions` user scope) | machine |
-| Setup section E review tools; setup section G companions (installation is per machine) | machine |
-| Setup section F usage metrics, consent, retention; agent snapshot; compaction threshold and stop | machine |
+| Data location; setup section A host config (delegation, agent scan); quota probe | user |
+| Setup section D user-scoped instructions (loads `/fnl-setup instructions` user scope) | user |
+| Setup section E review tools; setup section G companions (installation is per user) | user |
+| Setup section F usage metrics, consent, retention; agent snapshot; compaction threshold and stop | user |
 | Setup section B local exclude; setup section C Agent skills block and review line | project |
 | Workflow detection (Spec Kit, work records, none), work tracking settings (part B), project label | project |
-| Project progress | both: the on/off preference and metrics consent are machine; this repository's label, ledger name and task file are project. A project step that needs machine consent says so and asks the machine step first. |
+| Project progress | both: the on/off preference and metrics consent are user-scoped; this repository's label, ledger name and task file are project-scoped. A project step that needs user-scope consent says so and asks the user step first. |
 
-There is no machine-wide default workflow: the workflow is a property of the repository. Setup Check reports the same
+There is no user-wide default workflow: the workflow is a property of the repository. Setup Check reports the same
 two groups. Skipped sections stay skippable as today. Enforcer: agent judgment (advisory); every write keeps its own
 script, preview and consent, unchanged.
 
@@ -206,8 +206,8 @@ script, preview and consent, unchanged.
 - A test fails if `refresh.py` or the dashboard code opens `CLAUDE.md` or `AGENTS.md`.
 - The deprecated global lines still work in 0.2.0, are reported by `checkup.py` and lose to a per-repository entry;
   the existing tests and `project-progress.md` that describe the global lines are updated in the same change.
-- `fnl-setup-instructions` and `fnl-setup` carry the interview and the two-step flow with their trigger checks; neither
-  calls the other's script; references stay within their size limits.
+- `/fnl-setup instructions` and the setup project flow carry the interview and the two-step flow with their trigger checks;
+  the instructions component writes no host config; references stay within their size limits.
 - `PRIVACY.md` lists the `## Project settings` section, says its values never reach `data.js`, tooltips, events or
   `checkup.py` output, and says `purge` leaves the host config as it is (the user's own file).
 - This repository's specs and index follow the vocabulary and the test above enforces it.

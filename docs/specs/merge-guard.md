@@ -1,8 +1,8 @@
 # Merge guard through host permission rules
 
-Status: deferred; moved to 0.2.0 with autopilot (owner, 2026-11-06); no permission-rule writer is shipped. The accepted design remains below; release scheduling needs an owner decision.
+Status: deferred; the release 0.2.0 record moves the backlog target to 0.2.1 with autopilot; no permission-rule writer is built in 0.2.0. The accepted design remains below; implementation and unresolved host decisions still need owner approval.
 
-Deferred to 0.2.0 (owner, 2026-11-06): the hosts already ask before a merge in their default modes, and the owner
+Originally deferred to 0.2.0 (owner, 2026-11-06), now a 0.2.1 backlog target: the hosts already ask before a merge in their default modes, and the owner
 authorizes merges in chat; the remaining gap is unattended runs, which autopilot settles (`autopilot.md`).
 The design below stays for that use.
 

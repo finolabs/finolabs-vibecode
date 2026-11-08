@@ -2,13 +2,20 @@
 
 ## Supported versions
 
-The plugin is in phase 0 (`0.y.z`). Only the latest release receives fixes.
+The plugin is in phase 0 (`0.y.z`). Security maintenance covers the following release lines:
+
+| Version | Security support |
+| --- | --- |
+| 0.2.x | Supported; fixes ship in the latest 0.2.x release. |
+| 0.1.x | Not supported; upgrade to 0.2.x. |
+
+Development builds are not supported releases; reproduce against a supported release when possible.
 
 ## Reporting a vulnerability
 
 Report vulnerabilities privately through GitHub's **Report a vulnerability** button on this repository's Security tab. Do not open a public issue.
 
-Include the affected skill or script, the version, the steps or prompt that reproduce the problem, and its impact. You will receive an acknowledgement, and the fix is released with a changelog entry that credits you unless you ask otherwise.
+Include the affected skill or script, the version, the steps or prompt that reproduce the problem, and its impact. We aim to acknowledge reports within **5 working days**. We coordinate disclosure with the reporter so users can receive a fix or mitigation before details become public, and agree on a disclosure timeline through the private report. A released fix includes a changelog entry that credits you unless you ask otherwise.
 
 ## Scope
 

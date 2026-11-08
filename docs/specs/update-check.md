@@ -1,7 +1,7 @@
 # Plugin update check
 
 Status: implemented; for package D of 0.1.7; check and notice verified on Claude Code, unverified on Codex and Antigravity; no live network or host update validation.
-Owner decisions: 2026-11-04. The check is on by default, independent of usage metrics consent. `FNL_UPDATE_CHECK=off` stops every helper action. It is the one allowed network call made by the plugin itself. Updating through a host is a separate, explicitly authorized native operation.
+Owner decisions: 2026-11-04. The check is on by default, independent of usage metrics consent. `FNL_UPDATE_CHECK=off` stops every helper action. It is the one network call the plugin makes on its own initiative. The optional judge call is the only other network call by the plugin, and runs only when the coordinator or the user invokes it, under CLAUDE.md's fourth scoped exception. Updating through a host is a separate, explicitly authorized native operation.
 
 ## What and why
 
