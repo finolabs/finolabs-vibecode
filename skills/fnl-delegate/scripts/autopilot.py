@@ -66,6 +66,7 @@ ENFORCERS = {'autopilot.py', 'data_root.py', 'parallel_slots.py', 'secret_patter
              'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
              'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py', 'heavy_run.py', 'delegate_env.py',
              'auto_gate.py', 'mode.py', 'judge.py', 'log_scan.py', 'route_task.py', 'brief_check.py'}
+ENFORCERS = {name.casefold() for name in ENFORCERS}  # case-insensitive filesystems name one file many ways
 
 
 def now():
@@ -266,7 +267,7 @@ def classify_paths(paths):
         if not isinstance(name, str) or protected(name):
             return 'protected'
         path = Path(name)
-        if path.name in ENFORCERS or path.name.upper() in slots.INSTRUCTION_FILES:
+        if path.name.casefold() in ENFORCERS or path.name.upper() in slots.INSTRUCTION_FILES:
             return 'protected'
         if (not re.fullmatch(r'[A-Za-z0-9_./-]{1,240}', name) or path.is_absolute()
                 or any(p in {'', '.', '..'} for p in name.split('/'))

@@ -260,6 +260,11 @@ class AutopilotTest(unittest.TestCase):
             self.check(paths=[path], tier=3, code='protected')
             self.check(['git', 'add', '--', path], tier=3, code='protected')
         self.check(paths=['skills/fnl-review-gate/scripts/merge_check.py'], tier=3, code='protected')
+        # Case aliases name the same file on a case-insensitive filesystem.
+        for name in ('Heavy_run.py', 'LEDGER.py', 'Run_env.py', 'Data_Root.py', 'Merge_Check.py'):
+            path = 'skills/fnl-delegate/scripts/' + name
+            self.check(paths=[path], tier=3, code='protected')
+            self.check(['git', 'add', '--', path], tier=3, code='protected')
 
     def test_merge_and_push_settings(self):
         self.start(SETUP.replace('- Merge: yes', '- Merge: no').replace('requests: yes', 'requests: no'))
