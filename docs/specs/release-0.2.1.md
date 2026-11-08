@@ -35,7 +35,7 @@ and the setup gaps found on the way.
 
 ## Out of scope (later releases)
 
-The `fnl-goal` skill and autopilot, `README.vi.md` and the use-case table, a Codex `PreCompact` declaration, an
+A goal skill and autopilot, `README.vi.md` and the use-case table, a Codex `PreCompact` declaration, an
 Antigravity `/compact` message, the Codex ref in the catalog, relay receipts and counters, a private `HOME` per run,
 multi-account agents, a merge guard and live-host verification.
 
