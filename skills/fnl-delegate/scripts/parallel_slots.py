@@ -21,7 +21,7 @@ AGENTS = {'claude': 'claude', 'claude-session': 'claude', 'subagent': 'claude',
           'codex': 'codex', 'antigravity': 'antigravity'}
 HOST_LIMIT = 262144
 LEDGER_LIMIT = 4 * 1024 * 1024
-DEFAULT_LIMIT = 5
+DEFAULT_LIMIT = 3
 
 
 INSTRUCTION_FILES = ('CLAUDE.MD', 'CLAUDE.LOCAL.MD', 'AGENTS.MD', 'AGENTS.OVERRIDE.MD', 'GEMINI.MD',

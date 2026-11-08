@@ -23,7 +23,7 @@ ROLES_UNKNOWN = ("Roles: code review unknown; security review unknown; navigator
                  "posting claude unknown, codex unknown, antigravity unknown\n")
 ROLES_DEFAULT = ("Roles: code review unassigned; security review unassigned; navigator unassigned; judge host; "
                  "posting claude unverified, codex unverified, antigravity unverified\n")
-SLOTS_DEFAULT = "Parallel slots: 5 free of 5 (claude 0 open, codex 0 open, antigravity 0 open; default)\n"
+SLOTS_DEFAULT = "Parallel slots: 3 free of 3 (claude 0 open, codex 0 open, antigravity 0 open; default)\n"
 STATE_BASELINE = ("\nPlugin state (local files; fixed words and counts only)\n"
                   "Delegation mode: unknown\n" + ROLES_DEFAULT + "Quota (cached): unknown\nOpen ledger dispatches: 0\n" + SLOTS_DEFAULT)
 

@@ -13,12 +13,12 @@ Undo: Restore the previous sections or edit them through setup.
 Choices: "Yes, save the helper settings" / "No, leave the file unchanged".
 Create the remaining config from `fnl-delegate`'s `references/host-template.md`, preserving the scan section byte for byte, and fill: how this computer invokes the present agents, which agents may coordinate and which delegates each can reach, the heavy-job lock path, and the durable folder for briefs and logs. Leave unknown commands as questions in the file rather than guesses.
 Ask as free text, inside the repository being set up: "How many agent runs may work at the same time in this repository?"
-Recommend a small number such as 3 to start; accept an integer from 1 to 32; without an answer the repository keeps the default of 5. Explain that runs of the same family share quota pools, that the limit counts only this repository and that other repositories keep their own.
+Recommend a small number such as 3 to start; accept an integer from 1 to 32; without an answer the repository keeps the default of 3. Explain that runs of the same family share quota pools, that the limit counts only this repository and that other repositories keep their own.
 Then ask as optional free text: "Any per-family caps for claude, codex or antigravity in this repository? Leave blank for the total limit only."
 Accept any subset as `claude=<n>, codex=<n>, antigravity=<n>`, each n from 1 to the total. A blank answer means the total only: if caps already exist, show them and clear them with `--clear parallel-caps` after the same yes, so an old cap never outlives a smaller total.
 Preview the entries and write each only after a yes, through `python3 -I <this skill folder>/scripts/project_progress.py settings --set parallel=<n>` and `--set parallel-caps=<list>` (clear with `--clear`); never infer a number from silence. The old user-scope `## Limits` lines are no longer read.
 Validate with `python3 -I <fnl-delegate skill folder>/scripts/parallel_slots.py check-config` from the repository and show its understood total, caps and source.
-Exit 3 means default or unknown: explain that a missing or invalid setting defaults to 5, fix or leave setup unverified; never call that the user's choice.
+Exit 3 means default or unknown: explain that a missing or invalid setting defaults to 3, fix or leave setup unverified; never call that the user's choice.
 Asking and honoring caps are advisory (agent judgment); `parallel_slots.py` enforces parsing only, not dispatch admission.
 When more than one agent coordinates, recommend a host config and ledger path every coordinator's sandbox can read and write.
 

@@ -97,7 +97,7 @@ class SizeLimitTests(unittest.TestCase):
         text = (REFS / 'features/delegation.md').read_text()
         for sentence in ('How many agent runs may work at the same time in this repository?',
                          'Any per-family caps for claude, codex or antigravity in this repository?',
-                         'free text', 'such as 3', '1 to 32', 'share quota pools', 'default of 5',
+                         'free text', 'such as 3', '1 to 32', 'share quota pools', 'default of 3',
                          'settings --set parallel=<n>', '--set parallel-caps=<list>',
                          'parallel_slots.py check-config', 'advisory (agent judgment)'):
             self.assertIn(sentence, text)

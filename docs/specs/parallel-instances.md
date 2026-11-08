@@ -6,7 +6,7 @@ Owner decision: 2026-11-07. A model family (Claude Code, Codex, Antigravity) is 
 
 ## Goal and acceptance
 
-- AC1: Canonical host config chooses a total from 1 to 32 and optional family caps from 1 to that total; missing/invalid total reports default 5.
+- AC1: Canonical host config chooses a total from 1 to 32 and optional family caps from 1 to that total; missing/invalid total reports default 3.
 - AC2: Bounded canonical ledger reads count starts without finishes, with Claude aliases sharing one family. `check` tests both limits; unsafe/unreadable state is unknown.
 - AC3: Session start reports only fixed words, family names and integers, stays read-only and exits 0 on errors.
 - AC4: Refresh and dashboard use the same parser, show a total above five and family counts/caps with text-only rendering and unknown on unreadable state.
@@ -26,7 +26,7 @@ Canonical `host.md`, under `## Limits`:
 - Parallel per family: claude=2, codex=3
 ```
 
-The total is 1 to 32; 32 is a sanity cap. A missing or invalid total falls back to 5, source `default`; valid total source is `host config`. Optional caps accept any subset of `claude`, `codex`, `antigravity`, each 1 to the effective total. An omitted family has only the total bound. Duplicate sections, duplicate/unknown families and invalid caps report unknown, rather than silently dropping a cap. Legacy total wording with a parenthetical suffix is invalid and reports default 5 until setup replaces it.
+The total is 1 to 32; 32 is a sanity cap. A missing or invalid total falls back to 3, source `default`; valid total source is `host config`. Optional caps accept any subset of `claude`, `codex`, `antigravity`, each 1 to the effective total. An omitted family has only the total bound. Duplicate sections, duplicate/unknown families and invalid caps report unknown, rather than silently dropping a cap. Legacy total wording with a parenthetical suffix is invalid and reports default 3 until setup replaces it.
 
 `parallel_slots.py` reads only canonical `host.md` (256 KiB) and `ledger.jsonl` (4 MiB) via `data_root.py`: owned regular files, no-follow, no group/world writes, bounded reads. No environment override, subprocess, network or write. Missing config selects default; missing ledger means zero; unsafe inputs, invalid root, invalid UTF-8 or malformed/ambiguous ledger mean unknown. Start ids deduplicate; any finish for an id closes it regardless of line order. The mapping matches `ledger.py`: `claude`, `claude-session`, `subagent` are Claude; the other two families map directly. Unknown agents refuse capacity.
 
@@ -84,7 +84,7 @@ The limit was machine-wide: the total from `## Limits` was compared with every o
 
 Settled decisions (owner, 2026-11-08):
 
-- A repository without its own setting uses the default of 5. The global `## Limits` lines are no longer read; `check-config` reports `legacy_limits` when they exist and the setup check shows a one-line note that they are ignored.
+- A repository without its own setting uses the default of 3. The global `## Limits` lines are no longer read; `check-config` reports `legacy_limits` when they exist and the setup check shows a one-line note that they are ignored.
 - Per-family caps also move to the project.
 - There is no machine-wide total.
 

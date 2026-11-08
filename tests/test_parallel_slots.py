@@ -117,7 +117,7 @@ class ParallelSlotsTest(unittest.TestCase):
         self.assertEqual(slots.status()['limit'], 32)
 
     def test_missing_and_invalid_totals_default_with_source(self):
-        self.assertEqual(slots.status()['limit'], 5)
+        self.assertEqual(slots.status()['limit'], 3)
         for text in ('', '# Host\n', '## Other\n- Parallel dispatches: at most 8 at one time.\n',
                      *('## Limits\n- Parallel dispatches: at most %s at one time.\n' % value
                        for value in ('0', '33', '-1', '1.5', 'five', 'True', '9 extra')),
@@ -126,7 +126,7 @@ class ParallelSlotsTest(unittest.TestCase):
             with self.subTest(text=text):
                 self.write('host.md', text)
                 state = slots.status()
-                self.assertEqual((state['limit'], state['source'], state['open']), (5, 'default', 0))
+                self.assertEqual((state['limit'], state['source'], state['open']), (3, 'default', 0))
                 self.assertEqual(self.command('check-config')[0], 3)
         for total in (1, 6, 32):
             self.host(total, None)
@@ -166,7 +166,7 @@ class ParallelSlotsTest(unittest.TestCase):
         self.assertEqual(code, 0)
         other_state = json.loads(output)
         self.assertEqual((other_state['limit'], other_state['source'], other_state['open'], other_state['other_projects']),
-                         (5, 'default', 1, 2))
+                         (3, 'default', 1, 2))
         self.assertEqual(self.command('check', '--repo', str(other), '--family', 'codex', '--count', '5'),
                          (3, 'Parallel slots: full\n'))
         code, output = self.command('check-config', '--repo', str(self.repo))
@@ -193,7 +193,7 @@ class ParallelSlotsTest(unittest.TestCase):
         self.assertEqual(code, 0)
         state = json.loads(output)
         self.assertEqual((state['scope'], state['limit'], state['source'], state['open'], state['other_projects']),
-                         (None, 5, 'default', 0, 2))
+                         (None, 3, 'default', 0, 2))
         code, output = self.command('check-config', '--repo', str(self.repo.parent))
         self.assertEqual((code, json.loads(output)['legacy_limits']), (3, True))
         self.host(2, None)
@@ -203,7 +203,7 @@ class ParallelSlotsTest(unittest.TestCase):
         self.assertTrue(json.loads(self.command('check-config')[1])['legacy_limits'])
         (self.root / 'host.md').unlink()
         state = json.loads(self.command('status', '--repo', str(self.repo.parent))[1])
-        self.assertEqual((state['limit'], state['source'], state['scope'], state['open']), (5, 'default', None, 0))
+        self.assertEqual((state['limit'], state['source'], state['scope'], state['open']), (3, 'default', None, 0))
 
     def test_root_and_identity_parity_plain_checkout_and_linked_worktree(self):
         worktree = self.repo.parent / 'linked'
@@ -244,18 +244,18 @@ class ParallelSlotsTest(unittest.TestCase):
         self.assertEqual(self.command('status'), (3, 'unknown\n'))
 
     def test_caps_without_total_use_default_and_legacy_sections_are_only_detected(self):
-        for cap in (5, 6):
+        for cap in (3, 4):
             self.write('host.md', '## Project settings\n- %s parallel-caps: codex=%s\n' % (self.code, cap))
             code, output = self.command('status')
-            if cap == 5:
+            if cap == 3:
                 state = json.loads(output)
                 self.assertEqual((code, state['limit'], state['source'], state['families']['codex']['cap']),
-                                 (0, 5, 'default', 5))
+                                 (0, 3, 'default', 3))
                 self.assertEqual(self.command('check-config')[0], 3)
             else:
                 self.assertEqual((code, output), (3, 'unknown\n'))
         self.write('host.md', '## Limits\n- Parallel per family: broken\n## Limits\n')
-        self.assertEqual(slots.status()['limit'], 5)
+        self.assertEqual(slots.status()['limit'], 3)
         self.assertTrue(json.loads(self.command('check-config')[1])['legacy_limits'])
         self.write('host.md', '```\n## Limits\n```\n')
         self.assertFalse(json.loads(self.command('check-config')[1])['legacy_limits'])

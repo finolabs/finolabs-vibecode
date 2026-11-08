@@ -73,7 +73,7 @@ Advisory (agent judgment): use `/fnl-setup add quota` to opt in after the scan a
 
 Choose N from 1 to 32; optional family entries may be omitted, each n is 1 to N.
 Families are pools: several runs share their quota. Caps are advisory (agent judgment);
-`parallel_slots.py check-config` validates these lines; missing/invalid total defaults to 5.
+`parallel_slots.py check-config` validates these lines; missing/invalid total defaults to 3.
 
 ## Effort preference
 
