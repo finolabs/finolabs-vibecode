@@ -25,4 +25,4 @@
 | [Run hygiene](run-hygiene.md) | implemented; release 0.2.0 brief lint, environment allowlists, guarded log scan/redaction and ledger states have local tests; real-host dispatch remains unverified and private HOME is deferred. |
 | [Context snapshot](context-snapshot.md) | implemented; release 0.2.0 local Claude Code and Antigravity status-line recorder, fresh context reads, steward checks and previewed settings writer; live status-line delivery and user-owned composition remain unverified. |
 | [Parallel agent instances](parallel-instances.md) | implemented; shared helper, setup, SessionStart, dashboard, CI copy group and documentation are integrated locally; targeted verification is recorded in the spec, while live-host scheduling and UI behavior remain unverified. |
-| [Heavy-job guard and test scope](heavy-jobs.md) | draft; no code yet; enforcement scope and default thresholds are open for the owner. |
+| [Heavy-job guard and test scope](heavy-jobs.md) | draft; no code yet; owner decisions settled 2026-11-08 (script, rules, opt-in Claude Code gate, load 12 and 3 GB); the gate exception is recorded in CLAUDE.md. |

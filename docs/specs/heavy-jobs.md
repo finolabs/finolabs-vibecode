@@ -1,6 +1,6 @@
 # Heavy-job guard and test scope (release 0.2.1)
 
-Status: draft; no code yet. Two decisions below are open for the owner.
+Status: draft; no code yet. Owner decisions settled 2026-11-08; the CLAUDE.md exception for the gate lands with this spec before any code.
 
 ## Why
 
@@ -23,14 +23,11 @@ Two gaps caused it:
   command, check load first, and never test while a review or delegated run is active. The same line is now in the
   owner's user-scope instructions.
 
-## Decisions open (owner)
-
-1. **Enforcement.** Script and rules only (advisory: an agent that skips the script is not stopped), or also an
-   opt-in `PreToolUse` gate on Claude Code that denies a known heavy command not run through the script. The gate
-   would be a third blocking hook, which `CLAUDE.md` forbids until the owner records a new scoped exception. It would
-   never cover Codex or Antigravity. Recommended: script and rules first; the gate as a separate pull request after
-   the exception is recorded.
-2. **Default thresholds.** Proposed: one-minute load average below 12 and at least 3 GB free plus inactive memory.
+- **Enforcement (owner, 2026-11-08):** script and rules, plus the opt-in `PreToolUse` gate on Claude Code (part D). The
+  gate is the fifth scoped exception in `CLAUDE.md`, recorded in the same pull request as this spec, and no gate code
+  lands before that rule is merged. It never covers Codex or Antigravity.
+- **Default thresholds (owner, 2026-11-08):** one-minute load average below 12 and at least 3 GB of free plus inactive
+  memory; wait cap 40 minutes.
 
 ## A. The script
 
@@ -67,6 +64,17 @@ holds the load limit, the memory minimum and the wait cap. A missing section use
 - `fnl-coding-router` "Proportion" points to both.
 - A repository's own lock script may stay; it should call `heavy_run.py` so two locks cannot allow two heavy jobs.
 
+## D. The gate (opt-in, Claude Code only)
+
+A `PreToolUse` hook on the `Bash` tool, in its own group in the user's Claude Code hook configuration, installed and removed by a script with a dry run and a backup.
+
+- Off unless `Heavy-job gate: on` is recorded under `## Heavy jobs` in the canonical host config after a consent question of its own and a shown preview in `fnl-setup add delegation`. Unresolvable config means off. `FNL_HEAVY_GATE=off` disables it.
+- It denies one Bash call only when the command matches a heavy pattern (the section's list, else the built-in default list in part B) and does not start with `heavy_run.py run --`. The denial is one fixed message that names the script. Anything it cannot classify with certainty is allowed.
+- Matching is on the command string in memory. The command text is never stored, logged, sent or put in an event. It reads only the canonical host config, ignores a repository file, and allows on every error.
+- It never denies another tool, a prompt, a session start or the user's own stop, and never edits or runs the command.
+- Limits: it cannot see work started by a tool other than Bash, by a script a command calls, or by Codex or Antigravity; those rely on the rules in part C.
+- Acceptance: with the gate on and a heavy default pattern unwrapped, the hook emits the fixed denial; wrapped, non-heavy, gate off, config unreadable and malformed input all allow; the hook script writes no file and prints nothing else. Tests feed synthetic payloads in-process and start no real heavy work.
+
 ## Acceptance
 
 1. With the lock held by a live owner, a second `run` waits and then exits 75 when the cap ends, never starting its command.
@@ -80,7 +88,7 @@ holds the load limit, the memory minimum and the wait cap. A missing section use
 ## Out of scope
 
 Resource limits on a command (ulimit, cgroups), killing a running heavy job, scheduling other than first come first
-served, and any enforcement for an agent that never calls the script, until open decision 1 is settled.
+served, and any enforcement for Codex or Antigravity.
 
 ## Consumers to trace
 
