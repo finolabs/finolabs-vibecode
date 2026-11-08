@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- Record an optional coordinator session hash on dispatch starts, using `--session` or `CLAUDE_CODE_SESSION_ID`; keep only a short SHA-256 hash, or `null` when unknown.
+
 ### Changed
 
 - After a compaction, the session-start hook prints one fixed delegation reminder (unless Delegation mode is `manual`), and the handover template carries a Delegation state line, because delegation to other agent families fell after compaction. The hook script changed, so Codex asks to trust the hooks again.

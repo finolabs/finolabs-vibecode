@@ -86,6 +86,13 @@ def load():
 
 
 def cmd_start(args):
+    session = args.session
+    if session is not None:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session):
+            sys.exit("ledger: --session must contain 1 to 128 ASCII letters, digits, dash or underscore")
+    else:
+        session = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    coord_session = hashlib.sha256(session.encode("utf-8")).hexdigest()[:12] if session else None
     try:
         from mode import effective
         manual = effective(keys=("delegation_mode",), gate_opt_in=True)["delegation_mode"] == "manual"
@@ -102,6 +109,7 @@ def cmd_start(args):
         checkout_id = None  # non-code tasks can still end through the explicit escape hatch
     append({
         "checkout_id": checkout_id,
+        "coord_session": coord_session,
         "event": "start", "id": dispatch_id, "ts": now(),
         "project": args.project, "task": args.task, "kind": args.kind,
         "grade": args.grade, "coordinator": args.coordinator, "agent": args.agent,
@@ -260,6 +268,7 @@ def build_parser():
     s.add_argument("--kind", required=True, choices=KINDS)
     s.add_argument("--grade", required=True, choices=GRADES)
     s.add_argument("--coordinator", default="claude", choices=COORDINATORS)
+    s.add_argument("--session", help="coordinator session id; only a short hash is stored")
     s.add_argument("--agent", required=True, choices=AGENTS)
     s.add_argument("--model", default="default")
     s.add_argument("--reason", default="routing", choices=REASONS)
