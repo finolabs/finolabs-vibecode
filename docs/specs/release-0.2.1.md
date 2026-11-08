@@ -1,6 +1,6 @@
 # Release 0.2.1: scope
 
-Status: draft; scope settled by the owner on 2026-11-08 and cut by the coordinator on 2026-11-09 (see Moved to a later release); packages 1 to 11, 12a and 15 merged or in review; the release is not cut and nothing here is verified on a live host.
+Status: released; tagged v0.2.1 on 2026-11-09 after the scope was cut by the coordinator (see Moved to a later release); packages 1 to 11, 12a and 15 are in the release and nothing here is verified on a live host.
 
 ## Why
 

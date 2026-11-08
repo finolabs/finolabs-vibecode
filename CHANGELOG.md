@@ -4,10 +4,14 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-09
+
+Not in this release: the opt-in heavy-job gate hook described in `docs/specs/heavy-jobs.md` (the `heavy_run.py` wrapper is in), the review residual notes and the smaller setup items; see the [release record](docs/specs/release-0.2.1.md).
+
 ### Added
 
 - `/fnl-setup add autopilot` asks each away-session setting separately, with an explicit Merge decision as standing authority. Its writer previews the canonical `## Autopilot` section and applies only a confirmed, unexpired SHA-256 digest, preserving other host bytes with a backup and refusing links or changed files.
-- `fnl-delegate/scripts/autopilot.py` (first slice of autopilot, part 1): `start`, `stop`, `check` and `log` for a time-boxed lease read from `## Autopilot` in the host config. `check` classifies a command's argv or a change's paths into Tier 1 or Tier 3 by code (unknown input is Tier 3), enforces lease expiry, the stop marker, setup-hash changes and run, runtime and hourly action limits, and denies merge unless setup says `Merge: yes` and the argv pins the reviewed head. State is private and local; nothing is executed or sent. `merge_check.py --independent` additionally refuses a review pair from the pull request author's own model family. The skill, the `/fnl-brb` alias and the setup section are available.
+- `fnl-delegate/scripts/autopilot.py` (first slice of autopilot, part 1): `start`, `stop`, `check` and `log` for a time-boxed lease read from `## Autopilot` in the host config. `check` classifies a command's argv or a change's paths into Tier 1 or Tier 3 by code (unknown input is Tier 3), enforces lease expiry, the stop marker, setup-hash changes and run, runtime and hourly action limits, and denies merge unless setup says `Merge: yes` and the argv pins one full head SHA (that the SHA is the reviewed current head stays the caller's duty). State is private and local; nothing is executed or sent. `merge_check.py --independent` additionally refuses the merge when the families routing would pick for the reviews include the pull request author's own; which family posted each counted marker stays the caller's duty. The skill, the `/fnl-brb` alias and the setup section are available.
 - User-invoked `fnl-autopilot` starts and stops a time-boxed away mandate with action classification and an independent merge gate; `fnl-brb` (be right back) is its thin alias. Recorded setup is required; use `/fnl-setup add autopilot` to record it. The live loop, dashboard tab, scheduler, notice hook and host backstop remain deferred.
 - `fnl-delegate/scripts/heavy_run.py` runs one heavy command at a time on the machine: it holds a kernel lock in the fixed anchor folder, waits for the one-minute load and free memory, exits 75 after a wait cap, refuses detached Docker launches, starts the command with the allowlisted environment records who started the job (label, repository, dispatch id, program name, pids, times) so `status` can show it without guessing the holder, and stops a job past its maximum time (default 90 minutes). It replaces the `mkdir` recipe.
 - Record an optional coordinator session hash on dispatch starts from `CLAUDE_CODE_SESSION_ID` (never from a command-line option); keep only a short SHA-256 hash, or `null` when unknown.
@@ -426,7 +430,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.10...v0.2.0
 [0.1.10]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.8...v0.1.9
