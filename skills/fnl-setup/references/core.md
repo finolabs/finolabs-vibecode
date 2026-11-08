@@ -38,7 +38,7 @@ No: Keep the list; ask later.
 Undo: Remove those entries.
 Choices: "Yes, hide these files" / "No, keep the list".
 Exclude legacy `.orchestration/`; shared `.gitignore` needs request.
-2. **Agent skills block.** Existing context only:
+2. **Agent skills block.** Existing context only. Offer it in each repository context file that Claude Code or the other hosts read: `AGENTS.md` and `CLAUDE.md`, each with its own preview and yes (`instructions_write.py` writes one target per run). Skip a `CLAUDE.md` that only imports `AGENTS.md` (an `@AGENTS.md` line and no rules of its own), because the import already carries the block; say so. Write the same block text into both files, never different wording:
 
 ```markdown
 ## Agent skills
