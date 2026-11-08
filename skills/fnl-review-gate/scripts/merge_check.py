@@ -221,9 +221,10 @@ def independent_families(pr):
         import review_route
         import review_config
         author = review_route.author_family(Path.cwd(), base=pr.get("baseRefOid"), head=pr["headRefOid"])
-        # The families routing would pick for this author (assigned role, else the capability fallback), ignoring
-        # live quota; a same-family pick means no other family is present. Who posted a marker stays a caller duty.
-        rows = review_route.route(author, review_config.host_text(), [])
+        # The families routing would pick for this author from the same inputs `review_route` uses (assigned role, else
+        # the capability fallback, with cached quota readings); a same-family pick means no other family is present. Who posted a marker stays a caller duty.
+        import quota_probe
+        rows = review_route.route(author, review_config.host_text(), quota_probe.status_lines())
         result = {"author": author, "code": rows[0][0], "security": rows[1][0]}
         if any(value not in review_config.FAMILIES for value in result.values()):
             raise ValueError("unknown family")

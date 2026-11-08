@@ -170,7 +170,7 @@ class AutopilotTest(unittest.TestCase):
                      ['git', 'diff', '--stat', 'origin/main...HEAD'], ['git', 'show', '--stat', 'HEAD'],
                      ['git', 'rev-parse', 'HEAD'], ['git', 'branch', '--show-current'],
                      ['git', 'add', '--', 'src/example.py', 'tests/test_example.py'],
-                     ['git', 'commit', '-m', 'Fix example'], ['git', 'push', '-u', 'origin', 'topic'],
+                     ['git', 'commit', '-m', 'Fix example'], ['git', 'push', '-u', 'origin', 'HEAD:refs/heads/topic'],
                      ['git', 'merge', 'origin/main'], ['gh', 'pr', 'view', '7', '--json', 'headRefOid'],
                      ['gh', 'pr', 'checks', '7'], ['gh', 'pr', 'create', '--title', 'Example', '--body', 'Details'],
                      ['gh', 'pr', 'edit', '7', '--title', 'Example'], ['gh', 'issue', 'list'],
@@ -248,10 +248,23 @@ class AutopilotTest(unittest.TestCase):
         self.check(['git', 'add', '--', 'src/bundle.py'], tier=3, code='unknown')
         self.check(paths=['src/bundle.py/settings.json'], tier=3, code='protected')
 
+    def test_review_findings_round_two(self):
+        self.start()
+        # A bare or abbreviated destination can resolve to a tag, so only an explicit branch ref is known.
+        for refspec in ('v-example', 'topic:v-example', 'topic', 'HEAD', 'v-example:v-example'):
+            self.check(['git', 'push', 'origin', refspec], tier=3, code='unknown')
+        self.check(['git', 'push', 'origin', 'v-example:refs/heads/topic'])
+        # Every trusted wrapper and its dependencies are protected as paths and through git add.
+        for name in ('heavy_run.py', 'ledger.py', 'record.py', 'delegate_env.py', 'run_env.py', 'data_root.py'):
+            path = 'skills/fnl-delegate/scripts/' + name
+            self.check(paths=[path], tier=3, code='protected')
+            self.check(['git', 'add', '--', path], tier=3, code='protected')
+        self.check(paths=['skills/fnl-review-gate/scripts/merge_check.py'], tier=3, code='protected')
+
     def test_merge_and_push_settings(self):
         self.start(SETUP.replace('- Merge: yes', '- Merge: no').replace('requests: yes', 'requests: no'))
         self.check(['gh', 'pr', 'merge', '7', '--match-head-commit', 'a' * 40], tier=3, code='merge-disabled')
-        for argv in (['git', 'push', 'origin', 'topic'], ['gh', 'pr', 'create']):
+        for argv in (['git', 'push', 'origin', 'HEAD:refs/heads/topic'], ['gh', 'pr', 'create']):
             self.check(argv, tier=3, code='push-disabled')
         self.check(['gh', 'pr', 'view', '7'])
 

@@ -13,7 +13,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Credentials/env names, .github, hooks, agent instructions, settings, host/setup/lease files are Tier 3 anywhere in argv or paths | protected |
 | Only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3 | classify_paths |
 | Read-only Git/gh queries use closed verbs and option sets; command/config overrides and unknown options deny | classify_argv, options |
-| Git add of allowed paths, commit, explicit origin push to a known non-default branch and merge origin/main are Tier 1 | classify_argv, branch_context |
+| Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and merge origin/main are Tier 1 | classify_argv, branch_context |
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
 | Only this install's ledger/record/heavy_run/merge_check script paths, with isolated Python, are allowed wrappers; nested heavy commands are classified too | script_command |
 | Each Tier 1 check reserves one action; ledger start also reserves a run, even if the caller never executes | check |
@@ -64,7 +64,8 @@ EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt
 MAX_LOG = 8 * 1024 * 1024
 ENFORCERS = {'autopilot.py', 'data_root.py', 'parallel_slots.py', 'secret_patterns.py', 'merge_check.py',
              'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
-             'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py'}
+             'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py', 'heavy_run.py', 'delegate_env.py',
+             'auto_gate.py', 'mode.py', 'judge.py', 'log_scan.py', 'route_task.py', 'brief_check.py'}
 
 
 def now():
@@ -405,11 +406,15 @@ def classify_argv(argv, applied):
                 current, default = branch_context()
             except (OSError, ValueError):
                 return 'unknown'
-            target = refspec[-1].removeprefix('refs/heads/')
+            destination = refspec[-1]
+            target = destination.removeprefix('refs/heads/')
             target = current if target == 'HEAD' else target
             if target in {'main', 'master', 'trunk', default}:
                 return 'forbidden'
             if not default or not target:
+                return 'unknown'
+            # A bare or abbreviated destination can resolve to a tag, so only an explicit branch ref is a known push.
+            if len(refspec) != 2 or not destination.startswith('refs/heads/'):
                 return 'unknown'
             return 'allowed' if applied['Push and pull requests'] == 'yes' else 'push-disabled'
         if verb == 'merge':
