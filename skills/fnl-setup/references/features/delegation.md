@@ -18,7 +18,7 @@ Then ask as optional free text: "Any per-family caps for claude, codex or antigr
 Accept any subset as `claude=<n>, codex=<n>, antigravity=<n>`, each n from 1 to the total. A blank answer means the total only: if caps already exist, show them and clear them with `--clear parallel-caps` after the same yes, so an old cap never outlives a smaller total.
 Preview the entries and write each only after a yes, through `python3 -I <this skill folder>/scripts/project_progress.py settings --set parallel=<n>` and `--set parallel-caps=<list>` (clear with `--clear`); never infer a number from silence. The old user-scope `## Limits` lines are no longer read.
 Validate with `python3 -I <fnl-delegate skill folder>/scripts/parallel_slots.py check-config` from the repository and show its understood total, caps and source.
-Exit 3 means default or unknown: explain that a missing or invalid setting defaults to 3, fix or leave setup unverified; never call that the user's choice.
+Exit 3 means default or unknown: explain that an absent setting defaults to 3 while a malformed project entry reports unknown, fix or leave setup unverified; never call that the user's choice.
 Asking and honoring caps are advisory (agent judgment); `parallel_slots.py` enforces parsing only, not dispatch admission.
 When more than one agent coordinates, recommend a host config and ledger path every coordinator's sandbox can read and write.
 

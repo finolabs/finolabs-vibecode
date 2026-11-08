@@ -191,13 +191,13 @@ def legacy_ledger_alias(text):
         return None
     values = [m[1] for m in (re.fullmatch(r'(?:- )?Ledger project: (.+)', line)
                              for line in text[body:end].splitlines()) if m]
-    if len(values) != 1 or not LABEL.fullmatch(values[0]) or not values[0].strip():
+    if len(values) != 1 or not values[0].strip():
         return None
     return values[0]
 
 
 def parse_config(text, root=None):
-    """Project settings are strict; absent settings use five with no caps."""
+    """Project settings are strict; absent settings use the default of three with no caps."""
     entries = project_settings(text)
     code = repository_code(root) if root is not None else None
     total = entries.get((code, 'parallel'))

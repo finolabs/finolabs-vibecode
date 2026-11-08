@@ -186,6 +186,18 @@ class ParallelSlotsTest(unittest.TestCase):
                               '- %s parallel: 2\n- %s ledger: EntryName\n' % (self.code, self.code))
         self.assertEqual(slots.status()['scope']['project'], 'EntryName')
 
+    def test_legacy_alias_is_not_restricted_to_display_label_characters(self):
+        self.host(2, None)
+        for alias in ("org/demo", "T\u00ean d\u1ef1 \u00e1n", "x" * 41):
+            self.write("host.md", "## Project progress\n- Ledger project: %s\n\n## Project settings\n- %s parallel: 2\n" % (alias, self.code))
+            rows = [dict(event="start", id="a", agent="codex", project=alias),
+                    dict(event="start", id="b", agent="codex", project=alias)]
+            self.write("ledger.jsonl", "\n".join(map(json.dumps, rows)))
+            state = slots.status()
+            self.assertEqual((state["open"], state["free"], state["other_projects"]), (2, 0, 0), alias)
+            self.assertEqual(state["scope"]["project"], alias)
+        self.assertFalse(slots.fits(slots.status(), "codex"))
+
     def test_outside_repository_counts_nothing_and_ignores_legacy_limits(self):
         self.write('host.md', '## Limits\n- Parallel dispatches: at most 32 at one time.\n')
         self.ledger(['codex', 'claude'])

@@ -26,7 +26,7 @@ Canonical `host.md`, under `## Limits`:
 - Parallel per family: claude=2, codex=3
 ```
 
-The total is 1 to 32; 32 is a sanity cap. A missing or invalid total falls back to 3, source `default`; valid total source is `host config`. Optional caps accept any subset of `claude`, `codex`, `antigravity`, each 1 to the effective total. An omitted family has only the total bound. Duplicate sections, duplicate/unknown families and invalid caps report unknown, rather than silently dropping a cap. Legacy total wording with a parenthetical suffix is invalid and reports default 3 until setup replaces it.
+The total is 1 to 32; 32 is a sanity cap. A missing total falls back to 3, source `default`; valid total source is `host config`. Optional caps accept any subset of `claude`, `codex`, `antigravity`, each 1 to the effective total. An omitted family has only the total bound. Duplicate sections, duplicate/unknown families and invalid caps report unknown, rather than silently dropping a cap. Legacy total wording with a parenthetical suffix is invalid and reports unknown until setup replaces it.
 
 `parallel_slots.py` reads only canonical `host.md` (256 KiB) and `ledger.jsonl` (4 MiB) via `data_root.py`: owned regular files, no-follow, no group/world writes, bounded reads. No environment override, subprocess, network or write. Missing config selects default; missing ledger means zero; unsafe inputs, invalid root, invalid UTF-8 or malformed/ambiguous ledger mean unknown. Start ids deduplicate; any finish for an id closes it regardless of line order. The mapping matches `ledger.py`: `claude`, `claude-session`, `subagent` are Claude; the other two families map directly. Unknown agents refuse capacity.
 
@@ -100,7 +100,7 @@ Contract:
 
 Amendment acceptance:
 
-- AC7: two repositories with open dispatches count separately; a repository without a setting reports limit 5, source `default`.
+- AC7: two repositories with open dispatches count separately; a repository without a setting reports limit 3, source `default`.
 - AC8: a repository with `parallel: 2` reports 2 as its limit whatever the legacy `## Limits` total says, and a cap above the total makes the section unknown.
 - AC9: a linked worktree uses its main checkout's setting.
 - AC10: SessionStart, refresh and the dashboard read the same helper; outside a repository nothing is counted.
