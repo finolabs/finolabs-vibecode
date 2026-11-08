@@ -36,18 +36,19 @@ Two gaps caused it:
 `skills/fnl-delegate/scripts/heavy_run.py` runs one command while holding the machine-wide lock.
 
 - Usage: `heavy_run.py run -- <command> [args...]`, plus `status` (lock owner, age, load, free memory) and `clear-stale`
-  (removes a lock whose owner process is gone, after checking `ps -p`).
+  (removes a lock only when the wrapper, the child and the protected process group are all gone, after checking `ps -p`
+  and `os.killpg(pgid, 0)`).
 - Lock: an atomic `mkdir` under the data root's private state folder, named `heavy.lock`, with an `owner` file of
-  pid, start time and a short label. Owner-only permissions, no symlink followed, refused if the path is not a
+  wrapper pid, child pid, protected process-group id, start time and a short label. Owner-only permissions, no symlink followed, refused if the path is not a
   directory owned by the user.
 - Gate before start: wait while the lock is held, the one-minute load average is at or above the limit, or free memory
   is below the minimum. Poll every 15 seconds up to a wait cap (default 40 minutes), then exit 75 with a message that
   names the holder's label and age. Load and memory come from `os.getloadavg()` and `vm_stat`, run once per poll as
   fixed argv with no shell; on a platform without `vm_stat` only load is checked and `status` says so.
 - Protected job: the whole foreground lifecycle of the work (container start, tests and cleanup), not a launcher that
-  returns while the work continues. `run` refuses a command that asks for detached work (`-d` or `--detach` after
-  `docker` `up`, `run` or `compose up`; exit 64 with a fixed message that tells the caller to wrap a foreground script
-  that starts, tests and tears down). The lock is held until the child's process group is empty, checked with
+  returns while the work continues. `run` refuses a command that asks for detached work: `-d` or `--detach` as an option of `up` or `run`
+  in any Compose spelling (`docker compose`, `docker-compose`) or of `docker run` and `docker container run`; exit 64
+  with a fixed message that tells the caller to wrap a foreground script that starts, tests and tears down. The lock is held until the child's process group is empty, checked with
   `os.killpg(pgid, 0)`, so a launcher that exits while a descendant in its group still runs keeps protection. Work
   that escapes the group (a container owned by the Docker daemon) is outside what the script can see, which is why
   detached launches are refused instead of tracked.
@@ -59,9 +60,11 @@ Two gaps caused it:
 - Release and exclusion: only the process that acquired the lock removes it, and only after its child has ended. A
   waiter whose wait cap ends exits 75 and never touches the lock. On SIGINT or SIGTERM the wrapper forwards the signal
   to the child's process group, keeps the lock until the child has actually exited, then removes it. The `owner` file
-  records the wrapper pid and the child pid; the lock is stale only when both processes are gone, so a wrapper killed
-  by SIGKILL with a surviving child keeps the lock held. A crash with both gone leaves a stale lock that the next run
-  clears after confirming that.
+  records the wrapper pid, the child pid and the protected process-group id (also in the owner-only description of the
+  lock above); the lock is stale only when the wrapper, the child and every process in that group are gone, for the
+  automatic cleanup of the next run and for `clear-stale` alike. A wrapper killed by SIGKILL with a surviving child or
+  grandchild keeps the lock held. A crash with all of them gone leaves a stale lock that the next run clears after
+  confirming that.
 - No network, no hook, no background process.
 
 ## B. Which commands are heavy
@@ -114,7 +117,7 @@ A `PreToolUse` hook on the `Bash` tool, in its own group in the user's Claude Co
 1. With the lock held by a live owner, a second `run` waits and then exits 75 when the cap ends, never starting its
    command and never removing the lock; a third waiter queued behind it still cannot start while the owner lives.
 2. With the load or free memory beyond the limit, `run` waits; below it, `run` starts. Tests inject the readings.
-3. A stale lock (wrapper and child both gone) is cleared once; a lock with either process alive is never cleared.
+3. A stale lock (wrapper, child and the protected group all gone) is cleared once; a lock with any of them alive is never cleared.
 4. A signal sent only to the wrapper is forwarded to the child group and the lock stays until the child has exited;
    a wrapper killed with SIGKILL while a child survives leaves the lock held. Tests use short synthetic commands.
 5. A symlinked or foreign-owned lock path is refused.
@@ -122,15 +125,18 @@ A `PreToolUse` hook on the `Bash` tool, in its own group in the user's Claude Co
 7. The child's environment contains only the allowlisted names plus the `--pass-env` names; tests compare variable
    names only and never print or inspect values.
 8. A launcher that exits while a descendant in its process group is still alive keeps the lock held until the group is
-   empty; a command with `docker compose up -d` or `--detach` is refused with exit 64 before the lock is taken. Tests
-   use short synthetic commands and never start Docker.
-9. The tests start no real heavy work: they use fake readers and short commands, and the module runs in under two
+   empty. A command with detached flags is refused with exit 64 before the lock is taken: fixtures `docker compose up -d`,
+   `docker-compose up -d`, `docker compose run -d SERVICE` and `docker run --detach IMAGE`. Tests use short synthetic
+   commands and never start Docker.
+9. Combined case: a launcher starts a grandchild in its group and exits, then the wrapper is killed with SIGKILL; the
+   lock stays held while the grandchild lives, and neither the next `run` nor `clear-stale` removes it until the group
+   is gone.
+10. The tests start no real heavy work: they use fake readers and short commands, and the module runs in under two
    seconds.
 
 ## Out of scope
 
-Resource limits on a command (ulimit, cgroups), killing a running heavy job, scheduling other than first come first
-served, and any enforcement for Codex or Antigravity.
+Resource limits on a command (ulimit, cgroups), killing a running heavy job, scheduling and any admission order (waiters that poll first may win; first-come-first-served is not promised), and any enforcement for Codex or Antigravity.
 
 ## Consumers to trace
 
