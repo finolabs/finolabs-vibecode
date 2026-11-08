@@ -30,8 +30,9 @@ waiting to be asked. The user stops it when they return. It is not on by default
 - Merge: when autopilot is on, the agent may merge a pull request without asking when both review markers are
   APPROVE at the current head, every check is green (the hosted CI and the local test run of the touched modules) and
   `merge_check.py` prints `MERGE OK`. This is the durable authorization recorded at start for exactly that action;
-  it widens nothing else. The merge rule below still limits it to pull requests autopilot opened itself and never to
-  a pull request touching a Tier 3 path. Whether it also covers a trusted author's pull request is open.
+  it widens nothing else. It covers pull requests of trusted authors, not only autopilot's own: the user's own account (which
+  includes every agent on the user's machine that works under that login) and autopilot's own branches. The same gate
+  applies to all of them, and it is never used for a pull request touching a Tier 3 path or from any other author.
 - Entry and exit stay one command each: start applies the recorded setup and states the lease length; the user
   stops it on return.
 
@@ -85,7 +86,7 @@ never feed task choice or any gate.
 
 ## Merge rule
 
-A merge by autopilot requires: a pull request it opened itself; both review markers present for the current head,
+A merge by autopilot requires: a pull request it opened itself or one by a trusted author (owner decision, 2026-11-09); both review markers present for the current head,
 posted by a model family different from the pull request's author family (`merge_check.py` gains an
 `--independent` check for this; a same-family review is parked); checks green; the branch current; no two-round
 rework limit reached; and `MERGE OK`. A pull request touching Tier 3 paths is never merged by autopilot.
@@ -189,4 +190,3 @@ instruction files; any use of credentials by the plugin.
   throwaway task before building), and how the host rules behave in that mode.
 - Advisor budget: committee only for Tier 2 decisions that touch design, one opinion otherwise.
 - The format of the preferences file the advisor may read.
-- Whether the merge authorization also covers a trusted author's pull request.
