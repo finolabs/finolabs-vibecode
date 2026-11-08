@@ -6,7 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
-- Record an optional coordinator session hash on dispatch starts, using `--session` or `CLAUDE_CODE_SESSION_ID`; keep only a short SHA-256 hash, or `null` when unknown.
+- Record an optional coordinator session hash on dispatch starts from `CLAUDE_CODE_SESSION_ID` (never from a command-line option); keep only a short SHA-256 hash, or `null` when unknown.
 
 ### Changed
 

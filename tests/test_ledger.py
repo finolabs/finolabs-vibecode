@@ -182,52 +182,42 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(rec["reason"], "routing")
         self.assertEqual(rec["route_by"], "table")
 
-    def test_start_hashes_session_flag_and_overrides_environment(self):
-        self.env["CLAUDE_CODE_SESSION_ID"] = "synthetic-other-session"
-        result = self.run_ledger(*START, "--session", "abc-123")
-        [rec] = self.records()
-        self.assertEqual(rec["coord_session"], hashlib.sha256(b"abc-123").hexdigest()[:12])
-        self.assertRegex(rec["coord_session"], r"^[0-9a-f]{12}$")
-        for raw in ("abc-123", "synthetic-other-session"):
-            self.assertNotIn(raw, self.path.read_text() + result.stdout + result.stderr)
-
     def test_start_hashes_session_environment(self):
         self.env["CLAUDE_CODE_SESSION_ID"] = "abc-123"
         result = self.run_ledger(*START)
-        self.assertEqual(self.records()[0]["coord_session"],
-                         hashlib.sha256(b"abc-123").hexdigest()[:12])
+        [rec] = self.records()
+        self.assertEqual(rec["coord_session"], hashlib.sha256(b"abc-123").hexdigest()[:12])
+        self.assertRegex(rec["coord_session"], r"^[0-9a-f]{12}$")
         self.assertNotIn("abc-123", self.path.read_text() + result.stdout + result.stderr)
 
-    def test_start_records_null_when_session_unknown(self):
-        for value in (None, ""):
-            if value is not None:
+    def test_start_records_null_when_session_unknown_or_unusable(self):
+        for value in (None, "", "a" * 129, "bad session", "bad/session", "bad\n", "\u00e9", "bad.session"):
+            if value is None:
+                self.env.pop("CLAUDE_CODE_SESSION_ID", None)
+            else:
                 self.env["CLAUDE_CODE_SESSION_ID"] = value
-            self.run_ledger(*START)
+            result = self.run_ledger(*START)
             self.assertIsNone(self.records()[-1]["coord_session"])
+            self.assertEqual(result.stderr, "")
 
-    def test_start_refuses_invalid_session_flag_without_writing(self):
-        self.env["CLAUDE_CODE_SESSION_ID"] = "synthetic-valid-session"
-        for value in ("", "a" * 129, "bad session", "bad/session", "bad\n", "é", "bad.session"):
-            with self.subTest(case_length=len(value)):
-                result = self.run_ledger(*START, "--session", value, check=False)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertEqual(result.stdout, "")
-                self.assertEqual(result.stderr,
-                                 "ledger: --session must contain 1 to 128 ASCII letters, digits, dash or underscore\n")
-                self.assertFalse(self.path.exists())
-
-    def test_start_accepts_session_flag_boundaries(self):
+    def test_start_accepts_session_boundaries(self):
         for value in ("A", "Z9_-" * 32):
-            self.run_ledger(*START, "--session", value)
+            self.env["CLAUDE_CODE_SESSION_ID"] = value
+            self.run_ledger(*START)
             self.assertEqual(self.records()[-1]["coord_session"],
                              hashlib.sha256(value.encode()).hexdigest()[:12])
+
+    def test_the_session_id_is_never_a_command_line_option(self):
+        result = self.run_ledger("start", "--help")
+        self.assertNotIn("--session", result.stdout)
 
     def test_open_and_summary_read_mixed_session_records(self):
         old = self.run_ledger(*START).stdout.strip()
         [legacy] = self.records()
         legacy.pop("coord_session", None)
         self.path.write_text(json.dumps(legacy) + "\n")
-        new = self.run_ledger(*START, "--session", "abc-123").stdout.strip()
+        self.env["CLAUDE_CODE_SESSION_ID"] = "abc-123"
+        new = self.run_ledger(*START).stdout.strip()
         self.assertIn("coord_session", self.records()[-1])
         opened = self.run_ledger("open")
         self.assertEqual(opened.stderr, "")

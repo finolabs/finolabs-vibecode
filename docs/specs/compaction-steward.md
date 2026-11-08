@@ -57,7 +57,7 @@ changing bundled scripts can also require renewed Codex trust even with unchange
 reads the hook input from stdin (bounded, 64 KiB); when `source` is `compact` and
 a `session_id` is present it appends the output of the `read` function of
 `handover_state.py` under the heading `Handover before compaction`. It exits 0 and
-fails closed (adds nothing) on any error, uses no network, and leaves its existing
+fails closed (adds no handover text) on any error, uses no network, and leaves its existing
 output unchanged. On the same `compact` input, when Delegation mode is not `manual`,
 it first prints one fixed reminder of at most 500 characters and no data: apply
 `fnl-delegate` "Keep or hand off" before the first of two or more independent tasks,
@@ -135,8 +135,10 @@ CHANGELOG `Unreleased`.
    100%, refusal of non-integers, negatives, zero window, used above window by
    more than 10x.
 3. `session_start.py` with stdin `{"source":"compact","session_id":...}` appends
-   the stored handover; with another source, no session id, malformed or
-   oversized stdin, or an unsafe file it adds nothing and exits 0. Both hook
+   the stored handover; with another source, no session id, or malformed or
+   oversized stdin it adds nothing and exits 0; with an unsafe or empty handover
+   file it adds no handover text, only the fixed delegation reminder when
+   Delegation mode is not `manual`, and exits 0. Both hook
    files are byte-identical to main.
 4. `fnl-steward` has the required front matter, forbids writes, and the skill
    text states each enforcer.
