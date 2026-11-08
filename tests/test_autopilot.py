@@ -266,6 +266,16 @@ class AutopilotTest(unittest.TestCase):
             self.check(paths=[path], tier=3, code='protected')
             self.check(['git', 'add', '--', path], tier=3, code='protected')
 
+    def test_review_findings_security_one(self):
+        self.start()
+        self.repo = ROOT  # the checkout whose scripts are the installed wrappers
+        # New modules next to the trusted wrappers could shadow an import in them, so the folders are protected.
+        for folder in ('fnl-review-gate', 'fnl-delegate', 'fnl-setup'):
+            for name in ('struct.py', 'zlib.py', 'helper.py', 'pkg/__init__.py'):
+                path = 'skills/%s/scripts/%s' % (folder, name)
+                self.check(paths=[path], tier=3, code='protected')
+                self.check(['git', 'add', '--', path], tier=3, code='protected')
+
     def test_merge_and_push_settings(self):
         self.start(SETUP.replace('- Merge: yes', '- Merge: no').replace('requests: yes', 'requests: no'))
         self.check(['gh', 'pr', 'merge', '7', '--match-head-commit', 'a' * 40], tier=3, code='merge-disabled')

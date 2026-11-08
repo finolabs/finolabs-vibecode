@@ -11,7 +11,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Missing/expired/stopped/changed setup or exhausted runs, wall/runtime minutes or rolling-hour actions denies every check | lease_guard |
 | Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3 | classify_argv |
 | Credentials/env names, .github, hooks, agent instructions, settings, host/setup/lease files are Tier 3 anywhere in argv or paths | protected |
-| Only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3 | classify_paths |
+| Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3 | classify_paths |
 | Read-only Git/gh queries use closed verbs and option sets; command/config overrides and unknown options deny | classify_argv, options |
 | Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and merge origin/main are Tier 1 | classify_argv, branch_context |
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
@@ -260,6 +260,17 @@ def protected(value):
                    for p in re.split(r'[=:\s]+', value.upper()))
 
 
+def plugin_code(name):
+    """True for any path inside this install's script folders, so a new module cannot join a trusted import namespace."""
+    try:
+        full = os.path.abspath(os.path.join(os.getcwd(), name)).casefold()
+        base = Path(__file__).resolve().parent.parent.parent
+        return any(full == str(folder).casefold() or full.startswith(str(folder).casefold() + os.sep)
+                   for folder in base.glob('*/scripts'))
+    except (OSError, ValueError):
+        return True
+
+
 def classify_paths(paths):
     if not paths:
         return 'unknown'
@@ -267,7 +278,7 @@ def classify_paths(paths):
         if not isinstance(name, str) or protected(name):
             return 'protected'
         path = Path(name)
-        if path.name.casefold() in ENFORCERS or path.name.upper() in slots.INSTRUCTION_FILES:
+        if path.name.casefold() in ENFORCERS or path.name.upper() in slots.INSTRUCTION_FILES or plugin_code(name):
             return 'protected'
         if (not re.fullmatch(r'[A-Za-z0-9_./-]{1,240}', name) or path.is_absolute()
                 or any(p in {'', '.', '..'} for p in name.split('/'))

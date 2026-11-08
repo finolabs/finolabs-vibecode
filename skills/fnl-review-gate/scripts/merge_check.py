@@ -214,9 +214,10 @@ def router_marker(body):
 def independent_families(pr):
     """Reuse canonical role/route evidence; unknown fails closed, never guess a family."""
     from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    # Standard-library modules load first, so a new sibling file can never shadow them inside this gate.
     import struct
     import zlib
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     try:
         import review_route
         import review_config
