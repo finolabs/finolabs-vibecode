@@ -77,6 +77,72 @@ class CheckupTest(unittest.TestCase):
             "plugins": {"finolabs-vibecode@example": [{"installPath": str(root)}]}}))
         return root
 
+    def folder_marketplace(self, claude_home, version):
+        """A directory marketplace: Claude loads the plugin in place, the registry keeps a stale snapshot."""
+        live = self.base / "live-checkout"
+        self.write(live / ".claude-plugin/plugin.json", json.dumps({
+            "name": "finolabs-vibecode", "version": version}))
+        self.write(claude_home / "plugins/known_marketplaces.json", json.dumps({
+            "example": {"source": {"source": "directory", "path": str(live)},
+                        "installLocation": str(live)}}))
+        return live
+
+    def plugin_row(self, host="claude"):
+        return next(r for r in self.data()["hosts"][host] if r["check"] == "plugin")
+
+    def test_folder_marketplace_reports_live_version_and_the_stale_registry_one(self):
+        self.install_claude()
+        self.folder_marketplace(self.home / ".claude", "2.0.0-dev")
+        row = self.plugin_row()
+        self.assertEqual(row["status"], "ok")
+        self.assertIn("loads from its folder", row["reason"])
+        self.assertIn("version 2.0.0-dev", row["reason"])
+        self.assertIn("registry records 1.0.0", row["reason"])
+
+    def test_folder_marketplace_with_matching_registry_version_adds_no_registry_note(self):
+        self.install_claude()
+        self.folder_marketplace(self.home / ".claude", "1.0.0")
+        self.assertNotIn("registry records", self.plugin_row()["reason"])
+
+    def test_folder_marketplace_with_unreadable_manifest_stays_unverified_not_missing(self):
+        self.install_claude()
+        live = self.folder_marketplace(self.home / ".claude", "2.0.0")
+        (live / ".claude-plugin/plugin.json").write_text("not json")
+        self.assertNotEqual(self.plugin_row()["status"], "missing")
+        self.assertNotIn("version 2.0.0", self.plugin_row()["reason"])
+
+    def test_claude_config_dir_selects_the_home_the_session_uses(self):
+        other = self.home / ".claude-elsewhere"
+        root = other / "plugins/cache/example/finolabs-vibecode/3.0.0"
+        self.write(root / ".claude-plugin/plugin.json", json.dumps({
+            "name": "finolabs-vibecode", "version": "3.0.0"}))
+        self.write(other / "plugins/installed_plugins.json", json.dumps({
+            "plugins": {"finolabs-vibecode@example": [{"installPath": str(root)}]}}))
+        self.write(self.bin / "claude", "#!/bin/sh\nexit 91\n").chmod(0o755)
+        self.env["CLAUDE_CONFIG_DIR"] = str(other)
+        self.assertIn("version 3.0.0", self.plugin_row()["reason"])
+        self.env["CLAUDE_CONFIG_DIR"] = "relative/path"
+        self.assertNotIn("version 3.0.0", self.plugin_row()["reason"])
+
+    def test_other_claude_homes_are_listed_by_folder_name_with_recorded_version(self):
+        for name, version in ((".claude-work", "0.5.0"), (".claude-omni", None)):
+            home = self.home / name
+            if version:
+                root = home / "plugins/cache/example/finolabs-vibecode" / version
+                self.write(root / ".claude-plugin/plugin.json", json.dumps({
+                    "name": "finolabs-vibecode", "version": version}))
+                self.write(home / "plugins/installed_plugins.json", json.dumps({
+                    "plugins": {"finolabs-vibecode@example": [{"installPath": str(root)}]}}))
+            else:
+                (home / "plugins").mkdir(parents=True)
+        row = self.setup_item("other claude homes")
+        self.assertIn(".claude-work: version 0.5.0", row["reason"])
+        self.assertIn(".claude-omni: no install record", row["reason"])
+        self.assertNotIn(str(self.home), row["reason"])
+
+    def test_other_claude_homes_row_absent_without_any_extra_home(self):
+        self.assertFalse(any(r["check"] == "other claude homes" for r in self.data()["setup"]))
+
     def inventory(self, date):
         return "## Agents on this machine\n\nCoordinator: Codex\n\n" + "\n".join(
             f"| {name} | yes | fake | unverified | {date} |"

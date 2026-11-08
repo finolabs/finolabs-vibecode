@@ -123,6 +123,25 @@ def version(manifest):
     return value if isinstance(value, str) and re.fullmatch(r"[\w.+-]{1,64}", value) else "unknown"
 
 
+def folder_install(base, markets):
+    """The manifest of a directory marketplace the plugin is installed from, if readable."""
+    status, known = read_json(base / "known_marketplaces.json")
+    if status != "ok":
+        return None
+    for market in markets[:8]:
+        source = known.get(market)
+        location = source.get("installLocation") if isinstance(source, dict) else None
+        kind = source.get("source") if isinstance(source, dict) else None
+        if not isinstance(location, str) or not os.path.isabs(location) or \
+                not isinstance(kind, dict) or kind.get("source") != "directory":
+            continue
+        root = Path(os.path.abspath(location))
+        state, manifest = read_json(root / ".claude-plugin" / "plugin.json")
+        if state == "ok" and manifest.get("name") == PLUGIN:
+            return root, manifest
+    return None
+
+
 def plugin_evidence(host, home):
     """Only Claude's installation registry proves a recorded install.
 
@@ -133,6 +152,7 @@ def plugin_evidence(host, home):
     roots = []
     registered = False
     registry_status = "unverified"
+    markets = []
     if host == "claude":
         registry_status, registry = read_json(base / "installed_plugins.json")
         plugins = registry.get("plugins", {})
@@ -140,6 +160,7 @@ def plugin_evidence(host, home):
             for key, entries in plugins.items():
                 if key.split("@", 1)[0] != PLUGIN or not isinstance(entries, list):
                     continue
+                markets.append(key.split("@", 1)[1] if "@" in key else "")
                 for entry in entries[:16]:
                     location = entry.get("installPath") if isinstance(entry, dict) else None
                     if isinstance(location, str):
@@ -169,6 +190,13 @@ def plugin_evidence(host, home):
             return item("plugin", "missing", "no install record or readable manifest"), []
         return item("plugin", "unverified", "no readable install record or recognized manifest"), []
     versions = ",".join(sorted({version(m) for _, m in found}))[:100]
+    live = folder_install(base, markets) if registered else None
+    if live:
+        # A directory marketplace loads the plugin in place; the registry keeps an old snapshot.
+        live_version = version(live[1])
+        note = "" if live_version == versions else "; registry records " + versions
+        return item("plugin", "ok" if live_version != "unknown" else "unverified",
+                    "install recorded; loads from its folder; version " + live_version + note), [live]
     status = "ok" if registered and len(found) == len(roots) and "unknown" not in versions else "unverified"
     return item("plugin", status, ("install recorded" if status == "ok" else "files only; activation unknown") +
                 "; version " + versions), found
@@ -895,6 +923,22 @@ def project_tracking(text, root):
     return rows
 
 
+def other_claude_homes(home, active):
+    """Names only: sibling Claude config folders and the plugin version each records."""
+    rows = []
+    for name in folders(home):
+        folder = home / name
+        if not re.fullmatch(r"\.claude-[\w.-]{1,40}", name) or folder == active:
+            continue
+        _, found = plugin_evidence("claude", folder)
+        rows.append(name + ": " + ("version " + ",".join(sorted({version(m) for _, m in found}))[:60]
+                                   if found else "no install record"))
+    if not rows:
+        return []
+    return [item("other claude homes", "unverified" if any("no install" in r for r in rows) else "ok",
+                 "; ".join(rows[:8]) + "; launch commands are not inspected")]
+
+
 def collect(payload=False):
     # A local copy keeps this skill usable when installed alone, including under -I.
     sys.dont_write_bytecode = True
@@ -904,6 +948,8 @@ def collect(payload=False):
     home = dr.account_home()
     configured = os.environ.get("CODEX_HOME", "")
     codex = Path(configured) if os.path.isabs(configured) else home / ".codex"
+    selected = os.environ.get("CLAUDE_CONFIG_DIR", "")
+    claude_home = Path(os.path.abspath(selected)) if os.path.isabs(selected) else home / ".claude"
     config_status, config_text = host_config_text(home)
     if payload:
         try:
@@ -930,7 +976,7 @@ def collect(payload=False):
     hosts = {}
     user_context = []
     for host, folder, instructions in (
-        ("claude", home / ".claude", [home / ".claude/CLAUDE.md"]),
+        ("claude", claude_home, [claude_home / "CLAUDE.md"]),
         ("codex", codex, [codex / "AGENTS.override.md", codex / "AGENTS.md"]),
         ("agy", home / ".gemini", [home / ".gemini/GEMINI.md", home / ".gemini/AGENTS.md"]),
     ):
@@ -974,6 +1020,7 @@ def collect(payload=False):
     quota = item("quota", "unverified", "advisory cache; " + " | ".join(status_lines()))
     return {"principle": PRINCIPLE, "hosts": hosts, "instructions": instruction_block, "setup": [
             item("data root", data_source, str(data_path)), host_config, inventory, quota,
+            *other_claude_homes(home, claude_home),
             retired_evidence([*user_context, *context], reader=context_read),
             item("effective settings", "ok", "delegation mode=" + settings["delegation_mode"] +
                  "; routing=" + settings["routing"] + "; auto gate=" + settings["auto_gate"] + "; selected values only, not runtime proof"), *repository]}

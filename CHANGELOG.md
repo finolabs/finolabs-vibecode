@@ -4,6 +4,11 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Fixed
+
+- Check reports the version a Claude Code folder marketplace actually loads, and notes when the installation registry still records an older snapshot.
+- Check reads the Claude home selected by an absolute `CLAUDE_CONFIG_DIR` and lists sibling `~/.claude-*` homes with their recorded plugin version.
+
 ## [0.2.0] - 2026-11-08
 
 ### Highlights
