@@ -1,6 +1,6 @@
 # Release 0.2.1: scope
 
-Status: released; v0.2.1 was tagged on commit 00dee56 and published on GitHub on 2026-11-09; the scope was cut by the coordinator that day (see Moved to a later release); packages 1 to 11, 12a and 15 are in it and nothing here is verified on a live host. The catalog pin in finolabs/plugins and the Codex refresh are not done.
+Status: released; v0.2.1 was tagged on commit 00dee56 and published on GitHub on 2026-11-09; the scope was cut by the coordinator that day (see Moved to a later release); packages 1 to 11, 12a and 15 are in it and nothing here is verified on a live host.
 
 ## Why
 
@@ -42,6 +42,10 @@ coherent release; each stays in the backlog and the owner can reverse the cut.
 | 12b | Heavy-job gate (the opt-in `PreToolUse` hook, its installer and setup question) | The spec is merged, but the hook, installer and consent flow need their own review cycle; until then agents rely on `heavy_run.py` and the advisory rule. |
 | 13 | Review residuals (#176, #172, #177, #179, #180 non-blocking notes, including the process-group boundary wording) | Non-blocking notes. |
 | 14 | Smaller setup items (duplicate-lines warning, ledger project naming guidance) | Not started. |
+
+## After the release
+
+The catalog pin in finolabs/plugins and the Codex refresh have not been done; both wait for the owner's go.
 
 ## Out of scope (later releases)
 
