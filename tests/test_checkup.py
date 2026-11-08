@@ -303,7 +303,7 @@ class CheckupTest(unittest.TestCase):
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)))
         self.assertEqual(self.setup_item("host config")["status"], "ok")
         template = (ROOT / "skills/fnl-delegate/references/host-template.md").read_text()
-        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Project labels"})
+        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Project labels", "Heavy jobs"})
         for heading in ("Agent roles", "Review posting", "Delegate environment"):
             with self.subTest(heading=heading):
                 config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS - {heading})))
@@ -315,7 +315,7 @@ class CheckupTest(unittest.TestCase):
         template = (ROOT / "skills/fnl-delegate/references/host-template.md").read_text()
         headings = re.findall(r"^## (.+)$", template, re.M)
         expected = ['Delegation mode', 'Routing', 'Agents on this machine', 'Delegate environment',
-                    'Agent roles', 'Review posting', 'Quota probe', 'Project labels', 'Limits',
+                    'Agent roles', 'Review posting', 'Quota probe', 'Project labels', 'Limits', 'Heavy jobs',
                     'Effort preference', 'Briefs folder', 'Coordinators and reach', 'Route judgment',
                     'Dispatch marker', 'Claude Code', 'Codex', 'Antigravity']
         self.assertEqual(headings, expected)
