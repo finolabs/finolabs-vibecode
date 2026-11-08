@@ -1,6 +1,6 @@
-# Autopilot (release 0.2.1 backlog target)
+# Autopilot (release 0.2.1 first slice)
 
-Status: accepted; owner decisions recorded on 2026-11-06; the release 0.2.0 record moves the backlog target to 0.2.1. Design only, with no autopilot skill/script, setup feature or live-refresh lease built in 0.2.0. Implementation and unresolved host decisions still need owner approval; open questions are listed under "Open".
+Status: accepted; owner decisions recorded on 2026-11-06 and 2026-11-09; release 0.2.1 takes the first slice named under the 2026-11-09 decisions, the rest stays design only. Nothing was built in 0.2.0. Implementation and unresolved host decisions still need owner approval; open questions are listed under "Open".
 
 Idea: owner, 2026-11-06. An agent that, only when the user asks, coordinates the repository's work while the
 user is away: it watches progress, picks the next work, delegates it, reviews it, and keeps going instead of
@@ -27,12 +27,19 @@ waiting to be asked. The user stops it when they return. It is not on by default
   procedure (a skill folder cannot point outside itself, so the alias holds a pointer sentence and the dependency
   on fnl-autopilot, never a copy of the rules). The owner picked the alias name fnl-brb ("be right back") on 2026-11-09, so the alias is `/fnl-brb`. It is built together with
   fnl-autopilot, not before it.
-- Merge: when autopilot is on, the agent may merge a pull request without asking when both review markers are
-  APPROVE at the current head, every check is green (the hosted CI and the local test run of the touched modules) and
-  `merge_check.py` prints `MERGE OK`. This is the durable authorization recorded at start for exactly that action;
-  it widens nothing else. It covers pull requests of trusted authors, not only autopilot's own: the user's own account (which
-  includes every agent on the user's machine that works under that login) and autopilot's own branches. The same gate
-  applies to all of them, and it is never used for a pull request touching a Tier 3 path or from any other author.
+- Merge: the authority is the user's affirmative Merge answer in `fnl-setup` (the Merge setting still has no default,
+  and Tier 3 still forbids a merge when setup says no); starting a lease only applies that answer. The owner's own
+  answer is yes (2026-11-09). With a yes recorded, the agent may merge a pull request without asking when both review
+  markers are APPROVE at the current head, every check is green (the hosted CI and the local test run of the touched
+  modules) and `merge_check.py` prints `MERGE OK`. It widens nothing else. It covers pull requests of trusted authors,
+  not only autopilot's own: the user's own account (which includes every agent on the user's machine that works under
+  that login) and autopilot's own branches. The same gate applies to all of them, and it is never used for a pull
+  request touching a Tier 3 path or from any other author.
+- Release 0.2.1 takes a first slice (owner decision, 2026-11-09, replacing the "later releases" entry in the release
+  record): the skill and its alias, `autopilot.py` with `start`, `stop` and `check` (tier classification, lease with
+  expiry and limits, enumerated log), the `## Autopilot` setup section, and `merge_check.py --independent`. The
+  dashboard tab, the live refresh loop, the scheduled-task driver, the notice hook and the host backstop installer stay
+  later; the CLAUDE.md exceptions they need land with them, so the slice adds no hook and no long-lived process.
 - Entry and exit stay one command each: start applies the recorded setup and states the lease length; the user
   stops it on return.
 
@@ -63,7 +70,7 @@ a tier; unknown commands and paths are Tier 3.
 
 - **Tier 1, decides alone:** which task next, order, which agent and model (`fnl-delegate` routing), splitting work,
   fixing review findings, pushing its own branches and opening and updating its own pull requests, merging main into
-  its own branches, and (only when setup says so) merging its own pull requests that pass `merge_check.py`.
+  its own branches, and (only when setup says so) merging pull requests of its own or of a trusted author that pass `merge_check.py` and the complete merge gate.
 - **Tier 2, the advisor decides and records why:** an ambiguous requirement, a small design change, whether a LOW
   finding is worth a change, a choice between two reasonable approaches. The advisor is the user's avatar:
   `fnl-advisor` (one opinion, or a committee for design), Jev for narrow judgments, and preferences the user put in
@@ -176,8 +183,8 @@ instruction files; any use of credentials by the plugin.
    files are 0600 in a private folder, atomic, symlink-safe.
 2. Setup: each setting is a separate question; preview and digest; round trip through the host config reader; start
    with a recorded setup prints the summary and proceeds, without one it asks.
-3. `merge_check.py --independent` refuses a same-family review pair; autopilot refuses to merge a pull request by
-   an author that is not trusted or one touching a Tier 3 path.
+3. `merge_check.py --independent` refuses a same-family review pair; autopilot merges an otherwise eligible pull request of a trusted author that it did not open, and refuses to merge
+   one by an author that is not trusted, one touching a Tier 3 path, or any merge when setup says no.
 4. The notice hook is non-blocking, exits 0, prints nothing without a lease and is declared in the Claude Code hook
    file only. The live loop starts once, ends with the lease, is killed by stop and does not outlive 12 hours.
 5. The dashboard tab renders every field with `textContent`, shows data age, and handles an empty log.

@@ -32,10 +32,11 @@ and the setup gaps found on the way.
 | 12 | Heavy-job guard | `heavy_run.py`, the opt-in `PreToolUse` gate, setup, agent rules and tests, per `heavy-jobs.md`. | 2026-11-08: inside 0.2.1. |
 | 13 | Review residuals | #176: legacy-limits detection, Check note for ignored global limits, refresh throttle scope. #172: plugins-dir check, truncation note. #177: test-scope wording, wrapper-identity note. | 2026-11-08. |
 | 14 | Smaller setup items | Duplicate-lines warning on generated files; ledger project naming guidance. | 2026-11-08. |
+| 15 | Autopilot first slice (`/fnl-brb`) | Skill and alias, `autopilot.py` start, stop and check, `## Autopilot` setup section, `merge_check.py --independent`, per `autopilot.md`. | 2026-11-09: inside 0.2.1. |
 
 ## Out of scope (later releases)
 
-A goal skill and autopilot, `README.vi.md` and the use-case table, a Codex `PreCompact` declaration, an
+A goal skill, the rest of autopilot beyond its first slice (dashboard tab, live loop, scheduled driver, notice hook, host backstop), `README.vi.md` and the use-case table, a Codex `PreCompact` declaration, an
 Antigravity `/compact` message, the Codex ref in the catalog, relay receipts and counters, a private `HOME` per run,
 multi-account agents, a merge guard and live-host verification.
 
