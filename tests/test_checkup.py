@@ -188,6 +188,58 @@ class CheckupTest(unittest.TestCase):
     def test_other_claude_homes_row_absent_without_any_extra_home(self):
         self.assertFalse(any(r["check"] == "other claude homes" for r in self.data()["setup"]))
 
+    def test_plugin_enablement_states_are_home_labels_and_inert_facts_only(self):
+        for name, plugins in ((".claude", {"finolabs-vibecode@one": True}),
+                              (".claude-work", {"finolabs-vibecode@another": False}),
+                              (".claude-other", {"finolabs-vibecode-extra@one": True})):
+            (self.home / name / "plugins").mkdir(parents=True)
+            self.write(self.home / name / "settings.json", json.dumps({
+                "enabledPlugins": {**plugins, "PRIVATE-other@market": True},
+                "PRIVATE-setting": "PRIVATE-project-path"}))
+        for args in ((), ("--json",)):
+            output = self.run_check(*args)
+            self.assertNotIn("PRIVATE", output)
+        row = self.setup_item("claude plugin enablement")
+        self.assertEqual(row, {"check": "claude plugin enablement", "status": "ok",
+                              "reason": ".claude: enabled; .claude-other: absent; .claude-work: disabled"})
+
+    def test_plugin_enablement_missing_invalid_or_unsafe_settings_are_unverified(self):
+        path = self.home / ".claude/settings.json"
+        self.assertEqual(self.setup_item("claude plugin enablement")["reason"], ".claude: unverified")
+        for text in ("PRIVATE malformed", "[]", '{"enabledPlugins": []}',
+                     '{"enabledPlugins": {"finolabs-vibecode@one": "PRIVATE"}}',
+                     '{"enabledPlugins": {"finolabs-vibecode@one": 1}}',
+                     '{"enabledPlugins": {"finolabs-vibecode@one": true, "finolabs-vibecode@two": false}}'):
+            with self.subTest(text=text):
+                self.write(path, text)
+                row = self.setup_item("claude plugin enablement")
+                self.assertEqual(row["status"], "unverified")
+                self.assertEqual(row["reason"], ".claude: unverified")
+        path.unlink()
+        path.symlink_to(self.write(self.base / "outside-settings.json", "PRIVATE"))
+        self.assertEqual(self.setup_item("claude plugin enablement")["reason"], ".claude: unverified")
+
+    def test_plugin_enablement_absent_key_and_unreadable_file(self):
+        path = self.write(self.home / ".claude/settings.json", "{}")
+        self.assertEqual(self.setup_item("claude plugin enablement")["reason"], ".claude: absent")
+        original = checkup.open_safe
+        def denied(target, directory=False):
+            if Path(target) == path:
+                raise PermissionError("synthetic denial")
+            return original(target, directory=directory)
+        with mock.patch.object(checkup, "open_safe", side_effect=denied):
+            rows = checkup.claude_plugin_enablement(self.home, self.home / ".claude")
+        self.assertEqual(rows[0]["reason"], ".claude: unverified")
+
+    def test_plugin_enablement_selected_home_keeps_default_and_hides_external_path(self):
+        self.write(self.home / ".claude/settings.json", '{"enabledPlugins": {"finolabs-vibecode@one": true}}')
+        other = self.base / "PRIVATE-project"
+        self.write(other / "settings.json", '{"enabledPlugins": {"finolabs-vibecode@two": false}}')
+        self.env["CLAUDE_CONFIG_DIR"] = str(other)
+        row = self.setup_item("claude plugin enablement")
+        self.assertEqual(row["reason"], ".claude: enabled; selected home: disabled")
+        self.assertNotIn("PRIVATE", json.dumps(row))
+
     def inventory(self, date):
         return "## Agents on this machine\n\nCoordinator: Codex\n\n" + "\n".join(
             f"| {name} | yes | fake | unverified | {date} |"
