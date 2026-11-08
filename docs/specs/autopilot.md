@@ -22,12 +22,12 @@ waiting to be asked. The user stops it when they return. It is not on by default
 ## Owner decisions recorded here (2026-11-09)
 
 - One skill, not two. The away-mode idea (a user-run command that hands the host agents a time-boxed standing mandate
-  while the user is asleep or out) is autopilot itself. The skill folder keeps the `fnl-autopilot` name as the
+  while the user is asleep or out) is autopilot itself. The skill folder keeps the fnl-autopilot name as the
   canonical, documented command; a second entry with a friendlier name is only a thin alias that loads the same
   procedure (a skill folder cannot point outside itself, so the alias holds a pointer sentence and the dependency
-  on `fnl-autopilot`, never a copy of the rules). Name candidates for the alias, owner to pick: `fnl-hands-off`,
-  `fnl-brb`, `fnl-nightshift`, `fnl-sleepwalk`, `fnl-dont-wake-me`, `fnl-yolo-but-safe`. Until picked, only
-  `fnl-autopilot` is built.
+  on fnl-autopilot, never a copy of the rules). Name candidates for the alias, owner to pick: fnl-hands-off,
+  fnl-brb, fnl-nightshift, fnl-sleepwalk, fnl-dont-wake-me, fnl-yolo-but-safe. Until picked, only
+  fnl-autopilot is built.
 - Merge: when autopilot is on, the agent may merge a pull request without asking when both review markers are
   APPROVE at the current head, every check is green (the hosted CI and the local test run of the touched modules) and
   `merge_check.py` prints `MERGE OK`. This is the durable authorization recorded at start for exactly that action;
