@@ -38,7 +38,7 @@ No: Keep the list; ask later.
 Undo: Remove those entries.
 Choices: "Yes, hide these files" / "No, keep the list".
 Exclude legacy `.orchestration/`; shared `.gitignore` needs request.
-2. **Agent skills block.** Existing context only. Offer it in each repository context file that Claude Code or the other hosts read: `AGENTS.md` and `CLAUDE.md`, each with its own preview and yes (`instructions_write.py` writes one target per run). Skip a `CLAUDE.md` that only imports `AGENTS.md` (an `@AGENTS.md` line and no rules of its own), because the import already carries the block; say so. Write the same block text into both files, never different wording:
+2. **Agent skills block.** Existing context only; offer per file in `AGENTS.md` and `CLAUDE.md` (skip a `CLAUDE.md` that only imports it):
 
 ```markdown
 ## Agent skills
@@ -46,12 +46,12 @@ Exclude legacy `.orchestration/`; shared `.gitignore` needs request.
 This repository uses the finolabs-vibecode skills. Routing on: use `fnl-coding-router`. <Spec Kit line, when present: use Spec Kit.> <Work-record line, when adopted: use work records.> Pull requests follow `fnl-review-gate` "Pull requests"; reviewers may post code/security reviews. <Single-owner option: Pull requests may take the low-risk lane of `fnl-review-gate`.> Help: `/fnl-ask`.
 ```
 
-   Include only the confirmed workflow line, neither when none. `python3 -I <this skill folder>/scripts/instructions_write.py preview --target <file> --content-file <draft> --block "Agent skills"`; show diff/full digest. Ask: "Save these plugin rules for AI sessions in this repository?"
-Yes: Save only Agent skills in the shown repository file with backup; nothing sent now; future sessions use their AI provider.
+   Include only confirmed workflow lines. `python3 -I <this skill folder>/scripts/instructions_write.py preview --target <file> --content-file <draft> --block "Agent skills"`; show diff/full digest. Ask: "Save these plugin rules for AI sessions in this repository?"
+Yes: Save only Agent skills in the shown file with backup; future sessions use their AI provider.
 No: Keep the file; ask later.
-Undo: Restore the backup or prior block.
+Undo: Restore the backup.
 Choices: "Yes, save the rules" / "No, keep the file".
-After yes: `instructions_write.py apply --digest <full digest> --yes`. Read back. Script checks target/digest/expiry; no symlinks; atomic backup/block. Low-risk: `merge_check.py`; README: reviewer.
+After yes: `instructions_write.py apply --digest <full digest> --yes`. Script checks target/digest/expiry; no symlinks; atomic backup/block. Low-risk lane: `merge_check.py`.
 3. **Workflow detection.** Ask: "How does this repository keep its building plan and task progress?"
 Description: Choose Spec Kit (plan/task files), work records (goals/evidence), or neither. Undecided keeps notes; choose/correct later. Nothing sent; separate write approval.
 Folders prove no integration; instructions owns Work tracking/open questions.
