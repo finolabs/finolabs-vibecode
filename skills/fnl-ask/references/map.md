@@ -14,7 +14,7 @@ The 19 skill folders and their purposes match the README.
 | `fnl-versioning` | Bumping a version, tagging a release, or writing the changelog and release notes: SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog. |
 | `fnl-commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports). |
 | `fnl-restore-point` | Saving the working tree to a private git ref before the agent edits, listing restore points and restoring one after a preview and a yes. User-invoked, git repositories only. |
-| `fnl-autopilot` | Starting a time-boxed standing mandate while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. The setup feature follows separately; the live loop, dashboard tab, scheduler and hooks are deferred. |
+| `fnl-autopilot` | Starting a time-boxed standing mandate while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/fnl-setup add autopilot`; the live loop, dashboard tab, scheduler and hooks are deferred. |
 | `fnl-brb` | Short name for `fnl-autopilot` (be right back); follows the same procedure and arguments. |
 | `fnl-review-gate` | A user story is done or a pull request is about to merge: an independent code review, a disposition for every finding, a regression test per runtime fix. |
 | `fnl-security-review-gate` | A change touches auth, permissions, private data, untrusted input or payments: a permission-boundary review, with negative tests proving that not even a record's existence leaks. |
@@ -36,7 +36,7 @@ The 19 skill folders and their purposes match the README.
 | Writing or revising your own instructions for every agent and repository | `/fnl-setup instructions` | |
 | Adding or removing an agent, or refreshing allowed models | `/fnl-setup scan` | |
 | Saving the working tree before the agent edits, or going back to a saved point | `/fnl-restore-point` | |
-| Working while away, or stopping the mandate on return | `/fnl-autopilot start` or `/fnl-autopilot stop`; `/fnl-brb` is the short name | Recorded setup required; setup feature follows separately |
+| Working while away, or stopping the mandate on return | `/fnl-autopilot start` or `/fnl-autopilot stop`; `/fnl-brb` is the short name | Recorded setup required (`/fnl-setup add autopilot`) |
 | Showing or changing Delegation mode or Routing, including environment overrides | `/fnl-setup mode` | |
 | Starting, resuming or redirecting coding work | `fnl-coding-router` | |
 | Requirements unclear | `fnl-coding-router` (workflow adapter's clarification step, with questions put through the host's native question tool; advisory, agent judgment) | `/grill-me`, or `/grill-with-docs` to keep a glossary and ADRs |
@@ -71,7 +71,7 @@ The 19 skill folders and their purposes match the README.
 
 ## Agents and scripts
 
-Paths below are relative to the full plugin root. There are three agent definitions and 47 distinct script names: 37 in root `scripts/` and 10 available only under a skill. Shared root scripts also have byte-identical copies in consuming skill folders. A standalone skill has only its own helpers; find the installed folder before giving a command. Explaining these pieces runs nothing.
+Paths below are relative to the full plugin root. There are three agent definitions and 50 distinct script names: 37 in root `scripts/` and 13 available only under a skill. Shared root scripts also have byte-identical copies in consuming skill folders. A standalone skill has only its own helpers; find the installed folder before giving a command. Explaining these pieces runs nothing.
 
 | Agent | Purpose | Procedure |
 | --- | --- | --- |
@@ -125,10 +125,13 @@ Paths below are relative to the full plugin root. There are three agent definiti
 
 | Path | Purpose |
 | --- | --- |
+| `skills/fnl-delegate/scripts/autopilot.py` | Autopilot lease, closed action classification (Tier 1 or Tier 3) and private action log; executes nothing. |
+| `skills/fnl-delegate/scripts/heavy_run.py` | Runs one heavy command at a time per machine under a kernel lock, with load and memory gates, a wait cap and a maximum run time. |
 | `skills/fnl-delegate/scripts/ledger.py` | Records runs; accepted finishes need a current-head receipt or explicit reason-digested exception. |
 | `skills/fnl-restore-point/scripts/restore_point.py` | Saves/lists/previews/restores private git snapshots; captures non-ignored untracked files and keeps extra current files on restore. |
 | `skills/fnl-review-gate/scripts/merge_check.py` | Checks posted reviews, the low-risk lane and router marker when the base adopted the gate. |
 | `skills/fnl-setup/scripts/agent_scan.py` | Previews fixed local `--version` inventory; writes only after confirmation. |
+| `skills/fnl-setup/scripts/autopilot_setup.py` | Previews and writes only the `## Autopilot` section of the host config, with a digest and backup. |
 | `skills/fnl-setup/scripts/checkup.py` | Read-only setup/instruction evidence; no host commands or credentials. |
 | `skills/fnl-setup/scripts/compact_stop_setup.py` | Previews/installs/removes the separately consented Antigravity size-stop hook. |
 | `skills/fnl-setup/scripts/data_location.py` | Previews/copies plugin data into an empty approved folder and publishes the pointer last. |
