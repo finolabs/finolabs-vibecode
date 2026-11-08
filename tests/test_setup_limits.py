@@ -51,6 +51,10 @@ INVENTORY = [
 ]
 # Approvals found outside the numbered design inventory. Same home/shape contract.
 EXTRA_APPROVALS = [
+    ('May the agents choose new tasks from your task list?', REFS / "features" / "autopilot.md"),
+    ('May the agents push their branches and open pull requests?', REFS / "features" / "autopilot.md"),
+    ('May the agents merge pull requests while a lease is live?', REFS / "features" / "autopilot.md"),
+    ('Save the shown away-session settings?', REFS / "features" / "autopilot.md"),
     ("Start with only the essential setup questions?", SKILL / "SKILL.md"),
     ("Save only the notes shown about this setup?", REFS / "core.md"),
     ("Save the shown helper preferences and coding-guide setting?", REFS / "mode.md"),
@@ -66,7 +70,7 @@ EXTRA_APPROVALS = [
 PREREQUISITES = {
     "delegation": "the agent scan", "quota": "the agent scan", "roles": "the agent scan",
     "metrics": "the plugin's hooks installed", "project": "metrics consent",
-    "compaction": "nothing for the native threshold", "companions": "nothing",
+    "autopilot": "nothing", "compaction": "nothing for the native threshold", "companions": "nothing",
 }
 
 
@@ -81,7 +85,7 @@ class SizeLimitTests(unittest.TestCase):
         skill = (SKILL / "SKILL.md").read_text()
         self.assertLessEqual(len(skill.splitlines()), 70)
         self.assertLessEqual(len(skill.encode()), 10000)
-        self.assertEqual(len(FEATURES), 7)
+        self.assertEqual(len(FEATURES), 8)
         for path in FEATURES:
             text = path.read_text()
             self.assertLessEqual(len(text.splitlines()), 80, path.name)
@@ -167,6 +171,18 @@ class ConsentInventoryTests(unittest.TestCase):
                 extra_choices = following.split('Choices:', 1)[1].split('\n', 1)[0].lower()
                 for word in ('recommend', 'default', 'preselect'):
                     self.assertNotIn(word, extra_choices)
+
+    def test_autopilot_settings_are_separate_and_merge_is_last(self):
+        text = (REFS / "features/autopilot.md").read_text()
+        questions = re.findall(r'Ask(?: Merge last among the settings)?: "([^"\n]+)"', text)
+        self.assertEqual(len(questions), 10)
+        self.assertEqual(len(set(questions)), 10)
+        self.assertEqual(questions[-1], "May the agents merge pull requests while a lease is live?")
+        for key in ("Hosts", "Task choice", "Push and pull requests", "Merge", "Trusted authors",
+                    "Lease hours", "Max runs", "Max runtime minutes", "Max actions per hour", "Quota floor percent"):
+            self.assertIn(key, text)
+        self.assertIn("This is your own decision", text)
+        self.assertIn("There is no default for Merge", text)
 
     def test_every_consent_sentence_appears_once_in_its_home(self):
         texts = {path: path.read_text() for path in MARKDOWN}

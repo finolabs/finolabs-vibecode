@@ -1,6 +1,6 @@
 # Release 0.2.1: scope
 
-Status: draft; scope settled by the owner on 2026-11-08; packages 1 to 8 merged; the release is not cut and nothing here is verified on a live host.
+Status: draft; scope settled by the owner on 2026-11-08 and cut by the coordinator on 2026-11-09 (see Moved to a later release); packages 1 to 11, 12a and 15 merged or in review; the release is not cut and nothing here is verified on a live host.
 
 ## Why
 
@@ -22,17 +22,26 @@ and the setup gaps found on the way.
 | 7 | Heavy-job design | #177: the spec and the fifth scoped exception in `CLAUDE.md`. | design only; no code. |
 | 8 | Delegated-acceptance default | #178: one line in the user-contract template, defining the package boundary and the repository-owner exception. | implemented; template text only. |
 
-## In scope, not yet delivered
+## Delivered since the scope was settled
 
-| # | Package | What | Owner decision |
+| # | Package | Pull requests | Status |
 | --- | --- | --- | --- |
-| 9 | `## Agent skills` block in every context file | Setup recommends writing the block to every project context file the hosts read, `AGENTS.md` and `CLAUDE.md`, and skips a `CLAUDE.md` that only imports `AGENTS.md`. | 2026-11-08. |
-| 10 | Check reports plugin enablement | `enabledPlugins` state per Claude home in `/fnl-setup check`. | 2026-11-08. |
-| 11 | Unsandboxed review runs | Document the Codex review and posting run without a sandbox, record a needs-permission dispatch as such rather than as quota, and explain why `verify_claim.py` refused a valid brief. | 2026-11-08. |
-| 12 | Heavy-job guard | `heavy_run.py`, the opt-in `PreToolUse` gate, setup, agent rules and tests, per `heavy-jobs.md`. | 2026-11-08: inside 0.2.1. |
-| 13 | Review residuals | #176: legacy-limits detection, Check note for ignored global limits, refresh throttle scope. #172: plugins-dir check, truncation note. #177: test-scope wording, wrapper-identity note. | 2026-11-08. |
-| 14 | Smaller setup items | Duplicate-lines warning on generated files; ledger project naming guidance. | 2026-11-08. |
-| 15 | Autopilot first slice (`/fnl-brb`) | Skill and alias, `autopilot.py` start, stop and check, `## Autopilot` setup section, `merge_check.py --independent`, per `autopilot.md`. | 2026-11-09: inside 0.2.1. |
+| 9 | `## Agent skills` block in every context file | #182. | implemented; setup text only. |
+| 10 | Check reports plugin enablement | #184: `enabledPlugins` state per Claude home. | implemented; fixture tests. |
+| 11 | Unsandboxed review runs | #184: documentation of the unsandboxed review and posting run, `needs-permission` versus `quota`, and which command refuses a review dispatch's acceptance. | implemented; documentation only. |
+| 12a | Heavy-job wrapper | #180: `heavy_run.py`, a machine-wide one-at-a-time lock with load and memory gates, a wait cap and a maximum run time. | implemented; fixture tests, no live-host proof. |
+| 15 | Autopilot first slice (`/fnl-brb`) | #183: `autopilot.py` start, stop, check and log, and `merge_check.py --independent`. The skill, the alias and the `## Autopilot` setup feature follow in the next pull request. | implemented; classification only, nothing executes commands. |
+
+## Moved to a later release
+
+The owner was asleep when the cut was made (2026-11-09), so the coordinator moved these out of 0.2.1 to ship a
+coherent release; each stays in the backlog and the owner can reverse the cut.
+
+| # | Package | Why moved |
+| --- | --- | --- |
+| 12b | Heavy-job gate (the opt-in `PreToolUse` hook, its installer and setup question) | The spec is merged, but the hook, installer and consent flow need their own review cycle; until then agents rely on `heavy_run.py` and the advisory rule. |
+| 13 | Review residuals (#176, #172, #177, #179, #180 non-blocking notes, including the process-group boundary wording) | Non-blocking notes. |
+| 14 | Smaller setup items (duplicate-lines warning, ledger project naming guidance) | Not started. |
 
 ## Out of scope (later releases)
 
