@@ -11,6 +11,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- The user-contract template in `fnl-setup instructions` now has a delegated-acceptance line: all tests of the package or test module holding the changed code and its traced consumers, chosen from the diff, never a repository-wide suite without the owner's request, unless a repository's owner instructions scope task-level proof more narrowly.
 - The parallel run limit and per-family caps are now set per project (repository) in `## Project settings` (`parallel`, `parallel-caps`), default 3, and count only that repository's open dispatches; there is no machine-wide total, and family quota pools stay shared. `fnl-setup add delegation` asks for the limit inside the repository.
 - `fnl-delegate`'s description, the `fnl-ask` map and the README now say plainly that it hands work to other agents and runs it; the skill name is unchanged.
 - Delegated runs must start in the host's own background mode, one runner per call. The dispatch step and the background rule now name `( … ) &`, `nohup` and `disown` as the forms that hide a run from the host's task list; the handoff step and the after-compaction reminder name the first two. The hook script changed, so Codex asks to trust the hooks again.
