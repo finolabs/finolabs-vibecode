@@ -3,7 +3,8 @@
 
 `run [--label L] [--pass-env NAME]... -- <command...>` waits for the machine-wide lock and for load and free
 memory to allow a start, then runs the command and returns its exit status. `status` reports whether the lock is
-held. Exit 64: detached work refused; 75: the wait cap ended; 78: the lock location is unsafe; 2: bad usage.
+held. Exit 64: detached work refused; 75: the wait cap ended; 78: the lock location is unsafe; 124: stopped after the
+maximum run time; 2: bad usage.
 
 The lock is a kernel advisory lock on one regular file in the plugin's fixed anchor folder, so it does not move
 when the data root is relocated. The child and its descendants inherit the descriptor, so the lock outlives a
@@ -12,6 +13,7 @@ the command's process group is empty. Nothing here prints or stores the environm
 """
 import argparse
 import fcntl
+import json
 import os
 from pathlib import Path
 import re
@@ -22,13 +24,14 @@ import sys
 import time
 
 import data_root
+import parallel_slots as slots
 import run_env
 
 LOCK_NAME = 'heavy.lock'
 LABEL = re.compile(r'[A-Za-z0-9 ._-]{1,40}')
-DEFAULTS = {'load': 12.0, 'memory_gb': 3.0, 'wait_minutes': 40.0}
-BOUNDS = {'load': (1.0, 256.0), 'memory_gb': (0.0, 64.0), 'wait_minutes': (1.0, 720.0)}
-KEYS = {'Load limit': 'load', 'Memory minimum GB': 'memory_gb', 'Wait cap minutes': 'wait_minutes'}
+DEFAULTS = {'load': 12.0, 'memory_gb': 3.0, 'wait_minutes': 40.0, 'max_minutes': 90.0}
+BOUNDS = {'load': (1.0, 256.0), 'memory_gb': (0.0, 64.0), 'wait_minutes': (1.0, 720.0), 'max_minutes': (1.0, 720.0)}
+KEYS = {'Load limit': 'load', 'Memory minimum GB': 'memory_gb', 'Wait cap minutes': 'wait_minutes', 'Max job minutes': 'max_minutes'}
 TOOLS = {'vm_stat': '/usr/bin/vm_stat', 'ps': '/bin/ps'}
 
 
@@ -48,7 +51,7 @@ def limits():
         if line.startswith('## '):
             in_section = line.strip() == '## Heavy jobs'
             continue
-        match = re.fullmatch(r'(?:- )?(Load limit|Memory minimum GB|Wait cap minutes): (\d{1,6}(?:\.\d{1,3})?)', line.strip())
+        match = re.fullmatch(r'(?:- )?(Load limit|Memory minimum GB|Wait cap minutes|Max job minutes): (\d{1,6}(?:\.\d{1,3})?)', line.strip())
         if in_section and match:
             key, value = KEYS[match[1]], float(match[2])
             if BOUNDS[key][0] <= value <= BOUNDS[key][1]:
@@ -127,29 +130,73 @@ def process_age(pid):
         return None
 
 
+def source(label, command, max_seconds, child=None):
+    """What an investigator needs to find who started the job: no paths, no arguments, no environment values."""
+    repo = name = None
+    try:
+        root = slots.find_root(os.getcwd())
+        if root is not None:
+            repo = slots.repository_code(root)
+            name = root.name if slots.LABEL.fullmatch(root.name) else None
+    except (OSError, ValueError):
+        pass
+    dispatch = os.environ.get('FNL_DISPATCH_ID')
+    exe = os.path.basename(command[0]) if command else ''
+    now = int(time.time())
+    return {'v': 1, 'pid': os.getpid(), 'child': child, 'started': now, 'deadline': now + int(max_seconds),
+            'label': label, 'repo': repo, 'repo_name': name,
+            'dispatch': dispatch if dispatch and re.fullmatch(r'[A-Za-z0-9-]{1,40}', dispatch) else None,
+            'exe': exe if re.fullmatch(r'[A-Za-z0-9._+-]{1,40}', exe) else None}
+
+
 def holder():
-    """(label, age_seconds) only when the recorded process is alive and started before the record was written."""
+    """The recorded source when its process is alive and started before the record; else None."""
     try:
         fd = open_lock()
     except Refused:
         return None
     try:
-        raw = os.pread(fd, 256, 0).decode('utf-8', 'replace')
+        raw = os.pread(fd, 1024, 0)
     finally:
         os.close(fd)
-    match = re.fullmatch(r'(\d{1,9}) (\d{9,12}) (%s)\n' % LABEL.pattern, raw)
-    if not match:
+    try:
+        data = json.loads(raw.decode('utf-8'))
+        ok = (isinstance(data, dict) and data.get('v') == 1
+              and all(isinstance(data.get(key), int) and not isinstance(data.get(key), bool) for key in ('pid', 'started', 'deadline'))
+              and LABEL.fullmatch(data.get('label', '')))
+    except (UnicodeError, ValueError):
         return None
-    pid, written, label = int(match[1]), int(match[2]), match[3]
-    age = process_age(pid)
-    if age is None or time.time() - age > written + 5:
+    if not ok:
         return None
-    return label, max(0, int(time.time()) - written)
+    age = process_age(data['pid'])
+    if age is None or time.time() - age > data['started'] + 5:
+        return None
+    return data
 
 
-def record(fd, label):
-    os.ftruncate(fd, 0)
-    os.pwrite(fd, ('%d %d %s\n' % (os.getpid(), int(time.time()), label)).encode(), 0)
+def describe(data):
+    """One investigator-friendly block; every value was validated when read."""
+    now = int(time.time())
+    lines = ['  label: %s' % data['label']]
+    if data.get('repo') or data.get('repo_name'):
+        lines.append('  repo: %s (%s)' % (data.get('repo_name') or 'unnamed', data.get('repo') or 'no code'))
+    if data.get('dispatch'):
+        lines.append('  dispatch: %s' % data['dispatch'])
+    if data.get('exe'):
+        lines.append('  command: %s' % data['exe'])
+    lines.append('  pid: %d%s' % (data['pid'], ', child %d' % data['child'] if isinstance(data.get('child'), int) else ''))
+    running = max(0, now - data['started'])
+    limit = data['deadline'] - data['started']
+    over = now - data['deadline']
+    lines.append('  running: %d s of at most %d s%s' % (running, limit, ' (overdue by %d s)' % over if over > 0 else ''))
+    return '\n'.join(lines)
+
+
+def record(fd, data):
+    raw = (json.dumps(data, separators=(',', ':')) + '\n').encode('utf-8')
+    if len(raw) <= 1024:
+        os.ftruncate(fd, 0)
+        os.pwrite(fd, raw, 0)
 
 
 def resource_wait(config):
@@ -207,6 +254,8 @@ def run(args):
         return 64
     config = limits()
     wait = args.wait_seconds if args.wait_seconds is not None else config['wait_minutes'] * 60
+    max_seconds = args.max_seconds if args.max_seconds is not None else (
+        args.max_minutes if args.max_minutes is not None else config['max_minutes']) * 60
     try:
         fd = open_lock()
     except Refused as error:
@@ -224,13 +273,19 @@ def run(args):
                 reason = 'another heavy job holds the lock'
         if time.monotonic() >= deadline:
             who = holder()
-            tail = ' (holder: %s, %d s)' % who if who else ''
+            tail = ' (holder: %s, repo %s, %d s running)' % (who['label'], who.get('repo_name') or who.get('repo') or 'unknown',
+                                                           max(0, int(time.time()) - who['started'])) if who else ''
             print('heavy_run: gave up waiting: %s%s' % (reason, tail), file=sys.stderr)
             os.close(fd)
             return 75
         time.sleep(args.poll)
-    record(fd, args.label)
-    child = subprocess.Popen(args.command, env=run_env.environment(names=extra), pass_fds=(fd,), start_new_session=True)
+    try:
+        child = subprocess.Popen(args.command, env=run_env.environment(names=extra), pass_fds=(fd,), start_new_session=True)
+    except OSError:
+        os.close(fd)
+        print('heavy_run: could not start the command', file=sys.stderr)
+        return 127
+    record(fd, source(args.label, args.command, max_seconds, child.pid))
 
     def forward(number, _frame):
         try:
@@ -240,8 +295,19 @@ def run(args):
 
     for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         signal.signal(number, forward)
+    timed_out = False
     try:
-        status = child.wait()
+        try:
+            status = child.wait(timeout=max_seconds)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            forward(signal.SIGTERM, None)
+            try:
+                status = child.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                forward(signal.SIGKILL, None)
+                status = child.wait()
+            forward(signal.SIGKILL, None)
         # Keep the lock while anything the command left running in its own process group is alive.
         while True:
             try:
@@ -251,6 +317,9 @@ def run(args):
             time.sleep(min(args.poll, 0.2))
     finally:
         os.close(fd)
+    if timed_out:
+        print('heavy_run: stopped after the maximum run time', file=sys.stderr)
+        return 124
     return status if status >= 0 else 128 - status
 
 
@@ -263,7 +332,7 @@ def status():
         print('heavy lock: free')
     else:
         who = holder()
-        print('heavy lock: held, %s' % ('%s for %d s' % who if who else 'owner unknown'))
+        print('heavy lock: held, owner unknown' if not who else 'heavy lock: held\n' + describe(who))
     load, free = read_load(), read_free_gb()
     print('load: %s' % ('unknown' if load is None else '%.1f' % load))
     print('memory: %s' % ('unknown' if free is None else '%.1f GB free' % free))
@@ -277,7 +346,9 @@ def main(argv=None):
     runner = sub.add_parser('run')
     runner.add_argument('--label', default='heavy job')
     runner.add_argument('--pass-env', action='append', default=[], metavar='NAME')
+    runner.add_argument('--max-minutes', type=float, default=None, help='stop the command after this long (default 90)')
     runner.add_argument('--wait-seconds', type=float, default=None, help=argparse.SUPPRESS)
+    runner.add_argument('--max-seconds', type=float, default=None, help=argparse.SUPPRESS)
     runner.add_argument('command', nargs=argparse.REMAINDER)
     sub.add_parser('status')
     args = parser.parse_args(argv)

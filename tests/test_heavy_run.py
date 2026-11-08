@@ -45,14 +45,14 @@ class HeavyRunTest(unittest.TestCase):
     def lock_path(self):
         return self.root / 'heavy.lock'
 
-    def spawn(self, *cli, wait_held=True):
+    def spawn(self, *cli, wait_held=True, cwd=None, extra_env=None):
         """A real second process running the wrapper, as another repository's agent would."""
         pre = ('import sys, pwd, types; sys.path.insert(0, %r); '
                'pwd.getpwuid = lambda uid: types.SimpleNamespace(pw_dir=%r); import heavy_run as h; '
                'h.read_load = lambda: 1.0; h.read_free_gb = lambda: 8.0; '
                % (str(SCRIPTS), str(self.home)))
         code = pre + 'sys.exit(h.main(%r))' % (['--poll', '0.02', *cli],)
-        child = subprocess.Popen([sys.executable, '-c', code], env={'PATH': os.environ['PATH']})
+        child = subprocess.Popen([sys.executable, '-c', code], cwd=cwd, env={'PATH': os.environ['PATH'], **(extra_env or {})})
         self.addCleanup(self.stop, child)
         for _ in range(150 if wait_held else 0):
             if heavy.lock_state() == 'held':
@@ -137,6 +137,34 @@ class HeavyRunTest(unittest.TestCase):
         self.assertEqual(wrapper.wait(timeout=5), 0)
         self.assertEqual(heavy.lock_state(), 'free')
 
+    def test_record_carries_the_source_without_paths_or_arguments(self):
+        repo = self.home / 'projects' / 'demo-repo'
+        (repo / '.git').mkdir(parents=True)
+        child = self.spawn('run', '--label', 'tests', '--', 'sleep', '3', cwd=repo, extra_env={'FNL_DISPATCH_ID': 'd20261109-000000-abcd'})
+        for _ in range(100):
+            data = heavy.holder()
+            if data:
+                break
+            time.sleep(0.02)
+        self.assertEqual((data['label'], data['repo_name'], data['dispatch'], data['exe']),
+                         ('tests', 'demo-repo', 'd20261109-000000-abcd', 'sleep'))
+        self.assertRegex(data['repo'], r'^[0-9a-f]{8}$')
+        self.assertEqual((data['pid'], data['child'] > 0), (child.pid, True))
+        self.assertEqual(data['deadline'] - data['started'], 5400)
+        for value in data.values():
+            self.assertNotIn('/', str(value))
+        self.assertNotIn('3', str(data['exe']))
+        text = self.run_cli('status')[1]
+        for expected in ('tests', 'demo-repo', 'd20261109-000000-abcd', 'command: sleep', 'at most 5400 s'):
+            self.assertIn(expected, text)
+        self.assertNotIn(str(self.home), text)
+
+    def test_maximum_run_time_stops_the_command_and_frees_the_lock(self):
+        code, _, err = self.run_cli('run', '--max-seconds', '0.3', '--', 'sleep', '30')
+        self.assertEqual(code, 124)
+        self.assertIn('maximum run time', err)
+        self.assertEqual(heavy.lock_state(), 'free')
+
     def test_lock_does_not_move_with_the_data_root(self):
         first = heavy.lock_identity()
         moved = self.home / 'elsewhere'
@@ -154,7 +182,7 @@ class HeavyRunTest(unittest.TestCase):
         self.assertNotIn(str(self.home), text)
         child.kill()
         child.wait()
-        self.lock_path().write_text('%d %d alpha\n' % (child.pid, int(time.time())))
+        self.lock_path().write_text('{"v":1,"pid":%d,"child":1,"started":%d,"deadline":%d,"label":"alpha"}\n' % (child.pid, int(time.time()), int(time.time()) + 60))
         os.chmod(self.lock_path(), 0o600)
         # A complete record whose process is gone must read as unknown, never as the holder.
         held = os.open(self.lock_path(), os.O_RDWR)
@@ -202,10 +230,10 @@ class HeavyRunTest(unittest.TestCase):
             self.assertEqual(self.run_cli('run', '--label', label, '--', sys.executable, '-c', 'pass')[0], 2, label)
 
     def test_config_section_sets_limits_and_bad_values_fall_back(self):
-        (self.root / 'host.md').write_text('## Heavy jobs\n- Load limit: 3\n- Memory minimum GB: 99999\n- Wait cap minutes: 5\n')
+        (self.root / 'host.md').write_text('## Heavy jobs\n- Load limit: 3\n- Memory minimum GB: 99999\n- Wait cap minutes: 5\n- Max job minutes: 30\n')
         os.chmod(self.root / 'host.md', 0o600)
         limits = heavy.limits()
-        self.assertEqual((limits['load'], limits['memory_gb'], limits['wait_minutes']), (3.0, 3.0, 5.0))
+        self.assertEqual((limits['load'], limits['memory_gb'], limits['wait_minutes'], limits['max_minutes']), (3.0, 3.0, 5.0, 30.0))
         self.load = 4.0
         self.assertEqual(self.run_cli('run', '--wait-seconds', '0.1', '--', sys.executable, '-c', 'pass')[0], 75)
 

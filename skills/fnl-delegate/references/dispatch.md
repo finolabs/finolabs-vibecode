@@ -22,7 +22,7 @@ Run each heavy command through the wrapper, which holds one machine-wide lock an
 python3 -I <this skill folder>/scripts/heavy_run.py run --label "<what it is>" -- <heavy command...>
 ```
 
-It starts the command only when the one-minute load average is below the limit (default 12), free memory is at least
+It records who started the job in the lock file itself (label, repository code and folder name, dispatch id, the command's program name, pids, start time and deadline; never paths, arguments or environment values), and `status` prints it. It stops a command that runs past its maximum time (default 90 minutes, exit 124). It starts the command only when the one-minute load average is below the limit (default 12), free memory is at least
 the minimum (default 3 GB) and no other heavy job holds the lock, in any repository. It waits up to the cap (default 40
 minutes), then exits 75 and names the holder when it can. `python3 -I <this skill folder>/scripts/heavy_run.py status`
 shows whether the lock is held and by whom, or "owner unknown". The lock is released when the command and anything it

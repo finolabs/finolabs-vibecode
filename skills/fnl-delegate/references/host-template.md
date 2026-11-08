@@ -75,6 +75,7 @@ Advisory (agent judgment): use `/fnl-setup add quota` to opt in after the scan a
 - Load limit: 12
 - Memory minimum GB: 3
 - Wait cap minutes: 40
+- Max job minutes: 90
 
 The lock itself needs no setting: `heavy_run.py` keeps it in the fixed anchor folder, so relocating the data root does not move it.
 
