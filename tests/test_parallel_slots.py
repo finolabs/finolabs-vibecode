@@ -172,6 +172,20 @@ class ParallelSlotsTest(unittest.TestCase):
         code, output = self.command('check-config', '--repo', str(self.repo))
         self.assertEqual((code, json.loads(output)['limit']), (0, 2))
 
+    def test_legacy_ledger_project_alias_counts_and_repository_entry_wins(self):
+        self.host(2, None)
+        with (self.root / 'host.md').open('a') as host:
+            host.write('\n## Project progress\n- Ledger project: LegacyAlias\n')
+        rows = [dict(event='start', id='legacy', agent='codex', project='LegacyAlias'),
+                dict(event='start', id='folder', agent='codex', project=self.repo.name)]
+        self.write('ledger.jsonl', '\n'.join(map(json.dumps, rows)))
+        state = slots.status()
+        self.assertEqual((state['open'], state['other_projects']), (1, 1))
+        self.assertEqual(state['scope']['project'], 'LegacyAlias')
+        self.write('host.md', '## Project progress\n- Ledger project: LegacyAlias\n\n## Project settings\n'
+                              '- %s parallel: 2\n- %s ledger: EntryName\n' % (self.code, self.code))
+        self.assertEqual(slots.status()['scope']['project'], 'EntryName')
+
     def test_outside_repository_counts_nothing_and_ignores_legacy_limits(self):
         self.write('host.md', '## Limits\n- Parallel dispatches: at most 32 at one time.\n')
         self.ledger(['codex', 'claude'])

@@ -183,6 +183,19 @@ def legacy_limits(text):
     return False
 
 
+def legacy_ledger_alias(text):
+    """The deprecated global `Ledger project:` line that project progress still honors; any doubt means none."""
+    try:
+        _, body, end = host_section(text)
+    except ValueError:
+        return None
+    values = [m[1] for m in (re.fullmatch(r'(?:- )?Ledger project: (.+)', line)
+                             for line in text[body:end].splitlines()) if m]
+    if len(values) != 1 or not LABEL.fullmatch(values[0]) or not values[0].strip():
+        return None
+    return values[0]
+
+
 def parse_config(text, root=None):
     """Project settings are strict; absent settings use five with no caps."""
     entries = project_settings(text)
@@ -197,7 +210,8 @@ def parse_config(text, root=None):
             if int(count) > limit:
                 raise ValueError('invalid cap')
             caps[family] = int(count)
-    scope = None if root is None else dict(code=code, project=entries.get((code, 'ledger'), root.name))
+    scope = None if root is None else dict(
+        code=code, project=entries.get((code, 'ledger')) or legacy_ledger_alias(text) or root.name)
     return dict(limit=limit, caps=caps, source='project settings' if total is not None else 'default',
                 scope=scope, legacy_limits=legacy_limits(text))
 

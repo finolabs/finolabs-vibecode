@@ -503,7 +503,7 @@ class RefreshTest(unittest.TestCase):
         self.refresh('run', cwd=repo)
         block = self.data()['running']
         self.assertEqual(block['parallel_limit'], 6)
-        self.assertEqual((block['parallel_source'], block['parallel_project']), ('project settings', 'demo'))
+        self.assertEqual((block['parallel_source'], block['parallel_project']), ('project settings', None))
         self.assertEqual(block['family_slots'], dict(claude=dict(open=2, cap=4), codex=dict(open=3, cap=3),
                                                    antigravity=dict(open=0, cap=None)))
         self.assertEqual(original, self.ledger.read_bytes())
@@ -521,6 +521,32 @@ class RefreshTest(unittest.TestCase):
         block = self.data()['running']
         self.assertEqual((block['parallel_limit'], block['family_slots'], block['parallel_source']),
                          (None, None, 'unknown'))
+
+    def test_hook_cwd_selects_the_repository_and_only_a_permitted_name_reaches_the_page_data(self):
+        self.consent()
+        repo = Path(self.tmp.name).resolve() / 'demo'
+        (repo / '.git').mkdir(parents=True)
+        neutral = Path(self.tmp.name).resolve() / 'neutral'
+        neutral.mkdir()
+        module = self.running_module()
+        code = module.ps.repository_code(repo)
+        host = self.ledger.parent / 'host.md'
+        host.write_text('## Project settings\n- %s parallel: 3\n- %s ledger: PrivateAlias\n' % (code, code))
+        self.ledger.write_text(json.dumps(dict(event='start', id='1', ts=self.at.isoformat(), project='PrivateAlias',
+                                               task='t', kind='implement', grade='hard', model='m',
+                                               reason='routing', agent='codex')))
+        self.refresh('run', '--cwd', str(repo), cwd=neutral)
+        block = self.data()['running']
+        self.assertEqual((block['parallel_limit'], block['family_slots']['codex']['open']), (3, 1))
+        self.assertIsNone(block['parallel_project'])
+        self.assertNotIn('PrivateAlias', json.dumps(block['family_slots']) + str(block['parallel_project']))
+        host.write_text(host.read_text() + '## Project labels\n- %s: Demo label\n' % code)
+        self.refresh('run', '--cwd', str(repo), cwd=neutral)
+        self.assertEqual(self.data()['running']['parallel_project'], 'Demo label')
+        self.refresh('run', '--cwd', str(neutral), cwd=neutral)
+        block = self.data()['running']
+        self.assertEqual((block['parallel_limit'], block['parallel_source'], block['parallel_project']),
+                         (5, 'default', None))
 
     def test_slot_metrics_validates_numeric_schema_and_projects_only_known_fields(self):
         module = self.running_module()

@@ -876,6 +876,9 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render_freshness(data)
         self.assertEqual(self.marks(out, 'slots')[0]['spec']['rows'][-2:],
                          [['source', 'project settings'], ['project', 'demo']])
+        running.update(parallel_project=None)
+        out = self.render_freshness(data)
+        self.assertEqual(self.marks(out, 'slots')[0]['spec']['rows'][-1], ['project', 'unnamed'])
         running.update(parallel_project='x' * 41)
         out = self.render_freshness(data)
         self.assertNotIn('project', [row[0] for row in self.marks(out, 'slots')[0]['spec']['rows']])

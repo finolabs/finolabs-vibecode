@@ -347,10 +347,10 @@ def previous_projects():
         return {}
 
 
-def slot_metrics():
+def slot_metrics(cwd=None):
     """Closed numeric projection; unavailable capacity is null, never a fake five."""
     try:
-        state = ps.status()
+        state = ps.status(cwd)
         limit = state['limit']
         if type(limit) is not int or not 1 <= limit <= 32 or set(state['families']) != set(ps.FAMILIES):
             raise ValueError('slots')
@@ -364,8 +364,10 @@ def slot_metrics():
             rows[family] = dict(open=opened, cap=cap)
         if state['source'] not in ('project settings', 'default'):
             raise ValueError('source')
+        # The ledger name is a join key, never a label: show only a registered name or a user label.
         scope = state.get('scope')
-        project = scope.get('project') if isinstance(scope, dict) else None
+        code = scope.get('code') if isinstance(scope, dict) else None
+        project = canonical_labels().get(code) if isinstance(code, str) else None
         if not (isinstance(project, str) and re.fullmatch(r'[A-Za-z0-9 ._-]{1,40}', project)):
             project = None
         return dict(parallel_limit=limit, family_slots=rows, parallel_source=state['source'],
@@ -374,7 +376,7 @@ def slot_metrics():
         return dict(parallel_limit=None, family_slots=None, parallel_source='unknown', parallel_project=None)
 
 
-def running_metrics(generated, events=()):
+def running_metrics(generated, events=(), cwd=None):
     snapshot = ap.empty('snapshot off')
     if fm.enabled() and ap.enabled():
         snapshot = recent_snapshot() or ap.snapshot()
@@ -408,7 +410,7 @@ def running_metrics(generated, events=()):
     families = {'antigravity': 'agy', 'claude': 'claude', 'codex': 'codex'}
     for process in processes:
         process['not_started_by_coordinator'] = not any(families.get(row['agent']) == process['family'] for row in rows) if not note else False
-    return {'open': rows, 'processes': processes, 'snapshot': snapshot, 'ledger_note': note, 'quota': quota_meters(), 'live': live_sessions(events, generated), **slot_metrics()}
+    return {'open': rows, 'processes': processes, 'snapshot': snapshot, 'ledger_note': note, 'quota': quota_meters(), 'live': live_sessions(events, generated), **slot_metrics(cwd)}
 
 
 def progress_metrics(events, running, cwd=None):
@@ -575,7 +577,7 @@ def build(days=WEEKS * 7, cwd=None):
     for row in delegation or []:
         unverified[row["agent"]] += row["accepted_unverified"]
     generated = fm.now().isoformat(timespec="seconds")
-    running = running_metrics(generated, recorded_events)
+    running = running_metrics(generated, recorded_events, cwd)
     return {
         "progress": progress_metrics(events, running, cwd),
         "generated": generated,
