@@ -68,8 +68,16 @@ Advisory (agent judgment): use `/fnl-setup add quota` to opt in after the scan a
 
 - Machine role: <daily workstation | CI box>. Heavy jobs at one time: <1>.
 - Heavy jobs: <container-backed suites, scale measurements, end-to-end suites>.
-- Heavy-job lock: `<absolute path under the resolved data root, e.g. state/heavy.lock>`.
 - Fixture size for local tests and measurements: <e.g. about 1,000 items unless the owner asks for more>.
+
+## Heavy jobs
+
+- Load limit: 12
+- Memory minimum GB: 3
+- Wait cap minutes: 40
+- Max job minutes: 90
+
+The lock itself needs no setting: `heavy_run.py` keeps it in the fixed anchor folder, so relocating the data root does not move it.
 
 Choose N from 1 to 32; optional family entries may be omitted, each n is 1 to N.
 Families are pools: several runs share their quota. Caps are advisory (agent judgment);
