@@ -19,7 +19,7 @@ Two gaps caused it:
 ## Decisions settled (owner, 2026-11-08)
 
 - The guard is user-scope: it protects the machine from any agent in any repository, not one repository.
-- Test scope is a rule: run only the modules whose code the change touches, never batch more than two modules in one
+- Test scope is a rule: run only the tests covering the changed code and its traced consumers, never batch more than two modules in one
   command, and check load first. Overlap is limited, not the run's own verification: a coordinator starts no test
   while a review or delegated run it started is active, but a delegate runs its assigned targeted checks and a reviewer
   runs its review checks, each serialised by the lock when heavy. Lifecycle example: the delegate edits, runs its
@@ -44,6 +44,13 @@ Two gaps caused it:
   is below the minimum. Poll every 15 seconds up to a wait cap (default 40 minutes), then exit 75 with a message that
   names the holder's label and age. Load and memory come from `os.getloadavg()` and `vm_stat`, run once per poll as
   fixed argv with no shell; on a platform without `vm_stat` only load is checked and `status` says so.
+- Protected job: the whole foreground lifecycle of the work (container start, tests and cleanup), not a launcher that
+  returns while the work continues. `run` refuses a command that asks for detached work (`-d` or `--detach` after
+  `docker` `up`, `run` or `compose up`; exit 64 with a fixed message that tells the caller to wrap a foreground script
+  that starts, tests and tears down). The lock is held until the child's process group is empty, checked with
+  `os.killpg(pgid, 0)`, so a launcher that exits while a descendant in its group still runs keeps protection. Work
+  that escapes the group (a container owned by the Docker daemon) is outside what the script can see, which is why
+  detached launches are refused instead of tracked.
 - Environment: the child and the script's own `vm_stat` launches start with the allowlisted environment of
   `run_env.py` (`run_env.environment()`), the same helper that `verify_claim.py` and `delegate_env.py` use, plus only
   the variable names the caller lists in `--pass-env NAME`; the structural launch-site test in `test_run_hygiene.py`
@@ -68,7 +75,7 @@ matched after splitting the command with `shlex` and skipping leading `NAME=valu
 - `go test` with an argument containing `contract` or `integration`.
 - `python3 -m unittest` or `python -m unittest` with no module name, `discover`, or more than two module names.
 
-Default denial fixture: `docker compose up -d`. Categories a command string cannot show (a real PostgreSQL, large
+Default denial fixture: `docker compose up`. Categories a command string cannot show (a real PostgreSQL, large
 builds, a repository's whole-package suite) are left to patterns the owner configures, and otherwise to the advisory
 rule in part C. `fnl-setup add delegation` asks for the values, each write after a yes.
 
@@ -97,8 +104,8 @@ A `PreToolUse` hook on the `Bash` tool, in its own group in the user's Claude Co
 - Matching is on the command string in memory. The command text is never stored, logged, sent or put in an event. It reads only the canonical host config, ignores a repository file, and allows on every error.
 - It never denies another tool, a prompt, a session start or the user's own stop, and never edits or runs the command.
 - Limits: it cannot see work started by a tool other than Bash, by a script a command calls, or by Codex or Antigravity; those rely on the rules in part C.
-- Acceptance (synthetic payloads, in-process, no real heavy work): denied when on: `docker compose up -d`. Allowed:
-  `python3 -I /abs/skills/fnl-delegate/scripts/heavy_run.py run --label t -- docker compose up -d`, the same with
+- Acceptance (synthetic payloads, in-process, no real heavy work): denied when on: `docker compose up`. Allowed:
+  `python3 -I /abs/skills/fnl-delegate/scripts/heavy_run.py run --label t -- docker compose up --abort-on-container-exit`, the same with
   `run_env.py --` in front, the direct-executable form, a non-heavy command, gate off, config unreadable and malformed
   input. The hook script writes no file and prints nothing else.
 
@@ -114,7 +121,10 @@ A `PreToolUse` hook on the `Bash` tool, in its own group in the user's Claude Co
 6. `status` prints owner label, age, load and free memory, and nothing from the environment or the command.
 7. The child's environment contains only the allowlisted names plus the `--pass-env` names; tests compare variable
    names only and never print or inspect values.
-8. The tests start no real heavy work: they use fake readers and short commands, and the module runs in under two
+8. A launcher that exits while a descendant in its process group is still alive keeps the lock held until the group is
+   empty; a command with `docker compose up -d` or `--detach` is refused with exit 64 before the lock is taken. Tests
+   use short synthetic commands and never start Docker.
+9. The tests start no real heavy work: they use fake readers and short commands, and the module runs in under two
    seconds.
 
 ## Out of scope
