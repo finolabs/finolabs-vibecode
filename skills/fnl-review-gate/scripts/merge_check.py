@@ -16,11 +16,23 @@ merge may go ahead, 1 when it is blocked, 2 when it cannot tell.
 Usage:
   merge_check.py <number> --repo owner/name          the merge check
   merge_check.py <number> --repo owner/name --lane   whether the low-risk lane applies
+  merge_check.py <number> --repo owner/name --independent  require other-family reviews
 
 Comment bodies are data: only their first line is read, and only as a marker.
 The pull request body is data too: only whole lines are matched as a marker.
 Adoption is read through the GitHub contents API pinned to the base commit,
-never from the head; the check needs no local clone.
+never from the head; the ordinary check needs no local clone.
+
+With --independent, independent_families uses review_route.author_family's
+head-bound local ledger and consistent base..head commit trailers, and the
+canonical review_config roles for both reviewing families. No family is inferred
+from a GitHub login (agents may share a login), a PR body or a comment's prose.
+Missing/conflicting authorship or an unassigned reviewing role refuses; evaluate
+requires each reviewing family to differ from the author. Configured roles are
+route evidence, not proof that the assigned agent actually posted: following the
+route and associating each posted marker with that run remain agent judgment,
+advisory. This flag does not establish trusted authors, local test results or
+Tier 3 path eligibility; those are the autopilot caller's separate gates.
 """
 
 import argparse
@@ -199,7 +211,30 @@ def router_marker(body):
     return True, f"depth={depth} trigger={trigger}"
 
 
-def evaluate(pr, can_write, lane_ok=None, *, adopted):
+def independent_families(pr):
+    """Reuse canonical role/route evidence; unknown fails closed, never guess a family."""
+    from pathlib import Path
+    # Standard-library modules load first, so a new sibling file can never shadow them inside this gate.
+    import struct
+    import zlib
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import review_route
+        import review_config
+        author = review_route.author_family(Path.cwd(), base=pr.get("baseRefOid"), head=pr["headRefOid"])
+        # The families routing would pick for this author from the same inputs `review_route` uses (assigned role, else
+        # the capability fallback, with cached quota readings); a same-family pick means no other family is present. Who posted a marker stays a caller duty.
+        import quota_probe
+        rows = review_route.route(author, review_config.host_text(), quota_probe.status_lines())
+        result = {"author": author, "code": rows[0][0], "security": rows[1][0]}
+        if any(value not in review_config.FAMILIES for value in result.values()):
+            raise ValueError("unknown family")
+        return result
+    except (ImportError, OSError, ValueError, KeyError, TypeError, IndexError, struct.error, zlib.error):
+        return None
+
+
+def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, families=None):
     """Return (ok, lines). `can_write(login)` answers write access; `lane_ok()` the lane;
     `adopted` whether the base commit adopted the gate, which makes the router marker required.
     The marker is checked beside the review markers and never relaxes them."""
@@ -229,6 +264,19 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted):
                 lines.append(f"BLOCK {kind} review: took the low-risk lane, but {'; '.join(reasons)}")
         else:
             lines.append(f"ok    {kind} review: APPROVE ({verdict[1]})")
+    if independent:
+        known = {"claude", "codex", "antigravity"}
+        if (not isinstance(families, dict)
+                or any(families.get(key) not in known for key in ("author", "code", "security"))):
+            ok = False
+            lines.append("BLOCK independent reviews: author or reviewing family cannot be determined")
+        else:
+            for kind in ("code", "security"):
+                if families[kind] == families["author"]:
+                    ok = False
+                    lines.append(f"BLOCK independent {kind} review: same family as the pull request author")
+                else:
+                    lines.append(f"ok    independent {kind} review: different family")
     if adopted:
         marked, detail = router_marker(pr.get("body"))
         ok = ok and marked
@@ -342,7 +390,11 @@ def main(argv=None):
     parser.add_argument("number")
     parser.add_argument("--repo", required=True, help="owner/name of the repository the pull request belongs to")
     parser.add_argument("--lane", action="store_true", help="only report whether the low-risk lane applies")
+    parser.add_argument("--independent", action="store_true", help="require both reviewing families to differ from the author")
     args = parser.parse_args(argv)
+    if args.lane and args.independent:
+        print("UNKNOWN --lane cannot verify independent merge reviews")
+        return 2
     if not args.number.isdigit() or not re.fullmatch(r"[\w.-]+/[\w.-]+", args.repo):
         print("UNKNOWN expected a pull request number and --repo owner/name")
         return 2
@@ -377,7 +429,9 @@ def main(argv=None):
         if not isinstance(pr.get("body"), str):
             raise Unknown("the pull request body could not be read")
         adopted = adopted_at(args.repo, pr.get("baseRefOid"))
-        ok, lines = evaluate(pr, can_write, lane_ok, adopted=adopted)
+        families = independent_families(pr) if args.independent else None
+        ok, lines = evaluate(pr, can_write, lane_ok, adopted=adopted,
+                             independent=args.independent, families=families)
     except (Unknown, ValueError, KeyError, TypeError, AttributeError) as error:
         print(f"UNKNOWN {error}")
         return 2

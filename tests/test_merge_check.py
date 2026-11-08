@@ -110,10 +110,10 @@ def run_cli(data, *extra, files="CHANGELOG.md", base_files=None, base=None, head
         bin_dir = Path(tmp) / "bin"
         bin_dir.mkdir()
         fake = bin_dir / "gh"
-        fake.write_text(FAKE_GH.replace("@PR@", json.dumps(json.dumps(data)))
+        fake.write_text(FAKE_GH.replace("#!/usr/bin/env python3", "#!" + sys.executable).replace("@PR@", json.dumps(json.dumps(data)))
                         .replace("@CONTENTS@", json.dumps(json.dumps(contents))))
         fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
-        env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "FAKE_FILES": files,
+        env = {"PATH": f"{bin_dir}{os.pathsep}{os.defpath}", "FAKE_FILES": files,
                "FAKE_BASE": BASE if base is None else base, "GIT_CEILING_DIRECTORIES": tmp}
         return subprocess.run([sys.executable, "-I", str(SCRIPT), "7", "--repo", "acme/demo", *extra],
                               capture_output=True, text=True, env=env, cwd=cwd or tmp)
@@ -569,6 +569,94 @@ class RouterMarkerTest(unittest.TestCase):
     def test_the_lane_check_does_not_read_adoption(self):
         result = run_cli(pr(), "--lane", base_files={"CLAUDE.md": {"error": "gh: Forbidden (HTTP 403)"}})
         self.assertEqual(result.returncode, 0, result.stdout)
+
+
+class IndependentMergeTest(unittest.TestCase):
+    def evaluate(self, families, data=None):
+        return mc.evaluate(data or pr(), lambda who: who in WRITERS, adopted=False,
+                           independent=True, families=families)
+
+    def test_both_other_family_markers_pass_even_with_shared_login(self):
+        for author, reviewer in (("claude", "codex"), ("codex", "antigravity"), ("antigravity", "claude")):
+            with self.subTest(author=author, reviewer=reviewer):
+                ok, lines = self.evaluate(dict(author=author, code=reviewer, security=reviewer))
+                self.assertTrue(ok, lines)
+
+    def test_either_same_family_marker_refuses(self):
+        for code, security in (("codex", "codex"), ("codex", "claude"), ("claude", "codex")):
+            ok, lines = self.evaluate(dict(author="codex", code=code, security=security))
+            self.assertFalse(ok)
+            self.assertTrue(any("same family" in line for line in lines), lines)
+
+    def test_unknown_family_refuses_and_normal_gate_is_unchanged(self):
+        for families in (None, {}, dict(author="codex", code="claude"),
+                         dict(author="unknown", code="claude", security="claude")):
+            self.assertFalse(self.evaluate(families)[0])
+        self.assertTrue(run(pr())[0])
+
+    def test_independence_never_replaces_current_head_reviews_or_checks(self):
+        families = dict(author="codex", code="claude", security="claude")
+        self.assertFalse(self.evaluate(families, pr(comments=[]))[0])
+        self.assertFalse(self.evaluate(families, pr(checks=[]))[0])
+        self.assertFalse(self.evaluate(families, pr(comments=[comment(marker("code", "APPROVE", OLD)),
+                                                            comment(marker("security", "APPROVE"))]))[0])
+
+    def test_cli_flag_prints_no_merge_ok_on_same_or_unknown_family(self):
+        import contextlib
+        import io
+        for families, status in ((None, 1), (dict(author="codex", code="codex", security="codex"), 1),
+                                 (dict(author="codex", code="claude", security="claude"), 0)):
+            output = io.StringIO()
+            with patch.object(mc, "gh", return_value=json.dumps(pr())), \
+                 patch.object(mc, "adopted_at", return_value=False), \
+                 patch.object(mc, "permission", return_value=True), \
+                 patch.object(mc, "independent_families", return_value=families), \
+                 contextlib.redirect_stdout(output):
+                actual = mc.main(["7", "--repo", "acme/demo", "--independent"])
+            self.assertEqual(actual, status, output.getvalue())
+            self.assertEqual("MERGE OK" in output.getvalue(), status == 0)
+
+    def test_resolver_uses_head_bound_author_and_the_families_routing_would_pick(self):
+        sys.path.insert(0, str(SCRIPT.parent))
+        import review_route
+        import review_config
+        with patch.object(review_route, "author_family", return_value="codex") as author, \
+             patch.object(review_config, "host_text", return_value="synthetic"), \
+             patch.object(review_config, "present_families", return_value={"claude", "codex", "antigravity"}), \
+             patch.object(review_config, "read_roles", return_value={"code review": "claude", "security review": "antigravity"}), \
+             patch.object(review_config, "read_posting", return_value={}):
+            data = dict(pr(), baseRefOid=BASE)
+            self.assertEqual(mc.independent_families(data), dict(author="codex", code="claude", security="antigravity"))
+            self.assertEqual(author.call_args.kwargs, dict(base=BASE, head=HEAD))
+        with patch.object(review_route, "author_family", return_value="codex"), \
+             patch.object(review_config, "host_text", return_value="synthetic"), \
+             patch.object(review_config, "present_families", return_value={"claude", "codex"}), \
+             patch.object(review_config, "read_roles", return_value={"code review": "codex", "security review": "codex"}), \
+             patch.object(review_config, "read_posting", return_value={}):
+            # Roles that name the author's own family fall back to another present family, as routing does.
+            self.assertEqual(mc.independent_families(data), dict(author="codex", code="claude", security="claude"))
+        with patch.object(review_route, "author_family", return_value="codex"), \
+             patch.object(review_config, "host_text", return_value="synthetic"), \
+             patch.object(review_config, "present_families", return_value={"codex"}), \
+             patch.object(review_config, "read_roles", return_value={}), \
+             patch.object(review_config, "read_posting", return_value={}):
+            # With no other family present the pick is the author's own, so the independent check refuses it.
+            self.assertEqual(mc.independent_families(data), dict(author="codex", code="codex", security="codex"))
+        import quota_probe
+        with patch.object(review_route, "author_family", return_value="claude"), \
+             patch.object(review_config, "host_text", return_value="synthetic"), \
+             patch.object(review_config, "present_families", return_value={"claude", "codex"}), \
+             patch.object(review_config, "read_roles", return_value={"code review": "codex", "security review": "codex"}), \
+             patch.object(review_config, "read_posting", return_value={}), \
+             patch.object(quota_probe, "status_lines", return_value=["synthetic"]), \
+             patch.object(review_route, "blocked_families", return_value={"codex"}):
+            # A rate-limited assigned family changes the route exactly as review_route does: the author's own family.
+            self.assertEqual(mc.independent_families(data), dict(author="claude", code="claude", security="claude"))
+        with patch.object(review_route, "author_family", side_effect=ValueError("unverified ledger author")):
+            self.assertIsNone(mc.independent_families(data))
+        with patch.object(review_route, "author_family", return_value="codex"), \
+             patch.object(review_config, "host_text", return_value=""):
+            self.assertIsNone(mc.independent_families(data))
 
 
 if __name__ == "__main__":

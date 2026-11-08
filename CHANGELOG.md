@@ -6,8 +6,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- `fnl-delegate/scripts/autopilot.py` (first slice of autopilot, part 1): `start`, `stop`, `check` and `log` for a time-boxed lease read from `## Autopilot` in the host config. `check` classifies a command's argv or a change's paths into Tier 1 or Tier 3 by code (unknown input is Tier 3), enforces lease expiry, the stop marker, setup-hash changes and run, runtime and hourly action limits, and denies merge unless setup says `Merge: yes` and the argv pins the reviewed head. State is private and local; nothing is executed or sent. `merge_check.py --independent` additionally refuses a review pair from the pull request author's own model family. The skill, the `/fnl-brb` alias and the setup section follow.
 - User-invoked `fnl-autopilot` starts and stops a time-boxed away mandate with action classification and an independent merge gate; `fnl-brb` (be right back) is its thin alias. Recorded setup is required; the setup feature follows separately, and the live loop, dashboard tab, scheduler, notice hook and host backstop remain deferred.
-
 - `fnl-delegate/scripts/heavy_run.py` runs one heavy command at a time on the machine: it holds a kernel lock in the fixed anchor folder, waits for the one-minute load and free memory, exits 75 after a wait cap, refuses detached Docker launches, starts the command with the allowlisted environment records who started the job (label, repository, dispatch id, program name, pids, times) so `status` can show it without guessing the holder, and stops a job past its maximum time (default 90 minutes). It replaces the `mkdir` recipe.
 - Record an optional coordinator session hash on dispatch starts from `CLAUDE_CODE_SESSION_ID` (never from a command-line option); keep only a short SHA-256 hash, or `null` when unknown.
 
