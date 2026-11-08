@@ -36,6 +36,7 @@ LOCK_NAME = 'heavy.lock'
 LABEL = re.compile(r'[A-Za-z0-9 ._-]{1,40}')
 CODE = re.compile(r'[A-Za-z0-9_-]{1,40}')
 DISPATCH = re.compile(r'[A-Za-z0-9-]{1,40}')
+PID_LIMIT = 2 ** 31
 EXE = re.compile(r'[A-Za-z0-9._+-]{1,40}')
 DEFAULTS = {'load': 12.0, 'memory_gb': 3.0, 'wait_minutes': 40.0, 'max_minutes': 90.0}
 BOUNDS = {'load': (1.0, 256.0), 'memory_gb': (0.0, 64.0), 'wait_minutes': (1.0, 720.0), 'max_minutes': (1.0, 720.0)}
@@ -167,16 +168,16 @@ def source(label, command, max_seconds, child=None):
 
 def valid_record(data):
     """True only for a record whose every field has the expected type and format."""
-    def whole(key, low=1):
+    def whole(key, high=2 ** 40):
         value = data.get(key)
-        return isinstance(value, int) and not isinstance(value, bool) and low <= value < 2 ** 40
+        return isinstance(value, int) and not isinstance(value, bool) and 1 <= value < high
 
     def text(key, pattern):
         value = data.get(key)
         return value is None or (isinstance(value, str) and pattern.fullmatch(value) is not None)
 
-    return (isinstance(data, dict) and data.get('v') == 1 and whole('pid') and whole('started') and whole('deadline')
-            and data['deadline'] >= data['started'] and (data.get('child') is None or whole('child'))
+    return (isinstance(data, dict) and data.get('v') == 1 and whole('pid', PID_LIMIT) and whole('started') and whole('deadline')
+            and data['deadline'] >= data['started'] and (data.get('child') is None or whole('child', PID_LIMIT))
             and isinstance(data.get('label'), str) and LABEL.fullmatch(data['label']) is not None
             and text('repo', CODE) and text('repo_name', LABEL) and text('dispatch', DISPATCH) and text('exe', EXE))
 
@@ -194,7 +195,7 @@ def group_alive(group):
         os.killpg(group, 0)
     except ProcessLookupError:
         return False
-    except OSError:
+    except (OSError, OverflowError, ValueError):
         return True
     return True
 
@@ -457,10 +458,12 @@ def run(args):
                 if now >= kill_at + 10:
                     break
             time.sleep(min(args.poll, 0.1))
-        try:
-            os.ftruncate(fd, 0)
-        except OSError:
-            pass
+        # Keep the record while any member of the group is still alive, so the next start keeps waiting.
+        if not group_alive(child.pid):
+            try:
+                os.ftruncate(fd, 0)
+            except OSError:
+                pass
     finally:
         os.close(fd)
     if timed_out:

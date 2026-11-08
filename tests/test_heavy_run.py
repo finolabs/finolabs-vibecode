@@ -256,6 +256,56 @@ class HeavyRunTest(unittest.TestCase):
         self.assertFalse(marker.exists())
         self.assertEqual(heavy.lock_state(), 'free')
 
+    def test_out_of_range_process_ids_in_a_record_read_as_unknown_and_never_reach_a_signal(self):
+        now = int(time.time())
+        held = os.open(self.lock_path(), os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            for field, value in (('pid', 2 ** 31), ('child', 2 ** 31), ('child', 2 ** 40 - 1), ('pid', 0), ('child', 0)):
+                record = {'v': 1, 'pid': os.getpid(), 'child': None, 'started': now, 'deadline': now + 60, 'label': 'x'}
+                record[field] = value
+                self.lock_path().write_text(__import__('json').dumps(record) + '\n')
+                real = heavy.os.killpg
+
+                def guarded(group, number, real=real):
+                    if not 0 < group < 2 ** 31:
+                        raise AssertionError('signal sent to %r' % group)
+                    return real(group, number)
+
+                with mock.patch.object(heavy.os, 'killpg', guarded):
+                    code, out, _ = self.run_cli('status')
+                    self.assertEqual(code, 0, (field, value))
+                    self.assertIn('free', out)
+                    self.assertEqual(self.run_cli('run', '--', sys.executable, '-c', 'pass')[0], 0, (field, value))
+                self.lock_path().write_text('')
+        finally:
+            os.close(held)
+
+    def test_a_group_that_survives_the_kill_grace_keeps_its_record_and_blocks_the_next_start(self):
+        worker = subprocess.Popen(['sleep', '30'], start_new_session=True)
+        self.addCleanup(self.stop, worker)
+        clock = [0.0]
+        real_kill = heavy.os.killpg
+
+        def ignore_kills(group, number):
+            if number == 0:
+                return real_kill(group, 0)
+            return None
+
+        def sleep(seconds):
+            clock[0] += 5
+
+        with mock.patch.object(heavy, 'subprocess', mock.MagicMock(Popen=lambda *a, **k: worker, SubprocessError=Exception, run=subprocess.run, TimeoutExpired=subprocess.TimeoutExpired)), \
+                mock.patch.object(heavy.os, 'killpg', ignore_kills), mock.patch.object(heavy.time, 'monotonic', lambda: clock[0]), \
+                mock.patch.object(heavy.time, 'sleep', sleep):
+            code, _, err = self.run_cli('run', '--max-seconds', '1', '--', 'sleep', '30')
+        self.assertEqual(code, 124)
+        self.assertIn(str(worker.pid).encode(), self.lock_path().read_bytes())
+        marker = self.root / 'second'
+        code, _, err = self.run_cli('run', '--wait-seconds', '0.2', '--', sys.executable, '-c',
+                                    'open(%r, "w").close()' % str(marker))
+        self.assertEqual(code, 75)
+        self.assertFalse(marker.exists())
+
     def test_the_script_runs_as_its_own_isolated_entry_point(self):
         done = subprocess.run([sys.executable, '-I', str(SCRIPTS / 'heavy_run.py'), '--help'],
                               capture_output=True, text=True, timeout=30, env={'PATH': os.environ['PATH']})
