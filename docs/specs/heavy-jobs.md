@@ -1,6 +1,6 @@
 # Heavy-job guard and test scope (release 0.2.1)
 
-Status: draft; no code yet. Owner decisions settled 2026-11-08; the CLAUDE.md exception for the gate lands with this spec before any code.
+Status: draft; `heavy_run.py` is implemented; the gate, its installer and the setup question are not. Owner decisions settled 2026-11-08; the CLAUDE.md exception for the gate lands with this spec before any code.
 
 ## Why
 
@@ -36,6 +36,10 @@ Two gaps caused it:
 `skills/fnl-delegate/scripts/heavy_run.py` runs one command while holding the machine-wide lock. This part states what
 must hold. How the lock is kept is an implementation choice, settled in the code pull request and reviewed there.
 
+- Accountability: the holder records, in the lock file, its label, repository code and folder name, dispatch id, the program name
+  (never arguments, paths or environment values), pids, start time and deadline, so that `status` can say which repository
+  and which dispatch started the job. A job past its maximum run time (default 90 minutes, `Max job minutes`) is stopped
+  with SIGTERM then SIGKILL and the wrapper exits 124.
 - Usage: `heavy_run.py run -- <command> [args...]` and `status` (whether the lock is held, the holder's label and age
   only when they are known to belong to the current holder, load, free memory).
 - Exclusion: at any moment at most one protected job runs on the machine, across every repository and every agent that
@@ -130,7 +134,8 @@ A `PreToolUse` hook on the `Bash` tool, in its own group in the user's Claude Co
    names only and never print or inspect values.
 9. A command with detached flags is refused with exit 64 before the lock is taken: fixtures `docker compose up -d`,
    `docker-compose up -d`, `docker compose run -d SERVICE` and `docker run --detach IMAGE`.
-10. The test module runs in under two seconds and starts no Docker or other heavy work.
+10. The record carries the repository, dispatch id and program name and nothing path-like; a command past its maximum run time is stopped (exit 124) and the lock is freed.
+11. The test module finishes in seconds and starts no Docker or other heavy work.
 
 ## Out of scope
 
