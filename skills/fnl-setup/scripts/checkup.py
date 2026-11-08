@@ -123,6 +123,25 @@ def version(manifest):
     return value if isinstance(value, str) and re.fullmatch(r"[\w.+-]{1,64}", value) else "unknown"
 
 
+def folder_install(base, markets):
+    """The manifest of a directory marketplace the plugin is installed from, if readable."""
+    status, known = read_json(base / "known_marketplaces.json")
+    if status != "ok":
+        return None
+    for market in markets[:8]:
+        source = known.get(market)
+        location = source.get("installLocation") if isinstance(source, dict) else None
+        kind = source.get("source") if isinstance(source, dict) else None
+        if not isinstance(location, str) or not os.path.isabs(location) or \
+                not isinstance(kind, dict) or kind.get("source") != "directory":
+            continue
+        root = Path(os.path.abspath(location))
+        state, manifest = read_json(root / ".claude-plugin" / "plugin.json")
+        if state == "ok" and manifest.get("name") == PLUGIN:
+            return root, manifest
+    return None
+
+
 def plugin_evidence(host, home):
     """Only Claude's installation registry proves a recorded install.
 
@@ -133,6 +152,7 @@ def plugin_evidence(host, home):
     roots = []
     registered = False
     registry_status = "unverified"
+    markets = []
     if host == "claude":
         registry_status, registry = read_json(base / "installed_plugins.json")
         plugins = registry.get("plugins", {})
@@ -140,6 +160,7 @@ def plugin_evidence(host, home):
             for key, entries in plugins.items():
                 if key.split("@", 1)[0] != PLUGIN or not isinstance(entries, list):
                     continue
+                markets.append(key.split("@", 1)[1] if "@" in key else "")
                 for entry in entries[:16]:
                     location = entry.get("installPath") if isinstance(entry, dict) else None
                     if isinstance(location, str):
@@ -169,6 +190,16 @@ def plugin_evidence(host, home):
             return item("plugin", "missing", "no install record or readable manifest"), []
         return item("plugin", "unverified", "no readable install record or recognized manifest"), []
     versions = ",".join(sorted({version(m) for _, m in found}))[:100]
+    live = folder_install(base, markets) if registered else None
+    if live:
+        # A directory marketplace may load the plugin in place while the registry keeps an old snapshot.
+        # The files show what the folder declares, not what the running host loaded.
+        live_version = version(live[1])
+        if live_version == versions:
+            return item("plugin", "ok", "install recorded; version " + live_version), [live]
+        return item("plugin", "unverified",
+                    "folder marketplace declares version " + live_version + "; registry records " + versions +
+                    "; the host's own plugin list shows which loads"), [live]
     status = "ok" if registered and len(found) == len(roots) and "unknown" not in versions else "unverified"
     return item("plugin", status, ("install recorded" if status == "ok" else "files only; activation unknown") +
                 "; version " + versions), found
@@ -189,7 +220,7 @@ def hooks_evidence(host, home, found):
             return item("hooks", "unverified", "hook path outside inspected metadata")
         status, data = read_json(path)
         hooks = data.get("hooks", {})
-        source = "plugin hook file"
+        source = "plugin hook file" if root.is_relative_to(home / "plugins") else "folder hook file"
     else:
         return item("hooks", "unverified", "no unique readable installed hook source")
     if status != "ok" or not isinstance(hooks, dict):
@@ -200,7 +231,7 @@ def hooks_evidence(host, home, found):
     if host == "agy":
         # This plugin's user group has SessionStart; Stop/PreCompact support is unverified.
         absent = [e for e in absent if e == "SessionStart"]
-    reason = "declared: " + (", ".join(declared) or "none")
+    reason = ("from folder hook file; " if source == "folder hook file" else "") + "declared: " + (", ".join(declared) or "none")
     reason += "; missing: " + ", ".join(absent) if absent else "; declarations only"
     if host == "agy":
         reason += "; Stop/PreCompact support unverified"
@@ -320,7 +351,7 @@ def instruction_consent(text):
     return len(values) == 1 and bool(re.fullmatch(r"- Instruction check: on(?:[ .].*)?", values[0]))
 
 
-def instruction_scan(home, codex, root, cwd, git, common_git=None):
+def instruction_scan(home, codex, root, cwd, git, common_git=None, claude=None):
     files, cache, results, visited = {}, {}, [], set()
     limited = directory_limited = backup_limited = False
     result_keys = set()
@@ -390,7 +421,7 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None):
             return []
 
     for folder, names, host in (
-        (home / ".claude", ["CLAUDE.md"], "claude"),
+        (claude or home / ".claude", ["CLAUDE.md"], "claude"),
         (codex, ["AGENTS.override.md", "AGENTS.md"], "codex"),
         (home / ".gemini", ["GEMINI.md", "AGENTS.md"], "agy"),
         (root, sorted(INSTRUCTION_NAMES), "project"),
@@ -895,6 +926,47 @@ def project_tracking(text, root):
     return rows
 
 
+def claude_home_names(home):
+    """Directory names shaped like Claude config homes among up to 4096 entries, no links followed."""
+    try:
+        fd = open_safe(home, directory=True)
+        try:
+            with os.scandir(fd) as entries:
+                names, seen = [], 0
+                for entry in entries:
+                    seen += 1
+                    if seen > 4096:
+                        return sorted(names), True
+                    if (entry.name == ".claude" or re.fullmatch(r"\.claude-[\w.-]{1,40}", entry.name)) \
+                            and entry.is_dir(follow_symlinks=False):
+                        names.append(entry.name)
+                return sorted(names), False
+        finally:
+            os.close(fd)
+    except OSError:
+        return [], False
+
+
+def other_claude_homes(home, active):
+    """Names only: sibling Claude config folders that hold plugins, and the version each records."""
+    names, truncated = claude_home_names(home)
+    rows = []
+    for name in names:
+        folder = home / name
+        if os.path.abspath(folder) == os.path.abspath(active) or not folders(folder) or \
+                "plugins" not in folders(folder):
+            continue
+        _, found = plugin_evidence("claude", folder)
+        rows.append(name + ": " + ("version " + ",".join(sorted({version(m) for _, m in found}))[:60]
+                                   if found else "no install record"))
+    if not rows:
+        return []
+    notes = ("; more than 4096 home entries; list may be incomplete" if truncated else "") + \
+        ("; more homes not shown" if len(rows) > 8 else "")
+    return [item("other claude homes", "unverified" if truncated or any("no install" in r for r in rows) else "ok",
+                 "; ".join(rows[:8]) + notes + "; launch commands are not inspected")]
+
+
 def collect(payload=False):
     # A local copy keeps this skill usable when installed alone, including under -I.
     sys.dont_write_bytecode = True
@@ -904,6 +976,8 @@ def collect(payload=False):
     home = dr.account_home()
     configured = os.environ.get("CODEX_HOME", "")
     codex = Path(configured) if os.path.isabs(configured) else home / ".codex"
+    selected = os.environ.get("CLAUDE_CONFIG_DIR", "")
+    claude_home = Path(os.path.abspath(selected)) if os.path.isabs(selected) else home / ".claude"
     config_status, config_text = host_config_text(home)
     if payload:
         try:
@@ -922,7 +996,7 @@ def collect(payload=False):
     status, common = read(git / "commondir")
     if status == "ok":
         git = Path(os.path.abspath(git / common.strip()))
-    instruction_block, files, cache = instruction_scan(home, codex, root, cwd, index_git, git)
+    instruction_block, files, cache = instruction_scan(home, codex, root, cwd, index_git, git, claude=claude_home)
     if payload:
         return judge_payload(files)
     def context_read(path):
@@ -930,7 +1004,7 @@ def collect(payload=False):
     hosts = {}
     user_context = []
     for host, folder, instructions in (
-        ("claude", home / ".claude", [home / ".claude/CLAUDE.md"]),
+        ("claude", claude_home, [claude_home / "CLAUDE.md"]),
         ("codex", codex, [codex / "AGENTS.override.md", codex / "AGENTS.md"]),
         ("agy", home / ".gemini", [home / ".gemini/GEMINI.md", home / ".gemini/AGENTS.md"]),
     ):
@@ -974,6 +1048,7 @@ def collect(payload=False):
     quota = item("quota", "unverified", "advisory cache; " + " | ".join(status_lines()))
     return {"principle": PRINCIPLE, "hosts": hosts, "instructions": instruction_block, "setup": [
             item("data root", data_source, str(data_path)), host_config, inventory, quota,
+            *other_claude_homes(home, claude_home),
             retired_evidence([*user_context, *context], reader=context_read),
             item("effective settings", "ok", "delegation mode=" + settings["delegation_mode"] +
                  "; routing=" + settings["routing"] + "; auto gate=" + settings["auto_gate"] + "; selected values only, not runtime proof"), *repository]}
