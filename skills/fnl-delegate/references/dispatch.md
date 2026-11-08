@@ -4,6 +4,8 @@ Procedures from `SKILL.md` that only some runs reach.
 
 ## Quota fallback
 
+Classify the stopped run using [agents.md](agents.md) before applying this fallback (advisory, agent judgment).
+
 When a model's quota runs out, move to the next route the rules give: another model of the same tier on the same agent, then the same tier on the next agent in the capability order. Antigravity pools are separate, so one empty pool leaves its other models usable. Moving to a weaker agent at the same tier, split the task smaller. Moving up a tier spends more quota: ask first. Moving down a tier is allowed only for easy and medium work; for hard work, wait for the reset or ask. When every reachable agent is out, report the reset times and wait. Record the fallback in the ledger as `references/ledger.md` says.
 
 ## Parallel dispatch
