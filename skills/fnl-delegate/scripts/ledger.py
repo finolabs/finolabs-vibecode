@@ -86,6 +86,10 @@ def load():
 
 
 def cmd_start(args):
+    session = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session):
+        session = ""  # unknown or unusable ids are recorded as null, never echoed
+    coord_session = hashlib.sha256(session.encode("utf-8")).hexdigest()[:12] if session else None
     try:
         from mode import effective
         manual = effective(keys=("delegation_mode",), gate_opt_in=True)["delegation_mode"] == "manual"
@@ -102,6 +106,7 @@ def cmd_start(args):
         checkout_id = None  # non-code tasks can still end through the explicit escape hatch
     append({
         "checkout_id": checkout_id,
+        "coord_session": coord_session,
         "event": "start", "id": dispatch_id, "ts": now(),
         "project": args.project, "task": args.task, "kind": args.kind,
         "grade": args.grade, "coordinator": args.coordinator, "agent": args.agent,

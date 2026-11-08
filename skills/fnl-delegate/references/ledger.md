@@ -15,6 +15,8 @@ python3 -I "$L" summary --json           # the same rows as JSON, with quota and
 
 For review routing, the coordinator adds `--head <implementation head SHA>` to `finish`. This validates a forty-character lowercase SHA and copies the agent from the dispatch's start record; legacy records without a head cannot establish authorship. Commit trailers alone are insufficient. When acceptance uses a verification receipt, this head must also match the verified head.
 
+`start` records optional `coord_session`: the first 12 hex characters of the SHA-256 of the `CLAUDE_CODE_SESSION_ID` environment value, never the raw id and never from a command-line option (an argument would show in process listings and parser errors). It is `null` when the variable is unset or unusable, and older lines without it remain readable. It is a correlation identifier, not protection: a predictable id can be guessed from its hash, so treat the ledger as private.
+
 Before `finish --outcome accepted`, run the self-contained `verify_claim.py` from `fnl-verification` "Accepting someone else's work" and read its evidence. Pass `--checkout <task checkout>` to both `start` and `finish` when the task runs elsewhere: the gate requires a passing receipt for that checkout and its current head. For work with nothing to check, the coordinator can use `--accept-unverified --reason <text>`; keep the full reason in the coordinator report because the ledger stores only its SHA-256 digest and counts the exception in `summary`.
 
 `--grade` is one of `easy`, `medium`, `hard`, `very-hard` and `ultra-hard` (`SKILL.md` "Grade" defines them); lines written before `ultra-hard` existed still read.

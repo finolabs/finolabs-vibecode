@@ -20,6 +20,13 @@ LEDGER_LIMIT = 4 * 1024 * 1024  # a larger ledger reads as unknown at session st
 OPEN_CAP = 99
 
 
+COMPACT_DELEGATION = (
+    "\nDelegation after compaction (advisory, agent judgment): before starting the first of two or more "
+    "independent tasks, apply fnl-delegate \"Keep or hand off\"; send reviews and parallel work to another "
+    "agent family when one is present instead of doing them yourself or in a session of your own family; "
+    "re-read fnl-delegate if its steps are not in context.\n")
+
+
 def delegation_word():
     try:
         from mode import effective
@@ -197,6 +204,8 @@ def main():
                     pass
             if (isinstance(event, dict) and event.get("source") == "compact"
                     and isinstance(event.get("session_id"), str) and event["session_id"]):
+                if delegation_word() != "manual":
+                    print(COMPACT_DELEGATION, end="")
                 from handover_state import read
                 handover = read(event["session_id"])
                 if handover:

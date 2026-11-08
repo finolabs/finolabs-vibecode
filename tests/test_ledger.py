@@ -2,6 +2,7 @@
 
 import importlib.util
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -25,9 +26,7 @@ class LedgerTest(unittest.TestCase):
         self.home = account(self, Path(self.dir.name) / "home")
         self.path = self.home / ".finolabs/vibecode/ledger.jsonl"
         self.path.parent.mkdir(parents=True)
-        self.env = {**os.environ, "ORCHESTRATION_LEDGER": str(self.path)}
-        for key in ("FNL_DELEGATION_MODE", "ORCHESTRATION_HOST_CONFIG", "FNL_AUTO_GATE"):
-            self.env.pop(key, None)
+        self.env = {"HOME": str(self.home), "ORCHESTRATION_LEDGER": str(self.path)}
 
     def tearDown(self):
         self.dir.cleanup()
@@ -182,6 +181,54 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(rec["budget_min"], 40)
         self.assertEqual(rec["reason"], "routing")
         self.assertEqual(rec["route_by"], "table")
+
+    def test_start_hashes_session_environment(self):
+        self.env["CLAUDE_CODE_SESSION_ID"] = "abc-123"
+        result = self.run_ledger(*START)
+        [rec] = self.records()
+        self.assertEqual(rec["coord_session"], hashlib.sha256(b"abc-123").hexdigest()[:12])
+        self.assertRegex(rec["coord_session"], r"^[0-9a-f]{12}$")
+        self.assertNotIn("abc-123", self.path.read_text() + result.stdout + result.stderr)
+
+    def test_start_records_null_when_session_unknown_or_unusable(self):
+        for value in (None, "", "a" * 129, "bad session", "bad/session", "bad\n", "\u00e9", "bad.session"):
+            if value is None:
+                self.env.pop("CLAUDE_CODE_SESSION_ID", None)
+            else:
+                self.env["CLAUDE_CODE_SESSION_ID"] = value
+            result = self.run_ledger(*START)
+            self.assertIsNone(self.records()[-1]["coord_session"])
+            self.assertEqual(result.stderr, "")
+
+    def test_start_accepts_session_boundaries(self):
+        for value in ("A", "Z9_-" * 32):
+            self.env["CLAUDE_CODE_SESSION_ID"] = value
+            self.run_ledger(*START)
+            self.assertEqual(self.records()[-1]["coord_session"],
+                             hashlib.sha256(value.encode()).hexdigest()[:12])
+
+    def test_the_session_id_is_never_a_command_line_option(self):
+        result = self.run_ledger("start", "--help")
+        self.assertNotIn("--session", result.stdout)
+
+    def test_open_and_summary_read_mixed_session_records(self):
+        old = self.run_ledger(*START).stdout.strip()
+        [legacy] = self.records()
+        legacy.pop("coord_session", None)
+        self.path.write_text(json.dumps(legacy) + "\n")
+        self.env["CLAUDE_CODE_SESSION_ID"] = "abc-123"
+        new = self.run_ledger(*START).stdout.strip()
+        self.assertIn("coord_session", self.records()[-1])
+        opened = self.run_ledger("open")
+        self.assertEqual(opened.stderr, "")
+        for dispatch in (old, new):
+            self.assertIn(dispatch, opened.stdout)
+            self.run_ledger("finish", dispatch, "--outcome", "error")
+        summary = self.run_ledger("summary", "--json")
+        self.assertEqual(summary.stderr, "")
+        [row] = json.loads(summary.stdout)
+        self.assertEqual((row["n"], row["error"]), (2, 2))
+        self.assertEqual(self.run_ledger("open").stdout, "")
 
     def test_finish_binds_implementation_head_to_start_agent(self):
         dispatch_id = self.run_ledger(*START).stdout.strip()
