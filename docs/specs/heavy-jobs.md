@@ -31,45 +31,43 @@ Two gaps caused it:
 - **Default thresholds (owner, 2026-11-08):** one-minute load average below 12 and at least 3 GB of free plus inactive
   memory; wait cap 40 minutes.
 
-## A. The script
+## A. The script (contract; mechanism is decided when the code is written)
 
-`skills/fnl-delegate/scripts/heavy_run.py` runs one command while holding the machine-wide lock.
+`skills/fnl-delegate/scripts/heavy_run.py` runs one command while holding the machine-wide lock. This part states what
+must hold. How the lock is kept is an implementation choice, settled in the code pull request and reviewed there.
 
-- Usage: `heavy_run.py run -- <command> [args...]` and `status` (whether the lock is held, the holder's label and
-  age when known, load, free memory). There is no stale-lock cleanup command: the lock cannot go stale.
-- Lock (design settled after four review rounds on a PID-and-directory scheme): a regular file `heavy.lock` in the data
-  root's private state folder, created with `O_NOFOLLOW`, mode 0600, and refused unless `fstat` shows a regular file
-  owned by the user. It is held with `fcntl.flock(fd, LOCK_EX | LOCK_NB)`, polled every 15 seconds. The file is never
-  unlinked or replaced, so its identity is stable, and the kernel serialises every acquisition: exactly one process
-  holds it, and no check-then-remove step exists to race. The descriptor stays inheritable, so the child and every
-  descendant that keeps it open keep the lock after the wrapper dies; the kernel releases it when the last holder
-  exits. After acquiring, the holder writes a one-line best-effort record (wrapper pid, start time, label) into the file
-  for `status`. `status` never trusts that record: held or free is the result of a non-blocking `flock` probe, and a
-  missing or partial record (a crash between acquiring and writing) shows "held, owner unknown". flock on a network
-  filesystem is unverified; the data root is assumed local.
+- Usage: `heavy_run.py run -- <command> [args...]` and `status` (whether the lock is held, the holder's label and age
+  only when they are known to belong to the current holder, load, free memory).
+- Exclusion: at any moment at most one protected job runs on the machine, across every repository and every agent that
+  uses the script. A waiter that gives up never disturbs the holder. A holder that dies leaves no state that a later run
+  must repair by guesswork, and no cleanup step may race with an acquisition.
+- Lifetime: protection lasts until the protected job's whole foreground lifecycle ends, including descendants that the
+  command started and left running. Work the script cannot see (a container owned by the Docker daemon) is outside it,
+  which is why detached launches are refused (below).
+- Identity: the lock has one identity that survives a relocation of the data root and is not trusted from any recorded
+  text. Relocating the data root while a job holds the lock must not let a second job start. `status` never shows a
+  label or age that cannot be tied to the current holder; it says "held, owner unknown" instead.
 - Gate before start: wait while the lock is held, the one-minute load average is at or above the limit, or free memory
   is below the minimum. Poll every 15 seconds up to a wait cap (default 40 minutes), then exit 75 with a message that
-  names the holder's label and age. Load and memory come from `os.getloadavg()` and `vm_stat`, run once per poll as
-  fixed argv with no shell; on a platform without `vm_stat` only load is checked and `status` says so.
-- Protected job: the whole foreground lifecycle of the work (container start, tests and cleanup), not a launcher that
-  returns while the work continues. `run` refuses a command that asks for detached work: `-d` or `--detach` as an option
-  of `up` or `run` in any Compose spelling (`docker compose`, `docker-compose`) or of `docker run` and `docker container
-  run`; exit 64 with a fixed message that tells the caller to wrap a foreground script that starts, tests and tears
-  down. Protection lasts while any process holds the inherited lock descriptor, so a launcher that exits while a
-  descendant still runs keeps it. Work that closes the descriptor or is owned by another daemon (a container owned by
-  the Docker daemon) is outside what the script can see, which is why detached launches are refused instead of tracked.
+  names the holder's label and age when known. Load and memory come from `os.getloadavg()` and `vm_stat`, run once per
+  poll as fixed argv with no shell; on a platform without `vm_stat` only load is checked and `status` says so.
+- Detached work: `run` refuses a command that asks for detached work: `-d` or `--detach` as an option of `up` or `run`
+  in any Compose spelling (`docker compose`, `docker-compose`) or of `docker run` and `docker container run`; exit 64
+  with a fixed message that tells the caller to wrap a foreground script that starts, tests and tears down.
+- Signals: SIGINT and SIGTERM sent to the wrapper reach the child and the lock is kept until the child has exited;
+  a wrapper killed outright with a child alive keeps the lock held.
 - Environment: the child and the script's own `vm_stat` launches start with the allowlisted environment of
   `run_env.py` (`run_env.environment()`), the same helper that `verify_claim.py` and `delegate_env.py` use, plus only
   the variable names the caller lists in `--pass-env NAME`; the structural launch-site test in `test_run_hygiene.py`
   covers the new script. The script never prints, logs or stores the environment, the command's arguments beyond a
   40-character label passed with `--label`, or any output. Working folder is the caller's, no shell.
-- Release and exclusion: the kernel releases the lock when the last process holding the descriptor exits; the script
-  removes nothing. A waiter whose wait cap ends exits 75 and closes only its own descriptor, which cannot affect the
-  holder. On SIGINT or SIGTERM the wrapper forwards the signal to the child's process group and keeps running, still
-  holding the descriptor, until the child has exited. A wrapper killed by SIGKILL with a surviving child or grandchild
-  keeps the lock held through the inherited descriptor, and the next run acquires it as soon as the last holder exits,
-  with no cleanup step.
 - No network, no hook, no background process.
+
+Review findings carried to the implementation, not decided here: a kernel advisory lock on a never-replaced file was
+considered because it needs no stale cleanup; two constraints came from review and bind any mechanism: the lock must
+not live only inside the relocatable data root (relocation copies bytes and cannot move a kernel lock), and a
+best-effort owner record must never be presented as the current holder's. The implementation pull request carries the
+mechanism, its relocation behavior and the tests for both.
 
 ## B. Which commands are heavy
 
@@ -116,28 +114,23 @@ A `PreToolUse` hook on the `Bash` tool, in its own group in the user's Claude Co
   `run_env.py --` in front, the direct-executable form, a non-heavy command, gate off, config unreadable and malformed
   input. The hook script writes no file and prints nothing else.
 
-## Acceptance
+## Acceptance (behavior; tests use synthetic commands and fake readers, no real heavy work)
 
-1. With the lock held by a live holder, a second `run` waits and then exits 75 when the cap ends, never starting its
-   command; the holder's lock is unaffected, and a third waiter still cannot start while the holder lives.
+1. With a job holding the lock, a second `run` waits and exits 75 when the cap ends without starting its command; the
+   holder is unaffected, and a third waiter cannot start while the holder lives.
 2. With the load or free memory beyond the limit, `run` waits; below it, `run` starts. Tests inject the readings.
-3. Two processes racing for a free lock: exactly one acquires it (the other waits), checked with real `flock` between
-   short synthetic Python processes. There is no cleanup path to race, and no test pauses a stale-cleanup step.
-4. A signal sent only to the wrapper is forwarded to the child's group and the lock stays until the child has exited;
-   a wrapper killed with SIGKILL while a child survives leaves the lock held. Tests use short synthetic commands.
-5. A symlinked, non-regular or foreign-owned lock path is refused.
-6. `status` prints held or free, the holder's label and age when known, load and free memory, and nothing from the
-   environment or the command; a missing or partial record shows "held, owner unknown".
-7. The child's environment contains only the allowlisted names plus the `--pass-env` names; tests compare variable
+3. Two processes racing for a free lock: exactly one starts its command.
+4. A signal sent to the wrapper reaches the child; the lock stays until the child exits. A wrapper killed while a child
+   or grandchild runs leaves the lock held, and the next `run` can start only after they end, with no manual cleanup.
+5. Relocating the data root while a job holds the lock does not admit a second job.
+6. `status` prints held or free, load and free memory, and a label or age only when tied to the current holder;
+   otherwise "held, owner unknown". It prints nothing from the environment or the command.
+7. A symlinked or foreign-owned lock location is refused.
+8. The child's environment contains only the allowlisted names plus the `--pass-env` names; tests compare variable
    names only and never print or inspect values.
-8. A command with detached flags is refused with exit 64 before the lock is taken: fixtures `docker compose up -d`,
-   `docker-compose up -d`, `docker compose run -d SERVICE` and `docker run --detach IMAGE`. Tests use short synthetic
-   commands and never start Docker.
-9. Combined case: a launcher starts a grandchild that keeps the descriptor and exits, then the wrapper is killed with
-   SIGKILL; the lock stays held while the grandchild lives and a next `run` acquires it as soon as the grandchild
-   exits, with no cleanup step.
-10. The tests start no real heavy work: they use fake readers and short commands, and the module runs in under two
-    seconds.
+9. A command with detached flags is refused with exit 64 before the lock is taken: fixtures `docker compose up -d`,
+   `docker-compose up -d`, `docker compose run -d SERVICE` and `docker run --detach IMAGE`.
+10. The test module runs in under two seconds and starts no Docker or other heavy work.
 
 ## Out of scope
 
@@ -146,4 +139,4 @@ Resource limits on a command (ulimit, cgroups), killing a running heavy job, sch
 ## Consumers to trace
 
 `fnl-delegate` SKILL and `references/dispatch.md`, `references/host-template.md`, `fnl-verification`,
-`fnl-coding-router` "Proportion", `fnl-setup` delegation feature, the shared-copy check, `README.md` and the changelog.
+`fnl-coding-router` "Proportion", `fnl-setup` delegation feature, data-root relocation (`data_location.py`) and the data-root resolver, the shared-copy check, `README.md` and the changelog.
