@@ -34,8 +34,9 @@ class RefreshTest(unittest.TestCase):
         self.env.pop("FNL_METRICS", None)
         self.at = datetime.now(timezone.utc)
 
-    def refresh(self, *args, check=True):
-        result = subprocess.run([sys.executable, "-I", str(REFRESH), *args], capture_output=True, text=True, env=self.env)
+    def refresh(self, *args, check=True, cwd=None):
+        result = subprocess.run([sys.executable, "-I", str(REFRESH), *args], capture_output=True, text=True, env=self.env,
+                                cwd=cwd)
         if check:
             self.assertEqual(result.returncode, 0, result.stderr)
         return result
@@ -483,41 +484,78 @@ class RefreshTest(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
-    def test_parallel_capacity_canonical_config_multiple_runs_and_default_source(self):
+    def test_parallel_capacity_is_per_project_with_default_source_and_ignored_legacy_limits(self):
         self.consent()
+        repo = Path(self.tmp.name).resolve() / 'demo'
+        (repo / '.git').mkdir(parents=True)
+        module = self.running_module()
+        code = module.ps.repository_code(repo)
         host = self.ledger.parent / 'host.md'
         host.write_text('## Limits\n- Parallel dispatches: at most 12 at one time.\n'
-                        '- Parallel per family: codex=3, claude=4\n')
-        rows = [dict(event='start', id=str(n), ts=self.at.isoformat(), project='demo', task='t',
+                        '## Project settings\n- %s parallel: 6\n- %s parallel-caps: codex=3, claude=4\n' % (code, code))
+        rows = [dict(event='start', id=str(n), ts=self.at.isoformat(), project=name, task='t',
                      kind='implement', grade='hard', model='m', reason='routing', agent=agent)
-                for n, agent in enumerate(('claude-session', 'subagent', 'codex', 'codex', 'codex'))]
+                for n, (name, agent) in enumerate((('demo', 'claude-session'), ('demo', 'subagent'),
+                                                   ('demo', 'codex'), ('demo', 'codex'), ('demo', 'codex'),
+                                                   ('elsewhere', 'codex')))]
         self.ledger.write_text('\n'.join(map(json.dumps, rows)))
         original = self.ledger.read_bytes()
-        self.refresh('run')
+        self.refresh('run', cwd=repo)
         block = self.data()['running']
-        self.assertEqual(block['parallel_limit'], 12)
-        self.assertEqual(block['parallel_source'], 'host config')
+        self.assertEqual(block['parallel_limit'], 6)
+        self.assertEqual((block['parallel_source'], block['parallel_project']), ('project settings', None))
         self.assertEqual(block['family_slots'], dict(claude=dict(open=2, cap=4), codex=dict(open=3, cap=3),
                                                    antigravity=dict(open=0, cap=None)))
         self.assertEqual(original, self.ledger.read_bytes())
-        host.write_text('## Limits\n- Parallel dispatches: invalid\n')
-        self.refresh('run')
+        host.write_text('## Project settings\n- %s parallel: invalid\n' % code)
+        self.refresh('run', cwd=repo)
         block = self.data()['running']
-        self.assertEqual((block['parallel_limit'], block['parallel_source']), (5, 'default'))
+        self.assertEqual((block['parallel_limit'], block['family_slots'], block['parallel_source']),
+                         (None, None, 'unknown'))
+        host.write_text('## Limits\n- Parallel dispatches: at most 12 at one time.\n')
+        self.refresh('run', cwd=repo)
+        block = self.data()['running']
+        self.assertEqual((block['parallel_limit'], block['parallel_source']), (3, 'default'))
         host.chmod(0o666)
-        self.refresh('run')
+        self.refresh('run', cwd=repo)
         block = self.data()['running']
         self.assertEqual((block['parallel_limit'], block['family_slots'], block['parallel_source']),
                          (None, None, 'unknown'))
 
+    def test_hook_cwd_selects_the_repository_and_only_a_permitted_name_reaches_the_page_data(self):
+        self.consent()
+        repo = Path(self.tmp.name).resolve() / 'demo'
+        (repo / '.git').mkdir(parents=True)
+        neutral = Path(self.tmp.name).resolve() / 'neutral'
+        neutral.mkdir()
+        module = self.running_module()
+        code = module.ps.repository_code(repo)
+        host = self.ledger.parent / 'host.md'
+        host.write_text('## Project settings\n- %s parallel: 3\n- %s ledger: PrivateAlias\n' % (code, code))
+        self.ledger.write_text(json.dumps(dict(event='start', id='1', ts=self.at.isoformat(), project='PrivateAlias',
+                                               task='t', kind='implement', grade='hard', model='m',
+                                               reason='routing', agent='codex')))
+        self.refresh('run', '--cwd', str(repo), cwd=neutral)
+        block = self.data()['running']
+        self.assertEqual((block['parallel_limit'], block['family_slots']['codex']['open']), (3, 1))
+        self.assertIsNone(block['parallel_project'])
+        self.assertNotIn('PrivateAlias', json.dumps(block['family_slots']) + str(block['parallel_project']))
+        host.write_text(host.read_text() + '## Project labels\n- %s: Demo label\n' % code)
+        self.refresh('run', '--cwd', str(repo), cwd=neutral)
+        self.assertEqual(self.data()['running']['parallel_project'], 'Demo label')
+        self.refresh('run', '--cwd', str(neutral), cwd=neutral)
+        block = self.data()['running']
+        self.assertEqual((block['parallel_limit'], block['parallel_source'], block['parallel_project']),
+                         (3, 'default', None))
+
     def test_slot_metrics_validates_numeric_schema_and_projects_only_known_fields(self):
         module = self.running_module()
-        state = dict(limit=8, source='host config', families={
+        state = dict(limit=8, source='project settings', scope=dict(code='aaaaaaaa', project='demo'), families={
             family: dict(open=2, cap=None, private='PRIVATE') for family in module.ps.FAMILIES})
         with mock.patch.object(module.ps, 'status', return_value=state):
             result = module.slot_metrics()
         self.assertNotIn('PRIVATE', json.dumps(result))
-        self.assertEqual(set(result), {'parallel_limit', 'family_slots', 'parallel_source'})
+        self.assertEqual(set(result), {'parallel_limit', 'family_slots', 'parallel_source', 'parallel_project'})
         with mock.patch.object(module.ps, 'status', side_effect=RecursionError):
             self.assertIsNone(module.slot_metrics()['parallel_limit'])
         for field, value in [('limit', True), ('limit', 33), ('limit', '8'), ('source', 'PRIVATE')]:

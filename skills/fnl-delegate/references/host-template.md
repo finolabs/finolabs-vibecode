@@ -64,8 +64,7 @@ Advisory (agent judgment): use `/fnl-setup add quota` to opt in after the scan a
 
 ## Limits
 
-- Parallel dispatches: at most <N> at one time.
-- Parallel per family: claude=<n>, codex=<n>, antigravity=<n>
+- The parallel run limit is per project and lives in `## Project settings` (set with `fnl-setup add delegation`); lines here are ignored.
 
 - Machine role: <daily workstation | CI box>. Heavy jobs at one time: <1>.
 - Heavy jobs: <container-backed suites, scale measurements, end-to-end suites>.
@@ -74,7 +73,7 @@ Advisory (agent judgment): use `/fnl-setup add quota` to opt in after the scan a
 
 Choose N from 1 to 32; optional family entries may be omitted, each n is 1 to N.
 Families are pools: several runs share their quota. Caps are advisory (agent judgment);
-`parallel_slots.py check-config` validates these lines; missing/invalid total defaults to 5.
+`parallel_slots.py check-config` validates these lines; a missing total defaults to 3 and a malformed project entry reports unknown.
 
 ## Effort preference
 

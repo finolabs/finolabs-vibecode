@@ -287,8 +287,10 @@
     var lit = known ? Math.min(slotOpen, limit) + " of " + limit : "unknown";
     if (!known) slots.appendChild(t("span", "nodata", "unknown"));
     slotRows.unshift(["lit", lit]);
-    if (r.parallel_source === "default" || r.parallel_source === "host config" || r.parallel_source === "unknown")
+    if (r.parallel_source === "default" || r.parallel_source === "project settings" || r.parallel_source === "host config" || r.parallel_source === "unknown")
       slotRows.push(["source", r.parallel_source]);
+    if (typeof r.parallel_project === "string" && r.parallel_project.length <= 40) slotRows.push(["project", r.parallel_project]);
+    else if (r.parallel_project === null) slotRows.push(["project", "unnamed"]);
     tipOn(slots, {title: "slots", rows: slotRows});
     slots.setAttribute("aria-label", known ? lit + " slots lit" : "parallel slots unknown");
     capacity.appendChild(h("div", "capacity-block", [t("div", "capacity-caption", "slots (" + total + ")"), slots]));

@@ -872,7 +872,17 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(mark['spec']['rows'], [['lit', '4 of 12'], ['claude', '1 open'],
                          ['codex', '3 open of cap 3'], ['antigravity', '0 open'], ['source', 'host config']])
         self.assertEqual(mark['attrs']['aria-label'], '4 of 12 slots lit')
-        running.update(parallel_limit=None, family_slots=None, parallel_source='unknown')
+        running.update(parallel_source='project settings', parallel_project='demo')
+        out = self.render_freshness(data)
+        self.assertEqual(self.marks(out, 'slots')[0]['spec']['rows'][-2:],
+                         [['source', 'project settings'], ['project', 'demo']])
+        running.update(parallel_project=None)
+        out = self.render_freshness(data)
+        self.assertEqual(self.marks(out, 'slots')[0]['spec']['rows'][-1], ['project', 'unnamed'])
+        running.update(parallel_project='x' * 41)
+        out = self.render_freshness(data)
+        self.assertNotIn('project', [row[0] for row in self.marks(out, 'slots')[0]['spec']['rows']])
+        running.update(parallel_limit=None, family_slots=None, parallel_source='unknown', parallel_project=None)
         out = self.render_freshness(data)
         self.assertEqual(self.marks(out, 'slot'), [])
         self.assertEqual(self.marks(out, 'slots')[0]['attrs']['aria-label'], 'parallel slots unknown')

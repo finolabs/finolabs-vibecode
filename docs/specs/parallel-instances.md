@@ -1,12 +1,12 @@
 # Parallel agent instances
 
-Status: implemented; shared helper, setup, SessionStart, dashboard, CI copy group and documentation are integrated locally; targeted verification is recorded below, while live-host scheduling and UI behavior remain unverified.
+Status: implemented; amended 2026-11-08 to project scope (see Amendment); shared helper, setup, SessionStart, dashboard, CI copy group and documentation are integrated locally; targeted verification is recorded below, while live-host scheduling and UI behavior remain unverified.
 
 Owner decision: 2026-11-07. A model family (Claude Code, Codex, Antigravity) is a pool of agents, not one seat. Independent tasks may use any number of runs of the same family within the user's total and optional per-family caps. This supersedes the former ceiling of five.
 
 ## Goal and acceptance
 
-- AC1: Canonical host config chooses a total from 1 to 32 and optional family caps from 1 to that total; missing/invalid total reports default 5.
+- AC1: Canonical host config chooses a total from 1 to 32 and optional family caps from 1 to that total; missing/invalid total reports default 3.
 - AC2: Bounded canonical ledger reads count starts without finishes, with Claude aliases sharing one family. `check` tests both limits; unsafe/unreadable state is unknown.
 - AC3: Session start reports only fixed words, family names and integers, stays read-only and exits 0 on errors.
 - AC4: Refresh and dashboard use the same parser, show a total above five and family counts/caps with text-only rendering and unknown on unreadable state.
@@ -26,7 +26,7 @@ Canonical `host.md`, under `## Limits`:
 - Parallel per family: claude=2, codex=3
 ```
 
-The total is 1 to 32; 32 is a sanity cap. A missing or invalid total falls back to 5, source `default`; valid total source is `host config`. Optional caps accept any subset of `claude`, `codex`, `antigravity`, each 1 to the effective total. An omitted family has only the total bound. Duplicate sections, duplicate/unknown families and invalid caps report unknown, rather than silently dropping a cap. Legacy total wording with a parenthetical suffix is invalid and reports default 5 until setup replaces it.
+The total is 1 to 32; 32 is a sanity cap. A missing total falls back to 3, source `default`; valid total source is `host config`. Optional caps accept any subset of `claude`, `codex`, `antigravity`, each 1 to the effective total. An omitted family has only the total bound. Duplicate sections, duplicate/unknown families and invalid caps report unknown, rather than silently dropping a cap. Legacy total wording with a parenthetical suffix is invalid and reports unknown until setup replaces it.
 
 `parallel_slots.py` reads only canonical `host.md` (256 KiB) and `ledger.jsonl` (4 MiB) via `data_root.py`: owned regular files, no-follow, no group/world writes, bounded reads. No environment override, subprocess, network or write. Missing config selects default; missing ledger means zero; unsafe inputs, invalid root, invalid UTF-8 or malformed/ambiguous ledger mean unknown. Start ids deduplicate; any finish for an id closes it regardless of line order. The mapping matches `ledger.py`: `claude`, `claude-session`, `subagent` are Claude; the other two families map directly. Unknown agents refuse capacity.
 
@@ -77,3 +77,31 @@ Tests run through `python3 -I scripts/run_env.py -- python3 -I -c ...`, explicit
 ## Integration and limits
 
 Integration now includes the CI copy group for the three `parallel_slots.py` files, the README and `fnl-ask` map, and the public CHANGELOG entry. The preceding evidence records the original package's local checks; it does not establish live-host scheduling or UI behavior. No manifests, hooks, privacy policy, ledger behavior or real account state change here. Live UI, cross-process scheduling, user setup and independent reviews remain unverified in this package; checks never imply slot reservation.
+
+## Amendment: project scope (owner decision, 2026-11-08)
+
+The limit was machine-wide: the total from `## Limits` was compared with every open dispatch of every repository. The owner's intent is a limit per project (repository), with no machine-wide ceiling. Quota pools are per account and stay shared, so several repositories can still reach a quota limit together.
+
+Settled decisions (owner, 2026-11-08):
+
+- A repository without its own setting uses the default of 3. The global `## Limits` lines are no longer read; `check-config` reports `legacy_limits` when they exist and the setup check shows a one-line note that they are ignored.
+- Per-family caps also move to the project.
+- There is no machine-wide total.
+
+Contract:
+
+- Settings live in `## Project settings` of canonical `host.md`, one line each, keyed by the repository code (the 8-hex code `project_progress.py` already uses; a linked worktree shares its main checkout's code): `- <code> parallel: <1 to 32>` and `- <code> parallel-caps: claude=2, codex=3` (any subset of the three families, each 1 to the repository's total). They are set with `python3 -I project_progress.py settings --set parallel=<n>` and `--set parallel-caps=<list>` run inside the repository, and cleared with `--clear <key>`. One malformed entry invalidates the section as for `ledger` and `tasks`.
+- `parallel_slots.py` takes the repository from the current directory (nearest ancestor holding `.git`, or an explicit `--repo <path>` to the same resolution). It counts only open, non-stale starts whose `project` equals that repository's ledger project name (the repository's `ledger` project setting, else the deprecated global `Ledger project:` line under `## Project progress` that project progress still honors, else the folder name). Dispatches whose `project` matches no repository are not counted for any, and `status` reports how many open dispatches were left out as `other_projects`.
+- `status` keeps `limit`, `open`, `stale`, `free`, `families`, `source` and adds `scope` (`{"code": "<8hex>", "project": "<ledger name>"}`, or `null` outside a repository, where the default applies and nothing is counted). `source` is `project settings` or `default`. `check` and `check-config` keep their exit codes; `check-config` prints `limit`, `caps`, `source` and `legacy_limits`.
+- SessionStart prints `Parallel slots: <free> free of <limit> (<family> <open> open [of cap <cap>], ...; <source>)` for the session's repository; its fixed-word rule and exit 0 on errors are unchanged.
+- Refresh and the dashboard show the numbers for the repository given by the hook's `--cwd` (else the process directory). The tooltip names the project only by its registered name or user label, never by the ledger name, which is a join key; without one it says `unnamed`. Outside a repository they show the default and `unnamed`. A machine-wide view of every project is not part of this amendment.
+- `fnl-setup add delegation` asks "How many agent runs may work at the same time in this repository?" and the optional family caps, then writes them through `project_progress.py settings`, with the same neutral Yes and No approval and a preview. The user-scope `## Limits` question is removed.
+- Enforcement is unchanged: advisory (agent judgment); `ledger.py start` never blocks.
+
+Amendment acceptance:
+
+- AC7: two repositories with open dispatches count separately; a repository without a setting reports limit 3, source `default`.
+- AC8: a repository with `parallel: 2` reports 2 as its limit whatever the legacy `## Limits` total says, and a cap above the total makes the section unknown.
+- AC9: a linked worktree uses its main checkout's setting.
+- AC10: SessionStart, refresh and the dashboard read the same helper; outside a repository nothing is counted.
+- AC11: setup writes and validates the two keys only after the user's yes.

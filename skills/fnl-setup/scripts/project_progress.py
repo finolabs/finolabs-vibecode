@@ -98,6 +98,16 @@ def project_labels(text):
 def valid_setting(key, value):
     if not isinstance(value, str):
         return False
+    if key == 'parallel':
+        return bool(re.fullmatch(r'[0-9]{1,2}', value) and 1 <= int(value) <= 32)
+    if key == 'parallel-caps':
+        seen = set()
+        for item in value.split(','):
+            match = re.fullmatch(r'(claude|codex|antigravity)=([0-9]{1,2})', item.strip())
+            if not match or not 1 <= int(match[2]) <= 32 or match[1] in seen:
+                return False
+            seen.add(match[1])
+        return True
     if key == 'ledger':
         return bool(LABEL.fullmatch(value) and value.strip())
     if key == 'tasks':
@@ -116,7 +126,7 @@ def project_settings(text):
     if len(lines) > 100:
         raise ValueError('invalid project settings')
     for line in lines:
-        match = re.fullmatch(r'- ([0-9a-f]{8}) (ledger|tasks): (.*)', line)
+        match = re.fullmatch(r'- ([0-9a-f]{8}) (ledger|tasks|parallel|parallel-caps): (.*)', line)
         if not match or not valid_setting(match[2], match[3]) or (match[1], match[2]) in entries:
             raise ValueError('invalid project settings')
         entries[(match[1], match[2])] = match[3]
@@ -138,16 +148,18 @@ def repository_settings(values, root):
 
 
 def set_setting(cwd, key, value):
-    if key not in ('ledger', 'tasks') or value is not None and not valid_setting(key, value):
+    if key not in ('ledger', 'tasks', 'parallel', 'parallel-caps') or value is not None and not valid_setting(key, value):
         raise ValueError('invalid project setting')
-    # Keep the consent schema shared with metrics, without a cross-skill import.
-    try:
-        consent = json.loads(dr.read_data('state/consent.json', 4096))
-    except (OSError, ValueError):
-        raise ValueError('metrics consent required') from None
-    if (not isinstance(consent, dict) or consent.get('retention_days') not in (30, 90, 365)
-            or not isinstance(consent.get('date'), str)):
-        raise ValueError('metrics consent required')
+    # Keep the consent schema shared with metrics, without a cross-skill import. The parallel keys
+    # record no usage data, so they never need that consent.
+    if key in ('ledger', 'tasks'):
+        try:
+            consent = json.loads(dr.read_data('state/consent.json', 4096))
+        except (OSError, ValueError):
+            raise ValueError('metrics consent required') from None
+        if (not isinstance(consent, dict) or consent.get('retention_days') not in (30, 90, 365)
+                or not isinstance(consent.get('date'), str)):
+            raise ValueError('metrics consent required')
     root = find_root(cwd)
     if root is None:
         raise ValueError('no repository')
@@ -1162,7 +1174,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('choice', choices=('on', 'off', 'label', 'settings'))
     parser.add_argument('--set', dest='label')
-    parser.add_argument('--clear', choices=('ledger', 'tasks'))
+    parser.add_argument('--clear', choices=('ledger', 'tasks', 'parallel', 'parallel-caps'))
     parser.add_argument('--yes', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args(argv)

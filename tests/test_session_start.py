@@ -23,7 +23,7 @@ ROLES_UNKNOWN = ("Roles: code review unknown; security review unknown; navigator
                  "posting claude unknown, codex unknown, antigravity unknown\n")
 ROLES_DEFAULT = ("Roles: code review unassigned; security review unassigned; navigator unassigned; judge host; "
                  "posting claude unverified, codex unverified, antigravity unverified\n")
-SLOTS_DEFAULT = "Parallel slots: 5 free of 5 (claude 0 open, codex 0 open, antigravity 0 open; default)\n"
+SLOTS_DEFAULT = "Parallel slots: 3 free of 3 (claude 0 open, codex 0 open, antigravity 0 open; default)\n"
 STATE_BASELINE = ("\nPlugin state (local files; fixed words and counts only)\n"
                   "Delegation mode: unknown\n" + ROLES_DEFAULT + "Quota (cached): unknown\nOpen ledger dispatches: 0\n" + SLOTS_DEFAULT)
 
@@ -247,13 +247,23 @@ class StateBlockTest(SyntheticStateTest):
                                        "Open ledger dispatches: 0\n" + SLOTS_DEFAULT)
 
     def test_parallel_slots_from_canonical_synthetic_state(self):
-        self.write("host.md", "## Limits\n- Parallel dispatches: at most 6 at one time.\n"
-                   "- Parallel per family: codex=3\n")
-        records = [dict(event="start", id=str(n), agent=agent)
+        import parallel_slots
+        repo = self.root / 'repository'
+        (repo / '.git').mkdir(parents=True)
+        nested = repo / 'nested'
+        nested.mkdir()
+        code = parallel_slots.repository_code(repo)
+        self.write("host.md", "## Limits\n- Parallel dispatches: at most 32 at one time.\n"
+                   "## Project settings\n- %s parallel: 6\n- %s parallel-caps: codex=3\n" % (code, code))
+        records = [dict(event="start", id=str(n), agent=agent, project=repo.name)
                    for n, agent in enumerate(("claude-session", "codex", "codex", "codex"))]
+        records.append(dict(event='start', id='other', agent='codex', project='other'))
         self.write("ledger.jsonl", "\n".join(map(json.dumps, records)))
-        self.assertIn("Parallel slots: 2 free of 6 (claude 1 open, codex 3 open of cap 3, "
-                      "antigravity 0 open; host config)\n", self.state())
+        with mock.patch('os.getcwd', return_value=str(nested)):
+            self.assertIn("Parallel slots: 2 free of 6 (claude 1 open, codex 3 open of cap 3, "
+                          "antigravity 0 open; project settings)\n", self.state())
+        with mock.patch('os.getcwd', return_value=str(self.root)):
+            self.assertIn(SLOTS_DEFAULT, self.state())
 
     def test_no_metrics_consent_still_reads_recorded_roles(self):
         self.write("host.md", "## Agents on this machine\n| Codex | yes | x | x | x |\n"
