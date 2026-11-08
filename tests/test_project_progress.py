@@ -103,6 +103,41 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.host.stat().st_mode), 0o600)
         self.assertFalse(list(self.data.glob('.write-*')))
 
+    def test_parallel_settings_validation_and_section_bounds(self):
+        for value in ('1', '5', '32'):
+            self.assertTrue(self.pp.valid_setting('parallel', value))
+        for value in ('0', '33', '-1', '1.0', 'true', '', ' 2', '2 ', 2, None):
+            self.assertFalse(self.pp.valid_setting('parallel', value))
+        for value in ('claude=1', 'codex=32, antigravity=2', 'claude=2,codex=1,antigravity=3'):
+            self.assertTrue(self.pp.valid_setting('parallel-caps', value))
+        for value in ('', 'codex=0', 'codex=33', 'codex=1,codex=2', 'other=1', 'codex=1,', 'codex=true', None):
+            self.assertFalse(self.pp.valid_setting('parallel-caps', value))
+            with self.assertRaises(ValueError):
+                self.pp.project_settings('## Project settings\n- aaaaaaaa ledger: Alias\n- aaaaaaaa parallel-caps: %s\n' % value)
+        good = '## Project settings\n- aaaaaaaa parallel: 2\n- aaaaaaaa parallel-caps: codex=3\n'
+        self.assertEqual(self.pp.project_settings(good)[('aaaaaaaa', 'parallel-caps')], 'codex=3')
+        for count in (100, 101):
+            text = '## Project settings\n' + ''.join('- %08x parallel: 2\n' % n for n in range(count))
+            if count == 100:
+                self.assertEqual(len(self.pp.project_settings(text)), 100)
+            else:
+                with self.assertRaises(ValueError):
+                    self.pp.project_settings(text)
+
+    def test_parallel_settings_cli_set_clear_preserves_other_entries(self):
+        import io
+        self.consent()
+        code = self.pp.repository_code(self.repo)
+        self.assertTrue(self.pp.set_setting(self.repo, 'ledger', 'Alias'))
+        with mock.patch('os.getcwd', return_value=str(self.repo)), mock.patch('sys.stdout', new_callable=io.StringIO) as out:
+            for key, value in (('parallel', '2'), ('parallel-caps', 'codex=1, claude=2')):
+                self.assertEqual(self.pp.main(['settings', '--set', key + '=' + value]), 0)
+                self.assertEqual(self.pp.project_settings(self.host.read_text())[(code, key)], value)
+                self.assertEqual(self.pp.main(['settings', '--clear', key]), 0)
+                self.assertNotIn((code, key), self.pp.project_settings(self.host.read_text()))
+            self.assertNotIn('Alias', out.getvalue())
+        self.assertEqual(self.pp.project_settings(self.host.read_text())[(code, 'ledger')], 'Alias')
+
     def test_budget_restores_alarm_after_timeout_during_cancel(self):
         signal = self.pp.signal
         for body_timeout in (False, True):

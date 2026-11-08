@@ -10,6 +10,7 @@ starts no process, makes no network call and writes nothing.
 
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -140,7 +141,7 @@ def open_dispatches():
 def parallel_words():
     try:
         from parallel_slots import summary
-        return summary()
+        return summary(os.getcwd())
     except Exception:
         return "unknown"
 
