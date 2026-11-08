@@ -1,6 +1,6 @@
 # Release 0.2.1: scope
 
-Status: released; tagged v0.2.1 on 2026-11-09 after the scope was cut by the coordinator (see Moved to a later release); packages 1 to 11, 12a and 15 are in the release and nothing here is verified on a live host.
+Status: in progress; the release is prepared (version, changelog, README) and waits for its merge, the tag and the GitHub release; the scope was cut by the coordinator on 2026-11-09 (see Moved to a later release); packages 1 to 11, 12a and 15 are in it and nothing here is verified on a live host.
 
 ## Why
 
@@ -30,7 +30,7 @@ and the setup gaps found on the way.
 | 10 | Check reports plugin enablement | #184: `enabledPlugins` state per Claude home. | implemented; fixture tests. |
 | 11 | Unsandboxed review runs | #184: documentation of the unsandboxed review and posting run, `needs-permission` versus `quota`, and which command refuses a review dispatch's acceptance. | implemented; documentation only. |
 | 12a | Heavy-job wrapper | #180: `heavy_run.py`, a machine-wide one-at-a-time lock with load and memory gates, a wait cap and a maximum run time. | implemented; fixture tests, no live-host proof. |
-| 15 | Autopilot first slice (`/fnl-brb`) | #183: `autopilot.py` start, stop, check and log, and `merge_check.py --independent`. The skill, the alias and the `## Autopilot` setup feature follow in the next pull request. | implemented; classification only, nothing executes commands. |
+| 15 | Autopilot first slice (`/fnl-brb`) | #183: `autopilot.py` start, stop, check and log, and `merge_check.py --independent`. #185: the `fnl-autopilot` skill, its `fnl-brb` alias and the `/fnl-setup add autopilot` feature. | implemented; classification only, nothing executes commands; the live loop, dashboard tab, scheduler, hooks and host backstop are deferred. |
 
 ## Moved to a later release
 
