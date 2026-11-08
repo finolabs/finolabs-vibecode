@@ -105,7 +105,7 @@ The main preferences are yours. They live in host config: `## Delegation mode`, 
 - **Delegation mode.** `manual`: other agents get work only when you say so. `suggest` (default): the agent names who could take a task and waits for your yes. `auto`: it hands off bounded tasks by the guideline, records the decision in the ledger and tells you after.
 - **Agents.** Present agent families and user-confirmed allowed models. Delegation uses only present families; with no other family present it is off. A missing inventory keeps previous behavior and suggests a scan; an inventory older than 30 days prompts a stale warning once per session.
 - **Routing.** `on` (default) or `off`. Off removes the Claude Code/Codex session-start router reminder; the skill still works when called by name. Antigravity's static always-on rule cannot honor this switch.
-- **Parallel runs.** The user sets a total from 1 to 32 and optional per-family caps in `/fnl-setup add delegation`. Missing or invalid totals fall back to 5. [`parallel_slots.py`](docs/specs/parallel-instances.md) checks advisory capacity snapshots, not reservations; the ledger does not enforce these limits.
+- **Parallel runs.** The user sets a total from 1 to 32 and optional per-family caps in `/fnl-setup add delegation`. The limit is per repository; a missing setting defaults to 3 and a malformed one reads as unknown. [`parallel_slots.py`](docs/specs/parallel-instances.md) checks advisory capacity snapshots, not reservations; the ledger does not enforce these limits.
 
 For Delegation mode `auto`, `/fnl-setup mode auto-gate on` offers a separate opt-in with a clear Yes or No. On Claude Code, the installed hook may deny the first file write in a repository without a decision in the last 8 hours; a recorded decision or prior denial allows later writes in that window, and expiry can cause one more denial. The hook allows on errors. It does not cover shell commands and is not an approval or security control. Turn it off with `/fnl-setup mode auto-gate off` or `FNL_AUTO_GATE=off`. Antigravity and Codex have no auto gate declaration; agent judgment remains advisory there. Real-session delivery of this implementation is not verified.
 
@@ -130,7 +130,7 @@ Start any of them with `/fnl-setup` (on Codex, also `$fnl-setup instructions` ri
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-It targets Claude Code, Codex and Antigravity from one `skills/` folder. Release documented here: **0.2.0** (phase 0; see `fnl-versioning` and the [release record](docs/specs/release-0.2.0.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.1-dev`.
+It targets Claude Code, Codex and Antigravity from one `skills/` folder. Release documented here: **0.2.1** (phase 0; see `fnl-versioning` and the [release record](docs/specs/release-0.2.1.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.2-dev`.
 
 <p align="center">
   <picture>
@@ -218,7 +218,7 @@ Both reviewers cover two rings, the change and its impact set, rather than the w
 
 Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh). Choose one way per agent, because both together list every skill twice.
 
-Claude Code and Codex install the plugin from the [FINOLABS catalog](https://github.com/finolabs/plugins), marketplace `finolabs`, which groups the FINOLABS plugins together. This repository also remains its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. The catalog selects the installed ref; direct installs from this repository track `main`, which moves to `0.2.1-dev` after 0.2.0. Releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
+Claude Code and Codex install the plugin from the [FINOLABS catalog](https://github.com/finolabs/plugins), marketplace `finolabs`, which groups the FINOLABS plugins together. This repository also remains its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. The catalog selects the installed ref; direct installs from this repository track `main`, which moves to `0.2.2-dev` after 0.2.1. Releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
 
 ### Claude Code
 
