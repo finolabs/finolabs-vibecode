@@ -1,6 +1,6 @@
 # Heavy-job guard and test scope (release 0.2.1)
 
-Status: draft; no code yet. Owner decisions settled 2026-11-08; the CLAUDE.md exception for the gate lands with this spec before any code.
+Status: draft; `heavy_run.py` is implemented; the gate, its installer and the setup question are not. Owner decisions settled 2026-11-08; the CLAUDE.md exception for the gate lands with this spec before any code.
 
 ## Why
 
@@ -130,7 +130,7 @@ A `PreToolUse` hook on the `Bash` tool, in its own group in the user's Claude Co
    names only and never print or inspect values.
 9. A command with detached flags is refused with exit 64 before the lock is taken: fixtures `docker compose up -d`,
    `docker-compose up -d`, `docker compose run -d SERVICE` and `docker run --detach IMAGE`.
-10. The test module runs in under two seconds and starts no Docker or other heavy work.
+10. The test module finishes in seconds and starts no Docker or other heavy work.
 
 ## Out of scope
 

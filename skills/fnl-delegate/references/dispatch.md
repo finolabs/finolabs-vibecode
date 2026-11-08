@@ -16,16 +16,20 @@ Read [parallel-dispatch.md](parallel-dispatch.md) for family pools, shared quota
 
 ## Heavy-job lock
 
-Serialise heavy jobs with an atomic `mkdir` lock at the path the host config names:
+Run each heavy command through the wrapper, which holds one machine-wide lock and waits for load and free memory:
 
 ```bash
-until mkdir "$LOCK" 2>/dev/null; do sleep 15; done
-echo "$$ <dispatch-id> $(date)" > "$LOCK/owner"
-<heavy command>; status=$?
-rm -rf "$LOCK"; exit $status
+python3 -I <this skill folder>/scripts/heavy_run.py run --label "<what it is>" -- <heavy command...>
 ```
 
-A lock whose owner process is gone is stale: confirm with `ps -p <pid>` (the first field of `owner`) before removing it.
+It starts the command only when the one-minute load average is below the limit (default 12), free memory is at least
+the minimum (default 3 GB) and no other heavy job holds the lock, in any repository. It waits up to the cap (default 40
+minutes), then exits 75 and names the holder when it can. `python3 -I <this skill folder>/scripts/heavy_run.py status`
+shows whether the lock is held and by whom, or "owner unknown". The lock is released when the command and anything it
+left running have ended; nothing needs removing by hand, and a killed wrapper does not leave a lock to repair. Detached
+Docker launches (the short and long detach flags) are refused; wrap a foreground script that starts, tests and tears down. The limits
+come from `## Heavy jobs` in the host config (`Load limit`, `Memory minimum GB`, `Wait cap minutes`). The enforcer is
+the script for commands run through it; using it is advisory (agent judgment).
 
 ## Handover after an interrupted run
 
