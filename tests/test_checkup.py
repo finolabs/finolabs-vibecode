@@ -90,14 +90,25 @@ class CheckupTest(unittest.TestCase):
     def plugin_row(self, host="claude"):
         return next(r for r in self.data()["hosts"][host] if r["check"] == "plugin")
 
-    def test_folder_marketplace_reports_live_version_and_the_stale_registry_one(self):
+    def test_folder_marketplace_that_disagrees_with_the_registry_stays_unverified(self):
         self.install_claude()
         self.folder_marketplace(self.home / ".claude", "2.0.0-dev")
         row = self.plugin_row()
-        self.assertEqual(row["status"], "ok")
-        self.assertIn("loads from its folder", row["reason"])
-        self.assertIn("version 2.0.0-dev", row["reason"])
+        self.assertEqual(row["status"], "unverified")
+        self.assertIn("folder marketplace declares version 2.0.0-dev", row["reason"])
         self.assertIn("registry records 1.0.0", row["reason"])
+        hooks = next(r for r in self.data()["hosts"]["claude"] if r["check"] == "hooks")
+        self.assertIn("no explicit hook file", hooks["reason"])
+
+    def test_hooks_row_names_the_folder_source_when_the_folder_declares_hooks(self):
+        self.install_claude()
+        live = self.folder_marketplace(self.home / ".claude", "2.0.0")
+        self.write(live / ".claude-plugin/plugin.json", json.dumps({
+            "name": "finolabs-vibecode", "version": "2.0.0", "hooks": "./.claude-plugin/hooks.json"}))
+        self.write(live / ".claude-plugin/hooks.json", json.dumps({"hooks": {
+            "SessionStart": [{"hooks": []}], "Stop": [{"hooks": []}]}}))
+        hooks = next(r for r in self.data()["hosts"]["claude"] if r["check"] == "hooks")
+        self.assertIn("folder hook file", hooks["reason"])
 
     def test_folder_marketplace_with_matching_registry_version_adds_no_registry_note(self):
         self.install_claude()
@@ -108,8 +119,9 @@ class CheckupTest(unittest.TestCase):
         self.install_claude()
         live = self.folder_marketplace(self.home / ".claude", "2.0.0")
         (live / ".claude-plugin/plugin.json").write_text("not json")
-        self.assertNotEqual(self.plugin_row()["status"], "missing")
-        self.assertNotIn("version 2.0.0", self.plugin_row()["reason"])
+        row = self.plugin_row()
+        self.assertEqual(row["status"], "ok")
+        self.assertEqual(row["reason"], "install recorded; version 1.0.0")
 
     def test_claude_config_dir_selects_the_home_the_session_uses(self):
         other = self.home / ".claude-elsewhere"
@@ -139,6 +151,39 @@ class CheckupTest(unittest.TestCase):
         self.assertIn(".claude-work: version 0.5.0", row["reason"])
         self.assertIn(".claude-omni: no install record", row["reason"])
         self.assertNotIn(str(self.home), row["reason"])
+
+    def test_other_claude_homes_are_found_among_hundreds_of_home_entries(self):
+        for number in range(150):
+            (self.home / f"d{number:03}").mkdir()
+        root = self.home / ".claude-work/plugins/cache/example/finolabs-vibecode/0.5.0"
+        self.write(root / ".claude-plugin/plugin.json", json.dumps({
+            "name": "finolabs-vibecode", "version": "0.5.0"}))
+        self.write(self.home / ".claude-work/plugins/installed_plugins.json", json.dumps({
+            "plugins": {"finolabs-vibecode@example": [{"installPath": str(root)}]}}))
+        self.assertIn(".claude-work: version 0.5.0", self.setup_item("other claude homes")["reason"])
+
+    def test_sibling_folders_without_plugins_and_symlinks_are_not_listed(self):
+        (self.home / ".claude-science").mkdir()
+        (self.home / ".claude-real/plugins").mkdir(parents=True)
+        (self.home / ".claude-link").symlink_to(self.home / ".claude-real")
+        row = self.setup_item("other claude homes")
+        self.assertIn(".claude-real: no install record", row["reason"])
+        self.assertNotIn("science", row["reason"])
+        self.assertNotIn("link", row["reason"])
+
+    def test_default_home_is_listed_when_the_selected_home_is_elsewhere(self):
+        self.install_claude()
+        elsewhere = self.base / "elsewhere"
+        elsewhere.mkdir()
+        self.env["CLAUDE_CONFIG_DIR"] = str(elsewhere)
+        self.assertIn(".claude: version 1.0.0", self.setup_item("other claude homes")["reason"])
+
+    def test_claude_config_dir_also_selects_the_instruction_file(self):
+        other = self.home / ".claude-elsewhere"
+        self.write(other / "CLAUDE.md", "Use fnl-coding-router first.\n")
+        self.env["CLAUDE_CONFIG_DIR"] = str(other)
+        row = next(r for r in self.data()["hosts"]["claude"] if r["check"] == "instructions")
+        self.assertEqual(row["status"], "ok")
 
     def test_other_claude_homes_row_absent_without_any_extra_home(self):
         self.assertFalse(any(r["check"] == "other claude homes" for r in self.data()["setup"]))
