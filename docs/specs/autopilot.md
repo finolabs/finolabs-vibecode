@@ -176,8 +176,8 @@ instruction files; any use of credentials by the plugin.
    files are 0600 in a private folder, atomic, symlink-safe.
 2. Setup: each setting is a separate question; preview and digest; round trip through the host config reader; start
    with a recorded setup prints the summary and proceeds, without one it asks.
-3. `merge_check.py --independent` refuses a same-family review pair; autopilot refuses to merge a pull request it
-   did not open or one touching a Tier 3 path.
+3. `merge_check.py --independent` refuses a same-family review pair; autopilot refuses to merge a pull request by
+   an author that is not trusted or one touching a Tier 3 path.
 4. The notice hook is non-blocking, exits 0, prints nothing without a lease and is declared in the Claude Code hook
    file only. The live loop starts once, ends with the lease, is killed by stop and does not outlive 12 hours.
 5. The dashboard tab renders every field with `textContent`, shows data age, and handles an empty log.
