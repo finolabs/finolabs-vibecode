@@ -25,9 +25,8 @@ waiting to be asked. The user stops it when they return. It is not on by default
   while the user is asleep or out) is autopilot itself. The skill folder keeps the fnl-autopilot name as the
   canonical, documented command; a second entry with a friendlier name is only a thin alias that loads the same
   procedure (a skill folder cannot point outside itself, so the alias holds a pointer sentence and the dependency
-  on fnl-autopilot, never a copy of the rules). Name candidates for the alias, owner to pick: fnl-hands-off,
-  fnl-brb, fnl-nightshift, fnl-sleepwalk, fnl-dont-wake-me, fnl-yolo-but-safe. Until picked, only
-  fnl-autopilot is built.
+  on fnl-autopilot, never a copy of the rules). The owner picked the alias name fnl-brb ("be right back") on 2026-11-09, so the alias is `/fnl-brb`. It is built together with
+  fnl-autopilot, not before it.
 - Merge: when autopilot is on, the agent may merge a pull request without asking when both review markers are
   APPROVE at the current head, every check is green (the hosted CI and the local test run of the touched modules) and
   `merge_check.py` prints `MERGE OK`. This is the durable authorization recorded at start for exactly that action;
@@ -190,4 +189,4 @@ instruction files; any use of credentials by the plugin.
   throwaway task before building), and how the host rules behave in that mode.
 - Advisor budget: committee only for Tier 2 decisions that touch design, one opinion otherwise.
 - The format of the preferences file the advisor may read.
-- The alias name (owner to pick from the candidates above) and whether the merge authorization also covers a trusted author's pull request.
+- Whether the merge authorization also covers a trusted author's pull request.
