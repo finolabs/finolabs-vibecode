@@ -14,12 +14,19 @@ from tests.data_root_fixture import account
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import parallel_slots as slots
+import project_progress as progress
 
 
 class ParallelSlotsTest(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
+        self.repo = Path(temporary.name).resolve() / 'repository'
+        (self.repo / '.git').mkdir(parents=True)
+        self.code = progress.repository_code(self.repo)
+        cwd = mock.patch('os.getcwd', return_value=str(self.repo))
+        cwd.start()
+        self.addCleanup(cwd.stop)
         self.home = account(self, Path(temporary.name) / 'home')
         self.root = self.home / '.finolabs' / 'vibecode'
         self.root.mkdir(parents=True, mode=0o700)
@@ -34,11 +41,11 @@ class ParallelSlotsTest(unittest.TestCase):
         return path
 
     def host(self, total=6, caps='codex=3'):
-        return self.write('host.md', '## Limits\n- Parallel dispatches: at most %s at one time.\n' % total +
-                          ('- Parallel per family: %s\n' % caps if caps is not None else ''))
+        return self.write('host.md', '## Project settings\n- %s parallel: %s\n' % (self.code, total) +
+                          ('- %s parallel-caps: %s\n' % (self.code, caps) if caps is not None else ''))
 
     def ledger(self, agents):
-        rows = [dict(event='start', id=str(n), agent=agent) for n, agent in enumerate(agents)]
+        rows = [dict(event='start', id=str(n), agent=agent, project=self.repo.name) for n, agent in enumerate(agents)]
         return self.write('ledger.jsonl', '\n'.join(map(json.dumps, rows)) + '\n')
 
     def command(self, *args):
@@ -50,11 +57,11 @@ class ParallelSlotsTest(unittest.TestCase):
     def test_counts_mapping_finished_duplicate_and_order_independent(self):
         self.host(9, 'claude=4, codex=3')
         rows = [dict(event='finish', id='0'), dict(event='start', id='0', agent='codex')]
-        rows += [dict(event='start', id=str(n + 1), agent=agent) for n, agent in enumerate(slots.AGENTS)]
+        rows += [dict(event='start', id=str(n + 1), agent=agent, project=self.repo.name) for n, agent in enumerate(slots.AGENTS)]
         rows.append(rows[-1])
         self.write('ledger.jsonl', '\n'.join(map(json.dumps, rows)))
         state = slots.status()
-        self.assertEqual(state, dict(limit=9, open=5, stale=0, free=4, source='host config', families={
+        self.assertEqual(state, dict(limit=9, open=5, stale=0, free=4, source='project settings', scope=dict(code=self.code, project=self.repo.name), other_projects=0, families={
             'claude': dict(open=3, cap=4, free=1), 'codex': dict(open=1, cap=3, free=2),
             'antigravity': dict(open=1, cap=None, free=None)}))
         code, output = self.command('status')
@@ -86,9 +93,9 @@ class ParallelSlotsTest(unittest.TestCase):
 
     def test_status_and_summary_report_stale_dispatches_without_counting_them(self):
         from datetime import datetime, timedelta, timezone
-        self.write('host.md', '## Limits\n- Parallel dispatches: at most 4 at one time.\n')
+        self.host(4, None)
         old = (datetime.now(timezone.utc) - timedelta(hours=10)).isoformat()
-        rows = [dict(event='start', id='old', agent='codex', ts=old, budget_min=30)]
+        rows = [dict(event='start', id='old', agent='codex', project=self.repo.name, ts=old, budget_min=30)]
         self.write('ledger.jsonl', ''.join(json.dumps(r) + '\n' for r in rows))
         state = slots.status()
         self.assertEqual((state['open'], state['stale'], state['free']), (0, 1, 4))
@@ -129,15 +136,115 @@ class ParallelSlotsTest(unittest.TestCase):
         self.host(12, 'antigravity=2, claude=4')
         code, output = self.command('check-config')
         self.assertEqual(code, 0)
-        self.assertEqual(json.loads(output), dict(limit=12, source='host config',
-                                                caps=dict(claude=4, codex=None, antigravity=2)))
+        self.assertEqual(json.loads(output), dict(limit=12, source='project settings',
+                                                caps=dict(claude=4, codex=None, antigravity=2), legacy_limits=False))
         for caps in ('', 'codex=0', 'codex=13', 'codex=2, codex=3', 'other=1', 'codex=true',
-                     'codex=2,', 'codex=2\n- Parallel per family: claude=1'):
+                     'codex=2,', 'codex=2\n- %s parallel-caps: claude=1' % self.code):
             self.host(12, caps)
             self.assertEqual(self.command('status'), (3, 'unknown\n'))
             self.assertEqual(self.command('check-config'), (3, 'unknown\n'))
-        self.write('host.md', '## Limits\n## Limits\n')
+        self.write('host.md', '## Project settings\n## Project settings\n')
         self.assertEqual(self.command('status'), (3, 'unknown\n'))
+
+    def test_repository_scope_alias_other_projects_and_cli_repo(self):
+        from datetime import datetime, timedelta, timezone
+        self.host(2, 'codex=1')
+        with (self.root / 'host.md').open('a') as host:
+            host.write('- %s ledger: Alias\n' % self.code)
+        other = self.repo.parent / 'other'
+        (other / '.git').mkdir(parents=True)
+        old = (datetime.now(timezone.utc) - timedelta(hours=10)).isoformat()
+        rows = [dict(event='start', id='mine', agent='codex', project='Alias'),
+                dict(event='start', id='other', agent='claude', project='other'),
+                dict(event='start', id='unknown', agent='codex'),
+                dict(event='start', id='old-other', agent='codex', project='other', ts=old, budget_min=30)]
+        self.write('ledger.jsonl', '\n'.join(map(json.dumps, rows)))
+        state = slots.status()
+        self.assertEqual((state['limit'], state['open'], state['other_projects'], state['stale']), (2, 1, 2, 0))
+        self.assertEqual(state['scope'], dict(code=self.code, project='Alias'))
+        code, output = self.command('status', '--repo', str(other / '.git'))
+        self.assertEqual(code, 0)
+        other_state = json.loads(output)
+        self.assertEqual((other_state['limit'], other_state['source'], other_state['open'], other_state['other_projects']),
+                         (5, 'default', 1, 2))
+        self.assertEqual(self.command('check', '--repo', str(other), '--family', 'codex', '--count', '5'),
+                         (3, 'Parallel slots: full\n'))
+        code, output = self.command('check-config', '--repo', str(self.repo))
+        self.assertEqual((code, json.loads(output)['limit']), (0, 2))
+
+    def test_outside_repository_counts_nothing_and_ignores_legacy_limits(self):
+        self.write('host.md', '## Limits\n- Parallel dispatches: at most 32 at one time.\n')
+        self.ledger(['codex', 'claude'])
+        code, output = self.command('status', '--repo', str(self.repo.parent))
+        self.assertEqual(code, 0)
+        state = json.loads(output)
+        self.assertEqual((state['scope'], state['limit'], state['source'], state['open'], state['other_projects']),
+                         (None, 5, 'default', 0, 2))
+        code, output = self.command('check-config', '--repo', str(self.repo.parent))
+        self.assertEqual((code, json.loads(output)['legacy_limits']), (3, True))
+        self.host(2, None)
+        with (self.root / 'host.md').open('a') as host:
+            host.write('## Limits\n- Parallel dispatches: at most 32 at one time.\n')
+        self.assertEqual(slots.status()['limit'], 2)
+        self.assertTrue(json.loads(self.command('check-config')[1])['legacy_limits'])
+        (self.root / 'host.md').unlink()
+        state = json.loads(self.command('status', '--repo', str(self.repo.parent))[1])
+        self.assertEqual((state['limit'], state['source'], state['scope'], state['open']), (5, 'default', None, 0))
+
+    def test_root_and_identity_parity_plain_checkout_and_linked_worktree(self):
+        worktree = self.repo.parent / 'linked'
+        worktree.mkdir()
+        metadata = self.repo / '.git/worktrees/linked'
+        metadata.mkdir(parents=True)
+        (metadata / 'commondir').write_text('../..\n')
+        (worktree / '.git').write_text('gitdir: ../repository/.git/worktrees/linked\n')
+        nested = worktree / 'nested'
+        nested.mkdir()
+        for path in (self.repo, self.repo / '.git', worktree, nested, self.repo.parent):
+            with self.subTest(path=path):
+                self.assertEqual(slots.find_root(path), progress.find_root(path))
+        self.assertEqual(slots.repository_code(self.repo), progress.repository_code(self.repo))
+        self.assertEqual(slots.repository_code(worktree), progress.repository_code(worktree))
+        self.assertEqual(slots.repository_code(worktree), self.code)
+        self.host(2, None)
+        state = json.loads(self.command('status', '--repo', str(nested))[1])
+        self.assertEqual((state['limit'], state['scope']['code'], state['scope']['project']), (2, self.code, 'linked'))
+        (metadata / 'commondir').unlink()
+        (metadata / 'commondir').symlink_to(self.repo / 'missing')
+        self.assertEqual(slots.repository_code(worktree), progress.repository_code(worktree))
+
+    def test_strict_project_settings_parity_and_bounds(self):
+        good = '## Project settings\n- %s parallel: 2\n' % self.code
+        for bad in ('parallel: 0', 'parallel: 33', 'parallel: two', 'parallel: 2',
+                    'parallel-caps: codex=3', 'parallel-caps: codex=1, codex=2', 'unknown: x',
+                    'ledger: ', 'tasks: ../bad.md', 'tasks: AGENTS.md'):
+            self.write('host.md', good + '- %s %s\n' % (self.code, bad))
+            self.assertEqual(self.command('status'), (3, 'unknown\n'))
+        for count in (100, 101):
+            text = '## Project settings\n' + ''.join('- %08x parallel: 2\n' % n for n in range(count))
+            self.write('host.md', text)
+            self.assertEqual(self.command('status')[0], 0 if count == 100 else 3)
+        self.write('host.md', '```\n## Project settings\nbad\n```\n' + good)
+        self.assertEqual(slots.status()['limit'], 2)
+        self.write('host.md', good + '```\n')
+        self.assertEqual(self.command('status'), (3, 'unknown\n'))
+
+    def test_caps_without_total_use_default_and_legacy_sections_are_only_detected(self):
+        for cap in (5, 6):
+            self.write('host.md', '## Project settings\n- %s parallel-caps: codex=%s\n' % (self.code, cap))
+            code, output = self.command('status')
+            if cap == 5:
+                state = json.loads(output)
+                self.assertEqual((code, state['limit'], state['source'], state['families']['codex']['cap']),
+                                 (0, 5, 'default', 5))
+                self.assertEqual(self.command('check-config')[0], 3)
+            else:
+                self.assertEqual((code, output), (3, 'unknown\n'))
+        self.write('host.md', '## Limits\n- Parallel per family: broken\n## Limits\n')
+        self.assertEqual(slots.status()['limit'], 5)
+        self.assertTrue(json.loads(self.command('check-config')[1])['legacy_limits'])
+        self.write('host.md', '```\n## Limits\n```\n')
+        self.assertFalse(json.loads(self.command('check-config')[1])['legacy_limits'])
 
     def test_unsafe_unreadable_and_bounded_inputs_never_echo(self):
         for name, limit in [('host.md', slots.HOST_LIMIT), ('ledger.jsonl', slots.LEDGER_LIMIT)]:
@@ -172,7 +279,9 @@ class ParallelSlotsTest(unittest.TestCase):
         for raw in ('{broken', '[]', '{}', '{"id":1,"event":"start"}',
                     '{"id":"x","event":"start","agent":"other"}',
                     '{"id":"x","event":"start","agent":"codex"}\n'
-                    '{"id":"x","event":"start","agent":"claude"}'):
+                    '{"id":"x","event":"start","agent":"claude"}',
+                    '{"id":"x","event":"start","agent":"codex","project":"a"}\n'
+                    '{"id":"x","event":"start","agent":"codex","project":"b"}'):
             self.write('ledger.jsonl', raw)
             self.assertEqual(self.command('status'), (3, 'unknown\n'))
 
@@ -210,7 +319,7 @@ class ParallelSlotsTest(unittest.TestCase):
         (relocated / '.root-id').write_text('synthetic')
         (relocated / '.root-id').chmod(0o600)
         slots.dr.write_pointer(relocated, 'synthetic')
-        (relocated / 'host.md').write_text('## Limits\n- Parallel dispatches: at most 10 at one time.\n')
+        (relocated / 'host.md').write_text('## Project settings\n- %s parallel: 10\n' % self.code)
         self.assertEqual(slots.status()['limit'], 10)
         (relocated / '.root-id').write_text('changed')
         self.assertEqual(self.command('status'), (3, 'unknown\n'))
@@ -219,7 +328,7 @@ class ParallelSlotsTest(unittest.TestCase):
         import subprocess
         self.host(8, None)
         result = subprocess.run([sys.executable, '-I', str(ROOT / 'scripts/parallel_slots.py'), 'status'],
-                                capture_output=True, text=True, env={})
+                                capture_output=True, text=True, env={}, cwd=self.repo)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)['limit'], 8)
 
