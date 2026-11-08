@@ -124,6 +124,16 @@ class ProgressTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.pp.project_settings(text)
 
+    def test_parallel_settings_need_no_metrics_consent_but_ledger_and_tasks_do(self):
+        code = self.pp.repository_code(self.repo)
+        self.assertTrue(self.pp.set_setting(self.repo, 'parallel', '4'))
+        self.assertEqual(self.pp.project_settings(self.host.read_text())[(code, 'parallel')], '4')
+        self.assertTrue(self.pp.set_setting(self.repo, 'parallel-caps', 'codex=2'))
+        for key, value in (('ledger', 'Alias'), ('tasks', 'docs/t.md')):
+            with self.assertRaises(ValueError):
+                self.pp.set_setting(self.repo, key, value)
+        self.assertEqual(sorted(k for _, k in self.pp.project_settings(self.host.read_text())), ['parallel', 'parallel-caps'])
+
     def test_parallel_settings_cli_set_clear_preserves_other_entries(self):
         import io
         self.consent()

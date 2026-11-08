@@ -362,11 +362,16 @@ def slot_metrics():
                     or (cap is not None and (type(cap) is not int or not 1 <= cap <= limit))):
                 raise ValueError('slots')
             rows[family] = dict(open=opened, cap=cap)
-        if state['source'] not in ('host config', 'default'):
+        if state['source'] not in ('project settings', 'default'):
             raise ValueError('source')
-        return dict(parallel_limit=limit, family_slots=rows, parallel_source=state['source'])
+        scope = state.get('scope')
+        project = scope.get('project') if isinstance(scope, dict) else None
+        if not (isinstance(project, str) and re.fullmatch(r'[A-Za-z0-9 ._-]{1,40}', project)):
+            project = None
+        return dict(parallel_limit=limit, family_slots=rows, parallel_source=state['source'],
+                    parallel_project=project)
     except (OSError, ValueError, KeyError, TypeError, RecursionError):
-        return dict(parallel_limit=None, family_slots=None, parallel_source='unknown')
+        return dict(parallel_limit=None, family_slots=None, parallel_source='unknown', parallel_project=None)
 
 
 def running_metrics(generated, events=()):

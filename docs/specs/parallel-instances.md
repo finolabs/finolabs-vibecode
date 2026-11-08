@@ -1,6 +1,6 @@
 # Parallel agent instances
 
-Status: implemented; amended 2026-11-08 to project scope (see Amendment, in progress); shared helper, setup, SessionStart, dashboard, CI copy group and documentation are integrated locally; targeted verification is recorded below, while live-host scheduling and UI behavior remain unverified.
+Status: implemented; amended 2026-11-08 to project scope (see Amendment); shared helper, setup, SessionStart, dashboard, CI copy group and documentation are integrated locally; targeted verification is recorded below, while live-host scheduling and UI behavior remain unverified.
 
 Owner decision: 2026-11-07. A model family (Claude Code, Codex, Antigravity) is a pool of agents, not one seat. Independent tasks may use any number of runs of the same family within the user's total and optional per-family caps. This supersedes the former ceiling of five.
 

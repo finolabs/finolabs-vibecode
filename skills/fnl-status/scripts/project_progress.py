@@ -150,14 +150,16 @@ def repository_settings(values, root):
 def set_setting(cwd, key, value):
     if key not in ('ledger', 'tasks', 'parallel', 'parallel-caps') or value is not None and not valid_setting(key, value):
         raise ValueError('invalid project setting')
-    # Keep the consent schema shared with metrics, without a cross-skill import.
-    try:
-        consent = json.loads(dr.read_data('state/consent.json', 4096))
-    except (OSError, ValueError):
-        raise ValueError('metrics consent required') from None
-    if (not isinstance(consent, dict) or consent.get('retention_days') not in (30, 90, 365)
-            or not isinstance(consent.get('date'), str)):
-        raise ValueError('metrics consent required')
+    # Keep the consent schema shared with metrics, without a cross-skill import. The parallel keys
+    # record no usage data, so they never need that consent.
+    if key in ('ledger', 'tasks'):
+        try:
+            consent = json.loads(dr.read_data('state/consent.json', 4096))
+        except (OSError, ValueError):
+            raise ValueError('metrics consent required') from None
+        if (not isinstance(consent, dict) or consent.get('retention_days') not in (30, 90, 365)
+                or not isinstance(consent.get('date'), str)):
+            raise ValueError('metrics consent required')
     root = find_root(cwd)
     if root is None:
         raise ValueError('no repository')
