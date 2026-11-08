@@ -20,9 +20,11 @@ Two gaps caused it:
 
 - The guard is user-scope: it protects the machine from any agent in any repository, not one repository.
 - Test scope is a rule: run only the modules whose code the change touches, never batch more than two modules in one
-  command, check load first, and never test while a review or delegated run is active. The same line is now in the
-  owner's user-scope instructions.
-
+  command, and check load first. Overlap is limited, not the run's own verification: a coordinator starts no test
+  while a review or delegated run it started is active, but a delegate runs its assigned targeted checks and a reviewer
+  runs its review checks, each serialised by the lock when heavy. Lifecycle example: the delegate edits, runs its
+  assigned targeted checks, returns the evidence, and the coordinator then accepts and runs its own checks. The
+  owner's user-scope line is broader than this and stays the owner's wording.
 - **Enforcement (owner, 2026-11-08):** script and rules, plus the opt-in `PreToolUse` gate on Claude Code (part D). The
   gate is the fifth scoped exception in `CLAUDE.md`, recorded in the same pull request as this spec, and no gate code
   lands before that rule is merged. It never covers Codex or Antigravity.
@@ -42,19 +44,33 @@ Two gaps caused it:
   is below the minimum. Poll every 15 seconds up to a wait cap (default 40 minutes), then exit 75 with a message that
   names the holder's label and age. Load and memory come from `os.getloadavg()` and `vm_stat`, run once per poll as
   fixed argv with no shell; on a platform without `vm_stat` only load is checked and `status` says so.
-- The command runs with the caller's environment and working folder, no shell. The script never prints, logs or
-  stores the environment, the command's arguments beyond a 40-character label the caller passes with `--label`, or
-  any output.
-- Release: the lock is removed when the command exits, on a signal, or when the wait cap ends. A crash leaves a stale
-  lock, which the next run clears after confirming the owner process is gone.
+- Environment: the child and the script's own `vm_stat` launches start with the allowlisted environment of
+  `run_env.py` (`run_env.environment()`), the same helper that `verify_claim.py` and `delegate_env.py` use, plus only
+  the variable names the caller lists in `--pass-env NAME`; the structural launch-site test in `test_run_hygiene.py`
+  covers the new script. The script never prints, logs or stores the environment, the command's arguments beyond a
+  40-character label passed with `--label`, or any output. Working folder is the caller's, no shell.
+- Release and exclusion: only the process that acquired the lock removes it, and only after its child has ended. A
+  waiter whose wait cap ends exits 75 and never touches the lock. On SIGINT or SIGTERM the wrapper forwards the signal
+  to the child's process group, keeps the lock until the child has actually exited, then removes it. The `owner` file
+  records the wrapper pid and the child pid; the lock is stale only when both processes are gone, so a wrapper killed
+  by SIGKILL with a surviving child keeps the lock held. A crash with both gone leaves a stale lock that the next run
+  clears after confirming that.
 - No network, no hook, no background process.
 
 ## B. Which commands are heavy
 
-`## Heavy jobs` in the canonical host config lists patterns: Docker and testcontainers runs, a real PostgreSQL, Playwright,
-`go test` over contract or integration packages, large builds, and a repository's whole-package test suite. It also
-holds the load limit, the memory minimum and the wait cap. A missing section uses the proposed defaults above.
-`fnl-setup add delegation` asks for these values, each write after a yes.
+`## Heavy jobs` in the canonical host config lists patterns, the load limit, the memory minimum and the wait cap. A
+missing section uses the defaults settled above and this built-in default list. A pattern is a command-token sequence
+matched after splitting the command with `shlex` and skipping leading `NAME=value` words:
+
+- `docker` with `run`, `build`, `compose` or `buildx`; `docker-compose`.
+- `playwright test`, also behind `npx` or `pnpm exec`.
+- `go test` with an argument containing `contract` or `integration`.
+- `python3 -m unittest` or `python -m unittest` with no module name, `discover`, or more than two module names.
+
+Default denial fixture: `docker compose up -d`. Categories a command string cannot show (a real PostgreSQL, large
+builds, a repository's whole-package suite) are left to patterns the owner configures, and otherwise to the advisory
+rule in part C. `fnl-setup add delegation` asks for the values, each write after a yes.
 
 ## C. Rules for agents (advisory, agent judgment)
 
@@ -69,20 +85,36 @@ holds the load limit, the memory minimum and the wait cap. A missing section use
 A `PreToolUse` hook on the `Bash` tool, in its own group in the user's Claude Code hook configuration, installed and removed by a script with a dry run and a backup.
 
 - Off unless `Heavy-job gate: on` is recorded under `## Heavy jobs` in the canonical host config after a consent question of its own and a shown preview in `fnl-setup add delegation`. Unresolvable config means off. `FNL_HEAVY_GATE=off` disables it.
-- It denies one Bash call only when the command matches a heavy pattern (the section's list, else the built-in default list in part B) and does not start with `heavy_run.py run --`. The denial is one fixed message that names the script. Anything it cannot classify with certainty is allowed.
+- Canonical launch form: `python3 -I <path>/heavy_run.py run [--label <text>] [--pass-env NAME]... -- <command...>`, or
+  the same script run directly as an executable. The path may be absolute or relative. The script applies the
+  allowlisted environment itself, so no outer `run_env.py` is required; an outer `python3 -I <path>/run_env.py --`
+  prefix is also recognised and skipped. The gate recognises a wrapped command by this grammar: after `shlex` splitting,
+  an optional `run_env.py --` prefix, then an optional `python3`/`python` word with `-I`, then a word whose basename is
+  `heavy_run.py`, then `run`.
+- It denies one Bash call only when the command matches a heavy pattern (the section's list, else the built-in default
+  list in part B) and is not wrapped in that form. The denial is one fixed message that names the script. Anything it
+  cannot classify with certainty is allowed.
 - Matching is on the command string in memory. The command text is never stored, logged, sent or put in an event. It reads only the canonical host config, ignores a repository file, and allows on every error.
 - It never denies another tool, a prompt, a session start or the user's own stop, and never edits or runs the command.
 - Limits: it cannot see work started by a tool other than Bash, by a script a command calls, or by Codex or Antigravity; those rely on the rules in part C.
-- Acceptance: with the gate on and a heavy default pattern unwrapped, the hook emits the fixed denial; wrapped, non-heavy, gate off, config unreadable and malformed input all allow; the hook script writes no file and prints nothing else. Tests feed synthetic payloads in-process and start no real heavy work.
+- Acceptance (synthetic payloads, in-process, no real heavy work): denied when on: `docker compose up -d`. Allowed:
+  `python3 -I /abs/skills/fnl-delegate/scripts/heavy_run.py run --label t -- docker compose up -d`, the same with
+  `run_env.py --` in front, the direct-executable form, a non-heavy command, gate off, config unreadable and malformed
+  input. The hook script writes no file and prints nothing else.
 
 ## Acceptance
 
-1. With the lock held by a live owner, a second `run` waits and then exits 75 when the cap ends, never starting its command.
+1. With the lock held by a live owner, a second `run` waits and then exits 75 when the cap ends, never starting its
+   command and never removing the lock; a third waiter queued behind it still cannot start while the owner lives.
 2. With the load or free memory beyond the limit, `run` waits; below it, `run` starts. Tests inject the readings.
-3. A stale lock (owner process gone) is cleared once; a lock whose owner is alive is never cleared.
-4. A symlinked or foreign-owned lock path is refused.
-5. `status` prints owner label, age, load and free memory, and nothing from the environment or the command.
-6. The tests start no real heavy work: they use fake readers and short commands, and the module runs in under two
+3. A stale lock (wrapper and child both gone) is cleared once; a lock with either process alive is never cleared.
+4. A signal sent only to the wrapper is forwarded to the child group and the lock stays until the child has exited;
+   a wrapper killed with SIGKILL while a child survives leaves the lock held. Tests use short synthetic commands.
+5. A symlinked or foreign-owned lock path is refused.
+6. `status` prints owner label, age, load and free memory, and nothing from the environment or the command.
+7. The child's environment contains only the allowlisted names plus the `--pass-env` names; tests compare variable
+   names only and never print or inspect values.
+8. The tests start no real heavy work: they use fake readers and short commands, and the module runs in under two
    seconds.
 
 ## Out of scope
