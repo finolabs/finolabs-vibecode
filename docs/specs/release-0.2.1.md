@@ -1,6 +1,6 @@
 # Release 0.2.1: scope
 
-Status: in progress; the release is prepared (version, changelog, README) and waits for its merge, the tag and the GitHub release; the scope was cut by the coordinator on 2026-11-09 (see Moved to a later release); packages 1 to 11, 12a and 15 are in it and nothing here is verified on a live host.
+Status: released; v0.2.1 was tagged on commit 00dee56 and published on GitHub on 2026-11-09; the scope was cut by the coordinator that day (see Moved to a later release); packages 1 to 11, 12a and 15 are in it and nothing here is verified on a live host. The catalog pin in finolabs/plugins and the Codex refresh are not done.
 
 ## Why
 
