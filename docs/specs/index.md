@@ -18,7 +18,7 @@
 | [Merge guard](merge-guard.md) | deferred; accepted permission-rule design for Claude Code and Codex, with no shipped writer; the release 0.2.0 record moves this backlog target to 0.2.1 alongside autopilot. |
 | [Running agents](running-agents.md) | implemented; phase 1: ledger and opt-in process snapshot in Running now; liveness remains advisory, CLI name observations and real-host UI verification remain open. |
 | [Dashboard freshness](dashboard-freshness.md) | implemented; audit of what is current and the rebuild triggers that fix the gaps. |
-| [Autopilot](autopilot.md) | accepted; design only, with no shipped autopilot skill/script, setup feature or live-refresh lease; the release 0.2.0 record moves the backlog target to 0.2.1, with open design questions retained. |
+| [Autopilot](autopilot.md) | accepted; release 0.2.1 takes a first slice (skill and alias, start/stop/check, setup section, independent-review check); the dashboard tab, live loop and scheduler stay design only, with open design questions retained. |
 | [Work tracking facts per repository](work-tracking.md) | implemented; release 0.2.0 per-repository settings, work records and project progress have local tests; real-host dashboard delivery remains unverified. |
 | [Quota reading on demand](quota-on-demand.md) | implemented; release 0.2.0 on-demand reads and rate-limit markers have local fixture tests; live StopFailure payload and provider readings remain unverified. |
 | [Agent roles](agent-roles.md) | in progress; release 0.2.0 scripts and local tests are implemented; relay receipt/dashboard counters remain unimplemented; independent navigator/judge validation and live-host routing, posting and SessionStart delivery remain unverified. |
