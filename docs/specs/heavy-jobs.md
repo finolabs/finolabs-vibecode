@@ -11,7 +11,7 @@ and dozens of child processes) while delegated Codex reviews were running in oth
 
 Two gaps caused it:
 
-- The only machine-wide guard is an `mkdir` lock recipe in `fnl-delegate` "Heavy-job lock". A command that does not
+- The only machine-wide guard is an `mkdir` lock recipe in the `fnl-delegate` dispatch reference. A command that does not
   use it is not stopped, and the recipe checks neither load nor free memory.
 - Nothing tells an agent to run only the tests that cover its change, so a one-constant change ran suites that never
   touched the changed code.
@@ -58,7 +58,7 @@ holds the load limit, the memory minimum and the wait cap. A missing section use
 
 ## C. Rules for agents (advisory, agent judgment)
 
-- `fnl-delegate` replaces the recipe in "Heavy-job lock" with this script and keeps one Codex or Antigravity run at a
+- `fnl-delegate` replaces the recipe with this script and keeps one Codex or Antigravity run at a
   time per coordinator.
 - `fnl-verification` gains the test-scope rule above and names `heavy_run.py` for any command the host config marks heavy.
 - `fnl-coding-router` "Proportion" points to both.
