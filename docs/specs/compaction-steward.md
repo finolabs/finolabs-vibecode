@@ -58,7 +58,14 @@ reads the hook input from stdin (bounded, 64 KiB); when `source` is `compact` an
 a `session_id` is present it appends the output of the `read` function of
 `handover_state.py` under the heading `Handover before compaction`. It exits 0 and
 fails closed (adds nothing) on any error, uses no network, and leaves its existing
-output unchanged.
+output unchanged. On the same `compact` input, when Delegation mode is not `manual`,
+it first prints one fixed reminder of at most 500 characters and no data: apply
+`fnl-delegate` "Keep or hand off" before the first of two or more independent tasks,
+send reviews and parallel work to another agent family when one is present, and
+re-read `fnl-delegate` if its steps are not in context. A compaction drops the skill
+body; in a small sample of 10 sessions (November 2026 usage events) runs handed to
+other families fell from 1.37 to 0.70 per hour after the first compaction, with
+confounds noted in the 0.2.1 backlog. Agent judgment enforces the behavior (advisory).
 `precompact.py` text becomes: "Before compaction, write the handover (goal,
 decisions, work in progress, next action) with handover_state.py write, then
 write back decisions." Claude Code PreCompact stdout feeds summary instructions (up to 10,000 characters), not documented as added to model context. **On Codex a plain-text reminder does not reach the model**: PreCompact and PostCompact ignore plain stdout. Thus the agent must write the handover on `prepare`, before compaction (advisory, agent judgment); this reminder is no guarantee of a write.

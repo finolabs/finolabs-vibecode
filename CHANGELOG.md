@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- After a compaction, the session-start hook prints one fixed delegation reminder (unless Delegation mode is `manual`), and the handover template carries a Delegation state line, because delegation to other agent families fell after compaction. The hook script changed, so Codex asks to trust the hooks again.
+
 ### Fixed
 
 - Check shows the version a Claude Code folder marketplace declares beside the one the installation registry records, and stays unverified when they differ.
