@@ -315,8 +315,16 @@ def options_until_positional(words, long_values, short_values, booleans):
     return flags, []
 
 
+FALSE_WORDS = {'0', 'f', 'F', 'false', 'FALSE', 'False'}
+
+
 def asks_detach(flags):
-    return any(flag in ('-d', '--detach', '--detach=true') for flag in flags)
+    """True for -d, --detach and Compose's --wait (which implies detach), unless an explicit value is a false spelling."""
+    for flag in flags:
+        name, _, value = flag.partition('=')
+        if name in ('-d', '--detach', '--wait') and (flag == name or value not in FALSE_WORDS):
+            return True
+    return False
 
 
 def detached(argv):
@@ -399,6 +407,9 @@ def run(args):
                 if previous_group_running(fd):
                     fcntl.flock(fd, fcntl.LOCK_UN)
                     reason = 'a heavy job started by a stopped wrapper is still running'
+                elif time.monotonic() > deadline:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                    reason = 'the wait cap ended before the start'
                 else:
                     os.ftruncate(fd, 0)
                     break

@@ -240,6 +240,22 @@ class HeavyRunTest(unittest.TestCase):
             self.assertEqual(self.run_cli('run', '--', sys.executable, '-c', 'pass')[0], 0)
         self.assertEqual(calls, [heavy.LOCK_NAME])
 
+    def test_a_slow_resource_reading_that_crosses_the_wait_cap_starts_nothing(self):
+        clock = [0.0]
+
+        def gate(config):
+            clock[0] += 2.0
+            return None
+
+        marker = self.root / 'ran'
+        with mock.patch.object(heavy.time, 'monotonic', lambda: clock[0]), mock.patch.object(heavy.time, 'sleep', lambda s: None), \
+                mock.patch.object(heavy, 'resource_wait', gate):
+            code, _, err = self.run_cli('run', '--wait-seconds', '1', '--', sys.executable, '-c',
+                                        'open(%r, "w").close()' % str(marker))
+        self.assertEqual(code, 75)
+        self.assertFalse(marker.exists())
+        self.assertEqual(heavy.lock_state(), 'free')
+
     def test_the_script_runs_as_its_own_isolated_entry_point(self):
         done = subprocess.run([sys.executable, '-I', str(SCRIPTS / 'heavy_run.py'), '--help'],
                               capture_output=True, text=True, timeout=30, env={'PATH': os.environ['PATH']})
@@ -329,13 +345,18 @@ class HeavyRunTest(unittest.TestCase):
                         ['docker', 'compose', 'up', 'web', '-d'],
                         ['docker', 'run', '--pids-limit', '64', '-d', 'nginx'],
                         ['docker', 'run', '--memory-reservation', '1g', '--detach', 'nginx'],
-                        ['docker', 'run', '--some-future-option', 'x', 'image']):
+                        ['docker', 'run', '--some-future-option', 'x', 'image'],
+                        ['docker', 'run', '--detach=1', 'image'], ['docker', 'run', '--detach=T', 'image'],
+                        ['docker', 'compose', 'up', '--detach=TRUE'], ['docker-compose', 'up', '--detach=True'],
+                        ['docker', 'compose', 'up', '--wait'], ['docker-compose', 'up', '--wait'],
+                        ['docker', 'compose', 'up', '--wait=true'], ['docker', 'run', '-d=maybe', 'image']):
             self.assertTrue(heavy.detached(command), command)
         for command in (['docker', 'run', 'image', 'command', '-d'],
                         ['docker', 'run', '-e', 'A=-d', 'image'],
                         ['docker', 'compose', 'run', 'web', 'tool', '-d'],
                         ['docker', 'compose', '-f', 'fixture.yml', 'up'],
-                        ['docker', 'ps', '-d']):
+                        ['docker', 'ps', '-d'], ['docker', 'run', '--detach=false', 'image'],
+                        ['docker', 'compose', 'up', '--detach=0'], ['docker', 'compose', 'up', '--wait=false']):
             self.assertFalse(heavy.detached(command), command)
 
     def test_child_gets_only_allowlisted_names_plus_requested_ones(self):
