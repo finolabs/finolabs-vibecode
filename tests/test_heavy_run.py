@@ -114,18 +114,23 @@ class HeavyRunTest(unittest.TestCase):
         self.assertEqual(holder.wait(timeout=5), 5)
         self.assertEqual(heavy.lock_state(), 'free')
 
-    def test_killed_wrapper_with_a_surviving_grandchild_keeps_the_lock(self):
-        launcher = 'import subprocess, sys; subprocess.Popen([sys.executable, "-c", "import time; time.sleep(1.0)"], close_fds=False)'
+    def test_killed_wrapper_with_a_default_popen_grandchild_still_blocks_a_second_job(self):
+        launcher = 'import subprocess, sys; subprocess.Popen([sys.executable, "-c", "import time; time.sleep(1.5)"])'
         wrapper = self.spawn('run', '--', sys.executable, '-c', launcher)
-        time.sleep(0.2)
+        time.sleep(0.4)
         wrapper.kill()
         wrapper.wait()
-        self.assertEqual(heavy.lock_state(), 'held')
+        marker = self.root / 'second'
+        code, _, err = self.run_cli('run', '--wait-seconds', '0.2', '--', sys.executable, '-c',
+                                    'open(%r, "w").close()' % str(marker))
+        self.assertEqual(code, 75)
+        self.assertIn('stopped wrapper', err)
+        self.assertFalse(marker.exists())
+        self.assertIn('still running', self.run_cli('status')[1])
         for _ in range(100):
-            if heavy.lock_state() == 'free':
+            if 'still running' not in self.run_cli('status')[1]:
                 break
             time.sleep(0.05)
-        self.assertEqual(heavy.lock_state(), 'free')
         self.assertEqual(self.run_cli('run', '--', sys.executable, '-c', 'pass')[0], 0)
 
     def test_a_live_wrapper_waits_for_what_the_command_left_running(self):
@@ -164,6 +169,43 @@ class HeavyRunTest(unittest.TestCase):
         self.assertEqual(code, 124)
         self.assertIn('maximum run time', err)
         self.assertEqual(heavy.lock_state(), 'free')
+
+    def test_maximum_run_time_also_covers_a_worker_left_after_the_command_exits(self):
+        launcher = 'import subprocess, sys; subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])'
+        started = time.monotonic()
+        code, _, err = self.run_cli('run', '--max-seconds', '0.4', '--', sys.executable, '-c', launcher)
+        self.assertEqual(code, 124)
+        self.assertIn('maximum run time', err)
+        self.assertLess(time.monotonic() - started, 8)
+        self.assertEqual(heavy.lock_state(), 'free')
+
+    def test_the_script_runs_as_its_own_isolated_entry_point(self):
+        done = subprocess.run([sys.executable, '-I', str(SCRIPTS / 'heavy_run.py'), '--help'],
+                              capture_output=True, text=True, timeout=30, env={'PATH': os.environ['PATH']})
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn('status', done.stdout)
+
+    def test_a_finished_job_leaves_no_record_to_misread_as_the_next_holder(self):
+        self.assertEqual(self.run_cli('run', '--label', 'alpha', '--', sys.executable, '-c', 'pass')[0], 0)
+        self.assertEqual(self.lock_path().read_bytes(), b'')
+
+    def test_malformed_owner_records_read_as_unknown(self):
+        now = int(time.time())
+        held = os.open(self.lock_path(), os.O_RDWR | os.O_CREAT, 0o600)
+        import fcntl
+        fcntl.flock(held, fcntl.LOCK_EX)
+        try:
+            for label in ('null', '1', '[]', '"bad/label"'):
+                self.lock_path().write_text('{"v":1,"pid":%d,"child":null,"started":%d,"deadline":%d,"label":%s}\n'
+                                            % (os.getpid(), now, now + 60, label))
+                code, out, _ = self.run_cli('status')
+                self.assertEqual(code, 0, label)
+                self.assertIn('held, owner unknown', out, label)
+            self.lock_path().write_text('{"v":1,"pid":%d,"child":null,"started":%d,"deadline":%d,"label":"ok","exe":7}\n'
+                                        % (os.getpid(), now, now + 60))
+            self.assertIn('held, owner unknown', self.run_cli('status')[1])
+        finally:
+            os.close(held)
 
     def test_lock_does_not_move_with_the_data_root(self):
         first = heavy.lock_identity()
@@ -213,6 +255,20 @@ class HeavyRunTest(unittest.TestCase):
             self.assertEqual(code, 64, command)
             self.assertIn('foreground', err)
             self.assertEqual(heavy.lock_state(), 'free')
+
+    def test_detach_is_found_after_global_options_and_not_in_the_container_command(self):
+        for command in (['docker', 'compose', '-f', 'fixture.yml', 'up', '-d'],
+                        ['docker-compose', '-f', 'fixture.yml', 'up', '--detach'],
+                        ['docker', '--context', 'fixture', 'run', '-d', 'image'],
+                        ['docker', 'run', '--name', 'x', '-e', 'A=1', '-d', 'image'],
+                        ['docker', 'compose', 'up', 'web', '-d']):
+            self.assertTrue(heavy.detached(command), command)
+        for command in (['docker', 'run', 'image', 'command', '-d'],
+                        ['docker', 'run', '-e', 'A=-d', 'image'],
+                        ['docker', 'compose', 'run', 'web', 'tool', '-d'],
+                        ['docker', 'compose', '-f', 'fixture.yml', 'up'],
+                        ['docker', 'ps', '-d']):
+            self.assertFalse(heavy.detached(command), command)
 
     def test_child_gets_only_allowlisted_names_plus_requested_ones(self):
         names = self.root / 'names'

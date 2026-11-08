@@ -7,9 +7,11 @@ held. Exit 64: detached work refused; 75: the wait cap ended; 78: the lock locat
 maximum run time; 2: bad usage.
 
 The lock is a kernel advisory lock on one regular file in the plugin's fixed anchor folder, so it does not move
-when the data root is relocated. The child and its descendants inherit the descriptor, so the lock outlives a
-killed wrapper while any of them still runs and has not closed it. A wrapper that is still alive also waits until
-the command's process group is empty. Nothing here prints or stores the environment or the command.
+when the data root is relocated. The wrapper holds it until the command's process group is empty or the maximum
+run time ends. If the wrapper is killed, the lock file also records the command's process group; a later start that
+gets the kernel lock still waits while that group is alive and its record is not past its deadline plus a grace
+period, whatever the command did with the inherited descriptor. The only gap is the instant between starting the
+command and writing that record. Nothing here prints or stores the environment or the command.
 """
 import argparse
 import fcntl
@@ -23,12 +25,18 @@ import subprocess
 import sys
 import time
 
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
 import data_root
 import parallel_slots as slots
 import run_env
 
 LOCK_NAME = 'heavy.lock'
 LABEL = re.compile(r'[A-Za-z0-9 ._-]{1,40}')
+CODE = re.compile(r'[A-Za-z0-9_-]{1,40}')
+DISPATCH = re.compile(r'[A-Za-z0-9-]{1,40}')
+EXE = re.compile(r'[A-Za-z0-9._+-]{1,40}')
+GRACE = 120
 DEFAULTS = {'load': 12.0, 'memory_gb': 3.0, 'wait_minutes': 40.0, 'max_minutes': 90.0}
 BOUNDS = {'load': (1.0, 256.0), 'memory_gb': (0.0, 64.0), 'wait_minutes': (1.0, 720.0), 'max_minutes': (1.0, 720.0)}
 KEYS = {'Load limit': 'load', 'Memory minimum GB': 'memory_gb', 'Wait cap minutes': 'wait_minutes', 'Max job minutes': 'max_minutes'}
@@ -145,8 +153,42 @@ def source(label, command, max_seconds, child=None):
     now = int(time.time())
     return {'v': 1, 'pid': os.getpid(), 'child': child, 'started': now, 'deadline': now + int(max_seconds),
             'label': label, 'repo': repo, 'repo_name': name,
-            'dispatch': dispatch if dispatch and re.fullmatch(r'[A-Za-z0-9-]{1,40}', dispatch) else None,
-            'exe': exe if re.fullmatch(r'[A-Za-z0-9._+-]{1,40}', exe) else None}
+            'dispatch': dispatch if dispatch and DISPATCH.fullmatch(dispatch) else None,
+            'exe': exe if EXE.fullmatch(exe) else None}
+
+
+def valid_record(data):
+    """True only for a record whose every field has the expected type and format."""
+    def whole(key, low=1):
+        value = data.get(key)
+        return isinstance(value, int) and not isinstance(value, bool) and low <= value < 2 ** 40
+
+    def text(key, pattern):
+        value = data.get(key)
+        return value is None or (isinstance(value, str) and pattern.fullmatch(value) is not None)
+
+    return (isinstance(data, dict) and data.get('v') == 1 and whole('pid') and whole('started') and whole('deadline')
+            and data['deadline'] >= data['started'] and (data.get('child') is None or whole('child'))
+            and isinstance(data.get('label'), str) and LABEL.fullmatch(data['label']) is not None
+            and text('repo', CODE) and text('repo_name', LABEL) and text('dispatch', DISPATCH) and text('exe', EXE))
+
+
+def read_record(fd):
+    try:
+        data = json.loads(os.pread(fd, 1024, 0).decode('utf-8'))
+    except (UnicodeError, ValueError):
+        return None
+    return data if valid_record(data) else None
+
+
+def group_alive(group):
+    try:
+        os.killpg(group, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
 
 
 def holder():
@@ -156,17 +198,10 @@ def holder():
     except Refused:
         return None
     try:
-        raw = os.pread(fd, 1024, 0)
+        data = read_record(fd)
     finally:
         os.close(fd)
-    try:
-        data = json.loads(raw.decode('utf-8'))
-        ok = (isinstance(data, dict) and data.get('v') == 1
-              and all(isinstance(data.get(key), int) and not isinstance(data.get(key), bool) for key in ('pid', 'started', 'deadline'))
-              and LABEL.fullmatch(data.get('label', '')))
-    except (UnicodeError, ValueError):
-        return None
-    if not ok:
+    if data is None:
         return None
     age = process_age(data['pid'])
     if age is None or time.time() - age > data['started'] + 5:
@@ -210,29 +245,71 @@ def resource_wait(config):
     return None
 
 
-def detached(argv):
-    """True for Docker or Compose commands that ask for detached work."""
-    base = os.path.basename(argv[0]) if argv else ''
-    args = None
-    if base == 'docker-compose':
-        args = argv[1:]
-    elif base == 'docker':
-        if argv[1:2] == ['compose']:
-            args = argv[2:]
-        elif argv[1:2] == ['run']:
-            args = argv[1:]
-        elif argv[1:3] == ['container', 'run']:
-            args = ['run'] + argv[3:]
-    if args is None:
-        return False
-    sub = next((word for word in args if not word.startswith('-')), None)
-    if sub not in ('up', 'run'):
-        return False
-    for word in args[args.index(sub) + 1:]:
+DOCKER_GLOBAL = ({'--config', '--context', '--host', '--log-level', '--tlscacert', '--tlscert', '--tlskey'}, set('Hcl'))
+COMPOSE_GLOBAL = ({'--file', '--project-name', '--profile', '--project-directory', '--env-file', '--ansi', '--parallel',
+                   '--progress'}, set('fp'))
+RUN_OPTIONS = ({'--add-host', '--attach', '--cap-add', '--cap-drop', '--cpus', '--device', '--dns', '--entrypoint',
+                '--env', '--env-file', '--expose', '--gpus', '--hostname', '--label', '--label-file', '--link',
+                '--log-driver', '--log-opt', '--memory', '--mount', '--name', '--net', '--network', '--platform',
+                '--publish', '--pull', '--restart', '--security-opt', '--shm-size', '--stop-signal', '--stop-timeout',
+                '--tmpfs', '--ulimit', '--user', '--volume', '--volumes-from', '--workdir'}, set('acehlmpuvw'))
+
+
+def options_until_positional(words, long_values, short_values):
+    """(option tokens, remaining words) up to the first word that is not an option or an option's value."""
+    flags, index = [], 0
+    while index < len(words):
+        word = words[index]
         if word == '--':
-            break
-        if word == '--detach' or word.startswith('--detach=') or (word.startswith('-') and not word.startswith('--') and 'd' in word[1:]):
-            return True
+            return flags, words[index + 1:]
+        if word.startswith('--'):
+            flags.append(word)
+            if word.split('=', 1)[0] in long_values and '=' not in word:
+                index += 1
+        elif word.startswith('-') and len(word) > 1:
+            for position, letter in enumerate(word[1:], 1):
+                flags.append('-' + letter)
+                if letter in short_values:
+                    if position == len(word) - 1:
+                        index += 1
+                    break
+        else:
+            return flags, words[index:]
+        index += 1
+    return flags, []
+
+
+def asks_detach(flags):
+    return any(flag in ('-d', '--detach', '--detach=true') for flag in flags)
+
+
+def detached(argv):
+    """True for Docker or Compose commands that ask for detached work, after the supported global options."""
+    base = os.path.basename(argv[0]) if argv else ''
+    kind = None
+    if base == 'docker-compose':
+        words, kind = argv[1:], 'compose'
+    elif base == 'docker':
+        _flags, rest = options_until_positional(argv[1:], *DOCKER_GLOBAL)
+        if rest[:1] == ['compose']:
+            words, kind = rest[1:], 'compose'
+        elif rest[:1] == ['run']:
+            words, kind = rest[1:], 'run'
+        elif rest[:2] == ['container', 'run']:
+            words, kind = rest[2:], 'run'
+    if kind is None:
+        return False
+    if kind == 'run':
+        return asks_detach(options_until_positional(words, *RUN_OPTIONS)[0])
+    _flags, rest = options_until_positional(words, *COMPOSE_GLOBAL)
+    if rest[:1] == ['up']:
+        for word in rest[1:]:
+            if word == '--':
+                break
+            if asks_detach([word]) or (word.startswith('-') and not word.startswith('--') and 'd' in word[1:]):
+                return True
+    elif rest[:1] == ['run']:
+        return asks_detach(options_until_positional(rest[1:], *RUN_OPTIONS)[0])
     return False
 
 
@@ -268,9 +345,15 @@ def run(args):
         if reason is None:
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
             except BlockingIOError:
                 reason = 'another heavy job holds the lock'
+            else:
+                if previous_group_running(fd):
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                    reason = 'a heavy job started by a stopped wrapper is still running'
+                else:
+                    os.ftruncate(fd, 0)
+                    break
         if time.monotonic() >= deadline:
             who = holder()
             tail = ' (holder: %s, repo %s, %d s running)' % (who['label'], who.get('repo_name') or who.get('repo') or 'unknown',
@@ -295,26 +378,28 @@ def run(args):
 
     for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         signal.signal(number, forward)
-    timed_out = False
+    limit = time.monotonic() + max_seconds
+    timed_out, kill_at, status = False, None, None
     try:
-        try:
-            status = child.wait(timeout=max_seconds)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            forward(signal.SIGTERM, None)
-            try:
-                status = child.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                forward(signal.SIGKILL, None)
-                status = child.wait()
-            forward(signal.SIGKILL, None)
-        # Keep the lock while anything the command left running in its own process group is alive.
+        # One deadline covers the command and anything it left running in its process group.
         while True:
-            try:
-                os.killpg(child.pid, 0)
-            except OSError:
+            if status is None:
+                status = child.poll()
+            if status is not None and not group_alive(child.pid):
                 break
-            time.sleep(min(args.poll, 0.2))
+            now = time.monotonic()
+            if not timed_out and now >= limit:
+                timed_out, kill_at = True, now + 10
+                forward(signal.SIGTERM, None)
+            elif timed_out and now >= kill_at:
+                forward(signal.SIGKILL, None)
+                if now >= kill_at + 10:
+                    break
+            time.sleep(min(args.poll, 0.1))
+        try:
+            os.ftruncate(fd, 0)
+        except OSError:
+            pass
     finally:
         os.close(fd)
     if timed_out:
@@ -323,13 +408,28 @@ def run(args):
     return status if status >= 0 else 128 - status
 
 
+def previous_group_running(fd):
+    """True when the record left by an earlier wrapper names a process group that is alive and within its deadline."""
+    data = read_record(fd)
+    return bool(data and data.get('child') and time.time() < data['deadline'] + GRACE and group_alive(data['child']))
+
+
 def status():
     state = lock_state()
     if state == 'refused':
         print('heavy lock: location refused')
         return 78
     if state == 'free':
-        print('heavy lock: free')
+        orphan = False
+        try:
+            fd = open_lock()
+            try:
+                orphan = previous_group_running(fd)
+            finally:
+                os.close(fd)
+        except Refused:
+            pass
+        print('heavy lock: free, but a job from a stopped wrapper is still running' if orphan else 'heavy lock: free')
     else:
         who = holder()
         print('heavy lock: held, owner unknown' if not who else 'heavy lock: held\n' + describe(who))
