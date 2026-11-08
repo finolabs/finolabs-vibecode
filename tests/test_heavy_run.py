@@ -179,6 +179,67 @@ class HeavyRunTest(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 8)
         self.assertEqual(heavy.lock_state(), 'free')
 
+    def test_an_old_record_does_not_free_a_group_that_is_still_running(self):
+        worker = subprocess.Popen(['sleep', '30'], start_new_session=True)
+        self.addCleanup(self.stop, worker)
+        long_ago = int(time.time()) - 100000
+        self.lock_path().write_text('{"v":1,"pid":1,"child":%d,"started":%d,"deadline":%d,"label":"old"}\n'
+                                    % (worker.pid, long_ago, long_ago + 60))
+        os.chmod(self.lock_path(), 0o600)
+        marker = self.root / 'second'
+        code, _, err = self.run_cli('run', '--wait-seconds', '0.2', '--', sys.executable, '-c',
+                                    'open(%r, "w").close()' % str(marker))
+        self.assertEqual(code, 75)
+        self.assertIn('stopped wrapper', err)
+        self.assertFalse(marker.exists())
+        worker.kill()
+        worker.wait()
+        self.assertEqual(self.run_cli('run', '--', sys.executable, '-c', 'pass')[0], 0)
+
+    def test_runtime_numbers_must_be_positive_and_finite_before_anything_starts(self):
+        marker = self.root / 'ran'
+        for option, value in (('--max-minutes', 'nan'), ('--max-minutes', 'inf'), ('--max-minutes', '0'),
+                              ('--max-seconds', '-1'), ('--wait-seconds', 'nan')):
+            code, _, err = self.run_cli('run', option, value, '--', sys.executable, '-c',
+                                        'open(%r, "w").close()' % str(marker))
+            self.assertEqual(code, 2, (option, value))
+            self.assertFalse(marker.exists())
+        self.assertEqual(heavy.lock_state(), 'free')
+
+    def test_the_wait_cap_is_checked_before_a_late_attempt(self):
+        clock = [0.0]
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        attempts = []
+        original = heavy.resource_wait
+
+        def gate(config):
+            attempts.append(clock[0])
+            return 'busy' if clock[0] < 5 else None
+
+        with mock.patch.object(heavy.time, 'monotonic', lambda: clock[0]), mock.patch.object(heavy.time, 'sleep', sleep), \
+                mock.patch.object(heavy, 'resource_wait', gate):
+            code, _, err = self.run_cli('run', '--wait-seconds', '3', '--', sys.executable, '-c', 'pass', poll='2')
+        self.assertEqual(code, 75)
+        self.assertTrue(all(moment <= 3 for moment in attempts), attempts)
+        self.assertIn('busy', err)
+
+    def test_a_single_spurious_missing_file_while_creating_the_lock_is_retried(self):
+        real = os.open
+        calls = []
+
+        def flaky(path, *args, **kwargs):
+            if path == heavy.LOCK_NAME and not calls:
+                calls.append(path)
+                raise FileNotFoundError()
+            return real(path, *args, **kwargs)
+
+        with mock.patch.object(heavy.os, 'open', flaky):
+            self.assertEqual(self.run_cli('run', '--', sys.executable, '-c', 'pass')[0], 0)
+        self.assertEqual(calls, [heavy.LOCK_NAME])
+
     def test_the_script_runs_as_its_own_isolated_entry_point(self):
         done = subprocess.run([sys.executable, '-I', str(SCRIPTS / 'heavy_run.py'), '--help'],
                               capture_output=True, text=True, timeout=30, env={'PATH': os.environ['PATH']})
@@ -218,7 +279,11 @@ class HeavyRunTest(unittest.TestCase):
     def test_status_shows_holder_only_when_tied_to_a_live_process(self):
         self.assertIn('free', self.run_cli('status')[1])
         child = self.hold(label='alpha')
-        text = self.run_cli('status')[1]
+        for _ in range(100):
+            text = self.run_cli('status')[1]
+            if 'alpha' in text:
+                break
+            time.sleep(0.03)
         self.assertIn('held', text)
         self.assertIn('alpha', text)
         self.assertNotIn(str(self.home), text)
@@ -261,7 +326,10 @@ class HeavyRunTest(unittest.TestCase):
                         ['docker-compose', '-f', 'fixture.yml', 'up', '--detach'],
                         ['docker', '--context', 'fixture', 'run', '-d', 'image'],
                         ['docker', 'run', '--name', 'x', '-e', 'A=1', '-d', 'image'],
-                        ['docker', 'compose', 'up', 'web', '-d']):
+                        ['docker', 'compose', 'up', 'web', '-d'],
+                        ['docker', 'run', '--pids-limit', '64', '-d', 'nginx'],
+                        ['docker', 'run', '--memory-reservation', '1g', '--detach', 'nginx'],
+                        ['docker', 'run', '--some-future-option', 'x', 'image']):
             self.assertTrue(heavy.detached(command), command)
         for command in (['docker', 'run', 'image', 'command', '-d'],
                         ['docker', 'run', '-e', 'A=-d', 'image'],

@@ -9,9 +9,10 @@ maximum run time; 2: bad usage.
 The lock is a kernel advisory lock on one regular file in the plugin's fixed anchor folder, so it does not move
 when the data root is relocated. The wrapper holds it until the command's process group is empty or the maximum
 run time ends. If the wrapper is killed, the lock file also records the command's process group; a later start that
-gets the kernel lock still waits while that group is alive and its record is not past its deadline plus a grace
-period, whatever the command did with the inherited descriptor. The only gap is the instant between starting the
-command and writing that record. Nothing here prints or stores the environment or the command.
+gets the kernel lock still waits for as long as that group is alive, whatever the command did with the inherited
+descriptor and however old the record is. A recycled process group id can keep a start waiting until the wait cap
+(exit 75); the message says why and `status` shows it. The only gap is the instant between starting the command
+and writing that record. Nothing here prints or stores the environment or the command.
 """
 import argparse
 import fcntl
@@ -36,7 +37,6 @@ LABEL = re.compile(r'[A-Za-z0-9 ._-]{1,40}')
 CODE = re.compile(r'[A-Za-z0-9_-]{1,40}')
 DISPATCH = re.compile(r'[A-Za-z0-9-]{1,40}')
 EXE = re.compile(r'[A-Za-z0-9._+-]{1,40}')
-GRACE = 120
 DEFAULTS = {'load': 12.0, 'memory_gb': 3.0, 'wait_minutes': 40.0, 'max_minutes': 90.0}
 BOUNDS = {'load': (1.0, 256.0), 'memory_gb': (0.0, 64.0), 'wait_minutes': (1.0, 720.0), 'max_minutes': (1.0, 720.0)}
 KEYS = {'Load limit': 'load', 'Memory minimum GB': 'memory_gb', 'Wait cap minutes': 'wait_minutes', 'Max job minutes': 'max_minutes'}
@@ -87,11 +87,19 @@ def read_free_gb():
 
 def open_lock():
     """Open the lock file under the fixed anchor; refuse anything but a private regular file we own."""
-    try:
-        with data_root.anchor_folder(create=True) as folder:
-            fd = os.open(LOCK_NAME, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600, dir_fd=folder)
-    except (OSError, ValueError) as error:
-        raise Refused('lock location refused') from error
+    fd = None
+    for attempt in range(5):
+        try:
+            with data_root.anchor_folder(create=True) as folder:
+                fd = os.open(LOCK_NAME, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600, dir_fd=folder)
+            break
+        except FileNotFoundError as error:
+            # Two processes creating the file at the same instant can make macOS report a missing file once.
+            if attempt == 4:
+                raise Refused('lock location refused') from error
+            time.sleep(0.01 * (attempt + 1))
+        except (OSError, ValueError) as error:
+            raise Refused('lock location refused') from error
     info = os.fstat(fd)
     if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1
             or info.st_mode & 0o077):
@@ -245,17 +253,39 @@ def resource_wait(config):
     return None
 
 
-DOCKER_GLOBAL = ({'--config', '--context', '--host', '--log-level', '--tlscacert', '--tlscert', '--tlskey'}, set('Hcl'))
+# Option arities of the supported CLIs: (long options taking a value, short letters taking a value, boolean options).
+# An option that is in none of these makes the arity unknown, so a command that may start detached work is refused.
+DOCKER_GLOBAL = ({'--config', '--context', '--host', '--log-level', '--tlscacert', '--tlscert', '--tlskey'}, set('Hcl'),
+                 {'--debug', '--tls', '--tlsverify', '--version', '--help', '-D', '-v', '-h'})
 COMPOSE_GLOBAL = ({'--file', '--project-name', '--profile', '--project-directory', '--env-file', '--ansi', '--parallel',
-                   '--progress'}, set('fp'))
-RUN_OPTIONS = ({'--add-host', '--attach', '--cap-add', '--cap-drop', '--cpus', '--device', '--dns', '--entrypoint',
-                '--env', '--env-file', '--expose', '--gpus', '--hostname', '--label', '--label-file', '--link',
-                '--log-driver', '--log-opt', '--memory', '--mount', '--name', '--net', '--network', '--platform',
-                '--publish', '--pull', '--restart', '--security-opt', '--shm-size', '--stop-signal', '--stop-timeout',
-                '--tmpfs', '--ulimit', '--user', '--volume', '--volumes-from', '--workdir'}, set('acehlmpuvw'))
+                   '--progress'}, set('fp'),
+                  {'--all-resources', '--compatibility', '--dry-run', '--verbose', '--no-ansi', '--help', '--version',
+                   '-v', '-h'})
+RUN_OPTIONS = ({'--add-host', '--annotation', '--attach', '--blkio-weight', '--blkio-weight-device', '--cap-add',
+                '--cap-drop', '--cgroup-parent', '--cgroupns', '--cidfile', '--cpu-period', '--cpu-quota',
+                '--cpu-rt-period', '--cpu-rt-runtime', '--cpu-shares', '--cpus', '--cpuset-cpus', '--cpuset-mems',
+                '--detach-keys', '--device', '--device-cgroup-rule', '--device-read-bps', '--device-read-iops',
+                '--device-write-bps', '--device-write-iops', '--dns', '--dns-option', '--dns-search', '--domainname',
+                '--entrypoint', '--env', '--env-file', '--expose', '--gpus', '--group-add', '--health-cmd',
+                '--health-interval', '--health-retries', '--health-start-interval', '--health-start-period',
+                '--health-timeout', '--hostname', '--ip', '--ip6', '--ipc', '--isolation', '--kernel-memory', '--label',
+                '--label-file', '--link', '--link-local-ip', '--log-driver', '--log-opt', '--mac-address', '--memory',
+                '--memory-reservation', '--memory-swap', '--memory-swappiness', '--mount', '--name', '--net',
+                '--net-alias', '--network', '--network-alias', '--oom-score-adj', '--pid', '--pids-limit', '--platform',
+                '--publish', '--pull', '--restart', '--runtime', '--security-opt', '--shm-size', '--stop-signal',
+                '--stop-timeout', '--storage-opt', '--sysctl', '--tmpfs', '--ulimit', '--user', '--userns', '--uts',
+                '--volume', '--volume-driver', '--volumes-from', '--workdir'}, set('acehlmpuvw'),
+               {'--detach', '--interactive', '--tty', '--rm', '--privileged', '--read-only', '--init', '--sig-proxy',
+                '--oom-kill-disable', '--publish-all', '--no-healthcheck', '--quiet', '--disable-content-trust',
+                '--help', '--no-deps', '--build', '--use-aliases', '--service-ports', '--quiet-pull', '--remove-orphans',
+                '--no-TTY', '-d', '-i', '-t', '-P', '-q', '-T'})
 
 
-def options_until_positional(words, long_values, short_values):
+class UnknownArity(Exception):
+    """An option was met whose arity the tables do not describe."""
+
+
+def options_until_positional(words, long_values, short_values, booleans):
     """(option tokens, remaining words) up to the first word that is not an option or an option's value."""
     flags, index = [], 0
     while index < len(words):
@@ -263,9 +293,13 @@ def options_until_positional(words, long_values, short_values):
         if word == '--':
             return flags, words[index + 1:]
         if word.startswith('--'):
+            name = word.split('=', 1)[0]
             flags.append(word)
-            if word.split('=', 1)[0] in long_values and '=' not in word:
-                index += 1
+            if name in long_values:
+                if '=' not in word:
+                    index += 1
+            elif name not in booleans:
+                raise UnknownArity(name)
         elif word.startswith('-') and len(word) > 1:
             for position, letter in enumerate(word[1:], 1):
                 flags.append('-' + letter)
@@ -273,6 +307,8 @@ def options_until_positional(words, long_values, short_values):
                     if position == len(word) - 1:
                         index += 1
                     break
+                if '-' + letter not in booleans:
+                    raise UnknownArity(letter)
         else:
             return flags, words[index:]
         index += 1
@@ -284,8 +320,16 @@ def asks_detach(flags):
 
 
 def detached(argv):
-    """True for Docker or Compose commands that ask for detached work, after the supported global options."""
+    """True for Docker or Compose commands that ask for detached work, or whose options cannot be read with certainty."""
     base = os.path.basename(argv[0]) if argv else ''
+    try:
+        return _detached(argv, base)
+    except UnknownArity:
+        # Refuse only when the command could still start containers.
+        return base in ('docker', 'docker-compose') and any(word in ('run', 'up') for word in argv[1:])
+
+
+def _detached(argv, base):
     kind = None
     if base == 'docker-compose':
         words, kind = argv[1:], 'compose'
@@ -326,6 +370,10 @@ def run(args):
     if not args.command:
         print('heavy_run: a command is required after --', file=sys.stderr)
         return 2
+    for number in (args.poll, args.wait_seconds, args.max_seconds, args.max_minutes):
+        if number is not None and not (0 < number < 10 ** 7):
+            print('heavy_run: times must be positive finite numbers', file=sys.stderr)
+            return 2
     if detached(args.command):
         print('heavy_run: detached launches are refused; wrap a foreground script that starts, tests and tears down', file=sys.stderr)
         return 64
@@ -354,14 +402,16 @@ def run(args):
                 else:
                     os.ftruncate(fd, 0)
                     break
-        if time.monotonic() >= deadline:
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(args.poll, remaining))
+        if remaining <= 0 or time.monotonic() >= deadline:
             who = holder()
             tail = ' (holder: %s, repo %s, %d s running)' % (who['label'], who.get('repo_name') or who.get('repo') or 'unknown',
                                                            max(0, int(time.time()) - who['started'])) if who else ''
             print('heavy_run: gave up waiting: %s%s' % (reason, tail), file=sys.stderr)
             os.close(fd)
             return 75
-        time.sleep(args.poll)
     try:
         child = subprocess.Popen(args.command, env=run_env.environment(names=extra), pass_fds=(fd,), start_new_session=True)
     except OSError:
@@ -411,7 +461,7 @@ def run(args):
 def previous_group_running(fd):
     """True when the record left by an earlier wrapper names a process group that is alive and within its deadline."""
     data = read_record(fd)
-    return bool(data and data.get('child') and time.time() < data['deadline'] + GRACE and group_alive(data['child']))
+    return bool(data and data.get('child') and group_alive(data['child']))
 
 
 def status():
