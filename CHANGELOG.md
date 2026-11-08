@@ -11,7 +11,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Changed
 
 - `fnl-delegate`'s description, the `fnl-ask` map and the README now say plainly that it hands work to other agents and runs it; the skill name is unchanged.
-- Delegated runs must start in the host's own background mode, one runner per call. The dispatch step, the handoff step and the after-compaction reminder now name the `( … ) &`, `nohup` and `disown` forms that hide a run from the host's task list. The hook script changed, so Codex asks to trust the hooks again.
+- Delegated runs must start in the host's own background mode, one runner per call. The dispatch step and the background rule now name `( … ) &`, `nohup` and `disown` as the forms that hide a run from the host's task list; the handoff step and the after-compaction reminder name the first two. The hook script changed, so Codex asks to trust the hooks again.
 - After a compaction, the session-start hook prints one fixed delegation reminder (unless Delegation mode is `manual`), and the handover template carries a Delegation state line, because delegation to other agent families fell after compaction. The hook script changed, so Codex asks to trust the hooks again.
 
 ### Fixed

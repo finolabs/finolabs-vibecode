@@ -86,7 +86,7 @@ class SessionStartTest(SyntheticStateTest):
     def test_compact_reminder_is_fixed_text_without_data(self):
         text = hook.COMPACT_DELEGATION
         self.assertLessEqual(len(text), 500)
-        self.assertIn("background mode", text)
+        self.assertIn("in the host's background mode, never `( … ) &` or nohup;", text)
         self.assertNotIn("/", text.replace("fnl-delegate", ""))
 
     def baseline(self, routing):
