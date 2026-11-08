@@ -515,7 +515,7 @@ class RefreshTest(unittest.TestCase):
         host.write_text('## Limits\n- Parallel dispatches: at most 12 at one time.\n')
         self.refresh('run', cwd=repo)
         block = self.data()['running']
-        self.assertEqual((block['parallel_limit'], block['parallel_source']), (5, 'default'))
+        self.assertEqual((block['parallel_limit'], block['parallel_source']), (3, 'default'))
         host.chmod(0o666)
         self.refresh('run', cwd=repo)
         block = self.data()['running']
@@ -546,7 +546,7 @@ class RefreshTest(unittest.TestCase):
         self.refresh('run', '--cwd', str(neutral), cwd=neutral)
         block = self.data()['running']
         self.assertEqual((block['parallel_limit'], block['parallel_source'], block['parallel_project']),
-                         (5, 'default', None))
+                         (3, 'default', None))
 
     def test_slot_metrics_validates_numeric_schema_and_projects_only_known_fields(self):
         module = self.running_module()
