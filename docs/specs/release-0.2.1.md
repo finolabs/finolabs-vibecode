@@ -1,6 +1,6 @@
 # Release 0.2.1: scope
 
-Status: draft; scope settled by the owner on 2026-11-08, one package merged in part; the release is not cut and nothing here is verified on a live host.
+Status: draft; scope settled by the owner on 2026-11-08; packages 1 to 8 merged; the release is not cut and nothing here is verified on a live host.
 
 ## Why
 
@@ -20,12 +20,12 @@ and the setup gaps found on the way.
 | 5 | Background run rule | #175: runs start in the host's background mode, never `( … ) &`, `nohup` or `disown`. | implemented. |
 | 6 | Per-project parallel limit | #176: `parallel` and `parallel-caps` per repository, default 3. | implemented; live scheduling unverified. |
 | 7 | Heavy-job design | #177: the spec and the fifth scoped exception in `CLAUDE.md`. | design only; no code. |
+| 8 | Delegated-acceptance default | #178: one line in the user-contract template, defining the package boundary and the repository-owner exception. | implemented; template text only. |
 
 ## In scope, not yet delivered
 
 | # | Package | What | Owner decision |
 | --- | --- | --- | --- |
-| 8 | Delegated-acceptance default | #178: one line in the user-contract template. | 2026-11-08. |
 | 9 | `## Agent skills` block in every context file | Setup recommends writing the block to every project context file the hosts read, `AGENTS.md` and `CLAUDE.md`, and skips a `CLAUDE.md` that only imports `AGENTS.md`. | 2026-11-08. |
 | 10 | Check reports plugin enablement | `enabledPlugins` state per Claude home in `/fnl-setup check`. | 2026-11-08. |
 | 11 | Unsandboxed review runs | Document the Codex review and posting run without a sandbox, record a needs-permission dispatch as such rather than as quota, and explain why `verify_claim.py` refused a valid brief. | 2026-11-08. |
