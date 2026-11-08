@@ -165,7 +165,7 @@ start. It rebuilds at most every 10 seconds, with a wall-clock cap per rebuild.
 
 ## Layout
 
-The `fnl-autopilot` skill folder names `fnl-delegate` as its dependency and calls
+The fnl-autopilot skill folder names `fnl-delegate` as its dependency and calls
 `skills/fnl-delegate/scripts/autopilot.py`. The script lives beside `heavy_run.py`, `mode.py` and `ledger.py`,
 reusing `data_root.py`, `parallel_slots.py` and `secret_patterns.py` there without new shared copies.
 The live loop and notice hook are later work in the autopilot skill's own `scripts/` folder.
