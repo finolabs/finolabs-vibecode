@@ -2,6 +2,7 @@
 """Read advisory parallel capacity from canonical local config and ledger only."""
 
 import argparse
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
@@ -58,8 +59,24 @@ def config():
     return parse_config(text)
 
 
-def open_counts(raw):
-    starts, finishes = {}, set()
+def _stale(record, now):
+    """A start older than its hard cap (budget plus a third, at least 10 minutes) is stale; unknown stays counted."""
+    budget, started = record.get('budget_min'), record.get('ts')
+    if type(budget) is not int or budget <= 0 or not isinstance(started, str):
+        return False
+    try:
+        begun = datetime.fromisoformat(started)
+    except ValueError:
+        return False
+    if begun.tzinfo is None:
+        return False
+    return (now - begun).total_seconds() / 60 > max(budget * 4 / 3, budget + 10)
+
+
+def open_counts(raw, now=None, stale=None):
+    """Counts of open dispatches per family; `stale` (a dict) receives the per-family counts of stale ones left out."""
+    now = now or datetime.now(timezone.utc)
+    starts, finishes, records = {}, set(), {}
     for line in raw.decode('utf-8').splitlines():
         if not line.strip():
             continue
@@ -78,8 +95,13 @@ def open_counts(raw):
             if identity in starts and starts[identity] != family:
                 raise ValueError('ambiguous start')
             starts[identity] = family
+            records.setdefault(identity, record)
     counts = {family: 0 for family in FAMILIES}
     for identity in starts.keys() - finishes:
+        if _stale(records[identity], now):
+            if stale is not None:
+                stale[starts[identity]] = stale.get(starts[identity], 0) + 1
+            continue
         counts[starts[identity]] += 1
     return counts
 
@@ -90,9 +112,11 @@ def status():
         raw = dr.read_data('ledger.jsonl', LEDGER_LIMIT)
     except FileNotFoundError:
         raw = b''
-    counts = open_counts(raw)
+    stale = {}
+    counts = open_counts(raw, stale=stale)
     opened = sum(counts.values())
-    return dict(limit=settings['limit'], open=opened, free=max(0, settings['limit'] - opened),
+    return dict(limit=settings['limit'], open=opened, stale=sum(stale.values()),
+                free=max(0, settings['limit'] - opened),
                 families={family: dict(open=counts[family], cap=settings['caps'][family],
                     free=None if settings['caps'][family] is None else max(0, settings['caps'][family] - counts[family]))
                     for family in FAMILIES}, source=settings['source'])
@@ -112,7 +136,8 @@ def summary():
             row = state['families'][family]
             parts.append(f"{family} {row['open']} open" +
                          (f" of cap {row['cap']}" if row['cap'] is not None else ''))
-        return f"{state['free']} free of {state['limit']} (" + ', '.join(parts) + f"; {state['source']})"
+        tail = f"; {state['stale']} stale not counted" if state['stale'] else ''
+        return f"{state['free']} free of {state['limit']} (" + ', '.join(parts) + f"; {state['source']}{tail})"
     except (OSError, ValueError, TypeError, KeyError, RecursionError):
         return 'unknown'
 

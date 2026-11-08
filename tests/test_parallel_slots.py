@@ -54,12 +54,46 @@ class ParallelSlotsTest(unittest.TestCase):
         rows.append(rows[-1])
         self.write('ledger.jsonl', '\n'.join(map(json.dumps, rows)))
         state = slots.status()
-        self.assertEqual(state, dict(limit=9, open=5, free=4, source='host config', families={
+        self.assertEqual(state, dict(limit=9, open=5, stale=0, free=4, source='host config', families={
             'claude': dict(open=3, cap=4, free=1), 'codex': dict(open=1, cap=3, free=2),
             'antigravity': dict(open=1, cap=None, free=None)}))
         code, output = self.command('status')
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(output), state)
+
+    def test_dispatches_past_their_hard_cap_are_stale_and_left_out(self):
+        from datetime import datetime, timedelta, timezone
+        now = datetime(2026, 11, 8, 12, 0, tzinfo=timezone.utc)
+        def start(n, agent, minutes_ago, budget='30', naive=False):
+            when = now - timedelta(minutes=minutes_ago)
+            row = dict(event='start', id=str(n), agent=agent, ts=(when.replace(tzinfo=None) if naive else when).isoformat())
+            if budget is not None:
+                row['budget_min'] = int(budget)
+            return json.dumps(row)
+        raw = '\n'.join([
+            start(1, 'codex', 41),                  # budget 30: hard cap 40 minutes, so stale
+            start(2, 'codex', 39),                  # inside the cap, counted
+            start(3, 'claude', 600, budget='5'),    # cap is at least budget plus 10 minutes: stale
+            start(4, 'antigravity', 600, budget=None),   # no budget: cannot tell, counted
+            start(5, 'codex', 600, naive=True),     # no time zone: cannot tell, counted
+            start(6, 'claude', 12, budget='5'),     # 12 < 15: counted
+        ]).encode()
+        stale = {}
+        counts = slots.open_counts(raw, now=now, stale=stale)
+        self.assertEqual(counts, dict(claude=1, codex=2, antigravity=1))
+        self.assertEqual(stale, dict(codex=1, claude=1))
+        self.assertEqual(slots.open_counts(raw, now=now), counts)
+
+    def test_status_and_summary_report_stale_dispatches_without_counting_them(self):
+        from datetime import datetime, timedelta, timezone
+        self.write('host.md', '## Limits\n- Parallel dispatches: at most 4 at one time.\n')
+        old = (datetime.now(timezone.utc) - timedelta(hours=10)).isoformat()
+        rows = [dict(event='start', id='old', agent='codex', ts=old, budget_min=30)]
+        self.write('ledger.jsonl', ''.join(json.dumps(r) + '\n' for r in rows))
+        state = slots.status()
+        self.assertEqual((state['open'], state['stale'], state['free']), (0, 1, 4))
+        self.assertIn('1 stale not counted', slots.summary())
+        self.assertEqual(self.command('check', '--family', 'codex', '--count', '4'), (0, 'Parallel slots: available\n'))
 
     def test_check_both_limits_overfull_and_count(self):
         self.host()
