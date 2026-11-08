@@ -6,6 +6,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- User-invoked `fnl-autopilot` starts and stops a time-boxed away mandate with action classification and an independent merge gate; `fnl-brb` (be right back) is its thin alias. Recorded setup is required; the setup feature follows separately, and the live loop, dashboard tab, scheduler, notice hook and host backstop remain deferred.
+
 - `fnl-delegate/scripts/heavy_run.py` runs one heavy command at a time on the machine: it holds a kernel lock in the fixed anchor folder, waits for the one-minute load and free memory, exits 75 after a wait cap, refuses detached Docker launches, starts the command with the allowlisted environment records who started the job (label, repository, dispatch id, program name, pids, times) so `status` can show it without guessing the holder, and stops a job past its maximum time (default 90 minutes). It replaces the `mkdir` recipe.
 - Record an optional coordinator session hash on dispatch starts from `CLAUDE_CODE_SESSION_ID` (never from a command-line option); keep only a short SHA-256 hash, or `null` when unknown.
 

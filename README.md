@@ -174,7 +174,7 @@ Done when the plugin is listed by your host and the user knows the order: `/fnl-
 
 ## Skills
 
-The plugin has **17 skill folders**: 12 model-invoked skills and five marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Every skill carries the `fnl-` prefix. The user types five of them, `fnl-restore-point`, `fnl-setup`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff` and `fnl-advisor` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
+The plugin has **19 skill folders**: 12 model-invoked skills and seven marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Every skill carries the `fnl-` prefix. The user types seven of them, `fnl-autopilot`, `fnl-brb`, `fnl-restore-point`, `fnl-setup`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff` and `fnl-advisor` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
 
 | Skill | Use it when |
 | --- | --- |
@@ -186,6 +186,8 @@ The plugin has **17 skill folders**: 12 model-invoked skills and five marked use
 | `fnl-versioning` | Bumping a version, tagging a release, or writing the changelog and release notes: SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog. |
 | `fnl-commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports). |
 | `fnl-restore-point` | Saving the working tree to a private git ref before the agent edits, listing restore points and restoring one after a preview and a yes. User-invoked, git repositories only. |
+| `fnl-autopilot` | Starting a time-boxed standing mandate while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. The setup feature follows separately; the live loop, dashboard tab, scheduler and hooks are deferred. |
+| `fnl-brb` | Short name for `fnl-autopilot` (be right back); follows the same procedure and arguments. |
 | `fnl-review-gate` | A user story is done or a pull request is about to merge: an independent code review, a disposition for every finding, a regression test per runtime fix. |
 | `fnl-security-review-gate` | A change touches auth, permissions, private data, untrusted input or payments: a permission-boundary review, with negative tests proving that not even a record's existence leaks. |
 | `fnl-verification` | Choosing targeted tests, checking current-head verification receipts, completing host/judge criterion checks and deciding whether to accept reported work; the coordinator keeps the verdict. |
@@ -371,7 +373,7 @@ The judge defaults to a small host model. Choose `judge: jev` in canonical `## A
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 agents/fnl-*.md                   code reviewer, security reviewer and navigator definitions (no project edits; authorized posting uses a private draft)
 agents/openai.yaml                Codex skill-list display metadata
-skills/fnl-*/SKILL.md             17 self-contained skills (12 model-invoked; 5 user-only flags on Claude Code)
+skills/fnl-*/SKILL.md             19 self-contained skills (12 model-invoked; 7 user-only flags on Claude Code)
 skills/fnl-advisor/references/committee.md       committee procedure, loaded only for a committee
 skills/fnl-delegate/references/coordinator-sessions.md  spec coordinator and task sessions
 skills/fnl-session-hygiene/references/knowledge.md      remember/recall procedure; handovers live in SKILL.md
