@@ -11,7 +11,8 @@ when the data root is relocated. The wrapper holds it until the command's proces
 run time ends. If the wrapper is killed, the lock file also records the command's process group; a later start that
 gets the kernel lock still waits for as long as that group is alive, whatever the command did with the inherited
 descriptor and however old the record is. A recycled process group id can keep a start waiting until the wait cap
-(exit 75); the message says why and `status` shows it. The only gap is the instant between starting the command
+(exit 75); the message says why and `status` shows it. A worker that starts its own session or process group is
+outside the lock's process group and is not tracked. The only gap is the instant between starting the command
 and writing that record. Nothing here prints or stores the environment or the command.
 """
 import argparse

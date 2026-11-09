@@ -13,14 +13,14 @@ and the setup gaps found on the way.
 
 | # | Package | Pull requests | Status |
 | --- | --- | --- | --- |
-| 1 | Baseline | #171 started the 0.2.1 development cycle. | implemented. |
-| 2 | Check reports the live plugin version | #172: folder marketplace version beside the registry record, `CLAUDE_CONFIG_DIR`, other Claude homes. | implemented; fixture tests. |
-| 3 | Delegation after a compaction | #173: fixed reminder in the session-start hook, handover line, coordinator session hash in the ledger. | implemented; delivery to the model unverified. |
-| 4 | Plain delegate description | #174. | implemented. |
-| 5 | Background run rule | #175: runs start in the host's background mode, never `( … ) &`, `nohup` or `disown`. | implemented. |
-| 6 | Per-project parallel limit | #176: `parallel` and `parallel-caps` per repository, default 3. | implemented; live scheduling unverified. |
-| 7 | Heavy-job design | #177: the spec and the fifth scoped exception in `CLAUDE.md`. | design only; no code. |
-| 8 | Delegated-acceptance default | #178: one line in the user-contract template, defining the package boundary and the repository-owner exception. | implemented; template text only. |
+| 1 | Baseline | #171 started the 0.2.1 development cycle. | implemented |
+| 2 | Check reports the live plugin version | #172: folder marketplace version beside the registry record, `CLAUDE_CONFIG_DIR`, other Claude homes. | implemented; fixture tests |
+| 3 | Delegation after a compaction | #173: fixed reminder in the session-start hook, handover line, coordinator session hash in the ledger. | implemented; delivery to the model unverified |
+| 4 | Plain delegate description | #174. | implemented |
+| 5 | Background run rule | #175: runs start in the host's background mode, never `( … ) &`, `nohup` or `disown`. | implemented |
+| 6 | Per-project parallel limit | #176: `parallel` and `parallel-caps` per repository, default 3. | implemented; live scheduling unverified |
+| 7 | Heavy-job design | #177: the spec and the fifth scoped exception in `CLAUDE.md`. | draft; design only, no code |
+| 8 | Delegated-acceptance default | #178: one line in the user-contract template, defining the package boundary and the repository-owner exception. | implemented; template text only |
 
 ## Delivered since the scope was settled
 
@@ -28,7 +28,7 @@ and the setup gaps found on the way.
 | --- | --- | --- | --- |
 | 9 | `## Agent skills` block in every context file | #182. | implemented; setup text only. |
 | 10 | Check reports plugin enablement | #184: `enabledPlugins` state per Claude home. | implemented; fixture tests. |
-| 11 | Unsandboxed review runs | #184: documentation of the unsandboxed review and posting run, `needs-permission` versus `quota`, and which command refuses a review dispatch's acceptance. | implemented; documentation only. |
+| 11 | Unsandboxed review runs | #184: documentation of the unsandboxed review and posting run, `needs-permission` versus `quota`, and which command refuses a review dispatch's acceptance; the unsandboxed run needs the user's approval, as `skills/fnl-delegate/references/agents.md` says in its Codex and cross-host section. | implemented; documentation only. |
 | 12a | Heavy-job wrapper | #180: `heavy_run.py`, a machine-wide one-at-a-time lock with load and memory gates, a wait cap and a maximum run time. | implemented; fixture tests, no live-host proof. |
 | 15 | Autopilot first slice (`/fnl-brb`) | #183: `autopilot.py` start, stop, check and log, and `merge_check.py --independent`. #185: the `fnl-autopilot` skill, its `fnl-brb` alias and the `/fnl-setup add autopilot` feature. | implemented; classification only, nothing executes commands; the live loop, dashboard tab, scheduler, hooks and host backstop are deferred. |
 

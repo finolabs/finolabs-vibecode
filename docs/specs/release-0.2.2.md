@@ -1,6 +1,6 @@
 # Release 0.2.2: scope
 
-Status: in progress; scope settled by the owner on 2026-11-09; package 1 is merged and packages 2 to 6 are open.
+Status: in progress; scope settled by the owner on 2026-11-09; packages 1 to 3 are merged and packages 4 to 7 are open.
 
 ## Why
 
@@ -10,17 +10,18 @@ Status: in progress; scope settled by the owner on 2026-11-09; package 1 is merg
 
 | # | Package | Pull requests | Status |
 | --- | --- | --- | --- |
-| 1 | Agent levels | #189: `/fnl-setup add delegation` asks which of five task levels each helper takes, including extra Claude Code commands; the writer and strict reader are `levels_setup.py`; shell-function commands start behind the environment filter. Spec: `agent-levels.md`. | implemented; unit tests; routing by levels is advisory and unverified on a live host. |
+| 1 | Agent levels | #189: `/fnl-setup add delegation` asks which of five task levels each helper takes, including extra Claude Code commands; the writer and strict reader are `levels_setup.py`; shell-function commands start behind the environment filter. Spec: `agent-levels.md`. | implemented; unit tests, no live-host proof |
+| 2 | Find extra Claude Code commands | #191: `levels_setup.py candidates` prints, as names only, the `claude*` programs on `PATH` and the `~/.claude-*` folder labels, and `add delegation` offers them as candidates; a shell function is added only when the user types its name, because listing functions would run the user's startup file. | implemented; unit tests, no live-host proof |
+| 3 | Heavy-job wrapper memory minimum and queue view | #192: `heavy_run.py` reads free memory from the kernel's own figure (`memory_pressure` free percentage times `hw.memsize`, with a conservative `vm_stat` estimate as fallback), after a 2.6 GB reading refused a review on a 16 GB machine that the kernel reported 31% free; `status` prints `waiting: about <n>`. | implemented; unit tests, no live-host proof |
 
 ## Scope (owner decision, 2026-11-09)
 
 | # | Package | What it covers |
 | --- | --- | --- |
-| 2 | Find extra Claude Code commands | `scan` lists `claude*` programs on `PATH` and `~/.claude-*` folders as candidates and asks; a shell function is added only when the user types its name, because listing functions would run the user's startup file. |
-| 3 | Heavy-job wrapper memory minimum and queue view | Review the default free-memory minimum that held back a review at 2.6 GB free on a 16 GB machine, and show who is waiting for the lock. |
 | 4 | Review residuals and small setup items | The non-blocking notes of #172, #176, #177, #179 and #180 including the process-group wording, the duplicate-lines warning and the ledger project naming guidance. |
 | 5 | Quota probe for gateway installs | Skip or mark an install whose usage output has no pools, so routing treats it as unverified and the probe stops asking. |
 | 6 | Live-host check | Run `/fnl-brb`, `heavy_run.py` and a dispatch by level on this machine, and record what happened in the owner-facing evidence below. |
+| 7 | Native Windows message (issue 193) | Added 2026-11-09 after a user report: no Windows support, which would need a new security design; every script that imports `pwd` or `fcntl` stops with one clear message, the README names macOS and Linux (Windows through WSL), and a test pins it. |
 
 ## Left out of 0.2.2
 
@@ -28,7 +29,7 @@ The heavy-job gate hook and its installer, the goal skill, the rest of autopilot
 
 ## Evidence
 
-Package 1: `tests/test_levels_setup.py` (10 tests) and the two reviews on #189. Nothing else is verified yet.
+Package 1: `tests/test_levels_setup.py` and the reviews on #189 and #191. Nothing else is verified yet.
 
 ## Release steps (after the scope is delivered)
 
