@@ -17,6 +17,20 @@ Status: draft; scope started by the owner on 2026-11-09; nothing is built.
 | 5 | Away decisions | A decision ladder for the away mandate (recorded rule, Jev, the named advisor, park), the record of who decided, and a lease line at session start. Spec: `away-decisions.md`. |
 | 6 | Help skill rename | fnl-help becomes the main name of the plugin help skill and `fnl-ask` stays as its alias. Spec: `away-decisions.md`. |
 
+## Added from usage data (owner, 2026-11-09)
+
+Measured on the owner's machine over nine days of ledger and usage events (796 dispatches, 5,855 events, six projects) and the last 59 reviewed pull requests. Each row names the number that justifies it.
+
+| # | Package | Evidence | What it covers |
+| --- | --- | --- | --- |
+| 7 | Log scan false positives | Of 728 finished runs only 13 scanned clean; 316 `not_scanned`, 87 `findings`; 342 of 607 acceptances used `--accept-unverified`. The `named_token` pattern fires on ordinary JSON such as `credential_expires_at` and usage fields in every headless log, and the log folder's mode is refused when not 0700. | Stop the false positives, create and check the log folder, so that acceptance through the scan is the normal path again. |
+| 8 | Test selection from the diff | 12 of the last 100 CI runs failed; four test modules were missed by hand-picked targeted runs in one day. | A command that maps changed files to the test modules that read them, within the two-module batching rule. |
+| 9 | One source for skill counts | The count is written by hand in twelve files and broke CI twice in one day. | Remove the number where it is not needed; check or generate the rest from the folder. |
+| 10 | Stale ledger records | 68 open records, 31 older than 24 hours, which keep the pause verdict at `blocked`. | A previewed command that lists records past their budget whose log shows how they ended, and closes them after a yes. |
+| 11 | Router coverage | 43 of 133 hand-started sessions with a file edit (32%) recorded a router receipt. | A one-line reminder at the first edit of a session with no receipt; it never blocks. |
+| 12 | Usage blind spot | User-typed skills record no event (`fnl-setup`, `fnl-status`, `fnl-ask` show zero despite use); `fnl-verification`, which is model-invoked, also shows zero. | Record user-invoked skills, then check whether `fnl-verification` is loaded at all. |
+| 13 | Review gate size | `fnl-review-gate` is 18 KB, the largest skill, loaded 38 times in nine days. | Move detail into references, within the 10,000-byte skill limit. |
+
 ## Carried from earlier releases
 
 The unresolved notes of the 0.2.2 reviews: the 201-candidate arm of the `heavy_run` test can be masked by a fake `ps` that exits with an error (a note on pull request 201). The owner can add more.
