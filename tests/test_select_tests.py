@@ -43,7 +43,7 @@ class SelectTestsTest(unittest.TestCase):
             path.write_text(text)
         self.git('init', '-q', '-b', 'main')
         self.git('add', '.')
-        self.git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.invalid',
+        self.git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com',
                  'commit', '-qm', 'Create fixture')
 
     def git(self, *argv):
