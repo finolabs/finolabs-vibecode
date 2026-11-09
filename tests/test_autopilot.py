@@ -924,7 +924,9 @@ class AwayDecisionTest(AutopilotBase):
 
     def test_a_sensitive_assignment_split_across_lines_is_screened(self):
         module = self.load()
-        for brief in ('{"session_cookie":\n  "synthetic-fixture-1234567890"}', '{"password":\n"demo"}',
+        for brief in ('session_cookie: "\n  synthetic-fixture-1234567890\n"', "password: '\n  demo\n'", 'password: |\n  demo',
+                      'password:\n  - demo', 'password=$(cat x)', '"token" \n\n = \n "q"',
+                      '{"session_cookie":\n  "synthetic-fixture-1234567890"}', '{"password":\n"demo"}',
                       'password =\n  demo', 'api_token\n  : abc', '{"password": "demo"}'):
             with self.subTest(brief=brief):
                 self.assertFalse(module.brief_ok(brief))

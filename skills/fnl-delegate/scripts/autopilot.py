@@ -852,11 +852,13 @@ def review(folder, args):
     print('Decision review recorded')
 
 
+ASSIGNED = re.compile(r"""([^\s=:,'"{}\[\]]+)['"]?\s*[=:]""")
+
+
 def assigns_sensitive(value):
-    """An assigned value of any length under a sensitive name; naming a setting without a value stays possible."""
-    joined = re.sub(r'\s*\n\s*(?=[=:])|(?<=[=:])\s*\n\s*', ' ', value)  # a value may start on the next line
-    return any(secret_patterns.SENSITIVE.search(match['name']) and match[secret_patterns.value_group(match)]
-               for match in secret_patterns.PAIR.finditer(joined))
+    """A sensitive name followed by `=` or `:`, whatever comes next. Values have too many shapes to parse safely, so
+    the separator alone decides; naming a setting in prose stays possible, and a refusal only sends the host back."""
+    return any(secret_patterns.SENSITIVE.search(match[1]) for match in ASSIGNED.finditer(value))
 
 
 def screened(value):

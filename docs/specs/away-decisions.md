@@ -202,6 +202,7 @@ The owner reviews real use from the ledger, so one record covers every decision 
 
 ## Limits
 
+- Screening a brief or an excerpt lowers the risk of sending a credential to another provider; it cannot prove there is none. It refuses any sensitive name followed by `=` or `:` rather than parsing values, because every parser review tried could be bypassed by another value shape.
 - The gate stops the host asking the user; it does not make the host climb the ladder, which stays advisory, and whether the
   host applied the chosen option is not machine-checkable because options are free text. The ledger shows what was decided, not what was done.
 - Probability is a judgment of fit among the options given, not proof the choice is right; a poorly framed question yields a
