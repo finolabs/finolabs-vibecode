@@ -79,6 +79,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/away_gate_hook.py\" 2>/dev/null; exit 0",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "StopFailure": [

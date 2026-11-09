@@ -650,5 +650,122 @@ class LedgerLocationTest(unittest.TestCase):
         self.assertEqual(old.read_text(), "")
 
 
+class AwayLedgerTest(unittest.TestCase):
+    """Away decisions: decision, question_denied and decision_review lines beside dispatch history."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.home = account(self, Path(self.dir.name) / "home")
+        self.path = self.home / ".finolabs/vibecode/ledger.jsonl"
+        self.path.parent.mkdir(parents=True)
+        spec = importlib.util.spec_from_file_location("away_ledger", LEDGER)
+        self.ledger = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.ledger)
+
+    DISPATCHES = [
+        {"event": "start", "id": "d1", "ts": "2026-11-09T01:00:00+00:00", "project": "demo", "task": "parser",
+         "kind": "implement", "grade": "medium", "agent": "codex", "model": "m1", "reason": "routing", "route_by": "table"},
+        {"event": "finish", "id": "d1", "ts": "2026-11-09T01:30:00+00:00", "outcome": "accepted", "rework_rounds": 0},
+        {"event": "start", "id": "d2", "ts": "2026-11-09T02:00:00+00:00", "project": "demo", "task": "advice",
+         "kind": "advise", "grade": "easy", "agent": "claude", "model": "m2", "reason": "routing", "route_by": "table"},
+        {"event": "finish", "id": "d2", "ts": "2026-11-09T02:10:00+00:00", "outcome": "rejected", "rework_rounds": 1},
+    ]
+    AWAY = [
+        {"event": "decision", "id": "q20261109-010000-aaaa", "ts": "2026-11-09T01:00:00+00:00", "project": "demo",
+         "lease_start": 1000.0, "rung": "jev", "settled": "no", "by": "jev", "probability": 0.6, "precedents": 2, "topic": "schema"},
+        {"event": "decision", "id": "q20261109-010000-aaaa", "ts": "2026-11-09T01:01:00+00:00", "project": "demo",
+         "lease_start": 1000.0, "rung": "advisor", "settled": "yes", "by": "codex", "option": 2, "of": 3,
+         "dispatch": "d20261109-010100-abcd", "model": "m1", "precedents": 2, "topic": "schema"},
+        {"event": "decision", "id": "q20261109-020000-bbbb", "ts": "2026-11-09T02:00:00+00:00", "project": "demo",
+         "lease_start": 1000.0, "rung": "jev", "settled": "yes", "by": "jev", "option": 1, "of": 2, "probability": 0.9,
+         "precedents": 0, "topic": "naming"},
+        {"event": "decision", "id": "q20261109-030000-cccc", "ts": "2026-11-09T03:00:00+00:00", "project": "demo",
+         "lease_start": 1000.0, "rung": "park", "settled": "yes", "by": "claude", "precedents": 0, "topic": "deploy"},
+        {"event": "decision", "id": "q20261110-010000-dddd", "ts": "2026-11-10T01:00:00+00:00", "project": "demo",
+         "lease_start": 9000.0, "rung": "host", "settled": "yes", "by": "claude", "option": 1, "of": 2, "model": "m3",
+         "precedents": 1, "topic": "tests"},
+        {"event": "question_denied", "ts": "2026-11-09T01:05:00+00:00", "lease_start": 1000.0},
+        {"event": "question_denied", "ts": "2026-11-09T01:06:00+00:00", "lease_start": 1000.0},
+        {"event": "decision_review", "id": "q20261109-010000-aaaa", "ts": "2026-11-09T09:00:00+00:00", "verdict": "kept"},
+        {"event": "decision_review", "id": "q20261109-010000-aaaa", "ts": "2026-11-09T09:05:00+00:00", "verdict": "reversed"},
+        {"event": "decision_review", "id": "q20261109-020000-bbbb", "ts": "2026-11-09T09:06:00+00:00", "verdict": "kept"},
+    ]
+
+    def write(self, records, extra=""):
+        self.path.write_text("".join(json.dumps(r) + "\n" for r in records) + extra)
+        self.path.chmod(0o600)
+
+    def run_quiet(self, function, *args, **kwargs):
+        errors, output = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stderr(errors), contextlib.redirect_stdout(output):
+            value = function(*args, **kwargs)
+        return value, output.getvalue(), errors.getvalue()
+
+    def test_load_keeps_its_two_maps_and_skips_away_lines_silently(self):
+        self.write(self.DISPATCHES)
+        before, _, _ = self.run_quiet(self.ledger.load)
+        self.write(self.DISPATCHES[:2] + self.AWAY + self.DISPATCHES[2:])
+        after, _, errors = self.run_quiet(self.ledger.load)
+        self.assertIsInstance(after, tuple)
+        self.assertEqual(len(after), 2)
+        self.assertEqual(after, before)
+        self.assertEqual(errors, "")
+        # A truly malformed line still reports, and an away line missing its fields is no dispatch.
+        self.write(self.DISPATCHES + self.AWAY, extra="{broken\n")
+        after, _, errors = self.run_quiet(self.ledger.load)
+        self.assertEqual(after, before)
+        self.assertEqual(errors, "ledger: skipping malformed line %d\n" % (len(self.DISPATCHES + self.AWAY) + 1))
+
+    def test_away_reader_returns_only_the_three_new_event_types(self):
+        self.write(self.DISPATCHES + self.AWAY + [{"event": "decision"}, {"event": "other"}], extra="{broken\n")
+        records, _, errors = self.run_quiet(self.ledger.load_away)
+        self.assertEqual(errors, "")
+        self.assertEqual(records, self.AWAY)
+        self.path.unlink()
+        self.assertEqual(self.ledger.load_away(), [])
+
+    def test_dispatch_summary_numbers_are_unchanged_by_away_lines(self):
+        self.write(self.DISPATCHES)
+        rows = self.ledger.summary_rows()
+        picks = self.ledger.pick_rows()
+        self.write(self.AWAY[:3] + self.DISPATCHES + self.AWAY[3:])
+        self.assertEqual(self.ledger.summary_rows(), rows)
+        self.assertEqual(self.ledger.pick_rows(), picks)
+        args = self.ledger.build_parser().parse_args(["summary", "--json"])
+        _, output, _ = self.run_quiet(args.func, args)
+        self.assertEqual(json.loads(output), json.loads(json.dumps(rows)))
+
+    def test_away_section_per_lease(self):
+        self.write(self.DISPATCHES + self.AWAY)
+        leases = self.ledger.away_rows()
+        self.assertEqual([lease["lease_start"] for lease in leases], [1000.0, 9000.0])
+        first, second = leases
+        self.assertEqual(first["decisions"], 3)
+        self.assertEqual(first["by_rung"], {"advisor": 1, "jev": 1, "park": 1})
+        self.assertEqual(first["by_advisor"], {"codex m1": 1})
+        self.assertEqual(first["jev_p"], {"n": 2, "min": 0.6, "median": 0.75, "max": 0.9})
+        self.assertEqual((first["parked"], first["denied"]), (1, 2))
+        # The later review of one id replaces the earlier one: one reversed of two reviewed.
+        self.assertEqual((first["reviewed"], first["reversed"]), (2, 1))
+        self.assertEqual(first["no_precedent"], 2)
+        self.assertEqual((second["decisions"], second["by_rung"], second["denied"], second["reviewed"]),
+                         (1, {"host": 1}, 0, 0))
+        args = self.ledger.build_parser().parse_args(["summary"])
+        _, output, _ = self.run_quiet(args.func, args)
+        self.assertIn("away decisions per lease", output)
+        self.assertIn("advisor 1, jev 1, park 1", output)
+        self.assertIn("reversed 1 of 2 reviewed", output)
+        for word in ("schema", "naming"):
+            self.assertNotIn(word, output)  # topic labels stay in the ledger file
+
+    def test_summary_with_only_away_lines_prints_both_sections_honestly(self):
+        self.write(self.AWAY)
+        args = self.ledger.build_parser().parse_args(["summary"])
+        _, output, _ = self.run_quiet(args.func, args)
+        self.assertIn("ledger: no finished dispatches match", output)
+        self.assertIn("away decisions per lease", output)
+
+
 if __name__ == "__main__":
     unittest.main()

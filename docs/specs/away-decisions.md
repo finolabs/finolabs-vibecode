@@ -72,7 +72,7 @@ Each case has one outcome. A decision is never permission: the action it selects
 The skill requires a Tier 1 check before every action, so rungs 2 and 3 need command forms `autopilot.py` knows. Package 5 adds exactly two to `classify_argv`, and the script stays execution-free:
 
 - `judge.py` of this install, with isolated Python, and only the site `away-decision` and its validated options. No other site, no base-URL flag.
-- The advisor's run: this install's `delegate_env.py` wrapper followed by one closed read-only argv shape per family, taken from `fnl-advisor`'s own dispatch commands, the family being one of the lease's Hosts and other than the coordinator's. The brief is passed only by the mechanism those commands already use. Any write-enabling flag, unknown option or other program denies.
+- The advisor's run: this install's `delegate_env.py` wrapper followed by one closed read-only argv shape per family, taken from `fnl-advisor`'s own dispatch commands, the family being one of the lease's Hosts and other than the coordinator's. The program is the family's owner-approved executable: the absolute path recorded in the canonical host config for the quota probe (`Executable`, `Resolved` and its confirmed digest), passing that probe's owner, mode, repository and target checks at check time; no record means the form is denied, and a bare name, a PATH lookup, another path with the same name and a time-cap wrapper such as `perl`, which has no such record, deny. The brief is passed only by the mechanism those commands already use, behind an unambiguous boundary: Codex and Claude end their options with a literal `--` immediately before the brief, Antigravity takes it as the value of `-p`, and in every form a brief that starts with `-` (an option, or `-` for unvalidated standard input) denies. Any write-enabling flag, unknown option or other program denies.
 
 Each check reserves an action, and the advisor's ledger start also reserves a run, as today. Acceptance cases show both calls returning Tier 1 under a live lease, and a changed site, a write flag, a family outside Hosts and an unknown program being denied.
 
@@ -202,6 +202,7 @@ The owner reviews real use from the ledger, so one record covers every decision 
 
 ## Limits
 
+- Screening a brief or an excerpt lowers the risk of sending a credential to another provider; it cannot prove there is none. It refuses any sensitive name followed by `=` or `:` rather than parsing values, because every parser review tried could be bypassed by another value shape.
 - The gate stops the host asking the user; it does not make the host climb the ladder, which stays advisory, and whether the
   host applied the chosen option is not machine-checkable because options are free text. The ledger shows what was decided, not what was done.
 - Probability is a judgment of fit among the options given, not proof the choice is right; a poorly framed question yields a

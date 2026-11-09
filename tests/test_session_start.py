@@ -207,6 +207,9 @@ class SessionStartTest(SyntheticStateTest):
                 import json
                 manifest = json.loads(raw)
                 self.assertEqual(len(manifest["hooks"].pop("StopFailure")), 1)
+                # The away question gate adds only its own PreToolUse group, last in that list.
+                gate = manifest["hooks"]["PreToolUse"].pop()
+                self.assertEqual(gate["matcher"], "AskUserQuestion")
                 raw = (json.dumps(manifest, indent=2) + "\n").encode()
             self.assertEqual(hashlib.sha256(raw).hexdigest(), digest)
 
@@ -379,6 +382,47 @@ class StateBlockTest(SyntheticStateTest):
         with self.dr.data_folder("state/quota", create=True, private=True) as folder:
             self.qp.write_json(folder, "limits.json", {"claude": stamp(current - hours(minutes=10))})
         self.assertIn("Quota (cached): claude-code limited, codex out 3%", self.state())
+
+    AWAY = 'Away mandate active: do not ask the user; follow fnl-autopilot "Decide"\n'
+
+    def write_lease(self, start, expiry):
+        self.write("state/autopilot/lease.json", json.dumps({
+            "id": "a" * 32, "start": start, "expiry": expiry, "settings_hash": "b" * 64,
+            "counters": {"runs": 0, "runtime_minutes": 0, "actions": 0, "hour_actions": []}}))
+        (self.root / "state/autopilot").chmod(0o700)
+        (self.root / "state").chmod(0o700)
+
+    def test_a_live_away_lease_adds_one_fixed_line_after_every_start_source(self):
+        current = time.time()
+        self.write_lease(current - 60, current + 3600)
+        state = self.state()
+        self.assertTrue(state.endswith(self.AWAY), state)
+        self.assertEqual(state.count("Away mandate"), 1)
+        self.assertLessEqual(len(self.AWAY), 80)
+        for source in ("startup", "resume", "clear", "compact"):
+            with self.subTest(source=source):
+                out = io.StringIO()
+                raw = json.dumps({"source": source, "session_id": "synthetic"}).encode()
+                with mock.patch.object(sys, "stdin", io.TextIOWrapper(io.BytesIO(raw), encoding="utf-8")), \
+                        contextlib.redirect_stdout(out):
+                    self.assertEqual(hook.main(), 0)
+                self.assertEqual(out.getvalue().count(self.AWAY), 1)
+
+    def test_no_live_away_lease_adds_nothing(self):
+        current = time.time()
+        baseline = self.state()
+        self.assertNotIn("Away mandate", baseline)
+        for start, expiry in ((current - 7200, current - 1), (current + 600, current + 3600)):
+            self.write_lease(start, expiry)
+            self.assertEqual(self.state(), baseline)
+        self.write_lease(current - 60, current + 3600)
+        self.write("state/autopilot/stop", "")
+        self.assertEqual(self.state(), baseline)
+        (self.root / "state/autopilot/stop").unlink()
+        (self.root / "state/autopilot/lease.json").chmod(0o644)
+        self.assertEqual(self.state(), baseline)
+        self.write("state/autopilot/lease.json", "{broken")
+        self.assertEqual(self.state(), baseline)
 
     def test_it_starts_no_process(self):
         self.write("host.md", "## Delegation mode\n\nmanual\n")

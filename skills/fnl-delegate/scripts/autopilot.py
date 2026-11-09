@@ -9,7 +9,11 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | State stays outside Git, private (directories 0700/files 0600), no links, atomic and serialized | private_folder, read_private, write_private, data_root, flock |
 | One live lease; stop removes it and leaves a stop marker; starting clears that marker | start, stop |
 | Missing/expired/stopped/changed setup or exhausted runs, wall/runtime minutes or rolling-hour actions denies every check | lease_guard |
-| Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3 | classify_argv |
+| Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release and npm/pnpm publish forms whose every applicable category is `decide`, and a deploy matching a `Non-production targets` entry exactly with no production or live word; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
+| Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
+| The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
+| Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
+| A precedent packet holds at most eight excerpts and 8 KB; a secret or machine path drops an excerpt; excerpts need the separate consent | packet_check |
 | Credentials/env names, .github, hooks, agent instructions, settings, host/setup/lease files are Tier 3 anywhere in argv or paths | protected |
 | Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3 | classify_paths |
 | Read-only Git/gh queries use closed verbs and option sets; command/config overrides and unknown options deny | classify_argv, options |
@@ -51,10 +55,34 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
 import data_root as dr
 import parallel_slots as slots
 import secret_patterns
+from away_lease import finite, private_info, read_lease, read_private  # the one safe lease reader
 
 DEFAULTS = {'Hosts': 'Claude Code', 'Task choice': 'choose', 'Push and pull requests': 'yes',
             'Trusted authors': 'own', 'Lease hours': 8, 'Max runs': 20,
             'Max runtime minutes': 480, 'Max actions per hour': 30, 'Quota floor percent': 15}
+# Closed categories of docs/specs/away-decisions.md "Where it must stop": name -> fixed at stop.
+# Setup writes each starting choice; a missing or unknown value, and any value of a fixed row, is stop.
+CATEGORIES = {'Production': True, 'Real users and customer data': True, 'Unrecoverable deletion': False,
+              'Messages outside the repository': False, 'Tags and releases': False, 'Publishing': False,
+              'Shared settings': False, 'Recoverable deletion': False, 'Repository comments': False}
+CONSENT = 'Excerpts leave the machine'
+TARGETS = 'Non-production targets'
+HOST_FAMILIES = {'Claude Code': 'claude', 'Codex': 'codex', 'Antigravity': 'antigravity'}
+PROGRAMS = {'claude': 'claude', 'codex': 'codex', 'antigravity': 'agy'}
+MODEL = re.compile(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,79}')
+LABEL = re.compile(r'[A-Za-z0-9._-](?:[A-Za-z0-9 ._-]{0,58}[A-Za-z0-9._-])?')
+DECISION_ID = re.compile(r'q[0-9]{8}-[0-9]{6}-[0-9a-f]{4}')
+DISPATCH_ID = re.compile(r'd[0-9]{8}-[0-9]{6}-[0-9a-f]{4}')
+ADVISOR = re.compile(r'(?:claude|codex|antigravity)[a-z0-9]{0,24}')
+FIELDS = ('by', 'option', 'of', 'probability', 'dispatch', 'model')
+# The closed attempt schema of "Record for analysis": (rung, settled) -> (required, optional).
+ATTEMPTS = {('rule', 'yes'): ({'by', 'option', 'of'}, set()), ('rule', 'no'): ({'by'}, set()),
+            ('jev', 'yes'): ({'by', 'option', 'of', 'probability'}, set()), ('jev', 'no'): ({'by', 'probability'}, set()),
+            ('jev', 'unavailable'): ({'by'}, set()),
+            ('advisor', 'yes'): ({'by', 'option', 'of', 'dispatch', 'model'}, set()),
+            ('advisor', 'no'): ({'by', 'dispatch', 'model'}, set()),
+            ('host', 'yes'): ({'by', 'option', 'of', 'model'}, set()), ('park', 'yes'): ({'by'}, set())}
+SETTLE = 0.8
 NUMBERS = {'Lease hours': (1, 24), 'Max runs': (1, 10000), 'Max runtime minutes': (1, 1440),
            'Max actions per hour': (1, 10000), 'Quota floor percent': (0, 100)}
 KINDS = {'start': 1, 'stop': 1, 'action': 1, 'decision': 2, 'parked': 3,
@@ -68,7 +96,8 @@ MAX_LOG = 8 * 1024 * 1024
 ENFORCERS = {'autopilot.py', 'data_root.py', 'parallel_slots.py', 'secret_patterns.py', 'merge_check.py',
              'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
              'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py', 'heavy_run.py', 'delegate_env.py',
-             'auto_gate.py', 'mode.py', 'judge.py', 'log_scan.py', 'route_task.py', 'brief_check.py', 'assignments.py'}
+             'auto_gate.py', 'mode.py', 'judge.py', 'log_scan.py', 'route_task.py', 'brief_check.py', 'assignments.py',
+             'away_lease.py', 'away_gate_hook.py'}
 ENFORCERS = {name.casefold() for name in ENFORCERS}  # case-insensitive filesystems name one file many ways
 
 
@@ -81,16 +110,24 @@ def settings():
     start, body, end = slots.host_section(text, 'Autopilot')
     if start == body == end:
         raise ValueError('Autopilot setup is missing')
-    result, seen = dict(DEFAULTS), set()
+    result, seen = {**DEFAULTS, **{c: 'stop' for c in CATEGORIES}, CONSENT: 'no', TARGETS: []}, set()
     for line in text[body:end].splitlines():
         if not line.strip():
             continue
-        match = re.fullmatch(r'- ([A-Za-z ]+): (.+)', line)
-        if not match or match[1] not in {*DEFAULTS, 'Merge'} or match[1] in seen:
+        match = re.fullmatch(r'- ([A-Za-z -]+): (.+)', line)
+        if not match or match[1] not in {*DEFAULTS, 'Merge', *CATEGORIES, CONSENT, TARGETS} or match[1] in seen:
             raise ValueError('Autopilot setup is invalid')
         key, value = match.groups()
         seen.add(key)
-        if key in NUMBERS:
+        if key in CATEGORIES:
+            value = 'decide' if value == 'decide' and not CATEGORIES[key] else 'stop'
+        elif key == CONSENT:
+            value = 'yes' if value == 'yes' else 'no'
+        elif key == TARGETS:
+            entries = value.split('; ')
+            # Exact commands only; one unreadable entry empties the list, so every deploy fails closed to a person.
+            value = entries if all(0 < len(e) <= 200 and e == e.strip() and e.isprintable() for e in entries) else []
+        elif key in NUMBERS:
             lower, upper = NUMBERS[key]
             if not re.fullmatch(r'[0-9]{1,5}', value) or not lower <= int(value) <= upper:
                 raise ValueError('Autopilot setup has an invalid limit')
@@ -112,21 +149,9 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
-def private_info(folder, name):
-    try:
-        info = os.stat(name, dir_fd=folder, follow_symlinks=False)
-    except FileNotFoundError:
-        return None
-    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1
-            or stat.S_IMODE(info.st_mode) != 0o600):
-        raise ValueError('Autopilot state file is unsafe')
-    return info
-
-
-def read_private(folder, name, cap=65536):
-    if private_info(folder, name) is None:
-        return None
-    return dr.read_file(folder, name, cap)
+def permits(categories, applied):
+    """Precedence row 3: an action goes on only when every category that applies to it is `decide`."""
+    return bool(categories) and all(applied.get(c) == 'decide' for c in categories)
 
 
 def write_private(folder, name, raw):
@@ -156,31 +181,6 @@ def private_folder():
                 os.close(fd)
 
 
-def finite(value):
-    return type(value) in (int, float) and math.isfinite(value) and value >= 0
-
-
-def read_lease(folder):
-    raw = read_private(folder, 'lease.json')
-    if raw is None:
-        return None
-    value = json.loads(raw)
-    if (not isinstance(value, dict) or set(value) != {'id', 'start', 'expiry', 'settings_hash', 'counters'}
-            or not isinstance(value['id'], str) or not re.fullmatch(r'[0-9a-f]{32}', value['id'])
-            or not all(finite(value[k]) for k in ('start', 'expiry'))
-            or not value['start'] < value['expiry'] <= value['start'] + 24 * 3600
-            or not isinstance(value['settings_hash'], str) or not re.fullmatch(r'[0-9a-f]{64}', value['settings_hash'])):
-        raise ValueError('Autopilot lease is invalid')
-    counters = value['counters']
-    if (not isinstance(counters, dict) or set(counters) != {'runs', 'runtime_minutes', 'actions', 'hour_actions'}
-            or any(type(counters[k]) is not int or counters[k] < 0 for k in ('runs', 'actions'))
-            or not finite(counters['runtime_minutes']) or not isinstance(counters['hour_actions'], list)
-            or len(counters['hour_actions']) > 10000
-            or not all(finite(t) for t in counters['hour_actions'])):
-        raise ValueError('Autopilot counters are invalid')
-    return value
-
-
 def save_lease(folder, lease):
     write_private(folder, 'lease.json', json.dumps(lease, separators=(',', ':')).encode())
 
@@ -204,7 +204,7 @@ def start(folder, args):
         os.unlink('stop', dir_fd=folder)
     except FileNotFoundError:
         pass
-    summary = {**applied, 'Lease hours': hours}
+    summary = {**applied, 'Lease hours': hours, TARGETS: '; '.join(applied[TARGETS]) or 'none'}
     print('Autopilot started\n' + '\n'.join(f'- {key}: {value}' for key, value in summary.items()))
 
 
@@ -388,19 +388,242 @@ def script_command(argv, applied):
     return 'allowed'
 
 
-def classify_argv(argv, applied):
-    if (not isinstance(argv, list) or not argv or len(argv) > 256
-            or any(not isinstance(t, str) or not t or len(t) > 8192
-                   or any(unicodedata.category(c).startswith('C') for c in t) for t in argv)):
+def plain(token):
+    return isinstance(token, str) and 0 < len(token) <= 8192 and not any(
+        unicodedata.category(c).startswith('C') for c in token)
+
+
+def own_script(argv, names):
+    """The script name when argv is `python3 -I [-B] <this install's script>`, else None."""
+    if len(argv) < 3 or argv[0] not in {'python3', sys.executable} or argv[1] != '-I':
+        return None, None
+    index = 3 if argv[2] == '-B' else 2
+    if index >= len(argv):
+        return None, None
+    path, own = Path(argv[index]), Path(__file__).resolve().parent
+    if (path not in {own / name for name in names} or path.is_symlink() or not path.is_file()
+            or any(parent.is_symlink() for parent in (path.parent, path.parent.parent))):
+        return None, None
+    return path.name, argv[index + 1:]
+
+
+def flag_values(tokens, single, repeated=()):
+    """`--flag value` pairs only; each single flag at most once. None for anything else."""
+    values = {}
+    if len(tokens) % 2:
+        return None
+    for flag, value in zip(tokens[::2], tokens[1::2]):
+        if flag in repeated:
+            values.setdefault(flag, []).append(value)
+        elif flag in single and flag not in values:
+            values[flag] = value
+        else:
+            return None
+    return values
+
+
+def evidence_path(name):
+    if not plain(name) or protected(name):
+        return False
+    if classify_paths([name]) == 'allowed':
+        return True
+    if not re.fullmatch(r'\.finolabs/briefs/[A-Za-z0-9_.-]{1,80}\.(?:md|json|txt)', name):
+        return False
+    candidate = Path(os.getcwd())
+    for part in Path(name).parts:
+        candidate /= part
+        if candidate.is_symlink():
+            return False
+    return not candidate.is_dir()
+
+
+def judge_command(tail):
+    """`judge.py ask --site away-decision --question Q --option O (2 to 6) --evidence-file F [--judge jev]` only."""
+    if tail[:1] != ['ask']:
+        return 'unknown'
+    values = flag_values(tail[1:], {'--site', '--question', '--evidence-file', '--judge'}, {'--option'})
+    if (values is None or values.get('--site') != 'away-decision' or values.get('--judge', 'jev') != 'jev'
+            or not {'--question', '--evidence-file', '--option'} <= set(values)):
+        return 'unknown'
+    question, options = values['--question'], values['--option']
+    if not all(plain(t) for t in (question, *options)) or not evidence_path(values['--evidence-file']):
+        return 'unknown'
+    try:
+        import judge
+        judge.choice_fields('away-decision', question, options, '')
+    except (ImportError, ValueError):
+        return 'unknown'
+    return 'allowed'
+
+
+def brief_ok(brief):
+    """At least as strict as the judge and packet paths: secrets, machine paths, and any sensitive-name assignment."""
+    if (not isinstance(brief, str) or not 0 < len(brief.encode()) <= 65536
+            or any(unicodedata.category(c).startswith('C') and c not in '\n\t' for c in brief)):
+        return False
+    return not screened(brief)
+
+
+def approved_program(family, rest):
+    """Length of the owner-approved executable that starts `rest`, else 0; nothing is run.
+
+    The identity is the record setup wrote for the quota probe in the canonical host config (`Executable`, `Resolved`
+    and its confirmed digest), re-checked now by quota_probe.checked_executable: owner and mode of every component,
+    no repository, temporary or downloads folder, and an unchanged target. The program must be the absolute argv those
+    checks return, or for a native program the recorded `Executable` path itself. Bare names, PATH lookups and other
+    paths deny, and so does a time-cap wrapper such as perl, which has no such record.
+    """
+    import quota_probe
+    agent = PROGRAMS[family]
+    entry = quota_probe.canonical_config().get(agent)
+    if entry is None:
+        return 0
+    try:
+        checked = quota_probe.checked_executable(agent, entry)
+    except (OSError, ValueError, UnicodeError):
+        return 0
+    forms = [checked] + ([[entry['executable']]] if len(checked) == 1 else [])
+    for form in forms:
+        if all(isinstance(t, str) and Path(t).is_absolute() for t in form) and rest[:len(form)] == form:
+            return len(form)
+    return 0
+
+
+def advisor_command(tail, applied, coordinator):
+    """`delegate_env.py --family F -- [hard cap] <program> <closed read-only argv>`, F in Hosts and not the coordinator's."""
+    if len(tail) < 4 or tail[0] != '--family' or tail[2] != '--':
+        return 'unknown'
+    family, rest = tail[1], tail[3:]
+    hosts = {HOST_FAMILIES[h] for h in applied['Hosts'].split(', ')}
+    if family not in PROGRAMS or family not in hosts or coordinator not in PROGRAMS or coordinator == family:
+        return 'unknown'
+    size = approved_program(family, rest)
+    if not size:
+        return 'unknown'
+    args, brief = rest[size:], None
+    # The brief sits behind an unambiguous boundary: Codex and Claude end their options with a literal `--` right
+    # before it (`codex exec [OPTIONS] [PROMPT]`, `claude [options] [prompt]` with -p a switch); Antigravity takes it
+    # as the value of -p. In every form a brief starting with `-` (an option, or `-` for unvalidated stdin) denies.
+    if family == 'codex':
+        if args[:1] != ['exec'] or len(args) < 3 or args[-2] != '--':
+            return 'unknown'
+        brief, values = args[-1], flag_values(args[1:-2], {'-m', '-c', '-s'})
+        if (values is None or values.get('-s') != 'read-only' or '-m' not in values
+                or not re.fullmatch(r'model_reasoning_effort=(?:low|medium|high|xhigh)', values.get('-c', 'model_reasoning_effort=high'))):
+            return 'unknown'
+        model = values['-m']
+    else:
+        if family == 'claude':
+            if args[:1] != ['-p'] or len(args) < 3 or args[-2] != '--':
+                return 'unknown'
+            brief, values = args[-1], flag_values(args[1:-2], {'--model', '--output-format', '--permission-mode',
+                                                                '--effort', '--max-turns', '--max-budget-usd'})
+            required = {'--model', '--output-format', '--permission-mode'}
+        else:
+            values = flag_values(args, {'-p', '--model', '--output-format', '--mode', '--print-timeout'})
+            required = {'-p', '--model', '--output-format', '--mode'}
+            brief = values.get('-p') if values is not None else None
+        if values is None or not required <= set(values) or values['--output-format'] != 'json':
+            return 'unknown'
+        if values.get('--permission-mode', values.get('--mode')) != 'plan':
+            return 'unknown'
+        if (values.get('--effort', 'high') not in {'low', 'medium', 'high', 'xhigh', 'max'}
+                or not re.fullmatch(r'[1-9][0-9]{0,2}', values.get('--max-turns', '1'))
+                or not re.fullmatch(r'[0-9]{1,3}(?:\.[0-9]{1,2})?', values.get('--max-budget-usd', '1'))
+                or not re.fullmatch(r'[1-9][0-9]{0,2}m', values.get('--print-timeout', '30m'))):
+            return 'unknown'
+        model = values['--model']
+    others = [t for t in rest if t is not brief]
+    if (not isinstance(brief, str) or brief.startswith('-') or not MODEL.fullmatch(model) or not brief_ok(brief)
+            or not all(plain(t) and not protected(t) for t in others)):
+        return 'unknown'
+    return 'allowed'
+
+
+def ladder_command(argv, applied, coordinator):
+    """The two command forms the away ladder needs (judge and advisor), or None when argv is neither."""
+    name, tail = own_script(argv, ('judge.py', 'delegate_env.py'))
+    if name is None:
+        return None
+    return judge_command(tail) if name == 'judge.py' else advisor_command(tail, applied, coordinator)
+
+
+TAG = re.compile(r'v?[0-9A-Za-z][0-9A-Za-z._-]{0,63}')
+REVISION = re.compile(r'HEAD|[0-9a-f]{7,40}')
+
+
+DEPLOY = re.compile(r'deploy(?::[\w-]+)?')
+
+
+def command_categories(argv):
+    """Every category the command itself applies, read from its program and subcommand, never from free-text data."""
+    categories = set()
+    if argv[:2] in (['git', 'tag'], ['gh', 'release']):
+        categories.add('Tags and releases')
+    if argv[0] in {'npm', 'pnpm'} and argv[1:2] == ['publish']:
+        categories.add('Publishing')
+    return categories
+
+
+def is_deploy(argv):
+    """Git and gh have no deploy subcommand, so a deploy word there is data; elsewhere any such word fails closed."""
+    return argv[0] not in {'git', 'gh'} and any(DEPLOY.fullmatch(t) for t in argv[1:])
+
+
+def release_command(argv, applied, categories, deploy):
+    """Precedence rows 2 to 5 for the command forms a script can read: tags, releases, publishing and deploys."""
+    if categories and not permits(categories, applied):
+        return 'forbidden'  # row 3: every applicable category must be decide
+    if deploy:
+        if any(re.search(r'prod|live', t, re.I) for t in argv):
+            return 'forbidden'  # row 2: production or live, even when listed by mistake
+        if ' '.join(argv) not in applied.get(TARGETS, []):
+            return 'forbidden'  # row 4
+        if not categories:
+            return 'allowed'  # row 5
+    tail = argv[2:]
+    if argv[:2] == ['git', 'tag']:
+        if tail in ([], ['-l'], ['--list']):
+            return 'allowed'
+        operands = options(tail, {'-a'}, {'-m', '--message'})
+        if (operands and len(operands) <= 2 and TAG.fullmatch(operands[0])
+                and all(REVISION.fullmatch(o) for o in operands[1:])):
+            return 'allowed'
+    elif argv[:2] == ['gh', 'release']:
+        verb, rest = tail[:1], tail[1:]
+        if verb == ['create']:
+            operands = options(rest, {'--draft', '--verify-tag', '--prerelease'},
+                               {'--title', '-t', '--notes', '-n', '--target', '--repo', '-R'})
+            if operands is not None and len(operands) == 1 and TAG.fullmatch(operands[0]):
+                return 'allowed'
+        elif verb in (['view'], ['list']):
+            operands = options(rest, set(), {'--repo', '-R', '--limit', '-L', '--json'})
+            if operands is not None and len(operands) <= (verb == ['view']) and all(TAG.fullmatch(o) for o in operands):
+                return 'allowed'
+    elif argv[0] in {'npm', 'pnpm'} and argv[1:2] == ['publish']:
+        values = flag_values(tail, {'--access', '--tag'})
+        if values is not None and values.get('--access', 'public') in {'public', 'restricted'} and TAG.fullmatch(values.get('--tag', 'latest')):
+            return 'allowed'
+    return 'forbidden'
+
+
+def classify_argv(argv, applied, coordinator=None):
+    if not isinstance(argv, list) or not argv or len(argv) > 256 or not all(isinstance(t, str) and t for t in argv):
+        return 'unknown'
+    ladder = ladder_command(argv, applied, coordinator)
+    if ladder is not None:
+        return ladder  # its data tokens (question, options, brief) are checked by the form itself
+    if any(len(t) > 8192 or any(unicodedata.category(c).startswith('C') for c in t) for t in argv):
         return 'unknown'
     if any(t in {';', '&&', '||', '|', '>', '>>', '<'} or '$(' in t or '`' in t for t in argv):
         return 'unknown'
     if any(protected(t) for t in argv):
         return 'protected'
     command = argv[0]
-    if (argv[:2] in (['git', 'tag'], ['gh', 'release'])
-            or any(re.fullmatch(r'(?:publish|deploy)(?::[\w-]+)?', t) for t in argv[1:])
-            or command == 'rm' and any(t.startswith('-') and ('r' in t[1:] or t == '--recursive') for t in argv[1:])):
+    categories, deploy = command_categories(argv), is_deploy(argv)
+    if categories or deploy:
+        return release_command(argv, applied, categories, deploy)
+    if command == 'rm' and any(t.startswith('-') and ('r' in t[1:] or t == '--recursive') for t in argv[1:]):
         return 'forbidden'
     if command in {'python3', sys.executable}:
         return script_command(argv, applied)
@@ -482,6 +705,8 @@ def classify_argv(argv, applied):
                     for i, t in enumerate(tail) if t == '--match-head-commit' or t.startswith('--match-head-commit=')]
             if len(pins) != 1 or not SHA.fullmatch(pins[0]):
                 return 'unpinned'
+            if '--delete-branch' in tail and not permits({'Recoverable deletion'}, applied):
+                return 'forbidden'  # row 3: the deletion is its own category beside Merge
             operands = options(tail, {'--squash', '--merge', '--rebase', '--delete-branch'}, {'--match-head-commit', '--repo', '-R'})
             return 'allowed' if operands is not None and len(operands) == 1 and operands[0].isdigit() else 'unknown'
         if group == 'pr' and verb in {'create', 'edit'}:
@@ -507,7 +732,7 @@ def check(folder, args):
                 argv = json.loads(args.argv_json)
             except ValueError:
                 argv = None
-            code = classify_argv(argv, applied)
+            code = classify_argv(argv, applied, args.coordinator)
         else:
             argv = None
             code = classify_paths(args.paths)
@@ -534,7 +759,145 @@ def safe_note(note):
     return note[:500]
 
 
+def label(value):
+    if not isinstance(value, str) or not LABEL.fullmatch(value) or secret_patterns.findings(value):
+        raise ValueError('Autopilot label is invalid')
+    return value
+
+
+def iso(current):
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(current, timezone.utc).isoformat(timespec='seconds')
+
+
+def recorded_decision(identifier):
+    if not isinstance(identifier, str) or not DECISION_ID.fullmatch(identifier):
+        return False
+    import ledger
+    return any(r['event'] == 'decision' and r['id'] == identifier for r in ledger.load_away())
+
+
+def attempt(args):
+    """Validate one attempt against the closed schema; return the fields stored in the ledger."""
+    rung, settled = args.rung, args.settled
+    if rung is None or settled is None or args.project is None or args.topic is None or args.precedents is None:
+        raise ValueError('Autopilot decision needs rung, settled, project, topic and precedents')
+    given = {f for f in FIELDS if getattr(args, f) is not None}
+    if (rung, settled) == ('advisor', 'unavailable'):
+        required, optional = ({'by'}, {'dispatch'}) if 'by' in given else (set(), set())
+    elif (rung, settled) in ATTEMPTS:
+        required, optional = ATTEMPTS[rung, settled]
+    else:
+        raise ValueError('Autopilot decision rung and result do not match')
+    if not required <= given <= required | optional:
+        raise ValueError('Autopilot decision fields do not match the schema')
+    if not re.fullmatch(r'[0-8]', args.precedents):
+        raise ValueError('Autopilot precedents count is invalid')
+    fields = dict(rung=rung, settled=settled, precedents=int(args.precedents), topic=label(args.topic))
+    if 'by' in given:
+        valid = {'rule': args.by == 'rule', 'jev': args.by == 'jev', 'advisor': bool(ADVISOR.fullmatch(args.by)),
+                 'host': args.by in PROGRAMS, 'park': args.by in PROGRAMS}[rung]
+        if not valid:
+            raise ValueError('Autopilot decider is invalid')
+        fields['by'] = args.by
+    if 'of' in given:
+        if not re.fullmatch(r'[2-6]', args.of) or not re.fullmatch(r'[1-6]', args.option) or int(args.option) > int(args.of):
+            raise ValueError('Autopilot option is invalid')
+        fields.update(option=int(args.option), of=int(args.of))
+    if 'probability' in given:
+        # A bounded plain decimal, so the value judge.ask_choice returns (up to 17 significant digits) round-trips.
+        if not re.fullmatch(r'[01](?:\.[0-9]{1,20})?', args.probability):
+            raise ValueError('Autopilot probability is invalid')
+        probability = float(args.probability)
+        if not math.isfinite(probability) or not 0 <= probability <= 1:
+            raise ValueError('Autopilot probability is invalid')
+        if (settled == 'yes') != (probability >= SETTLE):
+            raise ValueError('Autopilot probability does not match the result')
+        fields['probability'] = probability
+    if 'dispatch' in given:
+        if not DISPATCH_ID.fullmatch(args.dispatch):
+            raise ValueError('Autopilot dispatch id is invalid')
+        fields['dispatch'] = args.dispatch
+    if 'model' in given:
+        if not MODEL.fullmatch(args.model):
+            raise ValueError('Autopilot model is invalid')
+        fields['model'] = args.model
+    return fields
+
+
+def decide(folder, args, current):
+    """Record one ladder attempt in the ledger; the first attempt generates the decision id and prints it."""
+    fields = attempt(args)
+    project = label(args.project)
+    lease = None if read_private(folder, 'stop') is not None else read_lease(folder)
+    if lease is None or not lease['start'] <= current < lease['expiry']:
+        raise ValueError('Autopilot decision needs a live lease')
+    if args.decision is None:
+        identifier = time.strftime('q%Y%m%d-%H%M%S-', time.localtime(current)) + os.urandom(2).hex()
+    elif recorded_decision(args.decision):
+        identifier = args.decision
+    else:
+        raise ValueError('Autopilot decision id is unknown')
+    import away_lease
+    away_lease.append_ledger(dict(event='decision', id=identifier, ts=iso(current), project=project,
+                                  lease_start=lease['start'], **fields))
+    return identifier
+
+
+def review(folder, args):
+    if not recorded_decision(args.decision):
+        raise ValueError('Autopilot decision id is unknown')
+    import away_lease
+    away_lease.append_ledger(dict(event='decision_review', id=args.decision, ts=iso(now()), verdict=args.verdict))
+    print('Decision review recorded')
+
+
+def screened(value):
+    """True when a value holds a secret, a machine path or a sensitive assignment."""
+    try:
+        if secret_patterns.findings(value):
+            return True
+    except ValueError:
+        return True
+    import judge
+    return judge.sensitive(value) or judge.assigns_sensitive(value)
+
+
+def packet_check(args):
+    """Lint a precedent packet: at most eight excerpts and 8 KB; a secret or path drops an excerpt; consent first."""
+    applied = settings()
+    fd = os.open(args.file, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 65536:
+            raise ValueError('Packet file is unsafe')
+        raw = os.read(fd, 65537)
+    finally:
+        os.close(fd)
+    packet = json.loads(raw.decode('utf-8'))
+    if (not isinstance(packet, dict) or set(packet) != {'goal', 'excerpts'} or not isinstance(packet['goal'], str)
+            or not 0 < len(packet['goal'].encode()) <= 2048 or not isinstance(packet['excerpts'], list)
+            or len(packet['excerpts']) > 8):
+        raise ValueError('Packet is invalid')
+    excerpts = packet['excerpts']
+    for item in excerpts:
+        if (not isinstance(item, dict) or set(item) != {'decision', 'date', 'source'}
+                or not all(isinstance(v, str) and 0 < len(v.encode()) <= 2048 for v in item.values())
+                or not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', item['date'])):
+            raise ValueError('Packet excerpt is invalid')
+    if len(json.dumps(excerpts, ensure_ascii=False).encode()) > 8192 or screened(packet['goal']):
+        raise ValueError('Packet is too large or its goal is unsafe')
+    if excerpts and applied[CONSENT] != 'yes':
+        raise ValueError('Excerpts may not leave the machine without the separate consent')
+    kept = [item for item in excerpts if not any(screened(v) for v in item.values())]
+    print(json.dumps({'goal': packet['goal'], 'excerpts': kept, 'dropped': len(excerpts) - len(kept)}, ensure_ascii=False))
+
+
 def log(folder, args):
+    decision_flags = ('rung', 'settled', 'precedents', 'topic', 'project', 'decision', *FIELDS)
+    if args.kind != 'decision' and any(getattr(args, key) is not None for key in decision_flags):
+        raise ValueError('Decision fields belong to the decision kind')
+    current = now()
     fields = {}
     for key in ('task', 'run'):
         value = getattr(args, key)
@@ -546,8 +909,7 @@ def log(folder, args):
         if not re.fullmatch(r'[1-9][0-9]{0,9}', args.pr):
             raise ValueError('Autopilot pull request id is invalid')
         fields['pr'] = int(args.pr)
-    current = now()
-    record = dict(time=current, tier=KINDS[args.kind], kind=args.kind, **fields, note=safe_note(args.note or ''))
+    note = safe_note(args.note or '')
     raw = read_private(folder, 'log.jsonl', MAX_LOG)
     retained = []
     for line in (raw or b'').splitlines():
@@ -556,12 +918,17 @@ def log(folder, args):
             raise ValueError('Autopilot log is invalid')
         if current - 30 * 86400 <= old['time'] <= current:
             retained.append(line)
+    # Every other check passes before the decision line reaches the ledger.
+    identifier = decide(folder, args, current) if args.kind == 'decision' else None
+    if identifier:
+        fields['decision'] = identifier
+    record = dict(time=current, tier=KINDS[args.kind], kind=args.kind, **fields, note=note)
     retained.append(json.dumps(record, separators=(',', ':')).encode())
     payload = b'\n'.join(retained) + b'\n'
     if len(payload) > MAX_LOG:
         raise ValueError('Autopilot log is full')
     write_private(folder, 'log.jsonl', payload)
-    print('Autopilot action logged')
+    print(identifier if identifier else 'Autopilot action logged')
 
 
 def main(argv=None):
@@ -574,10 +941,16 @@ def main(argv=None):
     group = inspect.add_mutually_exclusive_group(required=True)
     group.add_argument('--argv-json')
     group.add_argument('--paths', nargs='+')
+    inspect.add_argument('--coordinator', choices=sorted(PROGRAMS), help="the coordinator's own family")
     record = sub.add_parser('log', allow_abbrev=False)
     record.add_argument('--kind', required=True, choices=sorted(KINDS))
-    for key in ('task', 'pr', 'run', 'note'):
+    for key in ('task', 'pr', 'run', 'note', 'decision', 'rung', 'settled', 'precedents', 'topic', 'project', *FIELDS):
         record.add_argument('--' + key)
+    reviewed = sub.add_parser('review', allow_abbrev=False)
+    reviewed.add_argument('--decision', required=True)
+    reviewed.add_argument('verdict', choices=('kept', 'reversed'))
+    packet = sub.add_parser('packet-check', allow_abbrev=False)
+    packet.add_argument('--file', required=True)
     args = parser.parse_args(argv)
     try:
         with private_folder() as folder:
@@ -587,6 +960,10 @@ def main(argv=None):
                 stop(folder)
             elif args.command == 'check':
                 check(folder, args)
+            elif args.command == 'review':
+                review(folder, args)
+            elif args.command == 'packet-check':
+                packet_check(args)
             else:
                 log(folder, args)
         return 0
