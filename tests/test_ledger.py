@@ -185,6 +185,10 @@ class LedgerTest(unittest.TestCase):
     def test_start_prints_the_run_label_on_stderr_and_only_the_id_on_stdout(self):
         for agent, model, runner in (("codex", "gpt-6.1-sol", "codex sol"), ("claude", "claude-opus-5-5", "claude opus"),
                                      ("antigravity", "gemini-3-flash", "agy flash"), ("subagent", "sonnet", "claude sonnet"),
+                                     ("antigravity", "gemini-3.8-flash-high", "agy flash"),
+                                     ("antigravity", "gemini-4-argon-medium", "agy argon"),
+                                     ("antigravity", "claude-opus-5-5-low", "agy opus"),
+                                     ("claude", "claude-sonnet-5-5-xhigh", "claude sonnet"),
                                      ("codex", None, "codex")):
             argv = ["start", "--project", "demo", "--task", "PR 7  code review", "--kind", "review", "--grade", "easy",
                     "--coordinator", "claude", "--agent", agent, "--reason", "routing", "--route-by", "table",
