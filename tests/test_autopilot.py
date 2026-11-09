@@ -922,6 +922,25 @@ class AwayDecisionTest(AutopilotBase):
         for form, coordinator in forms.values():
             self.check_as(form, coordinator=coordinator)
 
+    def test_a_sensitive_assignment_split_across_lines_is_screened(self):
+        module = self.load()
+        for brief in ('{"session_cookie":\n  "synthetic-fixture-1234567890"}', '{"password":\n"demo"}',
+                      'password =\n  demo', 'api_token\n  : abc', '{"password": "demo"}'):
+            with self.subTest(brief=brief):
+                self.assertFalse(module.brief_ok(brief))
+                self.assertTrue(module.screened(brief))
+        self.assertTrue(module.brief_ok('The password setting is described\nin the next section.'))
+
+    def test_branch_deletion_bundled_with_a_merge_needs_its_own_category(self):
+        module = self.load()
+        argv = ['gh', 'pr', 'merge', '215', '--merge', '--match-head-commit=' + 'a' * 40]
+        applied = {**module.DEFAULTS, **{c: 'stop' for c in module.CATEGORIES}, 'Merge': 'yes',
+                   module.CONSENT: 'no', module.TARGETS: []}
+        self.assertEqual(module.classify_argv(argv, applied), 'allowed')
+        self.assertEqual(module.classify_argv(argv + ['--delete-branch'], applied), 'forbidden')
+        applied['Recoverable deletion'] = 'decide'
+        self.assertEqual(module.classify_argv(argv + ['--delete-branch'], applied), 'allowed')
+
     def test_the_advisor_brief_is_screened_like_the_judge_and_packet_paths(self):
         self.start_away()
         home = '/Us' + 'ers/synthetic'

@@ -461,11 +461,7 @@ def brief_ok(brief):
     if (not isinstance(brief, str) or not 0 < len(brief.encode()) <= 65536
             or any(unicodedata.category(c).startswith('C') and c not in '\n\t' for c in brief)):
         return False
-    if screened(brief):
-        return False
-    # An assigned value of any length may be a credential; naming a setting without a value stays possible.
-    return not any(secret_patterns.SENSITIVE.search(match['name']) and match[secret_patterns.value_group(match)]
-                   for match in secret_patterns.PAIR.finditer(brief))
+    return not screened(brief)
 
 
 def approved_program(family, rest):
@@ -709,6 +705,8 @@ def classify_argv(argv, applied, coordinator=None):
                     for i, t in enumerate(tail) if t == '--match-head-commit' or t.startswith('--match-head-commit=')]
             if len(pins) != 1 or not SHA.fullmatch(pins[0]):
                 return 'unpinned'
+            if '--delete-branch' in tail and not permits({'Recoverable deletion'}, applied):
+                return 'forbidden'  # row 3: the deletion is its own category beside Merge
             operands = options(tail, {'--squash', '--merge', '--rebase', '--delete-branch'}, {'--match-head-commit', '--repo', '-R'})
             return 'allowed' if operands is not None and len(operands) == 1 and operands[0].isdigit() else 'unknown'
         if group == 'pr' and verb in {'create', 'edit'}:
@@ -854,10 +852,17 @@ def review(folder, args):
     print('Decision review recorded')
 
 
+def assigns_sensitive(value):
+    """An assigned value of any length under a sensitive name; naming a setting without a value stays possible."""
+    joined = re.sub(r'\s*\n\s*(?=[=:])|(?<=[=:])\s*\n\s*', ' ', value)  # a value may start on the next line
+    return any(secret_patterns.SENSITIVE.search(match['name']) and match[secret_patterns.value_group(match)]
+               for match in secret_patterns.PAIR.finditer(joined))
+
+
 def screened(value):
-    """True when a value holds a secret or a machine path, by both shared pattern sets."""
+    """True when a value holds a secret, a machine path or a sensitive assignment."""
     try:
-        if secret_patterns.findings(value):
+        if secret_patterns.findings(value) or assigns_sensitive(value):
             return True
     except ValueError:
         return True
