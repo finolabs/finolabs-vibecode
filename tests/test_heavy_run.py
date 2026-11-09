@@ -625,10 +625,33 @@ class QueueViewTest(unittest.TestCase):
             self.assertEqual(heavy.waiting_count(), 1)
 
     def test_a_huge_process_list_elsewhere_does_not_hide_the_count(self):
-        # The real machine printed 450 KB for a full ps; only the pgrep candidates are listed now.
-        with self.fake_programs('sys.stdout.write("900 python3 /x/heavy_run.py run -- cmd\\n")',
-                                pgrep_body='print(900)'):
+        # The real machine printed 450 KB for a full ps. This ps prints that much unless it is asked for the
+        # named pids only, and the fake pgrep rejects any pattern but the fixed one.
+        ps_body = ('if sys.argv[1:] != ["-o", "pid=,command=", "-p", "900"]:\n'
+                   '    sys.stdout.write("x" * (450 * 1024)); sys.exit(0)\n'
+                   'sys.stdout.write("900 python3 /x/heavy_run.py run -- cmd\\n")')
+        pgrep_body = ('if sys.argv[1:] != ["-f", r"heavy_run\\.py"]:\n'
+                      '    sys.exit(2)\n'
+                      'print(900)')
+        with self.fake_programs(ps_body, pgrep_body=pgrep_body):
             self.assertEqual(heavy.waiting_count(), 1)
+
+    def test_more_candidates_than_the_cap_read_as_unknown_not_zero(self):
+        # 200 candidates still count; 201 is unknown, never a silent cut that could miss the runner.
+        for count, expected in ((200, 1), (201, None)):
+            pgrep_body = '; '.join('print(%d)' % pid for pid in range(1000, 1000 + count))
+            with self.fake_programs('sys.stdout.write("1000 python3 /x/heavy_run.py run -- cmd\\n")',
+                                    pgrep_body=pgrep_body):
+                self.assertEqual(heavy.waiting_count(), expected)
+
+    def test_ps_failing_with_no_output_reads_as_unknown(self):
+        with self.fake_programs('sys.exit(1)'):
+            self.assertIsNone(heavy.read_waiting_ps())
+
+    def test_pgrep_exit_one_with_unexpected_output_reads_as_unknown(self):
+        with self.fake_programs('print("900 python3 /x/heavy_run.py run")', pgrep_body='print("surprise")',
+                                pgrep_code=1):
+            self.assertIsNone(heavy.read_waiting_ps())
 
     def test_no_pgrep_match_counts_zero_without_running_ps(self):
         with self.fake_programs('raise SystemExit("ps must not run")', pgrep_body='', pgrep_code=1):

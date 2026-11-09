@@ -216,7 +216,7 @@ Both reviewers cover two rings, the change and its impact set, rather than the w
 
 ## Supported platforms
 
-macOS and Linux are supported. Native Windows is not: the plugin's scripts rely on POSIX file APIs (`pwd`, `fcntl`, `flock`, descriptor-relative opens and `O_NOFOLLOW`), so on Windows they stop with one clear message. Windows users run Claude Code, Codex or Antigravity with the plugin under WSL.
+macOS and Linux are supported. Native Windows is not: the plugin's scripts rely on POSIX file APIs (`pwd`, `fcntl`, `flock`, descriptor-relative opens and `O_NOFOLLOW`), so on Windows a script you run by hand stops with one clear message, while the plugin's hooks stay fail-open and never block a session. Windows users run Claude Code, Codex or Antigravity with the plugin under WSL.
 
 ## Install
 
