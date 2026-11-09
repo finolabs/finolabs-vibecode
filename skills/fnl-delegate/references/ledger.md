@@ -13,6 +13,8 @@ python3 -I "$L" summary --since 2026-11-01
 python3 -I "$L" summary --json           # the same rows as JSON, with quota and error counts
 ```
 
+**Project label.** Choose one short, stable `--project` label per repository, matching its `ledger` entry or display label when one exists. Use the same label from every worktree of that repository; never use a customer, personal or machine name.
+
 For review routing, the coordinator adds `--head <implementation head SHA>` to `finish`. This validates a forty-character lowercase SHA and copies the agent from the dispatch's start record; legacy records without a head cannot establish authorship. Commit trailers alone are insufficient. When acceptance uses a verification receipt, this head must also match the verified head.
 
 `start` records optional `coord_session`: the first 12 hex characters of the SHA-256 of the `CLAUDE_CODE_SESSION_ID` environment value, never the raw id and never from a command-line option (an argument would show in process listings and parser errors). It is `null` when the variable is unset or unusable, and older lines without it remain readable. It is a correlation identifier, not protection: a predictable id can be guessed from its hash, so treat the ledger as private.
