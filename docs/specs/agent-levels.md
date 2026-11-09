@@ -8,7 +8,7 @@ Levels are the grades of `fnl-delegate`: 1 easy, 2 medium, 3 hard, 4 very hard, 
 
 ## Goal and acceptance
 
-- AC1: `/fnl-setup add delegation` asks, per present agent family and for any extra Claude Code command the user names, "Which task levels can it take?" (free text `L-H`; blank means all five and writes no line), previews and, after a clear yes, writes one `## Agent levels` section in the canonical `host.md` with backup, digest and 60-minute expiry like the other setup writers.
+- AC1: `/fnl-setup add delegation` asks, per present agent family and for any extra Claude Code command the user names, "Which task levels can it take?" (free text `L-H`; for a family blank means all five and writes no line, for an extra command blank records `1-5` so the declaration is kept; with nothing to write the step is skipped), previews and, after a clear yes, writes one `## Agent levels` section in the canonical `host.md` with backup, digest and 60-minute expiry like the other setup writers.
 - AC2: An entry name is `claude`, `codex`, `antigravity` or a command `claude<suffix>` (lowercase letters and digits, 1 to 24 after `claude`); a range is `L-H` with 1 <= L <= H <= 5; at most 8 entries, no duplicate names.
 - AC3: `show` reads the section strictly: absent prints `none`; valid prints JSON; a duplicate section, a duplicate or unknown line or a bad range prints `unreadable` and exits 3.
 - AC4: The consent line is `- Consent: yes (<date>)`; `--off` writes `- Consent: no` and no entries. Entries without consent `yes` are unreadable.

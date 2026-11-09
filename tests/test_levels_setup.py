@@ -88,6 +88,12 @@ class LevelsSetupTest(unittest.TestCase):
         names = [item[0] for item in json.loads(self.cli('show')[1])['installs']]
         self.assertEqual(names, ['codex', 'claude', 'antigravity'])
 
+    def test_blank_command_range_is_kept_as_all_five(self):
+        digest = self.preview('--install', 'claudework:1-5', '--install', 'codex:1-4')
+        self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 0)
+        data = json.loads(self.cli('show')[1])
+        self.assertEqual(data['installs'], [['claudework', 1, 5], ['codex', 1, 4]])
+
     def test_show_reports_none_without_section(self):
         self.assertEqual(self.cli('show')[:2], (0, 'none\n'))
 
@@ -156,7 +162,7 @@ class FunctionDispatchEnvironmentTest(unittest.TestCase):
         import delegate_env
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp).resolve()
-            (home / '.zshrc').write_text('claudetest() { print -r -- "state:${LEVELS_SYNTH_NAME:+set}${LEVELS_SYNTH_NAME:-unset}"; }\n')
+            (home / '.zshrc').write_text('claudetest() { if (( ${+LEVELS_SYNTH_NAME} )); then print -r -- "state:set"; else print -r -- "state:unset"; fi; }\n')
             with mock.patch.dict(os.environ, {'HOME': str(home), 'LEVELS_SYNTH_NAME': 'x', 'PATH': '/usr/bin:/bin'}, clear=True):
                 env = delegate_env.environment('claude', host_text=host_text)
             self.assertNotIn('ZDOTDIR', env)
@@ -166,8 +172,14 @@ class FunctionDispatchEnvironmentTest(unittest.TestCase):
     def test_a_name_that_is_not_approved_does_not_reach_the_function(self):
         self.assertEqual(self.run_function('## Delegate environment\n- claude: none\n'), ['state:unset'])
 
+    def test_documented_launch_form_uses_the_filter_and_the_users_zsh(self):
+        text = (ROOT / 'skills/fnl-delegate/references/agents.md').read_text()
+        line = next(l for l in text.splitlines() if 'Declared Claude Code commands' in l)
+        self.assertIn('delegate_env.py --family claude -- /bin/zsh -ic', line)
+        self.assertNotIn('never behind `delegate_env.py`', line)
+
     def test_an_approved_name_reaches_the_function(self):
-        self.assertEqual(self.run_function('## Delegate environment\n- claude: LEVELS_SYNTH_NAME\n'), ['state:setx'])
+        self.assertEqual(self.run_function('## Delegate environment\n- claude: LEVELS_SYNTH_NAME\n'), ['state:set'])
 
 
 if __name__ == '__main__':
