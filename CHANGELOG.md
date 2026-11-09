@@ -8,6 +8,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - `fnl-afk` (away from keyboard) is the main short name for the away mandate; `fnl-brb` remains an older alias, and both load `fnl-autopilot`.
 - User-invoked `fnl-pause` (short name `fnl-gtg`) drains work before a restart or shutdown: `pause.py` writes a pause marker, reports the recorded work that remains and resumes afterwards, and `heavy_run.py run` refuses new commands (exit 77) while a valid marker exists.
+- `matrix_setup.py` (validate, preview, apply, show, migrate, candidates) and the shared `assignments.py` parser write and read the `## Assignment matrix` section (levels, types of work, model and roles per helper, plus the judge) with a digest-checked, backed-up, section-only write; the readers still use the old `## Agent roles` and `## Agent levels` sections until a later release.
 
 ## [0.2.2] - 2026-11-09
 
