@@ -43,17 +43,22 @@ Sessions and terminals it has no record of are listed as unknown and left to the
    active autopilot lease. While the marker exists the coordinator starts no delegated run and no heavy job, and
    `heavy_run.py` refuses to start a new command with one fixed message (the only script-enforced part; everything else
    is agent judgment, advisory).
-2. **Drain**: `pause.py status` lists each open dispatch with its age against its budget, the heavy-job holder and
-   waiters, and the agent processes the snapshot reader sees, by family. A run past its budget is reported as stalled,
-   never stopped. Readiness is judged on unfinished work, not on a count of processes, and every source has three
-   states: known, unknown (with a reason: disabled, failed, stale, unreadable) and known-empty. `status` prints
-   `safe to shut down: yes` only when all of these hold: the ledger was read and has no open dispatch except the
-   coordinator's own record; the heavy-job lock is free and the waiter count is known and zero (`waiting: unknown` is
-   not zero); every checkpoint the coordinator wrote was read back; and the snapshot is either known-empty of work
-   beyond the coordinator or disabled, in which case `status` says it did not look. Any unknown source makes the verdict
-   `unknown`, with the reason, never `yes`. Agent processes that are not the coordinator are listed as "still open,
-   idle or unknown: close them yourself" and do not by themselves block `yes`, because an idle session has no
-   unfinished work and the snapshot cannot tell idle from busy; the coordinator itself never blocks it.
+2. **Drain**: `pause.py status` lists each open dispatch with its age against its budget and the heavy-job holder and
+   waiters. A run past its budget is reported as stalled, never stopped. The plugin can know only what it records, so
+   the verdict is a statement about recorded work and never a claim that the machine is safe to shut down: that call
+   stays with the user. The verdict has three values and the first applicable one wins:
+   - `blocked: <what remains>`: an open dispatch other than the coordinator's own record, a heavy job started through
+     `heavy_run.py` that holds the lock, or a waiting wrapper.
+   - `unknown: <reasons>`: the ledger is unreadable, the lock or its waiter count is unreadable (`waiting: unknown` is
+     not zero), or a checkpoint cannot be read back. Each reason names its source.
+   - `no recorded work remains`: none of the above; every checkpoint the coordinator wrote was read again at this
+     moment and is still within its 24-hour read lifetime.
+   The lock covers only commands started through `heavy_run.py`; a job started another way is not seen, and the
+   output says so. The agent-process snapshot is never an input to the verdict, because it keeps only family, elapsed
+   seconds and descendant counts, so it cannot identify the coordinator or tell an idle session from a working one.
+   `status` prints it after the verdict from the existing cache as data (no collection, only when metrics consent and
+   the snapshot setting allow it, and a missing, stale or disabled cache is printed as "not observed"), under the
+   heading "agent processes seen, not identified: check these yourself before you restart".
 3. **Checkpoint**: for each session the coordinator knows, it writes the handover (goal, decisions, work in progress,
    next action) with `handover_state.py write`, and for each dispatch that will not finish it records the outcome
    with `ledger.py finish` (`cancelled` or `stalled`) only after the user says to stop that run. `handover_state.py
@@ -64,8 +69,8 @@ Sessions and terminals it has no record of are listed as unknown and left to the
 ## Boundaries
 
 - The user invokes it; no hook starts, ends or reads it. The marker holds a timestamp only and is covered by
-  `PRIVACY.md`'s state-folder wording. It runs no command beyond reading local state and, for the process
-  snapshot, the existing snapshot reader when its setup consent is on. No network call.
+  `PRIVACY.md`'s state-folder wording. It runs no command: it reads local state only, and the process snapshot only from the existing cache, never by running `ps`
+  (the dashboard refresh stays the only collector, as `CLAUDE.md` scopes it). No network call.
 - It never kills a process, never sends a signal and never shuts the machine down. Stopping a run is the user's
   decision, one run at a time.
 - The marker is the one file here that controls command admission, so it is read like the lease and the host config:
