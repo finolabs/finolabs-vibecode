@@ -53,6 +53,9 @@ class ChooseModeTests(unittest.TestCase):
         for case in ("a number out of range", "a second `CHOICE` line", "option text instead of a number", "no `CHOICE` line"):
             self.assertIn(case, self.text)
 
+    def test_the_documented_check_names_the_coordinator(self):
+        self.assertIn("autopilot.py check --coordinator <your own family> --argv-json", CHOOSE.read_text())
+
     def test_tier_and_family_rule(self):
         for rule in ("frontier tier", "else its strong tier", "Nothing below strong", "is not yours",
                      "Never a subagent of your own host", "a Claude model served through another host counts as Claude",

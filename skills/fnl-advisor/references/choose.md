@@ -17,7 +17,7 @@ With no eligible advisor, start no run: record `advisor unavailable` with no `--
 
 ## Dispatch
 
-One read-only run through this install's `delegate_env.py` wrapper with that family's read-only arguments from the host config, checked with `autopilot.py check` first; act only on Tier 1. Record it in the ledger with `--kind advise`; it counts against the lease's run limit. The brief goes after a literal `--` (Codex, Claude) or as the value of `-p` (Antigravity) and never starts with `-` (script: `autopilot.py check`).
+One read-only run through this install's `delegate_env.py` wrapper with that family's read-only arguments from the host config, checked first with `autopilot.py check --coordinator <your own family> --argv-json '<the real argv>'`, naming the family you run in, not the advisor's (without it the script denies the form); act only on Tier 1. Record it in the ledger with `--kind advise`; it counts against the lease's run limit. The brief goes after a literal `--` (Codex, Claude) or as the value of `-p` (Antigravity) and never starts with `-` (script: `autopilot.py check`).
 
 ## The briefing
 
