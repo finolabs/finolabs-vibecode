@@ -29,7 +29,7 @@ The heavy-job gate hook and its installer, the goal skill, the rest of autopilot
 
 ## Evidence
 
-Package 1: `tests/test_levels_setup.py` and the reviews on #189 and #191. Nothing else is verified yet.
+Package 1 (#189): `tests/test_levels_setup.py` and the two reviews. Package 2 (#191): the candidates fixtures in `tests/test_levels_setup.py` and its reviews. Package 3 (#192): the memory and waiting fixtures in `tests/test_heavy_run.py` and its reviews. All three are unit tests with synthetic input; nothing is verified on a live host yet.
 
 ## Release steps (after the scope is delivered)
 
