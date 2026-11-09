@@ -13,7 +13,7 @@ python3 -I "$L" summary --since 2026-11-01
 python3 -I "$L" summary --json           # the same rows as JSON, with quota and error counts
 ```
 
-**Project label.** Choose one short, stable `--project` label per repository, matching its `ledger` entry or display label when one exists. Use the same label from every worktree of that repository; never use a customer, personal or machine name.
+**Project label.** Choose one short, stable `--project` label per repository and use it from every worktree of that repository; never use a customer, personal or machine name. The dashboard joins dispatches to a repository by the repository's `ledger` project setting (the legacy `Ledger project:` line, then the folder name), not by its display label, so use that name; a different label joins nothing on the dashboard until `/fnl-setup add project` records it as the repository's `ledger` entry.
 
 For review routing, the coordinator adds `--head <implementation head SHA>` to `finish`. This validates a forty-character lowercase SHA and copies the agent from the dispatch's start record; legacy records without a head cannot establish authorship. Commit trailers alone are insufficient. When acceptance uses a verification receipt, this head must also match the verified head.
 
