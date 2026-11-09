@@ -48,7 +48,7 @@ rung that settles it. Each rung is cheaper than the next.
 Inside a lease the answer of a rung is the decision, not advice: the host applies the option it returned and does not
 re-ask, overrule or shop it to another rung (advisory, agent judgment; the `log --by` record shows who decided). If the host
 finds a fact the rung did not have, it parks the question rather than overruling. An advisor that is out of quota or
-unreachable, or that answers `none`, counts as unavailable, and the question goes on as the next paragraph of "Grounded in the user's memory" says. `fnl-advisor`'s line "you stay the
+unreachable, or that answers `none`, counts as unavailable, and the question goes on as "Grounded in the user's memory" says for a missing precedent. `fnl-advisor`'s line "you stay the
 decider" stays true for its open mode, with the user present; the choose mode states the opposite for a lease.
 
 Tier 3 never enters the ladder. `autopilot.py check` still classifies the resulting action, so a choice made here
