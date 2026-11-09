@@ -10,7 +10,8 @@ process is stopped abruptly and nothing is lost when the machine goes down.
 
 
 - Pause drains, then checkpoints. It stops starting new work, lets running work finish or reach a safe point, writes a
-  handover for each session, and says when it is safe to shut down. It does not stop running processes by itself.
+  handover for each session, and reports what recorded work remains so the user can decide. It does not stop running
+  processes by itself and never declares the machine safe to shut down.
 - It is its own user-run skill, not a branch of `fnl-autopilot`. It may read autopilot's state and end an active lease,
   and it shares no lease or log with it.
 - Names (revised the same day): the documented skill is fnl-pause, and fnl-gtg ("got to go", the counterpart of
@@ -48,11 +49,14 @@ Sessions and terminals it has no record of are listed as unknown and left to the
    the verdict is a statement about recorded work and never a claim that the machine is safe to shut down: that call
    stays with the user. The verdict has three values and the first applicable one wins:
    - `blocked: <what remains>`: an open dispatch other than the coordinator's own record, a heavy job started through
-     `heavy_run.py` that holds the lock, or a waiting wrapper.
+     `heavy_run.py` that holds the lock, a waiting wrapper, or a job from a stopped wrapper whose recorded process
+     group still runs (the case `heavy_run.py status` prints as `heavy lock: free, but a job from a stopped wrapper is
+     still running`; a free lock alone is not an empty one).
    - `unknown: <reasons>`: the ledger is unreadable, the lock or its waiter count is unreadable (`waiting: unknown` is
      not zero), or a checkpoint cannot be read back. Each reason names its source.
    - `no recorded work remains`: none of the above; every checkpoint the coordinator wrote was read again at this
-     moment and is still within its 24-hour read lifetime.
+     moment, belongs to its session, was written after the marker's start time and is still within its 24-hour read
+     lifetime, so an older handover of the same session cannot stand in for the current one.
    The lock covers only commands started through `heavy_run.py`; a job started another way is not seen, and the
    output says so. The agent-process snapshot is never an input to the verdict, because it keeps only family, elapsed
    seconds and descendant counts, so it cannot identify the coordinator or tell an idle session from a working one.
@@ -69,8 +73,10 @@ Sessions and terminals it has no record of are listed as unknown and left to the
 ## Boundaries
 
 - The user invokes it; no hook starts, ends or reads it. The marker holds a timestamp only and is covered by
-  `PRIVACY.md`'s state-folder wording. It runs no command: it reads local state only, and the process snapshot only from the existing cache, never by running `ps`
-  (the dashboard refresh stays the only collector, as `CLAUDE.md` scopes it). No network call.
+  `PRIVACY.md`'s state-folder wording. It adds no command of its own: it reads local state and the existing process-snapshot cache as data, never running
+  `ps` for it (the dashboard refresh stays the only collector, as `CLAUDE.md` scopes it). The heavy-job part of the
+  report comes from calling the existing read-only `heavy_run.py status`, which already runs its own fixed probes
+  (`pgrep`, `ps -p` and the memory reading) under its own bounds; pause adds none to them. No network call.
 - It never kills a process, never sends a signal and never shuts the machine down. Stopping a run is the user's
   decision, one run at a time.
 - The marker is the one file here that controls command admission, so it is read like the lease and the host config:
@@ -100,5 +106,5 @@ deadline applies and the skill waits until the user says to stop.
 
 ## Evidence
 
-None yet. A build needs a red test per behavior above: the marker, the refusal in `heavy_run.py`, the safe-to-shut-down
-rule and the resume listing.
+None yet. A build needs a red test per behavior above: the marker, the refusal in `heavy_run.py`, the three-value
+recorded-work verdict (including the stopped-wrapper case and unknown sources) and the resume listing.

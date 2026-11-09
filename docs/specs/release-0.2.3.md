@@ -6,7 +6,7 @@ Status: draft; scope started by the owner on 2026-11-09; nothing is built.
 
 | # | Package | What it covers |
 | --- | --- | --- |
-| 1 | Pause | The new user-run skill fnl-pause, with the friendly alias fnl-gtg: drain running work, write handovers, and report when the machine is safe to restart or shut down, with `--in <minutes>` and a `heavy_run.py` refusal while paused. Spec: `pause.md`. |
+| 1 | Pause | The new user-run skill fnl-pause, with the friendly alias fnl-gtg: drain running work, write handovers, and report what recorded work remains before a restart or shutdown (the user decides), with `--in <minutes>` and a `heavy_run.py` refusal while paused. Spec: `pause.md`. |
 | 2 | Away skill rename | fnl-afk becomes the main friendly name of the away skill and fnl-brb stays as its alias; the autopilot spec, skills, README and setup text change together. |
 
 ## Carried from earlier releases
