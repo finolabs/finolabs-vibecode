@@ -99,9 +99,13 @@ An advisor with only the code in front of it would give its own opinion, not the
 
 `autopilot.md` makes every deploy Tier 3. That is too broad: it also stops a deploy to a development environment or a UAT run, which can be rolled back. The rule becomes:
 
-- **Always stops (Tier 3):** a deploy or change to production or any live environment, anything reaching real users or real customer data, tags, releases and publishing, credentials, destructive deletion,
-  shared settings, security boundaries, and a message sent to a person. No rung can decide these.
-- **Goes on:** the local machine, and a deploy or run against a target the user named as non-production.
+- **Always stops, and no setting unlocks it** (only what is too important to leave to an agent): a deploy or change to production or any live environment; anything reaching real users or real
+  customer data; credentials; deletion that cannot be recovered (remote data, a forced push to a default branch); a message to a person outside the repository; and an agent changing its own limits
+  (hooks, permission rules, agent instructions, the lease and setup files).
+- **Stops unless the user unlocked it in setup, then the ladder decides:** tags and releases, publishing to the user's own catalog or package, and repository-level shared settings such as CI configuration
+  and defaults. Each is its own question in `/fnl-setup add autopilot`, with no default, like Merge. An away session that asked a person for each of these would get no answer.
+- **Goes on with no setting:** the local machine; deleting local or recoverable things such as the session's own branches, worktrees and generated files; comments and replies on the repository's own pull
+  requests and issues; a deploy or run against a target the user named as non-production. A change that touches security in code is not a stop by itself: it goes through the review gates and the merge gate.
 - **How a script tells them apart.** `autopilot.py` cannot infer an environment from a command. `## Autopilot` gains `Non-production targets`, an optional list the user fills in setup with the exact deploy
   commands or target names per project, default empty. A deploy matching an entry exactly is Tier 1 under the usual limits; every other deploy stays Tier 3, so an unlisted or ambiguous target
   fails closed to a person. A merge still follows the recorded Merge answer and the merge gate. Naming which targets are safe is the user's decision; an agent never adds an entry during a lease (script: setup changes deny further checks).
