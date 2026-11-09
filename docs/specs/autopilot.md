@@ -82,6 +82,9 @@ a tier; unknown commands and paths are Tier 3.
   `.github/`, hook files, `CLAUDE.md`, agent instruction files, settings or the lease and setup files, security-boundary
   changes, a merge when setup says no, and a task that names a Tier 3 action. Parked items wait in the log; the agent
   goes on with other work.
+- 2026-11-10: deploy classification changed per `away-decisions.md` "Where it must stop": a deploy that equals a
+  `Non-production targets` entry exactly is Tier 1, every other deploy stays Tier 3, and tags, releases and publishing
+  are Tier 1 only when the user moved their category to `decide`; production, live and real-user rows stay fixed at stop.
 
 ## Untrusted input
 
