@@ -1,6 +1,6 @@
 # Release 0.2.2: scope
 
-Status: in progress; scope settled by the owner on 2026-11-09; all seven packages are merged except this closing records pull request; the release itself waits for the owner's go.
+Status: released; scope settled by the owner on 2026-11-09, all seven packages merged, tagged v0.2.2 on 2026-11-09; live-host proof is partial (see Evidence).
 
 ## Why
 

@@ -3,7 +3,7 @@
   "name": "finolabs-vibecode",
   "displayName": "Finolabs Vibecode",
   "description": "19 skills and 3 agents (fnl-reviewer, fnl-security-reviewer, fnl-navigator) for review routing, verification, setup, run hygiene and quota on demand.",
-  "version": "0.2.2-dev",
+  "version": "0.2.2",
   "logo": "assets/icon.svg",
   "author": {
     "name": "FINOLABS",

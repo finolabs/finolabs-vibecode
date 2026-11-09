@@ -130,7 +130,7 @@ Start any of them with `/fnl-setup` (on Codex, also `$fnl-setup instructions` ri
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-It targets Claude Code, Codex and Antigravity from one `skills/` folder. Release documented here: **0.2.1** (phase 0; see `fnl-versioning` and the [release record](docs/specs/release-0.2.1.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.2-dev`.
+It targets Claude Code, Codex and Antigravity from one `skills/` folder. Release documented here: **0.2.2** (phase 0; see `fnl-versioning` and the [release record](docs/specs/release-0.2.2.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.3-dev`.
 
 <p align="center">
   <picture>
@@ -222,7 +222,7 @@ macOS and Linux are supported. Native Windows is not: the plugin's scripts rely 
 
 Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh). Choose one way per agent, because both together list every skill twice.
 
-Claude Code and Codex install the plugin from the [FINOLABS catalog](https://github.com/finolabs/plugins), marketplace `finolabs`, which groups the FINOLABS plugins together. This repository also remains its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. The catalog selects the installed ref; direct installs from this repository track `main`, which moves to `0.2.2-dev` after 0.2.1. Releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
+Claude Code and Codex install the plugin from the [FINOLABS catalog](https://github.com/finolabs/plugins), marketplace `finolabs`, which groups the FINOLABS plugins together. This repository also remains its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. The catalog selects the installed ref; direct installs from this repository track `main`, which moves to `0.2.3-dev` after 0.2.2. Releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
 
 ### Claude Code
 
@@ -357,7 +357,7 @@ A home folder that other users can write to lets them swap folders under it, so 
 
 Optional quota probing is configured in `/fnl-setup add quota`, off by default and independent of metrics. After a confirmed path preview, the coordinator runs `quota_probe.py read --family <agy|claude|codex>` before routing, then `status`. The command waits for each install's reading and enforces a minimum 15-minute age, failure backoff and one in-flight reading. Hooks start no quota reading; Claude Code alone records a family-and-time marker on StopFailure `rate_limit`, with probing on. A newer successful reading overrides this advisory marker; otherwise it expires at an eligible depleted pool's reset or after one hour, never over five hours. Claude Code asks to trust the changed hooks; Codex and Antigravity have no new hook entry. Claude Code vendor hooks docs (07/11/2026) verify the StopFailure `error: rate_limit` contract, with no token counts and ignored output/exit code; the live payload and this plugin's delivery remain unverified before release (see the [quota spec](docs/specs/quota-on-demand.md)). The programs contact their providers; the probe itself makes no network call. `FNL_QUOTA_PROBE=off` disables it. Scan and Check show per-install labels, measured times and pools; routing treats the cache as advisory, excludes nothing older than eight hours, and defers to the user. See [privacy](PRIVACY.md#quota-probe) for the stored fields, Claude configuration behavior and verification limits.
 
-Project progress uses per-repository ledger and task-file settings confirmed in `/fnl-setup add project`, while `/fnl-setup instructions` writes the project work convention and dated Outcome anchors. The global `Ledger project:` and `Task file:` lines remain readable in 0.2.0 and 0.2.1 and are removed in 0.3.0; Check shows their per-repository replacement.
+Project progress uses per-repository ledger and task-file settings confirmed in `/fnl-setup add project`, while `/fnl-setup instructions` writes the project work convention and dated Outcome anchors. The global `Ledger project:` and `Task file:` lines remain readable in 0.2.0 to 0.2.2 and are removed in 0.3.0; Check shows their per-repository replacement.
 
 Parallel capacity is user-set, advisory and shared across coordinators; [slot checks](docs/specs/parallel-instances.md) do not reserve capacity.
 
