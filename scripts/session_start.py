@@ -25,7 +25,8 @@ COMPACT_DELEGATION = (
     "\nDelegation after compaction (advisory, agent judgment): before starting the first of two or more "
     "independent tasks, apply fnl-delegate \"Keep or hand off\"; send reviews and parallel work to another "
     "agent family when one is present instead of doing them yourself or in a session of your own family; "
-    "start each run in the host's background mode, never `( … ) &` or nohup; re-read fnl-delegate if its steps are not in context.\n")
+    "start each run in the host's background mode, never `( … ) &` or nohup; "
+    "name it with the label `ledger.py start` prints; re-read fnl-delegate if its steps are not in context.\n")
 
 
 def delegation_word():

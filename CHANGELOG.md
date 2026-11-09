@@ -9,6 +9,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `fnl-afk` (away from keyboard) is the main short name for the away mandate; `fnl-brb` remains an older alias, and both load `fnl-autopilot`.
 - User-invoked `fnl-pause` (short name `fnl-gtg`) drains work before a restart or shutdown: `pause.py` writes a pause marker, reports the recorded work that remains and resumes afterwards, and `heavy_run.py run` refuses new commands (exit 77) while a valid marker exists.
 
+### Changed
+
+- `ledger.py start` prints a ready-made run name on stderr (`label: codex sol: demo PR 7 code review`) for the host's name field, because only 8% of 1,555 background runs measured on one machine used the documented form; `--task` now holds only scope and activity.
+
 ## [0.2.2] - 2026-11-09
 
 ### Added

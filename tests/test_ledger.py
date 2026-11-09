@@ -182,6 +182,17 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(rec["reason"], "routing")
         self.assertEqual(rec["route_by"], "table")
 
+    def test_start_prints_the_run_label_on_stderr_and_only_the_id_on_stdout(self):
+        for agent, model, runner in (("codex", "gpt-6.1-sol", "codex sol"), ("claude", "claude-opus-5-5", "claude opus"),
+                                     ("antigravity", "gemini-3-flash", "agy flash"), ("subagent", "sonnet", "claude sonnet"),
+                                     ("codex", None, "codex")):
+            argv = ["start", "--project", "demo", "--task", "PR 7  code review", "--kind", "review", "--grade", "easy",
+                    "--coordinator", "claude", "--agent", agent, "--reason", "routing", "--route-by", "table",
+                    "--budget", "5"] + (["--model", model] if model else [])
+            result = self.run_ledger(*argv)
+            self.assertRegex(result.stdout, r"^d\d{8}-\d{6}-[0-9a-f]{4}\n$")
+            self.assertEqual(result.stderr, "label: %s: demo PR 7 code review\n" % runner)
+
     def test_start_hashes_session_environment(self):
         self.env["CLAUDE_CODE_SESSION_ID"] = "abc-123"
         result = self.run_ledger(*START)
@@ -198,7 +209,7 @@ class LedgerTest(unittest.TestCase):
                 self.env["CLAUDE_CODE_SESSION_ID"] = value
             result = self.run_ledger(*START)
             self.assertIsNone(self.records()[-1]["coord_session"])
-            self.assertEqual(result.stderr, "")
+            self.assertEqual(result.stderr, "label: codex: demo add parser\n")
 
     def test_start_accepts_session_boundaries(self):
         for value in ("A", "Z9_-" * 32):

@@ -85,6 +85,14 @@ def load():
     return starts, finishes
 
 
+def run_label(agent, model, project, task):
+    """`<runner>: <project> <task>` for the host's name field; the runner is the family plus a short model name."""
+    family = {"claude-session": "claude", "subagent": "claude", "antigravity": "agy"}.get(agent, agent)
+    words = [w for w in (model or "").split("-") if w and not any(c.isdigit() for c in w) and w not in ("claude", "gpt", "gemini", "default")]
+    runner = f"{family} {words[-1]}" if words else family
+    return " ".join(f"{runner}: {project} {task}".split())
+
+
 def cmd_start(args):
     session = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session):
@@ -126,6 +134,7 @@ def cmd_start(args):
         except Exception:
             pass  # gate state must never change this command's output or exit code
     print(dispatch_id)
+    print("label: " + run_label(args.agent, args.model, args.project, args.task), file=sys.stderr)
 
 
 def cmd_finish(args):
