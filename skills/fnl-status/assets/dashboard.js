@@ -1073,6 +1073,11 @@
   if (D.depth) tabs.push(tableOf("depth", ["depth", "receipts", "reworked"], D.depth.map(function (x) { return [x.depth, x.receipts, x.reworked]; })));
   if (D.delegation) delegationTables.push(tableOf("delegation", ["agent / model / grade", "runs", "first pass", "quota", "error", "median min", "rework"], D.delegation.map(function (x) { return [x.agent + " / " + x.model + " / " + x.grade, x.runs, pct(x.first_pass), x.quota, x.error, x.median_min, x.rework]; })));
   if (!D.delegation) delegationTables.push(tableOf("delegation", ["status"], [["no data: " + (missing("delegation") || "ledger is empty")]]));
+  if (D.away) delegationTables.push(tableOf("away decisions per lease", ["lease start (UTC)", "decisions", "no precedent", "by rung", "advisor / model", "Jev p n / min / median / max", "parked", "denied questions", "reversed / reviewed"], D.away.map(function (x) {
+    var p = x.jev_p || {n: 0}, pairs = function (o) { return Object.keys(o || {}).map(function (k) { return k + " " + o[k]; }).join(", ") || "none"; };
+    return [new Date(x.lease_start * 1000).toISOString().slice(0, 16).replace("T", " "), x.decisions, x.no_precedent, pairs(x.by_rung), pairs(x.by_advisor),
+      p.n ? [p.n, p.min.toFixed(2), p.median.toFixed(2), p.max.toFixed(2)].join(" / ") : "0", x.parked, x.denied, x.reversed + " / " + x.reviewed];
+  })));
   if (D.kept) delegationTables.push(tableOf("kept and handed off", ["tasks kept", "receipts", "implementation runs handed off"],
     [[D.kept.tasks, D.kept.receipts, num(D.kept.handed_off)]]));
   if (D.kept && D.kept.rows.length) delegationTables.push(tableOf("kept by the coordinator", ["coordinator / reason / settled by", "receipts", "tasks"], D.kept.rows.map(function (x) { return [x.coordinator + " / " + x.reason + " / " + x.route_by, x.receipts, x.tasks]; })));

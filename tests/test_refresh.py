@@ -868,6 +868,33 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(d["errors"], 0)
         self.assertEqual(d["missing"], {})
 
+    def test_away_view_counts_decisions_per_lease_without_text(self):
+        self.consent()
+        self.fixture_store()
+        self.fixture_ledger()
+        ts = self.at.isoformat(timespec="seconds")
+        base = {"event": "decision", "ts": ts, "project": "demo", "lease_start": 1000.0, "topic": "cache"}
+        lines = [dict(base, id="q20261110-010000-aaaa", rung="jev", settled="no", by="jev", probability=0.6, precedents=0),
+                 dict(base, id="q20261110-010000-aaaa", rung="advisor", settled="yes", by="codex", option=2, of=3,
+                      dispatch="d20261110-010100-abcd", model="m1", precedents=0),
+                 dict(base, id="q20261110-020000-bbbb", rung="park", settled="yes", by="claude", precedents=1),
+                 {"event": "question_denied", "ts": ts, "lease_start": 1000.0},
+                 {"event": "decision_review", "id": "q20261110-010000-aaaa", "ts": ts, "verdict": "reversed"}]
+        with self.ledger.open("a") as stream:
+            stream.write("".join(json.dumps(line) + "\n" for line in lines))
+        self.refresh("run")
+        d = self.data()
+        [row] = d["away"]
+        self.assertEqual((row["decisions"], row["no_precedent"], row["by_rung"], row["by_advisor"], row["parked"],
+                          row["denied"], row["reviewed"], row["reversed"]),
+                         (2, 1, {"advisor": 1, "park": 1}, {"codex m1": 1}, 1, 1, 1, 1))
+        self.assertNotIn("cache", json.dumps(d["away"]))  # the topic label is not shown in the table
+        [delegation] = d["delegation"]
+        self.assertEqual(delegation["runs"], 2)  # dispatch numbers unchanged beside away lines
+        self.ledger.write_text("")
+        self.refresh("run")
+        self.assertIsNone(self.data()["away"])
+
     def days_ago(self, days, sid, repo, event, **fields):
         return self.event(days * 24 * 60, sid, repo, event, **fields)
 
