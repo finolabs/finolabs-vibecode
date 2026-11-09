@@ -39,6 +39,12 @@ rung that settles it. Each rung is cheaper than the next.
 4. **Park.** No rung settled it, or no judge or advisor is available: log it as parked, tell the user once, and go on with
    other work.
 
+Inside a lease the answer of a rung is the decision, not advice: the host applies the option it returned and does not
+re-ask, overrule or shop it to another rung (advisory, agent judgment; the `log --by` record shows who decided). If the host
+finds a fact the rung did not have, it parks the question rather than overruling. A named advisor that is out of quota or
+unreachable, or that answers `none`, counts as unavailable, and the question parks. `fnl-advisor`'s line "you stay the
+decider" stays true for its open mode, with the user present; the choose mode states the opposite for a lease.
+
 Tier 3 never enters the ladder. `autopilot.py check` still classifies the resulting action, so a choice made here
 grants no authority: an option the check denies is parked. The rungs choose among options the agent already may take.
 
