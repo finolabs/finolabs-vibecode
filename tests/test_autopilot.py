@@ -3,6 +3,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import re
 import os
 from pathlib import Path
 import stat
@@ -18,7 +19,7 @@ SETUP = ('## Autopilot\n- Hosts: Claude Code\n- Task choice: choose\n'
          '- Push and pull requests: yes\n- Merge: yes\n- Trusted authors: own\n')
 
 
-class AutopilotTest(unittest.TestCase):
+class AutopilotBase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -73,6 +74,8 @@ class AutopilotTest(unittest.TestCase):
         self.assertEqual(status, 0, output)
         self.assertEqual(json.loads(output), {'tier': tier, 'code': code})
 
+
+class AutopilotTest(AutopilotBase):
     def test_start_requires_setup_and_merge(self):
         for text in ('', '## Other\n', SETUP.replace('- Merge: yes\n', '')):
             self.setup_config(text)
@@ -363,6 +366,400 @@ class AutopilotTest(unittest.TestCase):
             self.check(['git', 'status'], tier=3, code='unsafe')
         self.change_lease(lambda v: v.update(settings_hash='0' * 64))
         self.check(['git', 'status'], tier=3, code='setup-changed')
+
+
+DISPATCH = 'd20261110-010203-abcd'
+DECISION = re.compile(r'q[0-9]{8}-[0-9]{6}-[0-9a-f]{4}')
+# Every row of the attempt schema in docs/specs/away-decisions.md "Record for analysis": flags and stored values.
+ROWS = {
+    'rule yes': (('--rung', 'rule', '--settled', 'yes', '--by', 'rule', '--option', '1', '--of', '2'),
+                 dict(by='rule', option=1, of=2)),
+    'rule no': (('--rung', 'rule', '--settled', 'no', '--by', 'rule'), dict(by='rule')),
+    'jev yes': (('--rung', 'jev', '--settled', 'yes', '--by', 'jev', '--option', '1', '--of', '2', '--probability', '0.9'),
+                dict(by='jev', option=1, of=2, probability=0.9)),
+    'jev no': (('--rung', 'jev', '--settled', 'no', '--by', 'jev', '--probability', '0.5'), dict(by='jev', probability=0.5)),
+    'jev unavailable': (('--rung', 'jev', '--settled', 'unavailable', '--by', 'jev'), dict(by='jev')),
+    'advisor yes': (('--rung', 'advisor', '--settled', 'yes', '--by', 'codex', '--option', '2', '--of', '3',
+                     '--dispatch', DISPATCH, '--model', 'gpt-5.5'),
+                    dict(by='codex', option=2, of=3, dispatch=DISPATCH, model='gpt-5.5')),
+    'advisor no': (('--rung', 'advisor', '--settled', 'no', '--by', 'codexwork', '--dispatch', DISPATCH, '--model', 'gpt-5.5'),
+                   dict(by='codexwork', dispatch=DISPATCH, model='gpt-5.5')),
+    'advisor unavailable, selected': (('--rung', 'advisor', '--settled', 'unavailable', '--by', 'codex'), dict(by='codex')),
+    'advisor unavailable, selected and started': (('--rung', 'advisor', '--settled', 'unavailable', '--by', 'codex',
+                                                   '--dispatch', DISPATCH), dict(by='codex', dispatch=DISPATCH)),
+    'advisor unavailable, no candidate': (('--rung', 'advisor', '--settled', 'unavailable'), {}),
+    'host yes': (('--rung', 'host', '--settled', 'yes', '--by', 'claude', '--option', '1', '--of', '2', '--model', 'claude-opus-5-5'),
+                 dict(by='claude', option=1, of=2, model='claude-opus-5-5')),
+    'park yes': (('--rung', 'park', '--settled', 'yes', '--by', 'claude'), dict(by='claude')),
+}
+EXTRA = {'--by': 'codex', '--option': '1', '--of': '2', '--probability': '0.9', '--dispatch': DISPATCH, '--model': 'gpt-5.5'}
+SETUP_AWAY = SETUP.replace('Claude Code', 'Claude Code, Codex') + '- Max actions per hour: 1000\n'
+JUDGE = ['python3', '-I', str(SCRIPT.parent / 'judge.py'), 'ask', '--site', 'away-decision',
+         '--question', 'Which schema fits the spec settings?', '--option', 'Keep one schema', '--option', 'Split it',
+         '--evidence-file', '.finolabs/briefs/packet.json']
+BRIEF = 'Choose one option for the config question.\n1 Keep one schema\n2 Split it\nReply with the number and a reason.'
+ENV = ['python3', '-I', str(SCRIPT.parent / 'delegate_env.py')]
+CODEX = ENV + ['--family', 'codex', '--', 'codex', 'exec', '-m', 'gpt-5.5', '-c', 'model_reasoning_effort=high',
+               '-s', 'read-only', BRIEF]
+CLAUDE = ENV + ['--family', 'claude', '--', 'claude', '-p', BRIEF, '--model', 'claude-opus-5-5',
+                '--output-format', 'json', '--permission-mode', 'plan']
+
+
+class AwayDecisionTest(AutopilotBase):
+    """Away decisions, scripts part: decision records, reviews, categories, the two ladder forms and the packet check."""
+
+    def ledger(self):
+        path = self.root / 'ledger.jsonl'
+        return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+    def decide(self, *flags, project='demo', topic='schema choice', precedents='1'):
+        return self.invoke('log', '--kind', 'decision', '--project', project, '--topic', topic,
+                           '--precedents', precedents, *flags)
+
+    def recorded(self, *flags, **kwargs):
+        before = len(self.ledger())
+        status, output = self.decide(*flags, **kwargs)
+        self.assertEqual(status, 0, output)
+        identifier = output.splitlines()[0]
+        self.assertRegex(identifier, DECISION.pattern + '$')
+        lines = self.ledger()
+        self.assertEqual(len(lines), before + 1)
+        return identifier, lines[-1]
+
+    def refused(self, *flags, **kwargs):
+        before = self.ledger()
+        status, output = self.decide(*flags, **kwargs)
+        self.assertEqual(status, 3, output)
+        self.assertEqual(self.ledger(), before)
+
+    def check_as(self, argv, coordinator='claude', tier=1, code='allowed'):
+        flags = ('--coordinator', coordinator) if coordinator else ()
+        status, output = self.invoke('check', *flags, '--argv-json', json.dumps(argv))
+        self.assertEqual(status, 0, output)
+        result = json.loads(output)
+        if code is None:  # any Tier 3 code: a checkout under a protected folder may say `protected` first
+            self.assertEqual(result['tier'], 3, argv)
+        else:
+            self.assertEqual(result, {'tier': tier, 'code': code}, argv)
+
+    # Record for analysis
+
+    def test_every_row_of_the_attempt_schema_records_its_fields_and_nothing_else(self):
+        self.start()
+        lease_start = self.lease()['start']
+        for name, (flags, stored) in ROWS.items():
+            with self.subTest(row=name):
+                identifier, line = self.recorded(*flags)
+                rung, settled = flags[1], flags[3]
+                self.assertEqual(line, dict(event='decision', id=identifier, ts=line['ts'], project='demo',
+                                            lease_start=lease_start, rung=rung, settled=settled, precedents=1,
+                                            topic='schema choice', **stored))
+                self.assertRegex(line['ts'], r'^[0-9]{4}-[0-9]{2}-[0-9]{2}T')
+
+    def test_every_row_refuses_each_unlisted_field_and_each_missing_required_field(self):
+        self.start()
+        optional = {'advisor unavailable, selected': {'--dispatch'}}
+        for name, (flags, stored) in ROWS.items():
+            given = {flags[i] for i in range(4, len(flags), 2)}
+            for flag, value in EXTRA.items():
+                if flag in given or flag in optional.get(name, set()):
+                    continue
+                if name == 'advisor unavailable, no candidate' and flag == '--by':
+                    continue  # adding the advisor is the valid row "an advisor was selected"
+                with self.subTest(row=name, extra=flag):
+                    self.refused(*flags, flag, value)
+            required = given - optional.get(name, set()) - ({'--dispatch'} if name.endswith('and started') else set())
+            if name.startswith('advisor unavailable, selected'):
+                required.discard('--by')  # without the advisor it is the valid row "no candidate"
+                if name.endswith('and started'):
+                    self.refused(*flags[:4], '--dispatch', DISPATCH)  # but a dispatch needs its advisor
+            for flag in required:
+                index = flags.index(flag)
+                with self.subTest(row=name, missing=flag):
+                    self.refused(*(flags[:index] + flags[index + 2:]))
+
+    def test_values_combinations_and_common_fields_are_closed(self):
+        self.start()
+        for flags in (('--rung', 'rule', '--settled', 'unavailable', '--by', 'rule'),
+                      ('--rung', 'host', '--settled', 'no', '--by', 'claude', '--model', 'm'),
+                      ('--rung', 'park', '--settled', 'no', '--by', 'claude'),
+                      ('--rung', 'user', '--settled', 'yes', '--by', 'claude'),
+                      ('--rung', 'rule', '--settled', 'yes', '--by', 'jev', '--option', '1', '--of', '2'),
+                      ('--rung', 'jev', '--settled', 'yes', '--by', 'jev', '--option', '1', '--of', '2', '--probability', '0.5'),
+                      ('--rung', 'jev', '--settled', 'no', '--by', 'jev', '--probability', '0.9'),
+                      ('--rung', 'jev', '--settled', 'no', '--by', 'jev', '--probability', 'nan'),
+                      ('--rung', 'jev', '--settled', 'no', '--by', 'jev', '--probability', '1.5'),
+                      ('--rung', 'rule', '--settled', 'yes', '--by', 'rule', '--option', '3', '--of', '2'),
+                      ('--rung', 'rule', '--settled', 'yes', '--by', 'rule', '--option', '1', '--of', '7'),
+                      ('--rung', 'rule', '--settled', 'yes', '--by', 'rule', '--option', '1', '--of', '1'),
+                      ('--rung', 'rule', '--settled', 'yes', '--by', 'rule', '--option', '0', '--of', '2'),
+                      ('--rung', 'advisor', '--settled', 'no', '--by', '../x', '--dispatch', DISPATCH, '--model', 'm'),
+                      ('--rung', 'advisor', '--settled', 'no', '--by', 'codex', '--dispatch', 'bad', '--model', 'm'),
+                      ('--rung', 'advisor', '--settled', 'no', '--by', 'codex', '--dispatch', DISPATCH, '--model', 'a b'),
+                      ('--rung', 'host', '--settled', 'yes', '--by', 'gemini', '--option', '1', '--of', '2', '--model', 'm'),
+                      ('--rung', 'host', '--settled', 'yes', '--by', 'codexwork', '--option', '1', '--of', '2', '--model', 'm'),
+                      ('--rung', 'park', '--settled', 'yes', '--by', 'rule')):
+            with self.subTest(flags=flags):
+                self.refused(*flags)
+        park = ROWS['park yes'][0]
+        for kwargs in (dict(precedents='-1'), dict(precedents='9'), dict(precedents='x'), dict(topic=''),
+                       dict(topic='   '), dict(topic='a' * 61), dict(topic='src/private.py'), dict(topic='ghp_' + 'x' * 30),
+                       dict(topic='line\nbreak'), dict(project='../demo'), dict(project='')):
+            with self.subTest(**kwargs):
+                self.refused(*park, **kwargs)
+        # Decision fields belong to the decision kind only, and a decision needs its common fields.
+        self.assertEqual(self.invoke('log', '--kind', 'action', '--rung', 'park')[0], 3)
+        self.assertEqual(self.invoke('log', '--kind', 'decision', *park)[0], 3)
+
+    def test_the_id_is_generated_once_and_later_attempts_must_pass_an_existing_one(self):
+        self.start()
+        first, line = self.recorded(*ROWS['jev unavailable'][0])
+        second, line = self.recorded(*ROWS['advisor yes'][0], '--decision', first)
+        self.assertEqual((second, line['id']), (first, first))
+        self.refused(*ROWS['host yes'][0], '--decision', 'q20261110-010203-ffff')  # unknown id
+        self.refused(*ROWS['host yes'][0], '--decision', 'd20261110-010203-abcd')  # not a decision id
+        other, _ = self.recorded(*ROWS['park yes'][0])
+        self.assertNotEqual(other, first)
+
+    def test_a_decision_needs_a_lease_and_the_autopilot_log_keeps_only_a_redacted_note(self):
+        self.setup_config()
+        self.refused(*ROWS['park yes'][0])
+        self.start()
+        identifier, _ = self.recorded(*ROWS['park yes'][0], '--note', 'Parked: git push origin main reaches production')
+        record = json.loads((self.state / 'log.jsonl').read_text().splitlines()[-1])
+        self.assertEqual((record['kind'], record['decision'], record['tier']), ('decision', identifier, 2))
+        self.assertNotIn('git push', record['note'])
+        self.assertNotIn('note', self.ledger()[-1])
+
+    def test_outcomes_table_and_ladder_cases_share_one_decision_id(self):
+        self.start()
+        cases = {
+            'jev not configured or options open': ['advisor yes'],
+            'jev refuses, times out or fails': ['jev unavailable', 'advisor yes'],
+            'jev below 0.8': ['jev no', 'advisor yes'],
+            'host-only hosts, no advisor': ['jev unavailable', 'advisor unavailable, no candidate', 'host yes'],
+            'advisor out of quota or failed': ['advisor unavailable, selected and started', 'host yes'],
+            'advisor answers none': ['advisor no', 'host yes'],
+            'advisor names an option outside the list': ['advisor no', 'host yes'],
+            'a new fact at the same rung': ['advisor yes', 'advisor yes'],
+            'a new fact and the answer does not hold': ['advisor yes', 'advisor no', 'host yes'],
+            'a rule invalidated by new evidence': ['rule yes', 'rule no', 'host yes'],
+            'where it must stop': ['park yes'],
+            'a rung answered, then the check parked it': ['jev yes', 'park yes'],
+        }
+        for name, rows in cases.items():
+            with self.subTest(case=name):
+                before = len(self.ledger())
+                identifier, _ = self.recorded(*ROWS[rows[0]][0], precedents='0')
+                for row in rows[1:]:
+                    self.recorded(*ROWS[row][0], '--decision', identifier, precedents='0')
+                lines = self.ledger()[before:]
+                self.assertEqual({line['id'] for line in lines}, {identifier})
+                self.assertEqual([(line['rung'], line['settled']) for line in lines],
+                                 [tuple(ROWS[row][0][1:4:2]) for row in rows])
+                self.assertEqual({line['precedents'] for line in lines}, {0})
+
+    def test_review_records_kept_or_reversed_for_an_existing_decision_only(self):
+        self.start()
+        identifier, _ = self.recorded(*ROWS['host yes'][0])
+        self.assertEqual(self.invoke('stop')[0], 0)  # reviews happen after the user returns
+        for verdict in ('kept', 'reversed'):
+            status, output = self.invoke('review', '--decision', identifier, verdict)
+            self.assertEqual(status, 0, output)
+            line = self.ledger()[-1]
+            self.assertEqual(line, dict(event='decision_review', id=identifier, ts=line['ts'], verdict=verdict))
+        before = self.ledger()
+        for identifier in ('q20261110-010203-ffff', 'bad'):
+            self.assertEqual(self.invoke('review', '--decision', identifier, 'kept')[0], 3)
+        self.assertEqual(self.ledger(), before)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            self.invoke('review', '--decision', identifier, 'maybe')
+
+    # Where it must stop
+
+    def test_category_settings_fixed_rows_unknown_values_consent_and_targets(self):
+        ap = self.load()
+        self.setup_config()
+        applied = ap.settings()
+        for category in ap.CATEGORIES:
+            self.assertEqual(applied[category], 'stop', category)  # missing is stop, even for decide-default rows
+        self.assertEqual((applied['Excerpts leave the machine'], applied['Non-production targets']), ('no', []))
+        self.setup_config(SETUP + '- Production: decide\n- Real users and customer data: decide\n'
+                          '- Tags and releases: decide\n- Publishing: maybe\n- Recoverable deletion: decide\n'
+                          '- Excerpts leave the machine: Yes\n'
+                          '- Non-production targets: npx wrangler deploy --env uat; make deploy-dev\n')
+        applied = ap.settings()
+        self.assertEqual((applied['Production'], applied['Real users and customer data']), ('stop', 'stop'))
+        self.assertEqual((applied['Tags and releases'], applied['Publishing'], applied['Recoverable deletion']),
+                         ('decide', 'stop', 'decide'))
+        self.assertEqual(applied['Excerpts leave the machine'], 'no')
+        self.assertEqual(applied['Non-production targets'], ['npx wrangler deploy --env uat', 'make deploy-dev'])
+        self.setup_config(SETUP + '- Excerpts leave the machine: yes\n- Non-production targets: ok; \x07bad\n')
+        applied = ap.settings()
+        self.assertEqual((applied['Excerpts leave the machine'], applied['Non-production targets']), ('yes', []))
+        self.assertTrue(ap.permits({'Tags and releases'}, dict(applied, **{'Tags and releases': 'decide'})))
+        self.assertFalse(ap.permits({'Tags and releases', 'Publishing'},
+                                    dict(applied, **{'Tags and releases': 'decide', 'Publishing': 'stop'})))
+        self.assertFalse(ap.permits({'Tags and releases'}, {}))
+        self.assertFalse(ap.permits(set(), applied))
+
+    def test_precedence_table_rows_and_examples(self):
+        targets = '- Non-production targets: npx wrangler deploy --env uat; npx wrangler deploy --env production\n'
+        self.start(SETUP + '- Max actions per hour: 1000\n' + targets)
+        # Row 3: tags, releases and publishing stay Tier 3 while their category is stop, missing or invalid.
+        for argv in (['git', 'tag', 'v1.2.0'], ['gh', 'release', 'create', 'v1.2.0'], ['npm', 'publish']):
+            self.check(argv, tier=3, code='forbidden')
+        # Row 5: a listed deploy goes on (a listed UAT run).
+        self.check(['npx', 'wrangler', 'deploy', '--env', 'uat'])
+        # Row 2: production parks even when listed by mistake; row 4: an unlisted or changed deploy parks.
+        for argv in (['npx', 'wrangler', 'deploy', '--env', 'production'], ['npx', 'wrangler', 'deploy', '--env', 'uat2'],
+                     ['npx', 'wrangler', 'deploy', '--env', 'uat', '--minify'], ['npx', 'wrangler', 'deploy'],
+                     ['npx', 'wrangler', 'deploy', '--env', 'live']):
+            self.check(argv, tier=3, code='forbidden')
+        # Row 1: credentials or the agent's own limits win over every listed target.
+        self.check(['npx', 'wrangler', 'deploy', '--env', 'uat', '--var', 'API_TOKEN'], tier=3, code='protected')
+        # Row 6: local work no category names is classified as today.
+        self.check(['git', 'status'])
+
+    def test_decide_categories_open_only_the_closed_tag_release_and_publish_forms(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n- Publishing: decide\n')
+        for argv in (['git', 'tag', 'v1.2.0'], ['git', 'tag', '-a', 'v1.2.0', '-m', 'Release 1.2.0'],
+                     ['git', 'tag', 'v1.2.0', 'a' * 40], ['gh', 'release', 'create', 'v1.2.0', '--title', 'v1.2.0',
+                                                          '--notes', 'Changes', '--verify-tag'],
+                     ['gh', 'release', 'view', 'v1.2.0'], ['gh', 'release', 'list'], ['npm', 'publish'],
+                     ['npm', 'publish', '--access', 'public'], ['pnpm', 'publish', '--tag', 'next']):
+            with self.subTest(argv=argv):
+                self.check(argv)
+        for argv in (['git', 'tag', '-d', 'v1.2.0'], ['git', 'tag', '-f', 'v1.2.0'], ['git', 'tag', '--delete', 'v1'],
+                     ['gh', 'release', 'delete', 'v1.2.0'], ['gh', 'release', 'upload', 'v1.2.0', 'dist/x.zip'],
+                     ['npm', 'publish', '--registry', 'https://example.invalid'], ['npm', 'unpublish'],
+                     ['git', 'push', 'origin', 'refs/tags/v1.2.0'], ['twine', 'upload', 'dist/x'],
+                     ['npx', 'wrangler', 'deploy', '--env', 'uat']):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code='unknown' if argv[0] == 'twine' or 'unpublish' in argv else 'forbidden')
+        # Recursive deletion keeps its Tier 3 classification in this slice.
+        self.check(['rm', '-rf', 'build'], tier=3, code='forbidden')
+
+    # How the ladder's calls pass the action gate
+
+    def test_the_judge_form_is_tier_one_under_a_live_lease_and_reserves_an_action(self):
+        self.start(SETUP_AWAY)
+        self.check_as(JUDGE)
+        self.check_as(JUDGE + ['--option', 'Third', '--judge', 'jev'])
+        self.assertEqual(self.lease()['counters']['actions'], 2)
+        self.assertEqual(self.lease()['counters']['runs'], 0)
+
+    def test_the_judge_form_denies_any_other_site_flag_shape_or_copy(self):
+        self.start(SETUP_AWAY)
+        site = JUDGE.index('away-decision')
+        other = str(ROOT / 'skills/fnl-verification/scripts/judge.py')
+        option = JUDGE.index('Split it')
+        for argv in (JUDGE[:site] + ['navigator'] + JUDGE[site + 1:], JUDGE + ['--base-url', 'http://127.0.0.1:9'],
+                     JUDGE + ['--dry-run'], JUDGE + ['--answers', 'docs/answers.json'],
+                     JUDGE[:option - 1] + JUDGE[option + 1:],  # one option
+                     JUDGE + [t for n in range(5) for t in ('--option', 'Extra %d' % n)],  # seven options
+                     JUDGE[:option] + ['ghp_' + 'x' * 30] + JUDGE[option + 1:],
+                     JUDGE[:option] + ['Keep one schema'] + JUDGE[option + 1:],  # duplicate option
+                     JUDGE[:7] + ['Which file under /Us' + 'ers/synthetic/private?'] + JUDGE[8:],
+                     JUDGE + ['--judge', 'host'], JUDGE + ['--site', 'away-decision'],
+                     JUDGE[:-1] + ['../packet.json'], JUDGE[:-1] + ['.env'], JUDGE[:-1] + ['/tmp/packet.json'],
+                     JUDGE[:-1] + ['.finolabs/briefs/packet.sh'],
+                     JUDGE[:3] + ['check-host'] + JUDGE[4:], JUDGE[:3] + JUDGE[5:]):
+            with self.subTest(argv=argv[3:6] + argv[-2:]):
+                self.check_as(argv, tier=3, code='unknown')
+        # Another copy of judge.py or a call without isolated Python is not the ladder form.
+        for argv in (JUDGE[:2] + [other] + JUDGE[3:], ['python3'] + JUDGE[2:]):
+            self.check_as(argv, tier=3, code=None)
+        self.assertEqual(self.lease()['counters']['actions'], 0)
+
+    def test_the_advisor_form_is_tier_one_for_another_family_in_hosts(self):
+        self.start(SETUP_AWAY)
+        self.check_as(CODEX)
+        self.check_as(CODEX[:5] + ['--', 'perl', '-e', 'alarm 900; exec @ARGV'] + CODEX[6:])
+        self.check_as(CODEX[:6] + ['/opt/tools/codex'] + CODEX[7:])
+        self.check_as(CLAUDE, coordinator='codex')
+        self.check_as(CLAUDE + ['--effort', 'high', '--max-turns', '8', '--max-budget-usd', '2'], coordinator='codex')
+        self.assertEqual(self.lease()['counters']['actions'], 5)
+        self.assertEqual(self.lease()['counters']['runs'], 0)  # the advisor's ledger start reserves its run, as today
+
+    def test_the_advisor_form_denies_writes_other_families_programs_and_shapes(self):
+        self.start(SETUP_AWAY)
+        mode = CODEX.index('read-only')
+        permission = CLAUDE.index('plan')
+        for argv, coordinator in (
+                (CODEX[:mode] + ['workspace-write'] + CODEX[mode + 1:], 'claude'),
+                (CODEX[:mode] + ['danger-full-access'] + CODEX[mode + 1:], 'claude'),
+                (CODEX[:-1] + ['--dangerously-bypass-approvals-and-sandbox', BRIEF], 'claude'),
+                (CODEX[:-1] + ['-o', 'docs/answer.md', BRIEF], 'claude'),
+                (CODEX[:-1] + ['--full-auto', BRIEF], 'claude'),
+                (CODEX[:6] + ['codex', 'review'] + CODEX[8:], 'claude'),
+                (CLAUDE[:permission] + ['acceptEdits'] + CLAUDE[permission + 1:], 'codex'),
+                (CLAUDE + ['--allowedTools', 'Bash'], 'codex'),
+                (CLAUDE + ['--dangerously-skip-permissions'], 'codex'),
+                (CLAUDE, 'claude'),  # the host's own family
+                (CODEX, 'codex'),
+                (CODEX, None),  # the coordinator's family must be stated
+                (ENV + ['--family', 'antigravity', '--', 'agy', '-p', BRIEF, '--model', 'm', '--mode', 'plan',
+                        '--output-format', 'json'], 'claude'),  # a family outside Hosts
+                (CODEX[:6] + ['bash', '-c', 'codex'] + CODEX[9:], 'claude'),  # an unknown program
+                (CODEX[:6] + ['./codex'] + CODEX[7:], 'claude'),
+                (CODEX[:6] + [str(self.repo / 'tools/codex')] + CODEX[7:], 'claude'),
+                (CODEX[:6] + ['claude'] + CODEX[7:], 'claude'),  # another family's program
+                (CODEX[:5] + ['--', 'perl', '-e', 'system("x"); exec @ARGV'] + CODEX[6:], 'claude'),
+                (CODEX[:5] + ['--claude-config-dir', '/opt/x', '--'] + CODEX[6:], 'claude'),
+                (CODEX[:4] + ['claude'] + CODEX[5:], 'claude'),  # wrapper family differs from the program
+                (CODEX[:-1] + ['ghp_' + 'x' * 30], 'claude'),  # a brief with a secret
+                (CODEX[:-1], 'claude'),  # no brief
+                (['python3', '-I', str(ROOT / 'scripts/delegate_env.py')] + CODEX[3:], 'claude'),
+                (['python3'] + CODEX[2:], 'claude')):
+            with self.subTest(argv=argv[3:9], coordinator=coordinator):
+                self.check_as(argv, coordinator=coordinator, tier=3, code='unknown')
+        self.assertEqual(self.lease()['counters']['actions'], 0)
+
+    def test_both_forms_deny_without_a_live_lease(self):
+        self.setup_config(SETUP_AWAY)
+        self.check_as(JUDGE, tier=3, code='no-lease')
+        self.check_as(CODEX, tier=3, code='no-lease')
+
+    # The precedent packet
+
+    def packet(self, excerpts, goal='Ship the parser with one schema, as the spec says.'):
+        path = self.home / 'packet.json'
+        path.write_text(json.dumps({'goal': goal, 'excerpts': excerpts}))
+        return path
+
+    def excerpt(self, n, text=None):
+        return {'decision': text or 'Chose one table for settings (%d)' % n, 'date': '2026-11-0%d' % (n % 9 + 1),
+                'source': 'decisions/schema-%d' % n}
+
+    def test_packet_check_caps_drops_and_counts(self):
+        self.setup_config(SETUP + '- Excerpts leave the machine: yes\n')
+        status, output = self.invoke('packet-check', '--file', str(self.packet([self.excerpt(n) for n in range(8)])))
+        self.assertEqual(status, 0, output)
+        self.assertEqual((len(json.loads(output)['excerpts']), json.loads(output)['dropped']), (8, 0))
+        secret, path = 'ghp_' + 'x' * 30, '/Us' + 'ers/synthetic/notes'
+        excerpts = [self.excerpt(n) for n in range(4)] + [self.excerpt(5, 'Kept key ' + secret), self.excerpt(6, 'See ' + path)]
+        excerpts.append(dict(self.excerpt(7), source='~/private/notes'))
+        status, output = self.invoke('packet-check', '--file', str(self.packet(excerpts)))
+        self.assertEqual(status, 0, output)
+        cleaned = json.loads(output)
+        self.assertEqual((len(cleaned['excerpts']), cleaned['dropped']), (4, 3))
+        for value in (secret, path, '~/private'):
+            self.assertNotIn(value, output)
+        for excerpts in ([self.excerpt(n) for n in range(9)], [self.excerpt(n, 'x' * 1100) for n in range(8)],
+                         [dict(self.excerpt(1), extra='x')], [dict(self.excerpt(1), date='yesterday')],
+                         [{'decision': 'Only text'}]):
+            with self.subTest(count=len(excerpts)):
+                self.assertEqual(self.invoke('packet-check', '--file', str(self.packet(excerpts)))[0], 3)
+        self.assertEqual(self.invoke('packet-check', '--file', str(self.packet([], goal='Use ' + secret)))[0], 3)
+        self.assertEqual(self.invoke('packet-check', '--file', str(self.home / 'missing.json'))[0], 3)
+
+    def test_packet_check_without_consent_lets_no_excerpt_leave(self):
+        self.setup_config()
+        self.assertEqual(self.invoke('packet-check', '--file', str(self.packet([self.excerpt(1)])))[0], 3)
+        status, output = self.invoke('packet-check', '--file', str(self.packet([])))
+        self.assertEqual(status, 0, output)
+        self.assertEqual(json.loads(output)['excerpts'], [])
 
 
 if __name__ == '__main__':
