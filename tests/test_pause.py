@@ -374,6 +374,14 @@ class StatusTest(Base):
             consent_file.write_text(json.dumps({'date': '2026-11-09', 'retention_days': 30}))
             consent_file.chmod(0o600)
 
+    def test_a_fenced_snapshot_section_closed_only_by_an_info_string_line_stays_fenced(self):
+        host = self.root / 'host.md'
+        host.write_text('```text\n```md\n## Agent snapshot\n\n- Snapshot: on\n```\n')
+        host.chmod(0o600)
+        self.assertFalse(pause.host_section_on())
+        host.write_text('```text\n## Agent snapshot\n- Snapshot: off\n```\n\n## Agent snapshot\n\n- Snapshot: on\n')
+        self.assertTrue(pause.host_section_on())
+
     def test_output_has_no_paths_and_pause_runs_no_subprocess_or_network(self):
         out = self.status()
         self.assertNotIn(str(self.home), out)
