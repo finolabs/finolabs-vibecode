@@ -58,6 +58,23 @@ class ParsersTest(unittest.TestCase):
         self.assertEqual(claude[2]["name"], "week-model")
         self.assertAlmostEqual(claude[0]["remaining_fraction"], .57)
 
+    def test_claude_reset_time_without_minutes_is_read(self):
+        # Claude Code prints an on-the-hour reset as `6pm`, not `6:00pm`.
+        self.require_claude_zone()
+        data = self.fixture("claude")
+        data["result"] = "\n".join((
+            "You are currently using your subscription to power your Claude Code usage", "",
+            "Current session: 37% used \u00b7 resets Nov 5 at 1:59pm (Asia/Saigon)",
+            "Current week (all models): 5% used \u00b7 resets Nov 15 at 5:59pm (Asia/Saigon)",
+            "Current week (Fable): 0% used \u00b7 resets Nov 15 at 6pm (Asia/Saigon)"))
+        groups = qp.parse("claude", json.dumps(data), MEASURED)
+        self.assertEqual([item["name"] for item in groups], ["session", "week-all", "week-model"])
+        self.assertEqual(groups[2]["reset_time"], "2026-11-15T11:00:00Z")
+        self.assertAlmostEqual(groups[2]["remaining_fraction"], 1.0)
+        data["result"] = data["result"].replace("at 6pm", "at 6:5pm")
+        with self.assertRaises(qp.ShapeError):
+            qp.parse("claude", json.dumps(data), MEASURED)
+
     def test_strict_shapes_and_prompt(self):
         bad = self.fixture("claude")
         bad["result"] = "\n".join(x for x in bad["result"].splitlines() if not x.startswith("Current session"))
