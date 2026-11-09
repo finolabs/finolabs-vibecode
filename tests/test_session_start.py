@@ -314,6 +314,32 @@ class StateBlockTest(SyntheticStateTest):
         self.state()
         self.assertEqual((self.root / "host.md").read_bytes(), original)
 
+    def test_assignment_matrix_states(self):
+        legacy = ("## Agents on this machine\n| Claude Code | yes | x | x | x |\n| Codex | yes | x | x | x |\n"
+                  "## Agent roles\n- code review: codex\n- security review: claude\n- judge: jev\n")
+        matrix = ("## Assignment matrix\n- Consent: yes (2026-11-09)\n- Judge: host\n"
+                  "- codex: levels 1-5; roles security-review\n- claudezz: levels 1-3; roles navigator\n")
+        line = "Assignments: 2 agents set; run route_pick.py before a dispatch\n"
+        # Valid: the matrix alone decides, a role it leaves out stays unassigned, and the fixed line follows the roles.
+        self.write("host.md", legacy + matrix)
+        state = self.state()
+        self.assertIn("Roles: code review unassigned; security review codex; navigator claude; judge host; "
+                      "posting claude unverified, codex unverified, antigravity unverified\n" + line, state)
+        self.assertLessEqual(len(line), 80)
+        # Absent: legacy roles as before and no assignments line.
+        self.write("host.md", legacy)
+        state = self.state()
+        self.assertIn("Roles: code review codex; security review claude; navigator unassigned; judge jev; ", state)
+        self.assertNotIn("Assignments:", state)
+        # Invalid or without consent, even beside a valid legacy section: unset roles and no assignments line.
+        for broken in (matrix + "- gemini: levels 1-2\n", "## Assignment matrix\n- Consent: no\n- Judge: host\n"):
+            with self.subTest(broken=broken[-25:]):
+                self.write("host.md", legacy + broken)
+                state = self.state()
+                self.assertIn(ROLES_DEFAULT, state)
+                self.assertNotIn("Assignments:", state)
+                self.assertNotIn("gemini", state)
+
     def test_role_reader_failure_prints_only_unknown_words(self):
         with mock.patch.dict(sys.modules, {"review_config": mock.Mock()}):
             self.assertIn(ROLES_UNKNOWN, self.state())
