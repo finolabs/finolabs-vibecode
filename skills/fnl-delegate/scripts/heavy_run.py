@@ -3,8 +3,9 @@
 
 `run [--label L] [--pass-env NAME]... -- <command...>` waits for the machine-wide lock and for load and free
 memory to allow a start, then runs the command and returns its exit status. `status` reports whether the lock is
-held. Exit 64: detached work refused; 75: the wait cap ended; 78: the lock location is unsafe; 124: stopped after the
-maximum run time; 2: bad usage.
+held. Exit 64: detached work refused; 75: the wait cap ended; 77: a pause is active (`pause.py`, checked at entry and
+again with the lock held; a missing, invalid or expired marker or any error means not paused); 78: the lock location
+is unsafe; 124: stopped after the maximum run time; 2: bad usage.
 
 The lock is a kernel advisory lock on one regular file in the plugin's fixed anchor folder, so it does not move
 when the data root is relocated. The wrapper holds it until the command's process group is empty or the maximum
@@ -502,6 +503,20 @@ def _detached(argv, base):
     return False
 
 
+def pause_active():
+    """True only for a valid, unexpired pause marker. Any error, including a failed import, means not paused."""
+    try:
+        import pause
+        return pause.paused() is True
+    except Exception:
+        return False
+
+
+def refuse_paused():
+    print('heavy_run: refused: a pause is active; run pause.py resume when the machine is back', file=sys.stderr)
+    return 77
+
+
 def run(args):
     if not LABEL.fullmatch(args.label):
         print('heavy_run: label must be 1 to 40 plain characters', file=sys.stderr)
@@ -522,6 +537,8 @@ def run(args):
     if detached(args.command):
         print('heavy_run: detached launches are refused; wrap a foreground script that starts, tests and tears down', file=sys.stderr)
         return 64
+    if pause_active():
+        return refuse_paused()
     config = limits()
     wait = args.wait_seconds if args.wait_seconds is not None else config['wait_minutes'] * 60
     max_seconds = args.max_seconds if args.max_seconds is not None else (
@@ -560,6 +577,13 @@ def run(args):
             print('heavy_run: gave up waiting: %s%s' % (reason, tail), file=sys.stderr)
             os.close(fd)
             return 75
+    # Second pause check, with the lock held, for a pause that began while this wrapper waited. The spec accepts the
+    # window between this check and the start below (docs/specs/pause.md, "Ordering"): a command that has started is
+    # never touched.
+    if pause_active():
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+        return refuse_paused()
     try:
         child = subprocess.Popen(args.command, env=run_env.environment(names=extra), pass_fds=(fd,), start_new_session=True)
     except OSError:

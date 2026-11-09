@@ -1,7 +1,7 @@
 interface:
   display_name: "Finolabs Vibecode"
-  short_description: "20 skills, 3 agents: routing, reviews and verification"
+  short_description: "22 skills, 3 agents: routing, reviews and verification"
   icon_small: "./assets/icon.svg"
   icon_large: "./assets/icon.svg"
   brand_color: "#9750C4"
-  default_prompt: "Explain the 20 skills and fnl-reviewer, fnl-security-reviewer, fnl-navigator; use fnl-setup for Quick or Advanced, add <feature>, instructions, check, scan and mode."
+  default_prompt: "Explain the 22 skills and fnl-reviewer, fnl-security-reviewer, fnl-navigator; use fnl-setup for Quick or Advanced, add <feature>, instructions, check, scan and mode."
