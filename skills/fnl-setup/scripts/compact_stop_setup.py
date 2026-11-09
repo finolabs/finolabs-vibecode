@@ -2,7 +2,10 @@
 """Preview and install the optional Antigravity compaction stop."""
 from contextlib import ExitStack
 import difflib
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
 import json
 import os
 from pathlib import Path

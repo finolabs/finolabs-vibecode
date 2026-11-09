@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Read a bounded, content-free snapshot of processes named claude, codex or agy."""
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
 import json
 import os
 import re

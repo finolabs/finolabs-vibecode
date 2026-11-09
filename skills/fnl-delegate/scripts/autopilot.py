@@ -30,7 +30,10 @@ a new lease. There is no status command or long-lived process.
 """
 import argparse
 from contextlib import contextmanager
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
 import hashlib
 import json
 import math
