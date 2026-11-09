@@ -92,6 +92,7 @@ jobs:
                     ["scripts/project_progress.py", "skills/fnl-status/scripts/project_progress.py", "skills/fnl-setup/scripts/project_progress.py"],
                     ["scripts/agent_processes.py", "skills/fnl-status/scripts/agent_processes.py", "skills/fnl-setup/scripts/agent_processes.py"],
                     ["scripts/judge.py", "skills/fnl-delegate/scripts/judge.py", "skills/fnl-session-hygiene/scripts/judge.py", "skills/fnl-verification/scripts/judge.py"],
+                    ["scripts/assignments.py", "skills/fnl-setup/scripts/assignments.py", "skills/fnl-delegate/scripts/assignments.py", "skills/fnl-review-gate/scripts/assignments.py", "skills/fnl-session-hygiene/scripts/assignments.py", "skills/fnl-verification/scripts/assignments.py"],
                     ["scripts/verify_claim.py", "skills/fnl-verification/scripts/verify_claim.py"],
                     ["scripts/record.py", "skills/fnl-coding-router/scripts/record.py", "skills/fnl-delegate/scripts/record.py", "skills/fnl-verification/scripts/record.py"],
                     ["scripts/context_steward.py", "skills/fnl-session-hygiene/scripts/context_steward.py"],
