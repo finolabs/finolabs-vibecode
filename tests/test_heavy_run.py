@@ -637,11 +637,14 @@ class QueueViewTest(unittest.TestCase):
             self.assertEqual(heavy.waiting_count(), 1)
 
     def test_more_candidates_than_the_cap_read_as_unknown_not_zero(self):
-        # 200 candidates still count; 201 is unknown, never a silent cut that could miss the runner.
+        # 200 candidates still count and all 200 reach ps; 201 is unknown, never a silent cut that could
+        # miss the runner.
         for count, expected in ((200, 1), (201, None)):
             pgrep_body = '; '.join('print(%d)' % pid for pid in range(1000, 1000 + count))
-            with self.fake_programs('sys.stdout.write("1000 python3 /x/heavy_run.py run -- cmd\\n")',
-                                    pgrep_body=pgrep_body):
+            ps_body = ('if sys.argv[1:4] != ["-o", "pid=,command=", "-p"] or len(sys.argv[4].split(",")) != 200:\n'
+                       '    sys.exit(2)\n'
+                       'sys.stdout.write("1199 python3 /x/heavy_run.py run -- cmd\\n")')
+            with self.fake_programs(ps_body, pgrep_body=pgrep_body):
                 self.assertEqual(heavy.waiting_count(), expected)
 
     def test_ps_failing_with_no_output_reads_as_unknown(self):
