@@ -43,12 +43,13 @@ CODE = re.compile(r'[A-Za-z0-9_-]{1,40}')
 DISPATCH = re.compile(r'[A-Za-z0-9-]{1,40}')
 PID_LIMIT = 2 ** 31
 PS_LIMIT = 256 * 1024
+PGREP_PIDS = 200
 EXE = re.compile(r'[A-Za-z0-9._+-]{1,40}')
 DEFAULTS = {'load': 12.0, 'memory_gb': 3.0, 'wait_minutes': 40.0, 'max_minutes': 90.0}
 BOUNDS = {'load': (1.0, 256.0), 'memory_gb': (0.0, 64.0), 'wait_minutes': (1.0, 720.0), 'max_minutes': (1.0, 720.0)}
 KEYS = {'Load limit': 'load', 'Memory minimum GB': 'memory_gb', 'Wait cap minutes': 'wait_minutes', 'Max job minutes': 'max_minutes'}
 TOOLS = {'vm_stat': '/usr/bin/vm_stat', 'ps': '/bin/ps', 'memory_pressure': '/usr/bin/memory_pressure',
-         'sysctl': '/usr/sbin/sysctl'}
+         'sysctl': '/usr/sbin/sysctl', 'pgrep': '/usr/bin/pgrep'}
 
 
 class Refused(Exception):
@@ -135,7 +136,7 @@ def heavy_run_action(words):
     """True for `[/usr/bin/env] python* [options] .../heavy_run.py [options] run`; the program word must be Python."""
     if words and words[0] == '/usr/bin/env':
         words = words[1:]
-    if not words or not os.path.basename(words[0]).startswith('python'):
+    if not words or not os.path.basename(words[0]).lower().startswith('python'):
         return False
     rest = [word for word in words[1:] if not word.startswith('-')]
     if not rest or os.path.basename(rest[0]) != 'heavy_run.py':
@@ -145,11 +146,13 @@ def heavy_run_action(words):
     return after[:1] == ['run']
 
 
-def read_waiting_ps():
-    """Read a bounded snapshot within five seconds; discard it on overflow or failure."""
-    process = subprocess.Popen([TOOLS['ps'], '-axo', 'pid=,command='], env=run_env.environment(),
-                               stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                               start_new_session=True)
+def bounded_output(argv):
+    """(exit code, text) of a fixed-path program, read to at most PS_LIMIT bytes within five seconds.
+
+    None when the output is larger than the limit; a timeout or read failure raises. The whole process group is
+    killed and reaped on every path."""
+    process = subprocess.Popen(argv, env=run_env.environment(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL, start_new_session=True)
     deadline, output = time.monotonic() + 5, bytearray()
     try:
         with selectors.DefaultSelector() as selector:
@@ -164,9 +167,8 @@ def read_waiting_ps():
                 output.extend(chunk)
                 if len(output) > PS_LIMIT:
                     return None
-        if process.wait(timeout=max(0, deadline - time.monotonic())) != 0:
-            return None
-        return output.decode('utf-8', errors='replace')
+        code = process.wait(timeout=max(0, deadline - time.monotonic()))
+        return code, output.decode('utf-8', errors='replace')
     finally:
         try:
             os.killpg(process.pid, signal.SIGKILL)
@@ -174,6 +176,30 @@ def read_waiting_ps():
             pass
         process.stdout.close()
         process.wait()
+
+
+def read_waiting_ps():
+    """Command lines of the processes that mention `heavy_run.py`, or None when they cannot be read.
+
+    A whole `ps` listing is not bounded (about 450 KB on a busy machine with long command lines), so `pgrep -f`
+    first names the few candidate pids and `ps -p` then prints only their lines."""
+    found = bounded_output([TOOLS['pgrep'], '-f', r'heavy_run\.py'])
+    if found is None:
+        return None
+    code, text = found
+    if code == 1 and not text.strip():
+        return ''
+    if code != 0:
+        return None
+    pids = [word for word in text.split() if word.isdigit() and int(word) < PID_LIMIT][:PGREP_PIDS]
+    if not pids:
+        return ''
+    listed = bounded_output([TOOLS['ps'], '-o', 'pid=,command=', '-p', ','.join(pids)])
+    if listed is None:
+        return None
+    code, text = listed
+    # `ps -p` exits 1 when one of the pids ended meanwhile but still prints the others.
+    return text if code == 0 or (code == 1 and text.strip()) else None
 
 
 def waiting_count():

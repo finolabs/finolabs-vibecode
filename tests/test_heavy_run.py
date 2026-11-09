@@ -604,24 +604,43 @@ class QueueViewTest(unittest.TestCase):
         finally:
             os.close(held)
 
+    def fake_programs(self, ps_body, pgrep_body='print(900)', pgrep_code=0):
+        """Fake pgrep (names one candidate pid) and ps (prints its lines) as real executables."""
+        for name, body in (('pgrep', '%s\nsys.exit(%d)' % (pgrep_body, pgrep_code)), ('ps', ps_body)):
+            fake = self.home / name
+            fake.write_text('#!%s\nimport sys, time\n%s\n' % (sys.executable, body))
+            fake.chmod(0o700)
+        return mock.patch.dict(heavy.TOOLS, {'ps': str(self.home / 'ps'), 'pgrep': str(self.home / 'pgrep')})
+
     def test_oversized_ps_reads_as_unknown_without_printing_its_output(self):
-        fake = self.home / 'ps'
-        fake.write_text('#!%s\nimport sys\nsys.stdout.write("synthetic-private-command " * 12000)\n'
-                        % sys.executable)
-        fake.chmod(0o700)
-        with mock.patch.dict(heavy.TOOLS, {'ps': str(fake)}):
+        with self.fake_programs('sys.stdout.write("synthetic-private-command " * 12000)'):
             code, out, err = self.run_cli('status')
         self.assertEqual(code, 0)
         self.assertIn('waiting: unknown', out)
         self.assertNotIn('synthetic-private-command', out + err)
-        self.assertNotIn(str(fake), out + err)
+        self.assertNotIn(str(self.home / 'ps'), out + err)
 
     def test_ps_at_the_byte_limit_still_counts_normally(self):
-        fake = self.home / 'ps'
-        fake.write_text('#!%s\nimport sys\nsys.stdout.write("900 python3 /x/heavy_run.py run".ljust(256 * 1024))\n'
-                        % sys.executable)
-        fake.chmod(0o700)
-        with mock.patch.dict(heavy.TOOLS, {'ps': str(fake)}):
+        with self.fake_programs('sys.stdout.write("900 python3 /x/heavy_run.py run".ljust(256 * 1024))'):
+            self.assertEqual(heavy.waiting_count(), 1)
+
+    def test_a_huge_process_list_elsewhere_does_not_hide_the_count(self):
+        # The real machine printed 450 KB for a full ps; only the pgrep candidates are listed now.
+        with self.fake_programs('sys.stdout.write("900 python3 /x/heavy_run.py run -- cmd\\n")',
+                                pgrep_body='print(900)'):
+            self.assertEqual(heavy.waiting_count(), 1)
+
+    def test_no_pgrep_match_counts_zero_without_running_ps(self):
+        with self.fake_programs('raise SystemExit("ps must not run")', pgrep_body='', pgrep_code=1):
+            self.assertEqual(heavy.waiting_count(), 0)
+
+    def test_a_failing_pgrep_reads_as_unknown(self):
+        with self.fake_programs('print("900 python3 /x/heavy_run.py run")', pgrep_body='', pgrep_code=2):
+            self.assertIsNone(heavy.waiting_count())
+
+    def test_ps_exit_one_with_output_for_an_ended_pid_still_counts_the_rest(self):
+        body = 'sys.stdout.write("900 python3 /x/heavy_run.py run -- cmd\\n"); sys.exit(1)'
+        with self.fake_programs(body, pgrep_body='print(900); print(901)'):
             self.assertEqual(heavy.waiting_count(), 1)
 
     def test_unreadable_ps_reads_as_unknown(self):
@@ -635,20 +654,17 @@ class QueueViewTest(unittest.TestCase):
     def test_only_python_running_the_script_with_run_counts(self):
         listing = self.lines('grep -n heavy_run.py run', 'python3 -I /x/heavy_run.py run -- cmd',
                              '/usr/bin/env python3 /x/heavy_run.py run -- cmd', 'vim heavy_run.py run',
-                             'python3 /x/other.py heavy_run.py run', '/bin/zsh -c ls')
+                             'python3 /x/other.py heavy_run.py run', '/bin/zsh -c ls',
+                             # Homebrew Python on macOS appears with a capital P in ps.
+                             '/opt/homebrew/Cellar/python@3.15/Frameworks/Python.framework/Resources/Python.app/'
+                             'Contents/MacOS/Python -I /x/heavy_run.py run -- cmd')
         with self.ps(listing):
-            self.assertEqual(heavy.waiting_count(), 2)
-            self.assertIn('waiting: about 2', self.run_cli('status')[1])
+            self.assertEqual(heavy.waiting_count(), 3)
+            self.assertIn('waiting: about 3', self.run_cli('status')[1])
 
     def test_own_process_is_not_counted(self):
         with self.ps('%d python3 -I /x/heavy_run.py run -- true\n' % os.getpid()):
             self.assertEqual(heavy.waiting_count(), 0)
-
-    def fake_ps(self, body):
-        fake = self.home / 'ps'
-        fake.write_text('#!%s\nimport sys, time\n%s\n' % (sys.executable, body))
-        fake.chmod(0o700)
-        return mock.patch.dict(heavy.TOOLS, {'ps': str(fake)})
 
     def recording_popen(self):
         real, self.children = subprocess.Popen, []
@@ -659,30 +675,30 @@ class QueueViewTest(unittest.TestCase):
             return child
         return mock.patch.object(heavy.subprocess, 'Popen', side_effect=record)
 
-    def assert_child_cleaned_up(self):
-        self.assertEqual(len(self.children), 1)
-        child = self.children[0]
-        self.assertIsNotNone(child.returncode)  # reaped
-        self.assertTrue(child.stdout.closed)
-        with self.assertRaises(ProcessLookupError):
-            os.kill(child.pid, 0)
+    def assert_children_cleaned_up(self, count):
+        self.assertEqual(len(self.children), count)
+        for child in self.children:
+            self.assertIsNotNone(child.returncode)  # reaped
+            self.assertTrue(child.stdout.closed)
+            with self.assertRaises(ProcessLookupError):
+                os.kill(child.pid, 0)
 
     def test_reader_kills_and_reaps_the_child_on_overflow(self):
-        with self.fake_ps('sys.stdout.write("x" * (300 * 1024)); sys.stdout.flush(); time.sleep(30)'), \
+        with self.fake_programs('sys.stdout.write("x" * (300 * 1024)); sys.stdout.flush(); time.sleep(30)'), \
                 self.recording_popen():
             self.assertIsNone(heavy.read_waiting_ps())
-        self.assert_child_cleaned_up()
+        self.assert_children_cleaned_up(2)
 
     def test_reader_kills_and_reaps_the_child_on_a_select_timeout(self):
         ticks = iter([0.0] + [100.0] * 50)
-        with self.fake_ps('time.sleep(30)'), self.recording_popen(), \
+        with self.fake_programs('time.sleep(30)', pgrep_body='time.sleep(30)'), self.recording_popen(), \
                 mock.patch.object(heavy.time, 'monotonic', side_effect=lambda: next(ticks)):
             with self.assertRaises(TimeoutError):
                 heavy.read_waiting_ps()
-        self.assert_child_cleaned_up()
+        self.assert_children_cleaned_up(1)
 
     def test_reader_cleans_up_when_reading_fails(self):
-        with self.fake_ps('sys.stdout.write("900 python3 /x/heavy_run.py run\\n"); sys.stdout.flush(); time.sleep(30)'), \
+        with self.fake_programs('time.sleep(30)', pgrep_body='print(900); sys.stdout.flush(); time.sleep(30)'), \
                 self.recording_popen():
             real_read = os.read
 
@@ -692,13 +708,13 @@ class QueueViewTest(unittest.TestCase):
                 return real_read(fd, size)
             with mock.patch.object(heavy.os, 'read', side_effect=read), self.assertRaises(OSError):
                 heavy.read_waiting_ps()
-        self.assert_child_cleaned_up()
+        self.assert_children_cleaned_up(1)
 
     def test_reader_returns_none_for_a_nonzero_exit_and_leaves_no_child(self):
-        with self.fake_ps('sys.stdout.write("900 python3 /x/heavy_run.py run\\n"); sys.exit(3)'), \
+        with self.fake_programs('sys.stdout.write("900 python3 /x/heavy_run.py run\\n"); sys.exit(3)'), \
                 self.recording_popen():
             self.assertIsNone(heavy.read_waiting_ps())
-        self.assert_child_cleaned_up()
+        self.assert_children_cleaned_up(2)
 
 
 if __name__ == '__main__':
