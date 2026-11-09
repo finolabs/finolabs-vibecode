@@ -5,11 +5,19 @@ Invalid state raises: callers must allow silently, not replace unsafe state.
 Only a missing file is an empty state. No environment variable selects storage.
 """
 
-import fcntl
+try:
+    import fcntl
+except ImportError:  # native Windows has no fcntl
+    raise ImportError("finolabs-vibecode scripts need macOS, Linux or WSL; "
+                      "native Windows is not supported (no fcntl module)") from None
 import hashlib
 import json
 import os
-import pwd
+try:
+    import pwd
+except ImportError:  # native Windows has no pwd
+    raise ImportError("finolabs-vibecode scripts need macOS, Linux or WSL; "
+                      "native Windows is not supported (no pwd module)") from None
 import re
 import stat
 import time

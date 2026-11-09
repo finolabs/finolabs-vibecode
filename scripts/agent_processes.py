@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Read a bounded, content-free snapshot of processes named claude, codex or agy."""
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:  # native Windows has no fcntl
+    raise ImportError("finolabs-vibecode scripts need macOS, Linux or WSL; "
+                      "native Windows is not supported (no fcntl module)") from None
 import json
 import os
 import re

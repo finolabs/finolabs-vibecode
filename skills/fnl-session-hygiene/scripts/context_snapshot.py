@@ -2,7 +2,11 @@
 """Store status-line context counts only; never read a transcript or run a command."""
 import argparse
 from datetime import datetime, timezone
-import fcntl
+try:
+    import fcntl
+except ImportError:  # native Windows has no fcntl
+    raise ImportError("finolabs-vibecode scripts need macOS, Linux or WSL; "
+                      "native Windows is not supported (no fcntl module)") from None
 import hashlib
 import json
 import os

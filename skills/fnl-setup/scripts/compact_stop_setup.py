@@ -2,7 +2,11 @@
 """Preview and install the optional Antigravity compaction stop."""
 from contextlib import ExitStack
 import difflib
-import fcntl
+try:
+    import fcntl
+except ImportError:  # native Windows has no fcntl
+    raise ImportError("finolabs-vibecode scripts need macOS, Linux or WSL; "
+                      "native Windows is not supported (no fcntl module)") from None
 import json
 import os
 from pathlib import Path

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Private local handovers; unsafe storage disables the feature silently."""
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:  # native Windows has no fcntl
+    raise ImportError("finolabs-vibecode scripts need macOS, Linux or WSL; "
+                      "native Windows is not supported (no fcntl module)") from None
 import hashlib
 import os
 from pathlib import Path

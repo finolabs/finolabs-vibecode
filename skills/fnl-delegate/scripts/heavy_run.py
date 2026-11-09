@@ -15,7 +15,11 @@ descriptor and however old the record is. A recycled process group id can keep a
 and writing that record. Nothing here prints or stores the environment or the command.
 """
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:  # native Windows has no fcntl
+    raise ImportError("finolabs-vibecode scripts need macOS, Linux or WSL; "
+                      "native Windows is not supported (no fcntl module)") from None
 import json
 import os
 from pathlib import Path

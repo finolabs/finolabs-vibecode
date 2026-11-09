@@ -2,7 +2,11 @@
 
 import json
 import os
-import pwd
+try:
+    import pwd
+except ImportError:  # native Windows has no pwd
+    raise ImportError("finolabs-vibecode scripts need macOS, Linux or WSL; "
+                      "native Windows is not supported (no pwd module)") from None
 import stat
 from contextlib import contextmanager
 from pathlib import Path

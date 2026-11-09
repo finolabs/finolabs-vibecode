@@ -14,7 +14,11 @@ sibling script. Nothing is sent anywhere. Dates are the machine's local dates.
 """
 
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:  # native Windows has no fcntl
+    raise ImportError("finolabs-vibecode scripts need macOS, Linux or WSL; "
+                      "native Windows is not supported (no fcntl module)") from None
 import importlib.util
 import json
 import os

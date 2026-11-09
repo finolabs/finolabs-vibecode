@@ -30,7 +30,11 @@ a new lease. There is no status command or long-lived process.
 """
 import argparse
 from contextlib import contextmanager
-import fcntl
+try:
+    import fcntl
+except ImportError:  # native Windows has no fcntl
+    raise ImportError("finolabs-vibecode scripts need macOS, Linux or WSL; "
+                      "native Windows is not supported (no fcntl module)") from None
 import hashlib
 import json
 import math

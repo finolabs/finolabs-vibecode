@@ -2,12 +2,20 @@
 """Opt-in, bounded usage reads. Provider output is never persisted verbatim."""
 
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:  # native Windows has no fcntl
+    raise ImportError("finolabs-vibecode scripts need macOS, Linux or WSL; "
+                      "native Windows is not supported (no fcntl module)") from None
 import hashlib
 import json
 import math
 import os
-import pwd
+try:
+    import pwd
+except ImportError:  # native Windows has no pwd
+    raise ImportError("finolabs-vibecode scripts need macOS, Linux or WSL; "
+                      "native Windows is not supported (no pwd module)") from None
 import re
 import selectors
 import shutil

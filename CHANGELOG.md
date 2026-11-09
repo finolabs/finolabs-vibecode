@@ -13,6 +13,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - `heavy_run.py`: the free-memory reading follows the kernel's own figure (the `memory_pressure` free percentage times `hw.memsize`) and falls back to a `vm_stat` estimate (free plus the larger of inactive plus speculative and file-backed pages; purgeable pages are not added because they can overlap inactive ones) when either program cannot be read or parsed, so a machine with a large file cache is no longer refused while `memory_pressure` reports it healthy; `status` also prints `waiting: about <n>` or `waiting: unknown`, a point-in-time approximation (it skips scripts whose path contains a space and can be off by one around a lock change), counting only a Python interpreter (optionally after `/usr/bin/env`) running `heavy_run.py` with the `run` action. The setup text no longer mentions a heavy-job lock location.
 
+### Fixed
+
+- On native Windows, scripts that need POSIX-only modules (`pwd`, `fcntl`), including every script that imports `data_root.py`, now stop with an `ImportError` that says native Windows is not supported and names macOS, Linux or WSL, instead of a bare `No module named` traceback. The error stays an `ImportError`, so callers that already catch it, hooks included, behave as before. Windows support itself is unchanged. Test: `tests/test_posix_only.py`. Issue #193.
+
 ## [0.2.1] - 2026-11-09
 
 Not in this release: the opt-in heavy-job gate hook described in `docs/specs/heavy-jobs.md` (the `heavy_run.py` wrapper is in), the review residual notes and the smaller setup items; see the [release record](docs/specs/release-0.2.1.md).

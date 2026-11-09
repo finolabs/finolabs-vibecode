@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Preview and apply only the canonical host's Autopilot section; start no lease."""
-import fcntl
+try:
+    import fcntl
+except ImportError:  # native Windows has no fcntl
+    raise ImportError("finolabs-vibecode scripts need macOS, Linux or WSL; "
+                      "native Windows is not supported (no fcntl module)") from None
 import json
 import os
 from pathlib import Path
