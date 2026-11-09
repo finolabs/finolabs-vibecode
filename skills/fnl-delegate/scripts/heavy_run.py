@@ -104,10 +104,11 @@ def kernel_free_gb():
 def vm_stat_free_gb():
     """Memory the kernel can give back without a start-time cost, in GB, from `vm_stat`; None when unreadable.
 
-    free + purgeable + the larger of (inactive + speculative) and the file-backed pages. File-backed pages (the clean
-    file cache, speculative ones included) are droppable even while active, which inactive + speculative alone misses;
-    taking the larger of the two avoids counting the same page twice. Compressed memory is never added: it is already
-    holding data. Purgeable and file-backed lines are optional (0 when absent)."""
+    free + the larger of (inactive + speculative) and the file-backed pages. File-backed pages (the clean file cache,
+    speculative ones included) are droppable even while active, which inactive + speculative alone misses; taking the
+    larger of the two avoids counting the same page twice. Purgeable pages are not added: they can already sit inside
+    the inactive count and their overlap cannot be measured, so the fallback stays conservative. Compressed memory is
+    never added: it is already holding data. The file-backed line is optional (0 when absent)."""
     try:
         done = subprocess.run([TOOLS['vm_stat']], env=run_env.environment(), capture_output=True, timeout=5, text=True)
         page = int(re.search(r'page size of (\d+) bytes', done.stdout)[1])
@@ -118,8 +119,7 @@ def vm_stat_free_gb():
                 raise ValueError(label)
             return int(found[1]) if found else 0
 
-        total = (pages('Pages free') + pages('Pages purgeable', False)
-                 + max(pages('Pages inactive') + pages('Pages speculative'), pages('File-backed pages', False)))
+        total = pages('Pages free') + max(pages('Pages inactive') + pages('Pages speculative'), pages('File-backed pages', False))
         return total * page / 2 ** 30
     except (OSError, subprocess.SubprocessError, TypeError, ValueError, IndexError):
         return None
@@ -571,7 +571,7 @@ def status():
         print('heavy lock: held, owner unknown' if not who else 'heavy lock: held\n' + describe(who))
     processes = waiting_count()
     waiting = None if processes is None else max(0, processes - 1) if state == 'held' else processes
-    print('waiting: %s' % ('unknown' if waiting is None else waiting))
+    print('waiting: %s' % ('unknown' if waiting is None else 'about %d' % waiting))
     load, free = read_load(), read_free_gb()
     print('load: %s' % ('unknown' if load is None else '%.1f' % load))
     print('memory: %s' % ('unknown' if free is None else '%.1f GB free' % free))

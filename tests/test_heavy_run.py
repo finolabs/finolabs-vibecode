@@ -518,7 +518,13 @@ class MeasureTest(unittest.TestCase):
             self.assertFalse(kwargs.get('shell', False))
             self.assertEqual(sorted(kwargs['env']), sorted(heavy.run_env.environment()))
 
-    def test_file_cache_and_purgeable_pages_count_as_reclaimable(self):
+    def test_a_purgeable_count_inside_inactive_is_not_added_again(self):
+        # Purgeable and file-backed pages contained in inactive: only 152000 distinct pages, below 3 GiB.
+        text = vm_text(1000, 150000, 1000, file_backed=50000, purgeable=100000)
+        self.assertAlmostEqual(self.free_gb(text), 152000 * 16384 / 2 ** 30)
+        self.assertLess(self.free_gb(text), 3.0)
+
+    def test_file_cache_pages_count_as_reclaimable(self):
         # Little inactive memory but a large clean file cache: refused by the old sum, allowed now.
         text = vm_text(1000, 20000, 1000, file_backed=400000, purgeable=20000)
         old = (1000 + 20000 + 1000) * 16384 / 2 ** 30
@@ -575,14 +581,14 @@ class QueueViewTest(unittest.TestCase):
     def test_count_is_zero_when_no_wrapper_runs(self):
         with self.ps(self.lines('/bin/zsh -l', 'python3 other.py run')):
             self.assertEqual(heavy.waiting_count(), 0)
-            self.assertIn('waiting: 0', self.run_cli('status')[1])
+            self.assertIn('waiting: about 0', self.run_cli('status')[1])
 
     def test_count_is_one_for_one_waiting_wrapper_and_prints_no_command_text(self):
         secret = 'python3 -I /tmp/skills/heavy_run.py run --label topsecret -- make private-target'
         with self.ps(self.lines(secret, 'python3 -I /tmp/skills/heavy_run.py status')):
             self.assertEqual(heavy.waiting_count(), 1)
             code, out, err = self.run_cli('status')
-        self.assertIn('waiting: 1', out)
+        self.assertIn('waiting: about 1', out)
         for word in ('topsecret', 'private-target', '/tmp'):
             self.assertNotIn(word, out + err)
 
@@ -593,7 +599,7 @@ class QueueViewTest(unittest.TestCase):
         fcntl.flock(held, fcntl.LOCK_EX)
         try:
             with self.ps(self.lines(wrapper, wrapper, wrapper)):
-                self.assertIn('waiting: 2', self.run_cli('status')[1])
+                self.assertIn('waiting: about 2', self.run_cli('status')[1])
         finally:
             os.close(held)
 
@@ -610,7 +616,7 @@ class QueueViewTest(unittest.TestCase):
                              'python3 /x/other.py heavy_run.py run', '/bin/zsh -c ls')
         with self.ps(listing):
             self.assertEqual(heavy.waiting_count(), 2)
-            self.assertIn('waiting: 2', self.run_cli('status')[1])
+            self.assertIn('waiting: about 2', self.run_cli('status')[1])
 
     def test_own_process_is_not_counted(self):
         with self.ps('%d python3 -I /x/heavy_run.py run -- true\n' % os.getpid()):
