@@ -15,7 +15,7 @@ Status: draft; scope started by the owner on 2026-11-09; nothing is built.
 | # | Package | What it covers |
 | --- | --- | --- |
 | 5 | Away decisions | A decision ladder for the away mandate (recorded rule, Jev, the named advisor, park), the record of who decided, and a lease line at session start. Spec: `away-decisions.md`. |
-| 6 | Help skill rename | fnl-help becomes the main name of the plugin help skill and `fnl-ask` stays as its alias. Spec: `away-decisions.md`. |
+| 6 | Help skill rename and refresh | fnl-help becomes the main name of the plugin help skill and `fnl-ask` stays as its alias. Its map catches up with what shipped (three scripts and three setup features are missing, the script count is stale, and no route answers "which agent takes which work"), and a test fails when a script or setup feature is missing from the map, so it cannot drift again. Spec: `away-decisions.md`. |
 
 ## Added from usage data (owner, 2026-11-09)
 
