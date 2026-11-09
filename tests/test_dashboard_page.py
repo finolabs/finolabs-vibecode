@@ -1242,7 +1242,9 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render(FIXTURE)
         for expected in ("Router coverage", "events per day", "October 2026", "skill and agent use", "fnl-coding-router",
                          "kept and handed off tasks kept receipts implementation runs handed off 7 3 14",
-                         "claude / needs-context / table"):
+                         "claude / needs-context / table",
+                         "away decisions per lease", "2025-11-10 05:00 3 2 advisor 1, jev 1, park 1 codex gpt-6-astra 1 "
+                         "2 / 0.60 / 0.75 / 0.90 1 2 1 / 2"):
             self.assertIn(expected, out["text"])
         self.assertNotIn("No data yet", out["text"])
         self.assertGreaterEqual(out["cells"], 28)

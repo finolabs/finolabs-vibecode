@@ -543,7 +543,7 @@ def build(days=WEEKS * 7, cwd=None):
 
     delegation, first_pass, fp_week, runs, handed_off = None, None, [None] * WEEKS, 0, None
     ledger_note = "fnl-delegate is not installed"
-    route_rows, has_judge_route = [], False
+    route_rows, has_judge_route, away = [], False, None
     if LEDGER.exists():
         try:
             usage_start = min((local_date(e["ts"]) for e in events), default=None)
@@ -555,6 +555,8 @@ def build(days=WEEKS * 7, cwd=None):
             route_rows = [{"route_by": r["route_by"], "runs": r["n"], "first_pass": r["first_pass"], "small": r["n"] < 5}
                           for r in ledger.summary_rows(keys=("route_by",), since=start.isoformat())
                           if r["route_by"] in ("judge", "table")]
+            # The away view: counts per lease only; the ledger holds no question or option text.
+            away = ledger.away_rows(since=start.isoformat()) if hasattr(ledger, "away_rows") else None
             ledger_note = "%d runs" % runs if runs else "no finished runs in this period"
         except Exception:
             delegation, ledger_note = None, "ledger could not be read"
@@ -595,7 +597,7 @@ def build(days=WEEKS * 7, cwd=None):
                           "sessions": sessions_week if events else None, "calls": calls_week if events else None,
                           "first_pass": fp_week if first_pass is not None else None}},
         "router": {"covered": covered, "missed": missed, "excluded": excluded, "unclassified": unclassified, "eligible": eligible} if eligible else None,
-        "use": use or None, "load": load, "depth": depth_rows or None, "delegation": delegation or None, "kept": kept_metrics(events, by_sid, handed_off),
+        "use": use or None, "load": load, "depth": depth_rows or None, "delegation": delegation or None, "away": away or None, "kept": kept_metrics(events, by_sid, handed_off),
         "accepted_unverified": [{"agent": agent, "count": count} for agent, count in sorted(unverified.items())],
         "judge": judge_metrics(events, route_rows, has_judge_route, ledger_note),
         "reviews": reviews or None, "review_stats": review_stats if groups else None, "activity": activity if events else None,

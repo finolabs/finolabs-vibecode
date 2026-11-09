@@ -1671,6 +1671,11 @@
     "reworked": 3
   },
   "judge": null,
+  "away": [
+    {"lease_start": 1762750800.0, "decisions": 3, "by_rung": {"advisor": 1, "jev": 1, "park": 1},
+     "by_advisor": {"codex gpt-6-astra": 1}, "jev_p": {"n": 2, "min": 0.6, "median": 0.75, "max": 0.9},
+     "parked": 1, "denied": 2, "no_precedent": 2, "reviewed": 2, "reversed": 1}
+  ],
   "kept": {
     "receipts": 3,
     "tasks": 7,
