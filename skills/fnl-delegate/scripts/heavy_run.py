@@ -24,6 +24,7 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
 import signal
 import stat
 import subprocess
@@ -41,6 +42,7 @@ LABEL = re.compile(r'[A-Za-z0-9 ._-]{1,40}')
 CODE = re.compile(r'[A-Za-z0-9_-]{1,40}')
 DISPATCH = re.compile(r'[A-Za-z0-9-]{1,40}')
 PID_LIMIT = 2 ** 31
+PS_LIMIT = 256 * 1024
 EXE = re.compile(r'[A-Za-z0-9._+-]{1,40}')
 DEFAULTS = {'load': 12.0, 'memory_gb': 3.0, 'wait_minutes': 40.0, 'max_minutes': 90.0}
 BOUNDS = {'load': (1.0, 256.0), 'memory_gb': (0.0, 64.0), 'wait_minutes': (1.0, 720.0), 'max_minutes': (1.0, 720.0)}
@@ -143,15 +145,45 @@ def heavy_run_action(words):
     return after[:1] == ['run']
 
 
+def read_waiting_ps():
+    """Read a bounded snapshot within five seconds; discard it on overflow or failure."""
+    process = subprocess.Popen([TOOLS['ps'], '-axo', 'pid=,command='], env=run_env.environment(),
+                               stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                               start_new_session=True)
+    deadline, output = time.monotonic() + 5, bytearray()
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or not selector.select(remaining):
+                    raise TimeoutError()
+                chunk = os.read(process.stdout.fileno(), min(65536, PS_LIMIT + 1 - len(output)))
+                if not chunk:
+                    break
+                output.extend(chunk)
+                if len(output) > PS_LIMIT:
+                    return None
+        if process.wait(timeout=max(0, deadline - time.monotonic())) != 0:
+            return None
+        return output.decode('utf-8', errors='replace')
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.stdout.close()
+        process.wait()
+
+
 def waiting_count():
     """Number of other `heavy_run.py run` processes, from `ps`; None when it cannot be read. Counts only; no text kept."""
     try:
-        done = subprocess.run([TOOLS['ps'], '-axo', 'pid=,command='], env=run_env.environment(),
-                              capture_output=True, timeout=5, text=True)
-        if done.returncode != 0:
+        output = read_waiting_ps()
+        if output is None:
             return None
         count = 0
-        for line in done.stdout.splitlines():
+        for line in output.splitlines():
             words = line.split()
             if len(words) < 3 or not words[0].isdigit() or int(words[0]) == os.getpid():
                 continue
