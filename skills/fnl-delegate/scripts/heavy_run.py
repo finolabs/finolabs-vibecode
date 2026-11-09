@@ -76,13 +76,50 @@ def read_load():
 
 
 def read_free_gb():
-    """Free, inactive and speculative memory in GB from `vm_stat`; None when it cannot be read."""
+    """Memory the kernel can give back without a start-time cost, in GB, from `vm_stat`; None when unreadable.
+
+    free + purgeable + the larger of (inactive + speculative) and the file-backed pages. File-backed pages (the clean
+    file cache, speculative ones included) are droppable even while active, which inactive + speculative alone misses;
+    taking the larger of the two avoids counting the same page twice. Compressed memory is never added: it is already
+    holding data. Purgeable and file-backed lines are optional (0 when absent)."""
     try:
         done = subprocess.run([TOOLS['vm_stat']], env=run_env.environment(), capture_output=True, timeout=5, text=True)
         page = int(re.search(r'page size of (\d+) bytes', done.stdout)[1])
-        pages = sum(int(re.search(r'Pages %s:\s+(\d+)' % name, done.stdout)[1]) for name in ('free', 'inactive', 'speculative'))
-        return pages * page / 2 ** 30
+
+        def pages(label, required=True):
+            found = re.search(r'^%s:\s+(\d+)' % label, done.stdout, re.MULTILINE)
+            if found is None and required:
+                raise ValueError(label)
+            return int(found[1]) if found else 0
+
+        total = (pages('Pages free') + pages('Pages purgeable', False)
+                 + max(pages('Pages inactive') + pages('Pages speculative'), pages('File-backed pages', False)))
+        return total * page / 2 ** 30
     except (OSError, subprocess.SubprocessError, TypeError, ValueError, IndexError):
+        return None
+
+
+def waiting_count():
+    """Number of other `heavy_run.py run` processes, from `ps`; None when it cannot be read. Counts only; no text kept."""
+    try:
+        done = subprocess.run([TOOLS['ps'], '-axo', 'pid=,command='], env=run_env.environment(),
+                              capture_output=True, timeout=5, text=True)
+        if done.returncode != 0:
+            return None
+        count = 0
+        for line in done.stdout.splitlines():
+            words = line.split()
+            if len(words) < 3 or not words[0].isdigit() or int(words[0]) == os.getpid():
+                continue
+            # Match the program word and the script word, then the `run` action after any options before it.
+            names = [os.path.basename(word) for word in words[1:6]]
+            if 'heavy_run.py' in names:
+                rest = words[1:][names.index('heavy_run.py') + 1:]
+                rest = [word for word in rest if word != '--poll' and not re.fullmatch(r'[0-9.]+', word)]
+                if rest[:1] == ['run']:
+                    count += 1
+        return count
+    except (OSError, subprocess.SubprocessError, ValueError):
         return None
 
 
@@ -497,6 +534,9 @@ def status():
     else:
         who = holder()
         print('heavy lock: held, owner unknown' if not who else 'heavy lock: held\n' + describe(who))
+    processes = waiting_count()
+    waiting = None if processes is None else max(0, processes - 1) if state == 'held' else processes
+    print('waiting: %s' % ('unknown' if waiting is None else waiting))
     load, free = read_load(), read_free_gb()
     print('load: %s' % ('unknown' if load is None else '%.1f' % load))
     print('memory: %s' % ('unknown' if free is None else '%.1f GB free' % free))

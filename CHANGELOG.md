@@ -8,6 +8,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - `/fnl-setup add delegation` asks which task levels each helper can take (1 easy to 5 ultra hard), for the three agent families and for any extra Claude Code command the user names, such as a `claudework` shell function. `levels_setup.py` previews and writes the canonical `## Agent levels` section with a backup and a digest, and reads it back strictly with `show`; it runs no command. `fnl-delegate` routes by those levels (advisory) and prefers a declared command to `claude` inside its range while it has quota. Spec: `docs/specs/agent-levels.md`.
 
+### Changed
+
+- `heavy_run.py`: the free-memory reading now counts purgeable and file-backed (clean file cache) pages beside free, inactive and speculative ones, without counting a page twice, so a machine with a large file cache is no longer refused while `memory_pressure` reports it healthy; `status` also prints how many other `heavy_run.py run` processes are waiting, as a count or `unknown`. The setup text no longer mentions a heavy-job lock location.
+
 ## [0.2.1] - 2026-11-09
 
 Not in this release: the opt-in heavy-job gate hook described in `docs/specs/heavy-jobs.md` (the `heavy_run.py` wrapper is in), the review residual notes and the smaller setup items; see the [release record](docs/specs/release-0.2.1.md).
