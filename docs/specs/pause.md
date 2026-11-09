@@ -1,6 +1,6 @@
 # Pause (draft, no release assigned)
 
-Status: draft; the owner described the idea and settled six decisions on 2026-11-09; nothing is built.
+Status: draft; the owner described the idea and settled eight decisions on 2026-11-09; nothing is built.
 
 Idea: owner, 2026-11-09. The opposite of `fnl-brb`. Autopilot hands the agents a mandate to keep working while the
 user is away; pause is what the user runs before a restart or shutdown of the machine, so that no running session or
@@ -17,9 +17,10 @@ process is stopped abruptly and nothing is lost when the machine goes down.
   "be right back") is its friendly alias, as fnl-brb is the alias of fnl-autopilot. Because an abbreviation says nothing
   to a new user, the alias skill's `description` must state in plain words what it does (drain running work before
   a restart or shutdown), with the same trigger phrases as the main skill.
-- The owner also proposed fnl-afk as the main friendly name of the away skill, with fnl-brb kept as its alias. That
-  changes a released skill and belongs to a separate change to the autopilot spec and skills; the message read
-  "brd", taken here as a typo for "brb", to be confirmed.
+- The away skill is renamed: fnl-afk becomes its main friendly name and fnl-brb stays as its alias (owner, confirmed
+  2026-11-09; the earlier "brd" was a typo for "brb"). This changes a released skill, so it goes through the autopilot
+  spec and skills in its own package.
+- Release: the pause skill and the away-skill rename are both scoped to 0.2.3 (owner, 2026-11-09).
 - `heavy_run.py` refuses to start a new command while the pause marker exists. This is the first script gate outside
   autopilot, so it needs its own security review before it lands.
 - A deadline exists, and the user states it as the time left before the machine goes down, in minutes, in the user's
@@ -71,8 +72,6 @@ deadline applies and the skill waits until the user says to stop.
 
 | Decision | Owner | What unblocks it |
 | --- | --- | --- |
-| Rename the away skill to fnl-afk with fnl-brb as alias, and confirm that "brd" meant "brb" | owner | a yes, then a change to the autopilot spec and skills |
-| Which release carries it | owner | scope for 0.2.3 or later |
 | Security review of the `heavy_run.py` marker read | reviewer | the code pull request |
 
 ## Evidence
