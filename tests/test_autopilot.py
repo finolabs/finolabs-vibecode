@@ -1,5 +1,6 @@
 """Synthetic, offline autopilot lease and classification tests."""
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -438,7 +439,45 @@ class AwayDecisionTest(AutopilotBase):
         self.assertEqual(status, 3, output)
         self.assertEqual(self.ledger(), before)
 
-    def check_as(self, argv, coordinator='claude', tier=1, code='allowed'):
+    def record_programs(self, folder=None, programs=None):
+        """The canonical `## Quota probe` record setup writes, for synthetic native programs in a temporary folder."""
+        folder = folder or self.home / 'bin'
+        folder.mkdir(mode=0o700, exist_ok=True)
+        self.load()  # puts the script folder on sys.path
+        import quota_probe
+        excluded = quota_probe.excluded
+        # The temporary folder sits under the system temporary root, which the probe excludes; keep every other check.
+        patcher = patch.object(quota_probe, 'excluded',
+                               side_effect=lambda path: excluded(path) if 'downloads' in str(path).lower() else None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        lines = ['## Quota probe', '', '- Quota probe: on', '- Date: 2026-11-05', '- Agents: claude, codex, agy',
+                 '- Claude config: default: ' + str(self.home / 'claude-config')]
+        self.paths = {}
+        for agent in ('claude', 'codex', 'agy'):
+            path = (programs or {}).get(agent)
+            if path is None:
+                path = folder / agent
+                path.write_bytes(b'\x7fsynthetic native program\n')
+                path.chmod(0o700)
+            resolved = str(Path(path).resolve())
+            lines += ['- Executable %s: %s' % (agent, path), '- Resolved %s: %s' % (agent, resolved),
+                      '- Resolved digest %s: %s' % (agent, hashlib.sha256(resolved.encode()).hexdigest())]
+            self.paths[agent] = str(path)
+        return '\n' + '\n'.join(lines) + '\n'
+
+    def start_away(self, text=SETUP_AWAY, **kwargs):
+        self.start(text + self.record_programs(**kwargs))
+
+    def real(self, argv):
+        """Put the recorded executable where a form names its program by the placeholder name."""
+        paths = getattr(self, 'paths', {})
+        if len(argv) > 6 and argv[:3] == ENV and argv[5] == '--' and argv[6] in paths:
+            return argv[:6] + [paths[argv[6]]] + argv[7:]
+        return argv
+
+    def check_as(self, argv, coordinator='claude', tier=1, code='allowed', real=True):
+        argv = self.real(argv) if real else argv
         flags = ('--coordinator', coordinator) if coordinator else ()
         status, output = self.invoke('check', *flags, '--argv-json', json.dumps(argv))
         self.assertEqual(status, 0, output)
@@ -736,18 +775,87 @@ class AwayDecisionTest(AutopilotBase):
         self.assertEqual(self.lease()['counters']['actions'], 0)
 
     def test_the_advisor_form_is_tier_one_for_another_family_in_hosts(self):
-        self.start(SETUP_AWAY)
+        self.start_away()
         self.check_as(CODEX)
-        self.check_as(CODEX[:5] + ['--', 'perl', '-e', 'alarm 900; exec @ARGV'] + CODEX[6:])
-        self.check_as(CODEX[:6] + ['/opt/tools/codex'] + CODEX[7:])
         self.check_as(CLAUDE, coordinator='codex')
         self.check_as(CLAUDE[:-2] + ['--effort', 'high', '--max-turns', '8', '--max-budget-usd', '2'] + CLAUDE[-2:],
                       coordinator='codex')
-        self.assertEqual(self.lease()['counters']['actions'], 5)
+        self.assertEqual(self.lease()['counters']['actions'], 3)
         self.assertEqual(self.lease()['counters']['runs'], 0)  # the advisor's ledger start reserves its run, as today
 
+    def test_the_antigravity_advisor_form_is_tier_one_in_plan_mode(self):
+        self.start_away(SETUP_ALL)
+        for coordinator in ('claude', 'codex'):
+            self.check_as(AGY, coordinator=coordinator)
+        self.check_as(AGY + ['--print-timeout', '30m'])
+        mode = AGY.index('plan')
+        for value in ('accept-edits', 'default', 'yolo'):
+            self.check_as(AGY[:mode] + [value] + AGY[mode + 1:], tier=3, code='unknown')
+        self.check_as(AGY, coordinator='antigravity', tier=3, code='unknown')
+        self.assertEqual(self.lease()['counters']['actions'], 3)
+
+    def test_the_advisor_program_is_the_owner_approved_executable(self):
+        self.start_away()
+        program = CODEX.index('codex', 6)
+        recorded = self.paths['codex']
+        def at(path):
+            return CODEX[:program] + [str(path)] + CODEX[program + 1:]
+        self.check_as(at(recorded), real=False)
+        # A matching basename at another path, a PATH shadow (bare name), a relative name and a perl time cap deny.
+        other = self.home / 'other'
+        other.mkdir()
+        (other / 'codex').write_bytes(b'\x7fsynthetic\n')
+        (other / 'codex').chmod(0o700)
+        for argv in (at(other / 'codex'), at('codex'), at('./codex'), at(recorded + '/'),
+                     at(str(Path(recorded).parent) + '/../bin/codex'),
+                     CODEX[:program] + ['perl', '-e', 'alarm 900; exec @ARGV', recorded] + CODEX[program + 1:],
+                     CODEX[:program] + ['/usr/bin/perl', '-e', 'alarm 900; exec @ARGV', recorded] + CODEX[program + 1:]):
+            with self.subTest(argv=argv[program:program + 4]):
+                self.check_as(argv, tier=3, code='unknown', real=False)
+        # A sibling directory in the same repository, with the coordinator in another folder of it.
+        tools = self.repo / 'tools'
+        tools.mkdir()
+        (tools / 'codex').write_bytes(b'\x7fsynthetic\n')
+        (tools / 'codex').chmod(0o700)
+        (self.repo / 'src').mkdir()
+        self.repo = self.repo / 'src'
+        self.check_as(at(tools / 'codex'), tier=3, code='unknown', real=False)
+        # A symlink outside the repository that leads to repository code.
+        links = self.home / 'links'
+        links.mkdir()
+        (links / 'codex').symlink_to(tools / 'codex')
+        self.check_as(at(links / 'codex'), tier=3, code='unknown', real=False)
+        self.assertEqual(self.lease()['counters']['actions'], 1)
+
+    def test_a_recorded_program_inside_a_repository_or_without_a_record_denies(self):
+        tools = self.repo / 'tools'
+        tools.mkdir()
+        target = tools / 'codex'
+        target.write_bytes(b'\x7fsynthetic\n')
+        target.chmod(0o700)
+        links = self.home / 'links'
+        links.mkdir()
+        (links / 'codex').symlink_to(target)
+        # Even when setup recorded it: repository code, directly or through a link, is never an approved program.
+        for path in (target, links / 'codex'):
+            with self.subTest(path=path):
+                self.setup_config(SETUP_AWAY + self.record_programs(programs={'codex': path}))
+                self.assertEqual(self.invoke('stop')[0], 0)
+                self.assertEqual(self.invoke('start')[0], 0)
+                self.check_as(CODEX, tier=3, code='unknown')
+        # No record, an unconfirmed record or the probe turned off: the advisor form is denied.
+        record = self.record_programs()
+        digest = re.search(r'- Resolved digest codex: [0-9a-f]+\n', record)[0]
+        for text in ('', record.replace(digest, ''), record.replace('- Quota probe: on', '- Quota probe: off'),
+                     record.replace('- Agents: claude, codex, agy', '- Agents: claude, agy')):
+            with self.subTest(record=text[:40]):
+                self.setup_config(SETUP_AWAY + text)
+                self.assertEqual(self.invoke('stop')[0], 0)
+                self.assertEqual(self.invoke('start')[0], 0)
+                self.check_as(CODEX[:6] + [self.paths['codex']] + CODEX[7:], tier=3, code='unknown', real=False)
+
     def test_the_advisor_form_denies_writes_other_families_programs_and_shapes(self):
-        self.start(SETUP_AWAY)
+        self.start_away()
         mode = CODEX.index('read-only')
         permission = CLAUDE.index('plan')
         for argv, coordinator in (
@@ -782,7 +890,7 @@ class AwayDecisionTest(AutopilotBase):
         self.assertEqual(self.lease()['counters']['actions'], 0)
 
     def test_the_brief_position_never_accepts_an_option(self):
-        self.start(SETUP_ALL)
+        self.start_away(SETUP_ALL)
         forms = {'codex': (CODEX, 'claude'), 'claude': (CLAUDE, 'codex'), 'antigravity': (AGY, 'claude')}
         for family, (form, coordinator) in forms.items():
             danger = DANGER[family]
@@ -815,7 +923,7 @@ class AwayDecisionTest(AutopilotBase):
             self.check_as(form, coordinator=coordinator)
 
     def test_the_advisor_brief_is_screened_like_the_judge_and_packet_paths(self):
-        self.start(SETUP_AWAY)
+        self.start_away()
         home = '/Us' + 'ers/synthetic'
         # A sensitive name with any assigned value, however short, and any machine path deny.
         for brief in ('Use db_password=fixture123 in the fixture.', 'Set API_TOKEN=ab and continue.',

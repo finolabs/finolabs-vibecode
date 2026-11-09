@@ -11,7 +11,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Missing/expired/stopped/changed setup or exhausted runs, wall/runtime minutes or rolling-hour actions denies every check | lease_guard |
 | Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release and npm/pnpm publish forms whose every applicable category is `decide`, and a deploy matching a `Non-production targets` entry exactly with no production or live word; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
 | Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
-| The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's; the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, brief_ok |
+| The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
 | Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
 | A precedent packet holds at most eight excerpts and 8 KB; a secret or machine path drops an excerpt; excerpts need the separate consent | packet_check |
 | Credentials/env names, .github, hooks, agent instructions, settings, host/setup/lease files are Tier 3 anywhere in argv or paths | protected |
@@ -468,6 +468,31 @@ def brief_ok(brief):
                    for match in secret_patterns.PAIR.finditer(brief))
 
 
+def approved_program(family, rest):
+    """Length of the owner-approved executable that starts `rest`, else 0; nothing is run.
+
+    The identity is the record setup wrote for the quota probe in the canonical host config (`Executable`, `Resolved`
+    and its confirmed digest), re-checked now by quota_probe.checked_executable: owner and mode of every component,
+    no repository, temporary or downloads folder, and an unchanged target. The program must be the absolute argv those
+    checks return, or for a native program the recorded `Executable` path itself. Bare names, PATH lookups and other
+    paths deny, and so does a time-cap wrapper such as perl, which has no such record.
+    """
+    import quota_probe
+    agent = PROGRAMS[family]
+    entry = quota_probe.canonical_config().get(agent)
+    if entry is None:
+        return 0
+    try:
+        checked = quota_probe.checked_executable(agent, entry)
+    except (OSError, ValueError, UnicodeError):
+        return 0
+    forms = [checked] + ([[entry['executable']]] if len(checked) == 1 else [])
+    for form in forms:
+        if all(isinstance(t, str) and Path(t).is_absolute() for t in form) and rest[:len(form)] == form:
+            return len(form)
+    return 0
+
+
 def advisor_command(tail, applied, coordinator):
     """`delegate_env.py --family F -- [hard cap] <program> <closed read-only argv>`, F in Hosts and not the coordinator's."""
     if len(tail) < 4 or tail[0] != '--family' or tail[2] != '--':
@@ -476,18 +501,10 @@ def advisor_command(tail, applied, coordinator):
     hosts = {HOST_FAMILIES[h] for h in applied['Hosts'].split(', ')}
     if family not in PROGRAMS or family not in hosts or coordinator not in PROGRAMS or coordinator == family:
         return 'unknown'
-    if rest[:2] == ['perl', '-e'] and len(rest) > 2 and re.fullmatch(r'alarm [1-9][0-9]{0,4}; exec @ARGV', rest[2]):
-        rest = rest[3:]
-    if not rest:
+    size = approved_program(family, rest)
+    if not size:
         return 'unknown'
-    program = rest[0]
-    if program != PROGRAMS[family]:
-        path = Path(program)
-        here = os.path.abspath(os.getcwd())
-        if (not plain(program) or not path.is_absolute() or '..' in path.parts or path.name != PROGRAMS[family]
-                or os.path.abspath(program).startswith(here + os.sep)):
-            return 'unknown'
-    args, brief = rest[1:], None
+    args, brief = rest[size:], None
     # The brief sits behind an unambiguous boundary: Codex and Claude end their options with a literal `--` right
     # before it (`codex exec [OPTIONS] [PROMPT]`, `claude [options] [prompt]` with -p a switch); Antigravity takes it
     # as the value of -p. In every form a brief starting with `-` (an option, or `-` for unvalidated stdin) denies.
