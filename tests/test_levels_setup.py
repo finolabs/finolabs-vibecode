@@ -145,5 +145,30 @@ class LevelsSetupTest(unittest.TestCase):
             self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 0)
 
 
+@unittest.skipUnless(Path('/bin/zsh').exists(), 'zsh is required')
+class FunctionDispatchEnvironmentTest(unittest.TestCase):
+    """A shell-function command behind delegate_env.py gets only approved names (names only, no values)."""
+
+    def run_function(self, host_text):
+        import subprocess
+        import sys
+        sys.path.insert(0, str(ROOT / 'scripts'))
+        import delegate_env
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp).resolve()
+            (home / '.zshrc').write_text('claudetest() { print -r -- "state:${LEVELS_SYNTH_NAME:+set}${LEVELS_SYNTH_NAME:-unset}"; }\n')
+            with mock.patch.dict(os.environ, {'HOME': str(home), 'LEVELS_SYNTH_NAME': 'x', 'PATH': '/usr/bin:/bin'}, clear=True):
+                env = delegate_env.environment('claude', host_text=host_text)
+            self.assertNotIn('ZDOTDIR', env)
+            result = subprocess.run(['/bin/zsh', '-ic', 'claudetest'], env=env, capture_output=True, text=True, timeout=30)
+        return [line for line in result.stdout.splitlines() if line.startswith('state:')]
+
+    def test_a_name_that_is_not_approved_does_not_reach_the_function(self):
+        self.assertEqual(self.run_function('## Delegate environment\n- claude: none\n'), ['state:unset'])
+
+    def test_an_approved_name_reaches_the_function(self):
+        self.assertEqual(self.run_function('## Delegate environment\n- claude: LEVELS_SYNTH_NAME\n'), ['state:setx'])
+
+
 if __name__ == '__main__':
     unittest.main()
