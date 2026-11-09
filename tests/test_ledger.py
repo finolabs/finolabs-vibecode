@@ -880,6 +880,13 @@ class StaleLedgerTest(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertEqual(self.path.read_bytes(), before)
 
+    def test_a_log_named_with_the_documented_slug_is_found(self):
+        ident = "d20261101-000000-e002"
+        self.write([self.start(ident, 300, 45)])
+        self.log(ident + "-add-parser", "output\nexit=1\n")
+        out, _ = self.preview_digest()
+        self.assertIn("exit=1  -> error", out)
+
     def test_each_outcome_follows_the_log_and_none_is_accepted(self):
         ids = {name: "d20261101-000000-" + name for name in ("e001", "e000", "eeee", "ffff")}
         self.write([self.start(ident, 300, 45) for ident in ids.values()])
