@@ -33,7 +33,8 @@ rung that settles it. Each rung is cheaper than the next.
 2. **Jev**, when the choice is among closed options and `judge: jev` is set: one call of a new `judge.py` site,
    `away-decision`, with the question, two to six options and the evidence the question needs. It settles the choice when the top option's
    probability is at least 0.8, a starting threshold that the first real uses must validate; below that, the next rung.
-3. **The advisor**, the agent the matrix names in the new role `advisor`: `fnl-advisor` in its choose mode, one read-only
+3. **The advisor**: `fnl-advisor` in its choose mode, run by the agent the matrix names in the optional role `advisor` or,
+   with none named, by the family `fnl-advisor` already picks (one other than the host's), among the lease's recorded Hosts: one read-only
    run that must return exactly one of the options with its reason, or `none`. It is an ordinary dispatch (ledger kind
    `advise`) and counts against the lease's run limit.
 4. **Park.** No rung settled it, or no judge or advisor is available: log it as parked, tell the user once, and go on with
@@ -41,7 +42,7 @@ rung that settles it. Each rung is cheaper than the next.
 
 Inside a lease the answer of a rung is the decision, not advice: the host applies the option it returned and does not
 re-ask, overrule or shop it to another rung (advisory, agent judgment; the `log --by` record shows who decided). If the host
-finds a fact the rung did not have, it parks the question rather than overruling. A named advisor that is out of quota or
+finds a fact the rung did not have, it parks the question rather than overruling. An advisor that is out of quota or
 unreachable, or that answers `none`, counts as unavailable, and the question parks. `fnl-advisor`'s line "you stay the
 decider" stays true for its open mode, with the user present; the choose mode states the opposite for a lease.
 
@@ -57,8 +58,9 @@ grants no authority: an option the check denies is parked. The rungs choose amon
   --of <m>`, validated (closed values, `n` within `m`) and stored without any option text. The note stays capped and redacted as today.
 - `judge.py` enforces the new site's closed schema and byte caps, as for the other sites. The new site changes the closed
   list in the fourth scoped exception of `CLAUDE.md` and the Judge text of `PRIVACY.md`; those amendments merge before its code.
-- `assignments.py` adds `advisor` to its roles, one agent at most. With no advisor named, rung 3 is skipped; `fnl-advisor`
-  run by hand still picks by contrast as it does today, and the named agent takes precedence only when the user names none.
+- `assignments.py` adds `advisor` to its roles, one agent at most. The role is optional, so the away mandate works with no
+  extra setup: without it the advisor is picked by contrast as `fnl-advisor` does today, limited to the lease's Hosts. A name
+  the user gives by hand wins over the role, and the role wins over the contrast rule.
 - While a lease is active, `session_start.py` prints one fixed line, after a compaction or resume as well: `Away mandate active:
   do not ask the user; follow fnl-autopilot "Decide"`. It reads only whether a live lease exists and prints no content.
   The skill says the same when the lease starts. The skill and that line replace the question tool for the lease
