@@ -1,6 +1,6 @@
-# Pause (draft, no release assigned)
+# Pause, friendly name fnl-gtg (draft, no release assigned)
 
-Status: draft; the owner described the idea and settled two decisions on 2026-11-09; nothing is built.
+Status: draft; the owner described the idea and settled five decisions on 2026-11-09; nothing is built.
 
 Idea: owner, 2026-11-09. The opposite of `fnl-brb`. Autopilot hands the agents a mandate to keep working while the
 user is away; pause is what the user runs before a restart or shutdown of the machine, so that no running session or
@@ -8,10 +8,20 @@ process is stopped abruptly and nothing is lost when the machine goes down.
 
 ## Owner decisions (2026-11-09)
 
+
 - Pause drains, then checkpoints. It stops starting new work, lets running work finish or reach a safe point, writes a
   handover for each session, and says when it is safe to shut down. It does not stop running processes by itself.
-- It is its own user-run skill (working name `fnl-pause`), not a branch of `fnl-autopilot`. It may read autopilot's
-  state and end an active lease, and it shares no lease or log with it.
+- It is its own user-run skill, not a branch of `fnl-autopilot`. It may read autopilot's state and end an active lease,
+  and it shares no lease or log with it.
+- The skill has a friendly canonical name and fnl-pause is its alias, as `fnl-brb` is the alias of `fnl-autopilot`.
+  The proposed name is fnl-gtg ("got to go", the counterpart of "be right back"); the owner has not confirmed it.
+- `heavy_run.py` refuses to start a new command while the pause marker exists. This is the first script gate outside
+  autopilot, so it needs its own security review before it lands.
+- A deadline exists, and the user states it as the time left before the machine goes down, in minutes, in the user's
+  own words: "I will shut the machine down (or restart it) in 15 minutes". The parameter is `--in <minutes>`, not
+  `--wait-minutes`, because the user is not choosing how long to wait but when the machine goes away. The kind is the
+  word `restart` or `shutdown` (for example "/fnl-gtg shutdown --in 15"). When the time is up, the skill asks the user
+  about each remaining run, one at a time, and stops none by itself.
 
 ## What pause can and cannot do
 
@@ -23,7 +33,7 @@ Sessions and terminals it has no record of are listed as unknown and left to the
 
 ## Behavior
 
-1. **Start** (`pause.py start`): writes a pause marker in the private state folder (time only, no content) and ends an
+1. **Start** (`pause.py start [restart|shutdown] [--in <minutes>]`): writes a pause marker in the private state folder (time only, no content) and ends an
    active autopilot lease. While the marker exists the coordinator starts no delegated run and no heavy job, and
    `heavy_run.py` refuses to start a new command with one fixed message (the only script-enforced part; everything else
    is agent judgment, advisory).
@@ -45,14 +55,20 @@ Sessions and terminals it has no record of are listed as unknown and left to the
   decision, one run at a time.
 - A pause marker left behind after a crash expires after 24 hours and is reported by `status`.
 
+## Restart and shutdown differ
+
+A restart returns in minutes, so a drain that cannot finish can leave its handovers to be read straight after boot.
+A shutdown may last overnight, and a handover is readable for 24 hours only, so for `shutdown` the report says that
+the handovers expire after 24 hours and offers to write a longer-lived note with the user's yes. Without `--in`, no
+deadline applies and the skill waits until the user says to stop.
+
 ## Open decisions
 
 | Decision | Owner | What unblocks it |
 | --- | --- | --- |
-| Name: `fnl-pause`, or a friendlier alias in the style of `fnl-brb` | owner | a proposed alias |
-| Whether `heavy_run.py` refusing new commands while paused is wanted, because it is the first script gate outside autopilot | owner | a yes, then a security review of the marker read |
-| Whether a deadline (`--wait-minutes`) escalates to asking the user about each remaining run | owner | the owner's preference |
+| Name: confirm fnl-gtg, or choose another (fnl-bbl, fnl-afk) | owner | the owner's pick |
 | Which release carries it | owner | scope for 0.2.3 or later |
+| Security review of the `heavy_run.py` marker read | reviewer | the code pull request |
 
 ## Evidence
 
