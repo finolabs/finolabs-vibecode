@@ -41,7 +41,8 @@ EXE = re.compile(r'[A-Za-z0-9._+-]{1,40}')
 DEFAULTS = {'load': 12.0, 'memory_gb': 3.0, 'wait_minutes': 40.0, 'max_minutes': 90.0}
 BOUNDS = {'load': (1.0, 256.0), 'memory_gb': (0.0, 64.0), 'wait_minutes': (1.0, 720.0), 'max_minutes': (1.0, 720.0)}
 KEYS = {'Load limit': 'load', 'Memory minimum GB': 'memory_gb', 'Wait cap minutes': 'wait_minutes', 'Max job minutes': 'max_minutes'}
-TOOLS = {'vm_stat': '/usr/bin/vm_stat', 'ps': '/bin/ps'}
+TOOLS = {'vm_stat': '/usr/bin/vm_stat', 'ps': '/bin/ps', 'memory_pressure': '/usr/bin/memory_pressure',
+         'sysctl': '/usr/sbin/sysctl'}
 
 
 class Refused(Exception):
@@ -76,13 +77,84 @@ def read_load():
 
 
 def read_free_gb():
-    """Free, inactive and speculative memory in GB from `vm_stat`; None when it cannot be read."""
+    """Free GB by the kernel's own figure, else by the `vm_stat` estimate; None when neither is readable."""
+    kernel = kernel_free_gb()
+    return kernel if kernel is not None else vm_stat_free_gb()
+
+
+def kernel_free_gb():
+    """`memory_pressure` free percentage times `hw.memsize`, in GB; None when either cannot be read or parsed.
+
+    Only the one percentage line (0 to 100) and the byte count are parsed; nothing else is kept."""
+    try:
+        env = run_env.environment()
+        pressure = subprocess.run([TOOLS['memory_pressure']], env=env, capture_output=True, timeout=5, text=True)
+        sized = subprocess.run([TOOLS['sysctl'], '-n', 'hw.memsize'], env=env, capture_output=True, timeout=5, text=True)
+        if pressure.returncode != 0 or sized.returncode != 0:
+            return None
+        found = re.search(r'^System-wide memory free percentage:\s*(\d{1,3})%', pressure.stdout, re.MULTILINE)
+        total = int(sized.stdout.strip())
+        if found is None or int(found[1]) > 100 or total <= 0:
+            return None
+        return int(found[1]) / 100 * total / 2 ** 30
+    except (OSError, subprocess.SubprocessError, TypeError, ValueError):
+        return None
+
+
+def vm_stat_free_gb():
+    """Memory the kernel can give back without a start-time cost, in GB, from `vm_stat`; None when unreadable.
+
+    free + the larger of (inactive + speculative) and the file-backed pages. File-backed pages (the clean file cache,
+    speculative ones included) are droppable even while active, which inactive + speculative alone misses; taking the
+    larger of the two avoids counting the same page twice. Purgeable pages are not added: they can already sit inside
+    the inactive count and their overlap cannot be measured, so the fallback stays conservative. Compressed memory is
+    never added: it is already holding data. The file-backed line is optional (0 when absent)."""
     try:
         done = subprocess.run([TOOLS['vm_stat']], env=run_env.environment(), capture_output=True, timeout=5, text=True)
         page = int(re.search(r'page size of (\d+) bytes', done.stdout)[1])
-        pages = sum(int(re.search(r'Pages %s:\s+(\d+)' % name, done.stdout)[1]) for name in ('free', 'inactive', 'speculative'))
-        return pages * page / 2 ** 30
+
+        def pages(label, required=True):
+            found = re.search(r'^%s:\s+(\d+)' % label, done.stdout, re.MULTILINE)
+            if found is None and required:
+                raise ValueError(label)
+            return int(found[1]) if found else 0
+
+        total = pages('Pages free') + max(pages('Pages inactive') + pages('Pages speculative'), pages('File-backed pages', False))
+        return total * page / 2 ** 30
     except (OSError, subprocess.SubprocessError, TypeError, ValueError, IndexError):
+        return None
+
+
+def heavy_run_action(words):
+    """True for `[/usr/bin/env] python* [options] .../heavy_run.py [options] run`; the program word must be Python."""
+    if words and words[0] == '/usr/bin/env':
+        words = words[1:]
+    if not words or not os.path.basename(words[0]).startswith('python'):
+        return False
+    rest = [word for word in words[1:] if not word.startswith('-')]
+    if not rest or os.path.basename(rest[0]) != 'heavy_run.py':
+        return False
+    after = words[words.index(rest[0]) + 1:]
+    after = [word for word in after if word != '--poll' and not re.fullmatch(r'[0-9.]+', word)]
+    return after[:1] == ['run']
+
+
+def waiting_count():
+    """Number of other `heavy_run.py run` processes, from `ps`; None when it cannot be read. Counts only; no text kept."""
+    try:
+        done = subprocess.run([TOOLS['ps'], '-axo', 'pid=,command='], env=run_env.environment(),
+                              capture_output=True, timeout=5, text=True)
+        if done.returncode != 0:
+            return None
+        count = 0
+        for line in done.stdout.splitlines():
+            words = line.split()
+            if len(words) < 3 or not words[0].isdigit() or int(words[0]) == os.getpid():
+                continue
+            if heavy_run_action(words[1:]):
+                count += 1
+        return count
+    except (OSError, subprocess.SubprocessError, ValueError):
         return None
 
 
@@ -497,6 +569,9 @@ def status():
     else:
         who = holder()
         print('heavy lock: held, owner unknown' if not who else 'heavy lock: held\n' + describe(who))
+    processes = waiting_count()
+    waiting = None if processes is None else max(0, processes - 1) if state == 'held' else processes
+    print('waiting: %s' % ('unknown' if waiting is None else 'about %d' % waiting))
     load, free = read_load(), read_free_gb()
     print('load: %s' % ('unknown' if load is None else '%.1f' % load))
     print('memory: %s' % ('unknown' if free is None else '%.1f GB free' % free))

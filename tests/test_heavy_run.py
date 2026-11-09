@@ -438,5 +438,190 @@ class HeavyRunTest(unittest.TestCase):
         self.assertNotIn('do-not-print', ''.join(out[1:]))
 
 
+def vm_text(free, inactive, speculative, file_backed=None, purgeable=None):
+    lines = ['Mach Virtual Memory Statistics: (page size of 16384 bytes)', 'Pages free: %d.' % free,
+             'Pages active: 170000.', 'Pages inactive: %d.' % inactive, 'Pages speculative: %d.' % speculative]
+    if purgeable is not None:
+        lines.append('Pages purgeable: %d.' % purgeable)
+    if file_backed is not None:
+        lines.append('File-backed pages: %d.' % file_backed)
+    return '\n'.join(lines) + '\n'
+
+
+def fake_run(stdout, returncode=0, error=None):
+    def run(argv, **_kwargs):
+        if error:
+            raise error
+        return subprocess.CompletedProcess(argv, returncode, stdout, '')
+    return run
+
+
+def pressure_text(percent):
+    return ('The system has 17179869184 (1048576 pages with a page size of 16384).\n'
+            'System-wide memory free percentage: %s%%\n' % percent)
+
+
+def routed_run(vm, pressure=None, memsize='17179869184\n', error=None):
+    """Fake `run` answering each program by basename; `pressure` None makes memory_pressure fail."""
+    def run(argv, **_kwargs):
+        name = os.path.basename(argv[0])
+        if name == 'memory_pressure':
+            if pressure is None:
+                raise error or OSError('no memory_pressure')
+            return subprocess.CompletedProcess(argv, 0, pressure, '')
+        if name == 'sysctl':
+            return subprocess.CompletedProcess(argv, 0, memsize, '')
+        return subprocess.CompletedProcess(argv, 0, vm, '')
+    return run
+
+
+class MeasureTest(unittest.TestCase):
+    def free_gb(self, text):
+        with mock.patch.object(heavy.subprocess, 'run', fake_run(text)):
+            return heavy.read_free_gb()
+
+    def kernel_gb(self, pressure, memsize='17179869184\n', vm=None):
+        vm = vm if vm is not None else vm_text(4031, 151654, 12391, file_backed=111892, purgeable=2)
+        with mock.patch.object(heavy.subprocess, 'run', routed_run(vm, pressure, memsize)):
+            return heavy.read_free_gb()
+
+    def test_kernel_figure_is_used_and_allows_the_motivating_case(self):
+        vm = vm_text(4031, 151654, 12391, file_backed=111892, purgeable=2)
+        self.assertLess(self.free_gb(vm), 3.0)  # the vm_stat estimate alone refuses
+        self.assertAlmostEqual(self.kernel_gb(pressure_text(31)), 0.31 * 16, places=6)
+        self.assertGreaterEqual(self.kernel_gb(pressure_text(31)), heavy.DEFAULTS['memory_gb'])
+
+    def test_low_kernel_figure_is_refused(self):
+        self.assertAlmostEqual(self.kernel_gb(pressure_text(10)), 1.6, places=6)
+        self.assertLess(self.kernel_gb(pressure_text(10)), heavy.DEFAULTS['memory_gb'])
+
+    def test_bad_kernel_reading_falls_back_to_vm_stat(self):
+        vm = vm_text(1000, 60000, 1000)
+        expected = 62000 * 16384 / 2 ** 30
+        for pressure, memsize in ((None, '17179869184'), ('garbage', '17179869184'), (pressure_text(101), '17179869184'),
+                                  (pressure_text(31), 'many'), (pressure_text(31), '0')):
+            self.assertAlmostEqual(self.kernel_gb(pressure, memsize, vm), expected, msg=repr((pressure, memsize)))
+        with mock.patch.object(heavy.subprocess, 'run', routed_run(vm, None, error=subprocess.TimeoutExpired('x', 5))):
+            self.assertAlmostEqual(heavy.read_free_gb(), expected)
+
+    def test_kernel_programs_run_without_shell_with_a_fixed_path_and_timeout(self):
+        calls = []
+
+        def run(argv, **kwargs):
+            calls.append((argv, kwargs))
+            return routed_run('', pressure_text(31))(argv, **kwargs)
+        with mock.patch.object(heavy.subprocess, 'run', run):
+            heavy.read_free_gb()
+        self.assertEqual([argv[0] for argv, _ in calls], ['/usr/bin/memory_pressure', '/usr/sbin/sysctl'])
+        for _, kwargs in calls:
+            self.assertEqual(kwargs['timeout'], 5)
+            self.assertFalse(kwargs.get('shell', False))
+            self.assertEqual(sorted(kwargs['env']), sorted(heavy.run_env.environment()))
+
+    def test_a_purgeable_count_inside_inactive_is_not_added_again(self):
+        # Purgeable and file-backed pages contained in inactive: only 152000 distinct pages, below 3 GiB.
+        text = vm_text(1000, 150000, 1000, file_backed=50000, purgeable=100000)
+        self.assertAlmostEqual(self.free_gb(text), 152000 * 16384 / 2 ** 30)
+        self.assertLess(self.free_gb(text), 3.0)
+
+    def test_file_cache_pages_count_as_reclaimable(self):
+        # Little inactive memory but a large clean file cache: refused by the old sum, allowed now.
+        text = vm_text(1000, 20000, 1000, file_backed=400000, purgeable=20000)
+        old = (1000 + 20000 + 1000) * 16384 / 2 ** 30
+        self.assertLess(old, 3.0)
+        self.assertGreater(self.free_gb(text), 3.0)
+
+    def test_a_machine_with_little_reclaimable_memory_is_still_refused(self):
+        text = vm_text(1000, 20000, 500, file_backed=30000, purgeable=100)
+        self.assertLess(self.free_gb(text), 3.0)
+
+    def test_the_same_page_is_not_counted_twice(self):
+        # File-backed pages already inside inactive + speculative add nothing.
+        text = vm_text(1000, 60000, 1000, file_backed=50000, purgeable=0)
+        self.assertAlmostEqual(self.free_gb(text), 62000 * 16384 / 2 ** 30)
+
+    def test_old_vm_stat_output_without_the_optional_lines_keeps_the_old_sum(self):
+        self.assertAlmostEqual(self.free_gb(vm_text(1000, 60000, 1000)), 62000 * 16384 / 2 ** 30)
+
+    def test_unreadable_vm_stat_is_none(self):
+        self.assertIsNone(self.free_gb('nothing useful'))
+        self.assertIsNone(self.free_gb(vm_text(1, 2, 3).replace('Pages free', 'Pages gone')))
+
+
+class QueueViewTest(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.home = account(self, Path(temporary.name) / 'home')
+        self.root = self.home / '.finolabs' / 'vibecode'
+        self.root.mkdir(parents=True, mode=0o700)
+        patch = mock.patch.dict(os.environ, {'PATH': os.environ.get('PATH', '')}, clear=True)
+        patch.start()
+        self.addCleanup(patch.stop)
+        for name, value in (('read_load', lambda: 1.0), ('read_free_gb', lambda: 8.0)):
+            patcher = mock.patch.object(heavy, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def run_cli(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = heavy.main([*argv])
+        return code, out.getvalue(), err.getvalue()
+
+    def lock_path(self):
+        return self.root / 'heavy.lock'
+
+    def ps(self, stdout, **kwargs):
+        return mock.patch.object(heavy.subprocess, 'run', fake_run(stdout, **kwargs))
+
+    def lines(self, *commands):
+        return ''.join('%d %s\n' % (900 + number, command) for number, command in enumerate(commands))
+
+    def test_count_is_zero_when_no_wrapper_runs(self):
+        with self.ps(self.lines('/bin/zsh -l', 'python3 other.py run')):
+            self.assertEqual(heavy.waiting_count(), 0)
+            self.assertIn('waiting: about 0', self.run_cli('status')[1])
+
+    def test_count_is_one_for_one_waiting_wrapper_and_prints_no_command_text(self):
+        secret = 'python3 -I /tmp/skills/heavy_run.py run --label topsecret -- make private-target'
+        with self.ps(self.lines(secret, 'python3 -I /tmp/skills/heavy_run.py status')):
+            self.assertEqual(heavy.waiting_count(), 1)
+            code, out, err = self.run_cli('status')
+        self.assertIn('waiting: about 1', out)
+        for word in ('topsecret', 'private-target', '/tmp'):
+            self.assertNotIn(word, out + err)
+
+    def test_the_holder_is_not_counted_as_waiting(self):
+        wrapper = 'python3 -I /x/heavy_run.py run -- sleep 5'
+        held = os.open(self.lock_path(), os.O_RDWR | os.O_CREAT, 0o600)
+        import fcntl
+        fcntl.flock(held, fcntl.LOCK_EX)
+        try:
+            with self.ps(self.lines(wrapper, wrapper, wrapper)):
+                self.assertIn('waiting: about 2', self.run_cli('status')[1])
+        finally:
+            os.close(held)
+
+    def test_unreadable_ps_reads_as_unknown(self):
+        for case in (self.ps('', error=OSError('no ps')), self.ps('boom', returncode=1),
+                     self.ps('', error=subprocess.TimeoutExpired('ps', 5))):
+            with case:
+                self.assertIsNone(heavy.waiting_count())
+                self.assertIn('waiting: unknown', self.run_cli('status')[1])
+
+    def test_only_python_running_the_script_with_run_counts(self):
+        listing = self.lines('grep -n heavy_run.py run', 'python3 -I /x/heavy_run.py run -- cmd',
+                             '/usr/bin/env python3 /x/heavy_run.py run -- cmd', 'vim heavy_run.py run',
+                             'python3 /x/other.py heavy_run.py run', '/bin/zsh -c ls')
+        with self.ps(listing):
+            self.assertEqual(heavy.waiting_count(), 2)
+            self.assertIn('waiting: about 2', self.run_cli('status')[1])
+
+    def test_own_process_is_not_counted(self):
+        with self.ps('%d python3 -I /x/heavy_run.py run -- true\n' % os.getpid()):
+            self.assertEqual(heavy.waiting_count(), 0)
+
+
 if __name__ == '__main__':
     unittest.main()

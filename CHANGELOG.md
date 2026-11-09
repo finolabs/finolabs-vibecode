@@ -9,6 +9,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `levels_setup.py candidates` lists, as names only, the `claude*` programs on `PATH` and the `~/.claude-<label>` folders, so `/fnl-setup add delegation` can offer the user's extra Claude Code commands as candidates. It runs nothing and never lists shell functions; the user types those names.
 - `/fnl-setup add delegation` asks which task levels each helper can take (1 easy to 5 ultra hard), for the three agent families and for any extra Claude Code command the user names, such as a `claudework` shell function. `levels_setup.py` previews and writes the canonical `## Agent levels` section with a backup and a digest, and reads it back strictly with `show`; it runs no command. `fnl-delegate` routes by those levels (advisory) and prefers a declared command to `claude` inside its range while it has quota. Spec: `docs/specs/agent-levels.md`.
 
+### Changed
+
+- `heavy_run.py`: the free-memory reading follows the kernel's own figure (the `memory_pressure` free percentage times `hw.memsize`) and falls back to a `vm_stat` estimate (free plus the larger of inactive plus speculative and file-backed pages; purgeable pages are not added because they can overlap inactive ones) when either program cannot be read or parsed, so a machine with a large file cache is no longer refused while `memory_pressure` reports it healthy; `status` also prints `waiting: about <n>` or `waiting: unknown`, a point-in-time approximation (it skips scripts whose path contains a space and can be off by one around a lock change), counting only a Python interpreter (optionally after `/usr/bin/env`) running `heavy_run.py` with the `run` action. The setup text no longer mentions a heavy-job lock location.
+
 ## [0.2.1] - 2026-11-09
 
 Not in this release: the opt-in heavy-job gate hook described in `docs/specs/heavy-jobs.md` (the `heavy_run.py` wrapper is in), the review residual notes and the smaller setup items; see the [release record](docs/specs/release-0.2.1.md).

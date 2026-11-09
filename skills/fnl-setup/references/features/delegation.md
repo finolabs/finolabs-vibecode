@@ -13,7 +13,7 @@ Yes: Fill the shown local host.md from the fnl-delegate template; the saved help
 No: Leave the file unchanged; ask later.
 Undo: Restore the previous sections or edit them through setup.
 Choices: "Yes, save the helper settings" / "No, leave the file unchanged".
-Create the remaining config from `fnl-delegate`'s `references/host-template.md`, preserving the scan section byte for byte, and fill: how this computer invokes the present agents, which agents may coordinate and which delegates each can reach, the heavy-job limits (the lock itself sits in the fixed account-home anchor, so there is no path to set), and the durable folder for briefs and logs. Leave unknown commands as questions in the file rather than guesses.
+Create the remaining config from `fnl-delegate`'s `references/host-template.md`, preserving the scan section byte for byte, and fill: how this computer invokes the present agents, which agents may coordinate and which delegates each can reach, the heavy-job limits (load, free memory, wait cap and maximum run time), and the durable folder for briefs and logs. Leave unknown commands as questions in the file rather than guesses.
 Ask as free text, inside the repository being set up: "How many agent runs may work at the same time in this repository?"
 Recommend a small number such as 3 to start; accept an integer from 1 to 32; without an answer the repository keeps the default of 3. Explain that runs of the same family share quota pools, that the limit counts only this repository and that other repositories keep their own.
 Then ask as optional free text: "Any per-family caps for claude, codex or antigravity in this repository? Leave blank for the total limit only."
