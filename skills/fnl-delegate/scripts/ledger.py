@@ -6,7 +6,10 @@ in the resolved data root. Environment variables cannot redirect the ledger.
 """
 
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
 import hashlib
 import json
 import os
