@@ -65,8 +65,9 @@ answer and makes deviation visible, without turning a preference into a block.
   `review_config.py` (plugin-level `scripts/`, `fnl-delegate`, `fnl-review-gate`) and the four copies of `judge.py`
   (plugin-level `scripts/`, `fnl-delegate`, `fnl-session-hygiene`, `fnl-verification`), plus `checkup.py`; after this
   change `route_pick.py` and `matrix_setup.py` also import `assignments.py`, so there is one reading of the format. Levels
-  and types of work have no script reader today (`route.md` reads levels as advice); the new readers are `route_pick.py`
-  and the ledger comparison, both through `assignments.py`.
+  have a setup reader today (`levels_setup.py` `parse` and `show`) but no computed routing reader, and types of work have
+  no reader (`route.md` reads levels as advice); the new readers are `route_pick.py` and the ledger comparison, both
+  through `assignments.py`.
 - Precedence, with three distinct states and no line-by-line fallback:
   1. The matrix section is **absent**: the readers use `## Agent roles` and `## Agent levels` exactly as today.
   2. The matrix section is **present and valid**: it alone decides roles and judge. A role no agent line names is
@@ -139,7 +140,7 @@ judgment, to run it before each dispatch; the script computes the answer exactly
   when it is 0. Eligibility and preference are separate: always choosing the second-ranked agent shows as rank 2, not as
   compliant. It never refuses the dispatch: the coordinator or the user may have a reason, and a block would only push
   agents to omit the type.
-- `ledger.py summary` shows, per agent, the share of dispatches at rank 1, at a lower rank and outside the set, so an
+- `ledger.py summary` shows, per agent, the share of dispatches at rank 1, at a lower rank and outside the set, counted only over the dispatches that recorded a `pick_rank` (an older dispatch or one started without a type and level has none and is left out of the denominator, never counted as outside the set), together with how many were left out, so an
   ignored preference is visible; `fnl-status` may show it. The enforcer of the choice stays agent judgment (advisory); the
   script enforces the computation and the record.
 - Session start prints one fixed line, `Assignments: <n> agents set; run route_pick.py before a dispatch`, about 20 tokens,
