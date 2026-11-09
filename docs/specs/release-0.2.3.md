@@ -9,6 +9,7 @@ Status: draft; scope started by the owner on 2026-11-09; nothing is built.
 | 1 | Pause | The new user-run skill fnl-pause, with the friendly alias fnl-gtg: drain running work, write handovers, and report what recorded work remains before a restart or shutdown (the user decides), with `--in <minutes>` and a `heavy_run.py` refusal while paused. Spec: `pause.md`. |
 | 2 | Away skill rename | fnl-afk becomes the main friendly name of the away skill and fnl-brb stays as its alias; the autopilot spec, skills, README and setup text change together. |
 | 3 | Assignment matrix | One `## Assignment matrix` section in the host config replacing `## Agent roles` and `## Agent levels`, with levels, types of work, model and roles per agent, a migration, dual readers for roles and judge, one `show` table and one setup pass in `/fnl-setup add delegation`. Spec: `assignment-matrix.md`. |
+| 4 | Run names | `ledger.py start` prints the run's name on stderr, ready to copy into the host's name field, and the delegate guidance says so, after 8% of 1,555 background runs measured on 2026-11-09 used the documented form. Advisory: nothing renames a call. |
 
 ## Added to the scope (owner, 2026-11-09)
 
