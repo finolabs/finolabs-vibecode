@@ -22,6 +22,12 @@ Tier 2 decisions go to an advisor acting as the user's avatar, but four gaps kee
   options, and the matrix role is `advisor`, so the same named agent serves the user's presence and absence.
 - The help skill's main name becomes fnl-help, and `fnl-ask` stays as a thin alias, as `fnl-brb` does for the away skill.
   `fnl-advisor` keeps its open opinion and its committee.
+- Inside a lease the advisor is always another model family, reached through its own command-line program, and has to be
+  capable enough for the role: the frontier tier of that family in `fnl-delegate` `models.md` first, then its strong tier.
+  Nothing below strong, and no same-family fallback (a Claude model served through another host counts as Claude): the
+  question parks instead.
+- The question gate below is built now rather than after a trial. The owner's practice is to apply the design predicted to
+  work best, use it on this machine and improve it from what happens, so every decision must reach the ledger for that analysis.
 
 ## The ladder
 
@@ -54,22 +60,44 @@ grants no authority: an option the check denies is parked. The rungs choose amon
 - `autopilot.py` stays a script with no execution and no network call, so it cannot run the ladder itself: a single command
   that called Jev or started an agent would break its contract. The ladder is a procedure in `fnl-autopilot`
   (`references/decide.md`), advisory (agent judgment).
-- The record is script-enforced: `autopilot.py log --kind decision` gains `--by rule|jev|<agent name>` and `--option <n>
-  --of <m>`, validated (closed values, `n` within `m`) and stored without any option text. The note stays capped and redacted as today.
+- The record is script-enforced; see "Record for analysis".
 - `judge.py` enforces the new site's closed schema and byte caps, as for the other sites. The new site changes the closed
   list in the fourth scoped exception of `CLAUDE.md` and the Judge text of `PRIVACY.md`; those amendments merge before its code.
 - `assignments.py` adds `advisor` to its roles, one agent at most. The role is optional, so the away mandate works with no
   extra setup: without it the advisor is picked by contrast as `fnl-advisor` does today, limited to the lease's Hosts. A name
   the user gives by hand wins over the role, and the role wins over the contrast rule.
+- The question gate below enforces that the user is not asked during a lease, on Claude Code.
 - While a lease is active, `session_start.py` prints one fixed line, after a compaction or resume as well: `Away mandate active:
   do not ask the user; follow fnl-autopilot "Decide"`. It reads only whether a live lease exists and prints no content.
-  The skill says the same when the lease starts. The skill and that line replace the question tool for the lease
-  (advisory, agent judgment).
+  The skill says the same when the lease starts.
+
+## The question gate (Claude Code)
+
+One `PreToolUse` hook for the `AskUserQuestion` tool, in its own group, under the sixth scoped exception in `CLAUDE.md`. While a live
+lease exists it denies that one call with one fixed message: the user is away, follow fnl-autopilot "Decide". It reads only whether
+a valid, unexpired lease exists, through the same safe reader as `autopilot.py`; no lease, an expired, stopped or unreadable one, or any
+error allows. It never reads the question, never denies another tool, a prompt, a session start or the user's own stop.
+Starting the lease is the user's opt-in; `FNL_AWAY_GATE=off` disables it. It appends one ledger line (below) and sends nothing.
+Codex and Antigravity have no such hook here and stay advisory. The first build step checks on the installed host that a hook fires for
+that tool; if it does not, the gate is dropped and the report says so.
+
+## Record for analysis
+
+The owner reviews real use from the ledger, so one record covers every decision and `fnl-status` reads it.
+
+- `autopilot.py log --kind decision` gains `--rung rule|jev|advisor|park`, `--by <rule, jev or the agent or install name>`, `--option <n> --of <m>`
+  (`n` within `m`, absent for a park), `--probability` (rung 2), `--dispatch <ledger id>` (rung 3), `--model` and `--topic`, a short label under
+  the ledger's task-label rule. It validates them and, in the same call, appends a `decision` line to the ledger with those fields, the
+  time, the project and the lease's start time as the grouping key. The note stays in the autopilot log, capped, redacted and kept 30 days.
+- The gate appends a `question_denied` line with the time and the lease's start time only.
+- A rung that is tried and does not settle the question is recorded too (`--settled no`), so the path up the ladder can be rebuilt.
+- An away view of the ledger summary and the `fnl-status` tables show, per lease: decisions by rung, by advisor and model, the Jev probability
+  spread, parked questions and denied questions. No question or option text is ever in the ledger; the topic label is the only words.
 
 ## Limits
 
-- Nothing blocks the question tool. A hook that denies it during a lease would be a new scoped exception to the hook rule,
-  which only the owner can grant, and whether the host allows a hook on that tool is unverified. It is left out.
+- The gate stops the host asking the user; it does not make the host climb the ladder, which stays advisory, and whether the
+  host applied the chosen option is not machine-checkable because options are free text. The ledger shows what was decided, not what was done.
 - Probability is a judgment of fit among the options given, not proof the choice is right; a poorly framed question yields a
   confident wrong answer. The record lets the user review each decision on return.
 - When the advisor's family wrote the work the decision concerns, the report says the opinion is from the same family.
@@ -84,11 +112,10 @@ README and tests follow, as for `fnl-afk`.
 
 | Decision | Owner | What unblocks it |
 | --- | --- | --- |
-| Whether a hook should deny the question tool during a lease | owner | a new scoped exception, after checking the host allows it |
 | Whether 0.8 is the right threshold for rung 2 | owner | the first real decisions in the log |
 | Whether `fnl-advisor`'s committee is ever a rung for design decisions | owner | a preference |
 
 ## Evidence
 
-None yet. A build needs a red test per behavior: the `log` fields and their refusals, the new judge site's schema and refusals, the `advisor`
-role and the single-agent rule, the choose mode's output contract, the lease line in `session_start.py` present and absent, and the alias and counts of the rename.
+None yet. A build needs a red test per behavior: the `log` fields and their refusals, the new judge site's schema and refusals, the gate (denies only with a live lease, allows on every error), the ledger `decision` and
+`question_denied` lines being accepted by `ledger.load`, the `advisor` role and the single-agent rule, the tier and family rule, the choose mode's output contract, the lease line in `session_start.py` present and absent, and the alias and counts of the rename.
