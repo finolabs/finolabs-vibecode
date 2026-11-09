@@ -373,6 +373,36 @@ class CheckupTest(unittest.TestCase):
                 self.assertEqual(row["status"], "missing")
                 self.assertEqual(row["reason"], "required headings absent: " + heading)
 
+    def test_assignment_matrix_states_and_fixed_reasons(self):
+        config = self.home / ".finolabs/vibecode/host.md"
+        legacy = "\n".join("## " + h for h in sorted(checkup.HEADINGS)) + "\n"
+        matrix = ("## Assignment matrix\n\n- Consent: yes (2026-11-09)\n- Judge: jev\n"
+                  "- codex: levels 1-5; roles code-review\n- claudezz: levels 2-4; roles navigator\n")
+        present = "required headings present; values not validated; assignments: "
+        self.write(config, legacy)
+        row = self.setup_item("host config")
+        self.assertEqual(row, {"check": "host config", "status": "ok", "reason": present +
+                               "matrix absent; legacy Agent roles and Agent levels in use until 0.3.0"})
+        # Valid: the matrix alone decides, so a missing legacy roles heading is no longer required.
+        self.write(config, "\n".join("## " + h for h in sorted(checkup.HEADINGS - {"Agent roles"})) + "\n" + matrix)
+        self.assertEqual(self.setup_item("host config"), {"check": "host config", "status": "ok", "reason": present +
+                         "matrix valid; 2 agents; judge jev; roles assigned: code-review, navigator"})
+        self.write(config, legacy + matrix)
+        self.assertTrue(self.setup_item("host config")["reason"].endswith(
+            "; legacy Agent roles or Agent levels present and ignored"))
+        # Invalid, even with a valid legacy section: unset, with each fixed reason and never the offending text.
+        self.write(config, legacy + matrix + "- gemini: levels 1-2\n- codex: levels 1-5\n")
+        row = self.setup_item("host config")
+        self.assertEqual(row["status"], "missing")
+        self.assertIn("assignments: matrix invalid (unknown agent, duplicate agent); roles and judge unset, "
+                      "reviews not routed, judge falls to the host model", row["reason"])
+        self.assertNotIn("gemini", json.dumps(self.data()))
+        # Without its own yes consent: unset as well.
+        self.write(config, legacy + "## Assignment matrix\n- Consent: no\n- Judge: host\n")
+        row = self.setup_item("host config")
+        self.assertEqual(row["status"], "missing")
+        self.assertIn("assignments: matrix without consent; roles and judge unset", row["reason"])
+
     def test_template_structure_and_instruction_consent(self):
         template = (ROOT / "skills/fnl-delegate/references/host-template.md").read_text()
         headings = re.findall(r"^## (.+)$", template, re.M)
