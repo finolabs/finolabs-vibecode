@@ -123,6 +123,16 @@ class CheckupTest(unittest.TestCase):
         self.assertEqual(row["status"], "ok")
         self.assertEqual(row["reason"], "install recorded; version 1.0.0")
 
+    def test_folder_marketplace_symlinked_manifest_is_unverified(self):
+        self.install_claude()
+        live = self.folder_marketplace(self.home / ".claude", "2.0.0")
+        manifest = live / ".claude-plugin/plugin.json"
+        target = self.base / "linked-manifest.json"
+        manifest.rename(target)
+        manifest.symlink_to(target)
+        self.assertEqual(checkup.read_json(manifest), ("unverified", {}))
+        self.assertIsNone(checkup.folder_install(self.home / ".claude/plugins", ["example"]))
+
     def test_claude_config_dir_selects_the_home_the_session_uses(self):
         other = self.home / ".claude-elsewhere"
         root = other / "plugins/cache/example/finolabs-vibecode/3.0.0"
