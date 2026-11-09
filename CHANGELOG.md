@@ -15,6 +15,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Native Windows is documented as unsupported (README "Supported platforms"): every script that imports `pwd` or `fcntl` now fails with one `ImportError` saying the plugin needs POSIX file APIs, supports macOS and Linux, and that Windows users run it under WSL, instead of a bare `ModuleNotFoundError`. Behavior on macOS and Linux is unchanged (issue 193).
 - `heavy_run.py`: the free-memory reading follows the kernel's own figure (the `memory_pressure` free percentage times `hw.memsize`) and falls back to a `vm_stat` estimate (free plus the larger of inactive plus speculative and file-backed pages; purgeable pages are not added because they can overlap inactive ones) when either program cannot be read or parsed, so a machine with a large file cache is no longer refused while `memory_pressure` reports it healthy; `status` also prints `waiting: about <n>` or `waiting: unknown`, a point-in-time approximation (it skips scripts whose path contains a space and can be off by one around a lock change), counting only a Python interpreter (optionally after `/usr/bin/env`) running `heavy_run.py` with the `run` action. The setup text no longer mentions a heavy-job lock location.
 
+### Fixed
+
+- The quota probe reads a Claude Code reset time printed on the hour (`6pm`) as well as one with minutes (`6:05pm`). Claude Code now prints `6pm`, which the strict parser rejected, so every Claude install was marked unverified and backed off for 24 hours. The line shape stays otherwise strict.
+
 ## [0.2.1] - 2026-11-09
 
 Not in this release: the opt-in heavy-job gate hook described in `docs/specs/heavy-jobs.md` (the `heavy_run.py` wrapper is in), the review residual notes and the smaller setup items; see the [release record](docs/specs/release-0.2.1.md).

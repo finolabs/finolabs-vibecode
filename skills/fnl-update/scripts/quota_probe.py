@@ -103,7 +103,7 @@ def parse_agy(data, measured=None):
 
 CLAUDE_LINE = re.compile(
     r"Current (session|week \(([^()\r\n]+)\)): ([0-9]+(?:\.[0-9]+)?)% used · resets "
-    r"([A-Z][a-z]{2}) ([0-9]{1,2}) at ([0-9]{1,2}):([0-9]{2})(am|pm) "
+    r"([A-Z][a-z]{2}) ([0-9]{1,2}) at ([0-9]{1,2})(?::([0-9]{2}))?(am|pm) "
     r"\(([A-Za-z_]+(?:/[A-Za-z0-9_+-]+)*)\)")
 MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
 
@@ -134,7 +134,7 @@ def parse_claude(data, measured=None):
         dates = []
         for year in range(local.year, local.year + 5):
             try:
-                candidate = datetime(year, MONTHS.index(month) + 1, int(day), hour, int(minute), tzinfo=zone)
+                candidate = datetime(year, MONTHS.index(month) + 1, int(day), hour, int(minute or 0), tzinfo=zone)
                 if candidate.astimezone(timezone.utc) >= measured:
                     dates.append(candidate)
             except ValueError:
