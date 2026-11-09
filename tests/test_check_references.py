@@ -165,14 +165,14 @@ class CheckReferencesTest(unittest.TestCase):
             with self.subTest(file=relative):
                 path = self.root / relative
                 original = path.read_text()
-                self.assertIn("19 skill folders", original)
-                path.write_text(original.replace("19 skill folders", "21 skill folders", 1))
+                self.assertIn("20 skill folders", original)
+                path.write_text(original.replace("20 skill folders", "21 skill folders", 1))
                 try:
                     result = self.check()
                 finally:
                     path.write_text(original)
                 self.assertEqual(result.returncode, 1, result.stdout)
-                self.assertIn("skill count 21 does not match 19 folders", result.stdout)
+                self.assertIn("skill count 21 does not match 20 folders", result.stdout)
 
     def test_skill_lists_match_folders(self):
         for relative in ("README.md", "skills/fnl-ask/references/map.md"):

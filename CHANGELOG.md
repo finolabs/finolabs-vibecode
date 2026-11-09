@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- `fnl-afk` (away from keyboard) is the main short name for the away mandate; `fnl-brb` remains an older alias, and both load `fnl-autopilot`.
+
 ## [0.2.2] - 2026-11-09
 
 ### Added
