@@ -23,10 +23,10 @@ waiting to be asked. The user stops it when they return. It is not on by default
 
 - One skill, not two. The away-mode idea (a user-run command that hands the host agents a time-boxed standing mandate
   while the user is asleep or out) is autopilot itself. The skill folder keeps the fnl-autopilot name as the
-  canonical, documented command; a second entry with a friendlier name is only a thin alias that loads the same
+  canonical, documented command; entries with friendlier names are only thin aliases that load the same
   procedure (a skill folder cannot point outside itself, so the alias holds a pointer sentence and the dependency
-  on fnl-autopilot, never a copy of the rules). The owner picked the alias name fnl-brb ("be right back") on 2026-11-09, so the alias is `/fnl-brb`. It is built together with
-  fnl-autopilot, not before it.
+  on fnl-autopilot, never a copy of the rules). Aliases are built together with fnl-autopilot, not before it.
+- On 2026-11-09, the owner named `fnl-afk` (away from keyboard) the main short name and kept `fnl-brb` (be right back) as an alias; both load `fnl-autopilot` and hold no rules of their own.
 - Merge: the authority is the user's affirmative Merge answer in `fnl-setup` (the Merge setting still has no default,
   and Tier 3 still forbids a merge when setup says no); starting a lease only applies that answer. The owner's own
   answer is yes (2026-11-09). With a yes recorded, the agent may merge a pull request without asking when both review

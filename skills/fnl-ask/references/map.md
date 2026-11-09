@@ -2,7 +2,7 @@
 
 ## Skills
 
-The 19 skill folders and their purposes match the README.
+The 20 skill folders and their purposes match the README.
 
 | Skill | Use it when |
 | --- | --- |
@@ -15,7 +15,8 @@ The 19 skill folders and their purposes match the README.
 | `fnl-commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports). |
 | `fnl-restore-point` | Saving the working tree to a private git ref before the agent edits, listing restore points and restoring one after a preview and a yes. User-invoked, git repositories only. |
 | `fnl-autopilot` | Starting a time-boxed standing mandate while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/fnl-setup add autopilot`; the live loop, dashboard tab, scheduler and hooks are deferred. |
-| `fnl-brb` | Short name for `fnl-autopilot` (be right back); follows the same procedure and arguments. |
+| `fnl-afk` | Main short name for `fnl-autopilot` (away from keyboard); starts the away mandate so your agents keep working while you are away, or stops it on return. |
+| `fnl-brb` | Older short name (be right back), kept as an alias of `fnl-afk` through `fnl-autopilot`; follows the same procedure and arguments. |
 | `fnl-review-gate` | A user story is done or a pull request is about to merge: an independent code review, a disposition for every finding, a regression test per runtime fix. |
 | `fnl-security-review-gate` | A change touches auth, permissions, private data, untrusted input or payments: a permission-boundary review, with negative tests proving that not even a record's existence leaks. |
 | `fnl-verification` | Choosing targeted tests, checking current-head verification receipts, completing host/judge criterion checks and deciding whether to accept reported work; the coordinator keeps the verdict. |
@@ -36,7 +37,7 @@ The 19 skill folders and their purposes match the README.
 | Writing or revising your own instructions for every agent and repository | `/fnl-setup instructions` | |
 | Adding or removing an agent, or refreshing allowed models | `/fnl-setup scan` | |
 | Saving the working tree before the agent edits, or going back to a saved point | `/fnl-restore-point` | |
-| Working while away, or stopping the mandate on return | `/fnl-autopilot start` or `/fnl-autopilot stop`; `/fnl-brb` is the short name | Recorded setup required (`/fnl-setup add autopilot`) |
+| Working while away, or stopping the mandate on return | `/fnl-autopilot start` or `/fnl-autopilot stop`; `/fnl-afk` is the main short name, with `/fnl-brb` kept as an alias | Recorded setup required (`/fnl-setup add autopilot`) |
 | Showing or changing Delegation mode or Routing, including environment overrides | `/fnl-setup mode` | |
 | Starting, resuming or redirecting coding work | `fnl-coding-router` | |
 | Requirements unclear | `fnl-coding-router` (workflow adapter's clarification step, with questions put through the host's native question tool; advisory, agent judgment) | `/grill-me`, or `/grill-with-docs` to keep a glossary and ADRs |
@@ -141,7 +142,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 
 ## Rules
 
-- A skill command with a leading `/` is for the user to type; on Codex use `$`. The seven user-only declarations are enforced on Claude Code; equivalent invocation policy on Codex/Antigravity remains unverified. Names without `/` load on their own when the task matches, or the user can type them.
+- A skill command with a leading `/` is for the user to type; on Codex use `$`. The eight user-only declarations are enforced on Claude Code; equivalent invocation policy on Codex/Antigravity remains unverified. Names without `/` load on their own when the task matches, or the user can type them.
 - In a Spec Kit repository, Spec Kit owns the process. Companion process skills (`to-spec`, `to-tickets`, `implement`, `implement-spec`) yield to it; companion phase tools (`grilling`, `tdd`, `diagnosing-bugs`, `prototype`, `code-review`) work inside its phases.
 - Companion skills come from [mattpocock/skills](https://github.com/mattpocock/skills), [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill), [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills), [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design), [finolabs/markmap-skills](https://github.com/finolabs/markmap-skills) and [typesafe-ai/skills](https://github.com/typesafe-ai/skills) (all MIT); `codex review` is native; Claude Code review instruments may need to be installed or enabled as setup describes. When one is not installed, say so and point to that repository's install instructions; install nothing yourself. The packs are independent: neither endorses the other.
 - For Route mode, name the matching skill and command in one or two sentences. When no row fits, say so and name the closest two, with the one question that would decide between them.

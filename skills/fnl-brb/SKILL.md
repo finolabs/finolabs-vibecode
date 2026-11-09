@@ -1,6 +1,6 @@
 ---
 name: fnl-brb
-description: Short name for fnl-autopilot (be right back); start the away mandate or stop it on return.
+description: Older short name (be right back) for the away mandate; start it while you are away or stop it on return, following fnl-afk's procedure through fnl-autopilot.
 disable-model-invocation: true
 argument-hint: "[start|stop]"
 ---

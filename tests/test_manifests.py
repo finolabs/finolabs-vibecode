@@ -27,16 +27,26 @@ class ManifestTest(unittest.TestCase):
     def test_release_surface_counts_and_agents_match_the_folders(self):
         skills = list((ROOT / "skills").glob("*/SKILL.md"))
         agents = {p.stem for p in (ROOT / "agents").glob("fnl-*.md")}
-        self.assertEqual(len(skills), 19)
+        self.assertEqual(len(skills), 20)
         self.assertEqual(agents, {"fnl-reviewer", "fnl-security-reviewer", "fnl-navigator"})
         readme = (ROOT / "README.md").read_text()
         ask = (ROOT / "skills/fnl-ask/references/map.md").read_text()
         display = (ROOT / "agents/openai.yaml").read_text()
         for doc in self.docs:
-            self.assertIn("19 skills and 3 agents", doc["description"])
+            self.assertIn("20 skills and 3 agents", doc["description"])
         for agent in agents:
             for public_text in (readme, ask, display, *(doc["description"] for doc in self.docs)):
                 self.assertIn(agent, public_text)
+
+    def test_afk_is_a_user_only_thin_alias(self):
+        path = ROOT / "skills/fnl-afk/SKILL.md"
+        _, frontmatter, body = path.read_text().split("---", 2)
+        fields = dict(line.split(": ", 1) for line in frontmatter.strip().splitlines())
+        self.assertEqual(fields["name"], path.parent.name)
+        self.assertEqual(fields["disable-model-invocation"], "true")
+        self.assertEqual(fields["argument-hint"], '"[start|stop]"')
+        brb_body = (ROOT / "skills/fnl-brb/SKILL.md").read_text().split("---", 2)[2]
+        self.assertEqual(body.replace("# Away from keyboard", "# Be right back"), brb_body)
 
     def test_description_length_fits_the_catalog_standard(self):
         # The shared catalog (finolabs/plugins) lists 120-160 characters and repeats them exactly.
