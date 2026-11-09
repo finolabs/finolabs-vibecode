@@ -1,6 +1,6 @@
 # Pause (draft, scoped to release 0.2.3)
 
-Status: draft; the owner described the idea and recorded the decisions below on 2026-11-09; nothing is built.
+Status: in progress; implemented in the code pull request, not yet released
 
 Idea: owner, 2026-11-09. The opposite of `fnl-brb`. Autopilot hands the agents a mandate to keep working while the
 user is away; pause is what the user runs before a restart or shutdown of the machine, so that no running session or
