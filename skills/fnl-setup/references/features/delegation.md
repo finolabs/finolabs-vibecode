@@ -6,6 +6,8 @@ Every question follows [interview.md](../interview.md): native question tool, ne
 
 Run the scan procedure with the running host passed explicitly, including its model confirmation, preview and clear yes before its section-only write. If it is unavailable, leave the inventory unverified and point to `/fnl-setup scan`; never guess which families exist.
 
+Then record what each helper can take, following [levels.md](../levels.md).
+
 Ask: "Save how this computer starts and shares work with other AI helpers?"
 Yes: Fill the shown local host.md from the fnl-delegate template; the saved helper list stays intact. Saving sends nothing; later helper work uses its provider.
 No: Leave the file unchanged; ask later.

@@ -27,3 +27,4 @@
 | [Context snapshot](context-snapshot.md) | implemented; release 0.2.0 local Claude Code and Antigravity status-line recorder, fresh context reads, steward checks and previewed settings writer; live status-line delivery and user-owned composition remain unverified. |
 | [Parallel agent instances](parallel-instances.md) | implemented; shared helper, setup, SessionStart, dashboard, CI copy group and documentation are integrated locally; targeted verification is recorded in the spec, while live-host scheduling and UI behavior remain unverified. |
 | [Heavy-job guard and test scope](heavy-jobs.md) | draft; `heavy_run.py` is implemented; the gate, its installer and the setup question are not; the gate exception is recorded in CLAUDE.md. |
+| [Agent levels](agent-levels.md) | in progress; the writer, strict reader and routing text are written; nothing is verified on a live host. |
