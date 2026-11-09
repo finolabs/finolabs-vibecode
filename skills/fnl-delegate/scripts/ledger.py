@@ -6,6 +6,7 @@ in the resolved data root. Environment variables cannot redirect the ledger.
 """
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -14,6 +15,7 @@ import secrets
 import statistics
 import subprocess
 import sys
+import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -273,6 +275,188 @@ def cmd_open(args):
                   f"{s['agent']}/{s['model']}  {s['project']}: {s['task']}")
 
 
+STALE_STATE = "state/ledger-stale"
+STALE_EXPIRY = 3600
+STALE_OUTCOMES = ("stalled", "error", "cancelled")
+LOG_TAIL = 64
+SAFE_ID = re.compile(r"[A-Za-z0-9-]{1,40}")  # the ids `start` writes; anything else never names a log file
+EXIT_LINE = re.compile(rb"exit=(-?[0-9]{1,3})")
+
+
+def past_budget(start, current):
+    """Age in minutes when the record is past a positive budget, else None (inside it, or no usable budget)."""
+    budget = start.get("budget_min")
+    if type(budget) is not int or budget <= 0:
+        return None
+    try:
+        age = (current - datetime.fromisoformat(start["ts"])).total_seconds() / 60
+    except (TypeError, ValueError):
+        return None
+    return age if age > budget else None
+
+
+def log_facts(ident, current):
+    """None when no log is named for the id, else (last-write age in minutes, exit code or None).
+
+    Reads only the last 64 bytes; the content never leaves this function."""
+    import log_scan
+    root = log_scan.run_log_folder()
+    try:
+        os.lstat(root)
+    except FileNotFoundError:
+        return None  # a preview never creates the run-log folder
+    with log_scan.folder_descriptor(root) as folder:
+        try:
+            fd = os.open(ident + ".log", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=folder)
+        except FileNotFoundError:
+            return None
+        try:
+            info = log_scan.check_file(fd)
+            offset = max(0, info.st_size - LOG_TAIL)
+            os.lseek(fd, offset, os.SEEK_SET)
+            tail = os.read(fd, LOG_TAIL)
+        finally:
+            os.close(fd)
+    lines = tail.splitlines()
+    if offset and lines:
+        lines = lines[1:]  # the first line of a cut tail is partial
+    codes = [m for m in (EXIT_LINE.fullmatch(line.strip()) for line in lines) if m]
+    return (max(0.0, current.timestamp() - info.st_mtime) / 60, int(codes[-1][1]) if codes else None)
+
+
+def stale_rows():
+    """Open records past their budget: (id, age, budget, log description, outcome or None, note)."""
+    import log_scan
+    starts, finishes = load()
+    current = datetime.now(timezone.utc)
+    rows = []
+    for ident, start in starts.items():
+        if ident in finishes:
+            continue
+        age = past_budget(start, current)
+        if age is None:
+            continue
+        if not isinstance(ident, str) or not SAFE_ID.fullmatch(ident):
+            rows.append(("(invalid id)", age, start["budget_min"], "unchecked", None, ""))
+            continue
+        try:
+            facts = log_facts(ident, current)
+        except log_scan.FolderRefused:
+            raise
+        except (OSError, ValueError):
+            rows.append((ident, age, start["budget_min"], "refused", None, ""))
+            continue
+        if facts is None:
+            described, outcome, reason = "none", "cancelled", "no log"
+        else:
+            log_age, code = facts
+            exit_text = "no exit line" if code is None else f"exit={code}"
+            described = f"age {log_age:.0f} min, {exit_text}"
+            outcome = "error" if code not in (None, 0) else "stalled"
+            reason = "log " + exit_text
+        rows.append((ident, age, start["budget_min"], described, outcome,
+                     f"closed late by ledger stale: past budget, {reason}"))
+    return rows
+
+
+def plan_digest(plan):
+    return hashlib.sha256(json.dumps(plan, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+
+
+def stale_preview():
+    rows = stale_rows()
+    if not rows:
+        print("ledger: no open records past their budget")
+        return
+    root = dr.consent_root()
+    if root is None:
+        raise ValueError("invalid data root")
+    for ident, age, budget, described, outcome, _ in rows:
+        print(f"{ident}  age {age:.0f}/{budget} min  log: {described}  -> {outcome or 'left open'}")
+    records = [{"id": ident, "outcome": outcome, "note": note} for ident, _, _, _, outcome, note in rows if outcome]
+    if not records:
+        print("ledger: nothing to close; ledger unchanged")
+        return
+    plan = {"root": str(root), "created": time.time(), "records": records}
+    value = plan_digest(plan)
+    with dr.data_folder(STALE_STATE, create=True, private=True) as state:
+        fcntl.flock(state, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        dr.atomic_write(state, "preview.json", json.dumps({"plan": plan, "digest": value}).encode())
+    print(f"Closes {len(records)} of {len(rows)} listed records; none is marked accepted.")
+    print("Digest: " + value)
+    print("Close with: ledger.py stale --close --digest <at least 12 hex digits of the digest>")
+    print("Preview expires in 60 minutes; ledger unchanged.")
+
+
+def valid_plan(plan):
+    if not isinstance(plan, dict) or set(plan) != {"root", "created", "records"}:
+        return False
+    if type(plan["created"]) not in (int, float) or not isinstance(plan["records"], list):
+        return False
+    return all(isinstance(r, dict) and set(r) == {"id", "outcome", "note"} and isinstance(r["id"], str)
+               and SAFE_ID.fullmatch(r["id"]) and r["outcome"] in STALE_OUTCOMES
+               and isinstance(r["note"], str) and len(r["note"]) <= 200 for r in plan["records"])
+
+
+def stale_close(value):
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{12,64}", value):
+        raise ValueError("at least 12 hex digits of the preview digest required")
+    root = dr.consent_root()
+    if root is None:
+        raise ValueError("invalid data root")
+    with dr.data_folder(STALE_STATE, private=True) as state:
+        fcntl.flock(state, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        import stat
+        raw = dr.read_file(state, "preview.json", 1024 * 1024)
+        if stat.S_IMODE(os.stat("preview.json", dir_fd=state, follow_symlinks=False).st_mode) != 0o600:
+            raise ValueError("preview must be private (0600)")
+        saved = json.loads(raw)
+        if not isinstance(saved, dict) or set(saved) != {"plan", "digest"} or not valid_plan(saved["plan"]):
+            raise ValueError("invalid preview; preview again")
+        plan = saved["plan"]
+        digest = plan_digest(plan)
+        if saved["digest"] != digest or not digest.startswith(value):
+            raise ValueError("digest mismatch; preview again")
+        if plan["root"] != str(root):
+            raise ValueError("data root changed; preview again")
+        if not 0 <= time.time() - plan["created"] <= STALE_EXPIRY:
+            raise ValueError("preview expired; preview again")
+        starts, finishes = load()
+        current = datetime.now(timezone.utc)
+        closed = 0
+        for item in plan["records"]:
+            start = starts.get(item["id"])
+            if start is None or item["id"] in finishes or past_budget(start, current) is None:
+                continue  # finished since the preview, or never past its budget: never closed here
+            append({"event": "finish", "id": item["id"], "ts": now(), "outcome": item["outcome"],
+                    "rework_rounds": 0, "tests": "not-run", "note": item["note"], "log_scan": "not_scanned"})
+            closed += 1
+        os.unlink("preview.json", dir_fd=state)
+        os.fsync(state)
+    print(f"ledger: closed {closed} of {len(plan['records'])} previewed records")
+
+
+def cmd_stale(args):
+    import log_scan
+    if args.close and args.digest is None:
+        sys.exit("ledger: --close needs --digest from the preview")
+    if args.digest is not None and not args.close:
+        sys.exit("ledger: --digest only goes with --close")
+    try:
+        if args.close:
+            stale_close(args.digest)
+        else:
+            stale_preview()
+    except log_scan.FolderRefused as error:
+        sys.exit("ledger: " + str(error))
+    except FileNotFoundError:
+        sys.exit("ledger: stale refused: no preview; preview again")
+    except BlockingIOError:
+        sys.exit("ledger: stale refused: another stale command is running")
+    except (OSError, json.JSONDecodeError, UnicodeError):
+        sys.exit("ledger: stale refused: unsafe or unreadable state; preview again")
+
+
 SUMMARY_KEYS = ("agent", "model", "kind", "grade")
 SUMMARY_GROUP_KEYS = (*SUMMARY_KEYS, "route_by")
 
@@ -467,7 +651,12 @@ def build_parser():
     o.add_argument("--project", help="only dispatches of this exact project name")
     o.set_defaults(func=cmd_open)
 
-    m = sub.add_parser("summary", help="acceptance and timing per agent, model, kind and grade")
+    st = sub.add_parser("stale", help="preview open records past their budget; close them with --close --digest")
+    st.add_argument("--close", action="store_true", help="close the records the preview listed")
+    st.add_argument("--digest", help="at least 12 hex digits of the preview digest")
+    st.set_defaults(func=cmd_stale)
+
+    m = sub.add_parser("summary",help="acceptance and timing per agent, model, kind and grade")
     m.add_argument("--since", help="YYYY-MM-DD")
     m.add_argument("--project")
     m.add_argument("--json", action="store_true", help="print the rows as JSON")
