@@ -13,6 +13,7 @@ Levels are the grades of `fnl-delegate`: 1 easy, 2 medium, 3 hard, 4 very hard, 
 - AC3: `show` reads the section strictly: absent prints `none`; valid prints JSON; a duplicate section, a duplicate or unknown line or a bad range prints `unreadable` and exits 3.
 - AC4: The consent line is `- Consent: yes (<date>)`; `--off` writes `- Consent: no` and no entries. Entries without consent `yes` are unreadable.
 - AC5: Routing says how the section is used (advisory, agent judgment): an agent with a line takes only grades inside its range, an agent without a line takes any grade; a review takes the grade of the work reviewed plus one, at most 5; a declared command replaces `claude` in the headless form; a shell function starts through the user's zsh behind `delegate_env.py`, so the allowlist and the approved or declined names of `Delegate environment` still apply (tested with synthetic names), and it exists only where the user's zsh startup file defines it; quota is read under a label only when `add quota` lists that install.
+- AC7: `candidates` prints one JSON line of names only: `claude*` programs on absolute `PATH` entries (executable regular files, the bare name `claude` excluded) and the labels of `~/.claude-<label>` folders (real directories, not links); at most 20 of each, no paths, nothing run. Shell functions are never listed; the user names them.
 - AC6: The writer runs no command, reads no shell startup file and stores no environment value or credential.
 
 ## Contract
