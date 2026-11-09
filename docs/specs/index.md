@@ -17,7 +17,7 @@
 | [Pause](pause.md) | draft; the opposite of `fnl-afk` (older alias `fnl-brb`) (fnl-pause, friendly alias fnl-gtg): drain running work, write handovers and report what recorded work remains before a restart or shutdown; owner decisions recorded 2026-11-09, nothing built. |
 | [Release 0.2.1: scope](release-0.2.1.md) | released; v0.2.1 tagged 2026-11-09 with packages 1 to 11, 12a and 15; the rest moved to a later release. |
 | [Release 0.2.2: scope](release-0.2.2.md) | released; tagged v0.2.2 on 2026-11-09 with all seven packages; live-host proof partial. |
-| [Release 0.2.3: scope](release-0.2.3.md) | draft; pause skill and the away-skill rename to fnl-afk are scoped; nothing built. |
+| [Release 0.2.3: scope](release-0.2.3.md) | draft; the pause skill and the away-skill rename to fnl-afk are merged, the assignment matrix is scoped and specified; its code is not built. |
 | [Release 0.1.10: spec and plan](release-0.1.10.md) | released; the package table lists the pull request behind each package. |
 | [Merge guard](merge-guard.md) | deferred; accepted permission-rule design for Claude Code and Codex, with no shipped writer; the release 0.2.0 record moved this backlog target to 0.2.1 alongside autopilot, and release 0.2.1 then moved both out (see `release-0.2.1.md`). |
 | [Running agents](running-agents.md) | implemented; phase 1: ledger and opt-in process snapshot in Running now; liveness remains advisory, CLI name observations and real-host UI verification remain open. |

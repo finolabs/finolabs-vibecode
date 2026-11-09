@@ -60,20 +60,38 @@ answer and makes deviation visible, without turning a preference into a block.
 
 ## Reading and migration
 
-- One parser: `assignments.py`, a shared module copied into every skill that needs it (the copy group is checked in CI,
-  as for `data_root.py`), is the only code that reads the section; `review_config.py` (three copies plus the
-  plugin-level one), `judge.py` (five copies), `checkup.py`, `route_pick.py` and `matrix_setup.py` import it, so there is
-  one reading of the format. The review and judge readers get roles and judge
-  from this section first and from `## Agent roles` only when the matrix has no such line; `checkup.py` reports a
-  conflict between the two. Levels and work types have no script reader: `fnl-delegate` `route.md` reads them as advice
-  (agent judgment), and the section is the only place they are stored.
-- The old sections stay readable through release 0.2.x and are removed in 0.3.0 (the same schedule as the old global
-  ledger lines). `matrix_setup.py migrate` previews the matrix built from the old sections (roles, judge and levels) and,
-  after a yes, writes it with a backup and removes the old two in the same atomic write; nothing is lost because the
-  backup keeps the originals.
+- One parser: `assignments.py`, a shared module copied into every skill that needs it (a new copy group checked in CI,
+  as for `data_root.py`), is the only code that reads the section. Today's script readers are the three copies of
+  `review_config.py` (plugin-level `scripts/`, `fnl-delegate`, `fnl-review-gate`) and the four copies of `judge.py`
+  (plugin-level `scripts/`, `fnl-delegate`, `fnl-session-hygiene`, `fnl-verification`), plus `checkup.py`; after this
+  change `route_pick.py` and `matrix_setup.py` also import `assignments.py`, so there is one reading of the format. Levels
+  and types of work have no script reader today (`route.md` reads levels as advice); the new readers are `route_pick.py`
+  and the ledger comparison, both through `assignments.py`.
+- Precedence, with three distinct states and no line-by-line fallback:
+  1. The matrix section is **absent**: the readers use `## Agent roles` and `## Agent levels` exactly as today.
+  2. The matrix section is **present and valid**: it alone decides roles and judge. A role no agent line names is
+     **unassigned** (no routed review for it); that is the way to clear an assignment, and a legacy line never
+     resurrects it.
+  3. The matrix section is **present but invalid** (an unknown agent, type, role or key, a duplicate role, an
+     unreadable value): roles and judge are **unset**, reviews are not routed, `judge` falls to the host model, and `checkup.py` and
+     `show` report the reason. A reader never mixes the two sources, and never falls back to the legacy sections
+     because the matrix is damaged.
+- Consent is not inherited. The `Consent:` line is the matrix's own: `matrix_setup.py migrate` shows the preview and asks
+  for a new yes, and a matrix without a valid `Consent:` line is treated as absent for writing and as invalid for roles
+  and judge. The judge call's opt-in in `CLAUDE.md` (fourth scoped exception) and `PRIVACY.md` name `judge: jev` in
+  `## Agent roles` as the consent record; moving it into the matrix needs those two texts amended, and the amendment
+  merges before any code that reads the judge setting from the matrix.
+- The old sections stay readable through release 0.2.x (state 1 above) and are removed in 0.3.0, the same schedule as the old
+  global ledger lines. `matrix_setup.py migrate` previews the matrix built from the old sections and, after a yes, writes
+  it with a backup and removes the old two in one atomic write. The mapping is explicit, not "lossless by backup":
+  each `- code review|security review|navigator: <agent>` line becomes `roles code-review|security-review|navigator` on that agent's line (an agent
+  named only in roles gets a line with the levels it had or, with none recorded, `levels 1-5` shown in the preview for the user to
+  edit); `- judge: <value>` becomes `Judge: <value>`; the `## Agent levels` lines carry over unchanged; a legacy line that cannot be
+  mapped (an agent the matrix does not accept, a role outside the list) is listed in the preview as dropped, and migration
+  refuses to write while any dropped line remains unacknowledged by the user. The backup keeps the originals.
 - A roles line read from the matrix is held to the same strictness as today (closed vocabulary, one agent per role, a
   value outside the list refused), because review routing and posting trust depend on it. The security review of the code
-  pull request covers the dual read and its precedence.
+  pull request covers the three states, the consent rule and the dual read.
 
 ## One view
 
@@ -110,13 +128,20 @@ judgment, to run it before each dispatch; the script computes the answer exactly
 
 ## Compliance and token cost
 
-- `ledger.py start` accepts `--work-type <type>` (the closed list, local ledger only). When the type and level are given it
-  runs the same pick and, if the chosen agent or model is not among the survivors, prints one line `off the preferred
-  order: <reason>` and records `off_pick` (a short fixed reason) on the start line. It never refuses the dispatch: the
-  coordinator or the user may have a reason, and a block would only push agents to omit the type.
-- `ledger.py summary` shows the share of dispatches that went off the preferred order, per agent, so a preference that is
-  ignored is visible; `fnl-status` may show it. The enforcer of the choice stays agent judgment (advisory); the script
-  enforces the computation and the record.
+- Install identity: the ledger's `--agent` accepts only `claude`, `claude-session`, `codex`, `antigravity` and `subagent`,
+  so `claudework` cannot be recorded as itself today. `ledger.py start` gains an optional `--install <name>` (the same
+  name pattern as the matrix agents, local ledger only) recorded on the start line; the comparison uses the install when
+  given and the agent otherwise, so a legitimate `claudework` dispatch compares as `claudework`.
+- `ledger.py start` accepts `--work-type <type>` (the closed list, local ledger only) and `--level <1-5>`, the numeric
+  level of the grade (the existing `--grade` names stay as they are). With both given it runs the same pick and records
+  `pick_rank`: the 1-based position of the chosen install and model among the survivors, or 0 when it is not among them.
+  It prints one line `off the preferred order: rank <n>` when the rank is above 1 and `off the preferred set: <reason>`
+  when it is 0. Eligibility and preference are separate: always choosing the second-ranked agent shows as rank 2, not as
+  compliant. It never refuses the dispatch: the coordinator or the user may have a reason, and a block would only push
+  agents to omit the type.
+- `ledger.py summary` shows, per agent, the share of dispatches at rank 1, at a lower rank and outside the set, so an
+  ignored preference is visible; `fnl-status` may show it. The enforcer of the choice stays agent judgment (advisory); the
+  script enforces the computation and the record.
 - Session start prints one fixed line, `Assignments: <n> agents set; run route_pick.py before a dispatch`, about 20 tokens,
   instead of the roles summary only; the roles summary stays.
 - Expected cost: about 100 tokens per decision instead of about 5k of reading, and 20 tokens per session. These are
@@ -129,18 +154,25 @@ the listed model for that agent. A preference never overrides an agent's level r
 independence rule or the user's explicit choice, and it never grants anything: a preferred agent out of quota or range
 is skipped and the report says why.
 
+## Settled and provisional
+
+Settled by the owner: one stored section replacing the two old ones; setup in `/fnl-setup add delegation`; review posting
+stays in `/fnl-setup add roles` for now; the interim paragraph in the host config.
+
+Provisional (proposed by this design, pending the owner): the ledger records and warns but never refuses an off-order
+dispatch; a model not allowed on this machine is kept and reported as unverified rather than refused.
+
 ## Open decisions
 
 | Decision | Owner | What unblocks it |
 | --- | --- | --- |
 | Whether the six types are enough for a first release or `backend`, `data` or others are needed | owner | the owner's list |
-| Whether a model not allowed on this machine is refused or only reported | owner | a preference |
-| Whether `add roles` should keep review posting or fold it into the matrix flow now | owner | a preference |
-| Whether `ledger.py start` should stay warn-only on an off-order choice or require a reason with `--reason` | owner | a preference |
+| Whether an off-order dispatch should also require a short justification, as a new field distinct from the routing `--reason` enum | owner | a preference |
+| Whether a model not allowed on this machine is refused after all | owner | a preference |
 
 ## Evidence
 
 None yet. A build needs a red test per behavior: validation (agents, levels, types, model, roles, duplicates and limits),
 preview and apply with digest and expiry, strict `show`, migration from the two old sections including their backup,
 the dual read and its precedence in `review_config.py` and `judge.py` (every copy), `assignments.py` copies identical, `route_pick.py` drops and ordering, the ledger `--work-type` warning and summary, the `checkup.py` conflict report, and
-a routing example in `route.md` that names the section.
+a routing example in `route.md` that names the section, and a ledger test for `--install` and `pick_rank`.
