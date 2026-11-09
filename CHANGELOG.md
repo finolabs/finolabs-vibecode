@@ -10,7 +10,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
-- `heavy_run.py`: the free-memory reading now counts purgeable and file-backed (clean file cache) pages beside free, inactive and speculative ones, without counting a page twice, so a machine with a large file cache is no longer refused while `memory_pressure` reports it healthy; `status` also prints how many other `heavy_run.py run` processes are waiting, as a count or `unknown`. The setup text no longer mentions a heavy-job lock location.
+- `heavy_run.py`: the free-memory reading follows the kernel's own figure (the `memory_pressure` free percentage times `hw.memsize`) and falls back to a `vm_stat` estimate (free, purgeable and the larger of inactive plus speculative and file-backed pages) when either program cannot be read or parsed, so a machine with a large file cache is no longer refused while `memory_pressure` reports it healthy; `status` also prints how many other `heavy_run.py run` processes are waiting, as a count or `unknown`, counting only a Python interpreter (optionally after `/usr/bin/env`) running `heavy_run.py` with the `run` action. The setup text no longer mentions a heavy-job lock location.
 
 ## [0.2.1] - 2026-11-09
 

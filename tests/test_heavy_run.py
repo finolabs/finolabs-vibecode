@@ -456,10 +456,67 @@ def fake_run(stdout, returncode=0, error=None):
     return run
 
 
+def pressure_text(percent):
+    return ('The system has 17179869184 (1048576 pages with a page size of 16384).\n'
+            'System-wide memory free percentage: %s%%\n' % percent)
+
+
+def routed_run(vm, pressure=None, memsize='17179869184\n', error=None):
+    """Fake `run` answering each program by basename; `pressure` None makes memory_pressure fail."""
+    def run(argv, **_kwargs):
+        name = os.path.basename(argv[0])
+        if name == 'memory_pressure':
+            if pressure is None:
+                raise error or OSError('no memory_pressure')
+            return subprocess.CompletedProcess(argv, 0, pressure, '')
+        if name == 'sysctl':
+            return subprocess.CompletedProcess(argv, 0, memsize, '')
+        return subprocess.CompletedProcess(argv, 0, vm, '')
+    return run
+
+
 class MeasureTest(unittest.TestCase):
     def free_gb(self, text):
         with mock.patch.object(heavy.subprocess, 'run', fake_run(text)):
             return heavy.read_free_gb()
+
+    def kernel_gb(self, pressure, memsize='17179869184\n', vm=None):
+        vm = vm if vm is not None else vm_text(4031, 151654, 12391, file_backed=111892, purgeable=2)
+        with mock.patch.object(heavy.subprocess, 'run', routed_run(vm, pressure, memsize)):
+            return heavy.read_free_gb()
+
+    def test_kernel_figure_is_used_and_allows_the_motivating_case(self):
+        vm = vm_text(4031, 151654, 12391, file_backed=111892, purgeable=2)
+        self.assertLess(self.free_gb(vm), 3.0)  # the vm_stat estimate alone refuses
+        self.assertAlmostEqual(self.kernel_gb(pressure_text(31)), 0.31 * 16, places=6)
+        self.assertGreaterEqual(self.kernel_gb(pressure_text(31)), heavy.DEFAULTS['memory_gb'])
+
+    def test_low_kernel_figure_is_refused(self):
+        self.assertAlmostEqual(self.kernel_gb(pressure_text(10)), 1.6, places=6)
+        self.assertLess(self.kernel_gb(pressure_text(10)), heavy.DEFAULTS['memory_gb'])
+
+    def test_bad_kernel_reading_falls_back_to_vm_stat(self):
+        vm = vm_text(1000, 60000, 1000)
+        expected = 62000 * 16384 / 2 ** 30
+        for pressure, memsize in ((None, '17179869184'), ('garbage', '17179869184'), (pressure_text(101), '17179869184'),
+                                  (pressure_text(31), 'many'), (pressure_text(31), '0')):
+            self.assertAlmostEqual(self.kernel_gb(pressure, memsize, vm), expected, msg=repr((pressure, memsize)))
+        with mock.patch.object(heavy.subprocess, 'run', routed_run(vm, None, error=subprocess.TimeoutExpired('x', 5))):
+            self.assertAlmostEqual(heavy.read_free_gb(), expected)
+
+    def test_kernel_programs_run_without_shell_with_a_fixed_path_and_timeout(self):
+        calls = []
+
+        def run(argv, **kwargs):
+            calls.append((argv, kwargs))
+            return routed_run('', pressure_text(31))(argv, **kwargs)
+        with mock.patch.object(heavy.subprocess, 'run', run):
+            heavy.read_free_gb()
+        self.assertEqual([argv[0] for argv, _ in calls], ['/usr/bin/memory_pressure', '/usr/sbin/sysctl'])
+        for _, kwargs in calls:
+            self.assertEqual(kwargs['timeout'], 5)
+            self.assertFalse(kwargs.get('shell', False))
+            self.assertEqual(sorted(kwargs['env']), sorted(heavy.run_env.environment()))
 
     def test_file_cache_and_purgeable_pages_count_as_reclaimable(self):
         # Little inactive memory but a large clean file cache: refused by the old sum, allowed now.
@@ -546,6 +603,14 @@ class QueueViewTest(unittest.TestCase):
             with case:
                 self.assertIsNone(heavy.waiting_count())
                 self.assertIn('waiting: unknown', self.run_cli('status')[1])
+
+    def test_only_python_running_the_script_with_run_counts(self):
+        listing = self.lines('grep -n heavy_run.py run', 'python3 -I /x/heavy_run.py run -- cmd',
+                             '/usr/bin/env python3 /x/heavy_run.py run -- cmd', 'vim heavy_run.py run',
+                             'python3 /x/other.py heavy_run.py run', '/bin/zsh -c ls')
+        with self.ps(listing):
+            self.assertEqual(heavy.waiting_count(), 2)
+            self.assertIn('waiting: 2', self.run_cli('status')[1])
 
     def test_own_process_is_not_counted(self):
         with self.ps('%d python3 -I /x/heavy_run.py run -- true\n' % os.getpid()):
