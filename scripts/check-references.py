@@ -269,7 +269,7 @@ def check_mode_copies(root, problems):
 
 def check_skill_inventory(root, problems):
     folders = {p.name for p in (root / "skills").iterdir() if p.is_dir()}
-    for relative in ("README.md", "skills/fnl-ask/references/map.md"):
+    for relative in ("README.md", "skills/fnl-help/references/map.md"):
         path = root / relative
         # The canonical skill table lives under Skills, before the next heading.
         section = sections(path).get("Skills", "")

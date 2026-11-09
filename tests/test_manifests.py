@@ -44,7 +44,7 @@ class ManifestTest(unittest.TestCase):
         agents = {p.stem for p in (ROOT / "agents").glob("fnl-*.md")}
         self.assertEqual(agents, {"fnl-reviewer", "fnl-security-reviewer", "fnl-navigator"})
         readme = (ROOT / "README.md").read_text()
-        ask = (ROOT / "skills/fnl-ask/references/map.md").read_text()
+        ask = (ROOT / "skills/fnl-help/references/map.md").read_text()
         display = (ROOT / "agents/openai.yaml").read_text()
         for doc in self.docs:
             self.assertIn("skills and 3 agents", doc["description"])
@@ -75,9 +75,25 @@ class ManifestTest(unittest.TestCase):
         self.assertLess(len(main.read_text().splitlines()), 70)
         self.assertIn("Dependency: `fnl-pause`", alias.read_text())
 
+    def test_ask_is_a_user_only_thin_alias_of_help(self):
+        main = ROOT / "skills/fnl-help/SKILL.md"
+        alias = ROOT / "skills/fnl-ask/SKILL.md"
+        fields = {}
+        for path in (main, alias):
+            _, frontmatter, _ = path.read_text().split("---", 2)
+            fields[path.parent.name] = dict(line.split(": ", 1) for line in frontmatter.strip().splitlines())
+            self.assertEqual(fields[path.parent.name]["name"], path.parent.name)
+            self.assertEqual(fields[path.parent.name]["disable-model-invocation"], "true")
+        body = alias.read_text().split("---", 2)[2]
+        self.assertIn("Dependency: `fnl-help`", body)
+        self.assertIn("This alias holds no rules of its own.", body)
+        self.assertFalse((alias.parent / "references").exists())
+        self.assertIn("answers questions about this plugin", fields["fnl-help"]["description"])
+        self.assertNotIn("fnl-ask", (ROOT / "README.md").read_text().split("## Skills", 1)[0])
+
     def test_new_alias_and_pause_descriptions_are_valid_yaml_scalars(self):
         # A plain YAML scalar cannot contain ": "; the unquoted descriptions that already ship are older.
-        for name in ("fnl-afk", "fnl-gtg", "fnl-pause"):
+        for name in ("fnl-afk", "fnl-gtg", "fnl-pause", "fnl-help", "fnl-ask"):
             text = (ROOT / "skills" / name / "SKILL.md").read_text()
             line = next(l for l in text.split("---", 2)[1].splitlines() if l.startswith("description: "))
             value = line[len("description: "):]

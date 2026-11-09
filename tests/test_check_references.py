@@ -102,7 +102,7 @@ class CheckReferencesTest(unittest.TestCase):
                 ("docs/specs/work-tracking.md", True),
                 ("docs/specs/new-feature.md", False),
                 ("README.md", False),
-                ("skills/fnl-ask/references/map.md", False),
+                ("skills/fnl-help/references/map.md", False),
                 ("skills/fnl-setup/SKILL.md", False),
             ):
                 with self.subTest(name=old, file=relative):
@@ -161,7 +161,7 @@ class CheckReferencesTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_skill_lists_match_folders(self):
-        for relative in ("README.md", "skills/fnl-ask/references/map.md"):
+        for relative in ("README.md", "skills/fnl-help/references/map.md"):
             path = self.root / relative
             original = path.read_text()
             for replacement, expected in (("", "skill folder fnl-advisor missing from skill list"),
@@ -213,7 +213,7 @@ class CheckReferencesTest(unittest.TestCase):
         for suffix, replacement in (("verifier", "verification"), ("steward", "session-hygiene")):
             name, target = "fnl-" + suffix, "fnl-" + replacement
             for relative in ("docs/specs/agent-roles.md", "docs/specs/compaction-steward.md",
-                             "README.md", "skills/fnl-ask/references/map.md", "skills/fnl-setup/SKILL.md"):
+                             "README.md", "skills/fnl-help/references/map.md", "skills/fnl-setup/SKILL.md"):
                 with self.subTest(name=name, file=relative):
                     path = self.root / relative
                     original = path.read_text()

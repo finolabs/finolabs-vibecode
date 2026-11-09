@@ -36,7 +36,7 @@ On Codex, use `$` instead of `/` for every skill command below. Claude Code and 
 
 1. **Ask your AI assistant to install it.** Paste this into your assistant's chat: "Install https://github.com/finolabs/finolabs-vibecode for me, and explain each step before you do it."
 2. **Open a new chat.** Plugins load when a chat starts.
-3. **Type `/fnl-ask`.** (Claude Code may show it as `/finolabs-vibecode:fnl-ask`.) It tells you in plain words where to start, and you can ask it anything about the plugin.
+3. **Type `/fnl-help`.** (Claude Code may show it as `/finolabs-vibecode:fnl-help`.) It tells you in plain words where to start, and you can ask it anything about the plugin.
 4. **Type `/fnl-setup`, choose user scope, project scope or both, then Quick.** It asks a few plain questions and changes nothing without your yes.
 5. **Check that setup worked.** Type `/fnl-setup check`. It reads your setup, says in plain words what will run on its own and what will ask you first on your host, and lists what is missing. Anything it cannot see from files, it marks unverified.
 6. **Say what you want to build, in your own words.** For example: "I run a small shop and want a page that tracks my stock and turns red when an item runs low." The assistant plans it, builds it, checks it and tells you where to see it.
@@ -160,21 +160,21 @@ You were given this repository's link to install it for the user. Follow these s
    | Other agents | `npx skills add finolabs/finolabs-vibecode -a <agent>` |
 
 5. **Verify** that `claude plugin list`, `codex plugin list` or `agy plugin list` shows `finolabs-vibecode`. Report the command output to the user, and report any failure as it is.
-6. **Hand over to the user.** Plugins load when a session starts. Tell the user, in one message and in this order: open a new session; type `/fnl-ask` (`/finolabs-vibecode:fnl-ask` on Claude Code, `$fnl-ask` on Codex); then `/fnl-setup` and choose Quick (`$fnl-setup` on Codex). Only the user can start these, because setup interviews them before it writes host config and instructions. Tell them `/fnl-setup instructions` (choose user scope for their working contract) comes after their first result, except on Codex, where it comes right after setup.
+6. **Hand over to the user.** Plugins load when a session starts. Tell the user, in one message and in this order: open a new session; type `/fnl-help` (`/finolabs-vibecode:fnl-help` on Claude Code, `$fnl-help` on Codex); then `/fnl-setup` and choose Quick (`$fnl-setup` on Codex). Only the user can start these, because setup interviews them before it writes host config and instructions. Tell them `/fnl-setup instructions` (choose user scope for their working contract) comes after their first result, except on Codex, where it comes right after setup.
 7. **After the first result, offer companion guidance and show install commands only when requested:** [Matt Pocock's skills](https://github.com/mattpocock/skills) and [Cloudflare's `security-audit`](https://github.com/cloudflare/security-audit-skill) (see [Works well with](#works-well-with)). Every skill works without them.
 
-Done when the plugin is listed by your host and the user knows the order: `/fnl-ask`, `/fnl-setup` (Quick), a first real task, `/fnl-setup instructions` (immediately after setup on Codex), then `/fnl-status` later.
+Done when the plugin is listed by your host and the user knows the order: `/fnl-help`, `/fnl-setup` (Quick), a first real task, `/fnl-setup instructions` (immediately after setup on Codex), then `/fnl-status` later.
 
 ### For AI agents: working with a new user
 
 - **Start coding work with `fnl-coding-router`.** On Claude Code and Codex a session-start reminder prompts it (unless Routing is off, and Codex hooks need the user's trust) and on Antigravity an always-on rule does; on Codex the user's instructions should also point at it (`$fnl-setup instructions`).
-- **A user who says they are new to coding or not technical** should type `/fnl-ask` first: it loads the plain-language register, and you keep it for the rest of that conversation. Suggest it once; never start setup for them.
+- **A user who says they are new to coding or not technical** should type `/fnl-help` first: it loads the plain-language register, and you keep it for the rest of that conversation. Suggest it once; never start setup for them.
 - **Speak in everyday words, lead with the result, and ask only the user's own decisions.** Every check and gate still runs; only the wording changes.
 
 
 ## Skills
 
-The plugin has **22 skill folders**: 12 model-invoked skills and 10 marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Every skill carries the `fnl-` prefix. The user types the user-only ones, `fnl-autopilot`, `fnl-afk`, `fnl-brb`, `fnl-pause`, `fnl-gtg`, `fnl-restore-point`, `fnl-setup`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff` and `fnl-advisor` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
+The plugin has **23 skill folders**: 12 model-invoked skills and 11 marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Every skill carries the `fnl-` prefix. The user types the user-only ones, `fnl-autopilot`, `fnl-afk`, `fnl-brb`, `fnl-pause`, `fnl-gtg`, `fnl-restore-point`, `fnl-setup`, `fnl-status`, `fnl-update`, `fnl-help` and its older name `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff` and `fnl-advisor` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
 
 | Skill | Use it when |
 | --- | --- |
@@ -198,7 +198,8 @@ The plugin has **22 skill folders**: 12 model-invoked skills and 10 marked user-
 | `fnl-setup` | Configure user scope, project scope or both: Quick confirms inert defaults and asks companion choices; Advanced interviews each companion and offers widening features. `add <feature>` opens one feature, `check` is read-only, `scan` refreshes inventory, `mode` manages Delegation mode and Routing, and `instructions` drafts instruction files with approval per file; setup installs nothing. |
 | `fnl-status` | Opening the local dashboard with `overview` and `now` tabs in the terminal title bar. Overview includes a compact review gate and bottom tables for delegation, kept/handed-off counts, Judge receipts and Reviews. Now stacks running-agent lanes, slots and quota above named projects active in the last 24 hours, with compact Spec Kit or repository-state pipelines, task/package bricks and ledger outcome strips. Running status there with consent registers the local folder name. Refresh retains five repository snapshots and recognises Spec Kit artefacts before work records, repository indexes/status lines and packages, then exact-project ledger runs, skipping `specs/archive`; unrecognised projects retain their simple activity row and a searched-sources tooltip. `FNL_AGENT_SNAPSHOT=off` disables the opt-in process snapshot; `FNL_PROGRESS=off` disables progress. |
 | `fnl-update` | Showing installed and cached available versions, updating through the host after a clear yes, skipping a release, or stopping update notices. |
-| `fnl-ask` | You are new and do not know where to start, want to know what the plugin holds, or have a question about a skill, agent or script: it gives the first steps, lists the contents, explains the piece you name, or maps your situation to the next command, including companion skills from other packs. |
+| `fnl-help` | Plugin help: you are new and do not know where to start, want to know what the plugin holds, or have a question about a skill, agent or script; it gives the first steps, lists the contents, explains the piece you name, or maps your situation to the next command, including companion skills from other packs. It answers questions; it does not ask another agent. |
+| `fnl-ask` | Older name for `fnl-help`, kept as an alias; follows the same procedure and arguments. |
 | `fnl-open-source-review` | Before a repository goes public, and after: license, secrets in tree and history, internal leaks, clean payload, community files, repository settings, identity, data flow, plugin checks. |
 
 ### Agents
@@ -288,10 +289,10 @@ Ask your agent: "Route this change through the coding router and tell me the dep
 
 ## Getting started in detail
 
-The short version is "Start here" above; the order is `/fnl-ask`, `/fnl-setup`, a first real task, then `/fnl-setup instructions` (right after setup on Codex) and `/fnl-status`.
+The short version is "Start here" above; the order is `/fnl-help`, `/fnl-setup`, a first real task, then `/fnl-setup instructions` (right after setup on Codex) and `/fnl-status`.
 
 1. **Install** for your host (above), then open a new session: plugins load when a session starts.
-2. **Type `/fnl-ask`** (`$fnl-ask` on Codex). It explains where to begin. For a beginner, it loads plain-language guidance that the agent follows for the conversation.
+2. **Type `/fnl-help`** (`$fnl-help` on Codex). It explains where to begin. For a beginner, it loads plain-language guidance that the agent follows for the conversation.
 3. **Run setup once**: `/fnl-setup` (Claude Code, Antigravity) or `$fnl-setup` (Codex). Choose user scope, project scope or both first, then Quick for recommended defaults and a confirmation before writing, or Advanced to decide each part. The beginner path uses plain questions within the chosen scope and defers technical choices. The user-scope core runs `/fnl-setup scan` before configuring reach; Quick then asks one companion multi-select question and at most four separate offers to show install commands; Advanced interviews each companion and offers the widening features afterwards. Setup installs nothing; usage recording needs its own consent. On Codex, type `$fnl-setup instructions` next so your instructions point coding work at the router from the first task.
 4. **Give it a first real task.** Ask for a change; the agent starts coding work by loading `fnl-coding-router`. It chooses a workflow and depth (MIN, NORMAL or DEEP), checks the result, and explains what happened in your register within the same chat. On Claude Code and Codex a session-start reminder prompts the router (Codex hooks need your trust) and on Antigravity an always-on rule does; setting Routing to off removes the Claude Code/Codex reminder, while Antigravity's static rule stays.
 5. **What you should see:** a stated depth and reason, expressed in everyday words for a beginner; commits written as `fnl-commit-messages` says; pull requests held for posted code and security reviews (the adopted low-risk lane can use one reviewer for both); sensitive boundaries add the full security procedure; and, if delegation is set up, bounded tasks whose results are checked before acceptance.
@@ -388,7 +389,7 @@ rules/AGENTS.md                   session-start reminder: an always-on rule on A
 assets/                           icons, light/dark architecture and task-lifecycle diagrams, dashboard screenshots and their NOTICE
 evals/                            trigger, behavior and parity cases for `claude plugin eval`
 scripts/                          repository/shared helpers and checks: routing, reviews, receipts, judge, context, hygiene, slots, quota, metrics and setup; shared helpers have byte-identical copies in consuming skills
-skills/fnl-*/scripts/             self-contained copies plus skill-only helpers; the full inventory is in fnl-ask/references/map.md
+skills/fnl-*/scripts/             self-contained copies plus skill-only helpers; the full inventory is in fnl-help/references/map.md
 docs/specs/                       design specs (index.md) and one-file work records; work-tracking.md defines their contract
 docs/diagrams/                    HTML sources of the architecture and task-lifecycle diagrams
 tests/                            unit tests for the repository scripts, the ledger, the metrics hook and the dashboard page (the page script runs in node when it is installed)
@@ -428,7 +429,7 @@ MIT. See [LICENSE](LICENSE).
 
 This pack stands on other people's work. Thank you to:
 
-- **Matt Pocock** and [mattpocock/skills](https://github.com/mattpocock/skills) ([overview](https://www.aihero.dev/skills)), MIT. Its `/setup-matt-pocock-skills` and `/ask-matt` skills inspired `/fnl-setup` and `/fnl-ask`; its user-invoked and model-invoked split, its grilling interview and its `writing-for-agents` guidance shaped how these skills are written. No text is copied, and the two packs are independent projects.
+- **Matt Pocock** and [mattpocock/skills](https://github.com/mattpocock/skills) ([overview](https://www.aihero.dev/skills)), MIT. Its `/setup-matt-pocock-skills` and `/ask-matt` skills inspired `/fnl-setup` and `/fnl-help`; its user-invoked and model-invoked split, its grilling interview and its `writing-for-agents` guidance shaped how these skills are written. No text is copied, and the two packs are independent projects.
 - [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) by Steph Ango, MIT, which `fnl-session-hygiene` recommends for Obsidian vaults.
 - Orrery, the FINOLABS knowledge base for agents that `fnl-session-hygiene` recommends where it is available (not yet published).
 - [Cloudflare's security-audit skill](https://github.com/cloudflare/security-audit-skill), MIT, which the security gates recommend for audits.
