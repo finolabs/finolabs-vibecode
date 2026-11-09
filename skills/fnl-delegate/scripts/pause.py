@@ -39,7 +39,10 @@ def now():
 
 
 def number(value):
-    return type(value) in (int, float) and math.isfinite(value) and value >= 0
+    try:
+        return type(value) in (int, float) and math.isfinite(value) and value >= 0
+    except OverflowError:  # an integer too large for a float is invalid, never an error
+        return False
 
 
 def read_marker(folder):
@@ -72,7 +75,7 @@ def marker_state():
         if (not isinstance(data, dict) or set(data) != {'started', 'kind', 'deadline'}
                 or not number(data['started']) or not number(data['deadline']) or data['kind'] not in KINDS):
             return 'invalid', None
-    except (ValueError, UnicodeError, RecursionError):
+    except (ValueError, UnicodeError, RecursionError, ArithmeticError):
         return 'invalid', None
     age = now() - data['started']
     if age < -SKEW:
@@ -148,7 +151,11 @@ def heavy_facts():
         lines.append('heavy lock: location refused')
     elif state == 'held':
         blocked.append('a heavy job holds the lock')
-        lines.append('heavy lock: held')
+        try:
+            who = heavy_run.holder()
+            lines.append('heavy lock: held, owner unknown' if not who else 'heavy lock: held\n' + heavy_run.describe(who))
+        except Exception:
+            lines.append('heavy lock: held, owner unknown')
     else:
         orphan = None
         try:
@@ -222,7 +229,8 @@ def process_counts():
                 or not host_section_on()):
             return None
         consent = json.loads(dr.read_data('state/consent.json', 4096))
-        if not isinstance(consent, dict) or 'retention_days' not in consent:
+        if (not isinstance(consent, dict) or consent.get('retention_days') not in (30, 90, 365)
+                or not isinstance(consent.get('date'), str)):
             return None
         raw = dr.read_data('state/data.js', CACHE_LIMIT).decode('utf-8')
         running = json.loads(raw.removeprefix('window.FNL_DATA = ').removesuffix(';\n'))['running']
@@ -278,6 +286,7 @@ def status(checkpoints):
     out.extend(lines)
     blocked.extend(heavy_blocked)
     unknown.extend(heavy_unknown)
+    out.append('checkpoints checked in this run: %d' % len(checkpoints))
     for session in checkpoints:
         try:
             problem = checkpoint_problem(session, started)

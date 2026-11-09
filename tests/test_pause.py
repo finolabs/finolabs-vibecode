@@ -134,6 +134,16 @@ class MarkerStateTest(Base):
         self.assertFalse(pause.paused())
 
 
+class OversizedNumbersTest(Base):
+    def test_an_integer_too_large_for_a_float_is_an_invalid_marker_not_an_error(self):
+        self.raw_marker(('{"started":1%s,"kind":"none","deadline":0}' % ('0' * 400)).encode())
+        self.assertEqual(pause.marker_state()[0], 'invalid')
+        self.assertFalse(pause.paused())
+        code, out, _ = self.cli('status')
+        self.assertEqual(code, 0)
+        self.assertIn('pause: invalid', out)
+
+
 class StartTest(Base):
     def test_start_writes_exactly_three_keys_and_a_summary(self):
         code, out, _ = self.cli('start', 'shutdown', '--in', '15')
@@ -177,11 +187,14 @@ class StartTest(Base):
 
     def test_start_survives_an_autopilot_failure_and_says_so(self):
         import autopilot
-        with mock.patch.object(autopilot, 'stop', side_effect=OSError('x')):
+        stop = mock.Mock(side_effect=OSError('x'))
+        with mock.patch.object(autopilot, 'read_private', lambda folder, name, cap=0: b'{}'), \
+                mock.patch.object(autopilot, 'stop', stop):
             code, out, _ = self.cli('start')
         self.assertEqual(code, 0)
+        stop.assert_called_once()
         self.assertTrue(pause.paused())
-        self.assertIn('autopilot', out)
+        self.assertIn('autopilot lease not checked', out)
 
 
 class StatusTest(Base):
@@ -217,6 +230,25 @@ class StatusTest(Base):
         self.heavy(state='held', waiting=1)
         self.assertTrue(self.verdict().startswith('verdict: blocked:'))
         self.assertIn('lock', self.verdict())
+
+    def test_a_known_holder_is_described_and_an_unknown_one_says_so(self):
+        self.heavy(state='held')
+        self.assertIn('owner unknown', self.status())
+        record = {'label': 'build', 'pid': 123, 'started': int(time.time()) - 60, 'deadline': int(time.time()) + 600}
+        with mock.patch.object(heavy, 'holder', lambda: record):
+            out = self.status()
+        self.assertIn('label: build', out)
+        self.assertIn('pid: 123', out)
+
+    def test_each_run_reports_how_many_checkpoints_it_checked(self):
+        self.cli('start')
+        self.heavy()
+        self.handover('session-aaaa1111')
+        self.handover('session-bbbb2222')
+        one = self.status('--checkpoint', 'session-aaaa1111')
+        two = self.status('--checkpoint', 'session-aaaa1111', '--checkpoint', 'session-bbbb2222')
+        self.assertIn('checkpoints checked in this run: 1', one)
+        self.assertIn('checkpoints checked in this run: 2', two)
 
     def test_stopped_wrapper_with_a_live_group_blocks(self):
         self.heavy(state='free', orphan=True)
@@ -318,6 +350,11 @@ class StatusTest(Base):
         self.cache(processes=row, snapshot_on=False)
         self.assertIn('not observed', self.status())
         self.cache(processes=row, consent=False)
+        self.assertIn('not observed', self.status())
+        self.cache(processes=row)
+        (self.state / 'consent.json').write_text(json.dumps({'date': '2026-11-09', 'retention_days': None}))
+        self.assertIn('not observed', self.status())
+        (self.state / 'consent.json').write_text(json.dumps({'date': 5, 'retention_days': 30}))
         self.assertIn('not observed', self.status())
         (self.state / 'data.js').write_text('window.FNL_DATA = {broken')
         self.assertIn('not observed', self.status())

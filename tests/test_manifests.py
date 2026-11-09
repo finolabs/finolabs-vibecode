@@ -61,6 +61,15 @@ class ManifestTest(unittest.TestCase):
         self.assertLess(len(main.read_text().splitlines()), 70)
         self.assertIn("Dependency: `fnl-pause`", alias.read_text())
 
+    def test_new_alias_and_pause_descriptions_are_valid_yaml_scalars(self):
+        # A plain YAML scalar cannot contain ": "; the unquoted descriptions that already ship are older.
+        for name in ("fnl-afk", "fnl-gtg", "fnl-pause"):
+            text = (ROOT / "skills" / name / "SKILL.md").read_text()
+            line = next(l for l in text.split("---", 2)[1].splitlines() if l.startswith("description: "))
+            value = line[len("description: "):]
+            if not (value.startswith('"') and value.endswith('"')):
+                self.assertNotIn(": ", value, name)
+
     def test_description_length_fits_the_catalog_standard(self):
         # The shared catalog (finolabs/plugins) lists 120-160 characters and repeats them exactly.
         n = len(self.docs[0]["description"])
