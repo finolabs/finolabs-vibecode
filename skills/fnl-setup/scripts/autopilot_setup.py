@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Preview and apply only the canonical host's Autopilot section; start no lease."""
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
 import json
 import os
 from pathlib import Path

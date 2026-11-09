@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Bounded local task metadata. Project text is transient, never dashboard data."""
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
 import hashlib
 import json
 import os
