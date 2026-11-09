@@ -111,7 +111,7 @@ The refresh runs when `fnl-status` is called, on `SessionStart` and `Stop`, and 
 
 The dashboard shows a project's folder name only after the user runs `fnl-status` in that repository with consent (see the [registration rule](dashboard-infographics.md#data-changes-all-local-metadata-only)); an explicit host-config project label takes precedence.
 
-`ledger.py` provides `summary --json` so the refresh reads the same numbers the text report would. Its `summary_rows` accepts `route_by` as a grouping key without changing the default agent/model/kind/grade output; legacy lines with no known routing source are excluded from this split.
+`ledger.py` provides `summary --json` so the refresh reads the same numbers the text report would. Its `summary_rows` accepts `route_by` as a grouping key without changing the default agent/model/kind/grade output; legacy lines with no known routing source are excluded from this split. The local start fields `install`, `work_type`, `level` and `pick_rank` (`assignment-matrix.md` "Compliance and token cost") stay in the ledger; `summary --json` rows and the usage events do not carry them.
 
 ### Page contract
 
