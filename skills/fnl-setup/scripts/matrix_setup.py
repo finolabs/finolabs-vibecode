@@ -243,11 +243,26 @@ def apply(value, consent, acknowledged):
     print('Assignment matrix saved; no command was run.')
 
 
+def unfenced(body):
+    """Lines of a section body outside code fences; only a bare closing fence closes one, as in `assignments.py`."""
+    fence = None
+    for line in body.splitlines():
+        match = re.match(r'^\s*(`{3,}|~{3,})', line)
+        if match:
+            token = match[1]
+            if fence is None:
+                fence = token
+            elif token[0] == fence[0] and len(token) >= len(fence) and line.strip() == token:
+                fence = None
+        elif fence is None:
+            yield line
+
+
 def allowed_models(text):
     """Model patterns recorded in `## Agents on this machine`; the fourth table column, comma separated."""
     allowed = []
     for start, end in sections(text, '## Agents on this machine')[:1]:
-        for line in text[start:end].splitlines():
+        for line in unfenced(text[start:end]):
             cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
             if len(cells) >= 5 and not set(cells[3]) <= set('- '):
                 allowed.extend(item.strip() for item in cells[3].split(','))
@@ -258,7 +273,7 @@ def posting_summary(text):
     """Family and state words from `## Review posting`; nothing else from that section is printed."""
     words = []
     for start, end in sections(text, '## Review posting')[:1]:
-        for line in text[start:end].splitlines():
+        for line in unfenced(text[start:end]):
             match = re.match(r'- (claude|codex|antigravity): (yes|no|unverified)\b', line)
             if match:
                 words.append(f'{match[1]} {match[2]}')
