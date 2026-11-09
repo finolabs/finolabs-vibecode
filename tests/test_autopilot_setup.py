@@ -180,6 +180,74 @@ class AutopilotSetupTest(unittest.TestCase):
         self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 1)
         self.assertEqual(self.snapshot(), before)
 
+    def writer(self):
+        return load('autopilot_setup_names', SCRIPT)
+
+    def test_category_names_match_the_reader(self):
+        writer, reader = self.writer(), self.reader()
+        self.assertEqual(writer.CATEGORIES, reader.CATEGORIES)
+        self.assertEqual((writer.CONSENT, writer.TARGETS), (reader.CONSENT, reader.TARGETS))
+
+    def test_fixed_rows_cannot_be_moved(self):
+        before = self.snapshot()
+        for name in ('Production', 'Real users and customer data', 'Unknown category'):
+            with self.subTest(name=name):
+                self.assertEqual(self.cli('preview', '--merge', 'no', '--decide', name)[0], 1)
+                self.assertEqual(self.snapshot(), before)
+        writer = self.writer()
+        values = {**writer.DEFAULTS, 'Merge': 'no', **{c: 'stop' for c in writer.CATEGORIES},
+                  writer.CONSENT: 'no', writer.TARGETS: []}
+        writer.validate(values)
+        for name in ('Production', 'Real users and customer data'):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                writer.validate({**values, name: 'decide'})
+
+    def test_category_moves_only_with_its_own_answer(self):
+        self.apply(self.preview('--decide', 'Tags and releases'))
+        reader = self.reader()
+        applied = reader.settings()
+        self.assertEqual({c for c in reader.CATEGORIES if applied[c] == 'decide'}, {'Tags and releases'})
+        self.assertEqual(applied[reader.CONSENT], 'no')
+        text = self.host.read_text()
+        for name in reader.CATEGORIES:
+            self.assertEqual(text.count(f'- {name}: '), 1, name)
+        self.apply(self.preview('--decide', 'Recoverable deletion', '--decide', 'Repository comments'))
+        applied = self.reader().settings()
+        self.assertEqual({c for c in reader.CATEGORIES if applied[c] == 'decide'},
+                         {'Recoverable deletion', 'Repository comments'})
+
+    def test_missing_answer_is_stop(self):
+        self.apply(self.preview())
+        text = self.host.read_text()
+        reader = self.reader()
+        for name in reader.CATEGORIES:
+            self.assertIn(f'- {name}: stop\n', text)
+        self.assertNotIn(reader.TARGETS, text)
+        self.assertEqual(reader.settings()[reader.TARGETS], [])
+
+    def test_targets_stored_exactly(self):
+        targets = ['npm run deploy:uat', 'make deploy STAGE=dev-2']
+        self.apply(self.preview('--non-production-target', targets[0], '--non-production-target', targets[1]))
+        self.assertEqual(self.reader().settings()[self.reader().TARGETS], targets)
+        before = self.snapshot()
+        for bad in ('a; b', ' padded', 'x' * 201, 'tab\there', ''):
+            with self.subTest(bad=bad):
+                self.assertEqual(self.cli('preview', '--merge', 'no', '--non-production-target', bad)[0], 1)
+                self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.cli('preview', '--merge', 'no', '--non-production-target', 'same',
+                                  '--non-production-target', 'same')[0], 1)
+
+    def test_excerpt_consent_is_separate_and_off_by_default(self):
+        self.apply(self.preview('--merge', 'yes', '--decide', 'Publishing'))
+        reader = self.reader()
+        self.assertEqual(reader.settings()[reader.CONSENT], 'no')
+        self.assertIn('- Excerpts leave the machine: no\n', self.host.read_text())
+        self.apply(self.preview('--excerpts-leave-the-machine', 'yes'))
+        applied = self.reader().settings()
+        self.assertEqual(applied[reader.CONSENT], 'yes')
+        self.assertEqual({applied[c] for c in reader.CATEGORIES}, {'stop'})
+        self.assertEqual(self.cli('preview', '--merge', 'no', '--excerpts-leave-the-machine', 'maybe')[0], 1)
+
     def test_ambiguous_host_refused_and_missing_host_created(self):
         for raw in (b'## Autopilot\n- Merge: no\n## Autopilot\n', b'```\nunclosed\n'):
             self.host.write_bytes(raw)

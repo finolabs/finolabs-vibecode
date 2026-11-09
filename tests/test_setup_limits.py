@@ -55,6 +55,9 @@ EXTRA_APPROVALS = [
     ('May the agents push their branches and open pull requests?', REFS / "features" / "autopilot.md"),
     ('May the agents merge pull requests while a lease is live?', REFS / "features" / "autopilot.md"),
     ('Save the shown away-session settings?', REFS / "features" / "autopilot.md"),
+    ('Let the agents decide this kind of work while you are away?', REFS / "autopilot-decisions.md"),
+    ('Let excerpts of your past decisions go to the judge or another AI provider when agents decide for you?',
+     REFS / "autopilot-decisions.md"),
     ("Start with only the essential setup questions?", SKILL / "SKILL.md"),
     ("Save only the notes shown about this setup?", REFS / "core.md"),
     ("Save the shown helper preferences and coding-guide setting?", REFS / "mode.md"),
@@ -183,6 +186,26 @@ class ConsentInventoryTests(unittest.TestCase):
             self.assertIn(key, text)
         self.assertIn("This is your own decision", text)
         self.assertIn("There is no default for Merge", text)
+
+    def test_autopilot_stop_table_marks_fixed_rows_and_risks(self):
+        feature = (REFS / "features/autopilot.md").read_text()
+        text = (REFS / "autopilot-decisions.md").read_text()
+        self.assertIn("(../autopilot-decisions.md)", feature)
+        self.assertLess(feature.index("autopilot-decisions.md"), feature.index("Ask Merge last among the settings"))
+        rows = re.findall(r"^\| (?!Category)[^|]+\((?P<key>[A-Za-z ]+)\) \| (?P<start>[^|]+) \|(?P<risk>[^|]*)\|$", text, re.M)
+        self.assertEqual([key for key, _, _ in rows], [
+            "Production", "Real users and customer data", "Unrecoverable deletion", "Messages outside the repository",
+            "Tags and releases", "Publishing", "Shared settings", "Recoverable deletion", "Repository comments"])
+        for key, start, risk in rows:
+            with self.subTest(key=key):
+                if key in ("Production", "Real users and customer data"):
+                    self.assertEqual(start, "stop, fixed")
+                else:
+                    self.assertIn(start, ("stop", "decide"))
+                    self.assertTrue(risk.strip())  # each move states what could go wrong
+        self.assertIn("No move has a default", text)
+        self.assertIn("--non-production-target", text)
+        self.assertIn("Ask separately, never combined with another question", text)
 
     def test_every_consent_sentence_appears_once_in_its_home(self):
         texts = {path: path.read_text() for path in MARKDOWN}

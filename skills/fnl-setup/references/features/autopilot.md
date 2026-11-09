@@ -44,6 +44,8 @@ Ask: "At what remaining AI usage percentage should work stop?"
 Choices: A whole number from 0 to 100; suggest 15 (Quota floor percent). Missing or stale readings also stop routing; the coordinator checks readings in this slice (advisory, agent judgment).
 Undo: Stop the lease; repeat setup to change the floor.
 
+Then follow [../autopilot-decisions.md](../autopilot-decisions.md): what must wait for you, optional deploy targets and the separate excerpt consent.
+
 Ask Merge last among the settings: "May the agents merge pull requests while a lease is live?"
 Yes: Save Merge: yes. This lets the agents merge eligible pull requests while a lease is live when both independent reviews and all checks pass at the current head, including local tests of touched modules and MERGE OK from merge_check.py. Only your own account and autopilot's own branches qualify; protected changes remain forbidden. This is your own decision and grants merge authority.
 No: Save Merge: no; agents cannot merge pull requests.
@@ -51,7 +53,7 @@ Undo: Stop the current lease and repeat setup with Merge: no to withdraw this au
 Choices: "Yes, allow merges during a live lease" / "No, keep merges off".
 There is no default for Merge. Starting a lease applies this answer; it does not grant any further authority (advisory, agent judgment; the script denies merge when the setting is no).
 
-Translate the answers into `python3 -I <this skill folder>/scripts/autopilot_setup.py preview --hosts <names> --task-choice <choose|listed> --push-and-pull-requests <yes|no> --trusted-authors own --lease-hours <n> --max-runs <n> --max-runtime-minutes <n> --max-actions-per-hour <n> --quota-floor-percent <n> --merge <yes|no>`.
+Translate the answers into `python3 -I <this skill folder>/scripts/autopilot_setup.py preview --hosts <names> --task-choice <choose|listed> --push-and-pull-requests <yes|no> --trusted-authors own --lease-hours <n> --max-runs <n> --max-runtime-minutes <n> --max-actions-per-hour <n> --quota-floor-percent <n> --merge <yes|no> [--decide <key>]... [--non-production-target '<command>']... --excerpts-leave-the-machine <yes|no>`.
 Quote "Claude Code" as one name. Pass every answer explicitly. Show the target, entire section, backup and SHA-256 digest before asking the separate write approval:
 "Save the shown away-session settings?"
 Yes: Apply only the previewed Autopilot section in local host.md, keeping a backup of an existing file. No lease starts and no permission beyond the answered settings is granted.

@@ -24,15 +24,36 @@ DEFAULTS = {'Hosts': 'Claude Code', 'Task choice': 'choose', 'Push and pull requ
             'Max runtime minutes': 480, 'Max actions per hour': 30, 'Quota floor percent': 15}
 NUMBERS = {'Lease hours': (1, 24), 'Max runs': (1, 10000), 'Max runtime minutes': (1, 1440),
            'Max actions per hour': (1, 10000), 'Quota floor percent': (0, 100)}
+# Closed categories of "Where it must stop" in docs/specs/away-decisions.md: name -> fixed at stop.
+# Each is written explicitly; it is decide only when its own answer names it, and a fixed row never is.
+CATEGORIES = {'Production': True, 'Real users and customer data': True, 'Unrecoverable deletion': False,
+              'Messages outside the repository': False, 'Tags and releases': False, 'Publishing': False,
+              'Shared settings': False, 'Recoverable deletion': False, 'Repository comments': False}
+MOVABLE = tuple(name for name, fixed in CATEGORIES.items() if not fixed)
+CONSENT = 'Excerpts leave the machine'
+TARGETS = 'Non-production targets'
+MAX_TARGETS = 20
 CAP = sf.CAP
 STATE = 'state/autopilot-setup'
 
 
 def validate(values):
-    if not isinstance(values, dict) or set(values) != {*DEFAULTS, 'Merge'}:
+    if not isinstance(values, dict) or set(values) != {*DEFAULTS, 'Merge', *CATEGORIES, CONSENT, TARGETS}:
         raise ValueError('explicit Merge answer and all settings required')
     for key, value in values.items():
-        if key in NUMBERS:
+        if key in CATEGORIES:
+            if value not in (('stop',) if CATEGORIES[key] else ('stop', 'decide')):
+                raise ValueError('invalid category choice')
+        elif key == CONSENT:
+            if value not in ('yes', 'no'):
+                raise ValueError('invalid consent')
+        elif key == TARGETS:
+            # The reader splits on '; ' and empties the whole list on any unreadable entry, so refuse those here.
+            if (not isinstance(value, list) or len(value) > MAX_TARGETS or len(value) != len(set(value))
+                    or not all(isinstance(e, str) and 0 < len(e) <= 200 and e == e.strip() and e.isprintable()
+                               and '; ' not in e for e in value)):
+                raise ValueError('invalid targets')
+        elif key in NUMBERS:
             low, high = NUMBERS[key]
             if type(value) is not int or not low <= value <= high:
                 raise ValueError('invalid limit')
@@ -49,8 +70,11 @@ def validate(values):
 
 def render(values):
     validate(values)
-    keys = ['Hosts', 'Task choice', 'Push and pull requests', 'Merge', 'Trusted authors', *NUMBERS]
-    return '## Autopilot\n\n' + ''.join(f'- {key}: {values[key]}\n' for key in keys) + '\n'
+    keys = ['Hosts', 'Task choice', 'Push and pull requests', 'Merge', 'Trusted authors', *NUMBERS, *CATEGORIES, CONSENT]
+    lines = ''.join(f'- {key}: {values[key]}\n' for key in keys)
+    if values[TARGETS]:  # an empty list is no line: the reader's default is empty
+        lines += f'- {TARGETS}: ' + '; '.join(values[TARGETS]) + '\n'
+    return '## Autopilot\n\n' + lines + '\n'
 
 
 def transform(raw, values):
@@ -160,6 +184,9 @@ def main(argv=None):
         pre.add_argument('--trusted-authors', choices=('own',), default='own')
         for key in NUMBERS:
             pre.add_argument('--' + key.lower().replace(' ', '-'), type=int, default=DEFAULTS[key])
+        pre.add_argument('--decide', action='append', choices=MOVABLE, default=[])
+        pre.add_argument('--non-production-target', action='append', default=[])
+        pre.add_argument('--excerpts-leave-the-machine', choices=('yes', 'no'), default='no')
         app = commands.add_parser('apply')
         app.add_argument('--yes', action='store_true')
         app.add_argument('--digest', required=True)
@@ -167,6 +194,9 @@ def main(argv=None):
         if args.action == 'preview':
             values = {key: getattr(args, key.lower().replace(' ', '_')) for key in (*DEFAULTS, 'Merge')}
             values['Hosts'] = ', '.join(args.hosts)
+            values.update({c: 'decide' if c in args.decide else 'stop' for c in CATEGORIES})
+            values[CONSENT] = args.excerpts_leave_the_machine
+            values[TARGETS] = args.non_production_target
             preview(values)
         else:
             apply(args.digest, args.yes)
