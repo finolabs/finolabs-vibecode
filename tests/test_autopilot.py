@@ -748,6 +748,24 @@ class AwayDecisionTest(AutopilotBase):
                 self.check_as(argv, coordinator=coordinator, tier=3, code='unknown')
         self.assertEqual(self.lease()['counters']['actions'], 0)
 
+    def test_the_advisor_brief_is_screened_like_the_judge_and_packet_paths(self):
+        self.start(SETUP_AWAY)
+        home = '/Us' + 'ers/synthetic'
+        # A sensitive name with any assigned value, however short, and any machine path deny.
+        for brief in ('Use db_password=fixture123 in the fixture.', 'Set API_TOKEN=ab and continue.',
+                      'The test sets secret: x1 first.', "Config has auth_token = 'q'.", 'export PASSWORD=1',
+                      'Read ' + home + '/notes.md first.', 'See ~/private/notes.', 'Look in /home/synthetic/x.',
+                      'Open C:\\work\\x.txt.', BRIEF + '\nsession_cookie=abc'):
+            with self.subTest(brief=brief):
+                self.check_as(CODEX[:-1] + [brief], tier=3, code='unknown')
+        self.assertEqual(self.lease()['counters']['actions'], 0)
+        # Discussing configuration without an assigned value stays possible.
+        for brief in ('Should the db password setting move to the vault, or stay in the env file?',
+                      'Rotate the API key before the release, or after it?',
+                      'Choose: keep the token cache, or drop it.', BRIEF):
+            with self.subTest(brief=brief):
+                self.check_as(CODEX[:-1] + [brief])
+
     def test_both_forms_deny_without_a_live_lease(self):
         self.setup_config(SETUP_AWAY)
         self.check_as(JUDGE, tier=3, code='no-lease')

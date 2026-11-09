@@ -11,7 +11,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Missing/expired/stopped/changed setup or exhausted runs, wall/runtime minutes or rolling-hour actions denies every check | lease_guard |
 | Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release and npm/pnpm publish forms whose category is `decide`, and a deploy matching a `Non-production targets` entry exactly with no production or live word | classify_argv, release_command, permits |
 | Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
-| The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's | ladder_command, judge_command, advisor_command |
+| The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's; the brief passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, brief_ok |
 | Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
 | A precedent packet holds at most eight excerpts and 8 KB; a secret or machine path drops an excerpt; excerpts need the separate consent | packet_check |
 | Credentials/env names, .github, hooks, agent instructions, settings, host/setup/lease files are Tier 3 anywhere in argv or paths | protected |
@@ -457,13 +457,15 @@ def judge_command(tail):
 
 
 def brief_ok(brief):
+    """At least as strict as the judge and packet paths: secrets, machine paths, and any sensitive-name assignment."""
     if (not isinstance(brief, str) or not 0 < len(brief.encode()) <= 65536
             or any(unicodedata.category(c).startswith('C') and c not in '\n\t' for c in brief)):
         return False
-    try:
-        return not secret_patterns.findings(brief)
-    except ValueError:
+    if screened(brief):
         return False
+    # An assigned value of any length may be a credential; naming a setting without a value stays possible.
+    return not any(secret_patterns.SENSITIVE.search(match['name']) and match[secret_patterns.value_group(match)]
+                   for match in secret_patterns.PAIR.finditer(brief))
 
 
 def advisor_command(tail, applied, coordinator):
