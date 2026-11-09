@@ -17,6 +17,9 @@ import re
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import run_env
 
 COPY_FOLDERS = ('scripts', 'references')
 SKIP_FOLDERS = {'node_modules', '__pycache__'}
@@ -26,7 +29,7 @@ REF = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/@{}^~-]{0,199}')
 
 def changed_files(base, root):
     argv = ['git', 'diff', '--name-only', '--merge-base', base, '--']
-    done = subprocess.run(argv, cwd=root, capture_output=True, text=True, timeout=60, check=False)
+    done = subprocess.run(argv, cwd=root, capture_output=True, text=True, timeout=60, check=False, env=run_env.environment())
     if done.returncode:
         raise RuntimeError('git diff failed')
     return [line for line in done.stdout.splitlines() if line]
