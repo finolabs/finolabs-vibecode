@@ -4,4 +4,4 @@ The user asks what is in the plugin, or what exists for a purpose. Read [map.md]
 
 The current agent set is `fnl-reviewer`, `fnl-security-reviewer` and `fnl-navigator`. When explaining automation, distinguish fixed session-start state from observed live-host behavior, optional on-demand quota from a background timer, and verification receipts from the coordinator’s acceptance decision.
 
-The map lists every distinct script with its full-plugin path, including skill-only helpers. Counts describe files shipped, not host capabilities: ten Claude Code user-only flags do not prove invocation-policy parity on Codex or Antigravity. Review agents forbid project edits by instruction; an authorized post uses a private draft.
+The map lists every distinct script with its full-plugin path, including skill-only helpers. The map describes files shipped, not host capabilities: Claude Code user-only flags do not prove invocation-policy parity on Codex or Antigravity. Review agents forbid project edits by instruction; an authorized post uses a private draft.

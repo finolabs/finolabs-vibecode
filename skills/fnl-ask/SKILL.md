@@ -18,9 +18,9 @@ Read [references/plain-language.md](references/plain-language.md) first to decid
 | Route | Which skill fits a situation | [references/map.md](references/map.md) |
 
 Read the target file before describing it so the answer is current.
-The map lists all 22 skills, including `fnl-setup` (with `add <feature>`, `instructions`, `check`, `scan` and `mode` subcommands) and the user-only `fnl-restore-point` save-and-restore command, plus `fnl-autopilot` for a time-boxed away mandate and `fnl-afk` as its main short name and `fnl-brb` as an older alias, and `fnl-pause` (short name `fnl-gtg`) for draining work before a restart or shutdown.
+The map lists every skill, including `fnl-setup` (with `add <feature>`, `instructions`, `check`, `scan` and `mode` subcommands) and the user-only `fnl-restore-point` save-and-restore command, plus `fnl-autopilot` for a time-boxed away mandate and `fnl-afk` as its main short name and `fnl-brb` as an older alias, and `fnl-pause` (short name `fnl-gtg`) for draining work before a restart or shutdown.
 `fnl-advisor` owns both one opinion and committees, `fnl-delegate` owns spec coordinator sessions, and `fnl-session-hygiene` owns knowledge and handovers.
 Read a procedure reference only when the question concerns that procedure. Answer and stop: invoke nothing; leave the how-to to the target skill when it runs.
 On Codex the user types `$` instead of `/` for skill commands; Claude Code and Antigravity use `/`. Skills the user types, such as `fnl-setup`, may be missing from your own skill list; do not warn the user that they are missing.
 
-The plugin also ships three agents instructed to leave project files unchanged: `fnl-reviewer`, `fnl-security-reviewer` and `fnl-navigator`; the map covers all 50 distinct script names, review routing, receipts, judge, run hygiene, work records, context snapshots, quota on demand and advisory parallel slots.
+The plugin also ships three agents instructed to leave project files unchanged: `fnl-reviewer`, `fnl-security-reviewer` and `fnl-navigator`; the map covers every distinct script name, review routing, receipts, judge, run hygiene, work records, context snapshots, quota on demand and advisory parallel slots.

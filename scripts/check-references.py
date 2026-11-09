@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check that cross-references in the skills, agents and docs still resolve.
 
-- README and the ask map list and count exactly the skill folders.
+- README and the help map list exactly the skill folders (tests/test_manifests.py checks the count).
 - Retired names occur only in dated releases, Unreleased migration mappings or
   the explicitly listed historical setup specs.
 - Every `fnl-<name>` in backticks names a skill, an agent or the review marker,
@@ -271,9 +271,6 @@ def check_skill_inventory(root, problems):
     folders = {p.name for p in (root / "skills").iterdir() if p.is_dir()}
     for relative in ("README.md", "skills/fnl-ask/references/map.md"):
         path = root / relative
-        for count in re.findall(r"\b(\d+) skill folders\b", path.read_text()):
-            if int(count) != len(folders):
-                problems.append(f"{relative}: skill count {count} does not match {len(folders)} folders")
         # The canonical skill table lives under Skills, before the next heading.
         section = sections(path).get("Skills", "")
         section = re.split(r"^#{1,6} ", section, maxsplit=1, flags=re.M)[0]

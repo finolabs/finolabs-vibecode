@@ -174,7 +174,7 @@ Done when the plugin is listed by your host and the user knows the order: `/fnl-
 
 ## Skills
 
-The plugin has **22 skill folders**: 12 model-invoked skills and ten marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Every skill carries the `fnl-` prefix. The user types ten of them, `fnl-autopilot`, `fnl-afk`, `fnl-brb`, `fnl-pause`, `fnl-gtg`, `fnl-restore-point`, `fnl-setup`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff` and `fnl-advisor` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
+The plugin has **22 skill folders**: 12 model-invoked skills and 10 marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Every skill carries the `fnl-` prefix. The user types the user-only ones, `fnl-autopilot`, `fnl-afk`, `fnl-brb`, `fnl-pause`, `fnl-gtg`, `fnl-restore-point`, `fnl-setup`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff` and `fnl-advisor` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
 
 | Skill | Use it when |
 | --- | --- |
@@ -380,15 +380,15 @@ The judge defaults to a small host model. Choose `judge: jev` in canonical `## A
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 agents/fnl-*.md                   code reviewer, security reviewer and navigator definitions (no project edits; authorized posting uses a private draft)
 agents/openai.yaml                Codex skill-list display metadata
-skills/fnl-*/SKILL.md             22 self-contained skills (12 model-invoked; 10 user-only flags on Claude Code)
+skills/fnl-*/SKILL.md             self-contained skills, model-invoked or flagged user-only on Claude Code
 skills/fnl-advisor/references/committee.md       committee procedure, loaded only for a committee
 skills/fnl-delegate/references/coordinator-sessions.md  spec coordinator and task sessions
 skills/fnl-session-hygiene/references/knowledge.md      remember/recall procedure; handovers live in SKILL.md
 rules/AGENTS.md                   session-start reminder: an always-on rule on Antigravity, printed by scripts/session_start.py on Claude Code and Codex
 assets/                           icons, light/dark architecture and task-lifecycle diagrams, dashboard screenshots and their NOTICE
 evals/                            trigger, behavior and parity cases for `claude plugin eval`
-scripts/                          37 repository/shared helpers and checks: routing, reviews, receipts, judge, context, hygiene, slots, quota, metrics and setup; shared helpers have byte-identical copies in consuming skills
-skills/fnl-*/scripts/             self-contained copies plus 10 skill-only helpers; the full inventory is in fnl-ask/references/map.md
+scripts/                          repository/shared helpers and checks: routing, reviews, receipts, judge, context, hygiene, slots, quota, metrics and setup; shared helpers have byte-identical copies in consuming skills
+skills/fnl-*/scripts/             self-contained copies plus skill-only helpers; the full inventory is in fnl-ask/references/map.md
 docs/specs/                       design specs (index.md) and one-file work records; work-tracking.md defines their contract
 docs/diagrams/                    HTML sources of the architecture and task-lifecycle diagrams
 tests/                            unit tests for the repository scripts, the ledger, the metrics hook and the dashboard page (the page script runs in node when it is installed)

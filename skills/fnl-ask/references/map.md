@@ -2,7 +2,7 @@
 
 ## Skills
 
-The 22 skill folders and their purposes match the README.
+The skill folders and their purposes match the README.
 
 | Skill | Use it when |
 | --- | --- |
@@ -75,7 +75,7 @@ The 22 skill folders and their purposes match the README.
 
 ## Agents and scripts
 
-Paths below are relative to the full plugin root. There are three agent definitions and 50 distinct script names: 37 in root `scripts/` and 13 available only under a skill. Shared root scripts also have byte-identical copies in consuming skill folders. A standalone skill has only its own helpers; find the installed folder before giving a command. Explaining these pieces runs nothing.
+Paths below are relative to the full plugin root. There are three agent definitions; every distinct script name is listed once, either in root `scripts/` or as available only under a skill. Shared root scripts also have byte-identical copies in consuming skill folders. A standalone skill has only its own helpers; find the installed folder before giving a command. Explaining these pieces runs nothing.
 
 | Agent | Purpose | Procedure |
 | --- | --- | --- |
@@ -145,7 +145,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 
 ## Rules
 
-- A skill command with a leading `/` is for the user to type; on Codex use `$`. The ten user-only declarations are enforced on Claude Code; equivalent invocation policy on Codex/Antigravity remains unverified. Names without `/` load on their own when the task matches, or the user can type them.
+- A skill command with a leading `/` is for the user to type; on Codex use `$`. The user-only declarations are enforced on Claude Code; equivalent invocation policy on Codex/Antigravity remains unverified. Names without `/` load on their own when the task matches, or the user can type them.
 - In a Spec Kit repository, Spec Kit owns the process. Companion process skills (`to-spec`, `to-tickets`, `implement`, `implement-spec`) yield to it; companion phase tools (`grilling`, `tdd`, `diagnosing-bugs`, `prototype`, `code-review`) work inside its phases.
 - Companion skills come from [mattpocock/skills](https://github.com/mattpocock/skills), [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill), [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills), [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design), [finolabs/markmap-skills](https://github.com/finolabs/markmap-skills) and [typesafe-ai/skills](https://github.com/typesafe-ai/skills) (all MIT); `codex review` is native; Claude Code review instruments may need to be installed or enabled as setup describes. When one is not installed, say so and point to that repository's install instructions; install nothing yourself. The packs are independent: neither endorses the other.
 - For Route mode, name the matching skill and command in one or two sentences. When no row fits, say so and name the closest two, with the one question that would decide between them.
