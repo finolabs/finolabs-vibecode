@@ -41,6 +41,12 @@ REQUIRED = {
     "start": {"id", "ts", "project", "task", "kind", "grade", "agent", "model", "reason"},
     "finish": {"id", "ts", "outcome", "rework_rounds"},
 }
+# Away-decision lines (docs/specs/away-decisions.md): load() skips them silently, load_away() returns them.
+AWAY_EVENTS = {
+    "decision": {"id", "ts", "lease_start", "rung", "settled"},
+    "question_denied": {"ts", "lease_start"},
+    "decision_review": {"id", "ts", "verdict"},
+}
 
 
 def ledger_path():
@@ -66,19 +72,39 @@ def append(record):
             stream.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
-def load():
+def read_lines():
     try:
-        text = dr.read_data("ledger.jsonl", 16 * 1024 * 1024).decode("utf-8")
+        return dr.read_data("ledger.jsonl", 16 * 1024 * 1024).decode("utf-8").splitlines()
     except FileNotFoundError:
-        return {}, {}
+        return []
+
+
+def load_away():
+    """The decision, question_denied and decision_review lines, in file order; anything else is skipped silently."""
+    records = []
+    for line in read_lines():
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        required = AWAY_EVENTS.get(rec.get("event")) if isinstance(rec, dict) else None
+        if required and required <= rec.keys():
+            records.append(rec)
+    return records
+
+
+def load():
+    lines = read_lines()
     starts, finishes = {}, {}
-    for n, line in enumerate(text.splitlines(), 1):
+    for n, line in enumerate(lines, 1):
         if not line.strip():
             continue
         try:
             rec = json.loads(line)
         except json.JSONDecodeError:
             rec = None
+        if isinstance(rec, dict) and rec.get("event") in AWAY_EVENTS:
+            continue  # away lines are read by load_away(), never reported as malformed
         required = REQUIRED.get(rec.get("event")) if isinstance(rec, dict) else None
         if not required or not required <= rec.keys():
             print(f"ledger: skipping malformed line {n}", file=sys.stderr)
@@ -319,16 +345,78 @@ def print_pick_rows(rows):
         print(f"{r['agent']:<16}{n:>8}{shares[0]:>8}{shares[1]:>8}{shares[2]:>9}{r['left_out']:>10}")
 
 
+def away_rows(since=None, project=None):
+    """Per lease: decisions by deciding rung, advisor attempts by agent and model, the Jev spread, parked, denied, reversed."""
+    leases = defaultdict(lambda: {"attempts": defaultdict(list), "denied": 0})
+    reviews, lease_of = {}, {}
+    for rec in load_away():
+        if since and str(rec["ts"])[:10] < since:
+            continue
+        if rec["event"] == "decision_review":
+            reviews[rec["id"]] = rec["verdict"]  # a later review of the same id replaces the earlier one
+            continue
+        if not isinstance(rec["lease_start"], (int, float)) or isinstance(rec["lease_start"], bool):
+            continue
+        if rec["event"] == "question_denied":
+            leases[rec["lease_start"]]["denied"] += 1
+        elif not project or rec.get("project") == project:
+            leases[rec["lease_start"]]["attempts"][rec["id"]].append(rec)
+            lease_of[rec["id"]] = rec["lease_start"]
+    rows = []
+    for start in sorted(leases):
+        attempts, by_rung, by_advisor, probabilities = leases[start]["attempts"], defaultdict(int), defaultdict(int), []
+        parked = no_precedent = reviewed = reversed_ = 0
+        for decision_id, tries in attempts.items():
+            settled = [t for t in tries if t["settled"] == "yes"]
+            if settled:
+                by_rung[settled[-1]["rung"]] += 1
+                parked += settled[-1]["rung"] == "park"
+            if all(t.get("precedents") == 0 for t in tries):
+                no_precedent += 1
+            for t in tries:
+                if t["rung"] == "advisor" and t.get("by"):
+                    by_advisor[f"{t['by']} {t.get('model') or '-'}"] += 1
+                if t["rung"] == "jev" and isinstance(t.get("probability"), (int, float)):
+                    probabilities.append(float(t["probability"]))
+            if decision_id in reviews:
+                reviewed += 1
+                reversed_ += reviews[decision_id] == "reversed"
+        spread = ({"n": len(probabilities), "min": min(probabilities), "median": statistics.median(probabilities),
+                   "max": max(probabilities)} if probabilities else {"n": 0})
+        rows.append({"lease_start": start, "decisions": len(attempts), "by_rung": dict(sorted(by_rung.items())),
+                     "by_advisor": dict(sorted(by_advisor.items())), "jev_p": spread, "parked": parked,
+                     "denied": leases[start]["denied"], "no_precedent": no_precedent,
+                     "reviewed": reviewed, "reversed": reversed_})
+    return rows
+
+
+def print_away_rows(rows):
+    print()
+    print("away decisions per lease (no question or option text is kept)")
+    for r in rows:
+        started = datetime.fromtimestamp(r["lease_start"], timezone.utc).isoformat(timespec="minutes")
+        rungs = ", ".join(f"{k} {v}" for k, v in r["by_rung"].items()) or "none settled"
+        advisors = ", ".join(f"{k} {v}" for k, v in r["by_advisor"].items()) or "none"
+        p = r["jev_p"]
+        spread = f"n {p['n']}, min {p['min']:.2f}, median {p['median']:.2f}, max {p['max']:.2f}" if p["n"] else "n 0"
+        share = f"reversed {r['reversed']} of {r['reviewed']} reviewed" if r["reviewed"] else "none reviewed yet"
+        print(f"lease {started}: {r['decisions']} decisions ({r['no_precedent']} without precedent); by rung: {rungs}; "
+              f"advisors: {advisors}; Jev p: {spread}; parked {r['parked']}; denied questions {r['denied']}; {share}")
+
+
 def cmd_summary(args):
     rows = summary_rows(since=args.since, project=args.project)
     if args.json:
         print(json.dumps(rows))
         return
     picks = pick_rows(since=args.since, project=args.project)
+    away = away_rows(since=args.since, project=args.project)
     if not rows:
         print("ledger: no finished dispatches match")
         if picks:
             print_pick_rows(picks)
+        if away:
+            print_away_rows(away)
         return
     header = f"{'agent':<16}{'model':<24}{'kind':<10}{'grade':<10}{'n':>4}{'1st-pass':>10}{'accepted':>10}{'timeout':>9}{'fallback':>10}{'median min':>12}{'unverified':>12}"
     print(header)
@@ -337,6 +425,8 @@ def cmd_summary(args):
               f"{r['timeout']:>9}{r['fallback']:>10}{r['median_min']:>12.0f}{r['accepted_unverified']:>12}")
     if picks:
         print_pick_rows(picks)
+    if away:
+        print_away_rows(away)
 
 
 def build_parser():
