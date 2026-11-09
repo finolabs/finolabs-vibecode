@@ -346,6 +346,17 @@ class StatusTest(Base):
             self.assertNotIn(word, source)
 
 
+class VerdictLengthTest(unittest.TestCase):
+    def test_a_long_list_of_reasons_is_cut_to_five_and_a_count(self):
+        import pause
+        items = ['open dispatch d%d' % n for n in range(8)]
+        text = pause.brief(items)
+        self.assertEqual(text.count('open dispatch'), 5)
+        self.assertTrue(text.endswith('; and 3 more'))
+        self.assertEqual(pause.brief(items[:5]), '; '.join(items[:5]))
+        self.assertEqual(pause.brief([]), '')
+
+
 class ResumeTest(Base):
     def test_resume_removes_the_marker_and_missing_is_fine(self):
         self.marker()

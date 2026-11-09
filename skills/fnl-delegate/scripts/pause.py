@@ -240,6 +240,12 @@ def process_counts():
         return None
 
 
+def brief(items, limit=5):
+    """The first few reasons, then a count, so a long list of open records stays one readable line."""
+    shown = '; '.join(items[:limit])
+    return shown + ('; and %d more' % (len(items) - limit) if len(items) > limit else '')
+
+
 def status(checkpoints):
     state, data = marker_state()
     out = []
@@ -281,9 +287,9 @@ def status(checkpoints):
         if problem is not None:
             unknown.append('checkpoint %s %s' % (session, problem))
     if blocked:
-        out.append('verdict: blocked: ' + '; '.join(blocked))
+        out.append('verdict: blocked: ' + brief(blocked))
     elif unknown:
-        out.append('verdict: unknown: ' + '; '.join(unknown))
+        out.append('verdict: unknown: ' + brief(unknown))
     else:
         out.append('verdict: no recorded work remains')
     out.append('This is a statement about recorded work, not a claim that the machine is safe: restarting is your call, '
