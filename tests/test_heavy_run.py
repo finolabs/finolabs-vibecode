@@ -638,14 +638,18 @@ class QueueViewTest(unittest.TestCase):
 
     def test_more_candidates_than_the_cap_read_as_unknown_not_zero(self):
         # 200 candidates still count and all 200 reach ps; 201 is unknown, never a silent cut that could
-        # miss the runner.
+        # miss the runner. The fake ps always succeeds: it names the runner only when it receives every candidate,
+        # so 201 reads as unknown because of the cap, not because ps failed.
         for count, expected in ((200, 1), (201, None)):
             pgrep_body = '; '.join('print(%d)' % pid for pid in range(1000, 1000 + count))
-            ps_body = ('if sys.argv[1:4] != ["-o", "pid=,command=", "-p"] or len(sys.argv[4].split(",")) != 200:\n'
-                       '    sys.exit(2)\n'
-                       'sys.stdout.write("1199 python3 /x/heavy_run.py run -- cmd\\n")')
+            ps_body = ('if sys.argv[1:4] == ["-o", "pid=,command=", "-p"] and len(sys.argv[4].split(",")) == %d:\n'
+                       '    sys.stdout.write("1199 python3 /x/heavy_run.py run -- cmd\\n")' % count)
             with self.fake_programs(ps_body, pgrep_body=pgrep_body):
                 self.assertEqual(heavy.waiting_count(), expected)
+                if count == 201:
+                    # The same fake counts all 201 once the cap allows them, so only the cap makes the arm unknown.
+                    with mock.patch.object(heavy, 'PGREP_PIDS', 201):
+                        self.assertEqual(heavy.waiting_count(), 1)
 
     def test_ps_failing_with_no_output_reads_as_unknown(self):
         with self.fake_programs('sys.exit(1)'):
