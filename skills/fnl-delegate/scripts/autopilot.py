@@ -11,7 +11,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Missing/expired/stopped/changed setup or exhausted runs, wall/runtime minutes or rolling-hour actions denies every check | lease_guard |
 | Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release and npm/pnpm publish forms whose every applicable category is `decide`, and a deploy matching a `Non-production targets` entry exactly with no production or live word; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
 | Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
-| The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's; the brief passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, brief_ok |
+| The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's; the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, brief_ok |
 | Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
 | A precedent packet holds at most eight excerpts and 8 KB; a secret or machine path drops an excerpt; excerpts need the separate consent | packet_check |
 | Credentials/env names, .github, hooks, agent instructions, settings, host/setup/lease files are Tier 3 anywhere in argv or paths | protected |
@@ -488,19 +488,28 @@ def advisor_command(tail, applied, coordinator):
                 or os.path.abspath(program).startswith(here + os.sep)):
             return 'unknown'
     args, brief = rest[1:], None
+    # The brief sits behind an unambiguous boundary: Codex and Claude end their options with a literal `--` right
+    # before it (`codex exec [OPTIONS] [PROMPT]`, `claude [options] [prompt]` with -p a switch); Antigravity takes it
+    # as the value of -p. In every form a brief starting with `-` (an option, or `-` for unvalidated stdin) denies.
     if family == 'codex':
-        if args[:1] != ['exec'] or len(args) < 2:
+        if args[:1] != ['exec'] or len(args) < 3 or args[-2] != '--':
             return 'unknown'
-        brief, values = args[-1], flag_values(args[1:-1], {'-m', '-c', '-s'})
+        brief, values = args[-1], flag_values(args[1:-2], {'-m', '-c', '-s'})
         if (values is None or values.get('-s') != 'read-only' or '-m' not in values
                 or not re.fullmatch(r'model_reasoning_effort=(?:low|medium|high|xhigh)', values.get('-c', 'model_reasoning_effort=high'))):
             return 'unknown'
         model = values['-m']
     else:
-        values = flag_values(args, {'-p', '--model', '--output-format', '--permission-mode', '--effort', '--max-turns',
-                                    '--max-budget-usd'} if family == 'claude' else
-                             {'-p', '--model', '--output-format', '--mode', '--print-timeout'})
-        required = {'-p', '--model', '--output-format', '--permission-mode' if family == 'claude' else '--mode'}
+        if family == 'claude':
+            if args[:1] != ['-p'] or len(args) < 3 or args[-2] != '--':
+                return 'unknown'
+            brief, values = args[-1], flag_values(args[1:-2], {'--model', '--output-format', '--permission-mode',
+                                                                '--effort', '--max-turns', '--max-budget-usd'})
+            required = {'--model', '--output-format', '--permission-mode'}
+        else:
+            values = flag_values(args, {'-p', '--model', '--output-format', '--mode', '--print-timeout'})
+            required = {'-p', '--model', '--output-format', '--mode'}
+            brief = values.get('-p') if values is not None else None
         if values is None or not required <= set(values) or values['--output-format'] != 'json':
             return 'unknown'
         if values.get('--permission-mode', values.get('--mode')) != 'plan':
@@ -510,9 +519,10 @@ def advisor_command(tail, applied, coordinator):
                 or not re.fullmatch(r'[0-9]{1,3}(?:\.[0-9]{1,2})?', values.get('--max-budget-usd', '1'))
                 or not re.fullmatch(r'[1-9][0-9]{0,2}m', values.get('--print-timeout', '30m'))):
             return 'unknown'
-        brief, model = values['-p'], values['--model']
+        model = values['--model']
     others = [t for t in rest if t is not brief]
-    if not MODEL.fullmatch(model) or not brief_ok(brief) or not all(plain(t) and not protected(t) for t in others):
+    if (not isinstance(brief, str) or brief.startswith('-') or not MODEL.fullmatch(model) or not brief_ok(brief)
+            or not all(plain(t) and not protected(t) for t in others)):
         return 'unknown'
     return 'allowed'
 

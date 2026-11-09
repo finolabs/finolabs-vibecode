@@ -399,10 +399,16 @@ JUDGE = ['python3', '-I', str(SCRIPT.parent / 'judge.py'), 'ask', '--site', 'awa
          '--evidence-file', '.finolabs/briefs/packet.json']
 BRIEF = 'Choose one option for the config question.\n1 Keep one schema\n2 Split it\nReply with the number and a reason.'
 ENV = ['python3', '-I', str(SCRIPT.parent / 'delegate_env.py')]
+# Each form ends its options with a literal `--` right before the brief where the program's parser takes one.
 CODEX = ENV + ['--family', 'codex', '--', 'codex', 'exec', '-m', 'gpt-5.5', '-c', 'model_reasoning_effort=high',
-               '-s', 'read-only', BRIEF]
-CLAUDE = ENV + ['--family', 'claude', '--', 'claude', '-p', BRIEF, '--model', 'claude-opus-5-5',
-                '--output-format', 'json', '--permission-mode', 'plan']
+               '-s', 'read-only', '--', BRIEF]
+CLAUDE = ENV + ['--family', 'claude', '--', 'claude', '-p', '--model', 'claude-opus-5-5',
+                '--output-format', 'json', '--permission-mode', 'plan', '--', BRIEF]
+AGY = ENV + ['--family', 'antigravity', '--', 'agy', '-p', BRIEF, '--model', 'gemini-4-argon', '--mode', 'plan',
+             '--output-format', 'json']
+SETUP_ALL = SETUP.replace('Claude Code', 'Claude Code, Codex, Antigravity') + '- Max actions per hour: 1000\n'
+DANGER = {'codex': '--dangerously-bypass-approvals-and-sandbox', 'claude': '--dangerously-skip-permissions',
+          'antigravity': '--yolo'}
 
 
 class AwayDecisionTest(AutopilotBase):
@@ -735,7 +741,8 @@ class AwayDecisionTest(AutopilotBase):
         self.check_as(CODEX[:5] + ['--', 'perl', '-e', 'alarm 900; exec @ARGV'] + CODEX[6:])
         self.check_as(CODEX[:6] + ['/opt/tools/codex'] + CODEX[7:])
         self.check_as(CLAUDE, coordinator='codex')
-        self.check_as(CLAUDE + ['--effort', 'high', '--max-turns', '8', '--max-budget-usd', '2'], coordinator='codex')
+        self.check_as(CLAUDE[:-2] + ['--effort', 'high', '--max-turns', '8', '--max-budget-usd', '2'] + CLAUDE[-2:],
+                      coordinator='codex')
         self.assertEqual(self.lease()['counters']['actions'], 5)
         self.assertEqual(self.lease()['counters']['runs'], 0)  # the advisor's ledger start reserves its run, as today
 
@@ -746,13 +753,13 @@ class AwayDecisionTest(AutopilotBase):
         for argv, coordinator in (
                 (CODEX[:mode] + ['workspace-write'] + CODEX[mode + 1:], 'claude'),
                 (CODEX[:mode] + ['danger-full-access'] + CODEX[mode + 1:], 'claude'),
-                (CODEX[:-1] + ['--dangerously-bypass-approvals-and-sandbox', BRIEF], 'claude'),
-                (CODEX[:-1] + ['-o', 'docs/answer.md', BRIEF], 'claude'),
-                (CODEX[:-1] + ['--full-auto', BRIEF], 'claude'),
+                (CODEX[:-2] + ['--dangerously-bypass-approvals-and-sandbox', '--', BRIEF], 'claude'),
+                (CODEX[:-2] + ['-o', 'docs/answer.md', '--', BRIEF], 'claude'),
+                (CODEX[:-2] + ['--full-auto', '--', BRIEF], 'claude'),
                 (CODEX[:6] + ['codex', 'review'] + CODEX[8:], 'claude'),
                 (CLAUDE[:permission] + ['acceptEdits'] + CLAUDE[permission + 1:], 'codex'),
-                (CLAUDE + ['--allowedTools', 'Bash'], 'codex'),
-                (CLAUDE + ['--dangerously-skip-permissions'], 'codex'),
+                (CLAUDE[:-2] + ['--allowedTools', 'Bash', '--', BRIEF], 'codex'),
+                (CLAUDE[:-2] + ['--dangerously-skip-permissions', '--', BRIEF], 'codex'),
                 (CLAUDE, 'claude'),  # the host's own family
                 (CODEX, 'codex'),
                 (CODEX, None),  # the coordinator's family must be stated
@@ -767,11 +774,45 @@ class AwayDecisionTest(AutopilotBase):
                 (CODEX[:4] + ['claude'] + CODEX[5:], 'claude'),  # wrapper family differs from the program
                 (CODEX[:-1] + ['ghp_' + 'x' * 30], 'claude'),  # a brief with a secret
                 (CODEX[:-1], 'claude'),  # no brief
+                (CODEX[:-2], 'claude'),  # no brief and no separator
                 (['python3', '-I', str(ROOT / 'scripts/delegate_env.py')] + CODEX[3:], 'claude'),
                 (['python3'] + CODEX[2:], 'claude')):
             with self.subTest(argv=argv[3:9], coordinator=coordinator):
                 self.check_as(argv, coordinator=coordinator, tier=3, code='unknown')
         self.assertEqual(self.lease()['counters']['actions'], 0)
+
+    def test_the_brief_position_never_accepts_an_option(self):
+        self.start(SETUP_ALL)
+        forms = {'codex': (CODEX, 'claude'), 'claude': (CLAUDE, 'codex'), 'antigravity': (AGY, 'claude')}
+        for family, (form, coordinator) in forms.items():
+            danger = DANGER[family]
+            brief = form.index(BRIEF)
+            shapes = {
+                'dangerous flag as the brief': form[:brief] + [danger] + form[brief + 1:],
+                'stdin as the brief': form[:brief] + ['-'] + form[brief + 1:],
+                'brief starting with a dash': form[:brief] + ['-x ' + BRIEF] + form[brief + 1:],
+                'dangerous flag as the final token': form + [danger],
+                'dangerous flag after the brief': form + [danger, BRIEF],
+            }
+            if family == 'codex':  # the reviewed shape: the last token became the brief, with no separator
+                shapes['old form, dangerous flag last'] = CODEX[:-2] + [danger]
+                shapes['old form, stdin'] = CODEX[:-2] + ['-']
+                shapes['old form'] = CODEX[:-2] + [BRIEF]
+                shapes['flag before the brief'] = CODEX[:-2] + [danger, '--', BRIEF]
+            if family == 'claude':  # -p is a switch; the brief is the positional prompt after `--`
+                shapes['old form, dangerous flag as prompt'] = CLAUDE[:8] + [danger] + CLAUDE[8:-2]
+                shapes['old form, stdin'] = CLAUDE[:8] + ['-'] + CLAUDE[8:-2]
+                shapes['old form'] = CLAUDE[:8] + [BRIEF] + CLAUDE[8:-2]
+                shapes['flag before the brief'] = CLAUDE[:-2] + [danger, '--', BRIEF]
+            if family == 'antigravity':  # the brief is the value of -p
+                shapes['flag before the brief'] = AGY[:7] + [danger] + AGY[7:]
+                shapes['separator then brief'] = AGY[:8] + AGY[9:] + ['--', BRIEF]
+            for name, argv in shapes.items():
+                with self.subTest(family=family, shape=name):
+                    self.check_as(argv, coordinator=coordinator, tier=3, code='unknown')
+        self.assertEqual(self.lease()['counters']['actions'], 0)
+        for form, coordinator in forms.values():
+            self.check_as(form, coordinator=coordinator)
 
     def test_the_advisor_brief_is_screened_like_the_judge_and_packet_paths(self):
         self.start(SETUP_AWAY)
