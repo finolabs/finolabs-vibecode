@@ -1,6 +1,6 @@
 # Agent levels
 
-Status: in progress; a setup writer and a strict reader exist in a branch; routing reads the section by agent judgment; nothing is verified on a live host.
+Status: implemented; the writer, strict reader and candidates command are merged (#189, #191); routing by levels is advisory and unverified on a live host.
 
 Owner decisions, 2026-11-09: the declaration belongs to `delegation` setup. When the user adds an agent, setup asks which of five difficulty levels it can take and saves the answer in the host config so delegation routes well later. A Claude Code command the user already has, such as `claudework` or `claudeomni`, is declared the same way, by its command name and levels; nothing else is asked per command. The user confirms once, at setup, that task briefs and repository files may go to the account each listed command is logged into (it can belong to another organization); routing then uses the agent inside its level range without asking again per task. A declared agent is preferred to the default `claude` install for a task in its range while it has quota; otherwise the default install takes the task.
 
@@ -32,10 +32,10 @@ Whether a declared command exists is checked by the coordinator in the user's sh
 ## Tasks
 
 - [x] T1 Writer and reader script with tests.
-- [ ] T2 Level questions in the `delegation` feature file.
-- [ ] T3 Routing, dispatch and host template text in `fnl-delegate`.
-- [ ] T4 Changelog and index; targeted tests and reference check.
+- [x] T2 Level questions in the `delegation` feature file.
+- [x] T3 Routing, dispatch and host template text in `fnl-delegate`.
+- [x] T4 Changelog and index; targeted tests and reference check.
 
 ## Evidence
 
-Pending.
+`tests/test_levels_setup.py` and the reviews on #189 and #191; no live-host proof.
