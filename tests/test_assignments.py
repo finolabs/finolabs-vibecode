@@ -61,6 +61,10 @@ class ParseValidTest(unittest.TestCase):
         text = '# Host\n```\n' + HEAD + '- claude: levels 1-5\n```\n~~~md\n## Assignment matrix\n~~~\n'
         self.assertEqual(A.parse(text).state, 'absent')
 
+    def test_an_info_string_does_not_close_a_fence(self):
+        text = '```\n## Assignment matrix\n```python\n## Assignment matrix\n- Consent: no\n- Judge: host\n```\n'
+        self.assertEqual(A.parse(text).state, 'absent')
+
     def test_real_heading_after_a_closed_fence_is_found(self):
         self.assertEqual(A.parse('```\nx\n```\n' + FULL).state, 'valid')
 

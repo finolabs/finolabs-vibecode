@@ -216,8 +216,21 @@ class MatrixSetupTest(unittest.TestCase):
             '| claude | 1-5 | frontend, design | claude-opus-5-5 | none |',
             '| codex | 1-4 | image-generation |  | security-review |',
             '| antigravity | 1-3 |  |  | code-review, navigator |',
-            'Judge: jev'])
+            'Judge: jev',
+            'Review posting: not recorded',
+            'Unverified: claude model claude-opus-5-5 is not among the allowed models on this machine'])
         self.assertNotIn(str(self.home), out)
+
+    def test_show_reports_posting_words_and_accepts_an_allowed_model(self):
+        self.assertEqual(self.cli('apply', '--digest', self.preview())[0], 0)
+        extra = (b'\n## Agents on this machine\n\n| Agent | Present | Version | Allowed models | Checked |\n| --- | --- | --- | --- | --- |\n'
+                 b'| Claude Code | yes | 1 | claude-opus-*,other | 2026-11-09 |\n'
+                 b'\n## Review posting\n\n- codex: unverified (checked 2026-11-08)\n- antigravity: yes private note\n')
+        self.host.write_bytes(self.host.read_bytes() + extra)
+        out = self.cli('show')[1]
+        self.assertIn('Review posting: codex unverified, antigravity yes', out)
+        self.assertNotIn('Unverified', out)
+        self.assertNotIn('private note', out)
 
     def test_show_absent_says_legacy_applies(self):
         code, out, _ = self.cli('show')
@@ -298,6 +311,15 @@ class MatrixSetupTest(unittest.TestCase):
         self.assertNotIn(b'gemini', raw)
         self.assertNotIn(b'## Agent roles', raw)
         self.assertEqual(self.backups()[0].read_bytes(), before)
+
+    def test_migrate_never_prints_the_text_of_a_dropped_line(self):
+        secret = 'a' * 32
+        self.host.write_bytes(PREFIX + b'## Agent roles\n- password: ' + secret.encode() + b'\n- code review: codex\n')
+        out = self.cli('migrate')[1]
+        self.assertIn('dropped: Agent roles line 1: unrecognized or repeated line', out)
+        self.assertNotIn(secret, out)
+        self.assertNotIn('password', out)
+        self.assertNotIn(secret.encode(), self.plan.read_bytes())
 
     def test_migrate_unreadable_levels_section_is_dropped(self):
         self.host.write_bytes(PREFIX + b'## Agent levels\n- Consent: yes (2026-10-01)\n- claudework: levels 9-9\n')

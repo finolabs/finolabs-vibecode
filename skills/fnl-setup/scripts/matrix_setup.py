@@ -4,6 +4,7 @@ try:
     import fcntl
 except ImportError:
     raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
+import fnmatch
 import json
 import os
 from pathlib import Path
@@ -109,10 +110,6 @@ def legacy_section_lines(text, title):
     return [line for line in text[spans[0][0]:spans[0][1]].splitlines()[1:] if line.strip()]
 
 
-def safe(line):
-    return line if re.fullmatch(r'- [a-z ]{1,20}: [a-z0-9-]{1,32}', line) else 'unreadable line'
-
-
 def build_migration(text):
     """Map the legacy sections to matrix values (consent left for a new yes); return values, dropped lines and notes."""
     roles = legacy_section_lines(text, ROLES_HEADING)
@@ -136,11 +133,11 @@ def build_migration(text):
         if role:
             name, key = role[2], LEGACY_ROLE[role[1]]
             if key in assigned:
-                dropped.append(f'{where}: duplicate role ({safe(line)})')
+                dropped.append(f'{where}: duplicate role')
             elif not am.NAME.fullmatch(name):
-                dropped.append(f'{where}: agent not accepted ({safe(line)})')
+                dropped.append(f'{where}: agent not accepted')
             elif name not in agents and len(agents) >= am.MAX_AGENTS:
-                dropped.append(f'{where}: too many agents ({safe(line)})')
+                dropped.append(f'{where}: too many agents')
             else:
                 if name not in agents:
                     agents[name] = {'levels': (1, 5), 'works': [], 'model': None, 'roles': []}
@@ -150,7 +147,7 @@ def build_migration(text):
         elif verdict and judge is None and verdict[1] in ('jev', 'host'):
             judge = verdict[1]
         else:
-            dropped.append(f'{where}: unrecognized or repeated line ({safe(line)})')
+            dropped.append(f'{where}: unrecognized or repeated line')
     values = {'consent': 'no', 'date': '', 'judge': judge or 'host', 'agents': agents}
     validate(values)
     return values, dropped, notes
@@ -246,6 +243,28 @@ def apply(value, consent, acknowledged):
     print('Assignment matrix saved; no command was run.')
 
 
+def allowed_models(text):
+    """Model patterns recorded in `## Agents on this machine`; the fourth table column, comma separated."""
+    allowed = []
+    for start, end in sections(text, '## Agents on this machine')[:1]:
+        for line in text[start:end].splitlines():
+            cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
+            if len(cells) >= 5 and not set(cells[3]) <= set('- '):
+                allowed.extend(item.strip() for item in cells[3].split(','))
+    return allowed
+
+
+def posting_summary(text):
+    """Family and state words from `## Review posting`; nothing else from that section is printed."""
+    words = []
+    for start, end in sections(text, '## Review posting')[:1]:
+        for line in text[start:end].splitlines():
+            match = re.match(r'- (claude|codex|antigravity): (yes|no|unverified)\b', line)
+            if match:
+                words.append(f'{match[1]} {match[2]}')
+    return ', '.join(words) or 'not recorded'
+
+
 def table(matrix):
     lines = ['| Agent | Levels | Works on | Model | Roles |', '| --- | --- | --- | --- | --- |']
     for name, entry in matrix.agents.items():
@@ -273,6 +292,11 @@ def show():
         return 3
     print('\n'.join(table(matrix)))
     print(f'Judge: {matrix.judge}')
+    print(f'Review posting: {posting_summary(text)}')
+    allowed = allowed_models(text)
+    for name, entry in matrix.agents.items():
+        if entry['model'] and not any(fnmatch.fnmatchcase(entry['model'], item) for item in allowed):
+            print(f"Unverified: {name} model {entry['model']} is not among the allowed models on this machine")
     return 0
 
 
