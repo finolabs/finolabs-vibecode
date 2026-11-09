@@ -9,6 +9,8 @@ python3 -I "$L" start --project demo-app --task "003 T101" \
   --model gpt-6.1-sol --route-by table --budget 45
 python3 -I "$L" finish <id> --outcome accepted --rework-rounds 1 --tests passed
 python3 -I "$L" open                     # dispatches with no finish line
+python3 -I "$L" stale                    # preview open records past their budget
+python3 -I "$L" stale --close --digest <first 12+ hex digits>
 python3 -I "$L" summary --since 2026-11-01
 python3 -I "$L" summary --json           # the same rows as JSON, with quota and error counts
 ```
@@ -34,3 +36,5 @@ Under Delegation mode `manual`, `start` refuses a cross-family record without `-
 For task progress, use labels of the form `<feature> T<id>` (for example `003 T012`); include the exact three-digit feature number. Multiple ids or ranges of at most 20 ids link each task; labels without a feature remain unlinked. The rest of the label is discarded by the dashboard.
 
 `finish` accepts `--log-path <log>` inside the private `.finolabs/logs/` folder of the current checkout; it scans before recording and stores only `log_scan: no_findings|findings|not_scanned`. Omit the path to record `not_scanned`. The `--head` and verification-receipt gate still apply.
+
+**Stale records.** `stale` lists the open records past their budget (records inside it, or with no usable budget, are never listed) with id, age against budget and what can be learned without reading a log's content: whether `<id>.log` exists in the private `.finolabs/logs/` folder of the current checkout, its last-write age and the `exit=<code>` line within its last 64 bytes. Each listed record gets an outcome: `error` for a nonzero exit line, `stalled` for exit 0 or no exit line, `cancelled` when no log exists; a log that is a symlink, hard link or another user's file is refused and its record left open. The preview writes nothing to the ledger; it saves the plan in the data root's private state folder and prints its SHA-256 digest, valid for 60 minutes. Show the list to the user and, after their yes, run `stale --close --digest <first 12+ hex digits>`: it writes one `finish` line per previewed record that is still open and past its budget, with a note saying it was closed late and `log_scan: not_scanned`, then removes the preview. A digest mismatch, an expired or missing preview, or a changed data root writes nothing. It never marks a record `accepted` and never touches verification receipts. Enforcer: the digest check in `ledger.py`; asking the user before closing is agent judgment (advisory).
