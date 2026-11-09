@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import assignments as am
 import data_root as dr
 
 FAMILIES = ("claude", "codex", "antigravity")
@@ -64,7 +65,27 @@ def present_families(text):
     return machine_families(text)[1]
 
 
+def usable(matrix):
+    """A present matrix counts only when it is valid and its own consent is yes; otherwise roles and judge are unset."""
+    return matrix.state == "valid" and matrix.consent == "yes"
+
+
+def matrix_agents(text):
+    """Number of agent lines in a usable matrix; None when the matrix is absent, invalid or without consent."""
+    matrix = am.parse(text)
+    return len(matrix.agents) if usable(matrix) else None
+
+
 def read_roles(text):
+    """Three states: no matrix reads the legacy section; a usable matrix alone decides; any other matrix grants nothing."""
+    matrix = am.parse(text)
+    if matrix.state != "absent":
+        if not usable(matrix):
+            return {"judge": "host"}
+        # An extra Claude Code command (`claude<suffix>`) belongs to the claude family for routing.
+        families = {role.replace("-", " "): agent if agent in FAMILIES else "claude"
+                    for role, agent in matrix.roles.items()}
+        return {"judge": matrix.judge, **families}
     lines = section(text, "Agent roles")
     roles = {}
     if lines is None:

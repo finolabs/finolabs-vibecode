@@ -22,6 +22,9 @@ import data_root as dr
 from tests.data_root_fixture import account
 
 HEAD = "a" * 40
+MATRIX = ("## Assignment matrix\n\n- Consent: yes (2026-11-09)\n- Judge: jev\n"
+          "- codex: levels 1-5; roles code-review\n- claudework: levels 3-5; roles navigator\n"
+          "- antigravity: levels 1-3; roles advisor\n")
 
 
 def host(present=("claude", "codex", "antigravity"), roles="", posting=""):
@@ -102,6 +105,43 @@ class ReviewConfigTest(unittest.TestCase):
         self.assertEqual(config.read_roles(""), {"judge": "host"})
         self.assertEqual(config.read_roles(host(roles="- code review: codex") + "\n## Agent roles\n- judge: jev"), {"judge": "host"})
         self.assertEqual(config.read_roles("```md\n" + host(roles="- judge: jev") + "```\n"), {"judge": "host"})
+
+    def test_matrix_absent_keeps_the_legacy_roles(self):
+        legacy = host(roles="- code review: antigravity\n- judge: jev")
+        self.assertEqual(config.read_roles(legacy), {"code review": "antigravity", "judge": "jev"})
+        fenced = legacy + "```md\n" + MATRIX + "```\n"
+        self.assertEqual(config.read_roles(fenced), {"code review": "antigravity", "judge": "jev"})
+        self.assertIsNone(config.matrix_agents(legacy))
+
+    def test_valid_matrix_alone_decides_roles_and_judge(self):
+        text = host(roles="- code review: antigravity\n- security review: antigravity\n- judge: host") + MATRIX
+        self.assertEqual(config.read_roles(text), {"judge": "jev", "code review": "codex", "navigator": "claude",
+                                                   "advisor": "antigravity"})
+        self.assertEqual(config.matrix_agents(text), 3)
+        # Security review is named by no matrix line: unassigned, and the legacy line never resurrects it.
+        self.assertNotIn("security review", config.read_roles(text))
+        self.assertEqual(route.route("claude", text, []), [("codex", "headless", "assigned-one-run-two-comments"),
+                                                           ("codex", "headless", "capability-one-run-two-comments")])
+
+    def test_invalid_matrix_leaves_roles_and_judge_unset_despite_valid_legacy(self):
+        legacy = host(roles="- code review: antigravity\n- judge: jev")
+        for broken in (MATRIX + "- gemini: levels 1-2\n", MATRIX + "- codex: levels 1-5; roles navigator\n",
+                       MATRIX.replace("- Judge: jev\n", ""), MATRIX + MATRIX, "## Assignment matrix\n```\n"):
+            with self.subTest(broken=broken[-30:]):
+                self.assertEqual(config.read_roles(legacy + broken), {"judge": "host"})
+                self.assertIsNone(config.matrix_agents(legacy + broken))
+                if "```" in broken:
+                    continue  # an open fence hides every section, so no family is present to route to
+                self.assertEqual([row[2] for row in route.route("claude", legacy + broken, [])],
+                                 ["capability-one-run-two-comments"] * 2)
+
+    def test_matrix_without_consent_leaves_roles_and_judge_unset(self):
+        legacy = host(roles="- code review: antigravity\n- judge: jev")
+        for consent in ("- Consent: no\n- Judge: host\n", MATRIX.replace("yes (2026-11-09)", "no")):
+            with self.subTest(consent=consent[:40]):
+                text = legacy + "## Assignment matrix\n" + consent.split("## Assignment matrix\n")[-1]
+                self.assertEqual(config.read_roles(text), {"judge": "host"})
+                self.assertIsNone(config.matrix_agents(text))
 
     def test_posting_grammar_dates_duplicates_and_cap(self):
         valid = "- codex: yes (checked 2026-11-01)\n- claude: no (checked 2026-11-01)\n- antigravity: unverified (checked 2026-11-01)"
