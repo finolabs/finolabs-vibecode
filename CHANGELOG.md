@@ -11,6 +11,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- `heavy_run.py` caps the waiting-process snapshot at 256 KiB and reports `waiting: unknown` on overflow; ledger guidance now calls for one stable project label shared by every worktree of a repository.
 - Native Windows is documented as unsupported (README "Supported platforms"): every script that imports `pwd` or `fcntl` now fails with one `ImportError` saying the plugin needs POSIX file APIs, supports macOS and Linux, and that Windows users run it under WSL, instead of a bare `ModuleNotFoundError`. Behavior on macOS and Linux is unchanged (issue 193).
 - `heavy_run.py`: the free-memory reading follows the kernel's own figure (the `memory_pressure` free percentage times `hw.memsize`) and falls back to a `vm_stat` estimate (free plus the larger of inactive plus speculative and file-backed pages; purgeable pages are not added because they can overlap inactive ones) when either program cannot be read or parsed, so a machine with a large file cache is no longer refused while `memory_pressure` reports it healthy; `status` also prints `waiting: about <n>` or `waiting: unknown`, a point-in-time approximation (it skips scripts whose path contains a space and can be off by one around a lock change), counting only a Python interpreter (optionally after `/usr/bin/env`) running `heavy_run.py` with the `run` action. The setup text no longer mentions a heavy-job lock location.
 
