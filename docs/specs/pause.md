@@ -1,6 +1,6 @@
-# Pause (draft, no release assigned)
+# Pause (draft, scoped to release 0.2.3)
 
-Status: draft; the owner described the idea and settled eight decisions on 2026-11-09; nothing is built.
+Status: draft; the owner described the idea and recorded the decisions below on 2026-11-09; nothing is built.
 
 Idea: owner, 2026-11-09. The opposite of `fnl-brb`. Autopilot hands the agents a mandate to keep working while the
 user is away; pause is what the user runs before a restart or shutdown of the machine, so that no running session or
@@ -44,11 +44,20 @@ Sessions and terminals it has no record of are listed as unknown and left to the
    `heavy_run.py` refuses to start a new command with one fixed message (the only script-enforced part; everything else
    is agent judgment, advisory).
 2. **Drain**: `pause.py status` lists each open dispatch with its age against its budget, the heavy-job holder and
-   waiters, and running agent processes by family, and prints `safe to shut down: yes` only when none remain and no
-   waiter exists. A run that is past its budget is reported as stalled, never stopped.
+   waiters, and the agent processes the snapshot reader sees, by family. A run past its budget is reported as stalled,
+   never stopped. Readiness is judged on unfinished work, not on a count of processes, and every source has three
+   states: known, unknown (with a reason: disabled, failed, stale, unreadable) and known-empty. `status` prints
+   `safe to shut down: yes` only when all of these hold: the ledger was read and has no open dispatch except the
+   coordinator's own record; the heavy-job lock is free and the waiter count is known and zero (`waiting: unknown` is
+   not zero); every checkpoint the coordinator wrote was read back; and the snapshot is either known-empty of work
+   beyond the coordinator or disabled, in which case `status` says it did not look. Any unknown source makes the verdict
+   `unknown`, with the reason, never `yes`. Agent processes that are not the coordinator are listed as "still open,
+   idle or unknown: close them yourself" and do not by themselves block `yes`, because an idle session has no
+   unfinished work and the snapshot cannot tell idle from busy; the coordinator itself never blocks it.
 3. **Checkpoint**: for each session the coordinator knows, it writes the handover (goal, decisions, work in progress,
    next action) with `handover_state.py write`, and for each dispatch that will not finish it records the outcome
-   with `ledger.py finish` (`cancelled` or `stalled`) only after the user says to stop that run.
+   with `ledger.py finish` (`cancelled` or `stalled`) only after the user says to stop that run. `handover_state.py
+   write` returns silently when its storage is unsafe, so a checkpoint counts only after it is read back.
 4. **Resume** (`pause.py resume`): removes the marker, lists the handovers still within their 24-hour read lifetime and
    the ledger records that ended without a finish line, and starts nothing by itself. Autopilot is not restarted.
 
@@ -59,7 +68,17 @@ Sessions and terminals it has no record of are listed as unknown and left to the
   snapshot, the existing snapshot reader when its setup consent is on. No network call.
 - It never kills a process, never sends a signal and never shuts the machine down. Stopping a run is the user's
   decision, one run at a time.
-- A pause marker left behind after a crash expires after 24 hours and is reported by `status`.
+- The marker is the one file here that controls command admission, so it is read like the lease and the host config:
+  the path comes only from the canonical account-owned data root (never from a repository, an environment variable
+  or an argument), opened by descriptor with no-follow, a private regular file owned by the user, a bounded read, a
+  validated timestamp that is not in the future by more than a small skew, and written atomically. Missing means not
+  paused. Unreadable, invalid or not safe means `heavy_run.py` runs as if not paused and `status` reports the marker
+  as invalid, so a damaged file never blocks work and never silently pauses it. A marker older than 24 hours expires:
+  `heavy_run.py` ignores it and `status` reports it.
+- Ordering: marker publication is the admission point. `heavy_run.py` checks the marker at entry, again after it gets
+  the lock and before it starts the command (a wrapper that waited up to its wait cap across the start of a pause
+  refuses at that second check), and a command that already started is never touched. The window between the last
+  check and the start is the one race left; the spec accepts it and the code pull request documents it.
 
 ## Restart and shutdown differ
 
