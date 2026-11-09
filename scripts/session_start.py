@@ -160,6 +160,19 @@ def parallel_words():
         return "unknown"
 
 
+AWAY_LINE = 'Away mandate active: do not ask the user; follow fnl-autopilot "Decide"\n'
+
+
+def away_line():
+    """The fixed away line only while a valid, unexpired lease exists; it reads nothing else and prints no content."""
+    try:
+        import time
+        import away_lease
+        return AWAY_LINE if away_lease.live_lease(time.time()) is not None else ""
+    except Exception:
+        return ""
+
+
 def state_block():
     return ("\nPlugin state (local files; fixed words and counts only)\n"
             f"Delegation mode: {delegation_word()}\n"
@@ -167,7 +180,8 @@ def state_block():
             f"{assignments_line()}"
             f"Quota (cached): {quota_words()}\n"
             f"Open ledger dispatches: {open_dispatches()}\n"
-            f"Parallel slots: {parallel_words()}\n")
+            f"Parallel slots: {parallel_words()}\n"
+            f"{away_line()}")
 
 
 def main():
