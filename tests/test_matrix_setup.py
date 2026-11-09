@@ -232,6 +232,26 @@ class MatrixSetupTest(unittest.TestCase):
         self.assertNotIn('Unverified', out)
         self.assertNotIn('private note', out)
 
+    def test_show_ignores_fenced_posting_and_inventory_lines(self):
+        self.assertEqual(self.cli('apply', '--digest', self.preview())[0], 0)
+        # An info-string fence line inside a fence does not close it; only a bare closing fence does.
+        extra = (b'\n## Agents on this machine\n\n| Agent | Present | Version | Allowed models | Checked |\n| --- | --- | --- | --- | --- |\n'
+                 b'```md\n```text\n| Claude Code | yes | 1 | claude-opus-* | 2026-11-09 |\n```\n'
+                 b'\n## Review posting\n\n- codex: no (checked 2026-11-08)\n~~~\n~~~md\n- antigravity: yes (checked 2026-11-08)\n~~~\n')
+        self.host.write_bytes(self.host.read_bytes() + extra)
+        code, out, _ = self.cli('show')
+        self.assertEqual(code, 0)
+        self.assertIn('Review posting: codex no\n', out)
+        self.assertIn('Unverified: claude model claude-opus-5-5', out)
+
+    def test_advisor_role_is_accepted_once(self):
+        code, out, err = self.cli('validate', '--judge', 'host', '--consent', 'yes', '--line', 'claude: levels 1-5',
+                                  '--line', 'codex: levels 1-5; roles advisor')
+        self.assertEqual((code, err), (0, ''))
+        self.assertIn('- codex: levels 1-5; roles advisor\n', out)
+        self.assertEqual(self.cli('validate', '--judge', 'host', '--consent', 'yes', '--line', 'claude: levels 1-5; roles advisor',
+                                  '--line', 'codex: levels 1-5; roles advisor')[0], 1)
+
     def test_show_absent_says_legacy_applies(self):
         code, out, _ = self.cli('show')
         self.assertEqual(code, 0)

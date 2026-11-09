@@ -280,6 +280,36 @@ def agents_evidence(status, text):
     return item("agents inventory", "ok", "recent file inventory only; live access unverified")
 
 
+def canonical_matrix():
+    """The readers take roles and judge from the canonical host config only, never from an override."""
+    import assignments
+    try:
+        text = dr.read_data("host.md", MAX_BYTES).decode("utf-8")
+    except (OSError, ValueError, UnicodeError):
+        return "unverified", assignments.parse(""), ""
+    return "ok", assignments.parse(text), text
+
+
+def assignments_evidence(status, matrix, text):
+    """(status, reason) for the matrix state with fixed problem reasons only, never a value from the section;
+    None when the canonical host config cannot be read."""
+    from assignments import ROLES
+    if status != "ok":
+        return None
+    legacy = bool(re.search(r"^## Agent (?:roles|levels)[ \t]*\r?$", text, re.M))
+    ignored = "; legacy Agent roles or Agent levels present and ignored" if legacy else ""
+    unset = "roles and judge unset, reviews not routed, judge falls to the host model" + ignored
+    if matrix.state == "absent":
+        return "ok", "matrix absent; legacy Agent roles and Agent levels in use until 0.3.0"
+    if matrix.state != "valid":
+        return "missing", "matrix invalid (" + ", ".join(matrix.problems) + "); " + unset
+    if matrix.consent != "yes":
+        return "missing", "matrix without consent; " + unset
+    roles = [role for role in ROLES if role in matrix.roles]
+    return "ok", (f"matrix valid; {len(matrix.agents)} agents; judge {matrix.judge}; roles assigned: "
+                  + (", ".join(roles) or "none") + ignored)
+
+
 def retired_evidence(paths, reader=read):
     # Construct the historical names so the repository's retired-name rule still applies.
     names = ["fnl-" + suffix for suffix in ("committee", "coordinator-sessions", "knowledge",
@@ -1054,11 +1084,21 @@ def collect(payload=False):
         }[host]
         hosts[host].append(item("mode enforcement", "unverified", enforcement + "; auto is never 100%"))
     status, text = config_status, config_text
-    missing = sorted(HEADINGS - set(re.findall(r"^## (.+?)\s*$", text, re.M)))
+    import assignments
+    matrix = assignments.parse(text)
+    # A present matrix replaces the legacy roles section, so that heading is no longer required.
+    required = HEADINGS - {"Agent roles"} if matrix.state != "absent" else HEADINGS
+    missing = sorted(required - set(re.findall(r"^## (.+?)\s*$", text, re.M)))
     host_config = item("host config", status if status != "ok" else ("missing" if missing else "ok"),
                        ("required headings present; values not validated" if not missing else
                         "required headings absent: " + ", ".join(missing)) if status == "ok" else
                        "host config absent or unreadable")
+    # Folded into this row so the report stays within forty lines.
+    found = assignments_evidence(*canonical_matrix())
+    if found:
+        if found[0] == "missing" and host_config["status"] == "ok":
+            host_config["status"] = "missing"
+        host_config["reason"] += "; assignments: " + found[1]
     inventory = agents_evidence(status, text)
     context = [root / "CLAUDE.md", root / "CLAUDE.local.md", root / "AGENTS.override.md",
                root / "AGENTS.md", root / "GEMINI.md"]

@@ -64,6 +64,12 @@ class LevelsSetupTest(unittest.TestCase):
         self.assertEqual(code, 0, err)
         return out.split('Digest: ')[1].splitlines()[0]
 
+    def test_an_info_string_fence_line_does_not_close_a_fence(self):
+        reader = load('levels_setup_fence_test', SCRIPT)
+        text = ('## Other\n```text\n```md\n## Agent levels\n- Consent: no\n```\n\n'
+                '## Agent levels\n\n- Consent: yes (2026-10-01)\n- codex: levels 1-4\n')
+        self.assertEqual(reader.parse(text), {'consent': 'yes', 'date': '2026-10-01', 'installs': [['codex', 1, 4]]})
+
     def test_round_trip_keeps_other_bytes_and_show_reads_it(self):
         before = self.host.read_bytes()
         digest = self.preview('--install', 'claudework:3-5', '--install', 'claudeomni:1-2')

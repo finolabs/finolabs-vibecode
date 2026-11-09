@@ -8,7 +8,7 @@ Ask once per helper, in one pass, as free text; a blank answer skips that part:
 1. Levels: "Which task levels can <helper> take? 1 easy to 5 ultra hard; answer like 3-5, blank for all five."
 2. Types of work: "Which types of work suit <helper>? Choose from frontend, design, video, three-d, image-generation, transcription (at most four); blank for none." When several helpers list a type, the earlier one is preferred.
 3. Model: "Which full model id should <helper> use for those types? Blank for its default." A model not allowed on this machine is kept and shown as unverified.
-4. Roles: "Which reviews does <helper> own? Choose from code-review, security-review, navigator; each role goes to one helper; blank or none for no role."
+4. Roles: "Which roles does <helper> own? Choose from code-review, security-review, navigator, advisor (the optional agent asked for opinions and away decisions); each role goes to one helper; blank or none for no role."
 Then ask the judge: "Who judges evidence: jev (TypeSafe, needs your own key and approval) or host (the small host model)?"
 
 Build one line per helper: `<agent>: levels L-H[; works on <type>, ...][; model <id>][; roles <role>, ...]`, keys in that order, with no leading dash.

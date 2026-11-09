@@ -255,7 +255,7 @@ class AutopilotTest(unittest.TestCase):
             self.check(['git', 'push', 'origin', refspec], tier=3, code='unknown')
         self.check(['git', 'push', 'origin', 'v-example:refs/heads/topic'])
         # Every trusted wrapper and its dependencies are protected as paths and through git add.
-        for name in ('heavy_run.py', 'ledger.py', 'record.py', 'delegate_env.py', 'run_env.py', 'data_root.py'):
+        for name in ('heavy_run.py', 'ledger.py', 'record.py', 'delegate_env.py', 'run_env.py', 'data_root.py', 'assignments.py'):
             path = 'skills/fnl-delegate/scripts/' + name
             self.check(paths=[path], tier=3, code='protected')
             self.check(['git', 'add', '--', path], tier=3, code='protected')

@@ -27,7 +27,20 @@ class ConstantsTest(unittest.TestCase):
     def test_closed_lists(self):
         self.assertEqual(A.HEADING, '## Assignment matrix')
         self.assertEqual(A.TYPES, ('frontend', 'design', 'video', 'three-d', 'image-generation', 'transcription'))
-        self.assertEqual(A.ROLES, ('code-review', 'security-review', 'navigator'))
+        self.assertEqual(A.ROLES, ('code-review', 'security-review', 'navigator', 'advisor'))
+
+    def test_advisor_role_names_one_agent_at_most(self):
+        m = A.parse(HEAD + '- claude: levels 1-5\n- codex: levels 1-5; roles security-review, advisor\n')
+        self.assertEqual((m.state, m.roles), ('valid', {'security-review': 'codex', 'advisor': 'codex'}))
+        m = A.parse(HEAD + '- claude: levels 1-5; roles advisor\n- codex: levels 1-5; roles advisor\n')
+        self.assertEqual((m.state, m.problems), ('invalid', ['duplicate role']))
+        values = {'consent': 'yes', 'date': '2026-11-09', 'judge': 'host', 'agents': {
+            'claude': {'levels': (1, 5), 'works': [], 'model': None, 'roles': ['advisor']},
+            'codex': {'levels': (1, 5), 'works': [], 'model': None, 'roles': ['advisor']}}}
+        with self.assertRaises(ValueError):
+            A.validate(values)
+        values['agents']['codex']['roles'] = []
+        self.assertIn('- claude: levels 1-5; roles advisor\n', A.render(values))
 
 
 class ParseValidTest(unittest.TestCase):

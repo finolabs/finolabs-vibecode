@@ -210,8 +210,8 @@ def host_section_on():
         if match:
             if fence is None:
                 fence = match[1]
-            elif match[1][0] == fence[0] and len(match[1]) >= len(fence):
-                fence = None
+            elif match[1][0] == fence[0] and len(match[1]) >= len(fence) and line.strip() == match[1]:
+                fence = None  # a line with an info string after the run does not close a fence
         elif fence is None:
             lines.append(line)
     parts = re.split(r'^#{1,2} (.+?)\s*$', '\n'.join(lines), flags=re.M)

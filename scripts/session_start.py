@@ -65,6 +65,19 @@ def roles_words():
                 "posting claude unknown, codex unknown, antigravity unknown")
 
 
+def assignments_line():
+    """One fixed line with a count only, and only when the assignment matrix is valid with its own yes consent."""
+    try:
+        import review_config as config
+        text = config.host_text()
+        count = config.matrix_agents(text) if isinstance(text, str) else None
+        if type(count) is int and 0 <= count <= 8:
+            return f"Assignments: {count} agents set; run route_pick.py before a dispatch\n"
+    except Exception:
+        pass
+    return ""
+
+
 def family_quota(probe, agent, labels, marked, current):
     """One fixed word and, when measured, the lowest remaining percent (0 to 100)."""
     if marked is not None and probe.limited_until(agent, marked, {agent: labels}, current):
@@ -151,6 +164,7 @@ def state_block():
     return ("\nPlugin state (local files; fixed words and counts only)\n"
             f"Delegation mode: {delegation_word()}\n"
             f"Roles: {roles_words()}\n"
+            f"{assignments_line()}"
             f"Quota (cached): {quota_words()}\n"
             f"Open ledger dispatches: {open_dispatches()}\n"
             f"Parallel slots: {parallel_words()}\n")

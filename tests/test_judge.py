@@ -66,6 +66,28 @@ class JudgeTest(unittest.TestCase):
             path.write_text(text)
             self.assertEqual(judge.configured_judge(), expected)
 
+    def test_assignment_matrix_states_decide_the_judge(self):
+        path = self.home / '.finolabs/vibecode/host.md'
+        path.parent.mkdir(parents=True)
+        matrix = '## Assignment matrix\n\n- Consent: yes (2026-11-09)\n- Judge: %s\n- codex: levels 1-5; roles code-review\n'
+        legacy_jev = '## Agent roles\n- judge: jev\n\n'
+        legacy_host = '## Agent roles\n- judge: host\n\n'
+        cases = [
+            ('absent, fenced example only', '```md\n' + matrix % 'host' + '```\n\n' + legacy_jev, 'jev'),
+            ('valid jev over legacy host', legacy_host + matrix % 'jev', 'jev'),
+            ('valid host over legacy jev', legacy_jev + matrix % 'host', 'host'),
+            ('invalid matrix, valid legacy', legacy_jev + matrix % 'jev' + '- gemini: levels 1-2\n', 'host'),
+            ('duplicate matrix', legacy_jev + matrix % 'jev' + matrix % 'jev', 'host'),
+            ('no consent', legacy_jev + '## Assignment matrix\n- Consent: no\n- Judge: host\n', 'host'),
+            ('consent missing', legacy_jev + (matrix % 'jev').replace('- Consent: yes (2026-11-09)\n', ''), 'host'),
+        ]
+        with mock.patch('urllib.request.build_opener') as opener:
+            for name, text, expected in cases:
+                with self.subTest(name=name):
+                    path.write_text(text)
+                    self.assertEqual(judge.configured_judge(), expected)
+        opener.assert_not_called()
+
     @contextlib.contextmanager
     def server(self, response, status=200, headers=None):
         received = []

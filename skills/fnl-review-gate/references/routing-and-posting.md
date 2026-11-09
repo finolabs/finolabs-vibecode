@@ -16,6 +16,8 @@ Enforcer: `review_config.py`, read-only. Only `fnl-setup` writes settings after 
 
 Role values must name a family recorded in `## Agents on this machine`; `judge` permits only `host` or `jev` and defaults to `host`. An assignment to an absent family is skipped for that review kind; an unknown or unrecorded family invalidates the whole role section, so routing uses the capability order among present families. The presence table remains a restriction even when its check dates are stale. Presence and roles do not grant model access or permission.
 
+When canonical `host.md` has an `## Assignment matrix` section (written by `fnl-setup`, parsed only by `assignments.py`), it replaces `## Agent roles` and the two are never mixed. Valid with its own `- Consent: yes (<date>)` line, the matrix alone decides: `roles code-review`, `security-review` and `navigator` on an agent line assign that review, an extra Claude Code command counts as the `claude` family, and a role no line names is unassigned even when `## Agent roles` names it, and `review_route.py` exits 2 for that review kind rather than picking a family. Invalid, or without a yes consent, it leaves every role unset and the judge at `host`, and `review_route.py` exits 2, so no review is routed and `merge_check.py --independent` fails closed; it never falls back to `## Agent roles`. The capability order applies only while no matrix exists. An assignment to a family absent from `## Agents on this machine` is skipped as above. `## Agent roles` is read only while no matrix exists and is removed in 0.3.0.
+
 `## Review posting` uses a checked date on each family line:
 
 ```markdown

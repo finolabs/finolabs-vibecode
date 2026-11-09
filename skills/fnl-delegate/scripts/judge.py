@@ -196,12 +196,18 @@ def ask_jev(question, evidence, *, site="verification", base_url=ENDPOINT):
 
 
 def configured_judge():
-    """Strict role section; absent, malformed or unreadable configuration means host."""
+    """The assignment matrix when present, else the strict legacy role section; anything malformed or unreadable means host."""
     try:
         import data_root as dr
         if os.environ.get("FNL_JUDGE") == "off":
             return "host"
         text = dr.read_data("host.md").decode("utf-8")
+        import assignments
+        matrix = assignments.parse(text)
+        if matrix.state != "absent":
+            # A present matrix alone decides; invalid or without its own yes consent, the judge is the host model.
+            usable = matrix.state == "valid" and matrix.consent == "yes" and matrix.judge in ("jev", "host")
+            return matrix.judge if usable else "host"
         sections = text.split("## Agent roles\n")
         if len(sections) != 2:
             return "host"

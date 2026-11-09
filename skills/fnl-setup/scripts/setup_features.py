@@ -33,8 +33,8 @@ def split(text):
             token = match[1]
             if fence is None:
                 fence = token
-            elif token[0] == fence[0] and len(token) >= len(fence):
-                fence = None
+            elif token[0] == fence[0] and len(token) >= len(fence) and line.strip() == token:
+                fence = None  # a line with an info string after the run does not close a fence
         elif fence is None and re.match(r"^#{1,2} ", line):
             headings.append((offset, line.strip()))
         offset += len(line)
