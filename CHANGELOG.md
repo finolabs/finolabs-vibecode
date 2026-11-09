@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-09
+
 ### Added
 
 - `levels_setup.py candidates` lists, as names only, the `claude*` programs on `PATH` and the `~/.claude-<label>` folders, so `/fnl-setup add delegation` can offer the user's extra Claude Code commands as candidates. It runs nothing and never lists shell functions; the user types those names.
@@ -447,7 +449,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.10...v0.2.0
 [0.1.10]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.9...v0.1.10
