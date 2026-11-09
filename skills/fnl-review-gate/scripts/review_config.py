@@ -76,6 +76,12 @@ def matrix_agents(text):
     return len(matrix.agents) if usable(matrix) else None
 
 
+def matrix_state(text):
+    """`absent` keeps the legacy reading, `valid` lets the matrix alone decide, `unset` means nothing may be routed."""
+    matrix = am.parse(text)
+    return "absent" if matrix.state == "absent" else "valid" if usable(matrix) else "unset"
+
+
 def read_roles(text):
     """Three states: no matrix reads the legacy section; a usable matrix alone decides; any other matrix grants nothing."""
     matrix = am.parse(text)

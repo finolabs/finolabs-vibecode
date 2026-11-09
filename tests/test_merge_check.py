@@ -657,6 +657,14 @@ class IndependentMergeTest(unittest.TestCase):
         with patch.object(review_route, "author_family", return_value="codex"), \
              patch.object(review_config, "host_text", return_value=""):
             self.assertIsNone(mc.independent_families(data))
+        for matrix in ("## Assignment matrix\n- Consent: no\n- Judge: host\n- claude: levels 1-5; roles code-review\n",
+                       "## Assignment matrix\n- Consent: yes (2026-11-09)\n- Judge: host\n- gemini: levels 1-5\n",
+                       "## Assignment matrix\n- Consent: yes (2026-11-09)\n- Judge: host\n- claude: levels 1-5; roles code-review\n"):
+            with self.subTest(matrix=matrix[-30:]), patch.object(review_route, "author_family", return_value="codex"), \
+                    patch.object(review_config, "host_text", return_value=matrix), \
+                    patch.object(review_config, "present_families", return_value={"claude", "codex", "antigravity"}), \
+                    patch.object(quota_probe, "status_lines", return_value=[]):
+                self.assertIsNone(mc.independent_families(data))
 
 
 if __name__ == "__main__":

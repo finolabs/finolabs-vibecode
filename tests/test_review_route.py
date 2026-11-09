@@ -120,8 +120,11 @@ class ReviewConfigTest(unittest.TestCase):
         self.assertEqual(config.matrix_agents(text), 3)
         # Security review is named by no matrix line: unassigned, and the legacy line never resurrects it.
         self.assertNotIn("security review", config.read_roles(text))
-        self.assertEqual(route.route("claude", text, []), [("codex", "headless", "assigned-one-run-two-comments"),
-                                                           ("codex", "headless", "capability-one-run-two-comments")])
+        self.assertEqual(route.route("claude", text, [], kinds=("code",)), [("codex", "headless", "assigned")])
+        with self.assertRaisesRegex(ValueError, "review role unassigned"):
+            route.route("claude", text, [])
+        with self.assertRaisesRegex(ValueError, "review role unassigned"):
+            route.route("claude", text, [], kinds=("security",))
 
     def test_invalid_matrix_leaves_roles_and_judge_unset_despite_valid_legacy(self):
         legacy = host(roles="- code review: antigravity\n- judge: jev")
@@ -132,8 +135,8 @@ class ReviewConfigTest(unittest.TestCase):
                 self.assertIsNone(config.matrix_agents(legacy + broken))
                 if "```" in broken:
                     continue  # an open fence hides every section, so no family is present to route to
-                self.assertEqual([row[2] for row in route.route("claude", legacy + broken, [])],
-                                 ["capability-one-run-two-comments"] * 2)
+                with self.assertRaisesRegex(ValueError, "assignment matrix unset"):
+                    route.route("claude", legacy + broken, [])
 
     def test_matrix_without_consent_leaves_roles_and_judge_unset(self):
         legacy = host(roles="- code review: antigravity\n- judge: jev")
@@ -142,6 +145,12 @@ class ReviewConfigTest(unittest.TestCase):
                 text = legacy + "## Assignment matrix\n" + consent.split("## Assignment matrix\n")[-1]
                 self.assertEqual(config.read_roles(text), {"judge": "host"})
                 self.assertIsNone(config.matrix_agents(text))
+                with self.assertRaisesRegex(ValueError, "assignment matrix unset"):
+                    route.route("claude", text, [])
+
+    def test_absent_matrix_keeps_the_capability_fallback(self):
+        self.assertEqual({row[2] for row in route.route("claude", host(roles="- judge: host"), [])},
+                         {"capability-one-run-two-comments"})
 
     def test_posting_grammar_dates_duplicates_and_cap(self):
         valid = "- codex: yes (checked 2026-11-01)\n- claude: no (checked 2026-11-01)\n- antigravity: unverified (checked 2026-11-01)"

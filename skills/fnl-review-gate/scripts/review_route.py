@@ -306,6 +306,9 @@ def blocked_families(lines, current=None):
 def route(author, text, quota_lines, *, lane=False, kinds=("code", "security")):
     if author not in ORDER:
         raise ValueError("unverified author")
+    matrix = config.matrix_state(text)
+    if matrix == "unset":
+        raise ValueError("assignment matrix unset")
     present = config.present_families(text)
     if not present:
         raise ValueError("no present family")
@@ -316,6 +319,8 @@ def route(author, text, quota_lines, *, lane=False, kinds=("code", "security")):
     other.sort(key=lambda f: posting.get(f) != "yes")
     def choose(kind):
         assigned = roles.get(kind + " review")
+        if matrix == "valid" and assigned is None:
+            raise ValueError("review role unassigned")
         if assigned in other:
             return assigned, "assigned"
         if other:
