@@ -97,7 +97,8 @@ class LevelsSetupTest(unittest.TestCase):
     def test_candidates_lists_names_only_and_runs_nothing(self):
         bin_dir = self.home / 'bin'
         bin_dir.mkdir()
-        for name, mode in (('claudework', 0o755), ('claudeomni', 0o755), ('claudenox', 0o644), ('claude', 0o755), ('claudeBad', 0o755), ('other', 0o755)):
+        for name, mode in (('claudework', 0o755), ('claudeomni', 0o755), ('claudenox', 0o644), ('claude', 0o755), ('claudeBad', 0o755), ('other', 0o755),
+                           ('codex', 0o755), ('antigravity', 0o755)):
             (bin_dir / name).write_text('#!/bin/sh\n')
             (bin_dir / name).chmod(mode)
         (self.home / '.claude-work').mkdir()

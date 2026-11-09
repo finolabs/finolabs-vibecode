@@ -195,6 +195,7 @@ def show():
     return 0
 
 
+CANDIDATE = re.compile(r'claude[a-z0-9]{1,24}')
 FOLDER = re.compile(r'\.claude-([a-z0-9]{1,24})')
 LISTED = 20
 
@@ -208,7 +209,7 @@ def candidates():
         try:
             with os.scandir(entry) as items:
                 for item in items:
-                    if (item.name != 'claude' and NAME.fullmatch(item.name) and item.name not in commands
+                    if (item.name != 'claude' and CANDIDATE.fullmatch(item.name) and item.name not in commands
                             and item.is_file() and os.access(item.path, os.X_OK)):
                         commands.append(item.name)
         except OSError:
