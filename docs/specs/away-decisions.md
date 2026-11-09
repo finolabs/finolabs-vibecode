@@ -99,13 +99,28 @@ An advisor with only the code in front of it would give its own opinion, not the
 
 `autopilot.md` makes every deploy Tier 3. That is too broad: it also stops a deploy to a development environment or a UAT run, which can be rolled back. The rule becomes:
 
-- **Always stops, and no setting unlocks it** (only what is too important to leave to an agent): a deploy or change to production or any live environment; anything reaching real users or real
-  customer data; credentials; deletion that cannot be recovered (remote data, a forced push to a default branch); a message to a person outside the repository; and an agent changing its own limits
-  (hooks, permission rules, agent instructions, the lease and setup files).
-- **Stops unless the user unlocked it in setup, then the ladder decides:** tags and releases, publishing to the user's own catalog or package, and repository-level shared settings such as CI configuration
-  and defaults. Each is its own question in `/fnl-setup add autopilot`, with no default, like Merge. An away session that asked a person for each of these would get no answer.
-- **Goes on with no setting:** the local machine; deleting local or recoverable things such as the session's own branches, worktrees and generated files; comments and replies on the repository's own pull
-  requests and issues; a deploy or run against a target the user named as non-production. A change that touches security in code is not a stop by itself: it goes through the review gates and the merge gate.
+The user chooses (owner, 2026-11-09). `/fnl-setup add autopilot` shows one table of closed categories with the starting choice beside each, and the user changes any of them. Each category is `stop` (wait for a person) or `decide`
+(the ladder decides). The choices are stored in `## Autopilot`; a missing or unknown value is `stop`.
+
+| Category | Starting choice |
+| --- | --- |
+| Deploy or change to production or a live environment | stop |
+| Anything reaching real users or real customer data | stop |
+| Deletion that cannot be recovered (remote data, a forced push to a default branch) | stop |
+| A message to a person outside the repository | stop |
+| Tags and releases | stop |
+| Publishing to the user's own catalog or package | stop |
+| Repository-level shared settings such as CI configuration and defaults | stop |
+| Deleting local or recoverable things (the session's own branches, worktrees, generated files) | decide |
+| Comments and replies on the repository's own pull requests and issues | decide |
+
+Moving any category from `stop` to `decide` is its own neutral question, with what could go wrong stated and no default, like Merge. The local machine and a deploy or run against a listed non-production target always go on.
+A change that touches security in code is not a category: it goes through the review gates and the merge gate.
+
+**Two things no setting can open.** Credentials, because handling them is outside what any agent may do here, and an agent changing its own limits (hooks, permission rules, agent instructions, the lease and setup files), because a limit the agent can
+lift for itself is no limit.
+
+What the script can enforce: tags, releases, publishing, deploys and forced pushes are command forms that `autopilot.py check` classifies, so for those the choice is script-enforced. Whether an action reaches real users or real customer data, or whether a message goes to a person, cannot be read from a command: those categories are agent judgment, advisory, and a host in doubt treats them as `stop`.
 - **How a script tells them apart.** `autopilot.py` cannot infer an environment from a command. `## Autopilot` gains `Non-production targets`, an optional list the user fills in setup with the exact deploy
   commands or target names per project, default empty. A deploy matching an entry exactly is Tier 1 under the usual limits; every other deploy stays Tier 3, so an unlisted or ambiguous target
   fails closed to a person. A merge still follows the recorded Merge answer and the merge gate. Naming which targets are safe is the user's decision; an agent never adds an entry during a lease (script: setup changes deny further checks).
