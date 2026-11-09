@@ -120,17 +120,27 @@ def sensitive(value):
     return bool(MACHINE_PATH.search(value) or any(rx.search(value) for _, rx in SECRET_PATTERNS))
 
 
+SENSITIVE_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|SESSIONID|SESSID|(?:^|_)(?:PASS|PASSWD|PASSPHRASE|AUTH|COOKIE|COOKIES|SESSION|PRIVATE)(?:_|$)", re.I)
+# Matches only from the start of a candidate name, so a long text with no separator stays linear.
+ASSIGNED = re.compile(r"""(?<![^\s=:,'"{}\[\]])([^\s=:,'"{}\[\]]+)['"]?\s*[=:]""")
+
+
+def assigns_sensitive(value):
+    """A sensitive name followed by `=` or `:`, whatever comes next: values have too many shapes to parse safely."""
+    return any(SENSITIVE_NAME.search(match[1]) for match in ASSIGNED.finditer(value))
+
+
 def choice_fields(site, question, options, evidence):
     schema = CHOICE_SITES.get(site)
     if schema is None:
         raise Unavailable("payload schema")
     for name, value in (("question", question), ("evidence", evidence)):
         if (not isinstance(value, str) or len(value.encode()) > schema[name]
-                or (name == "question" and not value.strip()) or sensitive(value)):
+                or (name == "question" and not value.strip()) or sensitive(value) or assigns_sensitive(value)):
             raise Unavailable("field: " + name)
     fewest, most, cap = schema["options"]
     if (not isinstance(options, list) or not fewest <= len(options) <= most
-            or any(not isinstance(o, str) or not o.strip() or len(o.encode()) > cap or sensitive(o) for o in options)
+            or any(not isinstance(o, str) or not o.strip() or len(o.encode()) > cap or sensitive(o) or assigns_sensitive(o) for o in options)
             or len(set(options)) != len(options)):
         raise Unavailable("field: options")
     return {str(n): option for n, option in enumerate(options, 1)}

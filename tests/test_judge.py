@@ -13,6 +13,7 @@ import tempfile
 import ssl
 import urllib.error
 import threading
+import time
 import unittest
 from unittest import mock
 from tests.data_root_fixture import account
@@ -499,6 +500,19 @@ class AwayDecisionSiteTest(unittest.TestCase):
                 with self.assertRaises(judge.Unavailable):
                     judge.ask_choice('Which?', self.OPTIONS, 'E')  # no host config: judge host
             opener.assert_not_called()
+
+    def test_a_sensitive_assignment_is_refused_before_the_transport(self):
+        fixture = 'session_cookie: "\n  synthetic-fixture-1234567890\n"'
+        for question, options, evidence in (('Which?', self.OPTIONS, fixture), ('password: demo', self.OPTIONS, 'E'),
+                                            ('Which?', ['Keep', 'token=abc'], 'E')):
+            with self.subTest(question=question, options=options), self.assertRaises(judge.Unavailable):
+                judge.choice_payload(question, options, evidence)
+        judge.choice_payload('Which?', self.OPTIONS, 'The password setting is described in the next section.')
+
+    def test_the_assignment_scan_stays_linear_on_long_text(self):
+        started = time.monotonic()
+        self.assertFalse(judge.assigns_sensitive('a' * 65536))
+        self.assertLess(time.monotonic() - started, 1)
 
     def test_the_documented_reply_shape_is_accepted_and_anything_else_refused(self):
         full = {'model': 'jev-latest', 'usage': {'input_tokens': 1, 'output_tokens': 1},

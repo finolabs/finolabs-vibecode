@@ -852,24 +852,15 @@ def review(folder, args):
     print('Decision review recorded')
 
 
-ASSIGNED = re.compile(r"""([^\s=:,'"{}\[\]]+)['"]?\s*[=:]""")
-
-
-def assigns_sensitive(value):
-    """A sensitive name followed by `=` or `:`, whatever comes next. Values have too many shapes to parse safely, so
-    the separator alone decides; naming a setting in prose stays possible, and a refusal only sends the host back."""
-    return any(secret_patterns.SENSITIVE.search(match[1]) for match in ASSIGNED.finditer(value))
-
-
 def screened(value):
     """True when a value holds a secret, a machine path or a sensitive assignment."""
     try:
-        if secret_patterns.findings(value) or assigns_sensitive(value):
+        if secret_patterns.findings(value):
             return True
     except ValueError:
         return True
     import judge
-    return judge.sensitive(value)
+    return judge.sensitive(value) or judge.assigns_sensitive(value)
 
 
 def packet_check(args):
