@@ -71,6 +71,27 @@ grants no authority: an option the check denies is parked. The rungs choose amon
   do not ask the user; follow fnl-autopilot "Decide"`. It reads only whether a live lease exists and prints no content.
   The skill says the same when the lease starts.
 
+## Grounded in the user's memory
+
+Owner decision (2026-11-09): a decision made in the user's place must rest on what the user has actually decided before.
+An advisor with only the code in front of it would give its own opinion, not the user's.
+
+- **The host builds a precedent packet; the advisor does not search.** Another family's program may have no access to the user's knowledge
+  base or to the host's native memory, and giving it that access would hand a whole private store to a provider for one question. The host,
+  which already reads them, queries the knowledge source the user's instructions name (`fnl-session-hygiene` "Remember or recall") and its
+  native memory for this question, and passes only the matching excerpts: the decision, its date and a source reference for each, at most eight
+  excerpts and 8 KB. Selecting by relevance is agent judgment, advisory; when a judge is configured it may rank the candidates.
+- **No precedent, no decision.** Rungs 2 and 3 must cite at least one excerpt or instruction they relied on; an answer without one counts as `none` and
+  the question parks. Rung 1 is now: a recorded rule or a precedent that answers this exact question.
+- **Excerpts are data.** The brief says so, instructions inside them are ignored, and a precedent can narrow a choice but grants no authority.
+- **Leaving the machine needs its own consent.** Excerpts sent to a judge or to another family's provider are the user's private history. `/fnl-setup add
+  autopilot` asks one separate neutral question for it, recorded in `## Autopilot`; without a yes no excerpt leaves the machine, so rungs 2 and 3 have
+  nothing to cite and those questions park. Each excerpt passes the secret and machine-path patterns first; a hit drops that excerpt. This is agent
+  judgment for selection and a script check (`brief_check`-style lint of the packet) for the caps and patterns.
+- **The loop that makes it learn.** `stop` lists the lease's decisions, and on return the user marks each `kept` or `reversed`. A reversal is written back to the knowledge
+  base as a decision with its reason, through the same procedure, so the next packet carries it; `reversed` also goes to the ledger, giving a real accuracy per rung and per advisor.
+  Without that step nothing is learned, so the report asks for it (advisory, agent judgment).
+
 ## The question gate (Claude Code)
 
 One `PreToolUse` hook for the `AskUserQuestion` tool, in its own group, under the sixth scoped exception in `CLAUDE.md`. While a live
@@ -86,13 +107,14 @@ that tool; if it does not, the gate is dropped and the report says so.
 The owner reviews real use from the ledger, so one record covers every decision and `fnl-status` reads it.
 
 - `autopilot.py log --kind decision` gains `--rung rule|jev|advisor|park`, `--by <rule, jev or the agent or install name>`, `--option <n> --of <m>`
-  (`n` within `m`, absent for a park), `--probability` (rung 2), `--dispatch <ledger id>` (rung 3), `--model` and `--topic`, a short label under
+  (`n` within `m`, absent for a park), `--probability` (rung 2), `--dispatch <ledger id>` (rung 3), `--model`, `--precedents <count>` and `--topic`, a short label under
   the ledger's task-label rule. It validates them and, in the same call, appends a `decision` line to the ledger with those fields, the
   time, the project and the lease's start time as the grouping key. The note stays in the autopilot log, capped, redacted and kept 30 days.
 - The gate appends a `question_denied` line with the time and the lease's start time only.
 - A rung that is tried and does not settle the question is recorded too (`--settled no`), so the path up the ladder can be rebuilt.
+- On return, a `decision_review` line records `kept` or `reversed` for a decision by its time and lease, with no reason text.
 - An away view of the ledger summary and the `fnl-status` tables show, per lease: decisions by rung, by advisor and model, the Jev probability
-  spread, parked questions and denied questions. No question or option text is ever in the ledger; the topic label is the only words.
+  spread, parked and denied questions, and the share reversed by the user. No question or option text is ever in the ledger; the topic label is the only words.
 
 ## Limits
 
@@ -113,9 +135,10 @@ README and tests follow, as for `fnl-afk`.
 | Decision | Owner | What unblocks it |
 | --- | --- | --- |
 | Whether 0.8 is the right threshold for rung 2 | owner | the first real decisions in the log |
+| Whether a low-stakes, easily reversed question may be decided without a precedent | owner | the share of questions that park in real use |
 | Whether `fnl-advisor`'s committee is ever a rung for design decisions | owner | a preference |
 
 ## Evidence
 
 None yet. A build needs a red test per behavior: the `log` fields and their refusals, the new judge site's schema and refusals, the gate (denies only with a live lease, allows on every error), the ledger `decision` and
-`question_denied` lines being accepted by `ledger.load`, the `advisor` role and the single-agent rule, the tier and family rule, the choose mode's output contract, the lease line in `session_start.py` present and absent, and the alias and counts of the rename.
+`question_denied` lines being accepted by `ledger.load`, the `advisor` role and the single-agent rule, the tier and family rule, the packet caps and pattern drops, an answer without a citation counted as `none`, the consent refusal, the choose mode's output contract, the lease line in `session_start.py` present and absent, and the alias and counts of the rename.
