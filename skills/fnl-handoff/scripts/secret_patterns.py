@@ -2,6 +2,7 @@
 import re
 import unicodedata
 from bisect import bisect_right
+from datetime import datetime
 from array import array
 from collections import Counter
 
@@ -22,26 +23,25 @@ PRIVATE_END = re.compile(r'-----END[^\r\n]{0,80}PRIVATE KEY[^\r\n]{0,80}-----')
 PAIR = re.compile(r'''(?<![^\s=:,'"{}\[\]])(?P<quote>['"]?)(?P<name>[^\s=:,'"{}\[\]]+)(?P=quote)[ \t]*[=:][ \t]*(?:"(?P<double>(?:\\.|[^"\\\r\n])*)"|'(?P<single>(?:\\.|[^'\\\r\n])*)'|(?P<bare>[^\s,}\]'" ]*))''')
 
 
-# Narrow named_token exemptions; each is shown not to be a credential, anything else stays flagged.
-ISO_TIME = re.compile(r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?')
-DECIMAL = re.compile(r'[+-]?\d+(?:\.\d+)?')
-# Exact lowercase field names that hosts and this plugin write in their own output.
-HOST_FIELDS = frozenset(('coord_session', 'session_id', 'credential_expires_at',
-                         'model_auto_compact_token_limit', 'expected_keys', 'key_end'))
-# Exact names whose value may be plain prose; a passphrase may be words, so no other name qualifies.
-PROSE_FIELDS = frozenset(('secret', 'key'))
-PROSE = re.compile(r'[A-Za-z]+[.,;:!?]?(?: [A-Za-z]+[.,;:!?]?){2,}')
+# The one named_token exemption: a host's expiry field holding a real timestamp. A name or a value shape
+# alone proves nothing, so anything else under a sensitive name stays flagged.
+ISO_TIME = re.compile(r'(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-](\d{2}):?(\d{2}))?')
+
+
+def real_timestamp(value):
+    match = ISO_TIME.fullmatch(value)
+    if not match:
+        return False
+    year, month, day, hour, minute, second, zone_hour, zone_minute = (int(part or 0) for part in match.groups())
+    try:
+        datetime(year, month, day, hour, minute, second)
+    except ValueError:
+        return False
+    return zone_hour <= 14 and zone_minute < 60
 
 
 def exempt(name, value):
-    if ISO_TIME.fullmatch(value) or DECIMAL.fullmatch(value):
-        return True
-    if name in HOST_FIELDS and not PREFIX.search(value):
-        return True
-    # Alternation such as KEY|TOKEN is pattern text, not a field name.
-    if '|' in name and all(name.split('|')):
-        return True
-    return name in PROSE_FIELDS and bool(PROSE.fullmatch(value))
+    return name == 'credential_expires_at' and real_timestamp(value)
 
 
 def value_group(match):

@@ -71,18 +71,12 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    Harmless pairs do not count toward that cap. A separate limit of 250,000 pairs per scan pass bounds
    pair matching; exceeding it gives `not_scanned`, without a finding or redaction. Matches are iterated;
    only environment-style pairs are retained for the dump window.
-   Exemptions to the sensitive-name rule (release 0.2.3, package 7), each shown not to be a credential:
-   a value that fully matches an ISO-8601 timestamp (date, `T` or space, time, optional fraction and zone)
-   or a decimal number, under any name; the exact lowercase names `coord_session`, `session_id`,
-   `credential_expires_at`, `model_auto_compact_token_limit`, `expected_keys` and `key_end`, which hosts and
-   this plugin write in their own output, when the value holds no known prefix; a name containing `|`
-   with no empty alternative, which is pattern text such as `KEY|TOKEN`, not a field name; and, for the
-   exact names `secret` and `key` only, a value of at least three single-space-separated words of letters,
-   each with optional trailing punctuation. Other regex metacharacters (`(`, `*`, `$`, `?`, `\`) can be
-   part of a real assignment and stay flagged. Values under `password`, `passwd`, `passphrase`, `token`,
-   `credential` or `*_api_key` names stay flagged even with spaces, and so do bare `key` values.
-   Known prefixes, bearer lines, private-key blocks and environment dumps are unchanged.
-   Beyond these exemptions the stance is to prefer false positives; no other ignore list exists. `no_findings` means only that nothing
+   One exemption to the sensitive-name rule (release 0.2.3, package 7): the exact lowercase name
+   `credential_expires_at` holding a real ISO-8601 timestamp, with its date, time and offset validated. A security
+   review showed that a name alone, a value shape alone, prose and `|` in a name can each hide a real credential,
+   so nothing broader is exempt: most false positives stay, and telling them apart needs a trusted
+   producer or schema that a raw-log scan does not have.
+   Beyond this exemption the stance is to prefer false positives; no other ignore list exists. `no_findings` means only that nothing
    matched these rules. This is a best-effort filter, not proof. Binary, compressed, unreadable or oversize
    (over 8 MiB or the 250,000-pair per-pass limit) logs, lone ESC, unrecognized escape forms, C1 controls and Unicode format characters
    (category Cf, including zero-width joiners and BOMs) give `not_scanned` for a log and
