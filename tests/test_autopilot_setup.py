@@ -82,7 +82,9 @@ class AutopilotSetupTest(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.plan.stat().st_mode), 0o600)
         self.apply(digest[:12])
         reader = self.reader()
-        self.assertEqual(reader.settings(), {**reader.DEFAULTS, 'Merge': 'no'})
+        owned = {key: value for key, value in reader.settings().items() if key in {*reader.DEFAULTS, 'Merge'}}
+        self.assertEqual(owned, {**reader.DEFAULTS, 'Merge': 'no'})
+        self.assertEqual({reader.settings()[key] for key in reader.CATEGORIES}, {'stop'})
         self.assertEqual(next(self.host.parent.glob('host.md.bak-*')).read_bytes(), before)
         self.assertFalse(self.plan.exists())
 
@@ -99,7 +101,8 @@ class AutopilotSetupTest(unittest.TestCase):
         raw = self.host.read_bytes()
         self.assertTrue(raw.startswith(prefix))
         self.assertTrue(raw.endswith(suffix))
-        self.assertEqual(self.reader().settings(), {
+        reader = self.reader()
+        self.assertEqual({key: value for key, value in reader.settings().items() if key in {*reader.DEFAULTS, 'Merge'}}, {
             'Hosts': 'Codex, Antigravity', 'Task choice': 'listed',
             'Push and pull requests': 'no', 'Merge': 'yes', 'Trusted authors': 'own',
             'Lease hours': 24, 'Max runs': 10000, 'Max runtime minutes': 1440,
