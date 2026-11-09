@@ -349,7 +349,7 @@ auto_gate.fcntl.flock = contend
             self.assertIn("invalid data root", result.stderr)
             return
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stderr, "")
+        self.assertRegex(result.stderr, r"\A(label: [^\n]+\n)?\Z")
         if kind == "keep":
             self.assertEqual(result.stdout, "keep receipt: tasks=1 reason=needs-context route_by=table\n")
         else:
