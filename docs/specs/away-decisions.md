@@ -182,16 +182,18 @@ The owner reviews real use from the ledger, so one record covers every decision 
   | Rung and result | Required | Absent |
   | --- | --- | --- |
   | `rule`, `yes` | `--by rule`, `--option`, `--of` | probability, dispatch |
+  | `rule`, `no` (new evidence made the rule inapplicable) | `--by rule` | option, probability, dispatch |
   | `jev`, `yes` | `--by jev`, `--option`, `--of`, `--probability` | dispatch |
   | `jev`, `no` | `--by jev`, `--probability` | option |
   | `jev`, `unavailable` | `--by jev` | option, probability |
   | `advisor`, `yes` | `--by <agent or install>`, `--option`, `--of`, `--dispatch`, `--model` | probability |
   | `advisor`, `no` | `--by`, `--dispatch`, `--model` | option |
-  | `advisor`, `unavailable` | `--by` (`--dispatch` when a run was started) | option |
+  | `advisor`, `unavailable`, an advisor was selected | `--by` (optional: `--dispatch` when a run was started) | option |
+  | `advisor`, `unavailable`, selection found no candidate | nothing further | `--by`, option, dispatch, model |
   | `host`, `yes` | `--by <the host's family>`, `--option`, `--of`, `--model` | probability, dispatch |
   | `park`, `yes` | `--by` the deciding host | option |
 
-  It validates them and, in the same call, appends a `decision` line to the ledger with those fields, the time, the project and the lease's start time. The note stays in the autopilot log, capped, redacted and kept 30 days.
+  A field not listed as required or optional for its row is refused. Per-advisor reports count only attempts with a `--by`. It validates them and, in the same call, appends a `decision` line to the ledger with those fields, the time, the project and the lease's start time. The note stays in the autopilot log, capped, redacted and kept 30 days.
 - The gate appends a `question_denied` line with the time and the lease's start time only.
 - On return, `autopilot.py review --decision <id> kept|reversed` appends a `decision_review` line with no reason text. The id must exist in the ledger; a later review of the same id replaces the earlier one when read.
 - `ledger.load()` keeps returning its two maps of `start` and `finish` records, which `pause.py`, the status refresh and `project_progress` consume. It skips the three new event types silently, without the malformed-line message; a separate reader returns them. A test runs mixed history through `load`, the new reader and `summary` and shows the dispatch numbers unchanged.
@@ -221,4 +223,4 @@ README and tests follow, as for `fnl-afk`.
 
 ## Evidence
 
-None yet. A build needs a red test per behavior: the `log` fields and their refusals, the new judge site's schema and refusals, the gate (denies only with a live lease, allows on every error), the ledger `decision`, `question_denied` and `decision_review` lines over mixed history with `load` unchanged, every row of the attempt schema, every row of the outcomes table and of the precedence table, the two new Tier 1 forms and their denials, the `advisor` role and the single-agent rule, the tier and family rule, the packet caps and pattern drops, the zero-precedent record, the environment classification and its fail-closed default, the consent refusal, the choose mode's output contract, the lease line in `session_start.py` present and absent, and the alias and counts of the rename.
+None yet. A build needs a red test per behavior: the `log` fields and their refusals, the new judge site's schema and refusals, the gate (denies only with a live lease, allows on every error), the ledger `decision`, `question_denied` and `decision_review` lines over mixed history with `load` unchanged, every row of the attempt schema (with table-driven cases for host-only Hosts and no advisor, and for a rule invalidated by new evidence, each ending in `host` under one decision id), every row of the outcomes table and of the precedence table, the two new Tier 1 forms and their denials, the `advisor` role and the single-agent rule, the tier and family rule, the packet caps and pattern drops, the zero-precedent record, the environment classification and its fail-closed default, the consent refusal, the choose mode's output contract, the lease line in `session_start.py` present and absent, and the alias and counts of the rename.
