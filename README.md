@@ -214,6 +214,10 @@ Configure roles through `/fnl-setup add roles`: `review_route.py` chooses the re
 
 Both reviewers cover two rings, the change and its impact set, rather than the whole repository, and report what they traced. The coordinator verifies delegated work with `fnl-verification` and its self-contained `verify_claim.py`; ledger acceptance requires a passing receipt for the checkout's current head, or a logged `--accept-unverified --reason` exception. A pull request merges only after the reviewer and the security reviewer have each posted an approving review comment for its current head commit; a push after a review needs a new review. Where a repository adopts the low-risk lane, a pull request that only modifies the allowlisted root documents written for people (such as this README or the changelog) or the manifests' top-level versions takes one pass by the reviewer, which posts both comments; a script decides which pull requests qualify. `skills/fnl-review-gate/scripts/merge_check.py` runs the merge check and the lane check, and requires exactly one valid router marker when the base commit adopted the gate. A story closes only after verification and both required reviews pass.
 
+## Supported platforms
+
+macOS and Linux are supported. Native Windows is not: the plugin's scripts rely on POSIX file APIs (`pwd`, `fcntl`, `flock`, descriptor-relative opens and `O_NOFOLLOW`), so on Windows they stop with one clear message. Windows users run Claude Code, Codex or Antigravity with the plugin under WSL.
+
 ## Install
 
 Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh). Choose one way per agent, because both together list every skill twice.

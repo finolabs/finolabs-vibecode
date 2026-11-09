@@ -2,12 +2,18 @@
 """Opt-in, bounded usage reads. Provider output is never persisted verbatim."""
 
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
 import hashlib
 import json
 import math
 import os
-import pwd
+try:
+    import pwd
+except ImportError:
+    raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
 import re
 import selectors
 import shutil

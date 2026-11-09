@@ -5,11 +5,17 @@ Invalid state raises: callers must allow silently, not replace unsafe state.
 Only a missing file is an empty state. No environment variable selects storage.
 """
 
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
 import hashlib
 import json
 import os
-import pwd
+try:
+    import pwd
+except ImportError:
+    raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
 import re
 import stat
 import time

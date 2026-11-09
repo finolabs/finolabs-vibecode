@@ -16,7 +16,10 @@ outside the lock's process group and is not tracked. The only gap is the instant
 and writing that record. Nothing here prints or stores the environment or the command.
 """
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
 import json
 import os
 from pathlib import Path
