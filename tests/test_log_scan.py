@@ -393,6 +393,49 @@ class LogScanTest(unittest.TestCase):
         with log_scan.folder_descriptor(new) as fd:
             self.assertEqual(stat.S_IMODE(os.fstat(fd).st_mode), 0o700)
 
+    def test_open_folder_refusal_is_one_fixed_fix_message_and_mode_is_kept(self):
+        self.write()
+        self.root.chmod(0o755)
+        with self.assertRaises(ValueError) as refused:
+            log_scan.scan(self.log)
+        self.assertEqual(str(refused.exception), log_scan.FOLDER_REFUSED)
+        self.assertIn('chmod 700', log_scan.FOLDER_REFUSED)
+        self.assertNotIn(str(self.root), log_scan.FOLDER_REFUSED)
+        self.assertNotIn('/', log_scan.FOLDER_REFUSED)
+        self.assertEqual(stat.S_IMODE(self.root.stat().st_mode), 0o755)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assert_output(self.cli('scan', str(self.log)), (1, 'not_scanned file=1\n'))
+        self.assertEqual(err.getvalue(), log_scan.FOLDER_REFUSED + '\n')
+        self.assertEqual(stat.S_IMODE(self.root.stat().st_mode), 0o755)
+
+    def test_other_refusals_keep_the_plain_message(self):
+        self.write()
+        link = self.root / 'link.log'
+        link.symlink_to(self.log)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assert_output(self.cli('scan', str(link)), (1, 'not_scanned file=1\n'))
+        self.assertEqual(err.getvalue(), '')
+
+
+class NamedTokenStanceTest(unittest.TestCase):
+    """Synthetic values only: shapes a security review showed could hide a credential stay flagged."""
+
+    def assert_flagged(self, text):
+        self.assertIn('named_token', [hit['kind'] for hit in sp.findings(text)], 'missing finding; content suppressed')
+
+    def test_names_and_value_shapes_grant_no_exemption(self):
+        opaque = 'fixture' * 4
+        stamp = '2026-11-10T01:17:00Z'
+        cases = ['true|API_KEY=' + opaque + ' /usr/bin/true', 'PASSWORD=' + '1234567890' * 3,
+                 '"password": "' + stamp + '"', '"secret": "correct horse battery staple"',
+                 'credential_expires_at=' + stamp, 'credential_expires_at=' + stamp + ',' + opaque]
+        cases += [f'{name}={opaque}' for name in ('coord_session', 'session_id', 'expected_keys', 'key_end')]
+        for index, text in enumerate(cases):
+            with self.subTest(case=index):
+                self.assert_flagged(text)
+
 
 if __name__ == '__main__':
     unittest.main()

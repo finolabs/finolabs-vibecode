@@ -74,6 +74,33 @@ class LedgerTest(unittest.TestCase):
             args.func(args)
         self.assertEqual(len(self.records()), count)
 
+    def test_open_log_folder_refusal_names_the_fix_and_keeps_the_mode(self):
+        logs = Path(self.dir.name).resolve() / '.finolabs' / 'logs'
+        logs.mkdir(parents=True, mode=0o700)
+        path = logs / 'run.log'
+        path.write_text('ordinary')
+        logs.chmod(0o755)
+        spec = importlib.util.spec_from_file_location('hygiene_ledger', LEDGER)
+        ledger = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ledger)
+        import log_scan
+        args = ledger.build_parser().parse_args(['finish', 'missing', '--outcome', 'error', '--log-path', str(path)])
+        with mock.patch.object(log_scan, 'run_log_folder', return_value=logs), \
+                mock.patch.object(ledger, 'load') as load, self.assertRaises(SystemExit) as stopped:
+            args.func(args)
+        load.assert_not_called()
+        self.assertEqual(stopped.exception.code, 'ledger: log refused; ' + log_scan.FOLDER_REFUSED)
+        self.assertNotIn(str(logs), stopped.exception.code)
+        self.assertEqual(logs.stat().st_mode & 0o777, 0o755)
+        path.unlink()
+        logs.chmod(0o700)
+        alias = logs / 'alias.log'
+        alias.symlink_to(logs / 'gone.log')
+        args = ledger.build_parser().parse_args(['finish', 'missing', '--outcome', 'error', '--log-path', str(alias)])
+        with mock.patch.object(log_scan, 'run_log_folder', return_value=logs), self.assertRaises(SystemExit) as stopped:
+            args.func(args)
+        self.assertEqual(stopped.exception.code, 'ledger: log refused')
+
     def test_log_path_refuses_outside_symlink_hardlink_and_scans_before_ledger_read(self):
         logs = Path(self.dir.name).resolve() / '.finolabs' / 'logs'
         logs.mkdir(parents=True, mode=0o700)

@@ -144,7 +144,11 @@ def cmd_finish(args):
         try:
             import log_scan
             status = log_scan.scan(args.log_path)["status"]
-        except (ImportError, OSError, ValueError):
+        except (ImportError, OSError, ValueError) as error:
+            # Only the fixed folder message is shown; other refusals stay terse.
+            folder = getattr(sys.modules.get("log_scan"), "FolderRefused", None)
+            if folder is not None and isinstance(error, folder):
+                sys.exit("ledger: log refused; " + str(error))
             sys.exit("ledger: log refused")
     starts, finishes = load()
     if args.id not in starts:

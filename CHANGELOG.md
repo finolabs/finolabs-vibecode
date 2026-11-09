@@ -14,6 +14,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - `ledger.py start` prints a ready-made run name on stderr (`label: codex sol: demo PR 7 code review`) for the host's name field, because only 8% of 1,555 background runs measured on one machine used the documented form; `--task` now holds only scope and activity.
 
+### Fixed
+
+- A too-open run-log folder is refused with one fixed message that says to run `chmod 700`.
+
 ## [0.2.2] - 2026-11-09
 
 ### Added

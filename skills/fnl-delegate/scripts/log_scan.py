@@ -14,6 +14,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import secret_patterns as sp
 
 STATUSES = ('no_findings', 'findings', 'not_scanned')
+# One fixed message for a too-open run-log folder; never a path, and the mode is never changed here.
+FOLDER_REFUSED = 'log_scan: run-log folder is open to other users; run chmod 700 on it and retry'
+
+
+class FolderRefused(ValueError):
+    def __init__(self):
+        super().__init__(FOLDER_REFUSED)
 
 
 class Parser(argparse.ArgumentParser):
@@ -44,9 +51,10 @@ def folder_descriptor(root=None):
             os.close(fd)
             fd = child
         info = os.fstat(fd)
-        if (info.st_uid != os.getuid() or not stat.S_ISDIR(info.st_mode)
-                or stat.S_IMODE(info.st_mode) & 0o077):
+        if info.st_uid != os.getuid() or not stat.S_ISDIR(info.st_mode):
             raise ValueError('refused')
+        if stat.S_IMODE(info.st_mode) & 0o077:
+            raise FolderRefused()
         yield fd
     finally:
         os.close(fd)
@@ -190,6 +198,9 @@ def main():
             for index, path in enumerate(args.logs, 1):
                 try:
                     result = scan(path)
+                except FolderRefused:
+                    print(FOLDER_REFUSED, file=sys.stderr)
+                    result = dict(status='not_scanned', hits=[])
                 except (OSError, ValueError):
                     result = dict(status='not_scanned', hits=[])
                 emit(result, index)
@@ -210,6 +221,10 @@ def main():
                 print('digest=' + result['digest'])
                 print('transcript_stores: ~/.codex/sessions ~/.claude/projects')
         return 0
+    except FolderRefused:
+        print(FOLDER_REFUSED, file=sys.stderr)
+        print('not_scanned')
+        return 2
     except (OSError, ValueError, UnicodeError):
         print('not_scanned')
         return 2

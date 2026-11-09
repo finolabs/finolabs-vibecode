@@ -71,7 +71,11 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    Harmless pairs do not count toward that cap. A separate limit of 250,000 pairs per scan pass bounds
    pair matching; exceeding it gives `not_scanned`, without a finding or redaction. Matches are iterated;
    only environment-style pairs are retained for the dump window.
-   The stance is to prefer false positives; no ignore list exists. `no_findings` means only that nothing
+   No exemption to the sensitive-name rule exists. Release 0.2.3 (package 7) tried exempting measured false positives
+   (timestamps, numbers, host field names, prose, pattern text, finally one expiry field with a validated timestamp);
+   security review built a real credential that each one hid, because a raw-log scan cannot tell a value's producer
+   and its pair capture can stop inside a longer value. Reducing false positives needs a trusted producer or schema.
+   The stance is to prefer false positives; no other ignore list exists. `no_findings` means only that nothing
    matched these rules. This is a best-effort filter, not proof. Binary, compressed, unreadable or oversize
    (over 8 MiB or the 250,000-pair per-pass limit) logs, lone ESC, unrecognized escape forms, C1 controls and Unicode format characters
    (category Cf, including zero-width joiners and BOMs) give `not_scanned` for a log and
@@ -91,7 +95,9 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    or new command runs: `/proc` may be inaccessible and `lsof` has no scoped command exception. An idle
    open descriptor alone is not detected; writers must finish before redaction, and a concurrent same-user
    write after the last recheck remains a race. The run-log folder is created
-   0700, and an existing folder with a wider mode is refused. All file checks (regular file, `st_nlink == 1`, owner) run
+   0700, and an existing folder with a wider mode is refused with one fixed message on stderr that says to
+   run `chmod 700` on it and prints no path (`ledger.py finish` repeats it after `ledger: log refused;`);
+   the scripts never change the mode of an existing folder. All file checks (regular file, `st_nlink == 1`, owner) run
    on the opened descriptor (`O_NOFOLLOW`, then `fstat`), not on the path, for `redact`, `show` and the log-path
    argument of `ledger.py finish`. The agents' own transcript stores (for example `~/.codex/sessions`, `~/.claude/projects`) hold the same
    copy; `log_scan.py` lists them as places the user may need to clean and never touches them.
