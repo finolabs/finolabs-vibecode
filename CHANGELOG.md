@@ -17,6 +17,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - Review routing, the judge setting, `checkup.py` and the session-start summary read roles and judge from `## Assignment matrix` when it exists: a valid matrix with its own yes consent alone decides (a role no line names is unassigned), an invalid matrix or one without consent leaves roles and judge unset, and without a matrix the old `## Agent roles` section applies until 0.3.0; the matrix gains the optional role `advisor`, and session start adds `Assignments: <n> agents set` when the matrix is valid.
 - `ledger.py start` prints a ready-made run name on stderr (`label: codex sol: demo PR 7 code review`) for the host's name field, because only 8% of 1,555 background runs measured on one machine used the documented form; `--task` now holds only scope and activity.
+- `fnl-review-gate` fits the 10,000-byte skill limit (17,999 to 9,925 bytes): engines, packet contents and the impact set move to `references/reviewers.md`, the manual merge check, batching and the low-risk lane to `references/merge-check.md`, relay and posting setup to `references/relay-and-posting-setup.md`; no rule changes meaning and every cited section keeps its name.
 
 ### Fixed
 
