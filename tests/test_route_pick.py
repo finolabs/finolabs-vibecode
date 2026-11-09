@@ -107,11 +107,36 @@ class PickTest(unittest.TestCase):
         self.assertEqual([a for a, _ in result.survivors], ["claude", "claudework"])
         self.assertEqual(result.drops, [("codex", "out of quota")])
 
-    def test_claude_quota_drops_extra_claude_commands_too(self):
-        lines = [line.replace("5h 5h", "week-all 7d") for line in depleted("claude")]
-        result = self.pick(quota=lines)
+    def week(self, label, percent):
+        reset = (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        measured = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return f"Quota claude/{label}: measured {measured}; week-all 7d: {percent}% remaining, resets {reset}"
+
+    def test_a_depleted_install_is_dropped_and_the_healthy_one_stays(self):
+        result = self.pick(quota=[self.week("default", 3), self.week("work", 80)])
+        self.assertEqual([a for a, _ in result.survivors], ["claudework", "codex"])
+        self.assertEqual(result.drops, [("claude", "out of quota")])
+        self.assertEqual(self.rp.rank(result, "claudework", "claude-opus-5-5"), (1, None))
+        self.assertEqual(self.rp.rank(result, "claude", "default"), (0, "claude: out of quota"))
+
+    def test_an_install_with_no_reading_does_not_borrow_another_installs_quota(self):
+        result = self.pick(quota=[self.week("work", 3)])
+        self.assertEqual([a for a, _ in result.survivors], ["claude", "codex"])
+        self.assertEqual(result.drops, [("claudework", "out of quota")])
+
+    def test_a_rate_limit_marker_covers_every_claude_install(self):
+        now = datetime.now(timezone.utc)
+        marked = (now - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        until = (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        result = self.pick(quota=[f"Quota claude: rate-limit marker {marked}; out of quota until {until} (advisory)"])
         self.assertEqual(result.survivors, [("codex", None)])
         self.assertEqual(result.drops, [("claude", "out of quota"), ("claudework", "out of quota")])
+
+    def test_the_dispatching_coordinator_decides_reachability(self):
+        for own, kept in (("codex", True), ("claude", False), (None, False)):
+            with self.subTest(own=own):
+                result = self.rp.pick(host(agy="no"), "transcription", 2, dispatcher=own)
+                self.assertEqual("antigravity" in [a for a, _ in result.survivors], kept)
 
     def test_author_rule_drops_the_author_family(self):
         result = self.pick(author="claude")

@@ -515,6 +515,16 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(other.stderr.splitlines()[0], "off the preferred set: model not listed for claudework")
         self.assertEqual(self.records()[-1]["pick_rank"], 0)
 
+    def test_pick_rank_uses_the_dispatching_coordinator(self):
+        from tests.test_route_pick import host
+        (self.path.parent / "host.md").write_text(host(agy="no"))
+        argv = ["start", "--project", "demo", "--task", "t", "--kind", "implement", "--grade", "easy", "--budget", "5",
+                "--agent", "antigravity", "--work-type", "transcription", "--level", "2", "--route-by", "table", "--reason", "routing"]
+        self.run_ledger(*argv, "--coordinator", "codex")
+        self.assertEqual(self.records()[-1]["pick_rank"], 2)
+        self.run_ledger(*argv, "--coordinator", "claude")
+        self.assertEqual(self.records()[-1]["pick_rank"], 0)
+
     def test_pick_rank_zero_warns_and_never_refuses(self):
         self.write_matrix_host()
         result = self.start_picked("antigravity", "gemini-3-flash")

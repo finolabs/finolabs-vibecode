@@ -110,7 +110,7 @@ def pick_fields(args):
     if args.work_type is not None and args.level is not None:
         try:
             import route_pick
-            ranked = route_pick.rank(route_pick.answer(args.work_type, args.level),
+            ranked = route_pick.rank(route_pick.answer(args.work_type, args.level, dispatcher=args.coordinator),
                                      args.install or args.agent, args.model)
             if ranked is not None:
                 fields["pick_rank"] = ranked[0]

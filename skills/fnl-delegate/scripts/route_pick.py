@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Answer the routing query from the assignment matrix and local state only.
 
-`pick --type <type> --level <1-5> [--author <family>]` prints at most five lines: each surviving agent as
+`pick --type <type> --level <1-5> [--author <family>] [--coordinator <family>]` prints at most five lines: each surviving agent as
 `<agent> <model or default>` in preference order, then one `drop <agent>: <reason>` line per dropped agent.
 With no survivor, or no usable matrix, the first line is `no preference: use the strength table`.
 It reads the canonical host config and the cached quota status, runs no program, reads no repository,
@@ -47,9 +47,11 @@ def coordinator(text):
     return None
 
 
-def unreachable(text):
-    """Families the `## Coordinators and reach` row of this coordinator marks `no`; anything else excludes nothing."""
-    own = coordinator(text)
+def unreachable(text, own=None):
+    """Families the `## Coordinators and reach` row of this coordinator marks `no`; anything else excludes nothing.
+
+    The dispatching coordinator wins when known; the one recorded on this machine is the fallback."""
+    own = own or coordinator(text)
     lines = config.section(text, "Coordinators and reach", 30)
     if own is None or lines is None:
         return own, set()
@@ -67,23 +69,31 @@ def unreachable(text):
     return own, blocked
 
 
-def out_of_quota(lines):
-    """Reuse review routing's reading of the cached status; an unreadable status excludes nothing."""
+def out_of_quota(lines, agent):
+    """Reuse review routing's reading of the cached status; an unreadable status excludes nothing.
+
+    Each Claude install has its own quota: `claude` reads the label `default` or `claude`, and `claude<suffix>` the
+    label `<suffix>` or the full name. A family-wide rate-limit marker covers all of them; an install with no
+    reading is unverified, never excluded by another install's quota."""
     import review_route
+    name = family(agent)
+    if name == "claude":
+        labels = ("default", "claude") if agent == "claude" else (agent[len("claude"):], agent)
+        lines = [line for line in lines if "rate-limit marker" in line
+                 or any(line.startswith(f"Quota claude/{label}:") for label in labels)]
     try:
-        return review_route.blocked_families(lines)
+        return name in review_route.blocked_families(lines)
     except (ValueError, TypeError):
-        return set()
+        return False
 
 
-def pick(text, work_type, level, author=None, quota_lines=()):
+def pick(text, work_type, level, author=None, quota_lines=(), dispatcher=None):
     matrix = am.parse(text)
     state = "absent" if matrix.state == "absent" else "valid" if config.usable(matrix) else "invalid"
     result = Pick(state, work_type, level)
     if state != "valid":
         return result
-    own, unreached = unreachable(text)
-    quota = out_of_quota(quota_lines)
+    own, unreached = unreachable(text, dispatcher)
     for agent, entry in matrix.agents.items():
         if work_type not in entry["works"]:
             continue
@@ -93,7 +103,7 @@ def pick(text, work_type, level, author=None, quota_lines=()):
             reason = f"level {level} outside {low}-{high}"
         elif family(agent) in unreached:
             reason = f"unreachable from {own}"
-        elif family(agent) in quota:
+        elif out_of_quota(quota_lines, agent):
             reason = "out of quota"
         elif author is not None and family(agent) == author:
             reason = "author family"
@@ -136,8 +146,8 @@ def quota_lines():
     return quota_probe.status_lines()
 
 
-def answer(work_type, level, author=None):
-    return pick(host_text(), work_type, level, author=author, quota_lines=quota_lines())
+def answer(work_type, level, author=None, dispatcher=None):
+    return pick(host_text(), work_type, level, author=author, quota_lines=quota_lines(), dispatcher=dispatcher)
 
 
 def build_parser():
@@ -147,12 +157,13 @@ def build_parser():
     p.add_argument("--type", required=True, choices=am.TYPES)
     p.add_argument("--level", required=True, type=int, choices=range(1, 6))
     p.add_argument("--author", choices=config.FAMILIES)
+    p.add_argument("--coordinator", choices=config.FAMILIES, help="the agent dispatching; default: the one recorded on this machine")
     return parser
 
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    for line in lines(answer(args.type, args.level, args.author)):
+    for line in lines(answer(args.type, args.level, args.author, args.coordinator)):
         print(line)
     return 0
 
