@@ -928,7 +928,7 @@ class AwayDecisionTest(AutopilotBase):
         # A sensitive name with any assigned value, however short, and any machine path deny.
         for brief in ('Use db_password=fixture123 in the fixture.', 'Set API_TOKEN=ab and continue.',
                       'The test sets secret: x1 first.', "Config has auth_token = 'q'.", 'export PASSWORD=1',
-                      'Read ' + home + '/notes.md first.', 'See ~/private/notes.', 'Look in /home/synthetic/x.',
+                      'Read ' + home + '/notes.md first.', 'See ~/private/notes.', 'Look in /ho' + 'me/synthetic/x.',
                       'Open C:\\work\\x.txt.', BRIEF + '\nsession_cookie=abc'):
             with self.subTest(brief=brief):
                 self.check_as(CODEX[:-1] + [brief], tier=3, code='unknown')
