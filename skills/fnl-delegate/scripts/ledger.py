@@ -33,6 +33,9 @@ OUTCOMES = [
     "blocked", "needs-permission", "quota", "cancelled",
 ]
 TESTS = ["passed", "failed", "not-run"]
+# Same closed lists as the assignment matrix (assignments.py); local ledger only.
+WORK_TYPES = ["frontend", "design", "video", "three-d", "image-generation", "transcription"]
+INSTALL = re.compile(r"claude|codex|antigravity|claude[a-z0-9]{1,24}")
 # Keys open and summary read from each kind of line.
 REQUIRED = {
     "start": {"id", "ts", "project", "task", "kind", "grade", "agent", "model", "reason"},
@@ -93,6 +96,34 @@ def run_label(agent, model, project, task):
     return " ".join(f"{runner}: {project} {task}".split())
 
 
+def install_name(value):
+    if not INSTALL.fullmatch(value):
+        raise argparse.ArgumentTypeError("invalid install name")
+    return value
+
+
+def pick_fields(args):
+    """Record the routing query's rank and its stderr notice; any failure leaves the rank out."""
+    fields = {k: v for k, v in (("install", args.install), ("work_type", args.work_type), ("level", args.level))
+              if v is not None}
+    notice = None
+    if args.work_type is not None and args.level is not None:
+        try:
+            import route_pick
+            ranked = route_pick.rank(route_pick.answer(args.work_type, args.level, dispatcher=args.coordinator),
+                                     args.install or args.agent, args.model)
+            if ranked is not None:
+                fields["pick_rank"] = ranked[0]
+                if ranked[0] > 1:
+                    notice = f"off the preferred order: rank {ranked[0]}"
+                elif ranked[0] == 0:
+                    notice = f"off the preferred set: {ranked[1]}"
+        except Exception:
+            fields.pop("pick_rank", None)
+            notice = None  # a preference never refuses or changes a dispatch
+    return fields, notice
+
+
 def cmd_start(args):
     session = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session):
@@ -112,6 +143,7 @@ def cmd_start(args):
         checkout_id = checkout_identity(args.checkout)
     except (ImportError, OSError, ValueError, subprocess.SubprocessError):
         checkout_id = None  # non-code tasks can still end through the explicit escape hatch
+    picked, notice = pick_fields(args)
     append({
         "checkout_id": checkout_id,
         "coord_session": coord_session,
@@ -119,7 +151,7 @@ def cmd_start(args):
         "project": args.project, "task": args.task, "kind": args.kind,
         "grade": args.grade, "coordinator": args.coordinator, "agent": args.agent,
         "model": args.model, "reason": args.reason, "route_by": args.route_by,
-        "budget_min": args.budget,
+        "budget_min": args.budget, **picked,
     })
     if args.kind == "implement":
         try:
@@ -134,6 +166,8 @@ def cmd_start(args):
         except Exception:
             pass  # gate state must never change this command's output or exit code
     print(dispatch_id)
+    if notice:
+        print(notice, file=sys.stderr)
     print("label: " + run_label(args.agent, args.model, args.project, args.task), file=sys.stderr)
 
 
@@ -253,19 +287,56 @@ def summary_rows(keys=SUMMARY_KEYS, since=None, project=None):
     return rows
 
 
+def pick_rows(since=None, project=None):
+    """Per install (else agent): dispatches with a pick_rank at rank 1, lower and outside, and how many had none."""
+    starts, _ = load()
+    counts = {}
+    for s in starts.values():
+        if since and s["ts"][:10] < since:
+            continue
+        if project and s["project"] != project:
+            continue
+        name = s.get("install") or s["agent"]
+        row = counts.setdefault(name, {"agent": name, "ranked": 0, "first": 0, "lower": 0, "outside": 0, "left_out": 0})
+        rank = s.get("pick_rank")
+        if type(rank) is not int or rank < 0:
+            row["left_out"] += 1  # older or unpicked dispatches never count as outside the set
+            continue
+        row["ranked"] += 1
+        row["first" if rank == 1 else "lower" if rank > 1 else "outside"] += 1
+    if not any(row["ranked"] for row in counts.values()):
+        return []
+    return [counts[name] for name in sorted(counts)]
+
+
+def print_pick_rows(rows):
+    print()
+    print("preferred order (shares over dispatches with a pick rank)")
+    print(f"{'agent':<16}{'ranked':>8}{'rank 1':>8}{'lower':>8}{'outside':>9}{'left out':>10}")
+    for r in rows:
+        n = r["ranked"]
+        shares = [f"{r[k] / n:.0%}" if n else "-" for k in ("first", "lower", "outside")]
+        print(f"{r['agent']:<16}{n:>8}{shares[0]:>8}{shares[1]:>8}{shares[2]:>9}{r['left_out']:>10}")
+
+
 def cmd_summary(args):
     rows = summary_rows(since=args.since, project=args.project)
     if args.json:
         print(json.dumps(rows))
         return
+    picks = pick_rows(since=args.since, project=args.project)
     if not rows:
         print("ledger: no finished dispatches match")
+        if picks:
+            print_pick_rows(picks)
         return
     header = f"{'agent':<16}{'model':<24}{'kind':<10}{'grade':<10}{'n':>4}{'1st-pass':>10}{'accepted':>10}{'timeout':>9}{'fallback':>10}{'median min':>12}{'unverified':>12}"
     print(header)
     for r in rows:
         print(f"{r['agent']:<16}{r['model']:<24}{r['kind']:<10}{r['grade']:<10}{r['n']:>4}{r['first_pass']:>10.0%}{r['accepted']:>10.0%}"
               f"{r['timeout']:>9}{r['fallback']:>10}{r['median_min']:>12.0f}{r['accepted_unverified']:>12}")
+    if picks:
+        print_pick_rows(picks)
 
 
 def build_parser():
@@ -284,6 +355,9 @@ def build_parser():
     s.add_argument("--route-by", default="table", choices=ROUTE_BY)
     s.add_argument("--budget", type=int, required=True, help="time budget in minutes")
     s.add_argument("--checkout", default=".", help="delegated checkout; only its hash is stored")
+    s.add_argument("--install", type=install_name, help="install compared with the matrix in place of --agent")
+    s.add_argument("--work-type", choices=WORK_TYPES)
+    s.add_argument("--level", type=int, choices=range(1, 6), help="numeric level of the grade, 1 to 5")
     s.set_defaults(func=cmd_start)
 
     f = sub.add_parser("finish", help="record how a dispatch ended")

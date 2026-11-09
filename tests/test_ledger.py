@@ -485,6 +485,131 @@ class LedgerTest(unittest.TestCase):
             self.run_ledger("finish", dispatch, "--outcome", outcome)
             self.assertNotIn("accept_unverified", self.records()[-1])
 
+    # The routing query's record: --install, --work-type, --level and pick_rank.
+
+    def write_matrix_host(self):
+        from tests.test_route_pick import host
+        (self.path.parent / "host.md").write_text(host())
+
+    def start_picked(self, agent, model, *extra):
+        argv = ["start", "--project", "demo", "--task", "add page", "--kind", "implement", "--grade", "hard",
+                "--agent", agent, "--model", model, "--budget", "30", "--work-type", "frontend", "--level", "3", *extra]
+        return self.run_ledger(*argv)
+
+    def test_pick_rank_one_records_fields_and_prints_no_warning(self):
+        self.write_matrix_host()
+        result = self.start_picked("claude", "claude-opus-5-5")
+        self.assertRegex(result.stdout, r"^d\d{8}-\d{6}-[0-9a-f]{4}\n$")
+        self.assertEqual(result.stderr, "label: claude opus: demo add page\n")
+        rec = self.records()[-1]
+        self.assertEqual((rec["work_type"], rec["level"], rec["pick_rank"]), ("frontend", 3, 1))
+        self.assertNotIn("install", rec)
+
+    def test_install_is_compared_in_place_of_the_agent(self):
+        self.write_matrix_host()
+        result = self.start_picked("claude-session", "claude-opus-5-5", "--install", "claudework")
+        self.assertEqual(result.stderr, "off the preferred order: rank 2\nlabel: claude opus: demo add page\n")
+        rec = self.records()[-1]
+        self.assertEqual((rec["agent"], rec["install"], rec["pick_rank"]), ("claude-session", "claudework", 2))
+        other = self.start_picked("claude", "claude-sonnet-5-5", "--install", "claudework")
+        self.assertEqual(other.stderr.splitlines()[0], "off the preferred set: model not listed for claudework")
+        self.assertEqual(self.records()[-1]["pick_rank"], 0)
+
+    def test_pick_rank_uses_the_dispatching_coordinator(self):
+        from tests.test_route_pick import host
+        (self.path.parent / "host.md").write_text(host(agy="no"))
+        argv = ["start", "--project", "demo", "--task", "t", "--kind", "implement", "--grade", "easy", "--budget", "5",
+                "--agent", "antigravity", "--work-type", "transcription", "--level", "2", "--route-by", "table", "--reason", "routing"]
+        self.run_ledger(*argv, "--coordinator", "codex")
+        self.assertEqual(self.records()[-1]["pick_rank"], 2)
+        self.run_ledger(*argv, "--coordinator", "claude")
+        self.assertEqual(self.records()[-1]["pick_rank"], 0)
+
+    def test_pick_rank_zero_warns_and_never_refuses(self):
+        self.write_matrix_host()
+        result = self.start_picked("antigravity", "gemini-3-flash")
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stderr.splitlines()[0], "off the preferred set: antigravity not listed for frontend")
+        self.assertEqual(self.records()[-1]["pick_rank"], 0)
+        dropped = self.start_picked("codex", "m1", "--level", "5")
+        self.assertEqual(dropped.stderr.splitlines()[0], "off the preferred set: codex: level 5 outside 1-4")
+
+    def test_no_pick_rank_without_type_and_level_or_without_a_matrix(self):
+        self.run_ledger(*START)
+        self.assertFalse({"install", "work_type", "level", "pick_rank"} & self.records()[-1].keys())
+        self.write_matrix_host()
+        self.run_ledger(*START, "--work-type", "frontend")
+        self.assertNotIn("pick_rank", self.records()[-1])
+        (self.path.parent / "host.md").unlink()
+        result = self.start_picked("claude", "m1")
+        self.assertEqual(result.stderr, "label: claude: demo add page\n")
+        rec = self.records()[-1]
+        self.assertEqual((rec["work_type"], rec["level"]), ("frontend", 3))
+        self.assertNotIn("pick_rank", rec)
+
+    def test_a_failed_pick_leaves_the_rank_out_and_records_the_dispatch(self):
+        self.write_matrix_host()
+        spec = importlib.util.spec_from_file_location("pick_ledger", LEDGER)
+        ledger = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ledger)
+        import route_pick
+        args = ledger.build_parser().parse_args(["start", "--project", "demo", "--task", "add page", "--kind", "advise",
+                                                 "--grade", "hard", "--agent", "claude", "--budget", "30",
+                                                 "--work-type", "frontend", "--level", "3"])
+        output, warning = io.StringIO(), io.StringIO()
+        with mock.patch.object(route_pick, "answer", side_effect=RuntimeError("synthetic")), \
+                mock.patch.dict(os.environ, self.env), contextlib.redirect_stdout(output), \
+                contextlib.redirect_stderr(warning):
+            args.func(args)
+        self.assertRegex(output.getvalue(), r"^d\d{8}-\d{6}-[0-9a-f]{4}\n$")
+        self.assertEqual(warning.getvalue(), "label: claude: demo add page\n")
+        self.assertNotIn("pick_rank", self.records()[-1])
+
+    def test_new_options_reject_values_outside_their_lists(self):
+        for extra in (["--install", "Claude Work"], ["--install", "other"], ["--work-type", "cooking"],
+                      ["--level", "0"], ["--level", "6"]):
+            with self.subTest(extra=extra):
+                result = self.run_ledger(*START, *extra, check=False)
+                self.assertEqual(result.returncode, 2)
+        self.assertFalse(self.path.exists())
+        spec = importlib.util.spec_from_file_location("lists_ledger", LEDGER)
+        ledger = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ledger)
+        import assignments
+        self.assertEqual(ledger.WORK_TYPES, list(assignments.TYPES))
+        self.assertEqual(ledger.INSTALL.pattern, assignments.NAME.pattern)
+
+    def write_starts(self, entries):
+        lines = []
+        for n, (agent, extra) in enumerate(entries):
+            rec = {"event": "start", "id": f"d{n}", "ts": "2026-11-10T01:00:00+00:00", "project": "demo",
+                   "task": "t", "kind": "implement", "grade": "hard", "agent": agent, "model": "m",
+                   "reason": "routing", **extra}
+            lines.append(json.dumps(rec))
+        self.path.write_text("\n".join(lines) + "\n")
+
+    def test_summary_shows_rank_shares_over_ranked_dispatches_only(self):
+        self.write_starts([("codex", {"pick_rank": 1}), ("codex", {"pick_rank": 1}), ("codex", {"pick_rank": 2}),
+                           ("codex", {"pick_rank": 0}), ("codex", {}), ("codex", {"work_type": "frontend"}),
+                           ("claude-session", {"install": "claudework", "pick_rank": 1}),
+                           ("antigravity", {}), ("antigravity", {})])
+        output = self.run_ledger("summary").stdout.splitlines()
+        self.assertEqual(output[0], "ledger: no finished dispatches match")
+        start = output.index("preferred order (shares over dispatches with a pick rank)")
+        rows = {line.split()[0]: line.split()[1:] for line in output[start + 2:]}
+        self.assertEqual(rows["codex"], ["4", "50%", "25%", "25%", "2"])
+        self.assertEqual(rows["claudework"], ["1", "100%", "0%", "0%", "0"])
+        self.assertEqual(rows["antigravity"], ["0", "-", "-", "-", "2"])
+        self.assertEqual(self.run_ledger("summary", "--json").stdout, "[]\n")
+
+    def test_summary_of_older_records_is_unchanged(self):
+        self.write_starts([("codex", {}), ("codex", {"work_type": "frontend", "level": 3})])
+        self.assertEqual(self.run_ledger("summary").stdout, "ledger: no finished dispatches match\n")
+        self.run_ledger("finish", "d0", "--outcome", "rejected")
+        output = self.run_ledger("summary").stdout
+        self.assertNotIn("preferred order", output)
+        self.assertEqual(len(output.splitlines()), 2)
+
 
 class LedgerLocationTest(unittest.TestCase):
     """The default file: the finolabs home, or the older XDG file while only that one exists."""

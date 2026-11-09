@@ -117,7 +117,7 @@ agent for levels, types, model and roles in one pass, shows the preview and writ
 
 ## Routing query
 
-`route_pick.py pick --type <type> --level <1-5> [--author <family>]` in `skills/fnl-delegate/scripts/` prints the ordered
+`route_pick.py pick --type <type> --level <1-5> [--author <family>] [--coordinator <family>]` in `skills/fnl-delegate/scripts/` prints the ordered
 candidates for a task, at most five lines, from the matrix and local state only: an agent whose levels do not contain the
 level is dropped, an agent the host config marks unreachable from this coordinator is dropped, one whose cached quota
 reading says out of quota is dropped, with `--author` the independent-review rule drops the author's own family, and
