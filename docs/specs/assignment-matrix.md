@@ -20,6 +20,24 @@ content must be transcribed from images, video or audio.
 - Until this exists, the owner's host config carries the work-type preference as one paragraph under `## Coordinators and
   reach`, read by agent judgment only.
 
+## Decision analysis (owner request, 2026-11-09: agents must understand, use and follow it, and it must cost few tokens)
+
+Measured on the owner's machine: the data is small (`## Agent roles` plus `## Agent levels` are 218 bytes; the matrix
+with types and models is about 600 bytes, roughly 150 tokens). The cost is in the guidance around it: `route.md` is 9.8
+KB, with `models.md` 6.2 KB, `entry.md` 2.0 KB and `grade.md` 1.9 KB, about 5k tokens a coordinator reads at each
+dispatch decision, and still lets each agent derive a different answer from the same prose. Three ways to make the matrix
+usable:
+
+| Option | Understood and used correctly | Compliance | Tokens per decision | Cost to build |
+| --- | --- | --- | --- | --- |
+| A. One section, agents read it and `route.md` prose | each agent re-derives the order from text; drift between agents | none beyond judgment; no record of deviation | the whole prose plus the section | lowest |
+| B. One section plus a table view in session start | sees the table, still derives the answer itself | none beyond judgment | about 150 tokens every session, used or not | low |
+| C. One section, one parser, and a query command that returns the answer | one deterministic answer, same for every agent | the dispatch records the type and the ledger shows each deviation from the answer | one call, about 100 tokens | highest |
+
+Recommended and adopted: C, because an advisory rule that is only prose is followed by whoever reads it carefully, and the
+failure here (a task sent to an agent outside its range or type preference) is silent. C turns the prose into a computed
+answer and makes deviation visible, without turning a preference into a block.
+
 ## The section
 
 `## Assignment matrix` in the canonical host config. One header line, one judge line and one line per agent:
@@ -42,7 +60,10 @@ content must be transcribed from images, video or audio.
 
 ## Reading and migration
 
-- Readers: `review_config.py` (three copies plus the plugin-level one) and `judge.py` (five copies) read roles and judge
+- One parser: `assignments.py`, a shared module copied into every skill that needs it (the copy group is checked in CI,
+  as for `data_root.py`), is the only code that reads the section; `review_config.py` (three copies plus the
+  plugin-level one), `judge.py` (five copies), `checkup.py`, `route_pick.py` and `matrix_setup.py` import it, so there is
+  one reading of the format. The review and judge readers get roles and judge
   from this section first and from `## Agent roles` only when the matrix has no such line; `checkup.py` reports a
   conflict between the two. Levels and work types have no script reader: `fnl-delegate` `route.md` reads them as advice
   (agent judgment), and the section is the only place they are stored.
@@ -75,6 +96,32 @@ SHA-256 digest, 60-minute expiry, section-only atomic write, symlink refusal), `
 existing command listing extra Claude Code commands). It runs no command. `/fnl-setup add delegation` asks once per
 agent for levels, types, model and roles in one pass, shows the preview and writes only after a neutral yes.
 
+## Routing query
+
+`route_pick.py pick --type <type> --level <1-5> [--author <family>]` in `skills/fnl-delegate/scripts/` prints the ordered
+candidates for a task, at most five lines, from the matrix and local state only: an agent whose levels do not contain the
+level is dropped, an agent the host config marks unreachable from this coordinator is dropped, one whose cached quota
+reading says out of quota is dropped, with `--author` the independent-review rule drops the author's own family, and
+each survivor prints as `<agent> <model or default>` in preference order with the reason for every drop on one short line
+each. No answer (nothing survives or the matrix is missing) prints `no preference: use the strength table`. It runs no
+program, reads no repository, makes no network call and prints no path. `route.md` replaces its prose on levels and
+strength overrides with the command, so the coordinator reads the answer instead of the rules (advisory, agent
+judgment, to run it before each dispatch; the script computes the answer exactly).
+
+## Compliance and token cost
+
+- `ledger.py start` accepts `--work-type <type>` (the closed list, local ledger only). When the type and level are given it
+  runs the same pick and, if the chosen agent or model is not among the survivors, prints one line `off the preferred
+  order: <reason>` and records `off_pick` (a short fixed reason) on the start line. It never refuses the dispatch: the
+  coordinator or the user may have a reason, and a block would only push agents to omit the type.
+- `ledger.py summary` shows the share of dispatches that went off the preferred order, per agent, so a preference that is
+  ignored is visible; `fnl-status` may show it. The enforcer of the choice stays agent judgment (advisory); the script
+  enforces the computation and the record.
+- Session start prints one fixed line, `Assignments: <n> agents set; run route_pick.py before a dispatch`, about 20 tokens,
+  instead of the roles summary only; the roles summary stays.
+- Expected cost: about 100 tokens per decision instead of about 5k of reading, and 20 tokens per session. These are
+  estimates from the sizes above; the code pull request measures them with the real files.
+
 ## Routing
 
 Advisory (agent judgment), in `route.md`: for a task of a listed type the coordinator offers the listed agents first and
@@ -89,10 +136,11 @@ is skipped and the report says why.
 | Whether the six types are enough for a first release or `backend`, `data` or others are needed | owner | the owner's list |
 | Whether a model not allowed on this machine is refused or only reported | owner | a preference |
 | Whether `add roles` should keep review posting or fold it into the matrix flow now | owner | a preference |
+| Whether `ledger.py start` should stay warn-only on an off-order choice or require a reason with `--reason` | owner | a preference |
 
 ## Evidence
 
 None yet. A build needs a red test per behavior: validation (agents, levels, types, model, roles, duplicates and limits),
 preview and apply with digest and expiry, strict `show`, migration from the two old sections including their backup,
-the dual read and its precedence in `review_config.py` and `judge.py` (every copy), the `checkup.py` conflict report, and
+the dual read and its precedence in `review_config.py` and `judge.py` (every copy), `assignments.py` copies identical, `route_pick.py` drops and ordering, the ledger `--work-type` warning and summary, the `checkup.py` conflict report, and
 a routing example in `route.md` that names the section.
