@@ -17,12 +17,17 @@ TOP_LEVEL_IMPORT = re.compile(
 )
 PROBE = (
     "import runpy, sys\n"
-    "sys.modules['pwd'] = None\n"
-    "sys.modules['fcntl'] = None\n"
+    "sys.modules[sys.argv[2]] = None\n"
     "path = sys.argv[1]\n"
     "sys.path.insert(0, str(__import__('pathlib').Path(path).parent))\n"
     "runpy.run_path(path, run_name='probe')\n"
 )
+
+
+def imports_module(text, module):
+    return re.search(
+        r"^(?:try:\n    )?(?:import|from)\s+%s\b|^import\s+.*\b%s\b" % (module, module), text, re.M
+    )
 
 
 def affected_scripts():
@@ -34,15 +39,26 @@ def affected_scripts():
     return found
 
 
+def affected_pairs():
+    """Each (script, module) where the script imports that module at the top level."""
+    return [
+        (path, module)
+        for path in affected_scripts()
+        for module in ("pwd", "fcntl")
+        if imports_module(path.read_text(encoding="utf-8"), module)
+    ]
+
+
 class PlatformMessageTests(unittest.TestCase):
     def test_affected_scripts_are_found(self):
         self.assertGreater(len(affected_scripts()), 0)
 
     def test_blocked_posix_modules_give_one_clear_error(self):
-        for path in affected_scripts():
-            with self.subTest(script=str(path.relative_to(ROOT))):
+        # Each directly imported module is blocked on its own, so a guard missing after the first import shows.
+        for path, module in affected_pairs():
+            with self.subTest(script=str(path.relative_to(ROOT)), blocked=module):
                 result = subprocess.run(
-                    [sys.executable, "-I", "-c", PROBE, str(path)],
+                    [sys.executable, "-I", "-c", PROBE, str(path), module],
                     capture_output=True,
                     text=True,
                     timeout=30,

@@ -191,7 +191,9 @@ def read_waiting_ps():
         return ''
     if code != 0:
         return None
-    pids = [word for word in text.split() if word.isdigit() and int(word) < PID_LIMIT][:PGREP_PIDS]
+    pids = [word for word in text.split() if word.isdigit() and int(word) < PID_LIMIT]
+    if len(pids) > PGREP_PIDS:
+        return None  # more candidates than one bounded listing holds: unknown, never a count that misses a runner
     if not pids:
         return ''
     listed = bounded_output([TOOLS['ps'], '-o', 'pid=,command=', '-p', ','.join(pids)])

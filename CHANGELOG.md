@@ -19,6 +19,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - `heavy_run.py status` counted no waiting runs on a real macOS machine: the full `ps` listing was 450 KB (over the 256 KiB bound, so `waiting: unknown`) and Homebrew Python appears as `Python` with a capital P. It now asks `pgrep -f` for the few candidate pids, lists only those with `ps -p`, and matches the interpreter name case-insensitively. Found by running two real waiters.
 - The quota probe reads a Claude Code reset time printed on the hour (`6pm`) as well as one with minutes (`6:05pm`). Claude Code now prints `6pm`, which the strict parser rejected, so every Claude install was marked unverified and backed off for 24 hours. The line shape stays otherwise strict.
+- `heavy_run.py status` prints `waiting: unknown` when `pgrep` names more than 200 candidate processes, instead of dropping the rest and possibly counting zero.
 
 ## [0.2.1] - 2026-11-09
 
