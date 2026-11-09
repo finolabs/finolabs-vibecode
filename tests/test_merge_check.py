@@ -620,6 +620,10 @@ class IndependentMergeTest(unittest.TestCase):
         sys.path.insert(0, str(SCRIPT.parent))
         import review_route
         import review_config
+        import quota_probe
+        status = patch.object(quota_probe, "status_lines", return_value=[])  # never the machine's real quota cache
+        status.start()
+        self.addCleanup(status.stop)
         with patch.object(review_route, "author_family", return_value="codex") as author, \
              patch.object(review_config, "host_text", return_value="synthetic"), \
              patch.object(review_config, "present_families", return_value={"claude", "codex", "antigravity"}), \
