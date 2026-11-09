@@ -32,7 +32,7 @@ The four non-blocking notes of #197 and #199 are closed in the pull request that
 
 ## Evidence
 
-Package 1 (#189): `tests/test_levels_setup.py` and the two reviews. Package 2 (#191): the candidates fixtures in `tests/test_levels_setup.py` and its reviews. Package 3 (#192): the memory and waiting fixtures in `tests/test_heavy_run.py` and its reviews. 
+Package 1 (#189): `tests/test_levels_setup.py` and the two reviews. Package 2 (#191): the candidates fixtures in `tests/test_levels_setup.py` and its reviews. Package 3 (#192): the memory and waiting fixtures in `tests/test_heavy_run.py` and its reviews.
 
 Live-host check on 2026-11-09 (package 6): two real `heavy_run.py run` waiters exposed two defects the unit tests missed, a full `ps` listing of 454 KB (804 processes) over the 256 KiB bound and Homebrew Python shown as `Python` with a capital P; #199 fixed both and a second live check counted `waiting: about 2`, then 0 after stopping them. Dispatch by level ran for real: `claudework` (levels 3 to 5) took the `heavy_run` and Windows packages, `claudeomni` (level 1) the documentation package and Codex (levels 1 to 4) the code; `claudework` needed the `USER` name through the environment filter, and `claudeomni`'s first run was rejected as partial. Not run: `/fnl-brb` (it needs the owner's autopilot consent and a granted period), Antigravity review posting (its run ended on quota), Linux `pgrep` and `ps -p` behavior and native Windows.
 
