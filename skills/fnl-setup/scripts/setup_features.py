@@ -5,7 +5,10 @@ A `declined` line only stops a bare `/fnl-setup` from offering that feature agai
 grants nothing, and `/fnl-setup add <feature>` always asks again. Written only by fnl-setup.
 """
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
 import re
 import sys
 from pathlib import Path
