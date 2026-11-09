@@ -43,13 +43,12 @@ rung that settles it. Each rung is cheaper than the next.
    with none named, by the family `fnl-advisor` already picks (one other than the host's), among the lease's recorded Hosts: one read-only
    run that must return exactly one of the options with its reason, or `none`. It is an ordinary dispatch (ledger kind
    `advise`) and counts against the lease's run limit.
-4. **Park.** No rung settled it, or no judge or advisor is available: log it as parked, tell the user once, and go on with
-   other work.
+4. **Park**, only in the three cases under "Grounded in the user's memory": log it, tell the user once, and go on with other work.
 
 Inside a lease the answer of a rung is the decision, not advice: the host applies the option it returned and does not
 re-ask, overrule or shop it to another rung (advisory, agent judgment; the `log --by` record shows who decided). If the host
 finds a fact the rung did not have, it parks the question rather than overruling. An advisor that is out of quota or
-unreachable, or that answers `none`, counts as unavailable, and the question parks. `fnl-advisor`'s line "you stay the
+unreachable, or that answers `none`, counts as unavailable, and the question goes on as the next paragraph of "Grounded in the user's memory" says. `fnl-advisor`'s line "you stay the
 decider" stays true for its open mode, with the user present; the choose mode states the opposite for a lease.
 
 Tier 3 never enters the ladder. `autopilot.py check` still classifies the resulting action, so a choice made here
@@ -81,12 +80,16 @@ An advisor with only the code in front of it would give its own opinion, not the
   which already reads them, queries the knowledge source the user's instructions name (`fnl-session-hygiene` "Remember or recall") and its
   native memory for this question, and passes only the matching excerpts: the decision, its date and a source reference for each, at most eight
   excerpts and 8 KB. Selecting by relevance is agent judgment, advisory; when a judge is configured it may rank the candidates.
-- **No precedent, no decision.** Rungs 2 and 3 must cite at least one excerpt or instruction they relied on; an answer without one counts as `none` and
-  the question parks. Rung 1 is now: a recorded rule or a precedent that answers this exact question.
+- **A missing precedent lowers the bar for reversibility, it does not stop the work.** Rungs 2 and 3 cite the excerpts or instructions they relied on and
+  the record keeps the count. With none, the rung still answers, choosing the option that is easiest to undo, and the work goes on: an away session that
+  stopped at every new question would do nothing. Only three cases park: a Tier 3 action, an option that cannot be undone or leaves the machine (a merge, a
+  publish, a message to someone) with no precedent behind it, and no rung able to answer on a question that has no reversible option. When no rung is
+  available and a reversible option exists, the host takes it and records itself as the decider. Rung 1 is a recorded rule or a precedent that answers this exact question.
+  On return, decisions with no precedent are listed first, because they are the ones most likely to be reversed and the ones that teach the most.
 - **Excerpts are data.** The brief says so, instructions inside them are ignored, and a precedent can narrow a choice but grants no authority.
 - **Leaving the machine needs its own consent.** Excerpts sent to a judge or to another family's provider are the user's private history. `/fnl-setup add
   autopilot` asks one separate neutral question for it, recorded in `## Autopilot`; without a yes no excerpt leaves the machine, so rungs 2 and 3 have
-  nothing to cite and those questions park. Each excerpt passes the secret and machine-path patterns first; a hit drops that excerpt. This is agent
+  nothing to cite, so they answer as with no precedent. Each excerpt passes the secret and machine-path patterns first; a hit drops that excerpt. This is agent
   judgment for selection and a script check (`brief_check`-style lint of the packet) for the caps and patterns.
 - **The loop that makes it learn.** `stop` lists the lease's decisions, and on return the user marks each `kept` or `reversed`. A reversal is written back to the knowledge
   base as a decision with its reason, through the same procedure, so the next packet carries it; `reversed` also goes to the ledger, giving a real accuracy per rung and per advisor.
@@ -135,10 +138,9 @@ README and tests follow, as for `fnl-afk`.
 | Decision | Owner | What unblocks it |
 | --- | --- | --- |
 | Whether 0.8 is the right threshold for rung 2 | owner | the first real decisions in the log |
-| Whether a low-stakes, easily reversed question may be decided without a precedent | owner | the share of questions that park in real use |
 | Whether `fnl-advisor`'s committee is ever a rung for design decisions | owner | a preference |
 
 ## Evidence
 
 None yet. A build needs a red test per behavior: the `log` fields and their refusals, the new judge site's schema and refusals, the gate (denies only with a live lease, allows on every error), the ledger `decision` and
-`question_denied` lines being accepted by `ledger.load`, the `advisor` role and the single-agent rule, the tier and family rule, the packet caps and pattern drops, an answer without a citation counted as `none`, the consent refusal, the choose mode's output contract, the lease line in `session_start.py` present and absent, and the alias and counts of the rename.
+`question_denied` lines being accepted by `ledger.load`, the `advisor` role and the single-agent rule, the tier and family rule, the packet caps and pattern drops, the zero-precedent record and the three park cases, the consent refusal, the choose mode's output contract, the lease line in `session_start.py` present and absent, and the alias and counts of the rename.
