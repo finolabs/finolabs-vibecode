@@ -243,6 +243,8 @@ def parse(text):
             problem('missing consent')
         if not judge_seen:
             problem('missing judge')
+        if matrix.consent == 'no' and (matrix.agents or matrix.judge == 'jev'):
+            problem('no consent')
         roles = {}
         for name, entry in matrix.agents.items():
             for role in entry['roles']:

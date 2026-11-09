@@ -154,6 +154,19 @@ class ParseInvalidTest(unittest.TestCase):
         self.assertEqual(m.roles, {})
 
 
+class DeclinedConsentTest(unittest.TestCase):
+    def test_declined_consent_cannot_carry_assignments_or_the_judge_call(self):
+        for lines in ('- Judge: host\n- codex: levels 1-4; roles code-review\n', '- Judge: jev\n'):
+            m = A.parse('## Assignment matrix\n- Consent: no\n' + lines)
+            self.assertEqual(m.state, 'invalid')
+            self.assertIn('no consent', m.problems)
+            self.assertIsNone(m.judge)
+            self.assertEqual(m.roles, {})
+
+    def test_declined_consent_alone_is_a_valid_record(self):
+        self.assertEqual(A.parse('## Assignment matrix\n- Consent: no\n- Judge: host\n').state, 'valid')
+
+
 class NoEchoAndNoRaiseTest(unittest.TestCase):
     def test_parse_never_raises_and_never_echoes(self):
         secret = 'zzSECRETzz'
