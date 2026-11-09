@@ -23,6 +23,9 @@ fm = importlib.util.module_from_spec(spec)
 sys.modules["fnl_metrics"] = fm
 spec.loader.exec_module(fm)
 
+REMINDER = json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": (
+    "fnl: this session edited a file before any fnl-coding-router receipt; invoke the fnl-coding-router skill before "
+    "further coding work (advisory reminder, shown once per session).")}}) + "\n"
 MARKER = "<!-- fnl-review kind=code head=0123456789abcdef0123456789abcdef01234567 verdict=REWORK -->"
 
 
@@ -56,9 +59,9 @@ class HookTest(unittest.TestCase):
         self.assertEqual(result.stdout, stdout)
         return result
 
-    def post(self, tool, tool_input, **extra):
+    def post(self, tool, tool_input, stdout="", **extra):
         return self.run_hook({"hook_event_name": "PostToolUse", "session_id": "s1", "cwd": str(self.repo),
-                              "tool_name": tool, "tool_input": tool_input, **extra})
+                              "tool_name": tool, "tool_input": tool_input, **extra}, stdout=stdout)
 
     def events(self):
         return [json.loads(line) for path in sorted(self.dir.glob("events-*.jsonl")) for line in path.read_text().splitlines()]
@@ -78,8 +81,8 @@ class HookTest(unittest.TestCase):
 
     def test_only_the_first_edit_of_a_session_is_recorded(self):
         self.consent()
-        for tool in ("Edit", "Write", "Edit"):
-            self.post(tool, {"file_path": "/private/path/secret.py", "content": "secret"})
+        for index, tool in enumerate(("Edit", "Write", "Edit")):
+            self.post(tool, {"file_path": "/private/path/secret.py", "content": "secret"}, stdout="" if index else REMINDER)
         self.assertEqual([e["event"] for e in self.events()], ["first_edit"])
 
     def test_a_commit_is_found_in_compound_commands_and_never_stores_the_text(self):
@@ -592,6 +595,74 @@ class HookTest(unittest.TestCase):
         self.run_hook({"hook_event_name": "PostToolUse", "session_id": "s1", "cwd": str(self.repo), "tool_name": "Skill",
                        "tool_input": {"skill": "fnl-x"}}, env={**self.env, "FNL_METRICS": "off"})
         self.assertEqual(self.events(), [])
+
+    def prompt(self, text, sid="s1", env=None):
+        return self.run_hook({"hook_event_name": "UserPromptSubmit", "session_id": sid, "cwd": str(self.repo),
+                              "prompt": text}, env=env)
+
+    def test_a_typed_fnl_skill_is_recorded_by_name_without_the_prompt_text(self):
+        self.consent()
+        self.prompt("/finolabs-vibecode:fnl-setup secret argument text")
+        self.prompt("/fnl-status")
+        got = [(e["event"], e["name"]) for e in self.events()]
+        self.assertEqual(got, [("skill", "fnl-setup"), ("skill", "fnl-status")])
+        stored = "".join(path.read_text() for path in self.dir.glob("events-*.jsonl"))
+        self.assertNotIn("secret", stored)
+        self.assertNotIn("argument", stored)
+
+    def test_a_typed_command_that_is_not_a_plugin_skill_or_prose_is_not_recorded(self):
+        self.consent()
+        for text in ("/compact", "/grilling fnl-setup", "please run /fnl-setup", " /fnl-setup", "/fnl-Setup",
+                     "/fnl-setup/../x", "/other:fnl-", "fnl-setup", ""):
+            self.prompt(text)
+        self.run_hook({"hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": str(self.repo), "prompt": ["/fnl-setup"]})
+        self.assertEqual(self.events(), [])
+
+    def test_a_typed_skill_is_not_recorded_without_consent_or_when_off(self):
+        self.prompt("/fnl-setup")
+        self.assertFalse(self.dir.exists())
+        self.consent()
+        self.prompt("/fnl-setup", env={**self.env, "FNL_METRICS": "off"})
+        self.assertEqual(self.events(), [])
+
+    def test_the_first_edit_without_a_router_receipt_prints_one_reminder_once(self):
+        self.consent()
+        first = self.post("Edit", {"file_path": "/x.py"}, stdout=REMINDER)
+        self.assertEqual(json.loads(first.stdout)["hookSpecificOutput"]["hookEventName"], "PostToolUse")
+        self.assertEqual(first.stdout.count("\n"), 1)
+        self.post("Write", {"file_path": "/y.py"})
+        self.post("Edit", {"file_path": "/z.py"})
+
+    def test_no_reminder_after_a_router_receipt_of_any_kind(self):
+        self.consent()
+        receipts = [lambda sid: self.run_hook({"hook_event_name": "PostToolUse", "session_id": sid, "cwd": str(self.repo),
+                                               "tool_name": "Skill", "tool_input": {"skill": "finolabs-vibecode:fnl-coding-router"}}),
+                    lambda sid: self.run_hook({"hook_event_name": "PostToolUse", "session_id": sid, "cwd": str(self.repo),
+                                               "tool_name": "Bash", "tool_input": {"command": "python3 x/record.py router --depth MIN --trigger none"}}),
+                    lambda sid: self.prompt("/fnl-coding-router fix it", sid=sid)]
+        for index, receipt in enumerate(receipts):
+            sid = "r%d" % index
+            receipt(sid)
+            self.run_hook({"hook_event_name": "PostToolUse", "session_id": sid, "cwd": str(self.repo),
+                           "tool_name": "Edit", "tool_input": {"file_path": "/x.py"}})
+        self.assertEqual([e["event"] for e in self.events()].count("first_edit"), 3)
+
+    def test_no_reminder_with_metrics_off_or_without_consent_or_on_other_hosts(self):
+        self.post("Edit", {"file_path": "/x.py"})
+        self.consent()
+        self.run_hook({"hook_event_name": "PostToolUse", "session_id": "s2", "cwd": str(self.repo), "tool_name": "Edit",
+                       "tool_input": {"file_path": "/x.py"}}, env={**self.env, "FNL_METRICS": "off"})
+        self.run_hook({"hook_event_name": "PostToolUse", "session_id": "s3", "cwd": str(self.repo), "tool_name": "apply_patch",
+                       "tool_input": {"command": "x"}}, args=("--host", "codex"))
+        self.assertEqual([e["event"] for e in self.events()], ["first_edit"])
+
+    def test_the_prompt_hook_is_registered_async_on_claude_code_only(self):
+        hooks = json.loads((ROOT / ".claude-plugin/hooks.json").read_text())["hooks"]["UserPromptSubmit"]
+        entries = [h for group in hooks for h in group["hooks"]]
+        self.assertEqual(len(entries), 1)
+        self.assertIn("metrics_hook.py", entries[0]["command"])
+        self.assertTrue(entries[0]["async"])
+        self.assertNotIn("UserPromptSubmit", json.loads((ROOT / ".codex-plugin/hooks.json").read_text())["hooks"])
 
 
 class DetachedFreshnessTest(unittest.TestCase):

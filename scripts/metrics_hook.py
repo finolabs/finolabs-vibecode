@@ -3,10 +3,12 @@
 
 Reads one hook payload from stdin and writes at most one event. `--host claude|codex|antigravity`
 says which agent sent it (default claude); Antigravity payloads carry no event name, so `--event
-session_start|post_tool_use` says which hook fired. It prints nothing (Antigravity wants `{}`) and always
-exits 0, so it can never fail or change the session. It reads command text only to test for a
-trigger and discards it; the only file it opens is a review body named in a `gh pr comment`
-command, and only the first line of that file is read.
+session_start|post_tool_use` says which hook fired. It prints nothing (Antigravity wants `{}`), except one
+fixed router reminder on Claude Code at a session's first edit with no router receipt, and always
+exits 0, so it can never fail or block the session. It reads command text only to test for a
+trigger and discards it, and reads a submitted prompt only for a leading `/fnl-` skill name and
+discards it; the only file it opens is a review body named in a `gh pr comment` command, and only
+the first line of that file is read.
 """
 
 import json
@@ -47,6 +49,37 @@ AGY_SHELL = {"run_command"}
 AGY_EDIT = {"write_file", "write_to_file", "replace_file_content", "multi_replace_file_content"}
 HEAD_BYTES = 4096
 MAX_COMMAND = 8192  # longer command text is not tested at all: a trigger is never that long
+ROUTER_SKILL = "fnl-coding-router"
+# A typed skill or slash command: "/name" or "/plugin:name" at the very start of the prompt, then whitespace or the end.
+TYPED = re.compile(r"/(?:[A-Za-z0-9_.-]{1,64}:)?(fnl-[a-z][a-z-]{0,39})(?:[ \t\r\n]|\Z)")
+REMINDER = ("fnl: this session edited a file before any fnl-coding-router receipt; invoke the fnl-coding-router skill "
+            "before further coding work (advisory reminder, shown once per session).")
+
+
+def router_mark(sid, create):
+    """Whether the session has a router receipt, from a marker file beside the first-edit marker; create=True records one."""
+    folder = fm.ensure_dir(fm.ensure_dir(fm.state_dir(), follow=True) / "markers")
+    path = folder / (sid + ".router")  # a session id never holds a dot, so this never meets a first-edit marker
+    if not create:
+        return os.path.lexists(path)
+    try:
+        os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | fm.NOFOLLOW, 0o600))
+    except FileExistsError:
+        pass
+    return True
+
+
+def record_skill(sid, cwd, name):
+    if fm.record("skill", sid, cwd, name=name) and name == ROUTER_SKILL:
+        router_mark(sid, True)
+
+
+def typed_skill(prompt):
+    """The `fnl-` name of a skill typed as a slash command at the start of the prompt, else None. The text is discarded."""
+    if not isinstance(prompt, str):
+        return None
+    found = TYPED.match(prompt[:200])
+    return found.group(1) if found else None
 
 
 def fnl_name(value):
@@ -231,11 +264,11 @@ def session_start(sid, cwd, source, host):
             start_detached_refresh(cwd=cwd)
 
 
-def post_tool_use(sid, cwd, tool, data):
+def post_tool_use(sid, cwd, tool, data, host="claude"):
     if tool == "Skill":
         name = fnl_name(data.get("skill"))
         if name:
-            fm.record("skill", sid, cwd, name=name)
+            record_skill(sid, cwd, name)
     elif tool == "Agent":
         name = fnl_name(data.get("subagent_type"))
         if name:
@@ -243,6 +276,10 @@ def post_tool_use(sid, cwd, tool, data):
     elif tool in EDIT_TOOLS:
         if fm.first_edit(sid):
             fm.record("first_edit", sid, cwd)
+            # Claude Code reads this JSON from an async hook as context for the next turn. Codex's output contract is
+            # unverified and Antigravity's hook must print `{}`, so both stay advisory.
+            if host == "claude" and not router_mark(sid, False):
+                print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": REMINDER}}))
     elif tool == "Bash":
         command = data.get("command")
         judge_command = command
@@ -258,7 +295,8 @@ def post_tool_use(sid, cwd, tool, data):
         if "record.py" in command and ROUTER.search(command):
             depth, trigger = DEPTH.search(command), TRIGGER.search(command)
             if depth and trigger and depth.group(1) in fm.DEPTHS and trigger.group(1) in fm.TRIGGERS:
-                fm.record("router", sid, cwd, depth=depth.group(1), trigger=trigger.group(1))
+                if fm.record("router", sid, cwd, depth=depth.group(1), trigger=trigger.group(1)):
+                    router_mark(sid, True)
         if "record.py" in command and "<<" not in command:  # text inside a heredoc never ran
             for keep in KEEP.finditer(command):  # one receipt per command, each read from its own arguments
                 args = keep.group(1)
@@ -344,11 +382,15 @@ def main():
         if event == "SessionStart":
             session_start(sid, cwd, source, host)
         elif event == "PostToolUse":
-            post_tool_use(sid, cwd, tool, data)
+            post_tool_use(sid, cwd, tool, data, host)
             if host != "antigravity":
                 refresh_if_stale(cwd=cwd)
             else:
                 start_detached_refresh(cwd=cwd)
+        elif event == "UserPromptSubmit" and host == "claude":
+            name = typed_skill(payload.get("prompt"))
+            if name:
+                record_skill(sid, cwd, name)
         elif event == "Stop" and host != "antigravity":
             refresh_dashboard(cwd=cwd)
     except Exception as error:
