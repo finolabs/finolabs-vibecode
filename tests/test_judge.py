@@ -389,6 +389,140 @@ class JudgeTest(unittest.TestCase):
             self.assertTrue(json.loads(output.getvalue())['fallback'])
 
 
+class AwayDecisionSiteTest(unittest.TestCase):
+    """Away decisions: the closed `away-decision` site chooses among two to six options; no network."""
+    OPTIONS = ['Keep one schema', 'Split the schema']
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.home = account(self, Path(self.tmp.name) / 'home')
+        judge._calls = 0
+        clean = mock.patch.dict(os.environ, {}, clear=True)
+        clean.start()
+        self.addCleanup(clean.stop)
+
+    def jev(self, reply):
+        stack = contextlib.ExitStack()
+        stack.enter_context(mock.patch.object(judge, 'configured_judge', return_value='jev'))
+        stack.enter_context(mock.patch.dict(os.environ, {'TYPESAFE_API_KEY': 'synthetic-key'}, clear=True))
+        factory = stack.enter_context(mock.patch('urllib.request.build_opener'))
+        response = factory.return_value.open.return_value.__enter__.return_value
+        response.read.return_value = reply if isinstance(reply, bytes) else json.dumps(reply).encode()
+        self.addCleanup(stack.close)
+        return factory
+
+    def test_site_is_closed_and_separate_from_the_yes_no_sites(self):
+        self.assertNotIn('away-decision', judge.SITE_SCHEMAS)
+        self.assertEqual(set(judge.CHOICE_SITES), {'away-decision'})
+        self.assertEqual(set(judge.CHOICE_SITES['away-decision']), {'question', 'options', 'evidence'})
+        body = judge.choice_payload('Which schema fits the spec?', self.OPTIONS, 'The spec asks for one table.')
+        self.assertEqual(body['questions']['q']['type'], 'choice')
+        self.assertEqual(body['questions']['q']['options'], {'1': 'Keep one schema', '2': 'Split the schema'})
+        self.assertEqual(body['state'], {'evidence': 'The spec asks for one table.'})
+        # The yes/no payload never serves the choice site, and the choice payload never serves a yes/no site.
+        with self.assertRaises(judge.Unavailable):
+            judge.payload('Q', 'E', 'away-decision')
+        for site in ('verification', 'navigator', 'unknown', ''):
+            with self.assertRaises(judge.Unavailable):
+                judge.choice_payload('Q', self.OPTIONS, 'E', site)
+
+    def test_option_count_type_duplicates_and_byte_caps_refuse(self):
+        caps = judge.CHOICE_SITES['away-decision']
+        _, _, option_cap = caps['options']
+        for options in ([], ['Only one'], ['o%d' % n for n in range(7)], ['Same', 'Same'], ['Fine', ''],
+                        ['Fine', '   '], ['Fine', 7], 'Keep, Split', ['Fine', 'é' * (option_cap // 2 + 1)]):
+            with self.subTest(options=str(options)[:40]):
+                with self.assertRaises(judge.Unavailable):
+                    judge.choice_payload('Which?', options, 'E')
+        for count in (2, 6):
+            judge.choice_payload('Which?', ['o%d' % n for n in range(count)], 'E')
+        for name in ('question', 'evidence'):
+            fields = dict(question='Which?', evidence='E')
+            fields[name] = 'é' * (caps[name] // 2 + 1)
+            with self.assertRaises(judge.Unavailable):
+                judge.choice_payload(fields['question'], self.OPTIONS, fields['evidence'])
+        with self.assertRaises(judge.Unavailable):
+            judge.choice_payload('   ', self.OPTIONS, 'E')
+
+    def test_secret_and_path_patterns_refuse_before_send_and_name_only_the_field(self):
+        values = ('sk-' + 'x' * 24, 'password=synthetic-password', '/Us' + 'ers/synthetic/private', '~/private', 'synthetic-key')
+        factory = self.jev({'answers': {'q': {'choice': {'1': .9, '2': .1}}}})
+        for field in ('question', 'options', 'evidence'):
+            for value in values:
+                fields = dict(question='Which?', options=list(self.OPTIONS), evidence='E')
+                if field == 'options':
+                    fields['options'][1] = value
+                else:
+                    fields[field] = value
+                with self.subTest(field=field, value=value[:8]):
+                    with self.assertRaises(judge.Unavailable) as raised:
+                        judge.ask_choice(fields['question'], fields['options'], fields['evidence'])
+                    self.assertEqual(str(raised.exception), 'field: ' + field)
+        factory.assert_not_called()
+
+    def test_reply_gives_the_top_option_its_probability_and_the_threshold(self):
+        self.jev({'answers': {'q': {'choice': {'1': .15, '2': .85}}}})
+        out = judge.ask_choice('Which?', self.OPTIONS, 'E')
+        self.assertEqual((out['option'], out['of'], out['settled'], out['source']), (2, 2, True, 'jev'))
+        self.assertAlmostEqual(out['p'], .85)
+        judge._calls = 0
+        self.jev({'answers': {'q': {'choice': {'1': .55, '2': .45}}}})
+        out = judge.ask_choice('Which?', self.OPTIONS, 'E')
+        self.assertEqual((out['option'], out['settled']), (1, False))
+        self.assertEqual(judge.SETTLE_THRESHOLD, 0.8)
+
+    def test_reply_shape_failures_are_unavailable(self):
+        for reply in ({'answers': {'q': {'noul': .9}}}, {'answers': {'q': {'choice': {'1': .9}}}},
+                      {'answers': {'q': {'choice': {'1': .9, '3': .1}}}}, {'answers': {'q': {'choice': {'1': 1.5, '2': -.5}}}},
+                      {'answers': {'q': {'choice': {'1': .9, '2': 'x'}}}}, {'answers': {'q': {'choice': '1'}}},
+                      {'answers': {'q': {'choice': {'1': .9, '2': .1}, 'extra': 1}}}, [],
+                      b'{"answers":{"q":{"choice":{"1":0.9,"1":0.1,"2":0.0}}}}', b'x' * (judge.LIMIT + 1)):
+            with self.subTest(reply=str(reply)[:50]):
+                judge._calls = 0
+                self.jev(reply)
+                with self.assertRaises(judge.Unavailable):
+                    judge.ask_choice('Which?', self.OPTIONS, 'E')
+
+    def test_off_switch_and_unconfigured_judge_never_open_a_connection(self):
+        with mock.patch('urllib.request.build_opener') as opener:
+            with mock.patch.dict(os.environ, {'FNL_JUDGE': 'off', 'TYPESAFE_API_KEY': 'synthetic-key'}, clear=True):
+                with self.assertRaises(judge.Unavailable):
+                    judge.ask_choice('Which?', self.OPTIONS, 'E')
+            with mock.patch.dict(os.environ, {'TYPESAFE_API_KEY': 'synthetic-key'}, clear=True):
+                with self.assertRaises(judge.Unavailable):
+                    judge.ask_choice('Which?', self.OPTIONS, 'E')  # no host config: judge host
+            opener.assert_not_called()
+
+    def test_cli_choice_site_dry_run_refusals_and_unavailable(self):
+        evidence = Path(self.tmp.name) / 'evidence'
+        evidence.write_text('The spec asks for one table.')
+        def run(*args):
+            with mock.patch.object(sys, 'argv', ['judge.py', *args]), contextlib.redirect_stdout(io.StringIO()) as out, \
+                    contextlib.redirect_stderr(io.StringIO()) as err:
+                code = judge.main()
+            return code, out.getvalue(), err.getvalue()
+        base = ('ask', '--site', 'away-decision', '--question', 'Which schema?', '--evidence-file', str(evidence))
+        code, out, _ = run(*base, '--option', 'Keep', '--option', 'Split', '--dry-run')
+        self.assertEqual(code, 0)
+        self.assertEqual(set(json.loads(out)['fields']), {'model', 'state', 'questions'})
+        self.assertNotIn('Keep', out)
+        # Too few options and options on a yes/no site are refused.
+        code, out, _ = run(*base, '--option', 'Keep', '--dry-run')
+        self.assertEqual(code, 3)
+        code, _, _ = run('ask', '--question', 'Q', '--evidence-file', str(evidence), '--option', 'A', '--option', 'B', '--dry-run')
+        self.assertEqual(code, 2)
+        # Without Jev the choice site has no host fallback: the ladder goes to the advisor.
+        code, out, err = run(*base, '--option', 'Keep', '--option', 'Split')
+        self.assertEqual(code, 3)
+        self.assertEqual(json.loads(out), {'option': None, 'of': 2, 'p': None, 'settled': False, 'source': 'host', 'fallback': True})
+        self.assertIn('unavailable', err)
+        self.jev({'answers': {'q': {'choice': {'1': .9, '2': .1}}}})
+        code, out, _ = run(*base, '--option', 'Keep', '--option', 'Split')
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out), {'option': 1, 'of': 2, 'p': .9, 'settled': True, 'source': 'jev', 'fallback': False})
+
+
 
 if __name__ == '__main__':
     unittest.main()
