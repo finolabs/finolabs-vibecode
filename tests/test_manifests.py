@@ -27,13 +27,13 @@ class ManifestTest(unittest.TestCase):
     def test_release_surface_counts_and_agents_match_the_folders(self):
         skills = list((ROOT / "skills").glob("*/SKILL.md"))
         agents = {p.stem for p in (ROOT / "agents").glob("fnl-*.md")}
-        self.assertEqual(len(skills), 20)
+        self.assertEqual(len(skills), 22)
         self.assertEqual(agents, {"fnl-reviewer", "fnl-security-reviewer", "fnl-navigator"})
         readme = (ROOT / "README.md").read_text()
         ask = (ROOT / "skills/fnl-ask/references/map.md").read_text()
         display = (ROOT / "agents/openai.yaml").read_text()
         for doc in self.docs:
-            self.assertIn("20 skills and 3 agents", doc["description"])
+            self.assertIn("22 skills and 3 agents", doc["description"])
         for agent in agents:
             for public_text in (readme, ask, display, *(doc["description"] for doc in self.docs)):
                 self.assertIn(agent, public_text)
@@ -47,6 +47,19 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(fields["argument-hint"], '"[start|stop]"')
         brb_body = (ROOT / "skills/fnl-brb/SKILL.md").read_text().split("---", 2)[2]
         self.assertEqual(body.replace("# Away from keyboard", "# Be right back"), brb_body)
+
+    def test_gtg_is_a_user_only_thin_alias_of_pause(self):
+        main = ROOT / "skills/fnl-pause/SKILL.md"
+        alias = ROOT / "skills/fnl-gtg/SKILL.md"
+        fields = {}
+        for path in (main, alias):
+            _, frontmatter, body = path.read_text().split("---", 2)
+            fields[path.parent.name] = dict(line.split(": ", 1) for line in frontmatter.strip().splitlines())
+            self.assertEqual(fields[path.parent.name]["name"], path.parent.name)
+            self.assertEqual(fields[path.parent.name]["disable-model-invocation"], "true")
+        self.assertEqual(fields["fnl-pause"]["argument-hint"], fields["fnl-gtg"]["argument-hint"])
+        self.assertLess(len(main.read_text().splitlines()), 70)
+        self.assertIn("Dependency: `fnl-pause`", alias.read_text())
 
     def test_description_length_fits_the_catalog_standard(self):
         # The shared catalog (finolabs/plugins) lists 120-160 characters and repeats them exactly.

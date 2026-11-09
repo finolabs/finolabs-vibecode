@@ -174,7 +174,7 @@ Done when the plugin is listed by your host and the user knows the order: `/fnl-
 
 ## Skills
 
-The plugin has **20 skill folders**: 12 model-invoked skills and eight marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Every skill carries the `fnl-` prefix. The user types eight of them, `fnl-autopilot`, `fnl-afk`, `fnl-brb`, `fnl-restore-point`, `fnl-setup`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff` and `fnl-advisor` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
+The plugin has **22 skill folders**: 12 model-invoked skills and ten marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Every skill carries the `fnl-` prefix. The user types ten of them, `fnl-autopilot`, `fnl-afk`, `fnl-brb`, `fnl-pause`, `fnl-gtg`, `fnl-restore-point`, `fnl-setup`, `fnl-status`, `fnl-update` and `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff` and `fnl-advisor` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
 
 | Skill | Use it when |
 | --- | --- |
@@ -189,6 +189,8 @@ The plugin has **20 skill folders**: 12 model-invoked skills and eight marked us
 | `fnl-autopilot` | Starting a time-boxed standing mandate while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/fnl-setup add autopilot`; the live loop, dashboard tab, scheduler and hooks are deferred. |
 | `fnl-afk` | Main short name for `fnl-autopilot` (away from keyboard); starts the away mandate so your agents keep working while you are away, or stops it on return. |
 | `fnl-brb` | Older short name (be right back), kept as an alias of `fnl-afk` through `fnl-autopilot`; follows the same procedure and arguments. |
+| `fnl-pause` | Before you restart or shut the machine down: stops new work, lets running work finish, writes handovers and reports what recorded work remains, with an optional `--in <minutes>` deadline; `heavy_run.py` refuses new commands while it is active. User-invoked; never stops a process or declares the machine safe. |
+| `fnl-gtg` | Short name (got to go) for `fnl-pause`; follows the same procedure and arguments. |
 | `fnl-review-gate` | A user story is done or a pull request is about to merge: an independent code review, a disposition for every finding, a regression test per runtime fix. |
 | `fnl-security-review-gate` | A change touches auth, permissions, private data, untrusted input or payments: a permission-boundary review, with negative tests proving that not even a record's existence leaks. |
 | `fnl-verification` | Choosing targeted tests, checking current-head verification receipts, completing host/judge criterion checks and deciding whether to accept reported work; the coordinator keeps the verdict. |
@@ -378,7 +380,7 @@ The judge defaults to a small host model. Choose `judge: jev` in canonical `## A
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 agents/fnl-*.md                   code reviewer, security reviewer and navigator definitions (no project edits; authorized posting uses a private draft)
 agents/openai.yaml                Codex skill-list display metadata
-skills/fnl-*/SKILL.md             20 self-contained skills (12 model-invoked; 8 user-only flags on Claude Code)
+skills/fnl-*/SKILL.md             22 self-contained skills (12 model-invoked; 10 user-only flags on Claude Code)
 skills/fnl-advisor/references/committee.md       committee procedure, loaded only for a committee
 skills/fnl-delegate/references/coordinator-sessions.md  spec coordinator and task sessions
 skills/fnl-session-hygiene/references/knowledge.md      remember/recall procedure; handovers live in SKILL.md
