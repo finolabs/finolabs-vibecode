@@ -22,6 +22,28 @@ PRIVATE_END = re.compile(r'-----END[^\r\n]{0,80}PRIVATE KEY[^\r\n]{0,80}-----')
 PAIR = re.compile(r'''(?<![^\s=:,'"{}\[\]])(?P<quote>['"]?)(?P<name>[^\s=:,'"{}\[\]]+)(?P=quote)[ \t]*[=:][ \t]*(?:"(?P<double>(?:\\.|[^"\\\r\n])*)"|'(?P<single>(?:\\.|[^'\\\r\n])*)'|(?P<bare>[^\s,}\]'" ]*))''')
 
 
+# Narrow named_token exemptions; each is shown not to be a credential, anything else stays flagged.
+ISO_TIME = re.compile(r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?')
+DECIMAL = re.compile(r'[+-]?\d+(?:\.\d+)?')
+# Exact lowercase field names that hosts and this plugin write in their own output.
+HOST_FIELDS = frozenset(('coord_session', 'session_id', 'credential_expires_at',
+                         'model_auto_compact_token_limit', 'expected_keys', 'key_end'))
+# Exact names whose value may be plain prose; a passphrase may be words, so no other name qualifies.
+PROSE_FIELDS = frozenset(('secret', 'key'))
+PROSE = re.compile(r'[A-Za-z]+[.,;:!?]?(?: [A-Za-z]+[.,;:!?]?){2,}')
+
+
+def exempt(name, value):
+    if ISO_TIME.fullmatch(value) or DECIMAL.fullmatch(value):
+        return True
+    if name in HOST_FIELDS and not PREFIX.search(value):
+        return True
+    # Alternation such as KEY|TOKEN is pattern text, not a field name.
+    if '|' in name and all(name.split('|')):
+        return True
+    return name in PROSE_FIELDS and bool(PROSE.fullmatch(value))
+
+
 def value_group(match):
     return next(group for group in ('double', 'single', 'bare') if match[group] is not None)
 
@@ -109,7 +131,7 @@ def findings(text):
             line = bisect_right(newlines, offsets[match.start()]) + 1
             group = value_group(match)
             # Prefer false positives; quoted values may include spaces or punctuation.
-            if SENSITIVE.search(name) and len(match[group]) >= 16:
+            if SENSITIVE.search(name) and len(match[group]) >= 16 and not exempt(name, match[group]):
                 candidate()
                 add('named_token', *match.span(group), name)
             if '_' in name and NAME.fullmatch(name):

@@ -393,6 +393,139 @@ class LogScanTest(unittest.TestCase):
         with log_scan.folder_descriptor(new) as fd:
             self.assertEqual(stat.S_IMODE(os.fstat(fd).st_mode), 0o700)
 
+    def test_open_folder_refusal_is_one_fixed_fix_message_and_mode_is_kept(self):
+        self.write()
+        self.root.chmod(0o755)
+        with self.assertRaises(ValueError) as refused:
+            log_scan.scan(self.log)
+        self.assertEqual(str(refused.exception), log_scan.FOLDER_REFUSED)
+        self.assertIn('chmod 700', log_scan.FOLDER_REFUSED)
+        self.assertNotIn(str(self.root), log_scan.FOLDER_REFUSED)
+        self.assertNotIn('/', log_scan.FOLDER_REFUSED)
+        self.assertEqual(stat.S_IMODE(self.root.stat().st_mode), 0o755)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assert_output(self.cli('scan', str(self.log)), (1, 'not_scanned file=1\n'))
+        self.assertEqual(err.getvalue(), log_scan.FOLDER_REFUSED + '\n')
+        self.assertEqual(stat.S_IMODE(self.root.stat().st_mode), 0o755)
+
+    def test_other_refusals_keep_the_plain_message(self):
+        self.write()
+        link = self.root / 'link.log'
+        link.symlink_to(self.log)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assert_output(self.cli('scan', str(link)), (1, 'not_scanned file=1\n'))
+        self.assertEqual(err.getvalue(), '')
+
+
+class NamedTokenExemptionTest(unittest.TestCase):
+    """Synthetic values only; each exemption sits beside a look-alike that stays flagged."""
+
+    def kinds(self, text):
+        return [hit['kind'] for hit in sp.findings(text)]
+
+    def assert_clean(self, text):
+        self.assertEqual(self.kinds(text), [], 'unexpected finding; content suppressed')
+
+    def assert_flagged(self, text, kind='named_token'):
+        self.assertIn(kind, self.kinds(text), 'missing finding; content suppressed')
+
+    def planted(self):
+        return 'sk' + '-' + 'fixture' * 4
+
+    def test_iso_timestamps_and_decimal_numbers_are_exempt_under_any_name(self):
+        for value in ('2026-11-10T01:17:00Z', '2026-11-10T01:17:00.123456+07:00',
+                      '2026-11-10 01:17:00', '2026-11-10T01:17:00+0700'):
+            for name in ('credential_expires_at', 'api_key', 'PASSWORD', 'token_refreshed'):
+                with self.subTest(name=name, value=value):
+                    self.assert_clean(f'{name}={value}')
+                    self.assert_clean(f'"{name}": "{value}"')
+        for value in ('1234567890123456', '-1234567890123456', '12345678901234.5678'):
+            with self.subTest(value=value):
+                self.assert_clean('model_auto_compact_token_limit=' + value)
+                self.assert_clean('ACCOUNT_TOKEN=' + value)
+
+    def test_timestamp_and_number_look_alikes_stay_flagged(self):
+        for value in ('2026-11-10T01:17:00Zfixturefixture', '2026-11-10T01:17:00Z fixture',
+                      '20261110T011700Zfixture', '1234567890123456abc', '0x1234567890123456',
+                      '1234567890123456 7', '1e100000000000000'):
+            for name in ('api_key', 'ACCOUNT_TOKEN', 'password'):
+                with self.subTest(name=name, value=value):
+                    self.assert_flagged(f'{name}="{value}"')
+
+    def test_host_field_names_are_exempt_without_a_secret_prefix(self):
+        value = 'f' * 8 + '-' + 'a' * 4 + '-' + 'b' * 4 + '-' + 'c' * 4 + '-' + 'd' * 12
+        for name in ('coord_session', 'session_id', 'credential_expires_at',
+                     'model_auto_compact_token_limit', 'expected_keys', 'key_end'):
+            with self.subTest(name=name):
+                self.assert_clean(f'{name}={value}')
+                self.assert_clean(f'"{name}": "{value}"')
+
+    def test_host_field_look_alikes_stay_flagged(self):
+        value = 'fixture' * 4
+        for name in ('session_id', 'coord_session', 'key_end', 'expected_keys'):
+            with self.subTest(name=name):
+                text = f'{name}={self.planted()}'
+                self.assert_flagged(text)
+                self.assert_flagged(text, 'key')
+        for name in ('SESSION_ID', 'Session_Id', 'coord_session_token', 'my_session_id', 'session',
+                     'keys', 'key_start', 'credential_expires', 'expected_keys2'):
+            with self.subTest(name=name):
+                self.assert_flagged(f'{name}={value}')
+
+    def test_pattern_text_names_are_exempt(self):
+        for text in ('KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL=' + 'fixture' * 4,
+                     '"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL": "names to look for in field names"'):
+            with self.subTest(text=text[:10]):
+                self.assert_clean(text)
+
+    def test_pattern_text_look_alikes_stay_flagged(self):
+        value = 'fixture' * 4
+        for name in ('|API_KEY', 'API_KEY|', 'KEY||TOKEN', 'print(api_key', '**API_KEY**',
+                     '$Password', '?access_token', 'C\\secret_key'):
+            with self.subTest(name=name):
+                self.assert_flagged(f'{name}={value}')
+        self.assert_flagged('KEY|TOKEN=' + self.planted(), 'key')
+
+    def test_prose_under_exact_secret_and_key_is_exempt(self):
+        for text in ('"secret": "Never print the value, only its name."',
+                     "secret='masked before the scan runs'",
+                     '"key": "Which field holds the account label"',
+                     '"key": "one two three four five six"'):
+            with self.subTest(text=text[:6]):
+                self.assert_clean(text)
+
+    def test_prose_look_alikes_stay_flagged(self):
+        flagged = ['"password": "correct horse battery staple"',
+                   '"passwd": "correct horse battery staple"',
+                   '"passphrase": "correct horse battery staple"',
+                   '"token": "correct horse battery staple"',
+                   '"credential": "correct horse battery staple"',
+                   '"api_key": "correct horse battery staple"',
+                   '"client_secret": "correct horse battery staple"',
+                   '"SECRET": "correct horse battery staple"',
+                   '"Key": "correct horse battery staple"',
+                   '"secret": "two words-onlyfixture"',
+                   '"secret": "fixture1 fixture2 fixture3"',
+                   '"secret": "a1b2c3d4 e5f6g7h8 i9"',
+                   '"secret": "abc  def ghijklmnop"',
+                   '"secret": "abc def ghi.jklmnop"',
+                   'key=' + 'fixture' * 4,
+                   '"key": "' + 'fixture' * 4 + '"']
+        for index, text in enumerate(flagged):
+            with self.subTest(case=index):
+                self.assert_flagged(text)
+        self.assert_flagged('"secret": "words around ' + self.planted() + ' here"', 'key')
+
+    def test_other_finding_kinds_are_unchanged(self):
+        self.assert_flagged('-----' + 'BEGIN PRIVATE KEY-----\nfixture\n-----END PRIVATE KEY-----',
+                            'private_key')
+        self.assert_flagged('Authorization: Bearer ' + 'fixture' * 4, 'bearer')
+        dump = '\n'.join(f'NAME_{i}=value' for i in range(10))
+        self.assert_flagged(dump, 'environment_dump')
+        self.assert_flagged('session_id=2026-11-10T01:17:00Z\n' + dump, 'environment_dump')
+
 
 if __name__ == '__main__':
     unittest.main()
