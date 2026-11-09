@@ -16,7 +16,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
-- `log_scan.py` no longer flags a real timestamp under `credential_expires_at` as `named_token`; every other sensitive-name match stays flagged after a security review showed broader exemptions could hide credentials; a too-open run-log folder is refused with one fixed message that says to run `chmod 700`.
+- A too-open run-log folder is refused with one fixed message that says to run `chmod 700`.
 
 ## [0.2.2] - 2026-11-09
 

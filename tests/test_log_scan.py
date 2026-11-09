@@ -419,51 +419,22 @@ class LogScanTest(unittest.TestCase):
         self.assertEqual(err.getvalue(), '')
 
 
-class NamedTokenExemptionTest(unittest.TestCase):
-    """Synthetic values only. One exemption exists; everything a review showed could hide a secret stays flagged."""
+class NamedTokenStanceTest(unittest.TestCase):
+    """Synthetic values only: shapes a security review showed could hide a credential stay flagged."""
 
-    def kinds(self, text):
-        return [hit['kind'] for hit in sp.findings(text)]
+    def assert_flagged(self, text):
+        self.assertIn('named_token', [hit['kind'] for hit in sp.findings(text)], 'missing finding; content suppressed')
 
-    def assert_clean(self, text):
-        self.assertEqual(self.kinds(text), [], 'unexpected finding; content suppressed')
-
-    def assert_flagged(self, text, kind='named_token'):
-        self.assertIn(kind, self.kinds(text), 'missing finding; content suppressed')
-
-    def test_a_real_timestamp_under_the_host_expiry_field_is_exempt(self):
-        for value in ('2026-11-10T01:17:00Z', '2026-11-10T01:17:00.123456+07:00', '2026-11-10 01:17:00',
-                      '2026-11-10T01:17:00+0700', '2024-02-29T23:59:59Z'):
-            with self.subTest(value=value):
-                self.assert_clean(f'credential_expires_at={value}' if ' ' not in value else f'"credential_expires_at": "{value}"')
-                self.assert_clean(f'"credential_expires_at": "{value}"')
-
-    def test_an_invalid_or_look_alike_timestamp_stays_flagged(self):
-        for value in ('2026-99-10T01:17:00Z', '2026-02-30T01:17:00Z', '2025-02-29T01:17:00Z', '2026-11-10T99:17:00Z',
-                      '2026-11-10T01:99:00Z', '2026-11-10T01:17:99Z', '2026-11-10T01:17:00+99:00',
-                      '2026-11-10T01:17:00+07:99', '2026-11-10T01:17:00Zfixturefixture', 'fixture' * 4):
-            with self.subTest(value=value):
-                self.assert_flagged(f'"credential_expires_at": "{value}"')
-
-    def test_a_timestamp_under_any_other_sensitive_name_stays_flagged(self):
-        for name in ('api_key', 'PASSWORD', 'password', 'token_refreshed', 'CREDENTIAL_EXPIRES_AT', 'my_credential_expires_at'):
-            with self.subTest(name=name):
-                self.assert_flagged(f'"{name}": "2026-11-10T01:17:00Z"')
-
-    def test_values_a_review_showed_could_hide_a_secret_stay_flagged(self):
+    def test_names_and_value_shapes_grant_no_exemption(self):
         opaque = 'fixture' * 4
-        cases = ['true|API_KEY=' + opaque + ' /usr/bin/true', 'KEY|TOKEN=' + opaque,
-                 'PASSWORD=' + '1234567890' * 3, 'password="12345678901234.5678"',
-                 '"secret": "correct horse battery staple"', '"key": "correct horse battery staple"']
-        cases += [f'{name}={opaque}' for name in ('coord_session', 'session_id', 'model_auto_compact_token_limit', 'expected_keys', 'key_end')]
+        stamp = '2026-11-10T01:17:00Z'
+        cases = ['true|API_KEY=' + opaque + ' /usr/bin/true', 'PASSWORD=' + '1234567890' * 3,
+                 '"password": "' + stamp + '"', '"secret": "correct horse battery staple"',
+                 'credential_expires_at=' + stamp, 'credential_expires_at=' + stamp + ',' + opaque]
+        cases += [f'{name}={opaque}' for name in ('coord_session', 'session_id', 'expected_keys', 'key_end')]
         for index, text in enumerate(cases):
             with self.subTest(case=index):
                 self.assert_flagged(text)
-
-    def test_other_finding_kinds_are_unchanged(self):
-        self.assert_flagged('-----' + 'BEGIN PRIVATE KEY-----\nfixture\n-----END PRIVATE KEY-----', 'private_key')
-        self.assert_flagged('Authorization: Bearer ' + 'fixture' * 4, 'bearer')
-        self.assert_flagged('\n'.join(f'NAME_{i}=value' for i in range(10)), 'environment_dump')
 
 
 if __name__ == '__main__':

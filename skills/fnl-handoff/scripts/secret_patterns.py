@@ -2,7 +2,6 @@
 import re
 import unicodedata
 from bisect import bisect_right
-from datetime import datetime
 from array import array
 from collections import Counter
 
@@ -21,27 +20,6 @@ PRIVATE = re.compile(r'-----BEGIN[^\r\n]{0,80}PRIVATE KEY[^\r\n]{0,80}-----')
 PRIVATE_END = re.compile(r'-----END[^\r\n]{0,80}PRIVATE KEY[^\r\n]{0,80}-----')
 # Keep the complete candidate name, so an attacker cannot cause a valid suffix to be printed.
 PAIR = re.compile(r'''(?<![^\s=:,'"{}\[\]])(?P<quote>['"]?)(?P<name>[^\s=:,'"{}\[\]]+)(?P=quote)[ \t]*[=:][ \t]*(?:"(?P<double>(?:\\.|[^"\\\r\n])*)"|'(?P<single>(?:\\.|[^'\\\r\n])*)'|(?P<bare>[^\s,}\]'" ]*))''')
-
-
-# The one named_token exemption: a host's expiry field holding a real timestamp. A name or a value shape
-# alone proves nothing, so anything else under a sensitive name stays flagged.
-ISO_TIME = re.compile(r'(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-](\d{2}):?(\d{2}))?')
-
-
-def real_timestamp(value):
-    match = ISO_TIME.fullmatch(value)
-    if not match:
-        return False
-    year, month, day, hour, minute, second, zone_hour, zone_minute = (int(part or 0) for part in match.groups())
-    try:
-        datetime(year, month, day, hour, minute, second)
-    except ValueError:
-        return False
-    return zone_hour <= 14 and zone_minute < 60
-
-
-def exempt(name, value):
-    return name == 'credential_expires_at' and real_timestamp(value)
 
 
 def value_group(match):
@@ -131,7 +109,7 @@ def findings(text):
             line = bisect_right(newlines, offsets[match.start()]) + 1
             group = value_group(match)
             # Prefer false positives; quoted values may include spaces or punctuation.
-            if SENSITIVE.search(name) and len(match[group]) >= 16 and not exempt(name, match[group]):
+            if SENSITIVE.search(name) and len(match[group]) >= 16:
                 candidate()
                 add('named_token', *match.span(group), name)
             if '_' in name and NAME.fullmatch(name):
