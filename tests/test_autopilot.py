@@ -511,6 +511,38 @@ class AwayDecisionTest(AutopilotBase):
         self.assertEqual(self.invoke('log', '--kind', 'action', '--rung', 'park')[0], 3)
         self.assertEqual(self.invoke('log', '--kind', 'decision', *park)[0], 3)
 
+    def test_a_judge_probability_round_trips_unchanged_and_the_threshold_holds(self):
+        self.start()
+        # The value judge.ask_choice returns, passed on as Python prints it, is stored as that same number.
+        for p, settled in ((0.823456789, 'yes'), (0.8, 'yes'), (1.0, 'yes'), (0.7999999999999999, 'no'),
+                           (1 / 3, 'no'), (0.5, 'no')):
+            with self.subTest(p=p):
+                flags = (('--rung', 'jev', '--settled', settled, '--by', 'jev', '--probability', str(p))
+                         + (('--option', '1', '--of', '2') if settled == 'yes' else ()))
+                _, line = self.recorded(*flags)
+                self.assertEqual(line['probability'], p)
+                self.assertIs(type(line['probability']), float)
+        # The judge's own output, with the provider call stubbed (no network), reaches the record unchanged.
+        self.load()
+        import judge
+        spread = {'1': 0.823456789, '2': 0.176543211}
+        with patch.object(judge, 'configured_judge', return_value='jev'), patch.object(judge, 'post', return_value=spread), \
+                patch.dict(os.environ, {'FNL_JUDGE': 'on'}):
+            answer = judge.ask_choice('Which schema fits the spec?', ['Keep one schema', 'Split it'], 'Goal: one schema.')
+        self.assertTrue(answer['settled'])
+        _, line = self.recorded('--rung', 'jev', '--settled', 'yes', '--by', 'jev', '--option', str(answer['option']),
+                                '--of', str(answer['of']), '--probability', str(answer['p']))
+        self.assertEqual((line['option'], line['of'], line['probability']), (1, 2, answer['p']))
+        # Just below 0.8 cannot settle, and 0.8 or above cannot be recorded as not settling.
+        for p, settled in (('0.7999999999999999', 'yes'), ('0.79999', 'yes'), ('0.823456789', 'no')):
+            with self.subTest(p=p, settled=settled):
+                self.refused('--rung', 'jev', '--settled', settled, '--by', 'jev', '--probability', p,
+                             *(('--option', '1', '--of', '2') if settled == 'yes' else ()))
+        # Anything that is not a bounded plain number in 0..1 is refused.
+        for p in ('nan', 'inf', '-0.1', '1.0000001', '1e400', '0x1', '0.5 ', ' 0.5', '0.' + '5' * 40, '', '.5', '1_0', '8e-1'):
+            with self.subTest(p=p):
+                self.refused('--rung', 'jev', '--settled', 'no', '--by', 'jev', '--probability', p)
+
     def test_the_id_is_generated_once_and_later_attempts_must_pass_an_existing_one(self):
         self.start()
         first, line = self.recorded(*ROWS['jev unavailable'][0])

@@ -759,9 +759,12 @@ def attempt(args):
             raise ValueError('Autopilot option is invalid')
         fields.update(option=int(args.option), of=int(args.of))
     if 'probability' in given:
-        if not re.fullmatch(r'0(?:\.[0-9]{1,6})?|1(?:\.0{1,6})?', args.probability):
+        # A bounded plain decimal, so the value judge.ask_choice returns (up to 17 significant digits) round-trips.
+        if not re.fullmatch(r'[01](?:\.[0-9]{1,20})?', args.probability):
             raise ValueError('Autopilot probability is invalid')
         probability = float(args.probability)
+        if not math.isfinite(probability) or not 0 <= probability <= 1:
+            raise ValueError('Autopilot probability is invalid')
         if (settled == 'yes') != (probability >= SETTLE):
             raise ValueError('Autopilot probability does not match the result')
         fields['probability'] = probability
