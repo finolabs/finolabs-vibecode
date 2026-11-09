@@ -572,8 +572,9 @@ class QueueViewTest(unittest.TestCase):
     def lock_path(self):
         return self.root / 'heavy.lock'
 
-    def ps(self, stdout, **kwargs):
-        return mock.patch.object(heavy.subprocess, 'run', fake_run(stdout, **kwargs))
+    def ps(self, stdout, returncode=0, error=None):
+        return mock.patch.object(heavy, 'read_waiting_ps', side_effect=error,
+                                 return_value=stdout if returncode == 0 else None)
 
     def lines(self, *commands):
         return ''.join('%d %s\n' % (900 + number, command) for number, command in enumerate(commands))
@@ -603,8 +604,29 @@ class QueueViewTest(unittest.TestCase):
         finally:
             os.close(held)
 
+    def test_oversized_ps_reads_as_unknown_without_printing_its_output(self):
+        fake = self.home / 'ps'
+        fake.write_text('#!%s\nimport sys\nsys.stdout.write("synthetic-private-command " * 12000)\n'
+                        % sys.executable)
+        fake.chmod(0o700)
+        with mock.patch.dict(heavy.TOOLS, {'ps': str(fake)}):
+            code, out, err = self.run_cli('status')
+        self.assertEqual(code, 0)
+        self.assertIn('waiting: unknown', out)
+        self.assertNotIn('synthetic-private-command', out + err)
+        self.assertNotIn(str(fake), out + err)
+
+    def test_ps_at_the_byte_limit_still_counts_normally(self):
+        fake = self.home / 'ps'
+        fake.write_text('#!%s\nimport sys\nsys.stdout.write("900 python3 /x/heavy_run.py run".ljust(256 * 1024))\n'
+                        % sys.executable)
+        fake.chmod(0o700)
+        with mock.patch.dict(heavy.TOOLS, {'ps': str(fake)}):
+            self.assertEqual(heavy.waiting_count(), 1)
+
     def test_unreadable_ps_reads_as_unknown(self):
-        for case in (self.ps('', error=OSError('no ps')), self.ps('boom', returncode=1),
+        for case in (self.ps('', error=OSError('no ps')), self.ps('', error=TimeoutError()),
+                     self.ps('boom', returncode=1),
                      self.ps('', error=subprocess.TimeoutExpired('ps', 5))):
             with case:
                 self.assertIsNone(heavy.waiting_count())
