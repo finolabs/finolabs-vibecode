@@ -19,6 +19,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- `judge.py` accepts the reply the judge service actually documents (`model` and `usage` beside `answers`, `type` beside the answer); it refused every real reply and fell back to the host model.
 - A too-open run-log folder is refused with one fixed message that says to run `chmod 700`.
 
 ## [0.2.2] - 2026-11-09

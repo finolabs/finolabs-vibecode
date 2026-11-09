@@ -129,6 +129,11 @@ class JudgeTest(unittest.TestCase):
                 self.assertEqual(seen[0]['questions']['q']['type'], 'noul')
                 self.assertNotIn('synthetic-test-key', json.dumps(seen))
 
+    def test_the_documented_noul_reply_shape_is_accepted(self):
+        reply = {'model': 'jev-latest', 'usage': {'input_tokens': 1, 'output_tokens': 1}, 'answers': {'q': {'type': 'noul', 'noul': .9}}}
+        with self.server(reply) as (url, seen):
+            self.assertEqual(judge.ask_jev('Q?', 'E', base_url=url)['p'], .9)
+
     def test_errors_probabilities_redirects_are_unavailable(self):
         for response, status in [({}, 200), ({'answers': {'q': {'noul': True}}}, 200),
                                  ({'answers': {'q': {'noul': 2}}}, 200),
@@ -418,7 +423,8 @@ class AwayDecisionSiteTest(unittest.TestCase):
         self.assertEqual(set(judge.CHOICE_SITES['away-decision']), {'question', 'options', 'evidence'})
         body = judge.choice_payload('Which schema fits the spec?', self.OPTIONS, 'The spec asks for one table.')
         self.assertEqual(body['questions']['q']['type'], 'choice')
-        self.assertEqual(body['questions']['q']['options'], {'1': 'Keep one schema', '2': 'Split the schema'})
+        self.assertEqual(body['questions']['q']['criteria'], {'1': 'Keep one schema', '2': 'Split the schema'})
+        self.assertEqual(set(body['questions']['q']), {'type', 'instructions', 'criteria'})
         self.assertEqual(body['state'], {'evidence': 'The spec asks for one table.'})
         # The yes/no payload never serves the choice site, and the choice payload never serves a yes/no site.
         with self.assertRaises(judge.Unavailable):
@@ -447,7 +453,7 @@ class AwayDecisionSiteTest(unittest.TestCase):
 
     def test_secret_and_path_patterns_refuse_before_send_and_name_only_the_field(self):
         values = ('sk-' + 'x' * 24, 'password=synthetic-password', '/Us' + 'ers/synthetic/private', '~/private', 'synthetic-key')
-        factory = self.jev({'answers': {'q': {'choice': {'1': .9, '2': .1}}}})
+        factory = self.jev({'answers': {'q': {'choice': '1', 'probabilities': {'1': .9, '2': .1}}}})
         for field in ('question', 'options', 'evidence'):
             for value in values:
                 fields = dict(question='Which?', options=list(self.OPTIONS), evidence='E')
@@ -462,22 +468,22 @@ class AwayDecisionSiteTest(unittest.TestCase):
         factory.assert_not_called()
 
     def test_reply_gives_the_top_option_its_probability_and_the_threshold(self):
-        self.jev({'answers': {'q': {'choice': {'1': .15, '2': .85}}}})
+        self.jev({'answers': {'q': {'choice': '1', 'probabilities': {'1': .15, '2': .85}}}})
         out = judge.ask_choice('Which?', self.OPTIONS, 'E')
         self.assertEqual((out['option'], out['of'], out['settled'], out['source']), (2, 2, True, 'jev'))
         self.assertAlmostEqual(out['p'], .85)
         judge._calls = 0
-        self.jev({'answers': {'q': {'choice': {'1': .55, '2': .45}}}})
+        self.jev({'answers': {'q': {'choice': '1', 'probabilities': {'1': .55, '2': .45}}}})
         out = judge.ask_choice('Which?', self.OPTIONS, 'E')
         self.assertEqual((out['option'], out['settled']), (1, False))
         self.assertEqual(judge.SETTLE_THRESHOLD, 0.8)
 
     def test_reply_shape_failures_are_unavailable(self):
-        for reply in ({'answers': {'q': {'noul': .9}}}, {'answers': {'q': {'choice': {'1': .9}}}},
-                      {'answers': {'q': {'choice': {'1': .9, '3': .1}}}}, {'answers': {'q': {'choice': {'1': 1.5, '2': -.5}}}},
-                      {'answers': {'q': {'choice': {'1': .9, '2': 'x'}}}}, {'answers': {'q': {'choice': '1'}}},
-                      {'answers': {'q': {'choice': {'1': .9, '2': .1}, 'extra': 1}}}, [],
-                      b'{"answers":{"q":{"choice":{"1":0.9,"1":0.1,"2":0.0}}}}', b'x' * (judge.LIMIT + 1)):
+        for reply in ({'answers': {'q': {'noul': .9}}}, {'answers': {'q': {'choice': '1', 'probabilities': {'1': .9}}}},
+                      {'answers': {'q': {'choice': '1', 'probabilities': {'1': .9, '3': .1}}}}, {'answers': {'q': {'choice': '1', 'probabilities': {'1': 1.5, '2': -.5}}}},
+                      {'answers': {'q': {'choice': '1', 'probabilities': {'1': .9, '2': 'x'}}}}, {'answers': {'q': {'choice': '1'}}},
+                      {'answers': {'q': {'choice': '1', 'probabilities': {'1': .9, '2': .1}, 'extra': 1}}}, [],
+                      b'{"answers":{"q":{"choice":"1","probabilities":{"1":0.9,"1":0.1,"2":0.0}}}}', b'x' * (judge.LIMIT + 1)):
             with self.subTest(reply=str(reply)[:50]):
                 judge._calls = 0
                 self.jev(reply)
@@ -493,6 +499,18 @@ class AwayDecisionSiteTest(unittest.TestCase):
                 with self.assertRaises(judge.Unavailable):
                     judge.ask_choice('Which?', self.OPTIONS, 'E')  # no host config: judge host
             opener.assert_not_called()
+
+    def test_the_documented_reply_shape_is_accepted_and_anything_else_refused(self):
+        full = {'model': 'jev-latest', 'usage': {'input_tokens': 1, 'output_tokens': 1},
+                'answers': {'q': {'type': 'choice', 'choice': '2', 'confidence': .7, 'probabilities': {'1': .2, '2': .8}}}}
+        self.jev(full)
+        out = judge.ask_choice('Which?', self.OPTIONS, 'E')
+        self.assertEqual((out['option'], out['p'], out['settled']), (2, .8, True))
+        for bad in (dict(full, extra=1), {'model': 'jev-latest', 'usage': {}},
+                    dict(full, answers={'q': dict(full['answers']['q'], type='noul')})):
+            self.jev(bad)
+            with self.assertRaises(judge.Unavailable):
+                judge.ask_choice('Which?', self.OPTIONS, 'E')
 
     def test_cli_choice_site_dry_run_refusals_and_unavailable(self):
         evidence = Path(self.tmp.name) / 'evidence'
@@ -517,7 +535,7 @@ class AwayDecisionSiteTest(unittest.TestCase):
         self.assertEqual(code, 3)
         self.assertEqual(json.loads(out), {'option': None, 'of': 2, 'p': None, 'settled': False, 'source': 'host', 'fallback': True})
         self.assertIn('unavailable', err)
-        self.jev({'answers': {'q': {'choice': {'1': .9, '2': .1}}}})
+        self.jev({'answers': {'q': {'choice': '1', 'probabilities': {'1': .9, '2': .1}}}})
         code, out, _ = run(*base, '--option', 'Keep', '--option', 'Split')
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out), {'option': 1, 'of': 2, 'p': .9, 'settled': True, 'source': 'jev', 'fallback': False})
