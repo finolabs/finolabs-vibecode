@@ -672,6 +672,31 @@ class AwayDecisionTest(AutopilotBase):
         # Recursive deletion keeps its Tier 3 classification in this slice.
         self.check(['rm', '-rf', 'build'], tier=3, code='forbidden')
 
+    def test_categories_come_from_the_command_not_from_its_free_text(self):
+        base = SETUP + '- Max actions per hour: 1000\n'
+        tag = (['gh', 'release', 'create', 'v1', '--notes', 'publish'], ['git', 'tag', '-a', 'v1', '-m', 'publish'],
+               ['git', 'tag', '-a', 'v1', '-m', 'deploy'], ['gh', 'release', 'create', 'v1', '--title', 'deploy:uat'])
+        publish = (['npm', 'publish', '--tag', 'next'], ['pnpm', 'publish', '--access', 'public'])
+        local = (['git', 'commit', '-m', 'publish'], ['gh', 'pr', 'create', '--title', 'deploy', '--body', 'publish'],
+                 ['git', 'commit', '-m', 'deploy'])
+        # Tags and releases stop, Publishing decide: free text naming publishing opens no tag or release.
+        self.start(base + '- Tags and releases: stop\n- Publishing: decide\n')
+        for argv in tag:
+            with self.subTest(setup='tags stop', argv=argv):
+                self.check(argv, tier=3, code='forbidden')
+        for argv in publish + local:
+            with self.subTest(setup='tags stop', argv=argv):
+                self.check(argv)
+        # The reverse: tags and releases decide, Publishing stop.
+        self.assertEqual(self.invoke('stop')[0], 0)
+        self.start(base + '- Tags and releases: decide\n- Publishing: stop\n')
+        for argv in tag + local:
+            with self.subTest(setup='publishing stop', argv=argv):
+                self.check(argv)
+        for argv in publish:
+            with self.subTest(setup='publishing stop', argv=argv):
+                self.check(argv, tier=3, code='forbidden')
+
     # How the ladder's calls pass the action gate
 
     def test_the_judge_form_is_tier_one_under_a_live_lease_and_reserves_an_action(self):

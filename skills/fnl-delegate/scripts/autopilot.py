@@ -9,7 +9,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | State stays outside Git, private (directories 0700/files 0600), no links, atomic and serialized | private_folder, read_private, write_private, data_root, flock |
 | One live lease; stop removes it and leaves a stop marker; starting clears that marker | start, stop |
 | Missing/expired/stopped/changed setup or exhausted runs, wall/runtime minutes or rolling-hour actions denies every check | lease_guard |
-| Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release and npm/pnpm publish forms whose category is `decide`, and a deploy matching a `Non-production targets` entry exactly with no production or live word | classify_argv, release_command, permits |
+| Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release and npm/pnpm publish forms whose every applicable category is `decide`, and a deploy matching a `Non-production targets` entry exactly with no production or live word; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
 | Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
 | The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's; the brief passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, brief_ok |
 | Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
@@ -529,15 +529,35 @@ TAG = re.compile(r'v?[0-9A-Za-z][0-9A-Za-z._-]{0,63}')
 REVISION = re.compile(r'HEAD|[0-9a-f]{7,40}')
 
 
-def release_command(argv, applied, deploy, publish):
+DEPLOY = re.compile(r'deploy(?::[\w-]+)?')
+
+
+def command_categories(argv):
+    """Every category the command itself applies, read from its program and subcommand, never from free-text data."""
+    categories = set()
+    if argv[:2] in (['git', 'tag'], ['gh', 'release']):
+        categories.add('Tags and releases')
+    if argv[0] in {'npm', 'pnpm'} and argv[1:2] == ['publish']:
+        categories.add('Publishing')
+    return categories
+
+
+def is_deploy(argv):
+    """Git and gh have no deploy subcommand, so a deploy word there is data; elsewhere any such word fails closed."""
+    return argv[0] not in {'git', 'gh'} and any(DEPLOY.fullmatch(t) for t in argv[1:])
+
+
+def release_command(argv, applied, categories, deploy):
     """Precedence rows 2 to 5 for the command forms a script can read: tags, releases, publishing and deploys."""
+    if categories and not permits(categories, applied):
+        return 'forbidden'  # row 3: every applicable category must be decide
     if deploy:
-        if publish or any(re.search(r'prod|live', t, re.I) for t in argv):
+        if any(re.search(r'prod|live', t, re.I) for t in argv):
             return 'forbidden'  # row 2: production or live, even when listed by mistake
-        return 'allowed' if ' '.join(argv) in applied.get(TARGETS, []) else 'forbidden'  # rows 4 and 5
-    categories = {'Publishing'} if publish else {'Tags and releases'}
-    if not permits(categories, applied):
-        return 'forbidden'  # row 3
+        if ' '.join(argv) not in applied.get(TARGETS, []):
+            return 'forbidden'  # row 4
+        if not categories:
+            return 'allowed'  # row 5
     tail = argv[2:]
     if argv[:2] == ['git', 'tag']:
         if tail in ([], ['-l'], ['--list']):
@@ -577,10 +597,9 @@ def classify_argv(argv, applied, coordinator=None):
     if any(protected(t) for t in argv):
         return 'protected'
     command = argv[0]
-    deploy = any(re.fullmatch(r'deploy(?::[\w-]+)?', t) for t in argv[1:])
-    publish = any(re.fullmatch(r'publish(?::[\w-]+)?', t) for t in argv[1:])
-    if argv[:2] in (['git', 'tag'], ['gh', 'release']) or deploy or publish:
-        return release_command(argv, applied, deploy, publish)
+    categories, deploy = command_categories(argv), is_deploy(argv)
+    if categories or deploy:
+        return release_command(argv, applied, categories, deploy)
     if command == 'rm' and any(t.startswith('-') and ('r' in t[1:] or t == '--recursive') for t in argv[1:]):
         return 'forbidden'
     if command in {'python3', sys.executable}:
