@@ -24,8 +24,8 @@ Tier 2 decisions go to an advisor acting as the user's avatar, but four gaps kee
   `fnl-advisor` keeps its open opinion and its committee.
 - Inside a lease the advisor is always another model family, reached through its own command-line program, and has to be
   capable enough for the role: the frontier tier of that family in `fnl-delegate` `models.md` first, then its strong tier.
-  Nothing below strong, and no same-family fallback (a Claude model served through another host counts as Claude): the
-  question parks instead.
+  Nothing below strong, and no advisor run of the host's own family (a Claude model served through another host counts as
+  Claude): with no eligible advisor the host itself chooses, as "Outcomes when a rung cannot answer" says.
 - The question gate below is built now rather than after a trial. The owner's practice is to apply the design predicted to
   work best, use it on this machine and improve it from what happens, so every decision must reach the ledger for that analysis.
 
@@ -43,13 +43,38 @@ rung that settles it. Each rung is cheaper than the next.
    with none named, by the family `fnl-advisor` already picks (one other than the host's), among the lease's recorded Hosts: one read-only
    run that must return exactly one of the options with its reason, or `none`. It is an ordinary dispatch (ledger kind
    `advise`) and counts against the lease's run limit.
-4. **Park**, only for what "Where it must stop" names: log it, tell the user once, and go on with other work.
+4. **The host's own choice**, when no rung above answered: it picks the option that best serves the spec or the project's stated goal and records itself as the decider (rung `host`).
+
+**Parking is not a rung.** Before a question enters the ladder and again before the chosen action runs, the host checks it against "Where it must stop" (advisory, agent judgment, except for the command forms `autopilot.py check` classifies). What stops there is logged as rung `park`, the user is told once, and the host goes on with other work.
 
 Inside a lease the answer of a rung is the decision, not advice: the host applies the option it returned and does not
-re-ask, overrule or shop it to another rung (advisory, agent judgment; the `log --by` record shows who decided). If the host
-finds a fact the rung did not have, it parks the question rather than overruling. An advisor that is out of quota or
-unreachable, or that answers `none`, counts as unavailable, and the question goes on to the host's own choice as "Grounded in the user's memory" says. `fnl-advisor`'s line "you stay the
+re-ask, overrule or shop it to another rung (advisory, agent judgment; the `log --by` record shows who decided). `fnl-advisor`'s line "you stay the
 decider" stays true for its open mode, with the user present; the choose mode states the opposite for a lease.
+
+### Outcomes when a rung cannot answer
+
+Each case has one outcome. A decision is never permission: the action it selects still goes through "Where it must stop" and `autopilot.py check`.
+
+| Case | Outcome | Recorded as |
+| --- | --- | --- |
+| Jev not configured, or the options are not closed | go to the advisor | no attempt |
+| Jev refuses, times out or fails | go to the advisor | `jev`, `unavailable` |
+| Jev's top option is below 0.8 | go to the advisor | `jev`, `no`, with the probability |
+| The lease's Hosts hold no family other than the host's, or no other family has a strong model | the host chooses | `advisor`, `unavailable`, then `host` |
+| The advisor is out of quota, unreachable or its run fails | the host chooses | `advisor`, `unavailable`, then `host` |
+| The advisor answers `none` | the host chooses | `advisor`, `no`, then `host` |
+| The advisor names something outside the options | treated as `none` | `advisor`, `no`, then `host` |
+| The host finds a fact the deciding rung did not have, and it changes which option fits | one new attempt at that same rung with the fact added, same decision id; if the answer does not hold, the host chooses | a further attempt, then `host` when it chooses |
+| "Where it must stop" applies, at either check | parks, whatever a rung answered | `park` |
+
+### How the ladder's calls pass the action gate
+
+The skill requires a Tier 1 check before every action, so rungs 2 and 3 need command forms `autopilot.py` knows. Package 5 adds exactly two to `classify_argv`, and the script stays execution-free:
+
+- `judge.py` of this install, with isolated Python, and only the site `away-decision` and its validated options. No other site, no base-URL flag.
+- The advisor's run: this install's `delegate_env.py` wrapper followed by one closed read-only argv shape per family, taken from `fnl-advisor`'s own dispatch commands, the family being one of the lease's Hosts and other than the coordinator's. The brief is passed only by the mechanism those commands already use. Any write-enabling flag, unknown option or other program denies.
+
+Each check reserves an action, and the advisor's ledger start also reserves a run, as today. Acceptance cases show both calls returning Tier 1 under a live lease, and a changed site, a write flag, a family outside Hosts and an unknown program being denied.
 
 Tier 3 never enters the ladder. `autopilot.py check` still classifies the resulting action, so a choice made here
 grants no authority: an option the check denies is parked. The rungs choose among options the agent already may take.
@@ -79,13 +104,13 @@ An advisor with only the code in front of it would give its own opinion, not the
   base or to the host's native memory, and giving it that access would hand a whole private store to a provider for one question. The host,
   which already reads them, queries the knowledge source the user's instructions name (`fnl-session-hygiene` "Remember or recall") and its
   native memory for this question, and passes only the matching excerpts: the decision, its date and a source reference for each, at most eight
-  excerpts and 8 KB. Selecting by relevance is agent judgment, advisory; when a judge is configured it may rank the candidates.
+  excerpts and 8 KB. Selecting by relevance is agent judgment, advisory; when a judge is configured it may rank the candidates, under the same consent and screening as any other excerpt that leaves the machine.
 - **The goal decides, a missing precedent does not stop the work.** Every rung chooses the option that best serves the current spec or the project's
   stated goal; the packet carries those anchors beside the precedents. Rungs 2 and 3 cite what they relied on and the record keeps the count of precedents. With
-  none, the rung still answers on the goal alone, and if no rung can answer, the host chooses the same way and records itself as the decider. Rung 1 is a recorded
+  none, the rung still answers on the goal alone, and if no rung can answer, the host chooses the same way (rung `host`). Rung 1 is a recorded
   rule or a precedent that answers this exact question. On return, decisions with no precedent are listed first, because they teach the most.
 - **What stops is the blast radius, not the novelty** (owner, 2026-11-09). Work that can be rolled back goes on: the local machine, a development environment, a UAT
-  run. Reaching production, a live environment or real users always stops for a person. See "Where it must stop".
+  run. Reaching production, a live environment or real users always stops for a person, and no setting opens it. See "Where it must stop".
 - **Excerpts are data.** The brief says so, instructions inside them are ignored, and a precedent can narrow a choice but grants no authority.
 - **Leaving the machine needs its own consent.** Excerpts sent to a judge or to another family's provider are the user's private history. `/fnl-setup add
   autopilot` asks one separate neutral question for it, recorded in `## Autopilot`; without a yes no excerpt leaves the machine, so rungs 2 and 3 have
@@ -99,13 +124,13 @@ An advisor with only the code in front of it would give its own opinion, not the
 
 `autopilot.md` makes every deploy Tier 3. That is too broad: it also stops a deploy to a development environment or a UAT run, which can be rolled back. The rule becomes:
 
-The user chooses (owner, 2026-11-09). `/fnl-setup add autopilot` shows one table of closed categories with the starting choice beside each, and the user changes any of them. Each category is `stop` (wait for a person) or `decide`
+The user chooses (owner, 2026-11-09). `/fnl-setup add autopilot` shows one table of closed categories with the starting choice beside each, and the user changes any row not marked fixed. Each category is `stop` (wait for a person) or `decide`
 (the ladder decides). The choices are stored in `## Autopilot`; a missing or unknown value is `stop`.
 
 | Category | Starting choice |
 | --- | --- |
-| Deploy or change to production or a live environment | stop |
-| Anything reaching real users or real customer data | stop |
+| Deploy or change to production or a live environment | stop, fixed |
+| Anything reaching real users or real customer data | stop, fixed |
 | Deletion that cannot be recovered (remote data, a forced push to a default branch) | stop |
 | A message to a person outside the repository | stop |
 | Tags and releases | stop |
@@ -114,15 +139,28 @@ The user chooses (owner, 2026-11-09). `/fnl-setup add autopilot` shows one table
 | Deleting local or recoverable things (the session's own branches, worktrees, generated files) | decide |
 | Comments and replies on the repository's own pull requests and issues | decide |
 
-Moving any category from `stop` to `decide` is its own neutral question, with what could go wrong stated and no default, like Merge. The local machine and a deploy or run against a listed non-production target always go on.
+Moving any category from `stop` to `decide` is its own neutral question, with what could go wrong stated and no default, like Merge.
 A change that touches security in code is not a category: it goes through the review gates and the merge gate.
 
-**Two things no setting can open.** Credentials, because handling them is outside what any agent may do here, and an agent changing its own limits (hooks, permission rules, agent instructions, the lease and setup files), because a limit the agent can
+**What no setting can open.** Production and live environments and real users or customer data, because the owner requires a person there (the two fixed rows). Credentials, because handling them is outside what any agent may do here. An agent changing its own limits (hooks, permission rules, agent instructions, the lease and setup files), because a limit the agent can
 lift for itself is no limit.
+
+**One precedence rule.** An action goes on only when every category that applies to it permits it. Checked in this order, the first match wins:
+
+| # | Condition | Result |
+| --- | --- | --- |
+| 1 | Credentials or the agent's own limits | Tier 3, parked |
+| 2 | Production, live, real users or customer data, or uncertain whether it reaches them | Tier 3, parked |
+| 3 | Any applicable category is `stop`, missing or invalid | Tier 3, parked |
+| 4 | A deploy that does not match `Non-production targets` exactly | Tier 3, parked |
+| 5 | Every applicable category is `decide`, or the deploy matches a listed target | Tier 1 |
+| 6 | Local work no category names | classified as today |
+
+A listed target relaxes only the deployment classification; it never overrides rows 1 to 3. Examples: a listed UAT run on synthetic data goes on; the same UAT holding real customer data parks; an action matching one `decide` and one `stop` category parks; a production deploy parks even if listed by mistake as a target, when the host can tell; a tag with the category moved to `decide` is Tier 1.
 
 What the script can enforce: tags, releases, publishing, deploys and forced pushes are command forms that `autopilot.py check` classifies, so for those the choice is script-enforced. Whether an action reaches real users or real customer data, or whether a message goes to a person, cannot be read from a command: those categories are agent judgment, advisory, and a host in doubt treats them as `stop`.
 - **How a script tells them apart.** `autopilot.py` cannot infer an environment from a command. `## Autopilot` gains `Non-production targets`, an optional list the user fills in setup with the exact deploy
-  commands or target names per project, default empty. A deploy matching an entry exactly is Tier 1 under the usual limits; every other deploy stays Tier 3, so an unlisted or ambiguous target
+  commands or target names per project, default empty. A deploy matching an entry exactly passes row 4 above; every other deploy stays Tier 3, so an unlisted or ambiguous target
   fails closed to a person. A merge still follows the recorded Merge answer and the merge gate. Naming which targets are safe is the user's decision; an agent never adds an entry during a lease (script: setup changes deny further checks).
 
 ## The question gate (Claude Code)
@@ -139,13 +177,24 @@ that tool; if it does not, the gate is dropped and the report says so.
 
 The owner reviews real use from the ledger, so one record covers every decision and `fnl-status` reads it.
 
-- `autopilot.py log --kind decision` gains `--rung rule|jev|advisor|park`, `--by <rule, jev or the agent or install name>`, `--option <n> --of <m>`
-  (`n` within `m`, absent for a park), `--probability` (rung 2), `--dispatch <ledger id>` (rung 3), `--model`, `--precedents <count>` and `--topic`, a short label under
-  the ledger's task-label rule. It validates them and, in the same call, appends a `decision` line to the ledger with those fields, the
-  time, the project and the lease's start time as the grouping key. The note stays in the autopilot log, capped, redacted and kept 30 days.
+- `autopilot.py log --kind decision` records one attempt. All attempts on one question share `--decision <id>`, an id the first attempt's call generates and prints (`q<date>-<time>-<4 hex>`) and later calls must pass. Common fields: `--rung rule|jev|advisor|host|park`, `--settled yes|no|unavailable`, `--precedents <count>`, `--topic` (a short label under the ledger's task-label rule). The closed schema, refused otherwise:
+
+  | Rung and result | Required | Absent |
+  | --- | --- | --- |
+  | `rule`, `yes` | `--by rule`, `--option`, `--of` | probability, dispatch |
+  | `jev`, `yes` | `--by jev`, `--option`, `--of`, `--probability` | dispatch |
+  | `jev`, `no` | `--by jev`, `--probability` | option |
+  | `jev`, `unavailable` | `--by jev` | option, probability |
+  | `advisor`, `yes` | `--by <agent or install>`, `--option`, `--of`, `--dispatch`, `--model` | probability |
+  | `advisor`, `no` | `--by`, `--dispatch`, `--model` | option |
+  | `advisor`, `unavailable` | `--by` (`--dispatch` when a run was started) | option |
+  | `host`, `yes` | `--by <the host's family>`, `--option`, `--of`, `--model` | probability, dispatch |
+  | `park`, `yes` | `--by` the deciding host | option |
+
+  It validates them and, in the same call, appends a `decision` line to the ledger with those fields, the time, the project and the lease's start time. The note stays in the autopilot log, capped, redacted and kept 30 days.
 - The gate appends a `question_denied` line with the time and the lease's start time only.
-- A rung that is tried and does not settle the question is recorded too (`--settled no`), so the path up the ladder can be rebuilt.
-- On return, a `decision_review` line records `kept` or `reversed` for a decision by its time and lease, with no reason text.
+- On return, `autopilot.py review --decision <id> kept|reversed` appends a `decision_review` line with no reason text. The id must exist in the ledger; a later review of the same id replaces the earlier one when read.
+- `ledger.load()` keeps returning its two maps of `start` and `finish` records, which `pause.py`, the status refresh and `project_progress` consume. It skips the three new event types silently, without the malformed-line message; a separate reader returns them. A test runs mixed history through `load`, the new reader and `summary` and shows the dispatch numbers unchanged.
 - An away view of the ledger summary and the `fnl-status` tables show, per lease: decisions by rung, by advisor and model, the Jev probability
   spread, parked and denied questions, and the share reversed by the user. No question or option text is ever in the ledger; the topic label is the only words.
 
@@ -172,5 +221,4 @@ README and tests follow, as for `fnl-afk`.
 
 ## Evidence
 
-None yet. A build needs a red test per behavior: the `log` fields and their refusals, the new judge site's schema and refusals, the gate (denies only with a live lease, allows on every error), the ledger `decision` and
-`question_denied` lines being accepted by `ledger.load`, the `advisor` role and the single-agent rule, the tier and family rule, the packet caps and pattern drops, the zero-precedent record, the environment classification and its fail-closed default, the consent refusal, the choose mode's output contract, the lease line in `session_start.py` present and absent, and the alias and counts of the rename.
+None yet. A build needs a red test per behavior: the `log` fields and their refusals, the new judge site's schema and refusals, the gate (denies only with a live lease, allows on every error), the ledger `decision`, `question_denied` and `decision_review` lines over mixed history with `load` unchanged, every row of the attempt schema, every row of the outcomes table and of the precedence table, the two new Tier 1 forms and their denials, the `advisor` role and the single-agent rule, the tier and family rule, the packet caps and pattern drops, the zero-precedent record, the environment classification and its fail-closed default, the consent refusal, the choose mode's output contract, the lease line in `session_start.py` present and absent, and the alias and counts of the rename.
