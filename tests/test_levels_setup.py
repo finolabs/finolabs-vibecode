@@ -94,6 +94,23 @@ class LevelsSetupTest(unittest.TestCase):
         data = json.loads(self.cli('show')[1])
         self.assertEqual(data['installs'], [['claudework', 1, 5], ['codex', 1, 4]])
 
+    def test_candidates_lists_names_only_and_runs_nothing(self):
+        bin_dir = self.home / 'bin'
+        bin_dir.mkdir()
+        for name, mode in (('claudework', 0o755), ('claudeomni', 0o755), ('claudenox', 0o644), ('claude', 0o755), ('claudeBad', 0o755), ('other', 0o755)):
+            (bin_dir / name).write_text('#!/bin/sh\n')
+            (bin_dir / name).chmod(mode)
+        (self.home / '.claude-work').mkdir()
+        (self.home / '.claude-link').symlink_to(self.home / '.claude-work')
+        (self.home / '.claude-File').mkdir()
+        with mock.patch.dict(os.environ, {'PATH': f'{bin_dir}:relative/bin'}), \
+                mock.patch('subprocess.run', side_effect=AssertionError('command run')), \
+                mock.patch('subprocess.Popen', side_effect=AssertionError('command run')):
+            code, out, _ = self.cli('candidates')
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out), {'commands': ['claudeomni', 'claudework'], 'folders': ['work']})
+        self.assertNotIn(str(self.home), out)
+
     def test_show_reports_none_without_section(self):
         self.assertEqual(self.cli('show')[:2], (0, 'none\n'))
 

@@ -195,6 +195,36 @@ def show():
     return 0
 
 
+FOLDER = re.compile(r'\.claude-([a-z0-9]{1,24})')
+LISTED = 20
+
+
+def candidates():
+    """Names only: claude* programs on an absolute PATH and ~/.claude-* folders; runs nothing."""
+    commands = []
+    for entry in os.get_exec_path():
+        if not os.path.isabs(entry) or len(commands) >= LISTED:
+            continue
+        try:
+            with os.scandir(entry) as items:
+                for item in items:
+                    if (item.name != 'claude' and NAME.fullmatch(item.name) and item.name not in commands
+                            and item.is_file() and os.access(item.path, os.X_OK)):
+                        commands.append(item.name)
+        except OSError:
+            continue
+    folders = []
+    try:
+        with os.scandir(dr.account_home()) as items:
+            for item in items:
+                match = FOLDER.fullmatch(item.name)
+                if match and item.is_dir(follow_symlinks=False) and match[1] not in folders:
+                    folders.append(match[1])
+    except OSError:
+        pass
+    return {'commands': sorted(commands)[:LISTED], 'folders': sorted(folders)[:LISTED]}
+
+
 def install(text):
     name, _, levels = text.partition(':')
     match = re.fullmatch(r'([1-5])-([1-5])', levels)
@@ -214,9 +244,13 @@ def main(argv=None):
         app.add_argument('--yes', action='store_true')
         app.add_argument('--digest', required=True)
         commands.add_parser('show')
+        commands.add_parser('candidates')
         args = parser.parse_args(argv)
         if args.action == 'show':
             return show()
+        if args.action == 'candidates':
+            print(json.dumps(candidates(), separators=(',', ':')))
+            return 0
         if args.action == 'preview':
             installs = [install(item) for item in args.install]
             if args.off:

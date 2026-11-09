@@ -6,6 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- `levels_setup.py candidates` lists, as names only, the `claude*` programs on `PATH` and the `~/.claude-<label>` folders, so `/fnl-setup add delegation` can offer the user's extra Claude Code commands as candidates. It runs nothing and never lists shell functions; the user types those names.
 - `/fnl-setup add delegation` asks which task levels each helper can take (1 easy to 5 ultra hard), for the three agent families and for any extra Claude Code command the user names, such as a `claudework` shell function. `levels_setup.py` previews and writes the canonical `## Agent levels` section with a backup and a digest, and reads it back strictly with `show`; it runs no command. `fnl-delegate` routes by those levels (advisory) and prefers a declared command to `claude` inside its range while it has quota. Spec: `docs/specs/agent-levels.md`.
 
 ## [0.2.1] - 2026-11-09
