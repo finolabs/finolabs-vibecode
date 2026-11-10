@@ -887,6 +887,27 @@ class StaleLedgerTest(unittest.TestCase):
         out, _ = self.preview_digest()
         self.assertIn("exit=1  -> error", out)
 
+    def test_close_reads_open_state_under_the_finish_lock(self):
+        ident = "d20261101-000000-e003"
+        self.write([self.start(ident, 300, 45)])
+        _, digest = self.preview_digest()
+        held, real_lock, real_load = [], self.ledger.finish_lock, self.ledger.load
+
+        @contextlib.contextmanager
+        def lock():
+            with real_lock():
+                held.append(True)
+                yield
+                held.pop()
+
+        def load():
+            self.assertTrue(held, "close read the open state outside the finish lock")
+            return real_load()
+
+        with mock.patch.object(self.ledger, "finish_lock", lock), mock.patch.object(self.ledger, "load", load):
+            self.ledger.stale_close(digest)
+        self.assertEqual(self.finishes()[ident]["outcome"], "cancelled")
+
     def test_each_outcome_follows_the_log_and_none_is_accepted(self):
         ids = {name: "d20261101-000000-" + name for name in ("e001", "e000", "eeee", "ffff")}
         self.write([self.start(ident, 300, 45) for ident in ids.values()])

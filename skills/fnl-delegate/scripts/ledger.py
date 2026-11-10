@@ -6,6 +6,7 @@ in the resolved data root. Environment variables cannot redirect the ledger.
 """
 
 import argparse
+from contextlib import contextmanager
 try:
     import fcntl
 except ImportError:
@@ -75,6 +76,17 @@ def append(record):
             if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022:
                 raise ValueError("unsafe ledger")
             stream.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+FINISH_LOCK = "state/ledger-finish"
+
+
+@contextmanager
+def finish_lock():
+    """Every finish writer holds this lock from its open-state check to its append, so two writers never both close one record."""
+    with dr.data_folder(FINISH_LOCK, create=True, private=True) as folder:
+        fcntl.flock(folder, fcntl.LOCK_EX)
+        yield
 
 
 def read_lines():
@@ -215,6 +227,11 @@ def cmd_finish(args):
             if folder is not None and isinstance(error, folder):
                 sys.exit("ledger: log refused; " + str(error))
             sys.exit("ledger: log refused")
+    with finish_lock():
+        finish_locked(args, status)
+
+
+def finish_locked(args, status):
     starts, finishes = load()
     if args.id not in starts:
         sys.exit(f"ledger: no start line for {args.id}")
@@ -429,16 +446,17 @@ def stale_close(value):
             raise ValueError("data root changed; preview again")
         if not 0 <= time.time() - plan["created"] <= STALE_EXPIRY:
             raise ValueError("preview expired; preview again")
-        starts, finishes = load()
-        current = datetime.now(timezone.utc)
-        closed = 0
-        for item in plan["records"]:
-            start = starts.get(item["id"])
-            if start is None or item["id"] in finishes or past_budget(start, current) is None:
-                continue  # finished since the preview, or never past its budget: never closed here
-            append({"event": "finish", "id": item["id"], "ts": now(), "outcome": item["outcome"],
-                    "rework_rounds": 0, "tests": "not-run", "note": item["note"], "log_scan": "not_scanned"})
-            closed += 1
+        with finish_lock():  # the open-state check and the appends happen under the finish writers' lock
+            starts, finishes = load()
+            current = datetime.now(timezone.utc)
+            closed = 0
+            for item in plan["records"]:
+                start = starts.get(item["id"])
+                if start is None or item["id"] in finishes or past_budget(start, current) is None:
+                    continue  # finished since the preview, or never past its budget: never closed here
+                append({"event": "finish", "id": item["id"], "ts": now(), "outcome": item["outcome"],
+                        "rework_rounds": 0, "tests": "not-run", "note": item["note"], "log_scan": "not_scanned"})
+                closed += 1
         os.unlink("preview.json", dir_fd=state)
         os.fsync(state)
     print(f"ledger: closed {closed} of {len(plan['records'])} previewed records")
