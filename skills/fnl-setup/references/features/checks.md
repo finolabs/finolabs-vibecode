@@ -13,7 +13,7 @@ It prints every source it read, a proposed ordered list (a short name and a JSON
 
 Show the user the sources, the list, the skipped items and the CI evidence in plain words. The user may drop, reorder or add checks; to keep a step found in CI, propose it as a `--check "<name>=<JSON array>"` item the user can read, never as a shell string. Each check is a name of lowercase letters, digits and dashes (at most 32 characters) and an argument array of at most 1 KB, at most 20 per repository. A check the CI runs through a reusable action or a service container is not listed; the sources shown let the user add it.
 
-The script refuses an argument array whose program, by base name, is a shell (`sh`, `bash`, `zsh`, `dash`, `ksh`, `fish`, `csh`, `tcsh`, `pwsh`, `powershell`, `cmd` and similar) or a launcher that runs another program (`env`, `xargs`, `nohup`, `nice`, `timeout`, `time`, `sudo`, `doas`, `exec`, `eval`, `command`, `busybox`, `script`, `watch`; `npx`, `npm exec` or `pnpm exec` with `-c`; `yarn exec`),
+The script refuses an argument array whose program, by base name, is a shell (`sh`, `bash`, `zsh`, `dash`, `ksh`, `fish`, `csh`, `tcsh`, `pwsh`, `powershell`, `cmd` and similar) or a launcher that runs another program (`env`, `xargs`, `nohup`, `nice`, `timeout`, `time`, `sudo`, `doas`, `exec`, `eval`, `command`, `busybox`, `script`, `watch`; `npx`, npm exec or `pnpm exec` with `-c`; `yarn exec`),
 and an interpreter (`python`, `node`, `deno`, `bun`, `perl`, `ruby`, `php`) given inline code (`-c`, `-e`, `--eval`, `-r` and similar flags anywhere in the array). It refuses them at detection, at preview, and when it reads the stored section, where one such entry makes the whole section unset.
 
 ## Save the list
