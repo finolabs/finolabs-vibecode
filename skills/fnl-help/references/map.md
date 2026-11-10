@@ -132,6 +132,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/statusline_setup.py` | Previews/applies/removes the opt-in context recorder; existing status lines get a manual recipe. |
 | `scripts/update_check.py` | Cached update status, skip/never preferences and the detached fixed-endpoint release check. |
 | `scripts/verify_claim.py` | Checks head, scope and targeted tests, writes verification metadata and prepares host-judge evidence; grants no acceptance. |
+| `scripts/select_tests.py` | Lists the test modules that name a file changed since a base, treating shared copies as one, with commands of at most two modules; runs no test. |
 
 ### Skill-only scripts
 
