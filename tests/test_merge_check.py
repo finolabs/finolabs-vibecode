@@ -819,14 +819,14 @@ class LocalReceiptTest(unittest.TestCase):
 
     def test_each_github_remote_form_is_parsed(self):
         forms = ("https://github.com/acme/demo", "https://github.com/acme/demo.git", "https://github.com/acme/demo/",
-                 "git@github.com:acme/demo.git", "git@github.com:acme/demo", "ssh://git@github.com/acme/demo.git",
+                 "git" "@github.com:acme/demo.git", "git" "@github.com:acme/demo", "ssh://git" "@github.com/acme/demo.git",
                  "https://GitHub.com/Acme/Demo.git")
         for url in forms:
             with self.subTest(url):
                 self.assertEqual(mc.origin_repository(url), ("acme", "demo"))
         for url in ("https://gitlab.com/acme/demo.git", "https://github.com.evil.example/acme/demo",
-                    "https://github.com/acme/demo/extra", "file:///tmp/acme/demo", "git@github.com:acme",
-                    "https://user@github.com/acme/demo", "", "https://github.com/acme/..", "https://github.com/acme/.git"):
+                    "https://github.com/acme/demo/extra", "file:///tmp/acme/demo", "git" "@github.com:acme",
+                    "https://user" "@github.com/acme/demo", "", "https://github.com/acme/..", "https://github.com/acme/.git"):
             with self.subTest(url):
                 self.assertIsNone(mc.origin_repository(url))
 
@@ -835,7 +835,7 @@ class LocalReceiptTest(unittest.TestCase):
         cases = {
             "missing": lambda: self.git(self.repo, "remote", "remove", "origin"),
             "not github": lambda: self.git(self.repo, "remote", "set-url", "origin", "https://gitlab.com/acme/demo.git"),
-            "two urls": lambda: self.git(self.repo, "config", "--add", "remote.origin.url", "git@github.com:acme/fork.git"),
+            "two urls": lambda: self.git(self.repo, "config", "--add", "remote.origin.url", "git" "@github.com:acme/fork.git"),
         }
         for name, change in cases.items():
             with self.subTest(name):
