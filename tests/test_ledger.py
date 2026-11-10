@@ -767,5 +767,242 @@ class AwayLedgerTest(unittest.TestCase):
         self.assertIn("away decisions per lease", output)
 
 
+class StaleLedgerTest(unittest.TestCase):
+    """`stale` previews open records past their budget and `stale --close --digest` closes exactly those."""
+
+    def setUp(self):
+        scratch = Path(__file__).resolve().parent.parent / ".finolabs" / "tmp"
+        scratch.mkdir(parents=True, exist_ok=True)
+        self.dir = tempfile.TemporaryDirectory(dir=scratch)
+        self.addCleanup(self.dir.cleanup)
+        base = Path(self.dir.name).resolve()
+        base.chmod(0o755)
+        self.home = account(self, base / "home")
+        self.path = self.home / ".finolabs/vibecode/ledger.jsonl"
+        self.path.parent.mkdir(parents=True, mode=0o700)
+        self.home.joinpath(".finolabs").chmod(0o700)
+        self.logs = base / "work" / ".finolabs" / "logs"
+        spec = importlib.util.spec_from_file_location("stale_ledger", LEDGER)
+        self.ledger = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.ledger)
+        import log_scan
+        patch = mock.patch.object(log_scan, "run_log_folder", return_value=self.logs)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def start(self, ident, minutes_ago, budget):
+        from datetime import datetime, timedelta, timezone
+        ts = (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).isoformat(timespec="seconds")
+        return {"event": "start", "id": ident, "ts": ts, "project": "demo", "task": "t", "kind": "implement",
+                "grade": "easy", "coordinator": "claude", "agent": "codex", "model": "m", "reason": "routing",
+                "budget_min": budget}
+
+    def write(self, records):
+        self.path.write_text("".join(json.dumps(r) + "\n" for r in records))
+        self.path.chmod(0o600)
+
+    def log(self, ident, text):
+        self.logs.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.logs.chmod(0o700)
+        (self.logs / (ident + ".log")).write_text(text)
+
+    def records(self):
+        return [json.loads(line) for line in self.path.read_text().splitlines()]
+
+    def finishes(self):
+        return {r["id"]: r for r in self.records() if r["event"] == "finish"}
+
+    def stale(self, *argv):
+        args = self.ledger.build_parser().parse_args(["stale", *argv])
+        out, err = io.StringIO(), io.StringIO()
+        code = 0
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                args.func(args)
+            except (SystemExit, ValueError) as error:
+                code = error.code if isinstance(error, SystemExit) else 1
+        return code, out.getvalue(), err.getvalue()
+
+    def preview_digest(self):
+        code, out, err = self.stale()
+        self.assertEqual(code, 0, err)
+        return out, [line.split(": ", 1)[1] for line in out.splitlines() if line.startswith("Digest: ")][0]
+
+    def test_inside_budget_and_finished_records_are_never_listed_or_closed(self):
+        done = {"event": "finish", "id": "d20261101-000000-dddd", "ts": "2026-11-01T01:00:00+00:00",
+                "outcome": "rejected", "rework_rounds": 0}
+        self.write([self.start("d20261101-000000-aaaa", 120, 30), self.start("d20261101-000000-bbbb", 10, 30),
+                    self.start("d20261101-000000-cccc", 500, None), self.start("d20261101-000000-dddd", 900, 30),
+                    done])
+        out, digest = self.preview_digest()
+        self.assertIn("d20261101-000000-aaaa", out)
+        for ident in ("bbbb", "cccc", "dddd"):
+            self.assertNotIn("d20261101-000000-" + ident, out)
+        self.assertEqual(len(self.records()), 5)  # the preview writes no ledger line
+        code, _, err = self.stale("--close", "--digest", digest[:12])
+        self.assertEqual(code, 0, err)
+        self.assertEqual(set(self.finishes()), {"d20261101-000000-aaaa", "d20261101-000000-dddd"})
+
+    def test_nothing_past_budget_prints_so_and_writes_no_preview(self):
+        self.write([self.start("d20261101-000000-bbbb", 10, 30)])
+        code, out, _ = self.stale()
+        self.assertEqual(code, 0)
+        self.assertIn("no open records past their budget", out)
+        self.assertNotIn("Digest:", out)
+
+    def test_digest_mismatch_writes_nothing(self):
+        self.write([self.start("d20261101-000000-aaaa", 120, 30)])
+        _, digest = self.preview_digest()
+        wrong = ("0" if digest[0] != "0" else "1") + digest[1:12]
+        before = self.path.read_bytes()
+        code, _, _ = self.stale("--close", "--digest", wrong)
+        self.assertNotEqual(code, 0)
+        self.assertEqual(self.path.read_bytes(), before)
+        code, _, _ = self.stale("--close", "--digest", digest[:6])  # too short to identify a preview
+        self.assertNotEqual(code, 0)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_close_without_a_preview_writes_nothing(self):
+        self.write([self.start("d20261101-000000-aaaa", 120, 30)])
+        before = self.path.read_bytes()
+        code, _, _ = self.stale("--close", "--digest", "a" * 12)
+        self.assertNotEqual(code, 0)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_expired_preview_writes_nothing(self):
+        import time as clock
+        self.write([self.start("d20261101-000000-aaaa", 120, 30)])
+        _, digest = self.preview_digest()
+        before = self.path.read_bytes()
+        later = clock.time() + 3601
+        with mock.patch.object(self.ledger.time, "time", return_value=later):
+            code, _, _ = self.stale("--close", "--digest", digest)
+        self.assertNotEqual(code, 0)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_a_log_named_with_the_documented_slug_is_found(self):
+        ident = "d20261101-000000-e002"
+        self.write([self.start(ident, 300, 45)])
+        self.log(ident + "-add-parser", "output\nexit=1\n")
+        out, _ = self.preview_digest()
+        self.assertIn("exit=1  -> error", out)
+
+    def test_a_held_finish_lock_ends_in_a_bounded_refusal(self):
+        import fcntl, time
+        self.write([self.start("d20261101-000000-e004", 300, 45)])
+        with self.ledger.dr.data_folder(self.ledger.FINISH_LOCK, create=True, private=True) as folder:
+            other = os.open(".", os.O_RDONLY, dir_fd=folder)
+            try:
+                fcntl.flock(other, fcntl.LOCK_EX)
+                started = time.monotonic()
+                with mock.patch.object(self.ledger, "LOCK_WAIT", 0.3), self.assertRaises(SystemExit):
+                    with self.ledger.finish_lock():
+                        pass
+                self.assertLess(time.monotonic() - started, 5)
+            finally:
+                os.close(other)
+        with self.ledger.finish_lock():
+            pass
+
+    def test_close_reads_open_state_under_the_finish_lock(self):
+        ident = "d20261101-000000-e003"
+        self.write([self.start(ident, 300, 45)])
+        _, digest = self.preview_digest()
+        held, real_lock, real_load = [], self.ledger.finish_lock, self.ledger.load
+
+        @contextlib.contextmanager
+        def lock():
+            with real_lock():
+                held.append(True)
+                yield
+                held.pop()
+
+        def load():
+            self.assertTrue(held, "close read the open state outside the finish lock")
+            return real_load()
+
+        with mock.patch.object(self.ledger, "finish_lock", lock), mock.patch.object(self.ledger, "load", load):
+            self.ledger.stale_close(digest)
+        self.assertEqual(self.finishes()[ident]["outcome"], "cancelled")
+
+    def test_each_outcome_follows_the_log_and_none_is_accepted(self):
+        ids = {name: "d20261101-000000-" + name for name in ("e001", "e000", "eeee", "ffff")}
+        self.write([self.start(ident, 300, 45) for ident in ids.values()])
+        self.log(ids["e001"], "lots of output\nexit=1\n")
+        self.log(ids["e000"], "x" * 500 + "\nexit=0\n")
+        self.log(ids["eeee"], "still running, no exit line\n")
+        out, digest = self.preview_digest()
+        self.assertIn("exit=1", out)
+        self.assertIn("log: none  -> cancelled", out)
+        self.assertIn("exit=1  -> error", out)
+        code, _, err = self.stale("--close", "--digest", digest)
+        self.assertEqual(code, 0, err)
+        finishes = self.finishes()
+        self.assertEqual(finishes[ids["e001"]]["outcome"], "error")
+        self.assertEqual(finishes[ids["e000"]]["outcome"], "stalled")
+        self.assertEqual(finishes[ids["eeee"]]["outcome"], "stalled")
+        self.assertEqual(finishes[ids["ffff"]]["outcome"], "cancelled")
+        for finish in finishes.values():
+            self.assertIn("closed late", finish["note"])
+            self.assertNotEqual(finish["outcome"], "accepted")
+            self.assertNotIn("verified_head", finish)
+            self.assertNotIn("accept_unverified", finish)
+            self.assertNotIn("still running", json.dumps(finish))  # no log content is stored
+        self.assertNotIn("still running", out)
+
+    def test_the_exit_line_is_read_only_from_the_last_64_bytes(self):
+        ident = "d20261101-000000-e002"
+        self.write([self.start(ident, 300, 45)])
+        self.log(ident, "exit=1\n" + "y" * 100 + "\n")
+        _, digest = self.preview_digest()
+        self.stale("--close", "--digest", digest)
+        self.assertEqual(self.finishes()[ident]["outcome"], "stalled")
+
+    def test_a_symlinked_log_is_refused_and_its_record_left_open(self):
+        ident = "d20261101-000000-e003"
+        self.write([self.start(ident, 300, 45), self.start("d20261101-000000-aaaa", 300, 45)])
+        self.log("other", "exit=1\n")
+        (self.logs / (ident + ".log")).symlink_to(self.logs / "other.log")
+        out, digest = self.preview_digest()
+        self.assertIn("log: refused  -> left open", out)
+        self.stale("--close", "--digest", digest)
+        self.assertEqual(set(self.finishes()), {"d20261101-000000-aaaa"})
+
+    def test_a_second_close_with_the_same_digest_writes_nothing(self):
+        self.write([self.start("d20261101-000000-aaaa", 120, 30)])
+        _, digest = self.preview_digest()
+        self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
+        before = self.path.read_bytes()
+        code, _, _ = self.stale("--close", "--digest", digest)
+        self.assertNotEqual(code, 0)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_a_record_finished_after_the_preview_is_not_closed_twice(self):
+        self.write([self.start("d20261101-000000-aaaa", 120, 30), self.start("d20261101-000000-bbbb", 120, 30)])
+        _, digest = self.preview_digest()
+        with self.path.open("a") as stream:
+            stream.write(json.dumps({"event": "finish", "id": "d20261101-000000-aaaa", "ts": "2026-11-10T00:00:00+00:00",
+                                     "outcome": "rejected", "rework_rounds": 0}) + "\n")
+        self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
+        finishes = [r for r in self.records() if r["event"] == "finish"]
+        self.assertEqual(sorted(r["id"] for r in finishes),
+                         ["d20261101-000000-aaaa", "d20261101-000000-bbbb"])
+
+    def test_load_and_pause_status_see_closed_records_as_closed(self):
+        self.write([self.start("d20261101-000000-aaaa", 120, 30), self.start("d20261101-000000-bbbb", 10, 30)])
+        _, digest = self.preview_digest()
+        self.stale("--close", "--digest", digest)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            starts, finishes = self.ledger.load()
+        self.assertEqual(err.getvalue(), "")  # finish lines written here are well formed
+        self.assertEqual(set(starts), {"d20261101-000000-aaaa", "d20261101-000000-bbbb"})
+        self.assertEqual(set(finishes), {"d20261101-000000-aaaa"})
+        sys.path.insert(0, str(LEDGER.parent))
+        import pause
+        rows = pause.open_dispatches()
+        self.assertEqual([row[0] for row in rows], ["d20261101-000000-bbbb"])
+
+
 if __name__ == "__main__":
     unittest.main()

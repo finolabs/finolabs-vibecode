@@ -298,7 +298,7 @@ class UpdateTest(unittest.TestCase):
                 result = subprocess.run(['sh', '-c', hook['command']], env=env, capture_output=True, timeout=3)
             self.assertEqual((result.returncode, result.stdout, result.stderr), (0, b'', b''))
             metric_hooks = [h for groups in data['hooks'].values() for g in groups for h in g['hooks'] if 'metrics_hook.py' in h['command']]
-            self.assertEqual(len(metric_hooks), 3)
+            self.assertEqual(len(metric_hooks), 4 if host == 'claude' else 3)
             self.assertTrue(all(h.get('async') for h in metric_hooks))
 
     def test_hook_import_does_not_load_urllib_request(self):

@@ -7,4 +7,4 @@ timeout_seconds: 300
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-/finolabs-vibecode:fnl-ask I just installed this plugin and I have no idea how to start using it. What do I do?
+/finolabs-vibecode:fnl-help I just installed this plugin and I have no idea how to start using it. What do I do?

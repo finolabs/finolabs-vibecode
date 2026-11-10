@@ -33,7 +33,7 @@ class UserLanguageTests(unittest.TestCase):
 
     def test_plain_language_copies_match_and_use_the_users_language(self):
         paths = [ROOT / "skills" / name / "references" / "plain-language.md"
-                 for name in ("fnl-ask", "fnl-setup")]
+                 for name in ("fnl-help", "fnl-setup")]
         self.assertEqual(paths[0].read_bytes(), paths[1].read_bytes())
         self.assertIn("beginner register in the user's language", paths[0].read_text())
         ci = (ROOT / ".github" / "workflows" / "validate.yml").read_text()
