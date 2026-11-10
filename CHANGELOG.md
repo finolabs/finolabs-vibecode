@@ -7,6 +7,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Added
 
 - `/fnl-setup add checks` reads a repository's `package.json` scripts, declared Python test runner and `Makefile` targets without running them, lists `run:` lines from its CI workflows as unverified candidates it never converts, proposes an ordered check list (a name and a JSON argument array each, never run through a shell by the plugin; known shells, launchers and inline-code forms are refused as a best-effort guard, not a sandbox; skipped items named) and, after a digest-bound yes, `checks_setup.py` saves it as that repository's entry in the host config's own `## Checks` section (at most 20 checks of 1 KB each); `## Project settings` is unchanged.
+- `fnl-checks`' `checks.py run [--changed] [--base <ref>]` runs a repository's stored checks in order through `heavy_run.py` and stops at the first failure (`--changed` narrows unittest checks to the modules `select_tests.py` names and runs the rest whole); an opt-in per-repository local-receipt mode lets a whole passing run on a clean, unmoved head stand in for missing or failing hosted checks in `merge_check.py`, which names it `checks: local receipt (<head>)`; and `checks_setup.py hook install|remove` adds or removes an optional git pre-push hook that runs `checks.py run --changed`, refusing when `core.hooksPath` is set and never overwriting a different hook without a second flag.
 
 ### Changed
 
