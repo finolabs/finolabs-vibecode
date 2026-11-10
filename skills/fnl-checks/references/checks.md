@@ -27,7 +27,9 @@ The local receipt is off by default. The user turns it on per repository through
 
 The receipt records the repository code, the head and the digest of the list that ran. It is written atomically to `state/checks-receipts/` in the plugin's private data folder, never to a repository file. In every other case the output says `no local receipt:` and why.
 
-`fnl-review-gate`'s `merge_check.py` reads the receipt only when the mode is on and the pull request's hosted checks are missing or not passing. It accepts the receipt only when the repository code, the pull request head and the current list digest all match, and then reports `checks: local receipt (<head>)`. In every other case it blocks as before. The receipt is self-reported. It proves only that this machine ran the list at that head and gives a reviewer nothing they can check, so the mode is meant for a repository one person works on.
+The latest full run decides: `checks.py run` over the whole list removes any earlier receipt for the repository before it launches the first check, so a failed, dirty or moved rerun leaves no receipt. If the earlier receipt cannot be removed, the run is refused and nothing is run. A `--changed` run neither writes nor removes a receipt.
+
+`fnl-review-gate`'s `merge_check.py` reads the receipt only when the mode is on and the pull request's hosted checks are missing or not passing. It consults the receipt only when the checkout's `origin` remote names the repository given with `--repo` (a github.com https or ssh URL, compared case-insensitively); otherwise, or when the remote is missing, unparsable or ambiguous, it reports `local receipt: checkout is not <owner/name>` and blocks. It accepts the receipt only when the repository code, the pull request head and the current list digest all match, and then reports `checks: local receipt (<head>)`. In every other case it blocks as before. The receipt is self-reported. It proves only that this machine ran the list at that head and gives a reviewer nothing they can check, so the mode is meant for a repository one person works on.
 
 ## The pre-push hook
 
