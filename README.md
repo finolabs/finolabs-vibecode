@@ -98,6 +98,20 @@ Claude Code and Antigravity (not Codex): when you opt in through `fnl-setup`, yo
 
 Two sequence diagrams follow the agents step by step. [One delegated task, dispatch to merge](docs/diagrams/delegation-sequence-light.html) ([dark](docs/diagrams/delegation-sequence-dark.html)): the coordinator records the dispatch with `ledger.py start`, which prints the run's name, the implementer runs in the background, the coordinator verifies and accepts against a receipt, reviewers of another family post their markers and `merge_check.py` passes before the merge. [A decision while you are away](docs/diagrams/away-decision-sequence-light.html) ([dark](docs/diagrams/away-decision-sequence-dark.html)): the question gate denies the question tool during a lease, the host climbs the ladder (a recorded rule, Jev at 0.8, an advisor of another family in choose mode, its own choice), checks twice against what must stop, parks or records the attempt with `autopilot.py log`, and on return you mark each decision kept or reversed. Open the HTML files in a browser; their PNG renders are not in `assets/` yet.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/delegation-sequence-dark.png">
+    <img src="assets/delegation-sequence-light.png" alt="Sequence diagram of one delegated task: the coordinator grades and routes, records the dispatch and its run label in the ledger, starts the implementer in the background, verifies and accepts against a receipt, opens the pull request, routes a code and a security reviewer of another family who post markers, and merges only when merge_check passes at the reviewed head." width="900">
+  </picture>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/away-decision-sequence-dark.png">
+    <img src="assets/away-decision-sequence-light.png" alt="Sequence diagram of a decision during an away lease: the question gate denies AskUserQuestion, the host checks what must stop, climbs the ladder of recorded rule, Jev, an advisor of another family and its own choice, checks the chosen action again, records each attempt, and the user marks each decision kept or reversed on return." width="900">
+  </picture>
+</p>
+
 The sources of all four diagrams are in [`docs/diagrams/`](docs/diagrams/).
 
 ### Bricks, not a framework
