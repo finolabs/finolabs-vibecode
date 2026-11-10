@@ -210,6 +210,8 @@ class SessionStartTest(SyntheticStateTest):
                 # The away question gate adds only its own PreToolUse group, last in that list.
                 gate = manifest["hooks"]["PreToolUse"].pop()
                 self.assertEqual(gate["matcher"], "AskUserQuestion")
+                # Typed-skill recording adds only UserPromptSubmit.
+                self.assertEqual(len(manifest["hooks"].pop("UserPromptSubmit")), 1)
                 raw = (json.dumps(manifest, indent=2) + "\n").encode()
             self.assertEqual(hashlib.sha256(raw).hexdigest(), digest)
 

@@ -6,6 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- With metrics consent on Claude Code, a skill typed as `/fnl-name` records the existing `skill` event (name only, never prompt text), and the first file edit of a session with no router receipt prints one advisory reminder to invoke `fnl-coding-router`; Codex and Antigravity stay unmeasured and advisory.
 - `select_tests.py [--base <ref>]` in `fnl-verification` lists the `tests.test_*` modules that name a file changed since the base (default `origin/main`, copies of a shared file included), reports changed files no module names, and groups the modules two per command; it runs only `git diff --name-only` and no test.
 - `fnl-afk` (away from keyboard) is the main short name for the away mandate; `fnl-brb` remains an older alias, and both load `fnl-autopilot`.
 - User-invoked `fnl-pause` (short name `fnl-gtg`) drains work before a restart or shutdown: `pause.py` writes a pause marker, reports the recorded work that remains and resumes afterwards, and `heavy_run.py run` refuses new commands (exit 77) while a valid marker exists.
