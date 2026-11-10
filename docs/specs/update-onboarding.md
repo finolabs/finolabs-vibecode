@@ -1,6 +1,6 @@
 # Update onboarding: what a new version asks of the user (draft, scoped to release 0.2.4)
 
-Status: draft; the owner asked for it on 2026-11-10; nothing is built.
+Status: implemented; for release 0.2.4 (2026-11-11), items 1 to 7 are implemented and tested; the exact-version host command (item 6) is verified on no host yet, so `/fnl-update <version>` leaves the host step to the user. Entries for 0.2.0 to 0.2.3 stay an open decision.
 
 ## Why
 
@@ -41,4 +41,6 @@ The update goes to the latest stable release by default, and the user can choose
 
 ## Evidence
 
-None yet. A build needs a red test per behavior: the notes schema and its refusal of unknown keys, the release test (released version without an entry fails, `-dev` passes), version-range selection, a done item, an open item and an item that does not apply, skip recorded and not asked again, no write without `fnl-setup`'s yes, the session-start line shown once after an update, latest as the default target, an exact version accepted only with evidence naming a published stable tag (an older target, an unknown target, missing evidence, and a matching tag from another repository refused by its URL), a rollback listing what is lost, and a pin that silences newer-release notices until unpinned.
+`tests/test_upgrade_notes.py` (schema and refusals, the shipped 0.2.4 entry, the release test) and `OnboardTest` in `tests/test_update_check.py` (range selection, item states, skip, writers, the session-start line, target, rollback, pin) were shown failing before the code and pass after it.
+
+The build covered these behaviors, each with a red test: the notes schema and its refusal of unknown keys, the release test (released version without an entry fails, `-dev` passes), version-range selection, a done item, an open item and an item that does not apply, skip recorded and not asked again, no write without `fnl-setup`'s yes, the session-start line shown once after an update, latest as the default target, an exact version accepted only with evidence naming a published stable tag (an older target, an unknown target, missing evidence, and a matching tag from another repository refused by its URL), a rollback listing what is lost, and a pin that silences newer-release notices until unpinned.

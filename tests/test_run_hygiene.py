@@ -198,7 +198,7 @@ class RunHygieneTest(unittest.TestCase):
     def test_new_script_copies_are_explicit_ci_groups(self):
         from tests.test_shared_copies import ci_copy_groups
         groups = ci_copy_groups()
-        for name, skills in {'run_env.py': ['fnl-delegate', 'fnl-checks', 'fnl-setup'],
+        for name, skills in {'run_env.py': ['fnl-delegate', 'fnl-checks', 'fnl-setup', 'fnl-update'],
                              'delegate_env.py': ['fnl-delegate'], 'log_scan.py': ['fnl-delegate'],
                              'secret_patterns.py': ['fnl-delegate', 'fnl-handoff'],
                              'brief_check.py': ['fnl-handoff']}.items():

@@ -320,5 +320,261 @@ class UpdateTest(unittest.TestCase):
         self.assertIsNone(json.loads(result.stdout)['available'])
 
 
+ONBOARD_LINE = ('finolabs-vibecode %s has upgrade notes. Let the user know they can type /fnl-update '
+                '(on Codex $fnl-update) to see what is new and finish its setup; do not run it on your own.\n')
+EVIDENCE_URL = 'https://github.com/finolabs/finolabs-vibecode/releases/tag/'
+
+
+class OnboardTest(unittest.TestCase):
+    """Upgrade notes, the checklist, onboarding state, targets and pins."""
+
+    call, save, cache = UpdateTest.call, UpdateTest.save, UpdateTest.cache
+
+    def setUp(self):
+        UpdateTest.setUp(self)
+        self.evidence_count = 0
+        self.plugin = Path(self.tmp.name) / 'plugin'
+        (self.plugin / 'scripts').mkdir(parents=True)
+        for name, code in [('done', 0), ('open', 1), ('na', 3), ('odd', 7)]:
+            (self.plugin / 'scripts' / f'check_{name}.py').write_text(f'import sys\nsys.exit({code})\n')
+        (self.plugin / 'scripts/check_slow.py').write_text('import time\ntime.sleep(5)\n')
+        self.notes_file = Path(self.tmp.name) / 'upgrades.json'
+        self.notes({'0.1.6': ['old'], '0.1.7': ['done', 'open', 'na', 'odd', 'none'], '0.1.8': ['next']})
+        for name, value in [('notes_path', self.notes_file), ('plugin_root', self.plugin)]:
+            patch = mock.patch.object(u, name, return_value=value)
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def notes(self, layout):
+        versions = []
+        for release, slugs in layout.items():
+            items = []
+            for slug in slugs:
+                item = {'id': f'{release}/{slug}', 'kind': 'setup', 'text': f'Synthetic item {slug}.'}
+                if slug in ('done', 'open', 'na', 'odd', 'slow'):
+                    item['check'] = [f'scripts/check_{slug}.py']
+                if slug == 'open':
+                    item['setup'] = '/fnl-setup add thing'
+                items.append(item)
+            versions.append({'version': release, 'items': items})
+        self.notes_file.write_text(json.dumps({'versions': versions}))
+
+    def real(self, *args):
+        with mock.patch.object(subprocess, 'Popen', REAL_POPEN):
+            return self.call(*args)
+
+    def onboard_file(self):
+        return self.folder / 'onboard.json'
+
+    def evidence(self, tag='v0.1.6', **changes):
+        data = {'tagName': tag, 'isDraft': False, 'isPrerelease': False, 'url': EVIDENCE_URL + tag}
+        data.update(changes)
+        self.evidence_count += 1
+        path = Path(self.tmp.name) / f'evidence-{self.evidence_count}.json'
+        path.write_text(json.dumps(data))
+        return str(path)
+
+    def test_whats_new_lists_every_version_up_to_installed_with_states_and_never_writes(self):
+        with mock.patch.object(u, 'installed_version', return_value='0.1.7'):
+            out = self.real('whats-new')
+        self.assertEqual(out, '\n'.join([
+            '0.1.6',
+            '- [unknown] 0.1.6/old: Synthetic item old.',
+            '0.1.7',
+            '- [done] 0.1.7/done: Synthetic item done.',
+            '- [open] 0.1.7/open: Synthetic item open. (setup: /fnl-setup add thing)',
+            '- [not applicable] 0.1.7/na: Synthetic item na.',
+            '- [unknown] 0.1.7/odd: Synthetic item odd.',
+            '- [unknown] 0.1.7/none: Synthetic item none.', '']))
+        self.assertEqual(list(self.folder.iterdir()), [])
+        self.transport.assert_not_called()
+
+    def test_whats_new_starts_after_last_seen_and_marks_skipped(self):
+        self.save('onboard.json', {'last_seen': '0.1.6', 'skipped': ['0.1.7/open']})
+        before = self.onboard_file().read_bytes()
+        with mock.patch.object(u, 'installed_version', return_value='0.1.7'):
+            out = self.real('whats-new')
+        self.assertNotIn('0.1.6', out)
+        self.assertIn('- [skipped] 0.1.7/open: Synthetic item open.\n', out)
+        self.assertNotIn('(setup:', out)
+        self.assertEqual(self.onboard_file().read_bytes(), before)
+        self.save('onboard.json', {'last_seen': '0.1.7', 'skipped': []})
+        with mock.patch.object(u, 'installed_version', return_value='0.1.7'):
+            self.assertEqual(self.real('whats-new'), 'No new upgrade notes.\n')
+
+    def test_a_dev_build_excludes_its_own_release_notes(self):
+        self.save('onboard.json', {'last_seen': '0.1.6', 'skipped': []})
+        self.assertEqual(self.real('whats-new'), 'No new upgrade notes.\n')  # installed 0.1.7-dev
+
+    def test_check_runs_plugin_script_without_shell_with_timeout_and_allowlisted_env(self):
+        with mock.patch.object(u.subprocess, 'run') as run:
+            run.return_value.returncode = 1
+            self.assertEqual(u.check_state(['scripts/check_open.py', 'state']), 'open')
+        args, kwargs = run.call_args
+        self.assertEqual(args[0], [sys.executable, '-I', str(self.plugin / 'scripts/check_open.py'), 'state'])
+        self.assertEqual(kwargs['timeout'], 10)
+        self.assertNotIn('shell', kwargs)
+        self.assertEqual(set(kwargs['env']) - set(u.run_env.BASE_NAMES), set())
+        for missing in [['scripts/absent.py'], ['skills/fnl-x/scripts/absent.py']]:
+            self.assertEqual(u.check_state(missing), 'unknown')
+        with mock.patch.object(u, 'CHECK_TIMEOUT', 0.5), mock.patch.object(subprocess, 'Popen', REAL_POPEN):
+            self.assertEqual(u.check_state(['scripts/check_slow.py']), 'unknown')
+        with mock.patch.object(u, 'plugin_root', return_value=None):
+            self.assertEqual(u.check_state(['scripts/check_done.py']), 'unknown')
+
+    def test_onboard_seen_and_skip_are_the_only_writers_and_bounded(self):
+        self.assertEqual(self.call('onboard', 'seen', '0.1.7'), '')
+        self.assertEqual(json.loads(self.onboard_file().read_text()), {'last_seen': '0.1.7', 'skipped': []})
+        self.assertEqual(stat.S_IMODE(self.onboard_file().stat().st_mode), 0o600)
+        self.assertEqual(self.call('onboard', 'skip', '0.1.8/next'), '')
+        self.assertEqual(json.loads(self.onboard_file().read_text()), {'last_seen': '0.1.7', 'skipped': ['0.1.8/next']})
+        before = self.onboard_file().read_bytes()
+        for args in [('onboard', 'seen', '0.1.7-dev'), ('onboard', 'seen', 'x;id'),
+                     ('onboard', 'skip', '0.1.8/unknown'), ('onboard', 'skip', 'bad id'),
+                     ('onboard', 'skip'), ('onboard', 'other', 'x')]:
+            with self.subTest(args=args):
+                self.call(*args)
+                self.assertEqual(self.onboard_file().read_bytes(), before)
+        many = {'0.1.8': [f'n{i}' for i in range(201)]}
+        self.notes(many)
+        self.save('onboard.json', {'last_seen': None, 'skipped': [f'0.1.8/n{i}' for i in range(200)]})
+        before = self.onboard_file().read_bytes()
+        self.call('onboard', 'skip', '0.1.8/n200')
+        self.assertEqual(self.onboard_file().read_bytes(), before)
+
+    def test_a_full_skip_ledger_of_long_ids_round_trips(self):
+        slug = lambda r, i: f'r{r}-' + 'x' * 34 + f'-{i:02d}'
+        releases = {f'0.1.{8 + r}': [slug(r, i) for i in range(30)] for r in range(7)}
+        self.notes(releases)
+        ids = [f'{v}/{s}' for v, items in releases.items() for s in items]
+        for item in ids[:200]:
+            self.call('onboard', 'skip', item)
+        self.assertGreater(len(self.onboard_file().read_bytes()), 4096)
+        self.assertEqual(u.onboard_state()['skipped'], ids[:200])
+        before = self.onboard_file().read_bytes()
+        self.call('onboard', 'skip', ids[200])
+        self.assertEqual(self.onboard_file().read_bytes(), before)
+
+    def test_invalid_onboard_state_is_replaced_by_a_writer_and_silences_the_hook(self):
+        for bad in [[], {'last_seen': '0.1.6'}, {'last_seen': 'x', 'skipped': []},
+                    {'last_seen': None, 'skipped': ['bad id']}, {'last_seen': None, 'skipped': [], 'x': 1}]:
+            with self.subTest(bad=bad):
+                self.save('onboard.json', bad)
+                with mock.patch.object(u, 'installed_version', return_value='0.1.7'):
+                    self.assertEqual(self.call(), '')
+                self.call('onboard', 'seen', '0.1.6')
+                self.assertEqual(json.loads(self.onboard_file().read_text()), {'last_seen': '0.1.6', 'skipped': []})
+
+    def test_session_start_line_until_seen_independent_of_release_notice(self):
+        with mock.patch.object(u, 'installed_version', return_value='0.1.7'):
+            self.cache('v0.1.7')
+            self.assertEqual(self.call(), ONBOARD_LINE % '0.1.7')
+            self.assertFalse(self.onboard_file().exists())  # the hook never writes
+            self.cache('v0.1.8')
+            out = self.call()
+            self.assertEqual(out.splitlines()[1] + '\n', ONBOARD_LINE % '0.1.7')
+            self.assertEqual(len(out.splitlines()), 2)
+            self.call('never')
+            self.assertEqual(self.call(), ONBOARD_LINE % '0.1.7')
+            self.call('onboard', 'seen', '0.1.7')
+            self.assertEqual(self.call(), '')
+        self.spawn.assert_not_called()
+
+    def test_session_start_line_fails_closed(self):
+        with mock.patch.object(u, 'installed_version', return_value='0.1.7'):
+            self.cache('v0.1.7')
+            self.notes_file.write_text('{broken')
+            self.assertEqual(self.call(), '')
+            self.notes({'0.1.7': ['open']})
+            with mock.patch.object(u.dr, 'read_data', side_effect=PermissionError):
+                self.assertEqual(self.call(), '')
+            with mock.patch.object(u, 'onboard_state', side_effect=RuntimeError):
+                self.assertEqual(self.call(), '')
+            self.save('onboard.json', {'last_seen': None, 'skipped': ['0.1.7/open']})
+            self.assertEqual(self.call(), '')  # only skipped notes left
+
+    def test_target_defaults_to_cached_latest(self):
+        self.cache('v0.1.8')
+        self.assertEqual(self.call('target'), 'target 0.1.8 latest upgrade\n')
+        (self.folder / 'update-check.json').unlink()
+        self.assertEqual(self.call('target'), 'refused: no cached latest release\n')
+        self.transport.assert_not_called()
+
+    def test_target_version_needs_matching_published_stable_evidence(self):
+        with mock.patch.object(u, 'installed_version', return_value='0.1.7'):
+            self.assertEqual(self.call('target', '0.1.8', '--evidence', self.evidence('v0.1.8')),
+                             'target 0.1.8 chosen upgrade\n')
+            self.assertEqual(self.call('target', '0.1.7', '--evidence', self.evidence('v0.1.7')),
+                             'target 0.1.7 chosen installed\n')
+            refusals = [
+                ('0.1.8', None),
+                ('0.1.8-dev', self.evidence('v0.1.8-dev')),
+                ('0.1.8', self.evidence('v0.1.9')),
+                ('0.1.8', self.evidence('v0.1.8', isDraft=True)),
+                ('0.1.8', self.evidence('v0.1.8', isPrerelease=True)),
+                ('0.1.8', self.evidence('v0.1.8', isPrerelease=0)),
+                ('0.1.8', self.evidence('v0.1.8', url='https://github.com/other/finolabs-vibecode/releases/tag/v0.1.8')),
+                ('0.1.8', self.evidence('v0.1.8', url=EVIDENCE_URL + 'v0.1.8/')),
+                ('0.1.8', self.evidence('v0.1.8', extra=1)),
+                ('0.1.8', str(Path(self.tmp.name) / 'absent.json')),
+            ]
+            for case, (version, evidence) in enumerate(refusals):
+                with self.subTest(case=case):
+                    args = ('target', version) + (('--evidence', evidence) if evidence else ())
+                    self.assertTrue(self.call(*args).startswith('refused: '))
+            big = Path(self.tmp.name) / 'big.json'
+            big.write_text(' ' * 65537)
+            self.assertTrue(self.call('target', '0.1.8', '--evidence', str(big)).startswith('refused: '))
+        self.assertEqual(list(self.folder.iterdir()), [])
+        self.transport.assert_not_called()
+
+    def test_older_target_is_a_rollback_listing_lost_items(self):
+        with mock.patch.object(u, 'installed_version', return_value='0.1.8'):
+            out = self.call('target', '0.1.6', '--evidence', self.evidence('v0.1.6'))
+        lines = out.splitlines()
+        self.assertEqual(lines[0], 'target 0.1.6 chosen rollback')
+        self.assertEqual(lines[1:], ['lost: 0.1.7/done: Synthetic item done.',
+                                     'lost: 0.1.7/open: Synthetic item open.',
+                                     'lost: 0.1.7/na: Synthetic item na.',
+                                     'lost: 0.1.7/odd: Synthetic item odd.',
+                                     'lost: 0.1.7/none: Synthetic item none.',
+                                     'lost: 0.1.8/next: Synthetic item next.'])
+
+    def test_pin_silences_release_notice_until_unpinned_and_status_shows_it(self):
+        self.cache('v0.1.8')
+        self.notes({'0.1.0': ['old']})
+        self.save('onboard.json', {'last_seen': '0.1.0', 'skipped': []})
+        self.assertTrue(self.call())
+        self.assertEqual(self.call('pin', '0.1.7'), '')
+        self.assertEqual(self.call(), '')
+        self.assertEqual(json.loads(self.call('status'))['pinned'], '0.1.7')
+        self.assertEqual(json.loads((self.folder / 'update-state.json').read_text()),
+                         {'skipped': [], 'never_ask': False, 'pinned': '0.1.7'})
+        self.call('skip', '0.1.9')
+        self.assertEqual(json.loads(self.call('status'))['pinned'], '0.1.7')
+        for bad in ['0.1.7-dev', 'x;id']:
+            self.call('pin', bad)
+            self.assertEqual(json.loads(self.call('status'))['pinned'], '0.1.7')
+        self.assertEqual(self.call('unpin'), '')
+        self.assertNotIn('pinned', json.loads(self.call('status')))
+        self.assertTrue(self.call())
+        self.spawn.assert_not_called()
+
+    def test_new_commands_stop_when_off(self):
+        with mock.patch.dict(os.environ, {'FNL_UPDATE_CHECK': 'off'}):
+            for args in [('whats-new',), ('onboard', 'seen', '0.1.7'), ('target',), ('pin', '0.1.7'), ('unpin',)]:
+                self.assertEqual(self.call(*args), '')
+        self.assertEqual(list(self.folder.iterdir()), [])
+
+    def test_shipped_notes_resolve_from_both_copies(self):
+        for script in ['scripts/update_check.py', 'skills/fnl-update/scripts/update_check.py']:
+            with self.subTest(script=script):
+                module_spec = importlib.util.spec_from_file_location('copy_' + script.replace('/', '_'), ROOT / script)
+                module = importlib.util.module_from_spec(module_spec)
+                module_spec.loader.exec_module(module)
+                self.assertEqual(module.notes_path(), ROOT / 'skills/fnl-update/references/upgrades.json')
+                self.assertEqual(module.plugin_root(), ROOT)
+
+
 if __name__ == '__main__':
     unittest.main()

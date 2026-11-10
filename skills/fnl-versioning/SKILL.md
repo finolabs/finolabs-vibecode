@@ -46,6 +46,7 @@ One standard for every repository: applications, libraries, CLIs, services, plug
 - Keep each entry to one or two sentences: the change and any consumer action. The reasons live in the skill, the commit and the pull request.
 - Every breaking entry names the consumer action needed.
 - The forge release body comes from the same changelog section.
+- In a repository that ships upgrade notes (as `fnl-update` does in its `references/upgrades.json`), the release pull request writes or updates the entry for its version, as part of the documentation review; a test fails when a released manifest version has none.
 - **Advisory (agent judgment):** After the tag and GitHub release, and only with the owner's explicit go for that repository (name it and the fields it changes first; the target is read from the user's marketplace entry, so the owner confirms it), open a pull request in the catalog repository that entry points to, moving `ref` to the new tag and syncing name, description and keywords with the default-branch manifests. The catalog's CI enforces the content against the raw default-branch files, which can lag a few minutes.
 
 ## Authority

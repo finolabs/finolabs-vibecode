@@ -20,7 +20,8 @@ All files use `fnl_metrics.state_dir()`: by default `~/.finolabs/vibecode/state/
 | File | Exact fields | Example |
 | --- | --- | --- |
 | `update-check.json` | `checked_at`: finite nonnegative Unix timestamp in seconds, not in the future; `tag`: validated stable release tag | `{"checked_at":1793750400,"tag":"v0.1.7"}` |
-| `update-state.json` | `skipped`: list of validated stable versions; `never_ask`: boolean | `{"skipped":["0.1.8"],"never_ask":false}` |
+| `update-state.json` | `skipped`: list of validated stable versions; `never_ask`: boolean; optional `pinned`: one validated stable version (see `update-onboarding.md`) | `{"skipped":["0.1.8"],"never_ask":false}` |
+| `onboard.json` | `last_seen`: a validated stable version or null; `skipped`: at most 200 upgrade-note ids (see `update-onboarding.md`) | `{"last_seen":"0.2.4","skipped":[]}` |
 
 Both files are written through `fnl_metrics.atomic_write` with mode `0600`; new state directories are mode `0700`. The cache is replaced only after a valid successful response. No response bodies or error text are retained. Local reads use the shared bounded regular-file reader and reject symlinks and pipes. Stored skip choices are normalized without the leading `v`. The never-ask choice suppresses notices, not requests; `FNL_UPDATE_CHECK=off` suppresses both. Existing cached data stays on disk while off.
 
