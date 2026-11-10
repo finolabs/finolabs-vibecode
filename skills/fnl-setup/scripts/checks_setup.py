@@ -43,6 +43,7 @@ MAX_TEST_FILES = 20
 MAX_EVIDENCE = 200
 EVIDENCE_WIDTH = 120
 CI_HEADING = 'found in CI, add with --check if you want it'
+PREVIEW_NOTICE = ("Review every array before you approve. These commands run the repository's own code, as cloud CI does; nothing runs now.\nThe refusal of shells, launchers and inline code is a best-effort guard, not a sandbox: an allowed program can still start a shell.\nWhat holds: the plugin never runs an array through a shell itself, and a repository cannot change the stored list.")
 PACKAGE_SCRIPTS = ('lint', 'test', 'typecheck', 'build')
 MAKE_TARGETS = ('test', 'lint', 'check')
 LOCKFILES = (('pnpm-lock.yaml', 'pnpm'), ('yarn.lock', 'yarn'), ('bun.lockb', 'bun'), ('bun.lock', 'bun'))
@@ -246,7 +247,7 @@ def preview(code, checks):
     else:
         print(HEADING + ' entry for repository ' + code + ':')
         print(''.join(render_line(code, name, argv) for name, argv in checks), end='')
-        print('These commands run the repository\'s own code, as cloud CI does; nothing runs now.')
+        print(PREVIEW_NOTICE)
     print('Backup: ' + str(root / plan['backup']))
     print('Digest: ' + value)
     print('Preview expires in 60 minutes; host configuration unchanged.')

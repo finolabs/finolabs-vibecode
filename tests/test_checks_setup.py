@@ -335,6 +335,13 @@ class ChecksSetupTest(unittest.TestCase):
 
     # Preview, digest, apply
 
+    def test_preview_states_the_trust_boundary_before_approval(self):
+        code, out, err = self.cli('preview', '--check', 'lint=["npm","run","lint"]')
+        self.assertEqual(code, 0, err)
+        for phrase in ('Review every array before you approve', 'best-effort guard, not a sandbox',
+                       'an allowed program can still start a shell', 'a repository cannot change the stored list'):
+            self.assertIn(phrase, out)
+
     def test_preview_then_apply_writes_only_the_section(self):
         before = self.host.read_bytes()
         digest = self.preview('lint=["npm","run","lint"]', 'test=["python3","-m","unittest"]')
