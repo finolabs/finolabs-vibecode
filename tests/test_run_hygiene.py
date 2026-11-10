@@ -20,6 +20,7 @@ MECHANICAL = {
     ('check-references.py', 'documents'): ("['git', 'ls-files', '--cached', '-z', '--', ':(glob)skills/*/**/*.md', ':(glob)agents/*.md', ':(glob)rules/*.md', ':(glob)*.md', ':(glob)docs/**/*.md']", None),
     ('check-references.py', 'check_skill_inventory'): ("['git', 'ls-files', '--cached', '-z']", None),
     ('merge_check.py', 'run_gh'): ("['gh', *args]", None),
+    ('merge_check.py', 'checkout_origin'): ("['git', '-c', 'core.fsmonitor=false', '-C', str(root), 'config', '--local', '--get-all', 'remote.origin.url']", 'env'),
     ('agent_scan.py', 'inventory'): ("[executable, '--version']", None),
     ('restore_point.py', 'run_git'): ("['git', '-c', 'core.quotePath=false', '-c', 'core.hooksPath=" + '/' + "dev/null', '-c', 'core.fsmonitor=false', *args]", 'env'),
 }
@@ -197,7 +198,7 @@ class RunHygieneTest(unittest.TestCase):
     def test_new_script_copies_are_explicit_ci_groups(self):
         from tests.test_shared_copies import ci_copy_groups
         groups = ci_copy_groups()
-        for name, skills in {'run_env.py': ['fnl-delegate', 'fnl-checks', 'fnl-setup', 'fnl-review-gate'],
+        for name, skills in {'run_env.py': ['fnl-delegate', 'fnl-checks', 'fnl-setup'],
                              'delegate_env.py': ['fnl-delegate'], 'log_scan.py': ['fnl-delegate'],
                              'secret_patterns.py': ['fnl-delegate', 'fnl-handoff'],
                              'brief_check.py': ['fnl-handoff']}.items():

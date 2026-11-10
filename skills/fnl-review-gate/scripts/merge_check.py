@@ -260,11 +260,12 @@ def origin_repository(url):
 
 def checkout_origin(root):
     """(owner, name) of the checkout's single `origin` URL, read with git; None on any failure or ambiguity."""
-    import run_env
+    import os
+    env = {name: os.environ[name] for name in ("PATH", "HOME") if name in os.environ}
     try:
         done = subprocess.run(["git", "-c", "core.fsmonitor=false", "-C", str(root), "config", "--local", "--get-all",
                                "remote.origin.url"], capture_output=True, text=True, encoding="utf-8", timeout=TIMEOUT,
-                              check=False, env=run_env.environment(), stdin=subprocess.DEVNULL)
+                              check=False, env=env, stdin=subprocess.DEVNULL)
     except (OSError, subprocess.SubprocessError, UnicodeError):
         return None
     urls = done.stdout.splitlines()
