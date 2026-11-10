@@ -18,7 +18,7 @@
 | [Pause](pause.md) | implemented; in 0.2.3: `fnl-pause` (alias `fnl-gtg`) with `pause.py` drains running work, writes handovers and reports what recorded work remains before a restart or shutdown; `heavy_run.py` refuses new commands while paused. |
 | [Release 0.2.1: scope](release-0.2.1.md) | released; v0.2.1 tagged 2026-11-09 with packages 1 to 11, 12a and 15; the rest moved to a later release. |
 | [Release 0.2.2: scope](release-0.2.2.md) | released; tagged v0.2.2 on 2026-11-09 with all seven packages; live-host proof partial. |
-| [Release 0.2.3: scope](release-0.2.3.md) | implemented; in 0.2.3: packages 1 to 13 are merged and package 14 brings the diagrams and documents up to date; ready to cut; outcomes that differ from the scope are recorded in the release spec. |
+| [Release 0.2.3: scope](release-0.2.3.md) | released; tagged v0.2.3 on 2026-11-10 with all fourteen packages; package 7 narrowed to the log folder message; live-host proof of the question gate and the typed-skill hook pending. |
 | [Release 0.1.10: spec and plan](release-0.1.10.md) | released; the package table lists the pull request behind each package. |
 | [Merge guard](merge-guard.md) | deferred; accepted permission-rule design for Claude Code and Codex, with no shipped writer; the release 0.2.0 record moved this backlog target to 0.2.1 alongside autopilot, and release 0.2.1 then moved both out (see `release-0.2.1.md`). |
 | [Running agents](running-agents.md) | implemented; phase 1: ledger and opt-in process snapshot in Running now; liveness remains advisory, CLI name observations and real-host UI verification remain open. |
