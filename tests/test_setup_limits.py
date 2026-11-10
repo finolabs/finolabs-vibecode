@@ -69,11 +69,13 @@ EXTRA_APPROVALS = [
     ("Let <agent family> receive any named runtime settings when it starts?", REFS / "features" / "delegation.md"),
     ("Let <agent family> receive the value of <VARIABLE_NAME> when it starts?", REFS / "features" / "delegation.md"),
     ("Let TypeSafe check task evidence using your service account and approved budget?", REFS / "features" / "roles.md"),
+    ("Save this list of checks for this repository?", REFS / "features" / "checks.md"),
 ]
 PREREQUISITES = {
     "delegation": "the agent scan", "quota": "the agent scan", "roles": "the agent scan",
     "metrics": "the plugin's hooks installed", "project": "metrics consent",
     "autopilot": "nothing", "compaction": "nothing for the native threshold", "companions": "nothing",
+    "checks": "a git repository",
 }
 
 
@@ -88,7 +90,7 @@ class SizeLimitTests(unittest.TestCase):
         skill = (SKILL / "SKILL.md").read_text()
         self.assertLessEqual(len(skill.splitlines()), 70)
         self.assertLessEqual(len(skill.encode()), 10000)
-        self.assertEqual(len(FEATURES), 8)
+        self.assertEqual(len(FEATURES), 9)
         for path in FEATURES:
             text = path.read_text()
             self.assertLessEqual(len(text.splitlines()), 80, path.name)

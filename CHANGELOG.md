@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- `/fnl-setup add checks` reads a repository's `package.json` scripts, declared Python test runner and `Makefile` targets without running them, lists `run:` lines from its CI workflows as unverified candidates it never converts, proposes an ordered check list (a name and a JSON argument array each, never run through a shell by the plugin; known shells, launchers and inline-code forms are refused as a best-effort guard, not a sandbox; skipped items named) and, after a digest-bound yes, `checks_setup.py` saves it as that repository's entry in the host config's own `## Checks` section (at most 20 checks of 1 KB each); `## Project settings` is unchanged.
+
 ### Changed
 
 - `fnl-verification` is now fnl-checks, which also covers where a repository's checks run (locally or in CI); `/fnl-verification` keeps working as a user-only alias through 0.2.x.
