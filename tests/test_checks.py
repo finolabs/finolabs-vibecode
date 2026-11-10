@@ -335,6 +335,74 @@ class ChecksRunTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(self.receipt().read_bytes(), before)
 
+    # One full run at a time
+    BUSY = "checks: refused: another full run of this repository's checks is in progress\n"
+
+    def lock_path(self):
+        return self.home / '.finolabs/vibecode/state/checks-receipts' / (self.code() + '.lock')
+
+    def test_a_second_full_run_refuses_while_the_first_is_in_progress(self):
+        argv, flag = self.gate()
+        self.store(('gate', argv), receipt=True)
+        self.assertEqual(self.run_cli(self.module(), 'run')[0], 0)  # an old receipt exists
+        flag.write_text('x\n')  # run A will fail
+        first = self.module()
+        original, inner = first.run_one, []
+
+        def during(name, check, root):
+            # A has removed the old receipt and is running its check; B starts now and must refuse.
+            second = self.module()
+            inner.append(self.run_cli(second, 'run'))
+            inner.append(len(self.launched()))
+            return original(name, check, root)
+
+        first.run_one = during
+        code, _, _ = self.run_cli(first, 'run')
+        self.assertEqual(code, 1)
+        (b_code, b_out, b_err), launches = inner
+        self.assertEqual((b_code, b_err), (2, self.BUSY))
+        self.assertEqual(launches, 1)  # B launched nothing; only A's first run before it
+        self.assertFalse(self.receipt().exists())
+        self.assertEqual(self.lock_path().stat().st_mode & 0o777, 0o600)
+
+    def test_sequential_runs_each_take_the_lock_and_a_failed_rerun_leaves_no_receipt(self):
+        argv, flag = self.gate()
+        self.store(('gate', argv), receipt=True)
+        self.assertEqual(self.run_cli(self.module(), 'run')[0], 0)
+        self.assertTrue(self.receipt().exists())
+        flag.write_text('x\n')
+        code, _, err = self.run_cli(self.module(), 'run')
+        self.assertEqual(code, 1, err)
+        self.assertNotIn('in progress', err)
+        self.assertFalse(self.receipt().exists())
+
+    def test_a_held_lock_refuses_before_removing_the_receipt_or_launching(self):
+        import fcntl
+        self.store(('a', self.mark('a')), receipt=True)
+        self.assertEqual(self.run_cli(self.module(), 'run')[0], 0)
+        before = self.receipt().read_bytes()
+        launches = len(self.launched())
+        with open(self.lock_path(), 'a') as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            code, _, err = self.run_cli(self.module(), 'run')
+            self.assertEqual((code, err), (2, self.BUSY))
+            self.assertEqual(self.receipt().read_bytes(), before)
+            self.assertEqual(len(self.launched()), launches)
+            # --changed takes no lock.
+            code, out, err = self.run_cli(self.module(), 'run', '--changed', '--base', 'main')
+            self.assertEqual(code, 0, err)
+
+    def test_an_unsafe_lock_file_refuses(self):
+        self.store(('a', self.mark('a')), receipt=True)
+        self.assertEqual(self.run_cli(self.module(), 'run')[0], 0)
+        lock = self.lock_path()
+        lock.unlink()
+        lock.symlink_to(self.temp_base() / 'elsewhere.lock')
+        code, _, err = self.run_cli(self.module(), 'run')
+        self.assertEqual(code, 2)
+        self.assertIn('checks: refused:', err)
+        self.assertFalse((self.temp_base() / 'elsewhere.lock').exists())
+
     def test_with_the_mode_off_no_receipt_is_written_or_mentioned(self):
         self.store(('a', self.mark('a')))
         code, out, _ = self.run_cli(self.module(), 'run')

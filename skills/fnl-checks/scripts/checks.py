@@ -11,8 +11,10 @@ the checks' own output streams through. `--changed` keeps only the checks the ch
 `python -m unittest` check is narrowed to the modules `select_tests.py` names, every other check runs whole.
 A run of the whole list first removes any earlier receipt for the repository, so the latest full run decides; when
 the repository's local-receipt mode is on, a passing run of the whole list on a clean tree whose head did not
-move writes a receipt (repository code, head, list digest) in the private state folder. `--changed` neither writes
-nor removes one. It edits no file of the
+move writes a receipt (repository code, head, list digest) in the private state folder. One whole-list run per
+repository at a time: it holds a private lock file beside the receipt from before the removal until the receipt is
+written or declined, and a second one refuses. `--changed` neither writes nor removes a receipt and takes no lock.
+It edits no file of the
 repository and makes no network call. Exits: 0 passed, 1 a check failed, 2 refused or unknown, 3 invalid list.
 """
 import argparse
@@ -77,6 +79,37 @@ def repository():
     return root, pp.repository_code(root)
 
 
+def full_run_lock(code):
+    """An open fd holding an exclusive, non-blocking flock on `state/checks-receipts/<code>.lock`, a private
+    regular file owned by this account; Refused when another full run holds it or the file is unsafe."""
+    import data_root as dr
+    import fcntl
+    import stat
+    if not isinstance(code, str) or not cl.CODE.fullmatch(code):
+        raise Refused('invalid repository code')
+    try:
+        with dr.data_folder(cl.RECEIPTS, create=True, private=True) as folder:
+            fd = os.open(code + '.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600,
+                         dir_fd=folder)
+    except (OSError, ValueError):
+        raise Refused('the full-run lock could not be opened; nothing was run') from None
+    try:
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1
+                or info.st_mode & 0o077):
+            raise Refused('the full-run lock could not be opened; nothing was run')
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Refused("another full run of this repository's checks is in progress") from None
+        except OSError:
+            raise Refused('the full-run lock could not be taken; nothing was run') from None
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
 def is_unittest(argv):
     return bool(cl.INTERPRETER.fullmatch(cl.program_name(argv[0]))) and argv[1:3] == ['-m', 'unittest']
 
@@ -111,6 +144,18 @@ def run(changed, base):
         print(f'Repository {code}: no checks ({reason}); nothing was run. Set them with /fnl-setup add checks.',
               file=sys.stderr)
         return 3 if reason in ('invalid', 'unreadable') else 2
+    if changed:
+        return run_list(root, code, checks, changed, base)
+    # One full run per repository at a time, separate from (and never inside) the heavy-job lock: taken before the
+    # old receipt is removed and the first heavy_run launch, released after the new receipt is written or declined.
+    lock = full_run_lock(code)
+    try:
+        return run_list(root, code, checks, changed, base)
+    finally:
+        os.close(lock)
+
+
+def run_list(root, code, checks, changed, base):
     digest = cl.list_digest(checks)
     mode = cl.receipt_mode(code)
     start_head, start_clean = (head(root), clean(root)) if mode and not changed else (None, False)
