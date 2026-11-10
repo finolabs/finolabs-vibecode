@@ -20,7 +20,7 @@ MECHANICAL = {
     ('check-references.py', 'documents'): ("['git', 'ls-files', '--cached', '-z', '--', ':(glob)skills/*/**/*.md', ':(glob)agents/*.md', ':(glob)rules/*.md', ':(glob)*.md', ':(glob)docs/**/*.md']", None),
     ('check-references.py', 'check_skill_inventory'): ("['git', 'ls-files', '--cached', '-z']", None),
     ('merge_check.py', 'run_gh'): ("['gh', *args]", None),
-    ('merge_check.py', 'checkout_origin'): ("['git', '-c', 'core.fsmonitor=false', '-C', str(root), 'config', '--local', '--get-all', 'remote.origin.url']", 'env'),
+    ('merge_check.py', 'checkout_origin'): ("['git', '-c', 'core.fsmonitor=false', '-C', str(root), 'remote', 'get-url', *mode, '--all', 'origin']", 'env'),
     ('agent_scan.py', 'inventory'): ("[executable, '--version']", None),
     ('restore_point.py', 'run_git'): ("['git', '-c', 'core.quotePath=false', '-c', 'core.hooksPath=" + '/' + "dev/null', '-c', 'core.fsmonitor=false', *args]", 'env'),
 }

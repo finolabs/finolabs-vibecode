@@ -849,6 +849,48 @@ class LocalReceiptTest(unittest.TestCase):
                     subprocess.run(["git", "-C", str(self.repo), "remote", "remove", "origin"], capture_output=True)
                     self.git(self.repo, "remote", "add", "origin", "https://github.com/acme/demo.git")
 
+    def test_the_effective_origin_decides_not_the_raw_config_value(self):
+        self.receipt()
+        fork = "https://github.com/acme/fork.git"
+        included = self.base / "included.gitconfig"
+        included.write_text('[remote "origin"]\n\turl = ' + fork + "\n")
+
+        def worktree_url():
+            linked = self.base / "wt-config"
+            self.git(self.repo, "worktree", "add", "-q", "--detach", str(linked))
+            self.git(self.repo, "config", "extensions.worktreeConfig", "true")
+            self.git(linked, "config", "--worktree", "remote.origin.url", fork)
+            os.chdir(linked)
+        cases = {
+            "insteadOf to a fork": lambda: self.git(self.repo, "config", "url." + fork + ".insteadOf",
+                                                    "https://github.com/acme/demo.git"),
+            "push url differs": lambda: self.git(self.repo, "config", "remote.origin.pushurl", fork),
+            "second url from an include": lambda: self.git(self.repo, "config", "include.path", str(included)),
+            "worktree-specific url": worktree_url,
+        }
+        for name, change in cases.items():
+            with self.subTest(name):
+                try:
+                    change()
+                    ok, lines = self.evaluate(pr(checks=[]))
+                    self.assertFalse(ok)
+                    self.assertEqual(self.checks_line(lines),
+                                     "BLOCK checks: none reported; local receipt: checkout is not acme/demo")
+                finally:
+                    os.chdir(self.repo)
+                    for key in ("url." + fork + ".insteadOf", "remote.origin.pushurl", "include.path",
+                                "extensions.worktreeConfig"):
+                        subprocess.run(["git", "-C", str(self.repo), "config", "--unset-all", key], capture_output=True)
+                    subprocess.run(["git", "-C", str(self.repo), "worktree", "remove", "--force",
+                                    str(self.base / "wt-config")], capture_output=True)
+
+    def test_matching_fetch_and_push_urls_in_other_forms_match(self):
+        self.receipt()
+        self.git(self.repo, "remote", "set-url", "origin", "git" "@github.com:Acme/Demo.git")
+        self.git(self.repo, "config", "remote.origin.pushurl", "ssh://git" "@github.com/acme/demo.git")
+        ok, lines = self.evaluate(pr(checks=[]), repo="acme/DEMO")
+        self.assertTrue(ok, lines)
+
     def test_main_binds_the_receipt_to_the_repo_argument(self):
         seen = []
 

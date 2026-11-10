@@ -259,19 +259,27 @@ def origin_repository(url):
 
 
 def checkout_origin(root):
-    """(owner, name) of the checkout's single `origin` URL, read with git; None on any failure or ambiguity."""
+    """(owner, name) of the checkout's effective `origin`, as git resolves it for a fetch and for a push
+    (`insteadOf`, includes and worktree config applied). Each must be exactly one URL and both must name the
+    same github.com repository; None on any failure, ambiguity or disagreement."""
     import os
     env = {name: os.environ[name] for name in ("PATH", "HOME") if name in os.environ}
-    try:
-        done = subprocess.run(["git", "-c", "core.fsmonitor=false", "-C", str(root), "config", "--local", "--get-all",
-                               "remote.origin.url"], capture_output=True, text=True, encoding="utf-8", timeout=TIMEOUT,
-                              check=False, env=env, stdin=subprocess.DEVNULL)
-    except (OSError, subprocess.SubprocessError, UnicodeError):
-        return None
-    urls = done.stdout.splitlines()
-    if done.returncode != 0 or len(urls) != 1:
-        return None
-    return origin_repository(urls[0].strip())
+    found = set()
+    for mode in ([], ["--push"]):
+        try:
+            done = subprocess.run(["git", "-c", "core.fsmonitor=false", "-C", str(root), "remote", "get-url", *mode,
+                                   "--all", "origin"], capture_output=True, text=True, encoding="utf-8",
+                                  timeout=TIMEOUT, check=False, env=env, stdin=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError, UnicodeError):
+            return None
+        urls = done.stdout.splitlines()
+        if done.returncode != 0 or len(urls) != 1:
+            return None
+        parsed = origin_repository(urls[0].strip())
+        if parsed is None:
+            return None
+        found.add(parsed)
+    return found.pop() if len(found) == 1 else None
 
 
 def local_receipt(head, repo):
