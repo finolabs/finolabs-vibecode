@@ -7,4 +7,4 @@ timeout_seconds: 300
 allowed_tools: [Skill, Read, Glob, Grep]
 ---
 
-/finolabs-vibecode:fnl-ask I've made three different fixes for a flaky test in our sync module and it keeps going red again. What should I do next?
+/finolabs-vibecode:fnl-help I've made three different fixes for a flaky test in our sync module and it keeps going red again. What should I do next?
