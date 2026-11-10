@@ -74,7 +74,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import filecmp, sys
-          groups = [['scripts/run_env.py', 'skills/fnl-delegate/scripts/run_env.py', 'skills/fnl-checks/scripts/run_env.py'],
+          groups = [['scripts/run_env.py', 'skills/fnl-delegate/scripts/run_env.py', 'skills/fnl-checks/scripts/run_env.py', 'skills/fnl-update/scripts/run_env.py'],
                     ['scripts/delegate_env.py', 'skills/fnl-delegate/scripts/delegate_env.py'],
                     ['scripts/away_lease.py', 'skills/fnl-delegate/scripts/away_lease.py'],
                     ['scripts/log_scan.py', 'skills/fnl-delegate/scripts/log_scan.py'],
