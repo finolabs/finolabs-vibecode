@@ -23,12 +23,12 @@ Questions below ask through the host's native question tool when the session has
    For an update, first find the target: `target` alone for the latest stable release (the default), or for `/fnl-update <version>` the evidence form in `references/onboarding.md`. A refusal ends the update; report its reason. For a rollback, show the `lost:` lines first.
 2. If the user only asked for status, finish with those facts. For an update, report the host's native command for the installed identifier, its status from `references/hosts.md` and any restart or trust step. Ask for a clear **yes to running that command now**, through the host's native question tool when the session has one. Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes. Wait for the answer. A skip, silence or ambiguous answer grants no permission.
 3. After that yes, run only a verified native update command for the matching host and installed identifier. Report the actual result. An error is an error, not a successful update. Verify the resulting installed version with the host's listing; a still-running session's manifest can describe the old loaded copy.
-4. Go straight on to the checklist (step 5); the user is never sent to a second command.
+4. Go straight on to the checklist (step 5); the user is never sent to a second command. First re-resolve `<update_check.py>` inside the newly installed copy that the host listing reports, and run its `status`: its `installed` must equal the verified version. If it does not (the host keeps the old copy loaded until a restart), stop here, say a restart is needed and that `/fnl-update whats-new` or `/fnl-update` continues afterwards, and do not run `onboard seen`.
 
 ## The checklist
 
 5. Run `python3 -I <update_check.py> whats-new` and show it. For each `[open]` or `[unknown]` item in the order given, offer its setup step: invoke `fnl-setup` with that `/fnl-setup add <feature>`, which asks its own consent, preview and neutral yes exactly as it always does. Nothing is set up without the user's own answer there. When the user chooses to skip an item, run `onboard skip <id>`. Items without a setup step are told, not offered.
-6. When the user has gone through the list, run `onboard seen <installed version>` and run `whats-new` again to verify. This clears the session-start line.
+6. When the user has gone through that installation's list, run `onboard seen <installed version>` with the same re-resolved helper and run `whats-new` again to verify. This clears the session-start line.
 
 `/fnl-update whats-new` runs step 5's command only: it shows the checklist and changes nothing, installs nothing, offers no setup step and never calls `onboard`.
 

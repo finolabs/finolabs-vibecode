@@ -442,6 +442,19 @@ class OnboardTest(unittest.TestCase):
         self.call('onboard', 'skip', '0.1.8/n200')
         self.assertEqual(self.onboard_file().read_bytes(), before)
 
+    def test_a_full_skip_ledger_of_long_ids_round_trips(self):
+        slug = lambda r, i: f'r{r}-' + 'x' * 34 + f'-{i:02d}'
+        releases = {f'0.1.{8 + r}': [slug(r, i) for i in range(30)] for r in range(7)}
+        self.notes(releases)
+        ids = [f'{v}/{s}' for v, items in releases.items() for s in items]
+        for item in ids[:200]:
+            self.call('onboard', 'skip', item)
+        self.assertGreater(len(self.onboard_file().read_bytes()), 4096)
+        self.assertEqual(u.onboard_state()['skipped'], ids[:200])
+        before = self.onboard_file().read_bytes()
+        self.call('onboard', 'skip', ids[200])
+        self.assertEqual(self.onboard_file().read_bytes(), before)
+
     def test_invalid_onboard_state_is_replaced_by_a_writer_and_silences_the_hook(self):
         for bad in [[], {'last_seen': '0.1.6'}, {'last_seen': 'x', 'skipped': []},
                     {'last_seen': None, 'skipped': ['bad id']}, {'last_seen': None, 'skipped': [], 'x': 1}]:

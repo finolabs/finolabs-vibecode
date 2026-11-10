@@ -74,9 +74,9 @@ def installed_version():
     return value
 
 
-def read_json(name, default):
+def read_json(name, default, limit=4096):
     try:
-        return json.loads(dr.read_data(Path("state") / name, 4096))
+        return json.loads(dr.read_data(Path("state") / name, limit))
     except FileNotFoundError:
         return default
     except (OSError, ValueError):
@@ -125,6 +125,8 @@ TEXT = re.compile(r"[ -~]{1,200}", re.ASCII)
 CHECK_TIMEOUT = 10
 CHECK_STATES = {0: "done", 1: "open", 3: "not applicable"}
 MAX_SKIPPED = 200
+# 200 ids of at most 64 characters each, quoted and comma-separated, plus the version and keys.
+ONBOARD_LIMIT = 16384
 EVIDENCE_LIMIT = 65536
 EVIDENCE_URL = "https://github.com/finolabs/finolabs-vibecode/releases/tag/"
 
@@ -213,7 +215,7 @@ def check_state(argv):
 
 def onboard_state():
     """{"last_seen", "skipped"} or None when the stored file is invalid."""
-    data = read_json("onboard.json", {"last_seen": None, "skipped": []})
+    data = read_json("onboard.json", {"last_seen": None, "skipped": []}, ONBOARD_LIMIT)
     if (not isinstance(data, dict) or set(data) != {"last_seen", "skipped"}
             or not (data["last_seen"] is None or data["last_seen"] == stable(data["last_seen"]))
             or not isinstance(data["skipped"], list) or len(data["skipped"]) > MAX_SKIPPED
@@ -260,6 +262,8 @@ def onboard(argv):
             if len(state["skipped"]) >= MAX_SKIPPED:
                 return
             state["skipped"] = [*state["skipped"], argv[1]]
+    if len(json.dumps(state, separators=(",", ":")) + "\n") > ONBOARD_LIMIT:
+        return
     write_json("onboard.json", state)
 
 
