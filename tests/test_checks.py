@@ -184,6 +184,54 @@ class ChecksRunTest(unittest.TestCase):
         self.assertEqual(launched, [[sys.executable, '-m', 'unittest', 'tests.test_alpha'], self.mark('other')])
         self.assertEqual(self.marked(), ['other'])
 
+    def change_alpha(self):
+        self.git('checkout', '-qb', 'work')
+        (self.repo / 'scripts/alpha.py').write_text('A = 2\n')
+        self.git('add', '.')
+        self.commit('Change alpha')
+
+    def changed_launches(self, check):
+        self.log.unlink(missing_ok=True)
+        self.store(('unit', check))
+        code, _, err = self.run_cli(self.module(), 'run', '--changed', '--base', 'main')
+        return code, err, [args[args.index('--') + 1:] for args in self.launched()]
+
+    def test_changed_narrows_only_the_supported_unittest_forms(self):
+        self.change_alpha()
+        py = sys.executable
+        narrowed = [py, '-m', 'unittest', 'tests.test_alpha']
+        # The stored-list guard refuses any `-p...` argument after an interpreter, so the -p forms are checked
+        # on the selector itself below; the forms a list can hold run end to end.
+        for tail in ([], ['discover'], ['discover', '-s', 'tests']):
+            with self.subTest(tail=tail):
+                code, err, launched = self.changed_launches([py, '-m', 'unittest', *tail])
+                self.assertEqual(code, 0, err)
+                self.assertEqual(launched, [narrowed])
+        module = self.module()
+        for tail in ([], ['discover'], ['discover', '-s', 'tests'], ['discover', '-p', 'test_*.py'],
+                     ['discover', '-s', 'tests', '-p', 'test_*.py'], ['discover', '-p', 'test_*.py', '-s', 'tests']):
+            with self.subTest(selector=tail):
+                self.assertTrue(module.narrowable([py, '-m', 'unittest', *tail]))
+
+    def test_changed_runs_every_other_unittest_form_whole(self):
+        self.change_alpha()
+        py = sys.executable
+        for tail in (['discover', '-s', 'other_tests'], ['tests.test_alpha', 'tests.test_other'],
+                     ['discover', '-v'], ['-v'], ['discover', '-s', 'tests', '-s', 'tests'], ['discover', '-t', '.'],
+                     ['discover', 'tests'], ['discover', '-s'], ['tests.test_alpha']):
+            with self.subTest(tail=tail):
+                check = [py, '-m', 'unittest', *tail]
+                _, _, launched = self.changed_launches(check)
+                self.assertEqual(launched, [check])
+        module = self.module()
+        for tail in (['discover', '-s', 'tests', '-p', 'check_*.py'], ['discover', '-p', '*_test.py'],
+                     ['discover', '-p', 'test_*.py', '-p', 'test_*.py'], ['discover', '-p'],
+                     ['discover', '--pattern', 'test_*.py'], ['discover', '-s', 'other_tests'],
+                     ['tests.test_alpha', 'tests.test_other'], ['discover', '-v'], ['-v']):
+            with self.subTest(selector=tail):
+                self.assertFalse(module.narrowable([py, '-m', 'unittest', *tail]))
+        self.assertFalse(module.narrowable(['make', '-m', 'unittest']))
+
     def test_changed_skips_python_tests_no_module_names_and_says_why(self):
         self.store(('unit', self.unittest_check()), ('other', self.mark('other')))
         self.git('checkout', '-qb', 'work')

@@ -7,7 +7,7 @@
 Run from inside the repository:
 
 - `python3 -I <this skill folder>/scripts/checks.py run` runs every check in the stored order and stops at the first failure, printing the failed check's name and exit code. The checks' own output streams through.
-- `checks.py run --changed [--base <ref>]` (default base `origin/main`) keeps only the checks the change since the base touches. A `python -m unittest` check is narrowed to the test modules `select_tests.py` names, at most two modules per command, and is skipped when no module names a changed file. Every other check (pytest, npm, make and the rest) runs whole. With no changed file every check is skipped. Each skipped check is printed with its reason. An unknown base refuses.
+- `checks.py run --changed [--base <ref>]` (default base `origin/main`) keeps only the checks the change since the base touches. Only two unittest forms are narrowed: `python -m unittest` alone, and `python -m unittest discover` optionally followed by `-s tests` and/or `-p test_*.py` in either order. Such a check is narrowed to the test modules `select_tests.py` names, at most two modules per command, and is skipped when no module names a changed file. Every other unittest form (another directory or pattern, an explicit module list, any other option) and every other check (pytest, npm, make and the rest) runs whole. With no changed file every check is skipped. Each skipped check is printed with its reason. An unknown base refuses.
 - `checks.py show` prints the stored list and whether the local-receipt mode is on.
 
 Exits: 0 passed, 1 a check failed, 2 refused (no list, unknown base, outside a repository), 3 the stored section is invalid or unreadable.

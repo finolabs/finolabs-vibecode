@@ -8,7 +8,8 @@ Usage, from inside the repository:
 Each check is an argument array from `## Checks` of the canonical host config (written only by fnl-setup's
 `checks_setup.py`), launched through `heavy_run.py`'s canonical form with no shell and an allowlisted environment;
 the checks' own output streams through. `--changed` keeps only the checks the change since the base touches: a
-`python -m unittest` check is narrowed to the modules `select_tests.py` names, every other check runs whole.
+`python -m unittest` check in a form `narrowable` accepts is narrowed to the modules `select_tests.py` names, every
+other check and every other unittest form runs whole.
 A run of the whole list first removes any earlier receipt for the repository, so the latest full run decides; when
 the repository's local-receipt mode is on, a passing run of the whole list on a clean tree whose head did not
 move writes a receipt (repository code, head, list digest) in the private state folder. One whole-list run per
@@ -110,8 +111,23 @@ def full_run_lock(code):
     return fd
 
 
-def is_unittest(argv):
-    return bool(cl.INTERPRETER.fullmatch(cl.program_name(argv[0]))) and argv[1:3] == ['-m', 'unittest']
+DISCOVERY_OPTIONS = {'-s': 'tests', '-p': 'test_*.py'}
+
+
+def narrowable(argv):
+    """True only for the forms the selector understands: `<python> -m unittest`, or `<python> -m unittest discover`
+    optionally followed by `-s tests` and/or `-p test_*.py` in either order. Every other form runs whole."""
+    if not (len(argv) >= 3 and cl.program_name(argv[0]).startswith('python')
+            and cl.INTERPRETER.fullmatch(cl.program_name(argv[0])) and argv[1:3] == ['-m', 'unittest']):
+        return False
+    rest = argv[3:]
+    if not rest:
+        return True
+    if rest[0] != 'discover' or len(rest) % 2 == 0:
+        return False
+    pairs = [(rest[i], rest[i + 1]) for i in range(1, len(rest), 2)]
+    flags = [flag for flag, _ in pairs]
+    return len(set(flags)) == len(flags) and all(DISCOVERY_OPTIONS.get(flag) == value for flag, value in pairs)
 
 
 def narrow(checks, base, root):
@@ -127,7 +143,7 @@ def narrow(checks, base, root):
     modules, _ = select_tests.select(str(root), changed)
     plan, skipped = [], []
     for name, argv in checks:
-        if not is_unittest(argv) or not all(MODULE.fullmatch(module) for module in modules):
+        if not narrowable(argv) or not all(MODULE.fullmatch(module) for module in modules):
             plan.append((name, argv))  # deny on doubt: an odd module name runs the check whole
         elif not modules:
             skipped.append((name, 'no Python test module names a changed file'))
