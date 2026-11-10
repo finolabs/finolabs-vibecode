@@ -74,7 +74,9 @@ jobs:
         run: |
           python3 - <<'PY'
           import filecmp, sys
-          groups = [['scripts/run_env.py', 'skills/fnl-delegate/scripts/run_env.py', 'skills/fnl-checks/scripts/run_env.py'],
+          groups = [['scripts/run_env.py', 'skills/fnl-delegate/scripts/run_env.py', 'skills/fnl-checks/scripts/run_env.py', 'skills/fnl-setup/scripts/run_env.py'],
+                    ['scripts/checks_list.py', 'skills/fnl-setup/scripts/checks_list.py', 'skills/fnl-checks/scripts/checks_list.py', 'skills/fnl-review-gate/scripts/checks_list.py'],
+                    ['skills/fnl-delegate/scripts/heavy_run.py', 'skills/fnl-checks/scripts/heavy_run.py'],
                     ['scripts/delegate_env.py', 'skills/fnl-delegate/scripts/delegate_env.py'],
                     ['scripts/away_lease.py', 'skills/fnl-delegate/scripts/away_lease.py'],
                     ['scripts/log_scan.py', 'skills/fnl-delegate/scripts/log_scan.py'],
@@ -90,7 +92,7 @@ jobs:
                     ["scripts/review_config.py", "skills/fnl-delegate/scripts/review_config.py", "skills/fnl-review-gate/scripts/review_config.py"],
                     ["scripts/git_metadata.py", "skills/fnl-delegate/scripts/git_metadata.py", "skills/fnl-review-gate/scripts/git_metadata.py"],
                     ["scripts/post_review.py", "skills/fnl-review-gate/scripts/post_review.py"],
-                    ["scripts/project_progress.py", "skills/fnl-status/scripts/project_progress.py", "skills/fnl-setup/scripts/project_progress.py"],
+                    ["scripts/project_progress.py", "skills/fnl-status/scripts/project_progress.py", "skills/fnl-setup/scripts/project_progress.py", "skills/fnl-checks/scripts/project_progress.py", "skills/fnl-review-gate/scripts/project_progress.py"],
                     ["scripts/agent_processes.py", "skills/fnl-status/scripts/agent_processes.py", "skills/fnl-setup/scripts/agent_processes.py"],
                     ["scripts/judge.py", "skills/fnl-delegate/scripts/judge.py", "skills/fnl-session-hygiene/scripts/judge.py", "skills/fnl-checks/scripts/judge.py"],
                     ["scripts/assignments.py", "skills/fnl-setup/scripts/assignments.py", "skills/fnl-delegate/scripts/assignments.py", "skills/fnl-review-gate/scripts/assignments.py", "skills/fnl-session-hygiene/scripts/assignments.py", "skills/fnl-checks/scripts/assignments.py"],
@@ -98,7 +100,7 @@ jobs:
                     ["scripts/select_tests.py", "skills/fnl-checks/scripts/select_tests.py"],
                     ["scripts/record.py", "skills/fnl-coding-router/scripts/record.py", "skills/fnl-delegate/scripts/record.py", "skills/fnl-checks/scripts/record.py"],
                     ["scripts/context_steward.py", "skills/fnl-session-hygiene/scripts/context_steward.py"],
-                    ["scripts/parallel_slots.py", "skills/fnl-delegate/scripts/parallel_slots.py", "skills/fnl-status/scripts/parallel_slots.py"],
+                    ["scripts/parallel_slots.py", "skills/fnl-delegate/scripts/parallel_slots.py", "skills/fnl-status/scripts/parallel_slots.py", "skills/fnl-checks/scripts/parallel_slots.py"],
                     ["scripts/context_snapshot.py", "skills/fnl-session-hygiene/scripts/context_snapshot.py"],
                     ["scripts/statusline_setup.py", "skills/fnl-setup/scripts/statusline_setup.py"],
                     ["scripts/compact_setup.py", "skills/fnl-setup/scripts/compact_setup.py"],
