@@ -9,8 +9,10 @@ Each check is an argument array from `## Checks` of the canonical host config (w
 `checks_setup.py`), launched through `heavy_run.py`'s canonical form with no shell and an allowlisted environment;
 the checks' own output streams through. `--changed` keeps only the checks the change since the base touches: a
 `python -m unittest` check is narrowed to the modules `select_tests.py` names, every other check runs whole.
-When the repository's local-receipt mode is on, a passing run of the whole list on a clean tree whose head did not
-move writes a receipt (repository code, head, list digest) in the private state folder. It edits no file of the
+A run of the whole list first removes any earlier receipt for the repository, so the latest full run decides; when
+the repository's local-receipt mode is on, a passing run of the whole list on a clean tree whose head did not
+move writes a receipt (repository code, head, list digest) in the private state folder. `--changed` neither writes
+nor removes one. It edits no file of the
 repository and makes no network call. Exits: 0 passed, 1 a check failed, 2 refused or unknown, 3 invalid list.
 """
 import argparse
@@ -116,6 +118,11 @@ def run(changed, base):
         plan, skipped = narrow(checks, base, root)
     else:
         plan, skipped = list(checks), []
+        # The latest full run decides: drop any earlier receipt before the first check, so a failed rerun leaves none.
+        try:
+            cl.remove_receipt(code)
+        except (OSError, ValueError):
+            raise Refused('the earlier local receipt could not be removed; nothing was run') from None
     for name, why in skipped:
         print(f'skipped {name}: {why}')
     for name, argv in plan:

@@ -268,6 +268,73 @@ class ChecksRunTest(unittest.TestCase):
         self.assertFalse(self.receipt().exists())
         self.assertIn('no local receipt: a check failed', out)
 
+    def gate(self):
+        """A check whose result flips with a flag file outside the repository: same list, same head."""
+        script = self.temp_base() / 'gate.py'
+        script.write_text('import os, sys\nsys.exit(1 if os.path.exists(sys.argv[1]) else 0)\n')
+        flag = self.temp_base() / 'fail.flag'
+        return [sys.executable, str(script), str(flag)], flag
+
+    def temp_base(self):
+        return Path(self.temp.name).resolve()
+
+    def test_a_failed_full_rerun_removes_the_receipt_and_the_merge_check_blocks(self):
+        argv, flag = self.gate()
+        self.store(('gate', argv), receipt=True)
+        self.git('remote', 'add', 'origin', 'https://github.com/acme/demo.git')
+        self.assertEqual(self.run_cli(self.module(), 'run')[0], 0)
+        self.assertTrue(self.receipt().exists())
+        merge_check = load('merge_check_for_rerun', ROOT / 'skills/fnl-review-gate/scripts/merge_check.py')
+        head = self.git('rev-parse', 'HEAD')
+        self.assertEqual(merge_check.local_receipt(head, 'acme/demo'), (True, 'matches'))
+        flag.write_text('x\n')
+        code, out, _ = self.run_cli(self.module(), 'run')
+        self.assertEqual(code, 1)
+        self.assertFalse(self.receipt().exists())
+        pr = {'state': 'OPEN', 'headRefOid': head, 'author': {'login': 'owner'}, 'comments': [], 'reviews': [],
+              'statusCheckRollup': [], 'mergeStateStatus': 'CLEAN', 'body': ''}
+        ok, lines = merge_check.evaluate(pr, lambda who: True, adopted=False,
+                                         local_receipt=merge_check.local_receipt, repo='acme/demo')
+        self.assertFalse(ok)
+        self.assertIn('BLOCK checks: none reported; local receipt: no local receipt', lines)
+
+    def test_a_full_run_removes_the_old_receipt_before_the_first_check(self):
+        self.store(('a', self.mark('a')), receipt=True)
+        self.assertEqual(self.run_cli(self.module(), 'run')[0], 0)
+        self.assertTrue(self.receipt().exists())
+        module = self.module()
+        original, seen = module.run_one, []
+
+        def watching(name, argv, root):
+            seen.append(self.receipt().exists())
+            return original(name, argv, root)
+
+        module.run_one = watching
+        self.assertEqual(self.run_cli(module, 'run')[0], 0)
+        self.assertEqual(seen, [False])
+        self.assertTrue(self.receipt().exists())
+
+    def test_a_dirty_full_run_also_drops_the_old_receipt(self):
+        self.store(('a', self.mark('a')), receipt=True)
+        self.assertEqual(self.run_cli(self.module(), 'run')[0], 0)
+        (self.repo / 'untracked.txt').write_text('x\n')
+        self.assertEqual(self.run_cli(self.module(), 'run')[0], 0)
+        self.assertFalse(self.receipt().exists())
+
+    def test_a_changed_run_neither_writes_nor_removes_the_receipt(self):
+        argv, flag = self.gate()
+        self.store(('gate', argv), receipt=True)
+        self.assertEqual(self.run_cli(self.module(), 'run')[0], 0)
+        before = self.receipt().read_bytes()
+        flag.write_text('x\n')
+        self.git('checkout', '-qb', 'work')
+        (self.repo / 'docs/notes.md').write_text('changed\n')
+        self.git('add', '.')
+        self.commit('Change notes')
+        code, _, _ = self.run_cli(self.module(), 'run', '--changed', '--base', 'main')
+        self.assertEqual(code, 1)
+        self.assertEqual(self.receipt().read_bytes(), before)
+
     def test_with_the_mode_off_no_receipt_is_written_or_mentioned(self):
         self.store(('a', self.mark('a')))
         code, out, _ = self.run_cli(self.module(), 'run')

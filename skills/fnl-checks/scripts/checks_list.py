@@ -7,6 +7,7 @@ whole and is never repaired here. Runs no command and makes no network call.
 """
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -225,6 +226,21 @@ def write_receipt(code, head, digest):
     with dr.data_folder(RECEIPTS, create=True, private=True) as folder:
         dr.atomic_write(folder, code + '.json', json.dumps(record, sort_keys=True).encode())
     return record
+
+
+def remove_receipt(code):
+    """Remove this repository's receipt, if any, in one unlink; a missing receipt or folder is fine."""
+    if not isinstance(code, str) or not CODE.fullmatch(code):
+        raise ValueError('invalid code')
+    try:
+        with dr.data_folder(RECEIPTS, private=True) as folder:
+            try:
+                os.unlink(code + '.json', dir_fd=folder)
+            except FileNotFoundError:
+                return
+            os.fsync(folder)
+    except FileNotFoundError:
+        return
 
 
 def read_receipt(code):
