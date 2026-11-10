@@ -1,6 +1,6 @@
 # Release 0.2.3: scope
 
-Status: implemented; ready to cut. Scope started by the owner on 2026-11-09; packages 1 to 14 are built, with the outcomes below where a result differs from its row.
+Status: released; scope started by the owner on 2026-11-09, all fourteen packages merged, tagged v0.2.3 on 2026-11-10; the outcomes below record where a result differs from its row.
 
 ## Scope (owner decisions, 2026-11-09)
 

@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-10
+
 ### Added
 
 - With metrics consent on Claude Code, a skill typed as `/fnl-name` records the existing `skill` event (name only, never prompt text), and the first file edit of a session with no router receipt prints one advisory reminder to invoke `fnl-coding-router`; Codex and Antigravity stay unmeasured and advisory.
@@ -474,7 +476,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.10...v0.2.0
