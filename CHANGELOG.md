@@ -8,6 +8,9 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - `/fnl-setup add checks` reads a repository's `package.json` scripts, declared Python test runner and `Makefile` targets without running them, lists `run:` lines from its CI workflows as unverified candidates it never converts, proposes an ordered check list (a name and a JSON argument array each, never run through a shell by the plugin; known shells, launchers and inline-code forms are refused as a best-effort guard, not a sandbox; skipped items named) and, after a digest-bound yes, `checks_setup.py` saves it as that repository's entry in the host config's own `## Checks` section (at most 20 checks of 1 KB each); `## Project settings` is unchanged.
 
+- `/fnl-update` now goes on, after the host update, to a checklist from the new `references/upgrades.json` (one closed-schema entry per release, starting with 0.2.4) and offers each open setup step through `fnl-setup` with its own consent; `/fnl-update whats-new` only shows the checklist, and the session-start hook adds one read-only line naming `/fnl-update` while the installed version's notes are unseen.
+- `update_check.py` gains `whats-new`, `onboard seen <version>` and `onboard skip <id>` (the only writers of `onboard.json`: `last_seen` and skipped ids), `target [<version>] [--evidence <file>]` (latest by default; a chosen version only with matching `gh release view` evidence, an older one reported as a rollback with what is lost) and `pin <version>` / `unpin`, which silences the newer-release notice; the network check is unchanged. The Codex refresh procedure is now marked verified, and `fnl-versioning` asks the release pull request to write the upgrade-notes entry, which a test enforces.
+
 ### Changed
 
 - `fnl-verification` is now fnl-checks, which also covers where a repository's checks run (locally or in CI); `/fnl-verification` keeps working as a user-only alias through 0.2.x.

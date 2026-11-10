@@ -25,7 +25,7 @@ The skill folders and their purposes match the README.
 | `fnl-plugin-packaging` | Packaging skills as a plugin for Claude Code, Codex and Antigravity from one repository: layout, manifests, icon, marketplaces, checks. |
 | `fnl-setup` | Configure user scope, project scope or both: Quick confirms inert defaults and asks companion choices; Advanced interviews each companion and offers widening features. `add <feature>` opens one feature, `check` is read-only, `scan` refreshes inventory, `mode` manages Delegation mode and Routing, and `instructions` drafts instruction files with approval per file; setup installs nothing. |
 | `fnl-status` | Opening the usage dashboard: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, from the usage events (after you consent in setup) and the dispatch ledger. Overview holds activity and reviews; Now shows repository-labelled running lanes, advisory slots, per-install quota and named repositories active in the last 24 hours. It also lists this repository's delegated runs still open. |
-| `fnl-update` | Showing installed and cached available versions, updating through the host after a clear yes, skipping a release, or stopping update notices. |
+| `fnl-update` | Showing installed and cached available versions, updating through the host after a clear yes and walking the new version's setup checklist, showing what is new, targeting a chosen or pinned version, skipping a release, or stopping update notices. |
 | `fnl-help` | Plugin help: you are new and do not know where to start, want to know what the plugin holds, or have a question about a skill, agent or script; it gives the first steps, lists the contents, explains the piece you name, or maps your situation to the next command, including companion skills from other packs. It answers questions; it does not ask another agent. |
 | `fnl-ask` | Older name for `fnl-help`, kept as an alias; follows the same procedure and arguments. |
 | `fnl-verification` | Older name for `fnl-checks`, kept as an alias through 0.2.x; follows the same procedure. |
@@ -55,7 +55,10 @@ The skill folders and their purposes match the README.
 | Stopping or switching and wanting the work continued later by a new session or another agent | `fnl-handoff` (Resume mode: writes a handover note and launches nothing) | |
 | How the practice is working for you: router coverage, skill use, load cost, delegated runs, review outcomes | `/fnl-status` (opens the usage dashboard) | |
 | Deleting the recorded usage data, or stopping the recording | `/fnl-status purge` (asks before deleting) | |
-| Checking for a plugin update, skipping a release, or stopping update notices | `/fnl-update` (shows versions and asks before updating) | |
+| Checking for a plugin update, skipping a release, or stopping update notices | `/fnl-update` (shows versions, asks before updating, then offers each open setup step of the new version) | |
+| Seeing what a new version changed or asks of you, without changing anything | `/fnl-update whats-new` (`update_check.py whats-new`; read-only checklist) | |
+| Updating to, or rolling back to, one exact released version | `/fnl-update <version>` (`update_check.py target <version> --evidence <file>` from `gh release view`) | |
+| Holding the plugin on a version so newer-release notices stop | `/fnl-update pin <version>`, then `/fnl-update unpin` (`update_check.py pin` / `unpin`) | |
 | Want a second opinion | `fnl-advisor` (proposed first and waits for your yes; spends quota) | |
 | Stuck or looping on fixes | `fnl-advisor` committee procedure (proposed first and waits for your yes; spends two families' quota) | |
 | A query on live data, an infrastructure change, a dashboard or a forecast | `fnl-coding-router`, which reads `references/non-code-work.md` | |
@@ -132,7 +135,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/secret_patterns.py` | Shared secret-pattern and environment-dump detection for briefs and logs. |
 | `scripts/session_start.py` | Read-only Claude Code/Codex reminder and fixed state summary, with advisory slots and optional context/handover. |
 | `scripts/statusline_setup.py` | Previews/applies/removes the opt-in context recorder; existing status lines get a manual recipe. |
-| `scripts/update_check.py` | Cached update status, skip/never preferences and the detached fixed-endpoint release check. |
+| `scripts/update_check.py` | Cached update status, skip/never/pin preferences, the detached fixed-endpoint release check, the upgrade-notes checklist (`whats-new`, `onboard seen`/`skip`) and evidence-checked `target`. |
 | `scripts/verify_claim.py` | Checks head, scope and targeted tests, writes verification metadata and prepares host-judge evidence; grants no acceptance. |
 | `scripts/select_tests.py` | Lists the test modules that name a file changed since a base, treating shared copies as one, with commands of at most two modules; runs no test. |
 
