@@ -29,7 +29,10 @@ config, set only by fnl-setup), a receipt written by fnl-checks' `checks.py
 run` stands in for them only when its repository code, head and check-list
 digest all match this checkout's repository, the pull request head and the
 current list; the line then reads `checks: local receipt (<head>)`. The receipt
-is self-reported. With the mode off nothing changes.
+is consulted only when the checkout's `origin` remote (read with git; a github.com
+https or ssh URL) names the `--repo` repository; otherwise the line says
+`local receipt: checkout is not <owner/name>`. The receipt is self-reported.
+With the mode off nothing changes.
 
 With --independent, independent_families uses review_route.author_family's
 head-bound local ledger and consistent base..head commit trailers, and the
@@ -242,9 +245,39 @@ def independent_families(pr):
         return None
 
 
-def local_receipt(head):
+GITHUB_REMOTE = re.compile(
+    r"(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)"
+    r"([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/([A-Za-z0-9._-]{1,100}?)(?:\.git)?/?", re.IGNORECASE)
+
+
+def origin_repository(url):
+    """(owner, name) in lower case for a github.com https or ssh remote URL; None for any other form."""
+    match = GITHUB_REMOTE.fullmatch(url) if isinstance(url, str) else None
+    if not match or not match.group(2).strip(".") or match.group(2).lower() == ".git":
+        return None
+    return match.group(1).lower(), match.group(2).lower()
+
+
+def checkout_origin(root):
+    """(owner, name) of the checkout's single `origin` URL, read with git; None on any failure or ambiguity."""
+    import os
+    env = {name: os.environ[name] for name in ("PATH", "HOME") if name in os.environ}
+    try:
+        done = subprocess.run(["git", "-c", "core.fsmonitor=false", "-C", str(root), "config", "--local", "--get-all",
+                               "remote.origin.url"], capture_output=True, text=True, encoding="utf-8", timeout=TIMEOUT,
+                              check=False, env=env, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        return None
+    urls = done.stdout.splitlines()
+    if done.returncode != 0 or len(urls) != 1:
+        return None
+    return origin_repository(urls[0].strip())
+
+
+def local_receipt(head, repo):
     """None when the current checkout's repository has the local-receipt mode off (or it cannot be read);
-    else (matched, reason) from `checks_list.receipt_status`. Any error is a non-match, never a pass."""
+    else (matched, reason). The receipt is consulted only when the checkout's `origin` is `repo` (owner/name,
+    case-insensitive); otherwise (False, 'checkout is not <repo>'). Any error is a non-match, never a pass."""
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     try:
@@ -253,16 +286,25 @@ def local_receipt(head):
         root = project_progress.find_root(Path.cwd())
         if root is None:
             return None
-        return checks_list.receipt_status(project_progress.repository_code(root), head)
+        code = project_progress.repository_code(root)
+        if not checks_list.receipt_mode(code):
+            return None
+        target = tuple(repo.lower().split("/")) if isinstance(repo, str) and re.fullmatch(r"[\w.-]+/[\w.-]+", repo) else None
+        origin = checkout_origin(root)
+        if target is None or origin is None or origin != target:
+            return False, f"checkout is not {repo}"
+        return checks_list.receipt_status(code, head)
     except (ImportError, OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):
         return None
 
 
-def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, families=None, local_receipt=None):
+def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, families=None, local_receipt=None,
+             repo=None):
     """Return (ok, lines). `can_write(login)` answers write access; `lane_ok()` the lane;
     `adopted` whether the base commit adopted the gate, which makes the router marker required.
     The marker is checked beside the review markers and never relaxes them.
-    `local_receipt(head)` is consulted only when the hosted checks are missing or not passing."""
+    `local_receipt(head, repo)` is consulted only when the hosted checks are missing or not passing;
+    `repo` is the owner/name the pull request was fetched from."""
     if pr.get("state") != "OPEN":
         raise Unknown(f"pull request is {pr.get('state')}")
     head = pr.get("headRefOid")
@@ -315,7 +357,7 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
         lines.append("BLOCK author lacks write access and no owner approved this head")
     passed, detail = checks(pr)
     if not passed and local_receipt is not None:
-        found = local_receipt(head)  # None: the mode is off, so nothing changes
+        found = local_receipt(head, repo)  # None: the mode is off, so nothing changes
         if found is not None:
             matched, reason = found
             if matched is True:
@@ -464,7 +506,8 @@ def main(argv=None):
         adopted = adopted_at(args.repo, pr.get("baseRefOid"))
         families = independent_families(pr) if args.independent else None
         ok, lines = evaluate(pr, can_write, lane_ok, adopted=adopted,
-                             independent=args.independent, families=families, local_receipt=local_receipt)
+                             independent=args.independent, families=families, local_receipt=local_receipt,
+                             repo=args.repo)
     except (Unknown, ValueError, KeyError, TypeError, AttributeError) as error:
         print(f"UNKNOWN {error}")
         return 2

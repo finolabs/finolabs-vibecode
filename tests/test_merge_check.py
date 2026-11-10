@@ -688,8 +688,8 @@ class LocalReceiptTest(unittest.TestCase):
         self.addCleanup(env.stop)
         self.host = self.home / ".finolabs/vibecode/host.md"
         self.host.parent.mkdir(parents=True, exist_ok=True)
-        self.repo = base / "repo"
-        (self.repo / ".git").mkdir(parents=True)
+        self.base = base
+        self.repo = self.init(base / "repo", "https://github.com/acme/demo.git")
         cwd = os.getcwd()
         os.chdir(self.repo)
         self.addCleanup(os.chdir, cwd)
@@ -703,10 +703,26 @@ class LocalReceiptTest(unittest.TestCase):
         self.checks = [("lint", ["make", "lint"]), ("test", ["make", "test"])]
         self.store(self.checks, receipt=True)
 
-    def store(self, checks, receipt):
-        lines = "".join("- %s: %s = %s\n" % (self.code, name, json.dumps(argv, separators=(",", ":")))
+    def git(self, folder, *argv):
+        env = {"HOME": str(self.home), "PATH": os.defpath + ":/usr/local/bin:/opt/homebrew/bin",
+               "GIT_CONFIG_NOSYSTEM": "1"}
+        return subprocess.run(["git", *argv], cwd=folder, env=env, capture_output=True, text=True,
+                              check=True).stdout.strip()
+
+    def init(self, folder, origin=None):
+        folder.mkdir(parents=True)
+        self.git(folder, "init", "-q", "-b", "main")
+        self.git(folder, "-c", "user.name=Synthetic", "-c", "user.email=synthetic@example.com",
+                 "commit", "-q", "--allow-empty", "-m", "Start")
+        if origin:
+            self.git(folder, "remote", "add", "origin", origin)
+        return folder
+
+    def store(self, checks, receipt, code=None):
+        code = code or self.code
+        lines = "".join("- %s: %s = %s\n" % (code, name, json.dumps(argv, separators=(",", ":")))
                         for name, argv in checks)
-        self.host.write_text("# Host\n\n## Checks\n\n" + lines + ("- %s: local-receipt = on\n" % self.code if receipt else ""))
+        self.host.write_text("# Host\n\n## Checks\n\n" + lines + ("- %s: local-receipt = on\n" % code if receipt else ""))
 
     def receipt(self, head=HEAD, checks=None, code=None):
         record = self.cl.write_receipt(self.code, head, self.cl.list_digest(checks or self.checks))
@@ -714,8 +730,8 @@ class LocalReceiptTest(unittest.TestCase):
             path = self.home / ".finolabs/vibecode/state/checks-receipts" / (self.code + ".json")
             path.write_text(json.dumps(dict(record, code=code)))
 
-    def evaluate(self, data):
-        return mc.evaluate(data, lambda who: who in WRITERS, adopted=False, local_receipt=mc.local_receipt)
+    def evaluate(self, data, repo="acme/demo"):
+        return mc.evaluate(data, lambda who: who in WRITERS, adopted=False, local_receipt=mc.local_receipt, repo=repo)
 
     def checks_line(self, lines):
         return next(line for line in lines if "checks:" in line)
@@ -769,16 +785,84 @@ class LocalReceiptTest(unittest.TestCase):
         self.assertEqual(self.checks_line(lines), "BLOCK checks: none reported")
 
     def test_passing_hosted_checks_ignore_the_receipt(self):
-        def never(head):
+        def never(head, repo):
             raise AssertionError("receipt read while hosted checks pass")
-        ok, lines = mc.evaluate(pr(), lambda who: who in WRITERS, adopted=False, local_receipt=never)
+        ok, lines = mc.evaluate(pr(), lambda who: who in WRITERS, adopted=False, local_receipt=never, repo="acme/demo")
         self.assertTrue(ok, lines)
         self.assertEqual(self.checks_line(lines), "ok    checks: all passed")
 
     def test_outside_a_repository_the_mode_is_off(self):
         os.chdir(self.home)
         self.receipt()
-        self.assertIsNone(mc.local_receipt(HEAD))
+        self.assertIsNone(mc.local_receipt(HEAD, "acme/demo"))
+
+    # The receipt is bound to the repository the merge check targets
+
+    def test_another_repository_sharing_the_head_is_not_satisfied_by_this_receipt(self):
+        other = self.init(self.base / "other", "https://github.com/acme/other.git")
+        self.assertNotEqual(self.project.repository_code(other), self.code)
+        self.receipt()  # mode on, list and receipt for repository A (acme/demo) only
+        ok, lines = self.evaluate(pr(checks=[]), repo="acme/other")  # run from A against B
+        self.assertFalse(ok)
+        self.assertEqual(self.checks_line(lines),
+                         "BLOCK checks: none reported; local receipt: checkout is not acme/other")
+
+    def test_a_linked_worktree_of_the_same_repository_matches(self):
+        linked = self.base / "linked"
+        self.git(self.repo, "worktree", "add", "-q", "--detach", str(linked))
+        self.assertEqual(self.project.repository_code(linked), self.code)
+        self.receipt()
+        os.chdir(linked)
+        ok, lines = self.evaluate(pr(checks=[]), repo="ACME/Demo")
+        self.assertTrue(ok, lines)
+        self.assertEqual(self.checks_line(lines), f"ok    checks: local receipt ({HEAD[:12]})")
+
+    def test_each_github_remote_form_is_parsed(self):
+        forms = ("https://github.com/acme/demo", "https://github.com/acme/demo.git", "https://github.com/acme/demo/",
+                 "git@github.com:acme/demo.git", "git@github.com:acme/demo", "ssh://git@github.com/acme/demo.git",
+                 "https://GitHub.com/Acme/Demo.git")
+        for url in forms:
+            with self.subTest(url):
+                self.assertEqual(mc.origin_repository(url), ("acme", "demo"))
+        for url in ("https://gitlab.com/acme/demo.git", "https://github.com.evil.example/acme/demo",
+                    "https://github.com/acme/demo/extra", "file:///tmp/acme/demo", "git@github.com:acme",
+                    "https://user@github.com/acme/demo", "", "https://github.com/acme/..", "https://github.com/acme/.git"):
+            with self.subTest(url):
+                self.assertIsNone(mc.origin_repository(url))
+
+    def test_a_missing_odd_or_ambiguous_origin_is_not_consulted(self):
+        self.receipt()
+        cases = {
+            "missing": lambda: self.git(self.repo, "remote", "remove", "origin"),
+            "not github": lambda: self.git(self.repo, "remote", "set-url", "origin", "https://gitlab.com/acme/demo.git"),
+            "two urls": lambda: self.git(self.repo, "config", "--add", "remote.origin.url", "git@github.com:acme/fork.git"),
+        }
+        for name, change in cases.items():
+            with self.subTest(name):
+                try:
+                    change()
+                    ok, lines = self.evaluate(pr(checks=[]))
+                    self.assertFalse(ok)
+                    self.assertEqual(self.checks_line(lines),
+                                     "BLOCK checks: none reported; local receipt: checkout is not acme/demo")
+                finally:
+                    subprocess.run(["git", "-C", str(self.repo), "remote", "remove", "origin"], capture_output=True)
+                    self.git(self.repo, "remote", "add", "origin", "https://github.com/acme/demo.git")
+
+    def test_main_binds_the_receipt_to_the_repo_argument(self):
+        seen = []
+
+        def spy(head, repo):
+            seen.append((head, repo))
+            return False, "spied"
+        data = dict(pr(checks=[]), baseRefOid=OLD)
+        with patch.object(mc, "gh", return_value=json.dumps(data)), \
+                patch.object(mc, "adopted_at", return_value=False), \
+                patch.object(mc, "permission", return_value=True), \
+                patch.object(mc, "local_receipt", spy), \
+                patch("sys.stdout", new_callable=__import__("io").StringIO):
+            self.assertEqual(mc.main(["7", "--repo", "acme/other"]), 1)
+        self.assertEqual(seen, [(HEAD, "acme/other")])
 
 
 if __name__ == "__main__":
