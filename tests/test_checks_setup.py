@@ -52,6 +52,19 @@ jobs:
             VERBOSE=1
 """
 
+SHELLS = ['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'csh', 'tcsh', 'pwsh', 'powershell', 'cmd']
+LAUNCHERS = ['env', 'xargs', 'nohup', 'nice', 'timeout', 'time', 'sudo', 'doas', 'exec', 'eval', 'command',
+             'busybox', 'script', 'watch']
+INTERPRETERS = ['python', 'python3', 'node', 'deno', 'bun', 'perl', 'ruby', 'php']
+REFUSED = ([['env', 'env', 'sh', '-c', 'true'], ['env', '-S', 'sh -c true'], ['python3', '-c', '...'],
+            ['npx', '-c', 'eslint .'], ['npx', 'eslint', '--call', 'x'], ['/usr/bin/BASH', 'x'],
+            ['C:\\Windows\\cmd.exe', '/c', 'x'], ['python3.12', '-c', 'x'], ['python3', '-Ic', 'x'],
+            ['node', '--eval=x'], ['python3', '-cprint(1)']]
+           + [[name, 'x'] for name in SHELLS + LAUNCHERS]
+           + [['/usr/bin/' + name, 'tests/x', flag, 'x'] for name in INTERPRETERS for flag in ('-c', '-e', '--eval', '-r')])
+ALLOWED = [['python3', '-m', 'pytest', '-q'], ['npx', 'eslint', '.'], ['node', '--test'], ['make', 'test'],
+           ['python3', '-m', 'unittest', 'discover', '-s', 'tests'], ['ruby', '-Itest', 'test/all.rb']]
+
 
 def load(name, path):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -125,35 +138,64 @@ class ChecksSetupTest(unittest.TestCase):
         self.assertEqual(data['sources'], ['.github/workflows/ci.yml', 'package.json', 'pyproject.toml', 'Makefile'])
         checks = [(item['name'], item['argv']) for item in data['checks']]
         self.assertEqual(checks, [
-            ('lint-code', ['npm', 'run', 'lint']),
-            ('python3-m-unittest', ['python3', '-m', 'unittest', 'discover', '-s', 'tests']),
-            ('folded', ['python3', 'scripts/check.py', '--strict']),
-            ('continued', ['make', 'check', 'VERBOSE=1']),
+            ('npm-lint', ['npm', 'run', 'lint']),
             ('npm-test', ['npm', 'run', 'test']),
             ('npm-build', ['npm', 'run', 'build']),
             ('pytest', ['python3', '-m', 'pytest']),
             ('make-test', ['make', 'test']),
             ('make-lint', ['make', 'lint']),
         ])
-        reasons = {item['where']: item['reason'] for item in data['skipped']}
-        self.assertEqual(reasons, {
-            '.github/workflows/ci.yml job test step 2 (Install)': 'installs dependencies',
-            '.github/workflows/ci.yml job test step 5': 'several commands',
-            '.github/workflows/ci.yml job test step 7 (Pipe)': 'needs a shell',
-            '.github/workflows/ci.yml job test step 8 (Expression)': 'needs a shell',
-            '.github/workflows/ci.yml job test step 9 (In folder)': 'sets a working directory',
-        })
-        self.assertNotIn('"sh"', out)
-        self.assertNotIn('-c', [arg for _, argv in checks for arg in argv])
+        where = {'file': '.github/workflows/ci.yml', 'job': 'test'}
+        self.assertEqual(data['ci'], [dict(where, line=line) for line in (
+            'npm ci', 'npm run lint', 'python3 -m unittest discover -s tests', 'echo one',
+            'python3 scripts/check.py', 'npm test | tee out.txt', 'echo ${{ github.sha }}', 'npm test',
+            'make check \\')])
+        self.assertEqual(data['skipped'], [])
 
-    def test_detect_human_output_names_sources_and_skips(self):
+    def test_detect_human_output_names_sources_and_ci_evidence(self):
         self.write_sources()
         code, out, _ = self.cli('detect', '--root', str(self.repo))
         self.assertEqual(code, 0)
         self.assertIn('Source: .github/workflows/ci.yml', out)
-        self.assertIn('Check: lint-code = ["npm","run","lint"]', out)
-        self.assertIn('Skipped: .github/workflows/ci.yml job test step 5: several commands', out)
+        self.assertIn('Check: npm-lint = ["npm","run","lint"]', out)
+        self.assertIn('\nfound in CI, add with --check if you want it\n', out)
+        self.assertIn('  .github/workflows/ci.yml (job test): npm test | tee out.txt\n', out)
+        self.assertNotIn('Check: lint-code', out)
         self.assertIn('Nothing was run.', out)
+
+    def ci_only(self, workflow):
+        workflows = self.repo / '.github/workflows'
+        workflows.mkdir(parents=True, exist_ok=True)
+        (workflows / 'ci.yml').write_text(workflow)
+        code, out, err = self.cli('detect', '--root', str(self.repo), '--json')
+        self.assertEqual(code, 0, err)
+        data = json.loads(out)
+        self.assertEqual(data['checks'], [])
+        return data['ci']
+
+    def test_a_folded_run_is_evidence_and_never_a_check(self):
+        ci = self.ci_only('jobs:\n  test:\n    steps:\n      - name: Folded\n        run: >-\n'
+                          '          pytest\n          --strict\n')
+        self.assertEqual(ci, [{'file': '.github/workflows/ci.yml', 'job': 'test', 'line': 'pytest'}])
+
+    def test_a_compact_steps_sequence_is_evidence_and_never_a_check(self):
+        ci = self.ci_only('jobs:\n  build:\n    steps:\n    - run: npm test\n    - name: Make\n      run: make test\n'
+                          '  lint:\n    steps:\n    -   run: "ruff check ."\n')
+        self.assertEqual(ci, [{'file': '.github/workflows/ci.yml', 'job': 'build', 'line': 'npm test'},
+                              {'file': '.github/workflows/ci.yml', 'job': 'build', 'line': 'make test'},
+                              {'file': '.github/workflows/ci.yml', 'job': 'lint', 'line': 'ruff check .'}])
+
+    def test_a_working_directory_run_is_evidence_and_never_a_check(self):
+        ci = self.ci_only('defaults:\n  run:\n    working-directory: web\njobs:\n  test:\n    defaults:\n      run:\n'
+                          '        working-directory: app\n    steps:\n      - run: npm test\n'
+                          '      - run: make test\n        working-directory: api\n')
+        self.assertEqual([item['line'] for item in ci], ['npm test', 'make test'])
+
+    def test_ci_evidence_is_truncated_and_cleaned(self):
+        ci = self.ci_only('jobs:\n  "odd job":\n    steps:\n      - run: ' + 'x' * 200 + '\n'
+                          '      - run: env sh -c "true"\n      - run: "a\\u001bb"\n')
+        self.assertEqual([item['line'] for item in ci], ['x' * 120, 'env sh -c "true"', 'a?b'])
+        self.assertEqual({item['job'] for item in ci}, {None})
 
     def test_detect_package_manager_follows_the_lockfile(self):
         (self.repo / 'package.json').write_text(json.dumps({'scripts': {'typecheck': 'tsc --noEmit', 'test': 'vitest'}}))
@@ -162,11 +204,50 @@ class ChecksSetupTest(unittest.TestCase):
         self.assertEqual([item['argv'] for item in data['checks']],
                          [['pnpm', 'run', 'test'], ['pnpm', 'run', 'typecheck']])
 
-    def test_detect_unittest_from_pyproject_with_a_tests_folder(self):
-        (self.repo / 'pyproject.toml').write_text('[project]\nname = "x"\n')
-        (self.repo / 'tests').mkdir()
-        data = json.loads(self.cli('detect', '--root', str(self.repo), '--json')[1])
-        self.assertEqual(data['checks'], [{'name': 'unittest', 'argv': ['python3', '-m', 'unittest', 'discover', '-s', 'tests']}])
+    def python_checks(self, files):
+        for name, text in files.items():
+            path = self.repo / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        code, out, err = self.cli('detect', '--root', str(self.repo), '--json')
+        self.assertEqual(code, 0, err)
+        data = json.loads(out)
+        return [item['argv'] for item in data['checks']], data['skipped']
+
+    def test_pytest_is_chosen_from_each_declaration(self):
+        pytest = ['python3', '-m', 'pytest']
+        cases = {
+            'project dependencies': {'pyproject.toml': '[project]\nname = "x"\ndependencies = ["requests", "PyTest>=8"]\n'},
+            'optional dependencies': {'pyproject.toml': '[project]\nname = "x"\n[project.optional-dependencies]\n'
+                                                        'test = ["pytest[testing] ; python_version>\'3\'"]\n'},
+            'dependency groups': {'pyproject.toml': '[dependency-groups]\ndev = [{include-group = "x"}, "pytest~=8.0"]\n'},
+            'poetry dependencies': {'pyproject.toml': '[tool.poetry.dependencies]\npython = "^3.11"\npytest = "^8"\n'},
+            'poetry group': {'pyproject.toml': '[tool.poetry.group.dev.dependencies]\nPytest = {version = "^8"}\n'},
+            'ini options': {'pyproject.toml': '[tool.pytest.ini_options]\naddopts = "-q"\n'},
+            'pytest.ini': {'pytest.ini': '[pytest]\naddopts = -q\n'},
+            'setup.cfg': {'setup.cfg': '[metadata]\nname = x\n\n[tool:pytest]\naddopts = -q\n'},
+        }
+        for label, files in cases.items():
+            with self.subTest(label):
+                for path in list(self.repo.iterdir()):
+                    if path.is_file():
+                        path.unlink()
+                self.assertEqual(self.python_checks(files), ([pytest], []))
+
+    def test_a_pytest_plugin_or_a_tests_folder_alone_declares_no_runner(self):
+        files = {'pyproject.toml': '[project]\nname = "x"\ndependencies = ["pytest-cov", "pytestx"]\n'
+                                   '[tool.poetry.dependencies]\npytest-mock = "*"\n',
+                 'setup.cfg': '[pytest_extra]\n', 'pytest.ini': '[tool:other]\n',
+                 'tests/test_x.py': 'def test_x():\n    assert True\n'}
+        checks, skipped = self.python_checks(files)
+        self.assertEqual(checks, [])
+        self.assertEqual(skipped, [{'where': 'pyproject.toml', 'reason': 'test runner not declared'}])
+
+    def test_detect_unittest_only_from_explicit_unittest_evidence(self):
+        files = {'pyproject.toml': '[project]\nname = "x"\n',
+                 'tests/test_a.py': 'import os\n', 'tests/test_b.py': 'import os\nfrom unittest import mock\n'}
+        self.assertEqual(self.python_checks(files),
+                         ([['python3', '-m', 'unittest', 'discover', '-s', 'tests']], []))
 
     def test_detect_skips_symlinked_and_oversized_sources(self):
         outside = self.repo.parent / 'outside.json'
@@ -212,6 +293,41 @@ class ChecksSetupTest(unittest.TestCase):
                 self.assertNotIn('Digest', out)
         self.assertEqual(self.host.read_bytes(), before)
         self.assertFalse(self.plan.exists())
+
+    def test_launchers_and_inline_code_are_refused_at_preview(self):
+        before = self.host.read_bytes()
+        for argv in REFUSED:
+            with self.subTest(argv=argv):
+                code, out, err = self.cli('preview', '--root', str(self.repo), '--check', 'test=' + json.dumps(argv))
+                self.assertEqual(code, 1)
+                self.assertNotIn('Digest', out)
+        self.assertEqual(self.host.read_bytes(), before)
+        self.assertFalse(self.plan.exists())
+        for argv in ALLOWED:
+            with self.subTest(argv=argv):
+                self.preview('test=' + json.dumps(argv))
+
+    def test_launchers_and_inline_code_are_refused_at_detection(self):
+        module = self.module()
+
+        def planted(root_fd, sources, checks, skipped):
+            checks.extend(('c', argv) for argv in REFUSED + [['make', 'test']])
+
+        with mock.patch.object(module, 'detect_makefile', planted):
+            data = module.detect(str(self.repo))
+        self.assertEqual(data['checks'], [{'name': 'c', 'argv': ['make', 'test']}])
+        self.assertEqual(len(data['skipped']), len(REFUSED))
+        self.assertEqual({item['reason'] for item in data['skipped']}, {'runs a shell, a launcher or inline code'})
+
+    def test_launchers_and_inline_code_make_the_stored_section_unset(self):
+        module = self.module()
+        code_ = self.code()
+        for argv in REFUSED:
+            with self.subTest(argv=argv):
+                encoded = json.dumps(argv, separators=(',', ':'))
+                self.host.write_text(PREFIX.decode() + '\n## Checks\n\n- %s: lint = ["make","lint"]\n- %s: test = %s\n'
+                                     % (code_, code_, encoded))
+                self.assertEqual(module.checks_for(code_), ([], 'invalid'))
 
     def test_twenty_checks_are_accepted(self):
         checks = [f'c{number}=["true"]' for number in range(20)]

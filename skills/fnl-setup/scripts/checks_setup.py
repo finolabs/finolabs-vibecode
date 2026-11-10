@@ -11,7 +11,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shlex
 import stat
 import sys
 import time
@@ -31,23 +30,48 @@ CODE = re.compile(r'[0-9a-f]{8}')
 LINE = re.compile(r'- ([0-9a-f]{8}): ([a-z0-9][a-z0-9-]{0,31}) = (.+)')
 MAX_CHECKS = 20
 MAX_ARGV = 1024
-SHELLS = {'sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'fish', 'csh', 'tcsh', 'ash', 'busybox',
-          'cmd', 'cmd.exe', 'powershell', 'powershell.exe', 'pwsh'}
+SHELLS = {'sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'fish', 'csh', 'tcsh', 'ash', 'cmd', 'powershell', 'pwsh'}
+LAUNCHERS = {'env', 'xargs', 'nohup', 'nice', 'timeout', 'time', 'sudo', 'doas', 'exec', 'eval', 'command',
+             'busybox', 'script', 'watch'}
+INTERPRETER = re.compile(r'python[0-9.]*|node|nodejs|deno|bun|perl[0-9.]*|ruby[0-9.]*|php[0-9.]*')
+INLINE = re.compile(r'-[cerEp].*|--(?:eval|print)(?:=.*)?|-[bBdEiIOPqsSuvx]+c.*|eval')
+SHELL_FLAG = re.compile(r'-c.*|--call(?:=.*)?|--shell-mode')
 PLAN_KEYS = {'code', 'checks', 'root', 'created', 'sha256', 'mode', 'backup'}
 SOURCE_LIMIT = 256 * 1024
 MAX_WORKFLOWS = 50
+MAX_TEST_FILES = 20
+MAX_EVIDENCE = 200
+EVIDENCE_WIDTH = 120
+CI_HEADING = 'found in CI, add with --check if you want it'
 PACKAGE_SCRIPTS = ('lint', 'test', 'typecheck', 'build')
 MAKE_TARGETS = ('test', 'lint', 'check')
 LOCKFILES = (('pnpm-lock.yaml', 'pnpm'), ('yarn.lock', 'yarn'), ('bun.lockb', 'bun'), ('bun.lock', 'bun'))
-SHELL_SYNTAX = re.compile(r'[|&;<>()$`*?\[\]{}~#!\\]|\$\{\{')
-INSTALLERS = re.compile(r'(?:npm|pnpm|yarn|bun) (?:ci|install|i|add)\b|(?:python3? -m )?pip3? install\b|'
-                        r'(?:sudo|apt|apt-get|brew|yum|dnf|apk|choco|uv sync|poetry install)\b')
 
 
 # The stored argument form
 
+def program_name(path):
+    """Lowercase base name without a Windows suffix, splitting on both kinds of slash."""
+    name = re.split(r'[\\/]', path)[-1].lower()
+    return re.sub(r'\.(?:exe|cmd|bat|com|ps1)$', '', name)
+
+
+def refused_program(argv):
+    """True when the argument array hands control to a shell, a launcher or inline code (deny on doubt)."""
+    name = program_name(argv[0])
+    if name in SHELLS or name in LAUNCHERS:
+        return True
+    rest = argv[1:]
+    if name == 'yarn' and 'exec' in rest:
+        return True
+    runs_package = name == 'npx' or (name in ('npm', 'pnpm') and any(arg in ('exec', 'x', 'dlx') for arg in rest))
+    if runs_package and any(SHELL_FLAG.fullmatch(arg) for arg in rest):
+        return True
+    return bool(INTERPRETER.fullmatch(name)) and any(INLINE.fullmatch(arg) for arg in argv[1:])
+
+
 def check_argv(argv):
-    """Refuse anything that is not a bounded argument list, or that hands a string to a shell."""
+    """Refuse anything that is not a bounded argument list, or that hands a string to a shell, a launcher or inline code."""
     if not isinstance(argv, list) or not argv or len(argv) > 64:
         raise ValueError('argument array')
     for item in argv:
@@ -58,13 +82,8 @@ def check_argv(argv):
     encoded = json.dumps(argv, separators=(',', ':'), ensure_ascii=True)
     if len(encoded.encode()) > MAX_ARGV:
         raise ValueError('argument array too long')
-    rest = list(argv)
-    if os.path.basename(rest[0]) == 'env':
-        rest = rest[1:]
-        while rest and (rest[0].startswith('-') or '=' in rest[0]):
-            rest = rest[1:]
-    if rest and os.path.basename(rest[0]).lower() in SHELLS:
-        raise ValueError('shell')
+    if refused_program(argv):
+        raise ValueError('shell, launcher or inline code')
     return encoded
 
 
@@ -300,106 +319,72 @@ def read_source(root_fd, relative, skipped):
         return None
 
 
-def slug(text):
-    value = re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')[:32].strip('-')
-    return value if value and NAME.fullmatch(value) else ''
-
-
-def command_argv(lines):
-    """One command as an argument array, or a reason it is not one."""
-    lines = [line.strip() for line in lines]
-    lines = [line for line in lines if line and not line.startswith('#')]
-    if not lines:
-        return None, 'empty'
-    joined = []
-    for index, line in enumerate(lines):
-        if line.endswith('\\') and index < len(lines) - 1:
-            joined.append(line[:-1].strip())
-            continue
-        joined.append(line)
-        if index < len(lines) - 1:
-            return None, 'several commands'
-    text = ' '.join(joined)
-    if SHELL_SYNTAX.search(text):
-        return None, 'needs a shell'
-    try:
-        argv = shlex.split(text)
-    except ValueError:
-        return None, 'needs a shell'
-    if not argv or '=' in argv[0] or argv[0] in ('cd', 'export', 'source', '.', 'set', 'eval', 'exec'):
-        return None, 'needs a shell'
-    if INSTALLERS.match(' '.join(argv)):
-        return None, 'installs dependencies'
-    try:
-        check_argv(argv)
-    except ValueError:
-        return None, 'needs a shell'
-    return argv, None
-
-
 def unquote(value):
+    """The text of a plainly quoted YAML scalar, else the value without a trailing comment; never raises."""
     value = value.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in '"\'':
         inner = value[1:-1]
-        return inner.replace("''", "'") if value[0] == "'" else json.loads(value)
-    return value
+        if value[0] == "'":
+            return inner.replace("''", "'")
+        try:
+            decoded = json.loads(value)
+        except ValueError:
+            return inner
+        return decoded if isinstance(decoded, str) else inner
+    return re.sub(r'\s+#.*$', '', value)
 
 
-def workflow_steps(text):
-    """Yield (job, number, step name, keys) for each step; keys map to (inline value, block lines)."""
+def evidence_line(text):
+    """One line fit to show: control and direction characters replaced, at most EVIDENCE_WIDTH characters."""
+    return re.sub(r'[\x00-\x1f\x7f-\x9f​-‏ -‮⁦-⁩]', '?', text.strip())[:EVIDENCE_WIDTH]
+
+
+RUN_KEY = re.compile(r'( *)(?:- +)?(run):(?:[ \t]+(.*))?')
+JOB_KEY = re.compile(r'([A-Za-z_][A-Za-z0-9_-]*):[ \t]*(?:#.*)?')
+BLOCK = re.compile(r'[|>](?:[1-9]?[+-]?|[+-]?[1-9]?)[ \t]*(?:#.*)?')
+
+
+def ci_runs(text):
+    """Yield (job or None, first line) for each `run:` key under `jobs:`; parses nothing else and converts nothing."""
     lines = text.splitlines()
-    job, job_indent, in_jobs, step_indent, number, current = None, None, False, None, 0, None
-    index = 0
-    while index < len(lines):
-        line = lines[index]
+    in_jobs, job_indent, job = False, None, None
+    for index, line in enumerate(lines):
         stripped = line.strip()
-        indent = len(line) - len(line.lstrip(' '))
         if not stripped or stripped.startswith('#'):
-            index += 1
             continue
+        indent = len(line) - len(line.lstrip(' '))
         if indent == 0:
-            in_jobs = stripped == 'jobs:'
-            job = None
-        elif in_jobs and (job_indent is None or indent == job_indent) and re.fullmatch(r'[A-Za-z0-9_-]+:\s*', stripped):
-            job_indent, job, number, step_indent = indent, stripped[:-1].strip(), 0, None
-            if current:
-                yield current
-            current = None
-        elif job is not None:
-            match = re.match(r'( *)- +(.*)$', line)
-            if match and (step_indent is None or len(match[1]) == step_indent) and len(match[1]) > job_indent:
-                if current:
-                    yield current
-                step_indent = len(match[1])
-                number += 1
-                current = (job, number, {})
-                content_indent = len(line) - len(match[2])
-                rest = match[2]
-            elif current and step_indent is not None and indent > step_indent:
-                content_indent, rest = indent, stripped
-            else:
-                index += 1
+            in_jobs = re.fullmatch(r'jobs:[ \t]*(?:#.*)?', stripped) is not None
+            job_indent, job = None, None
+            continue
+        if not in_jobs:
+            continue
+        if job_indent is None or indent <= job_indent:
+            job_indent = indent
+            match = JOB_KEY.fullmatch(stripped)
+            job = match[1] if match else None
+            continue
+        match = RUN_KEY.fullmatch(line)
+        if not match:
+            continue
+        value = (match[3] or '').strip()
+        if not value:
+            continue  # a mapping such as defaults.run, or a plain scalar on later lines: not shown
+        if BLOCK.fullmatch(value):
+            column = match.start(2)
+            first = next((item for item in lines[index + 1:] if item.strip()), '')
+            if len(first) - len(first.lstrip(' ')) <= column:
                 continue
-            key = re.match(r'([A-Za-z_-]+):(?:\s+(.*))?$', rest)
-            if key and current and indent <= content_indent:
-                value = (key[2] or '').strip()
-                block = []
-                if re.fullmatch(r'[|>][+-]?[0-9]?', value):
-                    while index + 1 < len(lines):
-                        following = lines[index + 1]
-                        if following.strip() and len(following) - len(following.lstrip(' ')) <= content_indent:
-                            break
-                        block.append(following)
-                        index += 1
-                    if value.startswith('>'):
-                        block = [' '.join(item.strip() for item in block if item.strip())]
-                current[2][key[1]] = (value, block)
-        index += 1
-    if current:
-        yield current
+            value = first
+        else:
+            value = unquote(value)
+        shown = evidence_line(value)
+        if shown:
+            yield job, shown
 
 
-def detect_workflows(root_fd, sources, checks, skipped):
+def detect_workflows(root_fd, sources, ci, skipped):
+    """List each workflow `run:` step's first line as evidence for the user; never turn one into a check."""
     folder = '.github/workflows'
     try:
         with _subdir(root_fd, folder) as fd:
@@ -415,25 +400,10 @@ def detect_workflows(root_fd, sources, checks, skipped):
         if text is None:
             continue
         sources.append(relative)
-        for job, number, keys in workflow_steps(text):
-            if 'run' not in keys:
-                continue
-            label = unquote(keys['name'][0]) if 'name' in keys and keys['name'][0] else ''
-            where = f'{relative} job {job} step {number}' + (f' ({label})' if label else '')
-            value, block = keys['run']
-            if 'working-directory' in keys:
-                skipped.append({'where': where, 'reason': 'sets a working directory'})
-                continue
-            try:
-                lines = block if re.fullmatch(r'[|>][+-]?[0-9]?', value) else [unquote(value)]
-            except ValueError:
-                skipped.append({'where': where, 'reason': 'needs a shell'})
-                continue
-            argv, reason = command_argv(lines)
-            if reason:
-                skipped.append({'where': where, 'reason': reason})
-                continue
-            checks.append((slug(label) or slug(' '.join(argv[:3])) or 'check', argv))
+        for job, line in ci_runs(text):
+            if len(ci) >= MAX_EVIDENCE:
+                return
+            ci.append({'file': relative, 'job': job, 'line': line})
 
 
 class _subdir:
@@ -485,27 +455,81 @@ def detect_package(root_fd, sources, checks, skipped):
             checks.append((f'{manager}-{name}', [manager, 'run', name]))
 
 
-def detect_pyproject(root_fd, sources, checks, skipped):
-    text = read_source(root_fd, 'pyproject.toml', skipped)
-    if text is None:
-        return
-    sources.append('pyproject.toml')
+def _table(value):
+    return value if isinstance(value, dict) else {}
+
+
+def _strings(value):
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
+
+
+def requirement_name(text):
+    """The normalized distribution name a requirement string or a dependency key starts with."""
+    match = re.match(r'\s*([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)', text)
+    return re.sub(r'[-_.]+', '-', match[1]).lower() if match else ''
+
+
+def pyproject_declares_pytest(data):
+    """True when pyproject.toml declares pytest as a dependency or configures it."""
+    project, tool = _table(data.get('project')), _table(data.get('tool'))
+    names = _strings(project.get('dependencies'))
+    for groups in (_table(project.get('optional-dependencies')), _table(data.get('dependency-groups'))):
+        for value in groups.values():
+            names += _strings(value)
+    poetry = _table(tool.get('poetry'))
+    names += list(_table(poetry.get('dependencies')))
+    for group in _table(poetry.get('group')).values():
+        names += list(_table(_table(group).get('dependencies')))
+    return isinstance(tool.get('pytest'), dict) or any(requirement_name(name) == 'pytest' for name in names)
+
+
+def unittest_evidence(root_fd, skipped):
+    """True when a test module under tests/ imports unittest; reads at most MAX_TEST_FILES files."""
     try:
-        import tomllib
-        data = tomllib.loads(text)
-    except ImportError:
-        skipped.append({'where': 'pyproject.toml', 'reason': 'needs Python 3.11 or later to read'})
+        with _subdir(root_fd, 'tests') as fd:
+            names = sorted(name for name in os.listdir(fd) if re.fullmatch(r'test[A-Za-z0-9_]{0,100}\.py', name))
+    except OSError:
+        return False
+    for name in names[:MAX_TEST_FILES]:
+        text = read_source(root_fd, f'tests/{name}', skipped)
+        if text and re.search(r'^[ \t]*(?:import[ \t]+unittest\b|from[ \t]+unittest\b)', text, re.M):
+            return True
+    return False
+
+
+def detect_python(root_fd, sources, checks, skipped):
+    """pytest only when declared, unittest only from explicit evidence, else a skip that says so."""
+    first, pytest = None, False
+    text = read_source(root_fd, 'pyproject.toml', skipped)
+    if text is not None:
+        sources.append('pyproject.toml')
+        first = 'pyproject.toml'
+        try:
+            import tomllib
+            data = tomllib.loads(text)
+        except ImportError:
+            skipped.append({'where': 'pyproject.toml', 'reason': 'needs Python 3.11 or later to read'})
+            data = None
+        except ValueError:
+            skipped.append({'where': 'pyproject.toml', 'reason': 'not valid TOML'})
+            data = None
+        pytest = isinstance(data, dict) and pyproject_declares_pytest(data)
+    for name, section in (('pytest.ini', 'pytest'), ('setup.cfg', 'tool:pytest')):
+        text = read_source(root_fd, name, skipped)
+        if text is None:
+            continue
+        sources.append(name)
+        first = first or name
+        if re.search(r'^\[' + re.escape(section) + r'\][ \t]*$', text, re.M):
+            pytest = True
+    if first is None:
         return
-    except ValueError:
-        skipped.append({'where': 'pyproject.toml', 'reason': 'not valid TOML'})
-        return
-    tool = data.get('tool', {}) if isinstance(data.get('tool'), dict) else {}
-    dependencies = json.dumps([data.get('project', {}).get('optional-dependencies', {}),
-                               data.get('dependency-groups', {})], default=str)
-    if 'pytest' in tool or re.search(r'"pytest(?:[<>=!~\[ ;"]|$)', dependencies):
+    if pytest:
         checks.append(('pytest', ['python3', '-m', 'pytest']))
-    elif exists(root_fd, 'tests', folder=True):
+    elif unittest_evidence(root_fd, skipped):
         checks.append(('unittest', ['python3', '-m', 'unittest', 'discover', '-s', 'tests']))
+    else:
+        skipped.append({'where': first, 'reason': 'test runner not declared'})
 
 
 def detect_makefile(root_fd, sources, checks, skipped):
@@ -523,13 +547,21 @@ def detect(root):
     found = pp.find_root(root or os.getcwd())
     if found is None:
         raise ValueError('no repository')
-    sources, found_checks, skipped = [], [], []
+    sources, found_checks, skipped, ci = [], [], [], []
     with pp.open_dir(found) as root_fd:
-        for reader in (detect_workflows, detect_package, detect_pyproject, detect_makefile):
+        detect_workflows(root_fd, sources, ci, skipped)
+        for reader in (detect_package, detect_python, detect_makefile):
             reader(root_fd, sources, found_checks, skipped)
     checks, names, seen = [], set(), []
     for name, argv in found_checks:
         if argv in seen or len(checks) >= MAX_CHECKS:
+            continue
+        try:
+            check_argv(argv)
+        except ValueError:
+            reason = 'runs a shell, a launcher or inline code' if isinstance(argv, list) and argv \
+                and isinstance(argv[0], str) and refused_program(argv) else 'not a valid argument array'
+            skipped.append({'where': f'check {name}', 'reason': reason})
             continue
         unique, number = name, 1
         while unique in names:
@@ -538,7 +570,7 @@ def detect(root):
         names.add(unique)
         seen.append(argv)
         checks.append({'name': unique, 'argv': argv})
-    return {'sources': sources, 'checks': checks, 'skipped': skipped}
+    return {'sources': sources, 'checks': checks, 'ci': ci, 'skipped': skipped}
 
 
 def print_detected(result):
@@ -550,6 +582,11 @@ def print_detected(result):
         print(f"Check: {item['name']} = {check_argv(item['argv'])}")
     for item in result['skipped']:
         print(f"Skipped: {item['where']}: {item['reason']}")
+    if result['ci']:
+        print(CI_HEADING)
+        for item in result['ci']:
+            job = f" (job {item['job']})" if item['job'] else ''
+            print(f"  {item['file']}{job}: {item['line']}")
     print('Nothing was run.')
 
 
