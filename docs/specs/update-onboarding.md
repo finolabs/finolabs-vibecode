@@ -1,6 +1,6 @@
 # Update onboarding: what a new version asks of the user (draft, scoped to release 0.2.4)
 
-Status: built for release 0.2.4 (2026-11-11): items 1 to 7 are implemented and tested; the exact-version host command (item 6) is verified on no host yet, so `/fnl-update <version>` leaves the host step to the user. Entries for 0.2.0 to 0.2.3 stay an open decision.
+Status: implemented; for release 0.2.4 (2026-11-11), items 1 to 7 are implemented and tested; the exact-version host command (item 6) is verified on no host yet, so `/fnl-update <version>` leaves the host step to the user. Entries for 0.2.0 to 0.2.3 stay an open decision.
 
 ## Why
 
