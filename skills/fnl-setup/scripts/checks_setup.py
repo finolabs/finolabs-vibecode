@@ -435,12 +435,14 @@ def hook_apply(value, yes, replace):
 
             def still_previewed():
                 # Re-read right before the replace or removal; a writer that ignores this between the re-read and
-                # the change remains a residual race (references/features/checks.md).
+                # the change remains a residual race (references/features/checks.md). Any failure of the re-read
+                # refuses: no content stands in for an error.
                 try:
                     current = read_hook(fd)
-                except (Said, OSError, ValueError):
-                    current = b''
-                if current is None or cs.content_hash(current) != plan['existing']:
+                    matches = current is not None and cs.content_hash(current) == plan['existing']
+                except Exception:
+                    matches = False
+                if not matches:
                     try:
                         os.unlink(backup, dir_fd=fd)  # the backup this apply just wrote; the hook is left alone
                     except FileNotFoundError:

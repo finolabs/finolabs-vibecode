@@ -697,6 +697,47 @@ class HookTest(unittest.TestCase):
         self.assertIn('changed since the preview', err)
         self.assertEqual(hook.read_bytes(), b'#!/bin/sh\necho racing\n')
 
+    def assert_untouched_refusal(self, code, err):
+        self.assertEqual(code, 1)
+        self.assertIn('changed since the preview', err)
+        self.assertEqual(list(self.hooks.glob('pre-push.bak-*')), [])
+        self.assertEqual([p.name for p in self.hooks.iterdir() if p.name.startswith('.pre-push-')], [])
+
+    def test_an_empty_previewed_hook_replaced_by_a_symlink_is_refused(self):
+        hook = self.hooks / 'pre-push'
+        hook.write_bytes(b'')
+        _, digest = self.install()
+        target = self.hooks.parent / 'elsewhere'
+        target.write_bytes(b'#!/bin/sh\necho elsewhere\n')
+
+        def to_symlink():
+            hook.unlink()
+            hook.symlink_to(target)
+        code, err = self.apply_racing(digest, to_symlink, '--replace-existing')
+        self.assert_untouched_refusal(code, err)
+        self.assertTrue(hook.is_symlink())
+        self.assertEqual(target.read_bytes(), b'#!/bin/sh\necho elsewhere\n')
+
+    def test_an_empty_previewed_hook_whose_re_read_fails_is_refused(self):
+        hook = self.hooks / 'pre-push'
+        hook.write_bytes(b'')
+        _, digest = self.install()
+        writer = load('checks_setup_read_error_test', SCRIPT)
+        real, calls = writer.read_hook, []
+
+        def failing(fd):
+            calls.append(1)
+            if len(calls) > 1:
+                raise OSError('synthetic read error')
+            return real(fd)
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(writer, 'read_hook', failing), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = writer.main(['hook', 'apply', '--yes', '--replace-existing', '--digest', digest])
+        self.assertEqual(len(calls), 2)
+        self.assert_untouched_refusal(code, err.getvalue())
+        self.assertEqual(hook.read_bytes(), b'')
+
     def test_an_unsafe_checks_script_path_is_refused(self):
         odd = self.script.parent / "it's" / 'checks.py'
         odd.parent.mkdir()
