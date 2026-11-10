@@ -614,9 +614,6 @@ class RestorePointTest(unittest.TestCase):
         self.assertIn(".env", text)
         self.assertIn("mirror clone or bundle", text)
         self.assertIn("never push `refs/finolabs/*`", text)
-        skill_count = sum(1 for path in (ROOT / "skills").glob("*/SKILL.md"))
-        self.assertEqual(skill_count, 22)
-        self.assertIn(f"The {skill_count} skill folders", (ROOT / "skills/fnl-ask/references/map.md").read_text())
 
     def test_script_source_uses_no_network_push_or_fetch(self):
         source = SCRIPT.read_text(encoding="utf-8").lower()
@@ -632,7 +629,7 @@ class RestorePointTest(unittest.TestCase):
         self.assertIn('argument-hint: "[list|create|restore <name>]"', skill_text)
         self.assertIn("Run only when the user asks.", skill_text)
 
-        start_text = (ROOT / "skills/fnl-ask/references/start.md").read_text(encoding="utf-8")
+        start_text = (ROOT / "skills/fnl-help/references/start.md").read_text(encoding="utf-8")
         demo_lines = [line for line in start_text.splitlines() if line.startswith("4. **Try it now**")]
         self.assertEqual(len(demo_lines), 1)
         demo = demo_lines[0].lower()

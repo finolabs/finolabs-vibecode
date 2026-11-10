@@ -2,7 +2,7 @@
 
 ## Skills
 
-The 22 skill folders and their purposes match the README.
+The skill folders and their purposes match the README.
 
 | Skill | Use it when |
 | --- | --- |
@@ -26,14 +26,15 @@ The 22 skill folders and their purposes match the README.
 | `fnl-setup` | Configure user scope, project scope or both: Quick confirms inert defaults and asks companion choices; Advanced interviews each companion and offers widening features. `add <feature>` opens one feature, `check` is read-only, `scan` refreshes inventory, `mode` manages Delegation mode and Routing, and `instructions` drafts instruction files with approval per file; setup installs nothing. |
 | `fnl-status` | Opening the usage dashboard: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, from the usage events (after you consent in setup) and the dispatch ledger. Overview holds activity and reviews; Now shows repository-labelled running lanes, advisory slots, per-install quota and named repositories active in the last 24 hours. It also lists this repository's delegated runs still open. |
 | `fnl-update` | Showing installed and cached available versions, updating through the host after a clear yes, skipping a release, or stopping update notices. |
-| `fnl-ask` | You are new and do not know where to start, want to know what the plugin holds, or have a question about a skill, agent or script: it gives the first steps, lists the contents, explains the piece you name, or maps your situation to the next command, including companion skills from other packs. |
+| `fnl-help` | Plugin help: you are new and do not know where to start, want to know what the plugin holds, or have a question about a skill, agent or script; it gives the first steps, lists the contents, explains the piece you name, or maps your situation to the next command, including companion skills from other packs. It answers questions; it does not ask another agent. |
+| `fnl-ask` | Older name for `fnl-help`, kept as an alias; follows the same procedure and arguments. |
 | `fnl-open-source-review` | Before a repository goes public, and after: license, secrets in tree and history, internal leaks, clean payload, community files, repository settings, identity, data flow, plugin checks. |
 
 ## Situations
 
 | Situation | Skill | Companion skills and native commands |
 | --- | --- | --- |
-| New to the plugin, or not sure what it holds | `fnl-ask`, "Start" or "Contents" | |
+| New to the plugin, or not sure what it holds | `fnl-help`, "Start" or "Contents" (`fnl-ask` is its older name) | |
 | "Is it set up right?" or what happens automatically on this host | `/fnl-setup check` | |
 | First time in this repository or on this machine | `/fnl-setup` | `/setup-matt-pocock-skills` if that pack is installed |
 | Writing or revising your own instructions for every agent and repository | `/fnl-setup instructions` | |
@@ -49,6 +50,7 @@ The 22 skill folders and their purposes match the README.
 | Bug, failing CI, unexplained behavior | `fnl-coding-router` (workflow adapter's debug path, router checkpoint) | `diagnosing-bugs` |
 | Handing one task to another agent (Claude Code, Codex, Antigravity) with a brief, or restarting a timed-out run | `fnl-handoff`, which loads `fnl-delegate` for the route and gates | `/handoff` for a portable handoff document |
 | Giving work to another agent, splitting work across agents, choosing an agent and model, parallel dispatch, quota, a watched run that stalls | `fnl-delegate` | |
+| Which agent takes which work: who implements a work type at a level, who reviews, who advises and who judges | `fnl-delegate`, whose `route_pick.py pick` answers from the assignment matrix before each dispatch (a preference, never a block); set the matrix with `/fnl-setup add delegation` and review families, judge and posting with `/fnl-setup add roles` | |
 | Stopping or switching and wanting the work continued later by a new session or another agent | `fnl-handoff` (Resume mode: writes a handover note and launches nothing) | |
 | How the practice is working for you: router coverage, skill use, load cost, delegated runs, review outcomes | `/fnl-status` (opens the usage dashboard) | |
 | Deleting the recorded usage data, or stopping the recording | `/fnl-status purge` (asks before deleting) | |
@@ -61,7 +63,10 @@ The 22 skill folders and their purposes match the README.
 | Project drift or a milestone course check | `fnl-delegate`, then the `fnl-navigator` agent | |
 | Confirm outcome anchors, work records or dashboard project settings | `/fnl-setup instructions` for conventions/anchors; `/fnl-setup add project` for settings | |
 | Assign review families, judge or posting setup | `/fnl-setup add roles` | |
-| Set concurrent-run total and optional family caps | `/fnl-setup add delegation` | |
+| Set concurrent-run total and optional family caps, or the assignment matrix | `/fnl-setup add delegation` | |
+| Read how much quota each agent has left before routing | `/fnl-setup add quota` (opt-in, off by default) | |
+| Turn usage metrics, project progress or the running-agent snapshot on or off | `/fnl-setup add metrics` (each needs its own consent) | |
+| Optional companion skills from other packs | `/fnl-setup add companions` (questions and install commands only; installs nothing) | |
 | Read context counts for compaction | `/fnl-setup add compaction`, then `fnl-session-hygiene` | Claude Code/Antigravity status line only; live delivery unverified |
 | Long session, phase change, compaction | `fnl-session-hygiene` | `/ask-matt` covers its phase-boundary choices |
 | A story is done, or before merge | `fnl-review-gate` | `/code-review` (Claude Code), `codex review`, or `code-review` from Matt's pack |
@@ -75,7 +80,7 @@ The 22 skill folders and their purposes match the README.
 
 ## Agents and scripts
 
-Paths below are relative to the full plugin root. There are three agent definitions and 50 distinct script names: 37 in root `scripts/` and 13 available only under a skill. Shared root scripts also have byte-identical copies in consuming skill folders. A standalone skill has only its own helpers; find the installed folder before giving a command. Explaining these pieces runs nothing.
+Paths below are relative to the full plugin root. There are three agent definitions; every distinct script name is listed once, either in root `scripts/` or as available only under a skill. Shared root scripts also have byte-identical copies in consuming skill folders. A standalone skill has only its own helpers; find the installed folder before giving a command. Explaining these pieces runs nothing.
 
 | Agent | Purpose | Procedure |
 | --- | --- | --- |
@@ -88,8 +93,11 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | Path | Purpose |
 | --- | --- |
 | `scripts/agent_processes.py` | Opt-in bounded process-name/elapsed-time snapshot for the dashboard; no repository attribution. |
+| `scripts/assignments.py` | Parses, validates and renders the host config's `## Assignment matrix`; pure, reads no file and runs nothing. |
 | `scripts/auto_gate.py` | Stores local repository-window handoff/keep decisions for the opt-in auto gate. |
 | `scripts/auto_gate_hook.py` | Claude Code first-write nudge; allows on errors, never covers shell writes. |
+| `scripts/away_gate_hook.py` | Claude Code question gate: denies `AskUserQuestion` only while a valid away lease exists, never reads the question, allows on every error. |
+| `scripts/away_lease.py` | Safe away-lease reader and away ledger appender shared by the autopilot, the question gate and session start; any error means no lease. |
 | `scripts/brief_check.py` | Lints brief headings, the environment rule and secret patterns without quoting matches; standalone copy in `fnl-handoff`. |
 | `scripts/build-parity-plugins.sh` | Builds local evaluation plugins from this checkout and a supplied upstream skill checkout. |
 | `scripts/check-references.py` | Checks local links, headings, names, inventories, ledger flags and shared mode copies. |
@@ -132,6 +140,8 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `skills/fnl-delegate/scripts/autopilot.py` | Autopilot lease, closed action classification (Tier 1 or Tier 3) and private action log; executes nothing. |
 | `skills/fnl-delegate/scripts/heavy_run.py` | Runs one heavy command at a time per machine under a kernel lock, with load and memory gates, a wait cap and a maximum run time. |
 | `skills/fnl-delegate/scripts/ledger.py` | Records runs; accepted finishes need a current-head receipt or explicit reason-digested exception. |
+| `skills/fnl-delegate/scripts/pause.py` | `fnl-pause` marker: start, status (open dispatches, heavy jobs, checkpoints) and resume; stops no process and runs nothing. |
+| `skills/fnl-delegate/scripts/route_pick.py` | Answers which agent takes a work type at a level from the assignment matrix and cached quota, with the dropped agents and why; a preference that never blocks. |
 | `skills/fnl-restore-point/scripts/restore_point.py` | Saves/lists/previews/restores private git snapshots; captures non-ignored untracked files and keeps extra current files on restore. |
 | `skills/fnl-review-gate/scripts/merge_check.py` | Checks posted reviews, the low-risk lane and router marker when the base adopted the gate. |
 | `skills/fnl-setup/scripts/agent_scan.py` | Previews fixed local `--version` inventory; writes only after confirmation. |
@@ -139,13 +149,15 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `skills/fnl-setup/scripts/checkup.py` | Read-only setup/instruction evidence; no host commands or credentials. |
 | `skills/fnl-setup/scripts/compact_stop_setup.py` | Previews/installs/removes the separately consented Antigravity size-stop hook. |
 | `skills/fnl-setup/scripts/data_location.py` | Previews/copies plugin data into an empty approved folder and publishes the pointer last. |
+| `skills/fnl-setup/scripts/levels_setup.py` | Previews and applies only the host config's `## Agent levels` section after a digest-bound yes; runs no command. |
+| `skills/fnl-setup/scripts/matrix_setup.py` | Previews, validates, migrates and applies only the host config's `## Assignment matrix` after a digest-bound yes; runs no command and makes no network call. |
 | `skills/fnl-setup/scripts/quota_setup.py` | Previews exact quota executable paths and applies only the approved digest-bound plan. |
 | `skills/fnl-setup/scripts/setup_features.py` | Shows/records/clears declined features; a decline is not a consent. |
 | `skills/fnl-status/scripts/refresh.py` | Rebuilds/opens local dashboard data; manages metrics consent/purge and the separately approved Antigravity metrics hook. |
 
 ## Rules
 
-- A skill command with a leading `/` is for the user to type; on Codex use `$`. The ten user-only declarations are enforced on Claude Code; equivalent invocation policy on Codex/Antigravity remains unverified. Names without `/` load on their own when the task matches, or the user can type them.
+- A skill command with a leading `/` is for the user to type; on Codex use `$`. The user-only declarations are enforced on Claude Code; equivalent invocation policy on Codex/Antigravity remains unverified. Names without `/` load on their own when the task matches, or the user can type them.
 - In a Spec Kit repository, Spec Kit owns the process. Companion process skills (`to-spec`, `to-tickets`, `implement`, `implement-spec`) yield to it; companion phase tools (`grilling`, `tdd`, `diagnosing-bugs`, `prototype`, `code-review`) work inside its phases.
 - Companion skills come from [mattpocock/skills](https://github.com/mattpocock/skills), [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill), [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills), [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design), [finolabs/markmap-skills](https://github.com/finolabs/markmap-skills) and [typesafe-ai/skills](https://github.com/typesafe-ai/skills) (all MIT); `codex review` is native; Claude Code review instruments may need to be installed or enabled as setup describes. When one is not installed, say so and point to that repository's install instructions; install nothing yourself. The packs are independent: neither endorses the other.
 - For Route mode, name the matching skill and command in one or two sentences. When no row fits, say so and name the closest two, with the one question that would decide between them.

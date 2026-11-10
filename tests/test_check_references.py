@@ -102,7 +102,7 @@ class CheckReferencesTest(unittest.TestCase):
                 ("docs/specs/work-tracking.md", True),
                 ("docs/specs/new-feature.md", False),
                 ("README.md", False),
-                ("skills/fnl-ask/references/map.md", False),
+                ("skills/fnl-help/references/map.md", False),
                 ("skills/fnl-setup/SKILL.md", False),
             ):
                 with self.subTest(name=old, file=relative):
@@ -160,22 +160,8 @@ class CheckReferencesTest(unittest.TestCase):
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stdout)
 
-    def test_skill_counts_match_folders(self):
-        for relative in ("README.md", "skills/fnl-ask/references/map.md"):
-            with self.subTest(file=relative):
-                path = self.root / relative
-                original = path.read_text()
-                self.assertIn("22 skill folders", original)
-                path.write_text(original.replace("22 skill folders", "23 skill folders", 1))
-                try:
-                    result = self.check()
-                finally:
-                    path.write_text(original)
-                self.assertEqual(result.returncode, 1, result.stdout)
-                self.assertIn("skill count 23 does not match 22 folders", result.stdout)
-
     def test_skill_lists_match_folders(self):
-        for relative in ("README.md", "skills/fnl-ask/references/map.md"):
+        for relative in ("README.md", "skills/fnl-help/references/map.md"):
             path = self.root / relative
             original = path.read_text()
             for replacement, expected in (("", "skill folder fnl-advisor missing from skill list"),
@@ -227,7 +213,7 @@ class CheckReferencesTest(unittest.TestCase):
         for suffix, replacement in (("verifier", "verification"), ("steward", "session-hygiene")):
             name, target = "fnl-" + suffix, "fnl-" + replacement
             for relative in ("docs/specs/agent-roles.md", "docs/specs/compaction-steward.md",
-                             "README.md", "skills/fnl-ask/references/map.md", "skills/fnl-setup/SKILL.md"):
+                             "README.md", "skills/fnl-help/references/map.md", "skills/fnl-setup/SKILL.md"):
                 with self.subTest(name=name, file=relative):
                     path = self.root / relative
                     original = path.read_text()
