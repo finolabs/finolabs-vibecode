@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- `fnl-verification` is now fnl-checks, which also covers where a repository's checks run (locally or in CI); `/fnl-verification` keeps working as a user-only alias through 0.2.x.
+
 ## [0.2.3] - 2026-11-10
 
 ### Added

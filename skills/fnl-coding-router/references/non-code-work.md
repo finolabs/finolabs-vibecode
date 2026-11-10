@@ -19,4 +19,4 @@ At least NORMAL. DEEP when the output drives a money or stock decision, runs on 
 
 ## Gates
 
-Proof follows `fnl-verification`: a query that ran, a plan that applied or a chart that rendered is not evidence that the result is right. Reviews follow `fnl-review-gate`, and `fnl-security-review-gate` triggers apply wherever personal data, permissions or secrets are involved.
+Proof follows `fnl-checks`: a query that ran, a plan that applied or a chart that rendered is not evidence that the result is right. Reviews follow `fnl-review-gate`, and `fnl-security-review-gate` triggers apply wherever personal data, permissions or secrets are involved.

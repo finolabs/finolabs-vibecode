@@ -754,7 +754,7 @@ class AwayDecisionTest(AutopilotBase):
     def test_the_judge_form_denies_any_other_site_flag_shape_or_copy(self):
         self.start(SETUP_AWAY)
         site = JUDGE.index('away-decision')
-        other = str(ROOT / 'skills/fnl-verification/scripts/judge.py')
+        other = str(ROOT / 'skills/fnl-checks/scripts/judge.py')
         option = JUDGE.index('Split it')
         for argv in (JUDGE[:site] + ['navigator'] + JUDGE[site + 1:], JUDGE + ['--base-url', 'http://127.0.0.1:9'],
                      JUDGE + ['--dry-run'], JUDGE + ['--answers', 'docs/answers.json'],

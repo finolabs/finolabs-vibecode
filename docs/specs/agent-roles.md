@@ -140,7 +140,7 @@ Enforcers: the script for the choice; `fnl-review-gate` text and agent judgment 
 
 ## E. Verification without an agent
 
-`fnl-verification` "Accepting someone else's work" gains a command, `verify_claim.py`:
+`fnl-checks` "Accepting someone else's work" gains a command, `verify_claim.py`:
 
 1. Mechanical part, no model: runs exactly the tests the brief lists (never the full suite), compares the changed
    files with the brief's scope, checks that the head is the one reported, and prints `PASS` or `FAIL` with the
@@ -201,7 +201,7 @@ and records the agreement; that result is part of acceptance.
   `fnl-versioning` makes a breaking change a MINOR bump, so a release that removes them is at least 0.2.0 (the
   owner chose 0.2.0 on 2026-11-07 and moved all work planned for 0.1.11 into it). The owner waived "deprecate first"
   for this removal.
-- `fnl-delegate` Accept step and Route text, `fnl-verification`, `fnl-review-gate` ("Instruments", "Who reviews", the
+- `fnl-delegate` Accept step and Route text, `fnl-checks`, `fnl-review-gate` ("Instruments", "Who reviews", the
   rules about relay and the low-risk lane), `fnl-coding-router` (the router marker), `fnl-setup` (roles, judge and
   posting steps), `fnl-session-hygiene`, `host-template.md`, the two reviewer agent files, `merge_check.py` with its
   tests and the `SessionStart` script change in the same work. Skills stay self-contained: scripts used by two skills are copied and compared in CI.

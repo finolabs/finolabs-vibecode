@@ -49,7 +49,7 @@ Read [references/heavy-jobs.md](references/heavy-jobs.md) for this step.
 
 ## Accept
 
-Use `fnl-verification` "Accepting someone else's work"; read [references/accept.md](references/accept.md) for the receipt gate and explicit exception. The coordinator retains the verdict.
+Use `fnl-checks` "Accepting someone else's work"; read [references/accept.md](references/accept.md) for the receipt gate and explicit exception. The coordinator retains the verdict.
 
 ## Handover after an interrupted run
 

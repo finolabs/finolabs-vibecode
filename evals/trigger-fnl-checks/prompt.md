@@ -1,5 +1,5 @@
 ---
-name: trigger-fnl-verification
+name: trigger-fnl-checks
 tags: [trigger]
 runs: 3
 max_turns: 5

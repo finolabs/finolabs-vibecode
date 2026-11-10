@@ -33,7 +33,7 @@ The app starts sessions only on a turn the user's own message began, never on on
 ## Briefs and acceptance
 
 - Each brief is self-contained: task IDs, the checkout, the files, what done looks like, test-first where `tasks.md` says so, the constraints from `AGENTS.md`, a time budget, and what to report (`fnl-handoff` has the template).
-- The coordinator verifies before marking `[X]`: it reads the diff and the test output itself (`fnl-verification`).
+- The coordinator verifies before marking `[X]`: it reads the diff and the test output itself (`fnl-checks`).
 
 ## Review gate
 

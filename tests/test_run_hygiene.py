@@ -197,7 +197,7 @@ class RunHygieneTest(unittest.TestCase):
     def test_new_script_copies_are_explicit_ci_groups(self):
         from tests.test_shared_copies import ci_copy_groups
         groups = ci_copy_groups()
-        for name, skills in {'run_env.py': ['fnl-delegate', 'fnl-verification'],
+        for name, skills in {'run_env.py': ['fnl-delegate', 'fnl-checks'],
                              'delegate_env.py': ['fnl-delegate'], 'log_scan.py': ['fnl-delegate'],
                              'secret_patterns.py': ['fnl-delegate', 'fnl-handoff'],
                              'brief_check.py': ['fnl-handoff']}.items():
@@ -205,7 +205,7 @@ class RunHygieneTest(unittest.TestCase):
 
     def test_touched_skill_documents_respect_setup_size_limits(self):
         # Apply the spec's limits to touched skill bodies, feature docs and new reference text.
-        for relative in ('fnl-setup/SKILL.md', 'fnl-delegate/SKILL.md', 'fnl-handoff/SKILL.md', 'fnl-session-hygiene/SKILL.md', 'fnl-verification/SKILL.md', 'fnl-setup/references/features/delegation.md'):
+        for relative in ('fnl-setup/SKILL.md', 'fnl-delegate/SKILL.md', 'fnl-handoff/SKILL.md', 'fnl-session-hygiene/SKILL.md', 'fnl-checks/SKILL.md', 'fnl-setup/references/features/delegation.md'):
             path = ROOT / 'skills' / relative
             text = path.read_text()
             self.assertLessEqual(len(text.encode()), 10000 if path.name == 'SKILL.md' else 8000)
