@@ -647,6 +647,56 @@ class HookTest(unittest.TestCase):
         self.assertEqual(self.cli('hook', 'remove', '--root', str(self.repo))[0], 1)
         self.assertEqual((self.hooks / 'pre-push').read_text(), '#!/bin/sh\necho mine\n')
 
+    def apply_racing(self, digest, change, *extra):
+        """Apply, while `change()` runs right after apply's own check of the hook: a concurrent writer."""
+        writer = load('checks_setup_race_test', SCRIPT)
+        real, calls = writer.read_hook, []
+
+        def racing(fd):
+            found = real(fd)
+            if not calls:
+                change()
+            calls.append(found)
+            return found
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(writer, 'read_hook', racing), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = writer.main(['hook', 'apply', '--yes', *extra, '--digest', digest])
+        self.assertTrue(calls, 'apply never read the hook')
+        return code, err.getvalue()
+
+    def test_a_hook_created_between_preview_and_apply_is_not_clobbered(self):
+        _, digest = self.install()
+        hook = self.hooks / 'pre-push'
+        code, err = self.apply_racing(digest, lambda: hook.write_bytes(b'#!/bin/sh\necho racing\n'))
+        self.assertEqual(code, 1)
+        self.assertIn('appeared', err)
+        self.assertEqual(hook.read_bytes(), b'#!/bin/sh\necho racing\n')
+        self.assertEqual([p.name for p in self.hooks.iterdir() if p.name.startswith('.pre-push-')], [])
+
+    def test_a_hook_changed_between_preview_and_remove_is_refused(self):
+        _, digest = self.install()
+        self.assertEqual(self.cli('hook', 'apply', '--yes', '--digest', digest)[0], 0)
+        hook = self.hooks / 'pre-push'
+        code, out, err = self.cli('hook', 'remove', '--root', str(self.repo))
+        self.assertEqual(code, 0, err)
+        changed = hook.read_bytes() + b'echo racing\n'
+        code, err = self.apply_racing(out.split('Digest: ')[1].splitlines()[0], lambda: hook.write_bytes(changed))
+        self.assertEqual(code, 1)
+        self.assertIn('changed since the preview', err)
+        self.assertEqual(hook.read_bytes(), changed)
+        self.assertEqual(list(self.hooks.glob('pre-push.bak-*')), [])
+
+    def test_a_hook_changed_between_preview_and_replace_is_refused(self):
+        hook = self.hooks / 'pre-push'
+        hook.write_bytes(b'#!/bin/sh\necho mine\n')
+        _, digest = self.install()
+        code, err = self.apply_racing(digest, lambda: hook.write_bytes(b'#!/bin/sh\necho racing\n'),
+                                      '--replace-existing')
+        self.assertEqual(code, 1)
+        self.assertIn('changed since the preview', err)
+        self.assertEqual(hook.read_bytes(), b'#!/bin/sh\necho racing\n')
+
     def test_an_unsafe_checks_script_path_is_refused(self):
         odd = self.script.parent / "it's" / 'checks.py'
         odd.parent.mkdir()

@@ -432,6 +432,21 @@ def hook_apply(value, yes, replace):
                     stream.write(existing)
                     stream.flush()
                     os.fsync(stream.fileno())
+
+            def still_previewed():
+                # Re-read right before the replace or removal; a writer that ignores this between the re-read and
+                # the change remains a residual race (references/features/checks.md).
+                try:
+                    current = read_hook(fd)
+                except (Said, OSError, ValueError):
+                    current = b''
+                if current is None or cs.content_hash(current) != plan['existing']:
+                    try:
+                        os.unlink(backup, dir_fd=fd)  # the backup this apply just wrote; the hook is left alone
+                    except FileNotFoundError:
+                        pass
+                    raise Said('the pre-push hook changed since the preview; preview again')
+
             if plan['action'] == 'install':
                 temporary = '.pre-push-' + os.urandom(8).hex()
                 out = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
@@ -441,7 +456,17 @@ def hook_apply(value, yes, replace):
                         os.fchmod(stream.fileno(), 0o755)
                         stream.flush()
                         os.fsync(stream.fileno())
-                    os.replace(temporary, 'pre-push', src_dir_fd=fd, dst_dir_fd=fd)
+                    if existing is None:
+                        # Publish without clobbering: link fails when a hook appeared since the preview.
+                        try:
+                            os.link(temporary, 'pre-push', src_dir_fd=fd, dst_dir_fd=fd, follow_symlinks=False)
+                        except FileExistsError:
+                            raise Said('a pre-push hook appeared since the preview; it is left alone. '
+                                       'Preview again.') from None
+                        os.unlink(temporary, dir_fd=fd)
+                    else:
+                        still_previewed()
+                        os.replace(temporary, 'pre-push', src_dir_fd=fd, dst_dir_fd=fd)
                 except BaseException:
                     try:
                         os.unlink(temporary, dir_fd=fd)
@@ -449,6 +474,7 @@ def hook_apply(value, yes, replace):
                         pass
                     raise
             else:
+                still_previewed()
                 os.unlink('pre-push', dir_fd=fd)
             os.fsync(fd)
         finally:
