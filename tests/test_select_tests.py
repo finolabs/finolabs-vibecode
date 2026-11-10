@@ -62,6 +62,22 @@ class SelectTestsTest(unittest.TestCase):
         listed = done.stdout.split('\n\n')[0].splitlines()
         self.assertEqual(listed, ['tests.test_alpha', 'tests.test_notes'])
 
+    def test_qualified_and_listed_imports_name_the_module(self):
+        found = select_tests.patterns('scripts/alpha.py')
+        for text in ('import scripts.alpha\n', 'from scripts.alpha import main\n', 'import beta, alpha\n',
+                     'import beta as b, scripts.alpha as a\n', 'from alpha import main\n'):
+            with self.subTest(text=text):
+                self.assertTrue(any(p.search(text) for p in found))
+        for text in ('import alphabet\n', 'from scripts.alphas import x\n', 'import beta, alphanumeric\n'):
+            with self.subTest(text=text):
+                self.assertFalse(any(p.search(text) for p in found))
+
+    def test_a_deleted_test_module_is_not_scheduled(self):
+        (self.repo / 'tests/test_other.py').unlink()
+        done = self.select()
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertNotIn('tests.test_other', done.stdout)
+
     def test_shared_copy_counts_as_every_copy(self):
         # Mid-edit: only one copy changed; the module names the other copy's path.
         (self.repo / 'skills/fnl-one/references/terms.md').write_text('more terms\n')

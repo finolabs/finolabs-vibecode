@@ -69,7 +69,10 @@ def patterns(path):
     if pure.suffix == '.py':
         stem = re.escape(pure.stem)
         found.append(re.compile(r'(?<![\w-])' + re.escape(pure.name) + r'(?!\w)'))
-        found.append(re.compile(r'\b(?:import|from)\s+' + stem + r'\b'))
+        # `import a.stem`, `from a.stem import x` and each member of `import x, a.stem as y`.
+        member = r'(?:\w+\.)*' + stem + r'(?![\w.])'
+        found.append(re.compile(r'^[ \t]*from[ \t]+' + member, re.M))
+        found.append(re.compile(r'^[ \t]*import[ \t]+(?:[\w.]+(?:[ \t]+as[ \t]+\w+)?[ \t]*,[ \t]*)*' + member, re.M))
         found.append(re.compile(r'''['"]''' + stem + r'''['"]'''))
     return found
 
@@ -82,7 +85,8 @@ def select(root, changed):
     for path in changed:
         pure = PurePosixPath(path)
         hits = set()
-        if pure.parent.as_posix() == 'tests' and pure.name.startswith('test_') and pure.suffix == '.py':
+        if (pure.parent.as_posix() == 'tests' and pure.name.startswith('test_') and pure.suffix == '.py'
+                and f'tests.{pure.stem}' in modules):  # a deleted module is never scheduled
             hits.add(f'tests.{pure.stem}')
         checks = [p for copy in copies(path, index) for p in patterns(copy)]
         hits.update(name for name, text in modules.items() if any(c.search(text) for c in checks))
