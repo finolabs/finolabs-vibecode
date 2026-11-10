@@ -63,6 +63,7 @@ The skill folders and their purposes match the README.
 | Remembering a decision or lesson, or finding what was decided before | `fnl-session-hygiene` | `obsidian-cli` from kepano/obsidian-skills for an Obsidian vault |
 | Project drift or a milestone course check | `fnl-delegate`, then the `fnl-navigator` agent | |
 | Confirm outcome anchors, work records or dashboard project settings | `/fnl-setup instructions` for conventions/anchors; `/fnl-setup add project` for settings | |
+| Save which checks a repository runs before a push (read from its CI, `package.json`, `pyproject.toml` or `Makefile`) | `/fnl-setup add checks` (reads the files, runs nothing, saves after a yes) | |
 | Assign review families, judge or posting setup | `/fnl-setup add roles` | |
 | Set concurrent-run total and optional family caps, or the assignment matrix | `/fnl-setup add delegation` | |
 | Read how much quota each agent has left before routing | `/fnl-setup add quota` (opt-in, off by default) | |

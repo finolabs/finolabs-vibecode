@@ -23,5 +23,6 @@ Choices: "Yes, draft instructions" / "No, leave instructions unchanged".
 | `compaction` | user | conversation limits |
 | `companions` | user | optional helpers; prints commands only |
 | `project` | project | task counts, display name |
+| `checks` | project | the repository's check list; runs nothing |
 
 Install nothing (advisory, agent judgment).
