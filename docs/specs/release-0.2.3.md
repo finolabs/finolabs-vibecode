@@ -1,6 +1,6 @@
 # Release 0.2.3: scope
 
-Status: draft; scope started by the owner on 2026-11-09; nothing is built.
+Status: implemented; ready to cut. Scope started by the owner on 2026-11-09; packages 1 to 14 are built, with the outcomes below where a result differs from its row.
 
 ## Scope (owner decisions, 2026-11-09)
 
@@ -32,6 +32,11 @@ Measured on the owner's machine over nine days of ledger and usage events (796 d
 | 12 | Usage blind spot | User-typed skills record no event (`fnl-setup`, `fnl-status`, `fnl-ask` show zero despite use); `fnl-verification`, which is model-invoked, also shows zero. | Record user-invoked skills through `scripts/metrics_hook.py` under the existing consent, then check whether `fnl-verification` is loaded at all; a host that exposes no such event stays unmeasured and says so. |
 | 13 | Review gate size | `fnl-review-gate` is 18 KB, the largest skill, loaded 38 times in nine days. | Move detail into references, within the 10,000-byte skill limit. |
 | 14 | Diagrams and documents | The owner asked on 2026-11-09 for flow and sequence diagrams of how the agents work together, and for the existing diagrams, README and docs to catch up with this release. | A sequence diagram of one delegated task through coordinator, implementer and reviewers, and one of an away decision; the existing architecture diagrams, README and setup docs updated. Done last, from the merged behavior. The same pull request adds the rule to the plugin: `fnl-versioning` requires this review before a release is proposed, and `fnl-open-source-review` checks that diagrams, README, docs and in-product help match what ships (both advisory, agent judgment). |
+
+## Outcomes that differ from the scope
+
+- Package 4. Outcome: `ledger.py start` prints the run name and the guidance says so, but `fnl-delegate` `references/route.md` did not shrink.
+- Package 7. Outcome: narrowed to one fixed message for a too-open log folder; the scanner's false positives are unchanged.
 
 ## Carried from earlier releases
 
