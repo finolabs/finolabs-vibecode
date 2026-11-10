@@ -92,7 +92,7 @@ rule in part C. `fnl-setup add delegation` asks for the values, each write after
 
 - `fnl-delegate` replaces the recipe with this script and keeps one Codex or Antigravity run at a
   time per coordinator.
-- `fnl-verification` gains the test-scope rule above and names `heavy_run.py` for any command the host config marks heavy.
+- `fnl-checks` gains the test-scope rule above and names `heavy_run.py` for any command the host config marks heavy.
 - `fnl-coding-router` "Proportion" points to both.
 - A repository's own lock script may stay; it should call `heavy_run.py` so two locks cannot allow two heavy jobs.
 
@@ -143,5 +143,5 @@ Resource limits on a command (ulimit, cgroups), killing a running heavy job, sch
 
 ## Consumers to trace
 
-`fnl-delegate` SKILL and `references/dispatch.md`, `references/host-template.md`, `fnl-verification`,
+`fnl-delegate` SKILL and `references/dispatch.md`, `references/host-template.md`, `fnl-checks`,
 `fnl-coding-router` "Proportion", `fnl-setup` delegation feature, data-root relocation (`data_location.py`) and the data-root resolver, the shared-copy check, `README.md` and the changelog.

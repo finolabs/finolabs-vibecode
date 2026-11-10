@@ -22,7 +22,7 @@ Tasks and implement only. Specify, clarify and plan are never skipped. After a p
 
 Otherwise run `speckit-tasks`, then `speckit-implement`. When these conditions leave the fit unclear, take it from the judge if the host config names one (read [../activity-selection.md](../activity-selection.md) "Depth gate questions"); otherwise decide it yourself, and run `speckit-tasks` when you still cannot tell: ambiguity is not evidence that the change is one seam.
 
-A direct path records the chosen path and its reason in the feature's `plan.md` and meets every acceptance criterion and gate. Its acceptance is `fnl-verification` against each acceptance criterion with fresh targeted tests, plus the two posted reviews of `fnl-review-gate`, whose packet carries the story's acceptance criteria and `plan.md`; it runs no separate analyze or converge step.
+A direct path records the chosen path and its reason in the feature's `plan.md` and meets every acceptance criterion and gate. Its acceptance is `fnl-checks` against each acceptance criterion with fresh targeted tests, plus the two posted reviews of `fnl-review-gate`, whose packet carries the story's acceptance criteria and `plan.md`; it runs no separate analyze or converge step.
 
 Spec Kit owns the process and artifacts; no work record is created in a Spec Kit repository (advisory, agent judgment).
 

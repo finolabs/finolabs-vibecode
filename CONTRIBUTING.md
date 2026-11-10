@@ -16,7 +16,7 @@ Open an issue describing the problem or the rule you want to change, with an exa
 
 ## Checks
 
-CI runs the full script suite and the reference/copy checks on every pull request (`.github/workflows/validate.yml`). Locally, run whole targeted modules covering the change and traced consumers; running the full suite is optional for contributors because CI runs it. Agents follow `fnl-verification` and run the full suite only when the owner requests it. For example, for a documentation/reference change:
+CI runs the full script suite and the reference/copy checks on every pull request (`.github/workflows/validate.yml`). Locally, run whole targeted modules covering the change and traced consumers; running the full suite is optional for contributors because CI runs it. Agents follow `fnl-checks` and run the full suite only when the owner requests it. For example, for a documentation/reference change:
 
 ```bash
 claude plugin validate .

@@ -13,7 +13,7 @@ ADVISORY = "**Advisory (agent judgment):** " + RULE
 # These skills ask or offer choices without mentioning the native question tool.
 OTHER_ASKING_SKILLS = {
     "fnl-advisor", "fnl-commit-messages", "fnl-handoff", "fnl-plugin-packaging",
-    "fnl-session-hygiene", "fnl-verification", "fnl-versioning",
+    "fnl-session-hygiene", "fnl-checks", "fnl-versioning",
 }
 
 

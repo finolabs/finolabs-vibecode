@@ -32,7 +32,7 @@ Enforcers: agent judgment while drafting (advisory), then `/fnl-setup check` mea
 
 - User scope: one shared body with the host-neutral sections plus a short host section per host.
 - Project scope: `AGENTS.md` is the source; `CLAUDE.md` holds an `@AGENTS.md` include plus only Claude-specific lines. Consolidate existing rules without losing them; move the setup-owned `## Agent skills` block intact into the source only in a confirmed migration, never leaving a second copy; resolve conflicts with the user first.
-- Point to skills by name for practice the plugin covers: `fnl-coding-router`, `fnl-delegate`, `fnl-commit-messages`, `fnl-versioning`, `fnl-verification`, `fnl-advisor`, `fnl-session-hygiene`.
+- Point to skills by name for practice the plugin covers: `fnl-coding-router`, `fnl-delegate`, `fnl-commit-messages`, `fnl-versioning`, `fnl-checks`, `fnl-advisor`, `fnl-session-hygiene`.
 - Keep it short: about 150 lines in the shared body is the house soft limit (no vendor source), 200 is Anthropic's target for Claude Code; beyond 150 offer to move detail into a skill or reference.
 - Committed context holds no personal, customer or organization names or machine paths. Personal project context goes in the untracked `CLAUDE.local.md`, kept out of git.
 - Drafted content is the template plus the user's answers, never text copied from repository files (advisory, agent judgment).

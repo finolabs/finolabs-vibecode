@@ -117,7 +117,7 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
 ## Where the code lives
 
 `fnl-delegate` owns `delegate_env.py`, `run_env.py`, `log_scan.py` and `secret_patterns.py`; `fnl-handoff` carries
-`brief_check.py` with its own copy of `secret_patterns.py`, and `run_env.py` is copied into `fnl-verification`. Each copy
+`brief_check.py` with its own copy of `secret_patterns.py`, and `run_env.py` is copied into `fnl-checks`. Each copy
 is listed in the CI copy groups and in the test that compares them, so each skill folder stays self-contained.
 
 ## Changes
@@ -128,7 +128,7 @@ is listed in the CI copy groups and in the test that compares them, so each skil
   `## Delegate environment`; "Accept" gains the log scan; `ledger.py finish` records `log_scan`.
 - `fnl-setup`: `delegation` feature asks, per present agent family, whether any variable must pass through (default
   none), with a neutral Yes and No; names only.
-- `fnl-verification`: states that the environment helper (`run_env.py`) is the only way the plugin starts a delegate or a test command; the quota probe and the `ps` snapshot keep their own scoped allowlists.
+- `fnl-checks`: states that the environment helper (`run_env.py`) is the only way the plugin starts a delegate or a test command; the quota probe and the `ps` snapshot keep their own scoped allowlists.
 - `PRIVACY.md`: the log scan and redaction are local; `log_scan` is one of three fixed words.
 - `CHANGELOG.md`, README, `fnl-ask` map: current-surface wording.
 - No change to `CLAUDE.md`: no network call, no new class of command (the helper starts the same agent commands the

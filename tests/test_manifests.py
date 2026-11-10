@@ -91,6 +91,18 @@ class ManifestTest(unittest.TestCase):
         self.assertIn("answers questions about this plugin", fields["fnl-help"]["description"])
         self.assertNotIn("fnl-ask", (ROOT / "README.md").read_text().split("## Skills", 1)[0])
 
+    def test_verification_is_a_user_only_thin_alias_of_checks(self):
+        alias = ROOT / "skills/fnl-verification/SKILL.md"
+        _, frontmatter, body = alias.read_text().split("---", 2)
+        fields = dict(line.split(": ", 1) for line in frontmatter.strip().splitlines())
+        self.assertEqual((fields["name"], fields["disable-model-invocation"]), ("fnl-verification", "true"))
+        self.assertIn("Dependency: `fnl-checks`", body)
+        self.assertIn("This alias holds no rules of its own.", body)
+        self.assertEqual(sorted(p.name for p in alias.parent.iterdir()), ["SKILL.md"])
+        main = (ROOT / "skills/fnl-checks/SKILL.md").read_text().split("---", 2)[1]
+        self.assertIn("name: fnl-checks", main)
+        self.assertNotIn("disable-model-invocation", main)
+
     def test_new_alias_and_pause_descriptions_are_valid_yaml_scalars(self):
         # A plain YAML scalar cannot contain ": "; the unquoted descriptions that already ship are older.
         for name in ("fnl-afk", "fnl-gtg", "fnl-pause", "fnl-help", "fnl-ask"):

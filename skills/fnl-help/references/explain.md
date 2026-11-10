@@ -18,7 +18,7 @@ Routing means starting with the coding guideline. It defaults to on; off removes
 
 ## Roles, verification and run hygiene
 
-For roles and posting, read `fnl-review-gate` and its routing/posting script headers: the assigned family is a preference, independence comes first, and a posting setting is verified only after the expected author and marker are observed. For drift, read `agents/fnl-navigator.md` and `fnl-delegate`’s navigator procedure. For acceptance, read `fnl-verification`: a current-head receipt gates ledger acceptance, with a reason-digested escape hatch; neither a test tick nor a judge answer accepts work.
+For roles and posting, read `fnl-review-gate` and its routing/posting script headers: the assigned family is a preference, independence comes first, and a posting setting is verified only after the expected author and marker are observed. For drift, read `agents/fnl-navigator.md` and `fnl-delegate`’s navigator procedure. For acceptance, read `fnl-checks`: a current-head receipt gates ledger acceptance, with a reason-digested escape hatch; neither a test tick nor a judge answer accepts work.
 
 The judge defaults to a small host model; optional Jev uses the scoped network exception through `judge.py`, with user authorization and budget, screened payloads and reported host fallback. `typesafe-ai` is optional cookbook guidance, outside the call path. For hygiene, explain `brief_check.py`, `delegate_env.py`, `run_env.py` and `log_scan.py show`; protection covers allowlisted headless forms and local logs, while HOME remains reachable. Quota is read on demand before routing; the Claude Code StopFailure marker stores only family and time and starts no reading.
 

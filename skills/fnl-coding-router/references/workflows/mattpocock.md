@@ -13,7 +13,7 @@ The pack's skills are installed for this repository (for example under `.claude/
 | 1. Clarify | `grilling` when the intent is open; `/grill-with-docs` also keeps a glossary and ADRs. Stop when the criteria are checkable. Run that skill's interview, but put its questions through the host's native question tool (advisory, agent judgment). |
 | 2. Plan | `prototype` for a design question only code can answer; `to-spec` and `to-tickets` for work larger than one pass, then `implement` or `implement-spec` over what they produced. |
 | 3–4. Red, smallest change | `tdd` for the red-green loop; `diagnosing-bugs` for a bug, failing CI or unexplained behavior. |
-| 5. Prove | `fnl-verification`; the red and green that `tdd` and `diagnosing-bugs` leave are its evidence. |
+| 5. Prove | `fnl-checks`; the red and green that `tdd` and `diagnosing-bugs` leave are its evidence. |
 | 6. Review | `fnl-review-gate`, with `code-review` as the reviewer's instrument, plus `fnl-security-review-gate` when its triggers hit. |
 | Pull request, handover | `pr` for the description, `handoff` for a portable handover. |
 

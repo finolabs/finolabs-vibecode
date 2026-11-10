@@ -13,7 +13,7 @@ The pack's skills are installed for this repository, or the repository's or the 
 | 1. Clarify | `brainstorming` when the intent or design is open. Stop when the criteria are checkable. Run that skill's interview, but put its questions through the host's native question tool (advisory, agent judgment). |
 | 2. Plan | `writing-plans`, then `executing-plans`; `subagent-driven-development` only within the router's child budget and `fnl-delegate`. |
 | 3–4. Red, smallest change | `test-driven-development`; `systematic-debugging` for a bug, failing CI or unexplained behavior. |
-| 5. Prove | `fnl-verification`; `verification-before-completion` supplies the habit, not the acceptance. |
+| 5. Prove | `fnl-checks`; `verification-before-completion` supplies the habit, not the acceptance. |
 | 6. Review | `fnl-review-gate`, plus `fnl-security-review-gate` when its triggers hit; `requesting-code-review` and `receiving-code-review` feed it. |
 | Branches | `using-git-worktrees` and `finishing-a-development-branch`, within `fnl-commit-messages` "Branches". |
 
@@ -21,7 +21,7 @@ The router's depth decides the ceremony, including where a skill of this pack sa
 
 ## What yields
 
-In a Spec Kit repository, Spec Kit replaces this pack's process skills ([speckit.md](speckit.md)); debugging and test-first skills still work inside its phases. The gates are ours: this pack's review and verification skills inform `fnl-review-gate` and `fnl-verification` and do not replace them.
+In a Spec Kit repository, Spec Kit replaces this pack's process skills ([speckit.md](speckit.md)); debugging and test-first skills still work inside its phases. The gates are ours: this pack's review and verification skills inform `fnl-review-gate` and `fnl-checks` and do not replace them.
 
 ## Gaps
 
