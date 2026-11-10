@@ -1,6 +1,6 @@
 # Assignment matrix: one section for levels, work types and roles (draft, scoped to release 0.2.3)
 
-Status: draft; the owner described the need and settled the storage choice on 2026-11-09; nothing is built.
+Status: implemented; in release 0.2.3.
 
 ## Why
 
