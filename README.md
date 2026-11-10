@@ -60,6 +60,8 @@ One engineering practice for AI coding agents, packaged as a single plugin with 
 
 The [0.2.0 changes](CHANGELOG.md#020---2026-11-08) include [review roles, the navigator and verification receipts](docs/specs/agent-roles.md), [setup modes and companions](docs/specs/setup-restructure.md), [run hygiene](docs/specs/run-hygiene.md), [work records](docs/specs/work-tracking.md), [quota on demand](docs/specs/quota-on-demand.md) and [parallel slots](docs/specs/parallel-instances.md). [`route_task.py`](scripts/route_task.py) prints the delegation matrix's tier, effort, budget and family order; the coordinator still selects an available allowed model.
 
+Release 0.2.3 adds [`fnl-pause`](docs/specs/pause.md) for draining work before a restart, the [assignment matrix](docs/specs/assignment-matrix.md) that `route_pick.py` answers from, and [away decisions](docs/specs/away-decisions.md): a decision ladder, a record of who decided and a question gate during an away lease. See the [release record](docs/specs/release-0.2.3.md).
+
 This pack owns the decisions between tools: routing, depth, delegation, gates and conventions. For the work itself it points to trusted skills and native commands from known publishers (Matt Pocock's skills, Cloudflare's security audit, Spec Kit, each host's own review commands) instead of rewriting them, and every such pointer carries a fallback that keeps the skill working when the companion is not installed.
 
 ### Compaction steward
@@ -92,7 +94,11 @@ Claude Code and Antigravity (not Codex): when you opt in through `fnl-setup`, yo
   </picture>
 </p>
 
-The sources of both diagrams are in [`docs/diagrams/`](docs/diagrams/).
+### One delegated task, and a decision while you are away
+
+Two sequence diagrams follow the agents step by step. [One delegated task, dispatch to merge](docs/diagrams/delegation-sequence-light.html) ([dark](docs/diagrams/delegation-sequence-dark.html)): the coordinator records the dispatch with `ledger.py start`, which prints the run's name, the implementer runs in the background, the coordinator verifies and accepts against a receipt, reviewers of another family post their markers and `merge_check.py` passes before the merge. [A decision while you are away](docs/diagrams/away-decision-sequence-light.html) ([dark](docs/diagrams/away-decision-sequence-dark.html)): the question gate denies the question tool during a lease, the host climbs the ladder (a recorded rule, Jev at 0.8, an advisor of another family in choose mode, its own choice), checks twice against what must stop, parks or records the attempt with `autopilot.py log`, and on return you mark each decision kept or reversed. Open the HTML files in a browser; their PNG renders are not in `assets/` yet.
+
+The sources of all four diagrams are in [`docs/diagrams/`](docs/diagrams/).
 
 ### Bricks, not a framework
 
@@ -130,7 +136,7 @@ Start any of them with `/fnl-setup` (on Codex, also `$fnl-setup instructions` ri
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-It targets Claude Code, Codex and Antigravity from one `skills/` folder. Release documented here: **0.2.2** (phase 0; see `fnl-versioning` and the [release record](docs/specs/release-0.2.2.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.3-dev`.
+It targets Claude Code, Codex and Antigravity from one `skills/` folder. Release documented here: **0.2.3** (phase 0; see `fnl-versioning` and the [release record](docs/specs/release-0.2.3.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.4-dev`.
 
 <p align="center">
   <picture>
@@ -174,19 +180,19 @@ Done when the plugin is listed by your host and the user knows the order: `/fnl-
 
 ## Skills
 
-The plugin has **23 skill folders**: 12 model-invoked skills and 11 marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Every skill carries the `fnl-` prefix. The user types the user-only ones, `fnl-autopilot`, `fnl-afk`, `fnl-brb`, `fnl-pause`, `fnl-gtg`, `fnl-restore-point`, `fnl-setup`, `fnl-status`, `fnl-update`, `fnl-help` and its older name `fnl-help` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff` and `fnl-advisor` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
+The plugin has **23 skill folders**: 12 model-invoked skills and 11 marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Every skill carries the `fnl-` prefix. The user types the user-only ones, `fnl-autopilot`, `fnl-afk`, `fnl-brb`, `fnl-pause`, `fnl-gtg`, `fnl-restore-point`, `fnl-setup`, `fnl-status`, `fnl-update`, `fnl-help` and its older name `fnl-ask` (`/fnl-setup` on Claude Code and Antigravity, `$fnl-setup` on Codex); `fnl-handoff` and `fnl-advisor` can be typed too. The agent loads `fnl-handoff` directly through `fnl-delegate`, proposes `fnl-advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
 
 | Skill | Use it when |
 | --- | --- |
 | `fnl-coding-router` | Starting or resuming any coding work, in any repository: depth (MIN, NORMAL, DEEP), review and security gates, proof, the stop-before-a-third-fix checkpoint, and a workflow path for Spec Kit (with its depth gate), mattpocock/skills, obra/superpowers, or none. |
 | `fnl-session-hygiene` | Keeping sessions healthy: context pressure, phase changes, stale titles, handovers, and remembering or recalling decisions, lessons and project state in one shared knowledge base (Orrery or an Obsidian vault); code facts stay in the repository. Opt-in Claude Code/Antigravity context snapshots feed the compaction steward; Codex is not covered by the recorder. |
-| `fnl-delegate` | Handing work to other agents (Claude Code, Codex, Antigravity) and running it, coordinated from whichever one you run in: grading on five levels with one decision matrix (tier, effort, budget, who accepts), routing by agent and model through a dated capability map, the configured judge, quota fallback, parallel runs up to the limit you set for each project, across any mix of agent families, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger; running a spec as a coordinator with one app session per task, standby sessions and review gates. |
+| `fnl-delegate` | Handing work to other agents (Claude Code, Codex, Antigravity) and running it, coordinated from whichever one you run in: grading on five levels with one decision matrix (tier, effort, budget, who accepts), routing by agent and model through a dated capability map and the assignment matrix (`route_pick.py`), the configured judge, quota fallback, parallel runs up to the limit you set for each project, across any mix of agent families, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger; running a spec as a coordinator with one app session per task, standby sessions and review gates. |
 | `fnl-handoff` | Writing a self-contained brief and dispatching one task, or saving a handover through session hygiene so a later session or another agent continues the work. |
-| `fnl-advisor` | Getting one second opinion from another model family, or convening two contrasting families for root-cause analysis and a plan when stuck or looping; both are read-only and spend quota, with approval governed by their procedure. |
+| `fnl-advisor` | Getting one second opinion from another model family, or convening two contrasting families for root-cause analysis and a plan when stuck or looping; both are read-only and spend quota, with approval governed by their procedure. During an away lease its choose mode returns exactly one of the given options, or `none`. |
 | `fnl-versioning` | Bumping a version, tagging a release, or writing the changelog and release notes: SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog. |
 | `fnl-commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports). |
 | `fnl-restore-point` | Saving the working tree to a private git ref before the agent edits, listing restore points and restoring one after a preview and a yes. User-invoked, git repositories only. |
-| `fnl-autopilot` | Starting a time-boxed standing mandate while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/fnl-setup add autopilot`; the live loop, dashboard tab, scheduler and hooks are deferred. |
+| `fnl-autopilot` | Starting a time-boxed standing mandate while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/fnl-setup add autopilot`. A question it would ask you goes up the away ladder instead (a recorded rule, Jev, an advisor of another family, the host), checked twice against what must stop and recorded with who decided; on Claude Code a question gate denies the question tool during the lease. On return you mark each decision kept or reversed. The live loop, dashboard tab and scheduler are deferred. |
 | `fnl-afk` | Main short name for `fnl-autopilot` (away from keyboard); starts the away mandate so your agents keep working while you are away, or stops it on return. |
 | `fnl-brb` | Older short name (be right back), kept as an alias of `fnl-afk` through `fnl-autopilot`; follows the same procedure and arguments. |
 | `fnl-pause` | Before you restart or shut the machine down: stops new work, lets running work finish, writes handovers and reports what recorded work remains, with an optional `--in <minutes>` deadline; `heavy_run.py` refuses new commands while it is active. User-invoked; never stops a process or declares the machine safe. |
@@ -214,7 +220,7 @@ The three agent definitions in `agents/` apply the skills above in a fresh conte
 
 Headless dispatch forms use `delegate_env.py` and `run_env.py` for an environment allowlist and `brief_check.py` to lint the brief; finished logs are scanned locally and read through `log_scan.py show`. HOME remains reachable: protection is environment-only, excluding interactive, desktop-app sessions and in-session subagents; private HOME is deferred. See [run hygiene and its limits](docs/specs/run-hygiene.md).
 
-Configure roles through `/fnl-setup add roles`: `review_route.py` chooses the review family before the run, prefers independence and discloses same-family fallbacks; `post_review.py` is the guarded posting path, and posting is marked verified only after observing the expected author and marker. On Claude Code and Codex, SessionStart prints fixed roles, judge and posting words alongside delegation, cached quota, open dispatch counts and parallel capacity; failures never block startup. Relay receipts/counters remain unimplemented. See [roles and posting](docs/specs/agent-roles.md) and [verification receipts](skills/fnl-verification/SKILL.md#accepting-someone-elses-work).
+Configure roles through `/fnl-setup add roles`, or through the assignment matrix in `/fnl-setup add delegation`, which decides when it is valid and consented: `review_route.py` chooses the review family before the run, prefers independence and discloses same-family fallbacks; `post_review.py` is the guarded posting path, and posting is marked verified only after observing the expected author and marker. On Claude Code and Codex, SessionStart prints fixed roles, judge and posting words alongside delegation, cached quota, open dispatch counts and parallel capacity; failures never block startup. Relay receipts/counters remain unimplemented. See [roles and posting](docs/specs/agent-roles.md) and [verification receipts](skills/fnl-verification/SKILL.md#accepting-someone-elses-work).
 
 Both reviewers cover two rings, the change and its impact set, rather than the whole repository, and report what they traced. The coordinator verifies delegated work with `fnl-verification` and its self-contained `verify_claim.py`; ledger acceptance requires a passing receipt for the checkout's current head, or a logged `--accept-unverified --reason` exception. A pull request merges only after the reviewer and the security reviewer have each posted an approving review comment for its current head commit; a push after a review needs a new review. Where a repository adopts the low-risk lane, a pull request that only modifies the allowlisted root documents written for people (such as this README or the changelog) or the manifests' top-level versions takes one pass by the reviewer, which posts both comments; a script decides which pull requests qualify. `skills/fnl-review-gate/scripts/merge_check.py` runs the merge check and the lane check, and requires exactly one valid router marker when the base commit adopted the gate. A story closes only after verification and both required reviews pass.
 
@@ -226,7 +232,7 @@ macOS and Linux are supported. Native Windows is not: the plugin's scripts rely 
 
 Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh). Choose one way per agent, because both together list every skill twice.
 
-Claude Code and Codex install the plugin from the [FINOLABS catalog](https://github.com/finolabs/plugins), marketplace `finolabs`, which groups the FINOLABS plugins together. This repository also remains its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. The catalog selects the installed ref; direct installs from this repository track `main`, which moves to `0.2.3-dev` after 0.2.2. Releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
+Claude Code and Codex install the plugin from the [FINOLABS catalog](https://github.com/finolabs/plugins), marketplace `finolabs`, which groups the FINOLABS plugins together. This repository also remains its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. The catalog selects the installed ref; direct installs from this repository track `main`, which moves to `0.2.4-dev` after 0.2.3. Releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
 
 ### Claude Code
 
@@ -282,6 +288,19 @@ Single-skill installs keep each folder self-contained, with these dependencies: 
 ### Setup commands
 
 Use `/fnl-setup` for the core, `/fnl-setup add <feature>` for one optional feature, `/fnl-setup instructions` for instruction files, `/fnl-setup check` for a read-only check, `/fnl-setup scan` for inventory and `/fnl-setup mode` for Delegation mode and Routing; on Codex use `$` instead of `/`.
+
+The features `add` opens:
+
+| Feature | What it sets |
+| --- | --- |
+| `delegation` | Which helpers take work, the parallel limit per project, and the assignment matrix: levels, types of work, model and roles per agent, plus the judge, written in one pass to `## Assignment matrix` |
+| `autopilot` | The away mandate: hosts, limits, the quota floor, which categories stop or are decided during a lease (two always stop), optional `Non-production targets`, a separate consent for precedent excerpts, and Merge |
+| `roles` | Review roles, the judge and review posting in `## Agent roles`; a valid matrix with its own consent decides instead |
+| `project` | Per-repository ledger and task-file settings |
+| `quota` | The opt-in quota probe |
+| `metrics` | Usage-metrics consent and retention, then project progress, the process snapshot and the Antigravity usage hook |
+| `compaction` | The native compaction threshold, context snapshots and the opt-in Antigravity compaction stop |
+| `companions` | Companion skills, with install commands shown only on request |
 
 ### First check
 
@@ -367,13 +386,13 @@ Parallel capacity is user-set, advisory and shared across coordinators; [slot ch
 
 The orchestration skills keep machine facts (agent commands, allowed models, reachable delegates, the configured judge, allow-rules, heavy-job limits) in `host.md`; the parallel limit is a per-project setting in the same file under the data root. Start from `skills/fnl-delegate/references/host-template.md`. File-backed opt-ins and Routing come from that canonical file; `FNL_ROUTING` can override Routing, and opt-in environment switches can disable collection; `ORCHESTRATION_HOST_CONFIG` applies only to non-consent settings. Put the data root where every coordinator's sandbox can read and write it, using setup's relocation step when needed.
 
-The judge defaults to a small host model. Choose `judge: jev` in canonical `## Agent roles` through `fnl-setup` only with authorization and API budget; `judge.py` calls TypeSafe directly using `TYPESAFE_API_KEY` from the process environment. The call uses the scoped Jev network exception; the optional `typesafe-ai` skill supplies cookbooks and is not required for calls. Both judges inform bounded semantic decisions; the host fallback is reported when Jev is unavailable. Neither judge grants acceptance or authority.
+The judge defaults to a small host model. Choose Jev through `fnl-setup` only with authorization and API budget: `Judge: jev` in `## Assignment matrix` (`add delegation`), which alone decides when it is present and valid with its own consent, or `judge: jev` in canonical `## Agent roles` (`add roles`) when there is no matrix; `judge.py` calls TypeSafe directly using `TYPESAFE_API_KEY` from the process environment. The call uses the scoped Jev network exception; the optional `typesafe-ai` skill supplies cookbooks and is not required for calls. Both judges inform bounded semantic decisions; the host fallback is reported when Jev is unavailable. Neither judge grants acceptance or authority.
 
 ## Layout
 
 ```text
 .claude-plugin/plugin.json        Claude Code manifest (the version's single source of truth)
-.claude-plugin/hooks.json         Claude Code hooks: the session reminder, the update notice, usage metrics and the advisory StopFailure hook
+.claude-plugin/hooks.json         Claude Code hooks: the session reminder, the update notice, usage metrics, the PreCompact reminder, the opt-in auto gate, the away question gate and the advisory StopFailure hook
 .claude-plugin/marketplace.json   Claude Code marketplace listing this repository
 .codex-plugin/plugin.json         Codex manifest, version kept equal
 .codex-plugin/hooks.json          Codex hooks for the session reminder, update notices and usage metrics (named by the manifest)
@@ -383,7 +402,10 @@ agents/fnl-*.md                   code reviewer, security reviewer and navigator
 agents/openai.yaml                Codex skill-list display metadata
 skills/fnl-*/SKILL.md             self-contained skills, model-invoked or flagged user-only on Claude Code
 skills/fnl-advisor/references/committee.md       committee procedure, loaded only for a committee
+skills/fnl-advisor/references/choose.md          choose mode: one option or none during an away lease
+skills/fnl-autopilot/references/decide.md        the away decision ladder, its two checks and the record of each attempt
 skills/fnl-delegate/references/coordinator-sessions.md  spec coordinator and task sessions
+skills/fnl-help/references/map.md                every skill, agent, script and setup feature; a test fails when a script or feature is missing
 skills/fnl-session-hygiene/references/knowledge.md      remember/recall procedure; handovers live in SKILL.md
 rules/AGENTS.md                   session-start reminder: an always-on rule on Antigravity, printed by scripts/session_start.py on Claude Code and Codex
 assets/                           icons, light/dark architecture and task-lifecycle diagrams, dashboard screenshots and their NOTICE
@@ -391,7 +413,7 @@ evals/                            trigger, behavior and parity cases for `claude
 scripts/                          repository/shared helpers and checks: routing, reviews, receipts, judge, context, hygiene, slots, quota, metrics and setup; shared helpers have byte-identical copies in consuming skills
 skills/fnl-*/scripts/             self-contained copies plus skill-only helpers; the full inventory is in fnl-help/references/map.md
 docs/specs/                       design specs (index.md) and one-file work records; work-tracking.md defines their contract
-docs/diagrams/                    HTML sources of the architecture and task-lifecycle diagrams
+docs/diagrams/                    HTML sources of the architecture, task-lifecycle, delegation sequence and away decision sequence diagrams
 tests/                            unit tests for the repository scripts, the ledger, the metrics hook and the dashboard page (the page script runs in node when it is installed)
 CHANGELOG.md                      Keep a Changelog
 LICENSE                           MIT
