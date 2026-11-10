@@ -1,0 +1,41 @@
+# Update onboarding: what a new version asks of the user (draft, scoped to release 0.2.4)
+
+Status: draft; the owner asked for it on 2026-11-10; nothing is built.
+
+## Why
+
+Each release brings things a user has to know or set up to get the value of it. Release 0.2.3 alone added a setup feature with its own consent (the assignment matrix in `/fnl-setup add delegation`), a migration from two old host config sections, new stop or decide categories and a separate excerpt consent in `/fnl-setup add autopilot`, three renamed or new commands (`/fnl-afk`, `/fnl-pause`, `/fnl-help`) and a new Claude Code hook. `fnl-update` today shows the installed and available versions and runs the host's update command; after that the user is on their own, and most of what a release adds stays unused or half set up.
+
+## Owner decision (2026-11-10)
+
+Each release, `fnl-update` must keep pace with what the release adds and help the user finish it: tell them what is new for them and walk them through the setup it needs.
+
+## What ships
+
+1. **Upgrade notes, one entry per release.** A machine-readable file in the `fnl-update` skill folder (`references/upgrades.json`) with, per version: what was renamed (old name, new name, until when the old one works), new setup features or questions (the `/fnl-setup add <feature>` to run, and whether it asks a new consent), migrations (the command that previews them, for example `matrix_setup.py migrate`), new hooks per host and what the user must do for them (for example trusting hooks again on Codex), and anything removed. Every item has a short plain sentence for the user and, where one exists, a read-only command that tells whether it is already done for this user (for example `matrix_setup.py show` printing that no matrix is set).
+2. **What is new for you.** `/fnl-update whats-new` reads the notes for every version between the last version this user saw and the installed one, runs only the read-only "is it done" commands, and shows a checklist with what is done, what is not and what does not apply to them. It changes nothing.
+3. **Finish it with the user.** For each open item, in the order the notes give, it offers to run the matching setup step through `fnl-setup`, which keeps every consent question, preview and neutral yes exactly as today. Skipping an item is recorded so the next run does not ask again; nothing is ever set up without the user's own answer.
+4. **Remember what was seen.** The last version the user went through is stored in the plugin's private state folder (a version string only). After an update the session-start line already shown for a newer version says once that the installed version has upgrade notes and names `/fnl-update whats-new`; it never runs anything itself.
+5. **Host update commands verified.** The Codex procedure used for the 0.2.2 and 0.2.3 refreshes (`codex plugin marketplace upgrade <catalog>`, then remove and add the plugin, then trust its hooks again in `/hooks`) moves from unverified to verified with its date, and `fnl-update` offers it after a yes. Antigravity stays unverified until checked the same way.
+6. **The notes are part of releasing.** `fnl-versioning` requires an upgrade-notes entry before a release is proposed, and a test fails when a manifest carries a released version (no `-dev`) with no entry for it. Writing the entry is part of the documentation review the same skill already requires.
+
+## What enforces what
+
+- Scripts: the notes file's schema, the test tying a released version to an entry, the read-only "is it done" commands, the stored last-seen version.
+- `fnl-setup`: every consent, preview and write, unchanged.
+- Agent judgment, advisory: walking the checklist with the user, offering each step, and writing a good plain sentence per item.
+
+## Limits
+
+- An item whose state cannot be read without running something stays "unknown" and is offered, never assumed done.
+- The checklist covers what the plugin itself set up; a host feature the user changed outside the plugin may show stale.
+
+## Open decisions
+
+| Decision | Owner | What unblocks it |
+| --- | --- | --- |
+| Whether entries for 0.2.0 to 0.2.3 are written back for users who skip several versions | owner | a preference |
+
+## Evidence
+
+None yet. A build needs a red test per behavior: the notes schema and its refusal of unknown keys, the release test (released version without an entry fails, `-dev` passes), version-range selection, a done item, an open item and an item that does not apply, skip recorded and not asked again, no write without `fnl-setup`'s yes, and the session-start line shown once after an update.
