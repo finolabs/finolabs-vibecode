@@ -79,13 +79,22 @@ def append(record):
 
 
 FINISH_LOCK = "state/ledger-finish"
+LOCK_WAIT = 30  # seconds a finish waits for another writer before it gives up without recording
 
 
 @contextmanager
 def finish_lock():
     """Every finish writer holds this lock from its open-state check to its append, so two writers never both close one record."""
     with dr.data_folder(FINISH_LOCK, create=True, private=True) as folder:
-        fcntl.flock(folder, fcntl.LOCK_EX)
+        deadline = time.monotonic() + LOCK_WAIT
+        while True:
+            try:
+                fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    sys.exit("ledger: another finish is still writing; nothing recorded, retry")
+                time.sleep(0.1)
         yield
 
 

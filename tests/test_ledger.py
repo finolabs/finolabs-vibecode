@@ -887,6 +887,23 @@ class StaleLedgerTest(unittest.TestCase):
         out, _ = self.preview_digest()
         self.assertIn("exit=1  -> error", out)
 
+    def test_a_held_finish_lock_ends_in_a_bounded_refusal(self):
+        import fcntl, time
+        self.write([self.start("d20261101-000000-e004", 300, 45)])
+        with self.ledger.dr.data_folder(self.ledger.FINISH_LOCK, create=True, private=True) as folder:
+            other = os.open(".", os.O_RDONLY, dir_fd=folder)
+            try:
+                fcntl.flock(other, fcntl.LOCK_EX)
+                started = time.monotonic()
+                with mock.patch.object(self.ledger, "LOCK_WAIT", 0.3), self.assertRaises(SystemExit):
+                    with self.ledger.finish_lock():
+                        pass
+                self.assertLess(time.monotonic() - started, 5)
+            finally:
+                os.close(other)
+        with self.ledger.finish_lock():
+            pass
+
     def test_close_reads_open_state_under_the_finish_lock(self):
         ident = "d20261101-000000-e003"
         self.write([self.start(ident, 300, 45)])
