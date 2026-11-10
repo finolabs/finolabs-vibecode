@@ -388,7 +388,7 @@ class MetricsTest(unittest.TestCase):
     def test_shared_copies_equal_their_source(self):
         groups = [
             (CORE, COPIES),
-            (ROOT / "skills/fnl-ask/references/plain-language.md",
+            (ROOT / "skills/fnl-help/references/plain-language.md",
              [ROOT / "skills/fnl-setup/references/plain-language.md"]),
         ]
         for source, copies in groups:
