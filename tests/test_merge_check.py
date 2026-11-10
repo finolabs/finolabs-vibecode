@@ -671,5 +671,115 @@ class IndependentMergeTest(unittest.TestCase):
                 self.assertIsNone(mc.independent_families(data))
 
 
+class LocalReceiptTest(unittest.TestCase):
+    """The local receipt stands in for hosted checks only when the mode is on and repository, head and digest match."""
+
+    def setUp(self):
+        from tests.data_root_fixture import account
+        root = Path(__file__).resolve().parent.parent
+        scratch = root / ".finolabs/tmp"  # git-ignored; keeps test files inside the checkout
+        scratch.mkdir(parents=True, exist_ok=True)
+        temp = tempfile.TemporaryDirectory(dir=scratch)
+        self.addCleanup(temp.cleanup)
+        base = Path(temp.name).resolve()
+        self.home = account(self, base / "home")
+        env = patch.dict(os.environ, {"HOME": str(self.home)}, clear=True)
+        env.start()
+        self.addCleanup(env.stop)
+        self.host = self.home / ".finolabs/vibecode/host.md"
+        self.host.parent.mkdir(parents=True, exist_ok=True)
+        self.repo = base / "repo"
+        (self.repo / ".git").mkdir(parents=True)
+        cwd = os.getcwd()
+        os.chdir(self.repo)
+        self.addCleanup(os.chdir, cwd)
+        scripts = root / "skills/fnl-review-gate/scripts"
+        for name in ("checks_list", "project_progress"):
+            loaded = importlib.util.spec_from_file_location(name + "_for_receipt", scripts / (name + ".py"))
+            module = importlib.util.module_from_spec(loaded)
+            loaded.loader.exec_module(module)
+            setattr(self, {"checks_list": "cl", "project_progress": "project"}[name], module)
+        self.code = self.project.repository_code(self.repo)
+        self.checks = [("lint", ["make", "lint"]), ("test", ["make", "test"])]
+        self.store(self.checks, receipt=True)
+
+    def store(self, checks, receipt):
+        lines = "".join("- %s: %s = %s\n" % (self.code, name, json.dumps(argv, separators=(",", ":")))
+                        for name, argv in checks)
+        self.host.write_text("# Host\n\n## Checks\n\n" + lines + ("- %s: local-receipt = on\n" % self.code if receipt else ""))
+
+    def receipt(self, head=HEAD, checks=None, code=None):
+        record = self.cl.write_receipt(self.code, head, self.cl.list_digest(checks or self.checks))
+        if code:
+            path = self.home / ".finolabs/vibecode/state/checks-receipts" / (self.code + ".json")
+            path.write_text(json.dumps(dict(record, code=code)))
+
+    def evaluate(self, data):
+        return mc.evaluate(data, lambda who: who in WRITERS, adopted=False, local_receipt=mc.local_receipt)
+
+    def checks_line(self, lines):
+        return next(line for line in lines if "checks:" in line)
+
+    def test_a_matching_receipt_stands_in_for_missing_or_failing_hosted_checks(self):
+        self.receipt()
+        for rollup in ([], [{"name": "validate", "conclusion": "FAILURE"}]):
+            with self.subTest(rollup=rollup):
+                ok, lines = self.evaluate(pr(checks=rollup))
+                self.assertTrue(ok, lines)
+                self.assertEqual(self.checks_line(lines), f"ok    checks: local receipt ({HEAD[:12]})")
+
+    def test_each_mismatch_blocks_as_today_and_says_which(self):
+        cases = {
+            "another head": dict(head=OLD),
+            "another check list": dict(checks=[("lint", ["make", "lint"])]),
+            "another repository": dict(code="0" * 8 if self.code != "0" * 8 else "1" * 8),
+        }
+        for reason, args in cases.items():
+            with self.subTest(reason):
+                self.receipt(**args)
+                ok, lines = self.evaluate(pr(checks=[]))
+                self.assertFalse(ok)
+                self.assertEqual(self.checks_line(lines),
+                                 f"BLOCK checks: none reported; local receipt: local receipt is for {reason}")
+
+    def test_no_or_an_invalid_receipt_blocks(self):
+        ok, lines = self.evaluate(pr(checks=[]))
+        self.assertFalse(ok)
+        self.assertEqual(self.checks_line(lines), "BLOCK checks: none reported; local receipt: no local receipt")
+        self.receipt()
+        path = self.home / ".finolabs/vibecode/state/checks-receipts" / (self.code + ".json")
+        path.write_text('{"kind": "checks"}')
+        ok, lines = self.evaluate(pr(checks=[]))
+        self.assertFalse(ok)
+        self.assertIn("local receipt unreadable or invalid", self.checks_line(lines))
+
+    def test_with_the_mode_off_nothing_changes(self):
+        self.receipt()
+        self.store(self.checks, receipt=False)
+        ok, lines = self.evaluate(pr(checks=[]))
+        self.assertFalse(ok)
+        self.assertEqual(self.checks_line(lines), "BLOCK checks: none reported")
+        self.assertEqual(lines, run(pr(checks=[]))[1])
+
+    def test_an_invalid_section_is_mode_off(self):
+        self.receipt()
+        self.host.write_text(self.host.read_text() + "- %s: test = [\"sh\",\"-c\",\"x\"]\n" % self.code)
+        ok, lines = self.evaluate(pr(checks=[]))
+        self.assertFalse(ok)
+        self.assertEqual(self.checks_line(lines), "BLOCK checks: none reported")
+
+    def test_passing_hosted_checks_ignore_the_receipt(self):
+        def never(head):
+            raise AssertionError("receipt read while hosted checks pass")
+        ok, lines = mc.evaluate(pr(), lambda who: who in WRITERS, adopted=False, local_receipt=never)
+        self.assertTrue(ok, lines)
+        self.assertEqual(self.checks_line(lines), "ok    checks: all passed")
+
+    def test_outside_a_repository_the_mode_is_off(self):
+        os.chdir(self.home)
+        self.receipt()
+        self.assertIsNone(mc.local_receipt(HEAD))
+
+
 if __name__ == "__main__":
     unittest.main()
