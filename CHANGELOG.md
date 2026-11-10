@@ -6,7 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
-- `/fnl-setup add checks` reads a repository's CI workflow `run:` steps, `package.json` scripts, `pyproject.toml` test settings and `Makefile` targets without running them, proposes an ordered check list (a name and a JSON argument array each, never a shell string, skipped steps named) and, after a digest-bound yes, `checks_setup.py` saves it as that repository's entry in the host config's own `## Checks` section (at most 20 checks of 1 KB each); `## Project settings` is unchanged.
+- `/fnl-setup add checks` reads a repository's `package.json` scripts, declared Python test runner and `Makefile` targets without running them, lists its CI workflow `run:` steps as evidence it never converts, proposes an ordered check list (a name and a JSON argument array each, never a shell string, a shell, a launcher or inline interpreter code; skipped items named) and, after a digest-bound yes, `checks_setup.py` saves it as that repository's entry in the host config's own `## Checks` section (at most 20 checks of 1 KB each); `## Project settings` is unchanged.
 
 ### Changed
 
