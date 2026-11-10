@@ -51,6 +51,7 @@ Mark each item **PASS**, **FAIL**, **N/A** (with why) or **BLOCKED** (with what 
 - `CODE_OF_CONDUCT.md` (for example Contributor Covenant) with a working contact.
 - `SECURITY.md`: how to report a vulnerability privately, and the supported versions.
 - `CHANGELOG.md` (`fnl-versioning`), and issue and pull request templates where the forge supports them.
+- Diagrams, the README, docs and in-product help (with its feature map) match what ships: what they name exists, and nothing shipped is missing. Report each drift (advisory, agent judgment).
 
 ### Repository settings
 
