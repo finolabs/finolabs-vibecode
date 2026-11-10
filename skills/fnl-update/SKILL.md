@@ -1,15 +1,15 @@
 ---
 name: fnl-update
-description: Update finolabs-vibecode with the user's permission, show installed and cached available versions, skip a release, or stop update notices. Use when the user requests a plugin update, asks whether a newer release is available, chooses skip this version, or says never ask again.
-argument-hint: "[status | skip <version> | never]"
+description: Update finolabs-vibecode with the user's permission and walk them through what the new version asks of them, show what is new without changing anything, target the latest or a chosen released version, pin or unpin a version, skip a release, or stop update notices. Use when the user requests a plugin update, asks whether a newer release is available or what a new version changed, wants a specific or older version, chooses skip this version, or says never ask again.
+argument-hint: "[status | whats-new | <version> | pin <version> | unpin | skip <version> | never]"
 disable-model-invocation: true
 ---
 
 # Update the plugin
 
-Run only at the user's request. A session-start notice tells the agent to let the user know a newer version is available and that they can type `/fnl-update` (on Codex `$fnl-update`). Only the user can invoke this skill; the notice is not permission to update. An earlier yes to checking or opening this skill is not a yes to installing an update.
+Run only at the user's request. A session-start notice tells the agent to let the user know a newer version is available, or that the installed version has upgrade notes, and that they can type `/fnl-update` (on Codex `$fnl-update`). Only the user can invoke this skill; a notice is not permission to update. An earlier yes to checking or opening this skill is not a yes to installing an update or to any setup step.
 
-The helper and its shared core are in this skill's own `scripts/` folder. Resolve `<update_check.py>` there. It uses `fnl_metrics.state_dir()` for all state, independently of metrics consent. It reads the plugin's own manifest when installed with the plugin; a standalone skill has no manifest, so its installed version is unknown. Use the host's installed-plugin listing to establish that version rather than guessing it.
+The helper and its shared core are in this skill's own `scripts/` folder. Resolve `<update_check.py>` there. It uses `fnl_metrics.state_dir()` for all state, independently of metrics consent. It reads the plugin's own manifest when installed with the plugin; a standalone skill has no manifest, so its installed version is unknown. Use the host's installed-plugin listing to establish that version rather than guessing it. Command output and states are in `references/onboarding.md`; host commands and privacy are in `references/hosts.md`.
 
 **Arguments:** $ARGUMENTS
 
@@ -19,28 +19,27 @@ Questions below ask through the host's native question tool when the session has
 
 **Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged. Script output stays English; report it to the user in their language (advisory, agent judgment).
 
-1. Run `python3 -I <update_check.py> status`. This reads local state only. Show `installed`, `available` (the cached latest stable release), whether it is `newer`, whether the cache is `stale`, and any skipped versions or never-ask choice. A null value is unknown, not evidence that the plugin is current. Empty output means the check is off or a read failed: report that limitation. Do not fetch a release manually or claim a stale cache is current. The automatic startup hook schedules a background refresh after 24 hours; the result is read on a later startup. A standalone skill has no automatic hook.
-2. If the user only asked for status, finish with those facts. If the user requests an update, identify the host and installed plugin identifier from its plugin listing. Report the proposed native command, the verified or unverified status below, and any required restart or trust step. Ask for a clear **yes to running that command now**, through the host's native question tool when the session has one. Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes. Wait for the answer. A skip, silence or ambiguous answer grants no permission to update.
-3. After that yes, run only a verified native update command for the matching host and installed identifier. Report the actual result. An error is an error, not a successful update. On Claude Code, tell the user to restart Claude Code before using the new plugin. On Codex, the plugin's hooks need trust again after an update: open `/hooks` in a new session and review them. Verify the resulting installed version with the host's listing; a still-running session's manifest can describe the old loaded copy.
+1. Run `python3 -I <update_check.py> status`. This reads local state only. Show `installed`, `available` (the cached latest stable release), whether it is `newer`, whether the cache is `stale`, any `pinned` version, and any skipped versions or never-ask choice. A null value is unknown, not evidence that the plugin is current. Empty output means the check is off or a read failed: report that limitation. Do not fetch a release manually or claim a stale cache is current. The startup hook schedules a background refresh after 24 hours; the result is read on a later startup.
+   For an update, first find the target: `target` alone for the latest stable release (the default), or for `/fnl-update <version>` the evidence form in `references/onboarding.md`. A refusal ends the update; report its reason. For a rollback, show the `lost:` lines first.
+2. If the user only asked for status, finish with those facts. For an update, report the host's native command for the installed identifier, its status from `references/hosts.md` and any restart or trust step. Ask for a clear **yes to running that command now**, through the host's native question tool when the session has one. Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes. Wait for the answer. A skip, silence or ambiguous answer grants no permission.
+3. After that yes, run only a verified native update command for the matching host and installed identifier. Report the actual result. An error is an error, not a successful update. Verify the resulting installed version with the host's listing; a still-running session's manifest can describe the old loaded copy.
+4. Go straight on to the checklist (step 5); the user is never sent to a second command.
 
-## Host commands: checked 2026-11-04
+## The checklist
 
-These are CLI help observations, not proof that an update completed. No update was executed during implementation.
+5. Run `python3 -I <update_check.py> whats-new` and show it. For each `[open]` or `[unknown]` item in the order given, offer its setup step: invoke `fnl-setup` with that `/fnl-setup add <feature>`, which asks its own consent, preview and neutral yes exactly as it always does. Nothing is set up without the user's own answer there. When the user chooses to skip an item, run `onboard skip <id>`. Items without a setup step are told, not offered.
+6. When the user has gone through the list, run `onboard seen <installed version>` and run `whats-new` again to verify. This clears the session-start line.
 
-| Host | Native support observed | Allowed update action after yes |
-| --- | --- | --- |
-| Claude Code | `claude plugin --help` lists `list` and `update`; `claude plugin update --help` confirms `update <plugin>` and restart required | `claude plugin update <installed-plugin-identifier>`; use the identifier the host lists, not a guessed catalog or scope. Keep the host's own confirmation if it asks about an install command. |
-| Codex | `codex plugin --help` lists `add`, `list`, `marketplace`, `remove`; `codex plugin marketplace --help` describes `upgrade` as refreshing marketplace snapshots | Plugin update procedure **unverified**. A marketplace refresh alone does not prove an installed plugin was updated. Explain the gap and leave the update pending until the host's current native procedure is verified. Do not invent `codex plugin update` or remove/reinstall as a substitute. |
-| Antigravity | `agy plugin --help` and `agy plugin help` list `list`, `install`, `uninstall`, `enable`, `disable`, `import`, `validate`, `link`; no update command | Updating an existing install with `install` is **unverified**. Explain the gap and leave the update pending until a native update procedure is verified. |
+`/fnl-update whats-new` runs step 5's command only: it shows the checklist and changes nothing, installs nothing, offers no setup step and never calls `onboard`.
 
-Recheck the relevant host's help if it differs from these observations. A newly verified procedure still needs the user's yes to its concrete command. Host-native installation may use its own network and provider policies; the automatic check below is separate.
+## Pin, skip a version or stop asking
 
-## Skip a version or stop asking
+When the user explicitly chooses to **hold a version**, run `python3 -I <update_check.py> pin <version>`; `unpin` removes it. While a pin is set the newer-release notice is silenced and `status` shows `pinned`; the pin does not change the installed plugin.
 
-When the user explicitly chooses **skip this version**, use the validated available version from status and run `python3 -I <update_check.py> skip <version>`. When the user explicitly chooses **never ask**, run `python3 -I <update_check.py> never`. Both commands are local and silent; read `status` again to verify the choice before reporting success. Never put response text into a shell command: versions must match `v?X.Y.Z` with decimal digits and dots only. Skip affects that release only; never-ask suppresses all notices, but the background check remains on.
+When the user explicitly chooses **skip this version**, use the validated available version from status and run `skip <version>`. When the user explicitly chooses **never ask**, run `never`. These commands are local and silent; read `status` again to verify the choice before reporting success. Skip affects that release only; never-ask suppresses the release notices, but the background check remains on.
+
+Never put response text into a shell command: versions must match `v?X.Y.Z` with decimal digits and dots only, and item ids must be ones `whats-new` printed.
 
 ## Privacy and off switch
 
-The automatic check is on by default and is the plugin's only automatic network call (the optional judge call to Jev runs only when the coordinator or the user invokes it; see PRIVACY.md): one HTTPS GET to `https://api.github.com/repos/finolabs/finolabs-vibecode/releases/latest` when its cache is missing or at least 24 hours old. It uses the generic User-Agent `finolabs-vibecode-update-check` and sends nothing about the user: no name, machine, repository, session, installed version or metrics. GitHub necessarily sees the connection's source IP. There are no retries, redirects or proxies. Only a timestamp and validated stable release tag are cached; skipped versions and a never-ask flag are stored separately in the same state folder. Files are mode `0600`.
-
-Set `FNL_UPDATE_CHECK=off` in the host's environment to stop checking and notices (including these helper commands); no files are changed while off. Metrics remain separately opt-in and local. The first release carrying the check notifies nobody: older installs do not carry the hook, and the carrying stable release equals itself. A `-dev` build does precede its own stable release. A missing cache produces no notice, and errors are silent with exit status 0.
+The automatic check makes one fixed HTTPS GET to the GitHub `/releases/latest` endpoint at most once a day and sends nothing about the user; nothing in this skill adds a network call. `FNL_UPDATE_CHECK=off` stops the check, the notices and these helper commands. Details are in `references/hosts.md` and PRIVACY.md.
