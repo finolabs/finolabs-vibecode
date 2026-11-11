@@ -14,7 +14,7 @@ The skill folders and their purposes match the README.
 | `versioning` | Bumping a version, tagging a release, or writing the changelog and release notes: SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog. |
 | `commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports). |
 | `restore-point` | Saving the working tree to a private git ref before the agent edits, listing restore points and restoring one after a preview and a yes. User-invoked, git repositories only. |
-| `autopilot` | Starting a time-boxed standing mandate while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/setup add autopilot`; the live loop, dashboard tab, scheduler and hooks are deferred. |
+| `autopilot` | Starting a time-boxed standing mandate while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/setup add afk`; the live loop, dashboard tab, scheduler and hooks are deferred. |
 | `afk` | Main short name for `autopilot` (away from keyboard); starts the away mandate so your agents keep working while you are away, or stops it on return. |
 | `brb` | Older short name (be right back), kept as an alias of `afk` through `autopilot`; follows the same procedure and arguments. |
 | `pause` | Before you restart or shut the machine down: stops new work, lets running work finish, writes handovers and reports what recorded work remains, with an optional `--in <minutes>` deadline; `heavy_run.py` refuses new commands while it is active. User-invoked; never stops a process or declares the machine safe. |
@@ -41,7 +41,7 @@ The skill folders and their purposes match the README.
 | Writing or revising your own instructions for every agent and repository | `/setup instructions` | |
 | Adding or removing an agent, or refreshing allowed models | `/setup scan` | |
 | Saving the working tree before the agent edits, or going back to a saved point | `/restore-point` | |
-| Working while away, or stopping the mandate on return | `/autopilot start` or `/autopilot stop`; `/afk` is the main short name, with `/brb` kept as an alias; during the lease a question goes up the decision ladder (`autopilot` "Decide") instead of to you | Recorded setup required (`/setup add autopilot`) |
+| Working while away, or stopping the mandate on return | `/autopilot start` or `/autopilot stop`; `/afk` is the main short name, with `/brb` kept as an alias; during the lease a question goes up the decision ladder (`autopilot` "Decide") instead of to you | Recorded setup required (`/setup add afk`) |
 | About to restart or shut the machine down, and wanting running work drained first | `/pause [restart\|shutdown] [--in <minutes>]`; `/gtg` is the short name; `/pause resume` after the restart | |
 | Showing or changing Delegation mode or Routing, including environment overrides | `/setup mode` | |
 | Starting, resuming or redirecting coding work | `coding-router` | |

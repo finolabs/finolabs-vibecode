@@ -6,6 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- The away-session setup is now `/setup add afk`; `add autopilot` still works as an older word. Its choices stay in the `## Autopilot` section of `host.md`, so nothing needs to be set again.
 - Breaking: skill names drop the `fnl-` prefix so they are short and easy to remember (owner decision, 2026-11-11): `fnl-setup` is now `setup`, `fnl-coding-router` is `coding-router`, and so on for every skill, the short aliases included (`afk`, `brb`, `ask`, `verification`, `gtg`). Every old name stays as a user-only alias (`skills/fnl-<name>/`) that loads the renamed skill with the same arguments, so `/fnl-setup` typed by you and any file of yours that names an old skill keep working; the model does not see the aliases.
   On Claude Code, type `/finolabs-vibecode:help` and `/finolabs-vibecode:status` in full, because `/help` and `/status` are the host's own commands. Usage metrics record the current name and count an old name, typed or stored, as the same skill. The agents (`fnl-reviewer`, `fnl-security-reviewer`, `fnl-navigator`) and the `fnl-review` and `fnl-router` markers keep their names, and a repository whose `## Agent skills` block names `fnl-review-gate` still counts as adopting the review gate.
 

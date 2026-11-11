@@ -9,7 +9,7 @@ Tier 2 decisions go to an advisor acting as the user's avatar, but four gaps kee
 
 1. Nothing stops the agent from asking anyway. The session-start text tells it to use the host's question tool, and the
    `autopilot` skill does not say what replaces it, so a question waits until the user returns.
-2. The user cannot name who decides: `/setup add autopilot` has no such question, so each host picks for itself.
+2. The user cannot name who decides: `/setup add afk` has no such question, so each host picks for itself.
 3. `advisor` only gives an open opinion and ends with "you stay the decider". An away decision needs one choice among
    known options, cheaply, and on the record.
 4. Two names are confused. `ask` answers questions about the plugin; `advisor` gets an opinion. The verb in the
@@ -124,7 +124,7 @@ An advisor with only the code in front of it would give its own opinion, not the
 
 `autopilot.md` makes every deploy Tier 3. That is too broad: it also stops a deploy to a development environment or a UAT run, which can be rolled back. The rule becomes:
 
-The user chooses (owner, 2026-11-09). `/setup add autopilot` shows one table of closed categories with the starting choice beside each, and the user changes any row not marked fixed. Each category is `stop` (wait for a person) or `decide`
+The user chooses (owner, 2026-11-09). `/setup add afk` shows one table of closed categories with the starting choice beside each, and the user changes any row not marked fixed. Each category is `stop` (wait for a person) or `decide`
 (the ladder decides). The choices are stored in `## Autopilot`; a missing or unknown value is `stop`.
 
 | Category | Starting choice |

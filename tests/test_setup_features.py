@@ -75,7 +75,7 @@ class SetupFeaturesTest(unittest.TestCase):
 
     def test_companions_decline_is_distinct_and_closed(self):
         self.assertEqual(set(sf.FEATURES),
-                         {"delegation", "roles", "quota", "autopilot", "metrics", "compaction", "companions", "project",
+                         {"delegation", "roles", "quota", "afk", "metrics", "compaction", "companions", "project",
                           "checks"})
         self.assertEqual(self.run_cli("decline", "companions", "--yes")[0], 0)
         self.assertEqual(self.run_cli("show")[1].strip(), "declined: companions")

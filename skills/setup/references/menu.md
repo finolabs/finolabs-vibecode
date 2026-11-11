@@ -18,7 +18,7 @@ Choices: "Yes, draft instructions" / "No, leave instructions unchanged".
 | `delegation` | user | helper settings, Antigravity test grants |
 | `roles` | user | reviewers, evidence checker, posting |
 | `quota` | user | AI usage checks |
-| `autopilot` | user | away-session permissions and limits |
+| `afk` | user | away-session permissions and limits (`autopilot` is an older word for it) |
 | `metrics` | user | private counts, progress, running programs |
 | `compaction` | user | conversation limits |
 | `companions` | user | optional helpers; prints commands only |

@@ -4,7 +4,7 @@ Status: implemented; for release 0.2.4 (2026-11-11), items 1 to 7 are implemente
 
 ## Why
 
-Each release brings things a user has to know or set up to get the value of it. Release 0.2.3 alone added a setup feature with its own consent (the assignment matrix in `/setup add delegation`), a migration from two old host config sections, new stop or decide categories and a separate excerpt consent in `/setup add autopilot`, three renamed or new commands (`/afk`, `/pause`, `/finolabs-vibecode:help`) and a new Claude Code hook. `update` today shows the installed and available versions and runs the host's update command; after that the user is on their own, and most of what a release adds stays unused or half set up.
+Each release brings things a user has to know or set up to get the value of it. Release 0.2.3 alone added a setup feature with its own consent (the assignment matrix in `/setup add delegation`), a migration from two old host config sections, new stop or decide categories and a separate excerpt consent in `/setup add afk`, three renamed or new commands (`/afk`, `/pause`, `/finolabs-vibecode:help`) and a new Claude Code hook. `update` today shows the installed and available versions and runs the host's update command; after that the user is on their own, and most of what a release adds stays unused or half set up.
 
 ## Owner decision (2026-11-10)
 

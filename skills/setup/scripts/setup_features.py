@@ -16,10 +16,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
 
-FEATURES = ("delegation", "roles", "quota", "autopilot", "metrics", "compaction", "companions", "project", "checks")
+FEATURES = ("delegation", "roles", "quota", "afk", "metrics", "compaction", "companions", "project", "checks")
 HEADING = "## Setup features"
 # Read the old name only; CLI choices and rendered records stay canonical.
-ALIASES = {"review-tools": "companions"}
+ALIASES = {"review-tools": "companions", "autopilot": "afk"}
 LINE = re.compile(r"- (" + "|".join((*FEATURES, *ALIASES)) + r"): declined")
 CAP = 262144
 

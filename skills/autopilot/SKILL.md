@@ -11,7 +11,7 @@ Dependency: `delegate`. Resolve <script> to <delegate folder>/scripts/autopilot.
 
 ## Start
 
-1. Run only on the user's invocation; use `start` when no argument is supplied (advisory (agent judgment)). Run `python3 -I <script> start` and report its settings summary and lease length. The script requires a recorded `## Autopilot` section with an explicit Merge answer and refuses a second live lease. If setup is missing, point to `/setup add autopilot` and stop (advisory (agent judgment)).
+1. Run only on the user's invocation; use `start` when no argument is supplied (advisory (agent judgment)). Run `python3 -I <script> start` and report its settings summary and lease length. The script requires a recorded `## Autopilot` section with an explicit Merge answer and refuses a second live lease. If setup is missing, point to `/setup add afk` and stop (advisory (agent judgment)).
 2. Stay within the recorded Hosts, Task choice, Push and pull requests, Merge and limits (advisory (agent judgment) for host/task scope; script check for supported push/merge commands and lease limits). Starting applies the user's Merge answer; it grants no wider authority. Never extend the lease or change setup while away (advisory (agent judgment); the script denies checks after setup changes).
 3. Away mandate active: do not ask the user; follow "Decide" below until the lease ends. On Claude Code the away question gate denies the question tool while the lease is live (hook); elsewhere this is advisory (agent judgment).
 

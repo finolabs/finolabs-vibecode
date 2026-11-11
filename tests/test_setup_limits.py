@@ -51,10 +51,10 @@ INVENTORY = [
 ]
 # Approvals found outside the numbered design inventory. Same home/shape contract.
 EXTRA_APPROVALS = [
-    ('May the agents choose new tasks from your task list?', REFS / "features" / "autopilot.md"),
-    ('May the agents push their branches and open pull requests?', REFS / "features" / "autopilot.md"),
-    ('May the agents merge pull requests while a lease is live?', REFS / "features" / "autopilot.md"),
-    ('Save the shown away-session settings?', REFS / "features" / "autopilot.md"),
+    ('May the agents choose new tasks from your task list?', REFS / "features" / "afk.md"),
+    ('May the agents push their branches and open pull requests?', REFS / "features" / "afk.md"),
+    ('May the agents merge pull requests while a lease is live?', REFS / "features" / "afk.md"),
+    ('Save the shown away-session settings?', REFS / "features" / "afk.md"),
     ('Let the agents decide this kind of work while you are away?', REFS / "autopilot-decisions.md"),
     ('Let excerpts of your past decisions go to the judge or another AI provider when agents decide for you?',
      REFS / "autopilot-decisions.md"),
@@ -74,7 +74,7 @@ EXTRA_APPROVALS = [
 PREREQUISITES = {
     "delegation": "the agent scan", "quota": "the agent scan", "roles": "the agent scan",
     "metrics": "the plugin's hooks installed", "project": "metrics consent",
-    "autopilot": "nothing", "compaction": "nothing for the native threshold", "companions": "nothing",
+    "afk": "nothing", "compaction": "nothing for the native threshold", "companions": "nothing",
     "checks": "a git repository",
 }
 
@@ -178,7 +178,7 @@ class ConsentInventoryTests(unittest.TestCase):
                     self.assertNotIn(word, extra_choices)
 
     def test_autopilot_settings_are_separate_and_merge_is_last(self):
-        text = (REFS / "features/autopilot.md").read_text()
+        text = (REFS / "features/afk.md").read_text()
         questions = re.findall(r'Ask(?: Merge last among the settings)?: "([^"\n]+)"', text)
         self.assertEqual(len(questions), 10)
         self.assertEqual(len(set(questions)), 10)
@@ -190,7 +190,7 @@ class ConsentInventoryTests(unittest.TestCase):
         self.assertIn("There is no default for Merge", text)
 
     def test_autopilot_stop_table_marks_fixed_rows_and_risks(self):
-        feature = (REFS / "features/autopilot.md").read_text()
+        feature = (REFS / "features/afk.md").read_text()
         text = (REFS / "autopilot-decisions.md").read_text()
         self.assertIn("(../autopilot-decisions.md)", feature)
         self.assertLess(feature.index("autopilot-decisions.md"), feature.index("Ask Merge last among the settings"))
