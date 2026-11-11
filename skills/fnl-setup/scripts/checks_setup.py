@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Detect, preview and apply one repository's entry in the canonical host's Checks section and its local-receipt
-mode, install or remove the optional git pre-push hook, and write one cheaper CI workflow file from the stored
-list (`ci preview|apply`, never committed or pushed); make no network call.
+"""Detect, preview and apply one repository's check list and local-receipt mode in its own
+`checks.json` in the main checkout's project data folder with an approved digest in the private state folder, install
+or remove the optional git pre-push hook, and write one cheaper CI workflow file from the stored list
+(`ci preview|apply`, never committed or pushed); never read or write the host config for checks; make no network
+call.
 
-A check is a short name and a JSON argument array, never a shell string. Only this script writes `## Checks`.
-Detection, the list and the mode run no command; the hook commands run only fixed git queries, with no shell,
-to find where git reads hooks.
+A check is a short name and a JSON argument array, never a shell string. Only this script writes the check file and
+its approval. Detection, the list and the mode run no command; the hook commands run only fixed git queries, with no
+shell, to find where git reads hooks.
 """
 try:
     import fcntl
@@ -32,10 +34,17 @@ import setup_features as sf
 CAP = sf.CAP
 STATE = 'state/checks-setup'
 HOOK_STATE = 'state/checks-hook'
-HEADING = cl.HEADING
 NAME, CODE = cl.NAME, cl.CODE
 MAX_CHECKS, MAX_ARGV = cl.MAX_CHECKS, cl.MAX_ARGV
-PLAN_KEYS = {'code', 'checks', 'receipt', 'root', 'created', 'sha256', 'mode', 'backup'}
+PLAN_KEYS = {'action', 'code', 'repo', 'main', 'common', 'content', 'previous', 'backup', 'exclude', 'add_exclude',
+             'root', 'created'}
+ACTIONS = ('save', 'mode', 'remove')
+EXCLUDE_LINE = b'.finolabs/\n'
+EXCLUDE_FORMS = {'.finolabs/', '.finolabs', '/.finolabs/', '/.finolabs', '.finolabs/*', '/.finolabs/*'}
+APPROVAL_NOTICE = ("Apply records the SHA-256 of these exact bytes as approved in your private state folder. A file "
+                   "that differs from it (edited by hand, committed or checked out on a branch) or has no approval "
+                   "reads as unset: nothing runs and the local receipt is off until you run /fnl-setup add checks "
+                   "again.")
 HOOK_KEYS = {'action', 'repo', 'hooks', 'content', 'existing', 'ours', 'backup', 'root', 'created'}
 HOOK_MARK = '# fnl-checks pre-push hook'
 HOOK_LIMIT = 65536
@@ -53,7 +62,7 @@ MAX_TEST_FILES = 20
 MAX_EVIDENCE = 200
 EVIDENCE_WIDTH = 120
 CI_HEADING = 'found in CI, add with --check if you want it'
-PREVIEW_NOTICE = ("Review every array before you approve. These commands run the repository's own code, as cloud CI does; nothing runs now.\nThe refusal of shells, launchers and inline code is a best-effort guard, not a sandbox: an allowed program can still start a shell.\nWhat holds: the plugin never runs an array through a shell itself, and a repository cannot change the stored list.")
+PREVIEW_NOTICE = ("Review every array before you approve. These commands run the repository's own code, as cloud CI does; nothing runs now.\nThe refusal of shells, launchers and inline code is a best-effort guard, not a sandbox: an allowed program can still start a shell.\nWhat holds: the plugin never runs an array through a shell itself, and a repository cannot change the stored list: only the bytes you approve here count.")
 PACKAGE_SCRIPTS = ('lint', 'test', 'typecheck', 'build')
 MAKE_TARGETS = ('test', 'lint', 'check')
 LOCKFILES = (('pnpm-lock.yaml', 'pnpm'), ('yarn.lock', 'yarn'), ('bun.lockb', 'bun'), ('bun.lock', 'bun'))
@@ -65,8 +74,6 @@ program_name = cl.program_name
 refused_program = cl.refused_program
 check_argv = cl.check_argv
 check_list = cl.check_list
-section_span = cl.section_span
-parse = cl.parse
 checks_for = cl.checks_for
 
 
@@ -84,100 +91,106 @@ def parse_check(text):
     return [name, argv]
 
 
-def render_line(code, name, argv):
-    return f'- {code}: {name} = {check_argv(argv)}\n'
-
-
-# The section
-
-def render(entries, receipts=()):
-    if not entries:
-        return ''
-    lines = ''
-    for code in sorted(entries):
-        lines += ''.join(render_line(code, name, argv) for name, argv in entries[code])
-        if code in receipts:
-            lines += f'- {code}: {cl.RECEIPT_MODE} = on\n'
-    return f'{HEADING}\n\n{lines}\n'
-
-
-def stored(text, code):
-    """This repository's stored list as [[name, argv], ...]; an absent or invalid section or no entry raises."""
-    parsed = cl.parse_section(text)
-    if parsed is None or code not in parsed[0]:
-        raise Said('this repository has no stored checks; save a list first')
-    return parsed[0][code]
-
-
-def transform(raw, code, checks, receipt=None):
-    """Replace only this repository's lines; checks None removes them and the mode, and the section when it empties.
-
-    receipt True turns the local-receipt mode on, False turns it off, None keeps it as stored.
-    """
-    text = raw.decode('utf-8') if raw is not None else ''
-    parsed = cl.parse_section(text)
-    entries, receipts = parsed if parsed is not None else ({}, set())
-    if checks is None:
-        if receipt is not None:
-            raise ValueError('mode without checks')
-        entries.pop(code, None)
-        receipts.discard(code)
-    else:
-        check_list(checks)
-        entries[code] = checks
-        if receipt is True:
-            receipts.add(code)
-        elif receipt is False:
-            receipts.discard(code)
-        elif receipt is not None:
-            raise ValueError('mode')
-    newline = '\r\n' if '\r\n' in text else '\n'
-    section = render(entries, receipts).replace('\n', newline)
-    span = section_span(text)
-    if span is not None:
-        result = text[:span[0]] + section + text[span[1]:]
-    elif section:
-        separator = newline * (2 if not text.endswith(newline) else 1) if text and not text.endswith(newline * 2) else ''
-        result = text + separator + section
-    else:
-        result = text
-    encoded = result.encode('utf-8')
-    if len(encoded) > CAP:
-        raise ValueError('host too large')
-    return encoded
-
-
 # Preview, digest, apply
 
-def read_host(folder):
-    raw, mode = cs.read_target(folder, 'host.md')
-    if raw is not None and len(raw) > CAP:
-        raise ValueError('host too large')
-    return raw, mode
-
-
 def repository(root):
+    """The repository root of the checkout at `root` (or the current folder)."""
     found = pp.find_root(root or os.getcwd())
     if found is None:
         raise ValueError('no repository')
-    return pp.repository_code(found)
+    return found
 
 
-def preview(code, checks, receipt=None):
-    """checks None removes the entry; receipt True or False changes only the mode and keeps the stored list."""
-    if checks is not None:
-        check_list(checks)
+def current_project(main):
+    """The project file's bytes, None when absent; a link or an unsafe file is refused."""
+    try:
+        return cl.read_project_bytes(main)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
+        raise Said('the project check file or its folder is a link, unsafe or too large; move it yourself first') \
+            from None
+
+
+def exclude_state(common):
+    """(bytes or None, already listed) of the git common folder's info/exclude; a link is refused."""
+    try:
+        with pp.open_dir(common) as fd:
+            try:
+                with _subdir(fd, 'info') as info:
+                    raw = dr.read_file(info, 'exclude', CAP)
+            except FileNotFoundError:
+                return None, False
+    except FileNotFoundError:
+        return None, False
+    lines = {line.strip() for line in raw.decode('utf-8', 'replace').splitlines()}
+    return raw, bool(lines & EXCLUDE_FORMS)
+
+
+def add_exclude(common, expected):
+    """Append the one exclude line to <common>/info/exclude when it is still the previewed content."""
+    with pp.open_dir(common) as fd:
+        try:
+            os.mkdir('info', 0o755, dir_fd=fd)
+        except FileExistsError:
+            pass
+        with _subdir(fd, 'info') as info:
+            raw, mode = cs.read_target(info, 'exclude')
+            if cs.content_hash(raw) != expected:
+                raise Said('.git/info/exclude changed since the preview; preview again')
+            text = raw or b''
+            if text and not text.endswith(b'\n'):
+                text += b'\n'
+            cs.write_target(info, 'exclude', text + EXCLUDE_LINE, mode if raw is not None else 0o644)
+
+
+def write_private(folder, name, raw, mode=0o600):
+    """A new backup file (never over an existing one), 0600 unless the original's mode is kept."""
+    fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=folder)
+    with os.fdopen(fd, 'wb') as stream:
+        os.fchmod(stream.fileno(), mode)
+        stream.write(raw)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def plan_for(found, action, checks=None, receipt=None):
+    """Build and save the plan for one repository: action save (checks), mode (receipt True or False) or remove;
+    returns (plan, digest, mode) without changing anything outside the private state folder."""
     root = dr.consent_root()
     if root is None:
         raise ValueError('invalid data root')
-    with dr.root_folder(create=True) as folder:
-        fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        raw, mode = read_host(folder)
-        if receipt is not None:
-            checks = stored(raw.decode('utf-8') if raw is not None else '', code)
-        transform(raw, code, checks, receipt)
-        plan = {'code': code, 'checks': checks, 'receipt': receipt, 'root': str(root), 'created': time.time(),
-                'sha256': cs.content_hash(raw), 'mode': mode, 'backup': cs.backup_name(folder, 'host.md')}
+    code = pp.repository_code(found)
+    main, common = cl.layout(found)
+    if cl.code_of(main) != code:
+        raise ValueError('repository identity')
+    previous = current_project(main)
+    if action == 'mode':
+        if previous is None:
+            raise Said('this repository has no stored checks; save a list first')
+        found_checks, _, reason = cl.read_project(code, found)
+        if reason:
+            raise Said(f'the project check file is unset ({reason}); save a list first')
+        checks = [list(item) for item in found_checks]
+        mode = receipt
+    elif action == 'save':
+        check_list(checks)
+        mode = False
+        if previous is not None:
+            _, kept, reason = cl.read_project(code, found)
+            mode = kept if reason is None else False
+    else:
+        checks = mode = None
+    content = None if action == 'remove' else cl.render_project(checks, mode).decode()
+    exclude, listed = (None, True) if content is None else exclude_state(common)
+    backup = None
+    if previous is not None:
+        with cl.project_folder(main) as fd:
+            backup = cs.backup_name(fd, cl.PROJECT_FILE)
+    plan = {'action': action, 'code': code, 'repo': str(found), 'main': str(main), 'common': str(common),
+            'content': content, 'previous': cs.content_hash(previous), 'backup': backup,
+            'exclude': None if listed else cs.content_hash(exclude), 'add_exclude': not listed,
+            'root': str(root), 'created': time.time()}
     value = cs.digest(plan)
     with dr.data_folder(STATE, create=True, private=True) as state:
         try:
@@ -185,22 +198,87 @@ def preview(code, checks, receipt=None):
         except FileNotFoundError:
             pass
         dr.atomic_write(state, 'preview.json', json.dumps({'plan': plan, 'digest': value}).encode())
-    print('Target: ' + str(root / 'host.md'))
-    if receipt is True:
-        print(f'Turn the local-receipt mode on for repository {code} ({HEADING} line '
-              f'"- {code}: {cl.RECEIPT_MODE} = on").')
-        print(RECEIPT_NOTICE)
-    elif receipt is False:
-        print(f'Turn the local-receipt mode off for repository {code}; its check list stays as stored.')
-    elif checks is None:
-        print(f'Remove every check of repository {code} from {HEADING}.')
+    return plan, value, mode
+
+
+def preview(found, action, checks=None, receipt=None):
+    plan, value, mode = plan_for(found, action, checks, receipt)
+    main, code = Path(plan['main']), plan['code']
+    target = main.joinpath(*cl.PROJECT_FOLDERS, cl.PROJECT_FILE)
+    print('Target: ' + str(target))
+    if action == 'mode':
+        print(f'Turn the local-receipt mode {"on" if receipt else "off"} for repository {code}; its check list '
+              'stays as stored.')
+        if receipt:
+            print(RECEIPT_NOTICE)
+    elif action == 'remove':
+        print(f'Remove the check file and the approved digest of repository {code}; backups beside it stay.')
     else:
-        print(HEADING + ' entry for repository ' + code + ':')
-        print(''.join(render_line(code, name, argv) for name, argv in checks), end='')
+        print('Check list for repository ' + code + ' (local receipt ' + ('on' if mode else 'off') + '):')
+        print(plan['content'], end='')
         print(PREVIEW_NOTICE)
-    print('Backup: ' + str(root / plan['backup']))
+    if plan['content'] is not None:
+        print(APPROVAL_NOTICE)
+    if plan['backup']:
+        print('Backup: ' + str(target.parent / plan['backup']))
+    if plan['add_exclude']:
+        print(f'The repository\'s .git/info/exclude ({Path(plan["common"]) / "info/exclude"}) does not list '
+              '.finolabs/; apply adds that one line (never to a tracked .gitignore).')
+    print('Undo: checks_setup.py remove for this repository.')
     print('Digest: ' + value)
-    print('Preview expires in 60 minutes; host configuration unchanged.')
+    print('Preview expires in 60 minutes; nothing changed.')
+
+
+def checked_plan(plan):
+    if not isinstance(plan, dict) or set(plan) != PLAN_KEYS or plan['action'] not in ACTIONS \
+            or not isinstance(plan['code'], str) or not CODE.fullmatch(plan['code']):
+        raise ValueError('invalid plan')
+    content = plan['content']
+    if (content is None) != (plan['action'] == 'remove'):
+        raise ValueError('invalid plan')
+    if content is not None:
+        if not isinstance(content, str):
+            raise ValueError('invalid plan')
+        checks, mode = cl.parse_project(content.encode())
+        if cl.render_project(checks, mode) != content.encode():
+            raise ValueError('invalid plan')
+    if plan['root'] != str(dr.consent_root()):
+        raise ValueError('data root changed; preview again')
+    if type(plan['created']) not in (int, float) or not 0 <= time.time() - plan['created'] <= 3600:
+        raise ValueError('preview expired; preview again')
+    if plan['backup'] is not None and (not isinstance(plan['backup'], str) or not re.fullmatch(
+            r'checks\.json\.bak-\d{8}(?:-[1-9][0-9]*)?', plan['backup'])):
+        raise ValueError('invalid backup')
+    found = pp.find_root(plan['repo'])
+    if found is None or str(found) != plan['repo'] or pp.repository_code(found) != plan['code']:
+        raise ValueError('repository changed; preview again')
+    main, common = cl.layout(found)
+    if str(main) != plan['main'] or str(common) != plan['common'] or cl.code_of(main) != plan['code']:
+        raise ValueError('repository changed; preview again')
+    return main, common
+
+
+def write_project(plan, main, code):
+    """Back up the previous file, then write the new one and its approval, or remove both; bound to the preview."""
+    with cl.project_folder(main, create=plan['content'] is not None) as fd:
+        try:
+            previous = cl.read_project_file(fd)
+        except FileNotFoundError:
+            previous = None
+        if cs.content_hash(previous) != plan['previous']:
+            raise Said('the project check file changed since the preview; preview again')
+        if previous is not None:
+            if plan['backup'] is None:
+                raise ValueError('invalid backup')
+            write_private(fd, plan['backup'], previous)
+        if plan['content'] is None:
+            if previous is not None:
+                os.unlink(cl.PROJECT_FILE, dir_fd=fd)
+                os.fsync(fd)
+        else:
+            raw = plan['content'].encode()
+            dr.atomic_write(fd, cl.PROJECT_FILE, raw)
+            cl.write_approved(code, cs.content_hash(raw))
 
 
 def apply(value, yes):
@@ -215,49 +293,45 @@ def apply(value, yes):
         digest = cs.digest(plan)
         if saved['digest'] != digest or not digest.startswith(value):
             raise ValueError('digest mismatch; preview again')
-        if not isinstance(plan, dict) or set(plan) != PLAN_KEYS or not isinstance(plan['code'], str) \
-                or not CODE.fullmatch(plan['code']):
-            raise ValueError('invalid plan')
-        if plan['checks'] is not None:
-            check_list(plan['checks'])
-        if plan['receipt'] not in (None, True, False) or (plan['checks'] is None and plan['receipt'] is not None):
-            raise ValueError('invalid plan')
-        if plan['root'] != str(dr.consent_root()):
-            raise ValueError('data root changed; preview again')
-        if type(plan['created']) not in (int, float) or not 0 <= time.time() - plan['created'] <= 3600:
-            raise ValueError('preview expired; preview again')
-        if not isinstance(plan['backup'], str) or not re.fullmatch(r'host\.md\.bak-\d{8}(?:-[1-9][0-9]*)?', plan['backup']):
-            raise ValueError('invalid backup')
-        with dr.root_folder() as folder:
-            fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            raw, mode = read_host(folder)
-            if cs.content_hash(raw) != plan['sha256'] or mode != plan['mode']:
-                raise ValueError('host changed; preview again')
-            result = transform(raw, plan['code'], plan['checks'], plan['receipt'])
-            if result != (raw or b''):
-                if raw is not None:
-                    fd = os.open(plan['backup'], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=folder)
-                    with os.fdopen(fd, 'wb') as stream:
-                        os.fchmod(stream.fileno(), mode)
-                        stream.write(raw)
-                        stream.flush()
-                        os.fsync(stream.fileno())
-                cs.write_target(folder, 'host.md', result, mode)
+        main, common = checked_plan(plan)
+        code = plan['code']
+        if plan['add_exclude'] and cs.content_hash(exclude_state(common)[0]) != plan['exclude']:
+            raise Said('.git/info/exclude changed since the preview; preview again')
+        removing = plan['content'] is None
+        # Each path refuses a stale preview before it changes anything.
+        if removing and plan['previous'] is None:
+            if current_project(main) is not None:
+                raise Said('the project check file changed since the preview; preview again')
+        else:
+            write_project(plan, main, code)
+        if removing:
+            cl.remove_approved(code)
         os.unlink('preview.json', dir_fd=state)
         os.fsync(state)
-    print('Checks section saved; no command was run.')
+        if plan['add_exclude']:
+            try:
+                add_exclude(common, plan['exclude'])
+            except (OSError, ValueError, UnicodeError):
+                raise Said('the check file was saved, but .git/info/exclude could not be changed; add the line '
+                           '.finolabs/ to it yourself') from None
+    print('Check file removed; no command was run.' if plan['content'] is None
+          else 'Check file saved and approved; no command was run.')
 
 
 def show(root):
-    code = repository(root)
-    checks, reason = checks_for(code)
+    found = pp.find_root(root or os.getcwd())
+    if found is None:
+        raise ValueError('no repository')
+    code = pp.repository_code(found)
+    checks, reason = checks_for(code, root=found)
     if reason:
-        print(f'Repository {code}: no checks ({reason}).')
-        return 3 if reason in ('invalid', 'unreadable') else 0
+        print(f'Repository {code}: no checks ({reason}).' + (f' Nothing runs; {cl.AGAIN}.'
+                                                              if reason == cl.CHANGED else ''))
+        return 3 if reason in ('invalid', 'unreadable', cl.CHANGED) else 0
     print(f'Repository {code}:')
     for name, argv in checks:
         print(f'{name} = {check_argv(argv)}')
-    print('local receipt: ' + ('on' if cl.receipt_mode(code) else 'off'))
+    print('local receipt: ' + ('on' if cl.receipt_mode(code, root=found) else 'off'))
     return 0
 
 
@@ -646,7 +720,7 @@ def ci_source(root, name, branch):
     if found is None:
         raise ValueError('no repository')
     code = pp.repository_code(found)
-    checks, reason = checks_for(code)
+    checks, reason = checks_for(code, root=found)
     if reason:
         raise Said(f'this repository has no stored checks ({reason}); save a list first')
     with pp.open_dir(found) as root_fd:
@@ -1119,7 +1193,7 @@ def main(argv=None):
                 hook_apply(args.digest, args.yes, args.replace_existing)
             return 0
         if args.action == 'receipt':
-            preview(repository(args.root), None, args.state == 'on')
+            preview(repository(args.root), 'mode', receipt=args.state == 'on')
             return 0
         if args.action == 'detect':
             result = detect(args.root)
@@ -1132,9 +1206,9 @@ def main(argv=None):
             return show(args.root)
         if args.action == 'preview':
             checks = [parse_check(item) for item in args.check]
-            preview(repository(args.root), checks)
+            preview(repository(args.root), 'save', checks)
         elif args.action == 'remove':
-            preview(repository(args.root), None)
+            preview(repository(args.root), 'remove')
         else:
             apply(args.digest, args.yes)
         return 0
@@ -1143,7 +1217,7 @@ def main(argv=None):
         return 1
     except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError,
             subprocess.SubprocessError):
-        print('Checks setup refused: invalid arguments, shell string, unsafe or changed file, invalid Checks section, '
+        print('Checks setup refused: invalid arguments, shell string, unsafe or changed file, invalid check file '
               'or stale preview; preview again.', file=sys.stderr)
         return 1
 

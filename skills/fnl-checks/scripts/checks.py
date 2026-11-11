@@ -7,7 +7,7 @@ Usage, from inside the repository:
   checks.py usage --from <runs.json> [--files-from <paths.json>] [--limit-minutes N]
                                              summarise CI runs and minutes from files; no network, no process
 
-Each check is an argument array from `## Checks` of the canonical host config (written only by fnl-setup's
+Each check is an argument array from the repository's approved check file (written only by fnl-setup's
 `checks_setup.py`), launched through `heavy_run.py`'s canonical form with no shell and an allowlisted environment;
 the checks' own output streams through. `--changed` keeps only the checks the change since the base touches: a
 `python -m unittest discover -s tests` check keeps its discovery and gets one `--pattern <file>` run per module
@@ -196,7 +196,11 @@ def narrow(checks, base, root):
 
 def run(changed, base):
     root, code = repository()
-    checks, reason = cl.checks_for(code)
+    checks, reason = cl.checks_for(code, root=root)
+    if reason == cl.CHANGED:
+        print(f'Repository {code}: no checks (the check file {reason}); nothing was run. To use it, {cl.AGAIN}.',
+              file=sys.stderr)
+        return 3
     if reason:
         print(f'Repository {code}: no checks ({reason}); nothing was run. Set them with /fnl-setup add checks.',
               file=sys.stderr)
@@ -214,7 +218,7 @@ def run(changed, base):
 
 def run_list(root, code, checks, changed, base):
     digest = cl.list_digest(checks)
-    mode = cl.receipt_mode(code)
+    mode = cl.receipt_mode(code, root=root)
     start_head, start_clean = (head(root), clean(root)) if mode and not changed else (None, False)
     if changed:
         plan, skipped = narrow(checks, base, root)
@@ -242,12 +246,12 @@ def run_list(root, code, checks, changed, base):
         print('no local receipt: a --changed run covers only part of the list')
         return 0
     end_head = head(root)
-    current, reason = cl.checks_for(code)
+    current, reason = cl.checks_for(code, root=root)
     if not start_clean or not clean(root):
         why = 'the working tree is not clean'
     elif start_head is None or end_head != start_head:
         why = 'the head moved during the run'
-    elif reason or cl.list_digest(current) != digest or not cl.receipt_mode(code):
+    elif reason or cl.list_digest(current) != digest or not cl.receipt_mode(code, root=root):
         why = 'the check list or its mode changed during the run'
     else:
         try:
@@ -263,15 +267,16 @@ def run_list(root, code, checks, changed, base):
 
 
 def show():
-    _, code = repository()
-    checks, reason = cl.checks_for(code)
+    root, code = repository()
+    checks, reason = cl.checks_for(code, root=root)
     if reason:
-        print(f'Repository {code}: no checks ({reason}).')
-        return 3 if reason in ('invalid', 'unreadable') else 0
+        print(f'Repository {code}: no checks ({reason}).' + (f' Nothing runs; {cl.AGAIN}.'
+                                                              if reason == cl.CHANGED else ''))
+        return 3 if reason in ('invalid', 'unreadable', cl.CHANGED) else 0
     print(f'Repository {code}:')
     for name, argv in checks:
         print(f'{name} = {cl.check_argv(list(argv))}')
-    print('local receipt: ' + ('on' if cl.receipt_mode(code) else 'off'))
+    print('local receipt: ' + ('on' if cl.receipt_mode(code, root=root) else 'off'))
     return 0
 
 

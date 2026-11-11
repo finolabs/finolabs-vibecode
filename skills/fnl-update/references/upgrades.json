@@ -27,6 +27,17 @@
           "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again."
         }
       ]
+    },
+    {
+      "version": "0.2.5",
+      "items": [
+        {
+          "id": "0.2.5/checks-store",
+          "kind": "setup",
+          "text": "A check list saved with 0.2.4 is no longer read: run /fnl-setup add checks again in each repository, then delete the old ## Checks section from host.md by hand.",
+          "setup": "/fnl-setup add checks"
+        }
+      ]
     }
   ]
 }

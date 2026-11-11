@@ -718,11 +718,8 @@ class LocalReceiptTest(unittest.TestCase):
             self.git(folder, "remote", "add", "origin", origin)
         return folder
 
-    def store(self, checks, receipt, code=None):
-        code = code or self.code
-        lines = "".join("- %s: %s = %s\n" % (code, name, json.dumps(argv, separators=(",", ":")))
-                        for name, argv in checks)
-        self.host.write_text("# Host\n\n## Checks\n\n" + lines + ("- %s: local-receipt = on\n" % code if receipt else ""))
+    def store(self, checks, receipt):
+        self.store_file(checks, receipt)
 
     def receipt(self, head=HEAD, checks=None, code=None):
         record = self.cl.write_receipt(self.code, head, self.cl.list_digest(checks or self.checks))
@@ -777,9 +774,43 @@ class LocalReceiptTest(unittest.TestCase):
         self.assertEqual(self.checks_line(lines), "BLOCK checks: none reported")
         self.assertEqual(lines, run(pr(checks=[]))[1])
 
-    def test_an_invalid_section_is_mode_off(self):
+    def test_an_invalid_project_file_is_mode_off(self):
+        import hashlib
         self.receipt()
-        self.host.write_text(self.host.read_text() + "- %s: test = [\"sh\",\"-c\",\"x\"]\n" % self.code)
+        raw = json.dumps({"version": 1, "checks": [{"name": "test", "argv": ["sh", "-c", "x"]}],
+                          "local_receipt": True}).encode()
+        (self.repo / ".finolabs/vibecode/checks.json").write_bytes(raw)
+        self.cl.write_approved(self.code, hashlib.sha256(raw).hexdigest())
+        ok, lines = self.evaluate(pr(checks=[]))
+        self.assertFalse(ok)
+        self.assertEqual(self.checks_line(lines), "BLOCK checks: none reported")
+
+    def store_file(self, checks, receipt, approve=True):
+        import hashlib
+        raw = self.cl.render_project([[name, argv] for name, argv in checks], receipt)
+        folder = self.repo / ".finolabs/vibecode"
+        folder.mkdir(parents=True, mode=0o700, exist_ok=True)
+        (folder / "checks.json").write_bytes(raw)
+        os.chmod(folder / "checks.json", 0o600)
+        if approve:
+            self.cl.write_approved(self.code, hashlib.sha256(raw).hexdigest())
+
+    def test_a_legacy_section_never_turns_the_mode_on(self):
+        (self.repo / ".finolabs/vibecode/checks.json").unlink()
+        self.cl.remove_approved(self.code)
+        lines = "".join("- %s: %s = %s\n" % (self.code, name, json.dumps(argv, separators=(",", ":")))
+                        for name, argv in self.checks)
+        self.host.write_text("# Host\n\n## Checks\n\n" + lines + "- %s: local-receipt = on\n" % self.code)
+        self.receipt()
+        self.assertFalse(self.cl.receipt_mode(self.code, root=self.repo))
+        ok, lines = self.evaluate(pr(checks=[]))
+        self.assertFalse(ok)
+        self.assertEqual(self.checks_line(lines), "BLOCK checks: none reported")
+
+    def test_an_unapproved_project_file_is_mode_off(self):
+        self.store_file(self.checks, receipt=True, approve=False)
+        self.cl.remove_approved(self.code)
+        self.receipt()
         ok, lines = self.evaluate(pr(checks=[]))
         self.assertFalse(ok)
         self.assertEqual(self.checks_line(lines), "BLOCK checks: none reported")

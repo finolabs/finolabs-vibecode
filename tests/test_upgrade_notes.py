@@ -68,9 +68,9 @@ class NotesSchemaTest(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 u.parse_notes(bad)
 
-    def test_shipped_notes_are_valid_and_hold_the_024_entry_only(self):
+    def test_shipped_notes_are_valid_and_hold_the_024_and_025_entries(self):
         parsed = u.parse_notes(json.loads(NOTES.read_text()))
-        self.assertEqual([entry['version'] for entry in parsed], ['0.2.4'])
+        self.assertEqual([entry['version'] for entry in parsed], ['0.2.4', '0.2.5'])
         ids = [item['id'] for item in parsed[0]['items']]
         self.assertIn('0.2.4/checks-rename', ids)
         self.assertIn('0.2.4/checks-setup', ids)
@@ -78,13 +78,21 @@ class NotesSchemaTest(unittest.TestCase):
         self.assertIn('0.2.4/codex-hook-trust', ids)
         rename = next(item for item in parsed[0]['items'] if item['id'] == '0.2.4/checks-rename')
         self.assertEqual(rename['until'], '0.3.0')
+        self.assertEqual([item['kind'] for item in parsed[1]['items']], ['setup'])
+        store = parsed[1]['items'][0]
+        self.assertEqual(store['id'], '0.2.5/checks-store')
+        self.assertEqual(store['setup'], '/fnl-setup add checks')
+        for phrase in ('0.2.4', 'no longer read', 'each repository', '## Checks', 'host.md', 'by hand'):
+            self.assertIn(phrase, store['text'])
+        self.assertNotIn('migrate', store['text'])
 
     def test_release_version_needs_an_entry(self):
         notes = u.parse_notes(json.loads(NOTES.read_text()))
         released = {entry['version'] for entry in notes}
         self.assertFalse(u.missing_release_entry('0.2.4-dev', released))
         self.assertFalse(u.missing_release_entry('0.2.4', released))
-        self.assertTrue(u.missing_release_entry('0.2.5', released))
+        self.assertFalse(u.missing_release_entry('0.2.5', released))
+        self.assertTrue(u.missing_release_entry('0.2.6', released))
         self.assertFalse(u.missing_release_entry('0.2.5-dev', released))
         manifest = json.loads((ROOT / '.claude-plugin/plugin.json').read_text())['version']
         self.assertFalse(u.missing_release_entry(manifest, released),
