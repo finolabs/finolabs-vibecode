@@ -784,6 +784,31 @@ class LocalReceiptTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(self.checks_line(lines), "BLOCK checks: none reported")
 
+    def store_file(self, checks, receipt, approve=True):
+        import hashlib
+        raw = self.cl.render_project([[name, argv] for name, argv in checks], receipt)
+        folder = self.repo / ".finolabs/vibecode"
+        folder.mkdir(parents=True, mode=0o700, exist_ok=True)
+        (folder / "checks.json").write_bytes(raw)
+        os.chmod(folder / "checks.json", 0o600)
+        if approve:
+            self.cl.write_approved(self.code, hashlib.sha256(raw).hexdigest())
+
+    def test_the_receipt_mode_and_list_come_from_the_project_file(self):
+        self.store([("other", ["make", "other"])], receipt=False)
+        self.store_file(self.checks, receipt=True)
+        self.receipt()
+        ok, lines = self.evaluate(pr(checks=[]))
+        self.assertTrue(ok, lines)
+        self.assertEqual(self.checks_line(lines), f"ok    checks: local receipt ({HEAD[:12]})")
+
+    def test_an_unapproved_project_file_is_mode_off(self):
+        self.store_file(self.checks, receipt=True, approve=False)
+        self.receipt()
+        ok, lines = self.evaluate(pr(checks=[]))
+        self.assertFalse(ok)
+        self.assertEqual(self.checks_line(lines), "BLOCK checks: none reported")
+
     def test_passing_hosted_checks_ignore_the_receipt(self):
         def never(head, repo):
             raise AssertionError("receipt read while hosted checks pass")

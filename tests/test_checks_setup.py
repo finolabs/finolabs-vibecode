@@ -342,26 +342,14 @@ class ChecksSetupTest(unittest.TestCase):
                        'an allowed program can still start a shell', 'a repository cannot change the stored list'):
             self.assertIn(phrase, out)
 
-    def test_preview_then_apply_writes_only_the_section(self):
-        before = self.host.read_bytes()
+    def test_preview_is_private_and_apply_takes_a_digest_prefix(self):
         digest = self.preview('lint=["npm","run","lint"]', 'test=["python3","-m","unittest"]')
-        self.assertEqual(self.host.read_bytes(), before)
         self.assertEqual(stat.S_IMODE(self.plan.stat().st_mode), 0o600)
         code, _, err = self.cli('apply', '--yes', '--digest', digest[:12])
         self.assertEqual(code, 0, err)
-        raw = self.host.read_bytes()
-        self.assertTrue(raw.startswith(before))
-        code_ = self.code()
-        self.assertIn(('\n## Checks\n\n- %s: lint = ["npm","run","lint"]\n'
-                       '- %s: test = ["python3","-m","unittest"]\n' % (code_, code_)).encode(), raw)
-        self.assertEqual(next(self.host.parent.glob('host.md.bak-*')).read_bytes(), before)
         self.assertFalse(self.plan.exists())
-        module = self.module()
-        self.assertEqual(module.checks_for(code_),
+        self.assertEqual(self.module().checks_for(self.code(), root=self.repo),
                          ([('lint', ['npm', 'run', 'lint']), ('test', ['python3', '-m', 'unittest'])], None))
-        code, out, _ = self.cli('show', '--root', str(self.repo))
-        self.assertEqual(code, 0)
-        self.assertIn('lint = ["npm","run","lint"]', out)
 
     def test_apply_needs_yes_and_a_matching_digest(self):
         digest = self.preview('test=["make","test"]')
@@ -376,10 +364,15 @@ class ChecksSetupTest(unittest.TestCase):
         digest = self.preview('test=["make","test"]')
         with mock.patch('time.time', return_value=time.time() + 3601):
             self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 1)
+        self.assertFalse((self.repo / '.finolabs/vibecode/checks.json').exists())
+        # A preview that also removes a legacy entry is bound to host.md as it was.
+        self.host.write_text(PREFIX.decode() + '\n## Checks\n\n- %s: lint = ["make","lint"]\n' % self.code())
         digest = self.preview('test=["make","test"]')
-        self.host.write_bytes(PREFIX + b'\n## Later\nx\n')
+        changed = PREFIX + b'\n## Later\nx\n\n## Checks\n\n- %s: lint = ["make","lint"]\n' % self.code().encode()
+        self.host.write_bytes(changed)
         self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 1)
-        self.assertNotIn(b'## Checks', self.host.read_bytes())
+        self.assertEqual(self.host.read_bytes(), changed)
+        self.assertFalse((self.repo / '.finolabs/vibecode/checks.json').exists())
 
     def test_a_symlinked_host_is_refused(self):
         real = self.home / 'real-host.md'
@@ -390,29 +383,20 @@ class ChecksSetupTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(real.read_bytes(), PREFIX)
 
-    def test_other_repositories_are_kept_and_remove_takes_only_this_one(self):
-        digest = self.preview('test=["make","test"]', root=self.other)
-        self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 0)
-        digest = self.preview('lint=["make","lint"]')
-        self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 0)
-        module = self.module()
-        self.assertEqual(module.checks_for(self.code(self.other)), ([('test', ['make', 'test'])], None))
-        self.assertEqual(module.checks_for(self.code()), ([('lint', ['make', 'lint'])], None))
-        digest = self.preview('lint=["make","lint"]', 'test=["make","test"]')
-        self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 0)
-        self.assertEqual(module.checks_for(self.code())[0], [('lint', ['make', 'lint']), ('test', ['make', 'test'])])
+    def test_remove_takes_this_repositorys_legacy_lines_only(self):
+        code_, other = self.code(), self.code(self.other)
+        self.host.write_text(PREFIX.decode() + '\n## Checks\n\n- %s: lint = ["make","lint"]\n'
+                             '- %s: test = ["make","test"]\n' % (code_, other))
         code, out, err = self.cli('remove', '--root', str(self.repo))
         self.assertEqual(code, 0, err)
-        digest = out.split('Digest: ')[1].splitlines()[0]
-        self.assertIn(b'- %s: lint' % self.code().encode(), self.host.read_bytes())
-        self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 0)
-        self.assertEqual(module.checks_for(self.code()), ([], 'no entry'))
-        self.assertEqual(module.checks_for(self.code(self.other)), ([('test', ['make', 'test'])], None))
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        module = self.module()
+        self.assertEqual(module.checks_for(code_, root=self.repo), ([], 'no entry'))
+        self.assertEqual(module.checks_for(other, root=self.other), ([('test', ['make', 'test'])], None))
         code, out, _ = self.cli('remove', '--root', str(self.other))
-        digest = out.split('Digest: ')[1].splitlines()[0]
-        self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 0)
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
         self.assertNotIn(b'## Checks', self.host.read_bytes())
-        self.assertEqual(module.checks_for(self.code()), ([], 'absent'))
+        self.assertEqual(module.checks_for(code_), ([], 'absent'))
 
     # Reader
 
@@ -434,8 +418,9 @@ class ChecksSetupTest(unittest.TestCase):
                 text = PREFIX.decode() + '\n## Checks\n\n' + body + '\n## After\n- other: ' + label + '\n'
                 self.host.write_text(text)
                 self.assertEqual(module.checks_for(code_), ([], 'invalid'))
+                # A new list goes to the project file; the invalid legacy section is left exactly as it is.
                 code, _, _ = self.cli('preview', '--root', str(self.repo), '--check', 'test=["make","test"]')
-                self.assertEqual(code, 1)
+                self.assertEqual(code, 0)
                 self.assertEqual(self.host.read_text(), text)
         self.host.write_text('## Checks\n' + good + '\n## Checks\n' + good)
         self.assertEqual(module.checks_for(code_), ([], 'invalid'))
@@ -449,9 +434,7 @@ class ChecksSetupTest(unittest.TestCase):
     def test_project_settings_read_and_write_unchanged_beside_checks(self):
         code_ = self.code()
         settings = '## Project settings\n\n- %s parallel: 4\n\n' % code_
-        self.host.write_text(PREFIX.decode() + '\n' + settings)
-        digest = self.preview('test=["make","test"]')
-        self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 0)
+        self.host.write_text(PREFIX.decode() + '\n' + settings + '## Checks\n\n- %s: test = ["make","test"]\n' % code_)
         text = self.host.read_text()
         self.assertIn(settings, text)
         for path in (SCRIPTS / 'project_progress.py', ROOT / 'scripts/project_progress.py',
@@ -492,23 +475,21 @@ class ChecksSetupTest(unittest.TestCase):
         value = out.split('Digest: ')[1].splitlines()[0]
         self.assertEqual(self.cli('apply', '--yes', '--digest', value)[0], 0)
         code_ = self.code()
-        self.assertIn(('- %s: test = ["make","test"]\n- %s: local-receipt = on\n' % (code_, code_)).encode(),
-                      self.host.read_bytes())
+        self.assertEqual(self.host.read_bytes(), before)
         reader = load('checks_list_mode', SCRIPTS / 'checks_list.py')
-        self.assertTrue(reader.receipt_mode(code_))
-        self.assertEqual(self.module().checks_for(code_), ([('test', ['make', 'test'])], None))
+        self.assertTrue(reader.receipt_mode(code_, root=self.repo))
+        self.assertEqual(self.module().checks_for(code_, root=self.repo), ([('test', ['make', 'test'])], None))
         # A new list keeps the mode; its digest changes, so an older receipt no longer matches.
         digest = self.preview('lint=["make","lint"]')
         self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 0)
-        self.assertTrue(reader.receipt_mode(code_))
+        self.assertTrue(reader.receipt_mode(code_, root=self.repo))
         code, out, _ = self.cli('receipt', 'off', '--root', str(self.repo))
         self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
-        self.assertFalse(reader.receipt_mode(code_))
-        self.assertNotIn(b'local-receipt', self.host.read_bytes())
+        self.assertFalse(reader.receipt_mode(code_, root=self.repo))
 
     def test_receipt_mode_is_off_by_default_and_needs_a_list(self):
         reader = load('checks_list_default', SCRIPTS / 'checks_list.py')
-        self.assertFalse(reader.receipt_mode(self.code()))
+        self.assertFalse(reader.receipt_mode(self.code(), root=self.repo))
         code, out, _ = self.cli('receipt', 'on', '--root', str(self.repo))
         self.assertEqual(code, 1)
         self.assertNotIn('Digest', out)
@@ -520,7 +501,8 @@ class ChecksSetupTest(unittest.TestCase):
         self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])
         _, out, _ = self.cli('remove', '--root', str(self.repo))
         self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
-        self.assertNotIn(b'## Checks', self.host.read_bytes())
+        self.assertFalse((self.repo / '.finolabs/vibecode/checks.json').exists())
+        self.assertFalse(load('checks_list_removed', SCRIPTS / 'checks_list.py').receipt_mode(self.code(), root=self.repo))
 
     def test_the_mode_name_is_reserved_and_a_bad_mode_line_unsets_the_section(self):
         code, _, _ = self.cli('preview', '--root', str(self.repo), '--check', 'local-receipt=["make"]')
@@ -534,6 +516,358 @@ class ChecksSetupTest(unittest.TestCase):
             with self.subTest(body=body):
                 self.host.write_text('## Checks\n\n' + body)
                 self.assertEqual(module.checks_for(code_), ([], 'invalid'))
+
+
+CHANGED = 'changed since it was approved'
+
+
+class ProjectFileTest(unittest.TestCase):
+    """The project-scoped list: <main checkout>/.finolabs/vibecode/checks.json, bound to an approved digest."""
+
+    setUp, module, cli, preview, code = (ChecksSetupTest.setUp, ChecksSetupTest.module, ChecksSetupTest.cli,
+                                         ChecksSetupTest.preview, ChecksSetupTest.code)
+
+    def reader(self):
+        return load('checks_list_project', SCRIPTS / 'checks_list.py')
+
+    def project(self, root=None):
+        return (root or self.repo) / '.finolabs/vibecode/checks.json'
+
+    def approved(self, root=None):
+        return self.host.parent / 'state/checks-approved' / (self.code(root) + '.json')
+
+    def save(self, *checks, root=None):
+        digest = self.preview(*checks, root=root)
+        code, out, err = self.cli('apply', '--yes', '--digest', digest)
+        self.assertEqual(code, 0, err)
+        return out
+
+    def legacy(self, *lines):
+        self.host.write_text(PREFIX.decode() + '\n## Checks\n\n' + ''.join(lines) + '\n')
+
+    def approve(self, root=None):
+        """Record the current file's bytes as approved, as an apply would."""
+        import hashlib
+        self.reader().write_approved(self.code(root), hashlib.sha256(self.project(root).read_bytes()).hexdigest())
+
+    def test_apply_writes_the_project_file_and_its_digest_and_leaves_host_identical(self):
+        before = self.host.read_bytes()
+        code, out, err = self.cli('preview', '--root', str(self.repo), '--check', 'lint=["make","lint"]',
+                                  '--check', 'test=["make","test"]')
+        self.assertEqual(code, 0, err)
+        self.assertIn('Target: ' + str(self.project()), out)
+        self.assertNotIn('host.md', out)
+        self.assertIn('Undo: ', out)
+        self.assertFalse(self.project().exists())
+        digest = out.split('Digest: ')[1].splitlines()[0]
+        self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 0)
+        self.assertEqual(self.host.read_bytes(), before)
+        self.assertEqual(list(self.host.parent.glob('host.md.bak-*')), [])
+        data = json.loads(self.project().read_text())
+        self.assertEqual(data, {'version': 1, 'checks': [{'name': 'lint', 'argv': ['make', 'lint']},
+                                                         {'name': 'test', 'argv': ['make', 'test']}],
+                                'local_receipt': False})
+        self.assertEqual(stat.S_IMODE(self.project().stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(self.project().parent.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE((self.repo / '.finolabs').stat().st_mode), 0o700)
+        import hashlib
+        record = json.loads(self.approved().read_text())
+        self.assertEqual(set(record), {'sha256', 'approved'})
+        self.assertEqual(record['sha256'], hashlib.sha256(self.project().read_bytes()).hexdigest())
+        self.assertEqual(stat.S_IMODE(self.approved().stat().st_mode), 0o600)
+        reader = self.reader()
+        expected = [('lint', ['make', 'lint']), ('test', ['make', 'test'])]
+        self.assertEqual(reader.checks_for(self.code(), root=self.repo), (expected, None))
+        self.assertEqual(self.module().checks_for(self.code(), root=self.repo), (expected, None))
+        self.assertFalse(reader.receipt_mode(self.code(), root=self.repo))
+        code, out, _ = self.cli('show', '--root', str(self.repo))
+        self.assertEqual(code, 0)
+        self.assertIn('lint = ["make","lint"]', out)
+
+    def test_two_repositories_keep_separate_files_and_remove_touches_only_one(self):
+        self.save('test=["make","test"]', root=self.other)
+        self.save('lint=["make","lint"]')
+        reader = self.reader()
+        self.assertEqual(reader.checks_for(self.code(self.other), root=self.other), ([('test', ['make', 'test'])], None))
+        self.assertEqual(reader.checks_for(self.code(), root=self.repo), ([('lint', ['make', 'lint'])], None))
+        self.save('lint=["make","lint"]', 'test=["make","test"]')
+        backups = list(self.project().parent.glob('checks.json.bak-*'))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(stat.S_IMODE(backups[0].stat().st_mode), 0o600)
+        self.assertEqual(json.loads(backups[0].read_text())['checks'], [{'name': 'lint', 'argv': ['make', 'lint']}])
+        host = self.host.read_bytes()
+        code, out, err = self.cli('remove', '--root', str(self.repo))
+        self.assertEqual(code, 0, err)
+        self.assertNotIn('host.md', out)
+        self.assertTrue(self.project().exists())
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        self.assertFalse(self.project().exists())
+        self.assertFalse(self.approved().exists())
+        self.assertTrue(list(self.project().parent.glob('checks.json.bak-*')))
+        self.assertEqual(self.host.read_bytes(), host)
+        self.assertEqual(reader.checks_for(self.code(), root=self.repo), ([], 'absent'))
+        self.assertEqual(reader.checks_for(self.code(self.other), root=self.other), ([('test', ['make', 'test'])], None))
+        self.assertTrue(self.approved(self.other).exists())
+
+    def linked_worktree(self):
+        """A linked worktree laid out as git lays it out, without running git."""
+        gitdir = self.repo / '.git/worktrees/side'
+        gitdir.mkdir(parents=True)
+        (gitdir / 'commondir').write_text('../..\n')
+        linked = self.repo.parent / 'linked'
+        linked.mkdir()
+        (linked / '.git').write_text('gitdir: %s\n' % gitdir)
+        (gitdir / 'gitdir').write_text(str(linked / '.git') + '\n')
+        return linked
+
+    def test_a_linked_worktree_uses_the_main_checkouts_file(self):
+        linked = self.linked_worktree()
+        self.assertEqual(self.code(linked), self.code())
+        code, out, err = self.cli('preview', '--root', str(linked), '--check', 'test=["make","test"]')
+        self.assertEqual(code, 0, err)
+        self.assertIn('Target: ' + str(self.project()), out)
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        self.assertTrue(self.project().exists())
+        self.assertFalse((linked / '.finolabs').exists())
+        reader = self.reader()
+        self.assertEqual(reader.checks_for(self.code(linked), root=linked), ([('test', ['make', 'test'])], None))
+        self.assertEqual(reader.checks_for(self.code(), root=self.repo), ([('test', ['make', 'test'])], None))
+        self.assertIn('.finolabs/', (self.repo / '.git/info/exclude').read_text())
+
+    def test_the_legacy_section_is_read_when_there_is_no_file(self):
+        code_ = self.code()
+        self.legacy('- %s: test = ["make","test"]\n' % code_, '- %s: local-receipt = on\n' % code_)
+        reader = self.reader()
+        self.assertEqual(reader.checks_for(code_, root=self.repo), ([('test', ['make', 'test'])], None))
+        self.assertTrue(reader.receipt_mode(code_, root=self.repo))
+
+    def test_the_file_wins_over_a_legacy_entry(self):
+        code_ = self.code()
+        self.save('lint=["make","lint"]')
+        self.legacy('- %s: test = ["make","test"]\n' % code_, '- %s: local-receipt = on\n' % code_)
+        reader = self.reader()
+        self.assertEqual(reader.checks_for(code_, root=self.repo), ([('lint', ['make', 'lint'])], None))
+        self.assertFalse(reader.receipt_mode(code_, root=self.repo))
+
+    def test_a_legacy_only_repository_moves_to_the_file_in_one_apply(self):
+        code_, other = self.code(), self.code(self.other)
+        self.legacy('- %s: test = ["make","test"]\n' % code_, '- %s: local-receipt = on\n' % code_,
+                    '- %s: lint = ["make","lint"]\n' % other)
+        before = self.host.read_bytes()
+        code, out, err = self.cli('preview', '--root', str(self.repo), '--check', 'unit=["make","unit"]')
+        self.assertEqual(code, 0, err)
+        self.assertIn('host.md', out)
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        text = self.host.read_text()
+        self.assertNotIn('- %s:' % code_, text)
+        self.assertIn('- %s: lint = ["make","lint"]\n' % other, text)
+        self.assertEqual(next(self.host.parent.glob('host.md.bak-*')).read_bytes(), before)
+        data = json.loads(self.project().read_text())
+        self.assertEqual(data['checks'], [{'name': 'unit', 'argv': ['make', 'unit']}])
+        self.assertTrue(data['local_receipt'], 'the legacy mode carries over')
+
+    def test_a_legacy_removal_that_fails_leaves_the_entry_and_the_file_wins(self):
+        code_ = self.code()
+        self.legacy('- %s: test = ["make","test"]\n' % code_)
+        before = self.host.read_bytes()
+        digest = self.preview('unit=["make","unit"]')
+        module = self.module()
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), \
+                mock.patch.object(module.cs, 'write_target', side_effect=OSError('disk')):
+            code = module.main(['apply', '--yes', '--digest', digest])
+        self.assertEqual(code, 1)
+        self.assertIn('host.md', err.getvalue())
+        self.assertEqual(self.host.read_bytes(), before)
+        self.assertEqual(self.reader().checks_for(code_, root=self.repo), ([('unit', ['make', 'unit'])], None))
+
+    def test_an_invalid_file_reads_as_unset_for_that_repository_only(self):
+        self.save('test=["make","test"]', root=self.other)
+        code_ = self.code()
+        self.legacy('- %s: test = ["make","test"]\n' % code_)
+        good = {'version': 1, 'checks': [{'name': 'test', 'argv': ['make', 'test']}], 'local_receipt': False}
+        cases = {
+            'unknown key': dict(good, extra=1),
+            'wrong version': dict(good, version=2),
+            'bool version': dict(good, version=True),
+            'shell': dict(good, checks=[{'name': 'test', 'argv': ['sh', '-c', 'make']}]),
+            'bad name': dict(good, checks=[{'name': 'Test', 'argv': ['make']}]),
+            'extra check key': dict(good, checks=[{'name': 'test', 'argv': ['make'], 'cwd': '/'}]),
+            'no checks': dict(good, checks=[]),
+            'string mode': dict(good, local_receipt='on'),
+        }
+        reader = self.reader()
+        self.project().parent.mkdir(parents=True, mode=0o700)
+        raws = {label: json.dumps(value).encode() for label, value in cases.items()}
+        raws['duplicate key'] = b'{"version": 1, "version": 1, "checks": [], "local_receipt": false}'
+        raws['not json'] = b'{'
+        for label, raw in raws.items():
+            with self.subTest(label):
+                self.project().write_bytes(raw)
+                os.chmod(self.project(), 0o600)
+                self.approve()
+                self.assertEqual(reader.checks_for(code_, root=self.repo), ([], 'invalid'))
+                self.assertFalse(reader.receipt_mode(code_, root=self.repo))
+                self.assertEqual(self.project().read_bytes(), raw)
+                self.assertEqual(reader.checks_for(self.code(self.other), root=self.other),
+                                 ([('test', ['make', 'test'])], None))
+
+    def test_a_symlinked_file_or_folder_is_refused(self):
+        code_ = self.code()
+        self.save('test=["make","test"]')
+        self.legacy('- %s: lint = ["make","lint"]\n' % code_)
+        reader = self.reader()
+        real = self.repo.parent / 'elsewhere.json'
+        real.write_bytes(self.project().read_bytes())
+        os.chmod(real, 0o600)
+        self.project().unlink()
+        self.project().symlink_to(real)
+        self.assertEqual(reader.checks_for(code_, root=self.repo), ([], 'unreadable'))
+        code, _, _ = self.cli('preview', '--root', str(self.repo), '--check', 'unit=["make","unit"]')
+        self.assertEqual(code, 1)
+        self.assertTrue(self.project().is_symlink())
+        self.project().unlink()
+        folder = self.repo.parent / 'folder'
+        (self.repo / '.finolabs/vibecode').rename(folder)
+        (self.repo / '.finolabs/vibecode').symlink_to(folder)
+        (folder / 'checks.json').write_bytes(real.read_bytes())
+        os.chmod(folder / 'checks.json', 0o600)
+        self.assertEqual(reader.checks_for(code_, root=self.repo), ([], 'unreadable'))
+        self.assertFalse(reader.receipt_mode(code_, root=self.repo))
+        code, _, _ = self.cli('preview', '--root', str(self.repo), '--check', 'unit=["make","unit"]')
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads((folder / 'checks.json').read_text())['checks'][0]['name'], 'test')
+
+    def test_the_exclude_line_is_added_once_and_never_to_gitignore(self):
+        (self.repo / '.gitignore').write_text('node_modules/\n')
+        info = self.repo / '.git/info'
+        info.mkdir()
+        (info / 'exclude').write_text('# local\n*.log')
+        code, out, err = self.cli('preview', '--root', str(self.repo), '--check', 'test=["make","test"]')
+        self.assertEqual(code, 0, err)
+        self.assertIn('.git/info/exclude', out)
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        self.assertEqual((info / 'exclude').read_text(), '# local\n*.log\n.finolabs/\n')
+        code, out, _ = self.cli('preview', '--root', str(self.repo), '--check', 'lint=["make","lint"]')
+        self.assertNotIn('.git/info/exclude', out)
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        self.assertEqual((info / 'exclude').read_text(), '# local\n*.log\n.finolabs/\n')
+        self.assertEqual((self.repo / '.gitignore').read_text(), 'node_modules/\n')
+
+    def test_an_unapproved_file_runs_nothing_and_turns_the_mode_off(self):
+        self.save('test=["make","test"]')
+        _, out, _ = self.cli('receipt', 'on', '--root', str(self.repo))
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        reader = self.reader()
+        code_ = self.code()
+        self.assertTrue(reader.receipt_mode(code_, root=self.repo))
+        original = self.project().read_bytes()
+        data = json.loads(original)
+        data['checks'][0]['argv'].append('--all')
+        edited = json.dumps(data).encode()
+        cases = {'edited after approval': (edited, True), 'no approved digest': (original, False)}
+        for label, (raw, keep_approval) in cases.items():
+            with self.subTest(label):
+                self.project().write_bytes(raw)
+                if not keep_approval:
+                    self.approved().unlink()
+                self.assertEqual(reader.checks_for(code_, root=self.repo), ([], CHANGED))
+                self.assertFalse(reader.receipt_mode(code_, root=self.repo))
+                self.assertIsNone(reader.receipt_status(code_, 'a' * 40, root=self.repo))
+                code, out, _ = self.cli('show', '--root', str(self.repo))
+                self.assertIn(CHANGED, out)
+                self.assertIn('/fnl-setup add checks', out)
+
+    def test_receipt_mode_lives_in_the_file(self):
+        self.save('test=["make","test"]')
+        host = self.host.read_bytes()
+        code, out, err = self.cli('receipt', 'on', '--root', str(self.repo))
+        self.assertEqual(code, 0, err)
+        self.assertIn('self-reported', out)
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        self.assertTrue(json.loads(self.project().read_text())['local_receipt'])
+        self.assertTrue(self.reader().receipt_mode(self.code(), root=self.repo))
+        self.save('lint=["make","lint"]')
+        self.assertTrue(self.reader().receipt_mode(self.code(), root=self.repo))
+        _, out, _ = self.cli('receipt', 'off', '--root', str(self.repo))
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        self.assertFalse(self.reader().receipt_mode(self.code(), root=self.repo))
+        self.assertEqual(self.host.read_bytes(), host)
+
+    def test_apply_refuses_a_file_changed_after_the_preview(self):
+        self.save('test=["make","test"]')
+        digest = self.preview('lint=["make","lint"]')
+        self.project().write_bytes(b'{}')
+        self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 1)
+        self.assertEqual(self.project().read_bytes(), b'{}')
+        self.project().unlink()
+        self.approved().unlink()
+        digest = self.preview('lint=["make","lint"]')
+        self.project().write_bytes(b'{}')
+        self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 1)
+        self.assertEqual(self.project().read_bytes(), b'{}')
+
+    # Migration
+
+    def test_migrate_moves_this_repositorys_entry_and_keeps_anothers(self):
+        code_, other = self.code(), self.code(self.other)
+        self.legacy('- %s: test = ["make","test"]\n' % code_, '- %s: local-receipt = on\n' % code_,
+                    '- %s: lint = ["make","lint"]\n' % other)
+        before = self.host.read_bytes()
+        code, out, err = self.cli('migrate', '--root', str(self.repo))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.host.read_bytes(), before)
+        self.assertFalse(self.project().exists())
+        digest = out.split('Digest: ')[1].splitlines()[0]
+        code, out, err = self.cli('migrate', '--root', str(self.repo), '--yes', '--digest', digest)
+        self.assertEqual(code, 0, err)
+        data = json.loads(self.project().read_text())
+        self.assertEqual(data, {'version': 1, 'checks': [{'name': 'test', 'argv': ['make', 'test']}],
+                                'local_receipt': True})
+        reader = self.reader()
+        self.assertEqual(reader.checks_for(code_, root=self.repo), ([('test', ['make', 'test'])], None))
+        text = self.host.read_text()
+        self.assertNotIn('- %s:' % code_, text)
+        self.assertIn('## Checks', text)
+        self.assertIn('- %s: lint = ["make","lint"]\n' % other, text)
+        self.assertEqual(next(self.host.parent.glob('host.md.bak-*')).read_bytes(), before)
+        # The last repository's migration takes the heading with it.
+        code, out, err = self.cli('migrate', '--root', str(self.other))
+        self.assertEqual(code, 0, err)
+        digest = out.split('Digest: ')[1].splitlines()[0]
+        self.assertEqual(self.cli('migrate', '--root', str(self.other), '--yes', '--digest', digest)[0], 0)
+        self.assertNotIn('## Checks', self.host.read_text())
+        self.assertTrue(self.host.read_text().startswith(PREFIX.decode()))
+
+    def test_migrate_skips_an_existing_file_and_says_so(self):
+        self.save('unit=["make","unit"]')
+        code_ = self.code()
+        self.legacy('- %s: test = ["make","test"]\n' % code_)
+        before, file = self.host.read_bytes(), self.project().read_bytes()
+        code, out, err = self.cli('migrate', '--root', str(self.repo))
+        self.assertEqual(code, 0, err)
+        self.assertIn('already exists', out)
+        self.assertNotIn('Digest', out)
+        self.assertEqual(self.host.read_bytes(), before)
+        self.assertEqual(self.project().read_bytes(), file)
+
+    def test_migrate_refuses_an_invalid_section_and_changes_nothing(self):
+        code_ = self.code()
+        self.legacy('- %s: test = ["sh","-c","make"]\n' % code_)
+        before = self.host.read_bytes()
+        code, out, err = self.cli('migrate', '--root', str(self.repo))
+        self.assertEqual(code, 1)
+        self.assertNotIn('Digest', out)
+        self.assertEqual(self.host.read_bytes(), before)
+        self.assertFalse(self.project().exists())
+
+    def test_migrate_with_no_entry_for_this_repository_changes_nothing(self):
+        self.legacy('- %s: lint = ["make","lint"]\n' % self.code(self.other))
+        before = self.host.read_bytes()
+        code, out, _ = self.cli('migrate', '--root', str(self.repo))
+        self.assertEqual(code, 0)
+        self.assertNotIn('Digest', out)
+        self.assertEqual(self.host.read_bytes(), before)
 
 
 class HookTest(unittest.TestCase):

@@ -168,6 +168,68 @@ class ChecksRunTest(unittest.TestCase):
         self.assertIn('local receipt: on', out)
         self.assertEqual(self.launched(), [])
 
+    # The project file
+
+    def store_file(self, *checks, receipt=False, approve=True):
+        """Write the project file as checks_setup.py apply does: 0700 folders, a 0600 file, its approved digest and
+        the exclude line that keeps it out of the working tree's status."""
+        import hashlib
+        reader = load('checks_list_store', SCRIPTS / 'checks_list.py')
+        raw = reader.render_project([[name, argv] for name, argv in checks], receipt)
+        folder = self.repo / '.finolabs/vibecode'
+        folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(self.repo / '.finolabs', 0o700)
+        os.chmod(folder, 0o700)
+        (folder / 'checks.json').write_bytes(raw)
+        os.chmod(folder / 'checks.json', 0o600)
+        if approve:
+            reader.write_approved(self.code(), hashlib.sha256(raw).hexdigest())
+        exclude = self.repo / '.git/info/exclude'
+        exclude.parent.mkdir(exist_ok=True)
+        exclude.write_text('.finolabs/\n')
+        return raw
+
+    def test_run_reads_the_approved_project_file(self):
+        self.store(('legacy', self.mark('legacy')))
+        self.store_file(('first', self.mark('first')), ('second', self.mark('second')))
+        code, out, err = self.run_cli(self.module(), 'run')
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.marked(), ['first', 'second'])
+
+    def test_a_receipt_is_written_from_the_project_file(self):
+        self.store_file(('a', self.mark('a')), receipt=True)
+        code, out, err = self.run_cli(self.module(), 'run')
+        self.assertEqual(code, 0, err)
+        self.assertIn('local receipt written', out)
+        self.assertTrue(self.receipt().exists())
+
+    def test_a_file_committed_on_a_branch_runs_nothing(self):
+        self.store_file(('a', self.mark('a')), receipt=True)
+        self.git('checkout', '-qb', 'side')
+        (self.repo / '.finolabs/vibecode/checks.json').write_bytes(
+            load('checks_list_branch', SCRIPTS / 'checks_list.py').render_project([['a', self.mark('b')]], True))
+        self.git('add', '-f', '.finolabs/vibecode/checks.json')
+        self.commit('Supply a check list')
+        self.git('checkout', '-q', 'main')
+        self.git('checkout', '-q', 'side')
+        module = self.module()
+        code, out, err = self.run_cli(module, 'run')
+        self.assertEqual(code, 3)
+        self.assertIn('changed since it was approved', out + err)
+        self.assertIn('/fnl-setup add checks', out + err)
+        self.assertEqual(self.launched(), [])
+        self.assertFalse(self.receipt().exists())
+        code, out, _ = self.run_cli(module, 'show')
+        self.assertIn('changed since it was approved', out)
+        self.assertNotIn('local receipt: on', out)
+
+    def test_an_unapproved_file_runs_nothing(self):
+        self.store_file(('a', self.mark('a')), approve=False)
+        code, out, err = self.run_cli(self.module(), 'run')
+        self.assertEqual(code, 3)
+        self.assertIn('changed since it was approved', out + err)
+        self.assertEqual(self.launched(), [])
+
     # --changed
 
     def unittest_check(self):
