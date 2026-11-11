@@ -4,6 +4,15 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- A repository's check list now lives in its own folder, `<main checkout>/.finolabs/vibecode/checks.json` (linked worktrees share it), instead of `## Checks` in the shared `host.md` (owner decision, 2026-11-11). Apply records the SHA-256 of the approved file in `<data root>/state/checks-approved/`; a file edited, committed or checked out on a branch, or without approval, runs nothing and turns the local receipt off until `/fnl-setup add checks` runs again.
+  `checks_setup.py` adds `.finolabs/` to the repository's `.git/info/exclude` once (never to `.gitignore`), keeps a replaced file as `checks.json.bak-<date>`, and removes a legacy entry from `host.md` in the same apply. Undo is `checks_setup.py remove` for this repository.
+
+### Added
+
+- `checks_setup.py migrate` and `migrate --yes --digest <d>` move the current repository's legacy `## Checks` entry out of `host.md` into its check file, with a `host.md` backup; other repositories' lines stay until migrated from their own checkout. The legacy section is still read through 0.2.x, and `/fnl-update` names the command in the 0.2.5 upgrade note.
+
 ## [0.2.4] - 2026-11-11
 
 ### Added

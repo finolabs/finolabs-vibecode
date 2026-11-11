@@ -1,6 +1,8 @@
 # Running a repository's stored checks
 
-`fnl-setup`'s `checks_setup.py` stores each repository's checks in `## Checks` of the canonical host config: an ordered list of short names and JSON argument arrays, never shell strings. A repository cannot change that list. `scripts/checks.py` in this skill runs it.
+`fnl-setup`'s `checks_setup.py` stores each repository's checks in the main checkout's `.finolabs/vibecode/checks.json`: an ordered list of short names and JSON argument arrays, never shell strings.
+Apply records the SHA-256 of the exact file in the private state folder; a file that differs from it (edited, or committed or checked out on a branch) or has none runs nothing, turns the local receipt off, and says to run `/fnl-setup add checks` again, so a repository cannot change which commands run.
+Without a file, a list saved before 0.2.5 in `## Checks` of the canonical host config is still read; `checks_setup.py migrate` moves it. Undo is `checks_setup.py remove` for this repository. `scripts/checks.py` in this skill runs the list.
 
 ## Commands
 
