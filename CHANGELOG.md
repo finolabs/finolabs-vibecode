@@ -4,7 +4,14 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- `fnl-checks`' `checks.py run --dispatch <ledger id>` writes the verification receipt that `fnl-delegate`'s `ledger.py finish --outcome accepted` requires, for the task checkout and its head, after a whole-list pass on a clean tree whose head and list did not move, whatever the local-receipt mode; each such run first removes the dispatch's earlier receipt. Until now `checks.py run` wrote only the merge gate's local receipt, which the ledger never reads, so most acceptances used `--accept-unverified`. `fnl-delegate`'s accept steps now use it where a check list is approved, `verify_claim.py` over the brief's tests where none is, and keep `--accept-unverified` for work with nothing to check.
+- `ledger.py stale --older-than-hours <n>` (1 to 8760) sets the stale threshold for one preview; a record inside its budget is still never listed. `fnl-status` now says when to preview and close stale records.
+
 ### Changed
+
+- `ledger.py stale` is more conservative by default: an open record is stale only past twice its budget and at least 24 hours (before: past its budget), and a record with no usable budget becomes stale after 24 hours (before: never). Each preview line now shows the record's label, and `stale --close` rechecks each record against the threshold its preview used.
 
 - A repository's settings (`ledger`, `tasks`, `parallel`, `parallel-caps`) and its dashboard label now live in its own folder, `<main checkout>/.finolabs/vibecode/settings.json` (linked worktrees share it), instead of `## Project settings` and `## Project labels` in the shared `host.md` (owner decision, 2026-11-11). Every setter records the SHA-256 of the file in `<data root>/state/settings-approved/`; a file with no approval record (such as a branch-supplied one) reads as unset, and an approved file that is now missing, unreadable, unsafe, invalid or edited makes capacity and the ledger join unknown, turns the task file and label off and says the settings need setup again, so a repository cannot raise `parallel`, relax an approved limit or redirect `tasks`.
   The setters keep their consent rule, lock and validation, add `.finolabs/` to `.git/info/exclude` when missing (never to `.gitignore`) and leave `host.md` byte-identical. While the settings are broken every setter refuses with a message naming `project_progress.py settings --reset`, which discards every project setting (the file and its approval record) after the user's yes and returns the repository to never configured; Check reports broken settings as needing setup again. The dashboard shows a label only for the repository it runs in; other repositories show their registered folder name.
