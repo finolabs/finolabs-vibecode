@@ -20,7 +20,7 @@ class WorkTrackingSkillsTests(unittest.TestCase):
 
     def test_every_feature_has_exactly_one_scope(self):
         text = read('references/menu.md')
-        expected = {'delegation': 'user', 'roles': 'user', 'quota': 'user', 'autopilot': 'user', 'metrics': 'user',
+        expected = {'delegation': 'user', 'roles': 'user', 'quota': 'user', 'afk': 'user', 'metrics': 'user',
                     'compaction': 'user', 'companions': 'user', 'project': 'project'}
         for name, scope in expected.items():
             row = next(line for line in text.splitlines() if line.startswith('| `%s` |' % name))
