@@ -4,13 +4,14 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-11
+
 ### Added
 
 - `/fnl-setup add checks` reads a repository's `package.json` scripts, declared Python test runner and `Makefile` targets without running them, lists `run:` lines from its CI workflows as unverified candidates it never converts, proposes an ordered check list (a name and a JSON argument array each, never run through a shell by the plugin; known shells, launchers and inline-code forms are refused as a best-effort guard, not a sandbox; skipped items named) and, after a digest-bound yes, `checks_setup.py` saves it as that repository's entry in the host config's own `## Checks` section (at most 20 checks of 1 KB each); `## Project settings` is unchanged.
 - `fnl-checks`' `checks.py run [--changed] [--base <ref>]` runs a repository's stored checks in order through `heavy_run.py` and stops at the first failure (`--changed` narrows `python -m unittest discover -s tests` over a flat tests folder to one discovery per module `select_tests.py` names, and runs every other form and layout whole); an opt-in per-repository local-receipt mode lets a whole passing run on a clean, unmoved head stand in for missing or failing hosted checks in `merge_check.py` (only when the checkout's `origin` is the `--repo` repository, and the latest full run decides, one full run per repository at a time), which names it `checks: local receipt (<head>)`; and `checks_setup.py hook install|remove` adds or removes an optional git pre-push hook that runs `checks.py run --changed`, refusing when `core.hooksPath` is set and never overwriting a different hook without a second flag.
 - `checks_setup.py ci preview|apply` writes, after a digest-bound yes, one new GitHub Actions workflow from a repository's stored checks: pull requests, pushes to the default branch, a weekly schedule, superseded runs cancelled, document-only changes skipped, caching for a known ecosystem. It refuses a link on the path and an Actions expression, keeps a backup, never overwrites without `--replace-existing`, and never commits or pushes; `fnl-checks`' `references/ci.md` describes it.
 - `fnl-checks`' `checks.py usage --from <file> [--files-from <file>] [--limit-minutes N]` summarises hosted CI runs from a `gh run list --json` file: run count, minutes rounded up per run, minutes per workflow and per event, the share spent on document-only changes and days left at the observed rate. It makes no network call and starts no process.
-
 - `/fnl-update` now goes on, after the host update, to a checklist from the new `references/upgrades.json` (one closed-schema entry per release, starting with 0.2.4) and offers each open setup step through `fnl-setup` with its own consent; `/fnl-update whats-new` only shows the checklist, and the session-start hook adds one read-only line naming `/fnl-update` while the installed version's notes are unseen.
 - `update_check.py` gains `whats-new`, `onboard seen <version>` and `onboard skip <id>` (the only writers of `onboard.json`: `last_seen` and skipped ids), `target [<version>] [--evidence <file>]` (latest by default; a chosen version only with matching `gh release view` evidence, an older one reported as a rollback with what is lost) and `pin <version>` / `unpin`, which silences the newer-release notice; the network check is unchanged. The Codex refresh procedure is now marked verified, and `fnl-versioning` asks the release pull request to write the upgrade-notes entry, which a test enforces.
 
@@ -490,7 +491,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.0...v0.2.1

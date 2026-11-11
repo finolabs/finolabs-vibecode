@@ -1,6 +1,6 @@
 # Release 0.2.4: scope
 
-Status: in progress; scope set by the owner on 2026-11-10; packages 1 to 5 are merged, package 6 is in review.
+Status: implemented; scope set by the owner on 2026-11-10; all six packages are merged; ready to cut. A real `git push` through the installed hook and a run of the generated workflow on GitHub Actions remain unverified.
 
 ## Scope (owner decisions, 2026-11-10)
 

@@ -150,7 +150,7 @@ Start any of them with `/fnl-setup` (on Codex, also `$fnl-setup instructions` ri
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-It targets Claude Code, Codex and Antigravity from one `skills/` folder. Release documented here: **0.2.3** (phase 0; see `fnl-versioning` and the [release record](docs/specs/release-0.2.3.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.4-dev`.
+It targets Claude Code, Codex and Antigravity from one `skills/` folder. Release documented here: **0.2.4** (phase 0; see `fnl-versioning` and the [release record](docs/specs/release-0.2.4.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.4-dev`.
 
 <p align="center">
   <picture>
