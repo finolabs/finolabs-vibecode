@@ -918,7 +918,12 @@ def project_tracking(text, root):
         pp.host_section(text)
     except ValueError:
         rows.append(item('project progress', 'unverified', 'invalid Project progress section'))
-    settings = pp.repository_settings({}, root)
+    state, stored = pp.store.settings_state(root)
+    if state != 'unset' and state != 'approved':
+        # The approved ledger alias is unknown, so the folder-name heuristic would guess: report setup instead.
+        rows.append(item('project settings', 'unverified', 'project settings need setup again'))
+        return rows
+    settings = pp.repository_settings({}, root, stored)
     try:
         raw = dr.read_data('ledger.jsonl', 16 * 1024 * 1024).decode('utf-8')
         names = set()

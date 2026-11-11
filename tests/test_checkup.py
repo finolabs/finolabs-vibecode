@@ -297,6 +297,22 @@ class CheckupTest(unittest.TestCase):
         self.write(host.with_name('ledger.jsonl'), json.dumps(dict(event='start', project='PRIVATE-REPO')) + '\n')
         self.assertTrue(any(r['check'] == 'ledger-project mismatch' for r in self.data()['setup']))
 
+    def test_broken_settings_report_setup_again_and_skip_the_folder_heuristic(self):
+        host = self.home / '.finolabs/vibecode/host.md'
+        import project_store as store
+        store.write_setting(self.repo, 'ledger', 'PRIVATE alias')
+        self.write(host.with_name('ledger.jsonl'), json.dumps(dict(event='start', project='PRIVATE-REPO')) + '\n')
+        self.assertFalse(any(r['check'] in ('ledger-project mismatch', 'project settings')
+                             for r in self.data()['setup']))
+        settings = self.repo / '.finolabs/vibecode/settings.json'
+        settings.write_bytes(settings.read_bytes() + b' ')
+        output = self.run_check('--json')
+        self.assertNotIn('PRIVATE', output)
+        rows = json.loads(output)['setup']
+        self.assertFalse(any(r['check'] == 'ledger-project mismatch' for r in rows))
+        found = [r for r in rows if r['check'] == 'project settings']
+        self.assertEqual(found, [checkup.item('project settings', 'unverified', 'project settings need setup again')])
+
     def test_invalid_progress_section_preserves_checkup_report(self):
         for text in ('## Project progress\n## Project progress\n',
                      '## Project progress\n```markdown\nPRIVATE unfinished\n'):
