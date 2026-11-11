@@ -1100,7 +1100,7 @@ def collect(payload=False):
         text_check("agent skills", context, lambda t: bool(re.search(r"^## Agent skills\s*$", t, re.M)),
                    "Agent skills heading present", "Agent skills block absent", reader=context_read),
         text_check("review adoption", context,
-                   lambda t: bool(re.search(r"(?:^|[.>]\s+)Pull requests (?:follow `review-gate`|merge only after a code review and a security review are posted on them, as `review-gate` says)", t, re.M)),
+                   lambda t: bool(re.search(r"(?:^|[.>]\s+)Pull requests (?:follow `(?:fnl-)?review-gate`|merge only after a code review and a security review are posted on them, as `(?:fnl-)?review-gate` says)", t, re.M)),
                    "review-gate adoption line present", "review-gate adoption line absent", reader=context_read),
         item("workflow", "unverified", "files cannot prove agents follow routing or review gates"),
     ]

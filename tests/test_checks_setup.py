@@ -1065,7 +1065,7 @@ class CiWorkflowTest(unittest.TestCase):
 
     @property
     def target(self):
-        return self.repo / '.github/workflows/checks.yml'
+        return self.repo / '.github/workflows/fnl-checks.yml'
 
     def test_preview_shows_the_cheaper_workflow_and_apply_writes_exactly_it(self):
         self.store('unit=["python3","-m","unittest","discover","-s","tests"]', 'lint=["make","lint"]')
@@ -1079,7 +1079,7 @@ class CiWorkflowTest(unittest.TestCase):
                        "run: 'python3 -m unittest discover -s tests'", "run: 'make lint'", "name: 'unit'"):
             self.assertIn(phrase, text)
         self.assertLess(text.index("name: 'unit'"), text.index("name: 'lint'"))
-        for phrase in ('Target: .github/workflows/checks.yml', 'through its shell', 'never commits',
+        for phrase in ('Target: .github/workflows/fnl-checks.yml', 'through its shell', 'never commits',
                        'review the file and commit it yourself', 'stays pending', 'pinning action versions',
                        'runs the repository\'s code in the cloud'):
             self.assertIn(phrase, out)
@@ -1181,7 +1181,7 @@ class CiWorkflowTest(unittest.TestCase):
         self.assertEqual([b.read_text() for b in backups], ['name: mine\n'])
         self.assertEqual(stat.S_IMODE(backups[0].stat().st_mode), 0o600)
         self.assertEqual(other.read_text(), 'name: other\n')
-        self.assertEqual(sorted(p.name for p in self.target.parent.iterdir()), ['ci.yml', 'checks.yml'])
+        self.assertEqual(sorted(p.name for p in self.target.parent.iterdir()), ['ci.yml', 'fnl-checks.yml'])
 
     def test_a_file_changed_or_created_after_the_preview_is_left_alone(self):
         self.store('lint=["make","lint"]')
@@ -1195,7 +1195,7 @@ class CiWorkflowTest(unittest.TestCase):
         self.target.write_text('name: later\n')
         self.assertEqual(self.apply_ci(digest, '--replace-existing')[0], 1)
         self.assertEqual(self.target.read_text(), 'name: later\n')
-        self.assertEqual([p.name for p in self.target.parent.iterdir()], ['checks.yml'])
+        self.assertEqual([p.name for p in self.target.parent.iterdir()], ['fnl-checks.yml'])
 
     def test_a_file_appearing_at_publish_is_not_clobbered(self):
         self.store('lint=["make","lint"]')
@@ -1215,7 +1215,7 @@ class CiWorkflowTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('appeared', err.getvalue())
         self.assertEqual(self.target.read_text(), 'name: racing\n')
-        self.assertEqual([p.name for p in self.target.parent.iterdir()], ['checks.yml'])
+        self.assertEqual([p.name for p in self.target.parent.iterdir()], ['fnl-checks.yml'])
 
     def test_a_dependency_file_voids_the_preview_only_when_the_workflow_would_differ(self):
         self.store('unit=["python3","-m","unittest","discover","-s","tests"]')

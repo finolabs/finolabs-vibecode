@@ -18,7 +18,7 @@ Each check becomes one step whose `run:` line is the stored argument array joine
 The writer (script-enforced):
 
 - builds the YAML text from a fixed template and never parses an existing workflow;
-- writes one file, `.github/workflows/checks.yml` by default or `--path .github/workflows/<name>.yml` with a name of lowercase letters, digits and dashes, and refuses a link anywhere on the path inside the repository;
+- writes one file, `.github/workflows/fnl-checks.yml` by default or `--path .github/workflows/<name>.yml` with a name of lowercase letters, digits and dashes, and refuses a link anywhere on the path inside the repository;
 - refuses to overwrite an existing file without `--replace-existing`, keeps a backup of it in the plugin's private state folder, and refuses when the file or the stored list changed after the preview, or when a dependency file appeared or disappeared so that the generated workflow would differ. A lockfile's contents are not part of the workflow, so editing one does not void the preview;
 - publishes a new file with a hard link that fails if a file appeared since;
 - never edits another workflow, never commits and never pushes. The user reviews the file and commits it.

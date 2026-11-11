@@ -46,7 +46,7 @@ APPROVAL_NOTICE = ("Apply records the SHA-256 of these exact bytes as approved i
                    "reads as unset: nothing runs and the local receipt is off until you run /setup add checks "
                    "again.")
 HOOK_KEYS = {'action', 'repo', 'hooks', 'content', 'existing', 'ours', 'backup', 'root', 'created'}
-HOOK_MARK = '# checks pre-push hook'
+HOOK_MARK = '# fnl-checks pre-push hook'  # kept: hooks installed before 0.2.5 carry it
 HOOK_LIMIT = 65536
 SAFE_PATH = re.compile(r'/[A-Za-z0-9/._+@ -]{1,1023}')  # no quote, so the path is safe inside single quotes
 REF = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/@{}^~-]{0,199}')
@@ -569,7 +569,7 @@ CI_BACKUPS = 'state/checks-ci/backups'
 CI_KEYS = {'repo', 'code', 'name', 'branch', 'list', 'content', 'existing', 'backup', 'root', 'created'}
 CI_FOLDERS = ('.github', 'workflows')
 CI_PATH = re.compile(r'\.github/workflows/([a-z0-9][a-z0-9-]{0,40}\.yml)')
-CI_DEFAULT = '.github/workflows/checks.yml'
+CI_DEFAULT = '.github/workflows/fnl-checks.yml'
 BRANCH = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,99}')
 CI_LIMIT = 256 * 1024
 CI_NOTICE = (
@@ -628,9 +628,9 @@ def run_line(argv):
 def workflow_text(checks, branch, files):
     """Deterministic YAML from a fixed template; `files` is the set of dependency files present at the root."""
     ignore = ''.join(f'      - {quoted(pattern)}\n' for pattern in cl.DOCUMENT_PATTERNS)
-    out = ['# checks: a cheaper CI workflow written by setup checks_setup.py from the stored checks of this\n',
+    out = ['# fnl-checks: a cheaper CI workflow written by setup checks_setup.py from the stored checks of this\n',
            '# repository. Review it and commit it yourself; the plugin never commits or pushes it.\n',
-           "name: 'checks'\n",
+           "name: 'fnl-checks'\n",
            'on:\n',
            '  pull_request:\n',
            '    paths-ignore:\n', ignore,
