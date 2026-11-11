@@ -18,20 +18,25 @@ Read [parallel-dispatch.md](parallel-dispatch.md) for family pools, shared quota
 
 ## Heavy-job lock
 
-Run each heavy command through the wrapper, which holds one machine-wide lock and waits for load and free memory:
+Run each heavy command through the wrapper, which holds one machine-wide lock and waits for load and memory:
 
 ```bash
 python3 -I <this skill folder>/scripts/heavy_run.py run --label "<what it is>" -- <heavy command...>
 ```
 
 It records who started the job in the lock file itself (label, repository code and folder name, dispatch id, the command's program name, pids, start time and deadline; never paths, arguments or environment values), and `status` prints it. It stops a command that runs past its maximum time (default 90 minutes, exit 124). It starts the command only when the one-minute load average is below the limit (default 12), free memory is at least
-the minimum (default 3 GB) and no other heavy job holds the lock, in any repository. It waits up to the cap (default 40
+the minimum (default 4 GB), on macOS the kernel's memory pressure has read normal at every poll for the whole window
+(default 60 seconds) and swap-outs over that window average at most the limit (default 5 MB/s), and no other heavy job
+holds the lock, in any repository. An unreadable pressure or swap-out reading waits and restarts the window; it never
+counts as a pass. On other platforms the pressure and swap-out gates are off. Nothing is checked after the start: a
+running job is never stopped for crossing a limit. It waits up to the cap (default 40
 minutes), then exits 75 and names the holder when it can. `python3 -I <this skill folder>/scripts/heavy_run.py status`
 shows whether the lock is held and by whom, or "owner unknown". The lock is released when the command and anything it
 left running have ended; nothing needs removing by hand, and a killed wrapper does not leave a lock to repair. Detached
 Docker launches (the short and long detach flags) are refused; wrap a foreground script that starts, tests and tears down. The limits
-come from `## Heavy jobs` in the host config (`Load limit`, `Memory minimum GB`, `Wait cap minutes`). The enforcer is
-the script for commands run through it; using it is advisory (agent judgment).
+come from `## Heavy jobs` in the host config (`Load limit`, `Memory minimum GB`, `Memory window seconds`, `Swap-out limit
+MB per second`, `Wait cap minutes`, `Max job minutes`). The enforcer is the script for commands run through it; using it
+is advisory (agent judgment). A light targeted test (one worker, about a minute, well under 512 MB extra, no browser, container, database or large build) skips the lock and the load gate, but still waits while memory pressure is critical: `heavy_run.py status` prints the `pressure:` line on macOS. Advisory (agent judgment).
 
 ## Handover after an interrupted run
 

@@ -439,10 +439,14 @@ class ResumeTest(Base):
 class HeavyRunRefusalTest(Base):
     def setUp(self):
         super().setUp()
-        for name, value in (('read_load', lambda: 1.0), ('read_free_gb', lambda: 8.0)):
+        for name, value in (('read_load', lambda: 1.0), ('read_free_gb', lambda: 8.0), ('read_pressure', lambda: 'normal'),
+                            ('read_swapout_bytes', lambda: 0)):
             patcher = mock.patch.object(heavy, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
+        window = mock.patch.dict(heavy.DEFAULTS, {'memory_window_seconds': 0.0})
+        window.start()
+        self.addCleanup(window.stop)
         self.touched = self.home / 'ran'
 
     def run_heavy(self, *extra):
@@ -464,7 +468,7 @@ class HeavyRunRefusalTest(Base):
     def test_refuses_again_after_the_lock_when_a_pause_appears_while_waiting(self):
         calls = []
 
-        def appears(_config):
+        def appears(_config, _watch=None):
             calls.append(1)
             self.marker()
             return None
@@ -523,7 +527,7 @@ class PackagedCopyRefusalTest(Base):
         'heavy_run.read_load = lambda: 1.0',
         'heavy_run.read_free_gb = lambda: 8.0',
         'marker = Path(home) / ".finolabs/vibecode/state/pause.json"',
-        'def appears(_config):',
+        'def appears(_config, _watch=None):',
         '    marker.write_text("{\\"started\\": %f, \\"kind\\": \\"none\\", \\"deadline\\": 0}" % __import__("time").time())',
         '    marker.chmod(0o600)',
         'if when == "wait":',
