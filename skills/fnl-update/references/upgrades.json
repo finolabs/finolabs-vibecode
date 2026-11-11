@@ -27,6 +27,16 @@
           "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again."
         }
       ]
+    },
+    {
+      "version": "0.2.5",
+      "items": [
+        {
+          "id": "0.2.5/checks-store",
+          "kind": "migration",
+          "text": "Check lists move out of host.md into each repository's .finolabs/vibecode folder; run checks_setup.py migrate from each repository to move its list."
+        }
+      ]
     }
   ]
 }
