@@ -15,7 +15,7 @@ Read the goal and acceptance criteria, the scoped instructions (`AGENTS.md`, `CL
 
 Keep a short receipt: source, task, workflow path, depth, gaps, evidence limits. A receipt is a record, not proof.
 
-Once the task is known, invoke `fnl-session-hygiene` to name or rename the session ("Titles"), and again when the phase changes (planning to implementation to review). Advisory (agent judgment).
+Once the task is known, invoke `session-hygiene` to name or rename the session ("Titles"), and again when the phase changes (planning to implementation to review). Advisory (agent judgment).
 
 Done when the workflow path and the depth can be chosen without guessing.
 
@@ -32,7 +32,7 @@ Pick the path here, before loading or invoking any generic process skill, includ
 
 A pack installed only for the user, with no instruction adopting it, supplies tools, not a workflow: follow none.md and let its tools carry the steps they fit. When two packs qualify and nothing chooses between them, ask the user the one question that decides it. Every adapter keeps the depth, gates and proof below; it decides only which skill carries each step. To support another workflow, add `references/workflows/<name>.md` with the same parts (detect, steps, what yields, gaps) and a row here.
 
-A request that is only a review, with no change to make, goes to `fnl-review-gate`, plus `fnl-security-review-gate` when its triggers hit, on every path.
+A request that is only a review, with no change to make, goes to `review-gate`, plus `security-review-gate` when its triggers hit, on every path.
 
 When the host config names a judge, read [references/activity-selection.md](references/activity-selection.md) before choosing the depth and the next activity, and take those judgments from it. Without a judge, decide them yourself by observed fit and the adapter, or ask the user the one question that decides it.
 
@@ -48,7 +48,7 @@ With a judge configured, ask it for the depth as [references/activity-selection.
 
 Record the receipt with `python3 -I <this skill's folder>/scripts/record.py router --depth <MIN|NORMAL|DEEP> --trigger <trigger>`. The command only prints the receipt; when the user has turned usage metrics on, the plugin's hook records it with the session. The trigger names what set the depth, one of `none`, `contract`, `security`, `privacy`, `permission`, `migration`, `dependency`, `uncertainty`, `consumers`, `irreversible`, `calculation`, `prediction`, `input`.
 
-When the work goes into a pull request, its body carries the same depth and trigger as one line with nothing else on it: `<!-- fnl-router depth=<MIN|NORMAL|DEEP> trigger=<trigger> -->`, for example `<!-- fnl-router depth=NORMAL trigger=consumers -->`. Write it when you open the pull request and update it before merge if the depth changed; keep one such line only. In a repository whose `CLAUDE.md` or `AGENTS.md` at the pull request's base commit has a `## Agent skills` section naming `fnl-review-gate`, that skill's merge check blocks a missing, malformed or conflicting line for every pull request, the low-risk lane and bot pull requests included (enforcer: `merge_check.py`). The line states the depth for the reviewers to compare with the diff; it never changes which reviews or lane a change needs.
+When the work goes into a pull request, its body carries the same depth and trigger as one line with nothing else on it: `<!-- fnl-router depth=<MIN|NORMAL|DEEP> trigger=<trigger> -->`, for example `<!-- fnl-router depth=NORMAL trigger=consumers -->`. Write it when you open the pull request and update it before merge if the depth changed; keep one such line only. In a repository whose `CLAUDE.md` or `AGENTS.md` at the pull request's base commit has a `## Agent skills` section naming `review-gate`, that skill's merge check blocks a missing, malformed or conflicting line for every pull request, the low-risk lane and bot pull requests included (enforcer: `merge_check.py`). The line states the depth for the reviewers to compare with the diff; it never changes which reviews or lane a change needs.
 
 Done when the depth and its reason are in the receipt, the command above has run, and a pull request's body carries the marker line.
 
@@ -60,18 +60,18 @@ These hold on every path:
 
 - A spec or plan asks the user the decisions the user can settle, through the host's native question tool when the session has one (text otherwise), the recommended option first, and records the answers in the document as settled decisions with the date. Only a decision the user cannot make yet (it needs evidence, another person or a later step) stays listed as open, with its owner and what unblocks it; a delegated or headless run with nobody to answer records its decisions as open and never invents an answer. Enforcer: agent judgment, advisory.
 - A behavior change starts from a genuine red: a test or reproducer that fails for the reason the change addresses. The change is the smallest that turns it green (see "Proportion").
-- Invoke `fnl-checks` before you report work as done, fixed or passing, and before you accept a delegated run: fresh targeted runs against each acceptance criterion. Advisory (agent judgment).
-- Every pull request needs a posted code review and a posted security review before merge (`fnl-review-gate` "Pull requests"); `fnl-security-review-gate` runs in full when its triggers hit.
-- Delegation to other agents follows the `fnl-delegate` skill. When you hold two or more independent tasks with clear acceptance tests, apply its "Keep or hand off" before you start the first, even if you expect to do them all yourself. Within one task, budget root and children before spawning: MIN has no implementation children (handing a whole task to another agent under `fnl-delegate` is a delegation, not a child); otherwise at most two lightweight children, one nesting level and one heavy job at a time, unless a stricter cap applies. Independent tasks run in parallel up to the repository's limit in `fnl-delegate` (default 3), each under these per-task caps.
-- Commits follow `fnl-commit-messages`, and so does every branch: creating, syncing, merging and deleting it (`fnl-commit-messages` "Branches"). Versions, tags and changelogs follow `fnl-versioning`.
-- Long sessions, handovers and titles follow `fnl-session-hygiene`.
+- Invoke `checks` before you report work as done, fixed or passing, and before you accept a delegated run: fresh targeted runs against each acceptance criterion. Advisory (agent judgment).
+- Every pull request needs a posted code review and a posted security review before merge (`review-gate` "Pull requests"); `security-review-gate` runs in full when its triggers hit.
+- Delegation to other agents follows the `delegate` skill. When you hold two or more independent tasks with clear acceptance tests, apply its "Keep or hand off" before you start the first, even if you expect to do them all yourself. Within one task, budget root and children before spawning: MIN has no implementation children (handing a whole task to another agent under `delegate` is a delegation, not a child); otherwise at most two lightweight children, one nesting level and one heavy job at a time, unless a stricter cap applies. Independent tasks run in parallel up to the repository's limit in `delegate` (default 3), each under these per-task caps.
+- Commits follow `commit-messages`, and so does every branch: creating, syncing, merging and deleting it (`commit-messages` "Branches"). Versions, tags and changelogs follow `versioning`.
+- Long sessions, handovers and titles follow `session-hygiene`.
 
 ## Proportion
 
 Build what the acceptance criteria require at the stage the product is at now. Every changed hunk traces to an acceptance criterion; a hunk that does not is removed or justified. Set this limit in the brief and the plan, where it costs nothing, rather than after the work is written.
 
 - **Over-engineering** looks like: an abstraction with one use, options or flags nobody asked for, defensive checks for cases that cannot happen, a compatibility shim with no consumer, an extra layer, retries or fallbacks before a real failure, comments or documents longer than the code, and scale or performance work (optimizing, hardening, load tests) beyond the stage the product has reached. Three similar lines beat a premature abstraction.
-- **Over-testing** looks like: tests for unchanged code or plain declarations, mocks around what can be tested directly, and running tests after every edit or running the whole suite. Tests cover new or changed behavior and its traced consumers, with one regression test per fixed defect. Run them at checkpoints (the end of a seam, after a fix); while fixing a failure, rerun only that test, then the targeted set once. The full suite stays the owner's call (`fnl-checks`).
+- **Over-testing** looks like: tests for unchanged code or plain declarations, mocks around what can be tested directly, and running tests after every edit or running the whole suite. Tests cover new or changed behavior and its traced consumers, with one regression test per fixed defect. Run them at checkpoints (the end of a seam, after a fix); while fixing a failure, rerun only that test, then the targeted set once. The full suite stays the owner's call (`checks`).
 
 ## Checkpoint: stop repeated local fixes
 
@@ -82,4 +82,4 @@ After two failed corrections of the same invariant, stop before a third. Also st
 - the proposed fix adds another flag, retry, debounce, timeout or state copy;
 - no shared authority, revision or epoch can prove the invariant.
 
-Then keep the implementation task open and the latest behavioral red as it is, stop product edits, and run a read-only architecture checkpoint: map each layer's owned state, whether it is authority or cache, its revision, its triggers and its stale readers. Separate safety, visibility truth, staleness, monotonicity, idempotency and coalescing. Choose one authoritative boundary or a versioned snapshot. Resume only with a deterministic root-cause test and a coherent design. Ask "which distinct failure does this action prevent?" of every proposed step. When the checkpoint leaves the cause open, propose a committee through `fnl-advisor` and wait for the user's yes: it spends the quota of two model families.
+Then keep the implementation task open and the latest behavioral red as it is, stop product edits, and run a read-only architecture checkpoint: map each layer's owned state, whether it is authority or cache, its revision, its triggers and its stale readers. Separate safety, visibility truth, staleness, monotonicity, idempotency and coalescing. Choose one authoritative boundary or a versioned snapshot. Resume only with a deterministic root-cause test and a coherent design. Ask "which distinct failure does this action prevent?" of every proposed step. When the checkpoint leaves the cause open, propose a committee through `advisor` and wait for the user's yes: it spends the quota of two model families.

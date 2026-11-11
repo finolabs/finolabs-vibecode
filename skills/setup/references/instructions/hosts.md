@@ -31,9 +31,9 @@ Documented on 2026-11-05, read through a page summarizer and not run on any host
 | Antigravity | 24,000 bytes per file after includes; about 20,000 tokens shared by global and always-on rules | The file is truncated; past the token budget the largest rule files are replaced by pointers | Rules are cumulative with no stated order | No rules load from subfolders below the workspace folder. A file in `.agents/rules/` needs a valid `trigger` in its frontmatter or it is ignored, and files nested in its subfolders are ignored unless registered. |
 | Gemini CLI | none stated | | Hierarchical, `@file.md` imports | Superseded by the Antigravity CLI on 2026-06-18 per its own page; treat its paths as legacy. |
 
-The 150-line figure in `procedure.md` is a house rule with no vendor source; 200 lines is Anthropic's documented target for Claude Code. `/fnl-setup check` measures these limits after a write.
+The 150-line figure in `procedure.md` is a house rule with no vendor source; 200 lines is Anthropic's documented target for Claude Code. `/setup check` measures these limits after a write.
 
-Use `AGENTS.md` as the sole repository source, with only the include and Claude-specific lines in `CLAUDE.md`; do not generate a parallel `GEMINI.md`. Keep committed content generic: no personal, customer or organization names or machine paths. Tell the user to keep `CLAUDE.local.md` and backups out of git. The `## Agent skills` block and review-gate adoption line belong to the core path of `/fnl-setup`; preserve them once in the source, and point to `/fnl-setup` for missing entries.
+Use `AGENTS.md` as the sole repository source, with only the include and Claude-specific lines in `CLAUDE.md`; do not generate a parallel `GEMINI.md`. Keep committed content generic: no personal, customer or organization names or machine paths. Tell the user to keep `CLAUDE.local.md` and backups out of git. The `## Agent skills` block and review-gate adoption line belong to the core path of `/setup`; preserve them once in the source, and point to `/setup` for missing entries.
 
 ## User layouts with one source of truth
 
@@ -43,6 +43,6 @@ Use `AGENTS.md` as the sole repository source, with only the include and Claude-
 
 **Default recommendation** for a user who runs Claude Code most: its file `~/.claude/CLAUDE.md` is the source. A host with an include (Antigravity) points at it with that include. A host without one (Codex today) gets a managed copy that records its source and warns that a change to the source must be applied to the copy by hand.
 
-Keep the agent inventory and host settings out of instruction files: `/fnl-setup scan` refreshes the local agent section, and `/fnl-setup mode` shows or changes Delegation mode and Routing with environment overrides explained. Both ask before writing host config.
+Keep the agent inventory and host settings out of instruction files: `/setup scan` refreshes the local agent section, and `/setup mode` shows or changes Delegation mode and Routing with environment overrides explained. Both ask before writing host config.
 
 The guarded `instructions_write.py` writer supports only the account-derived `~/.codex` instruction folder: it ignores `CODEX_HOME`, including an absolute override unless it equals that default, so the environment cannot expand the target list. A custom host instruction folder can be reported during discovery but is outside this writer’s allowed targets. Existing targets are opened nonblocking and must be regular files; a FIFO is refused without waiting for a writer.

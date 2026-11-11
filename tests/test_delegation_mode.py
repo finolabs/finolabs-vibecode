@@ -12,7 +12,7 @@ from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
-READER = ROOT / "skills/fnl-delegate/scripts/mode.py"
+READER = ROOT / "skills/delegate/scripts/mode.py"
 HOOK = ROOT / "scripts/session_start.py"
 DEFAULTS = {"delegation_mode": "suggest", "routing": "on", "auto_gate": "off"}
 
@@ -106,8 +106,8 @@ class DelegationModeTest(unittest.TestCase):
 
     def test_shared_copies_match(self):
         for name, copies in (
-            ("mode.py", ("fnl-delegate", "fnl-setup")),
-            ("auto_gate.py", ("fnl-delegate",)),
+            ("mode.py", ("delegate", "setup")),
+            ("auto_gate.py", ("delegate",)),
         ):
             for skill in copies:
                 with self.subTest(name=name, skill=skill):
@@ -191,22 +191,22 @@ class DelegationModeTest(unittest.TestCase):
     def test_routing_off_removes_only_router_instruction(self):
         self.config.write_text("## Routing\noff\n")
         text = self.run_script(HOOK)
-        self.assertNotIn("fnl-coding-router", text)
-        self.assertIn("fnl-delegate", text)
+        self.assertNotIn("coding-router", text)
+        self.assertIn("delegate", text)
 
     def test_routing_on_and_corrupt_host_keep_instruction(self):
         for data in (b"## Routing\non\n", b"\xff", b"## Routing\ninvalid\n"):
             with self.subTest(data=data):
                 self.config.write_bytes(data)
-                self.assertIn("fnl-coding-router", self.run_script(HOOK))
+                self.assertIn("coding-router", self.run_script(HOOK))
 
     def test_environment_controls_hook_and_invalid_override_fails_open(self):
         self.config.write_text("## Routing\non\n")
         self.env["FNL_ROUTING"] = "off"
-        self.assertNotIn("fnl-coding-router", self.run_script(HOOK))
+        self.assertNotIn("coding-router", self.run_script(HOOK))
         self.config.write_text("## Routing\noff\n")
         self.env["FNL_ROUTING"] = "invalid"
-        self.assertIn("fnl-coding-router", self.run_script(HOOK))
+        self.assertIn("coding-router", self.run_script(HOOK))
 
     def test_host_hook_commands_obey_switch_and_exit_zero(self):
         for host, variable in (("claude", "CLAUDE_PLUGIN_ROOT"), ("codex", "CODEX_PLUGIN_ROOT")):
@@ -220,14 +220,14 @@ class DelegationModeTest(unittest.TestCase):
                     result = subprocess.run(["sh", "-c", commands[0]], input="{}", text=True,
                                             capture_output=True, env={**self.env, variable: str(ROOT)}, timeout=5)
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual("fnl-coding-router" in result.stdout, value != "off")
+                    self.assertEqual("coding-router" in result.stdout, value != "off")
 
     def test_hook_fails_open_when_reader_unavailable(self):
         copy = self.home / "plugin/scripts/session_start.py"
         copy.parent.mkdir(parents=True)
         copy.write_bytes(HOOK.read_bytes())
         output = self.run_script(copy)
-        self.assertIn("fnl-coding-router", output)
+        self.assertIn("coding-router", output)
         self.assertIn("Roles: code review unknown; security review unknown; navigator unknown; judge unknown; "
                       "posting claude unknown, codex unknown, antigravity unknown\n", output)
 

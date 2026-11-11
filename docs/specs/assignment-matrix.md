@@ -15,7 +15,7 @@ content must be transcribed from images, video or audio.
 
 - One matrix, one stored section, replacing both `## Agent roles` and `## Agent levels` (the owner chose a new stored
   section over keeping three sections behind one setup flow).
-- It is set at user scope in `/fnl-setup add delegation`, which absorbs `/fnl-setup add roles` for the assignments; `add
+- It is set at user scope in `/setup add delegation`, which absorbs `/setup add roles` for the assignments; `add
   roles` keeps only review posting (the verified ability to post) until a later release folds it in.
 - Until this exists, the owner's host config carries the work-type preference as one paragraph under `## Coordinators and
   reach`, read by agent judgment only.
@@ -62,8 +62,8 @@ answer and makes deviation visible, without turning a preference into a block.
 
 - One parser: `assignments.py`, a shared module copied into every skill that needs it (a new copy group checked in CI,
   as for `data_root.py`), is the only code that reads the section. Today's script readers are the three copies of
-  `review_config.py` (plugin-level `scripts/`, `fnl-delegate`, `fnl-review-gate`) and the four copies of `judge.py`
-  (plugin-level `scripts/`, `fnl-delegate`, `fnl-session-hygiene`, `fnl-checks`), plus `checkup.py`; after this
+  `review_config.py` (plugin-level `scripts/`, `delegate`, `review-gate`) and the four copies of `judge.py`
+  (plugin-level `scripts/`, `delegate`, `session-hygiene`, `checks`), plus `checkup.py`; after this
   change `route_pick.py` and `matrix_setup.py` also import `assignments.py`, so there is one reading of the format. Levels
   have a setup reader today (`levels_setup.py` `parse` and `show`) but no computed routing reader, and types of work have
   no reader (`route.md` reads levels as advice); the new readers are `route_pick.py` and the ledger comparison, both
@@ -105,19 +105,19 @@ answer and makes deviation visible, without turning a preference into a block.
 | codex | 1-4 | image-generation, transcription | | security-review |
 | antigravity | 1-3 | image-generation, transcription | | code-review, navigator |
 
-and below it the judge, the posting line and anything unknown or unverified. `fnl-delegate` and `fnl-status` may quote
+and below it the judge, the posting line and anything unknown or unverified. `delegate` and `status` may quote
 the same table. The session-start line keeps its current summary of roles.
 
 ## Writer
 
-`matrix_setup.py` in `skills/fnl-setup/scripts/`, built like `levels_setup.py`: `validate`, `preview`, `apply` (backup,
+`matrix_setup.py` in `skills/setup/scripts/`, built like `levels_setup.py`: `validate`, `preview`, `apply` (backup,
 SHA-256 digest, 60-minute expiry, section-only atomic write, symlink refusal), `show`, `migrate`, `candidates` (the
-existing command listing extra Claude Code commands). It runs no command. `/fnl-setup add delegation` asks once per
+existing command listing extra Claude Code commands). It runs no command. `/setup add delegation` asks once per
 agent for levels, types, model and roles in one pass, shows the preview and writes only after a neutral yes.
 
 ## Routing query
 
-`route_pick.py pick --type <type> --level <1-5> [--author <family>] [--coordinator <family>]` in `skills/fnl-delegate/scripts/` prints the ordered
+`route_pick.py pick --type <type> --level <1-5> [--author <family>] [--coordinator <family>]` in `skills/delegate/scripts/` prints the ordered
 candidates for a task, at most five lines, from the matrix and local state only: an agent whose levels do not contain the
 level is dropped, an agent the host config marks unreachable from this coordinator is dropped, one whose cached quota
 reading says out of quota is dropped, with `--author` the independent-review rule drops the author's own family, and
@@ -141,7 +141,7 @@ judgment, to run it before each dispatch; the script computes the answer exactly
   compliant. It never refuses the dispatch: the coordinator or the user may have a reason, and a block would only push
   agents to omit the type.
 - `ledger.py summary` shows, per agent, the share of dispatches at rank 1, at a lower rank and outside the set, counted only over the dispatches that recorded a `pick_rank` (an older dispatch or one started without a type and level has none and is left out of the denominator, never counted as outside the set), together with how many were left out, so an
-  ignored preference is visible; `fnl-status` may show it. The enforcer of the choice stays agent judgment (advisory); the
+  ignored preference is visible; `status` may show it. The enforcer of the choice stays agent judgment (advisory); the
   script enforces the computation and the record.
 - Session start prints one fixed line, `Assignments: <n> agents set; run route_pick.py before a dispatch`, about 20 tokens,
   instead of the roles summary only; the roles summary stays.
@@ -157,8 +157,8 @@ is skipped and the report says why.
 
 ## Settled and provisional
 
-Settled by the owner: one stored section replacing the two old ones; setup in `/fnl-setup add delegation`; review posting
-stays in `/fnl-setup add roles` for now; the interim paragraph in the host config.
+Settled by the owner: one stored section replacing the two old ones; setup in `/setup add delegation`; review posting
+stays in `/setup add roles` for now; the interim paragraph in the host config.
 
 Provisional (proposed by this design, pending the owner): the ledger records and warns but never refuses an off-order
 dispatch; a model not allowed on this machine is kept and reported as unverified rather than refused.

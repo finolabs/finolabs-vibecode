@@ -1,25 +1,25 @@
 # Feature: delegation (user scope)
 
-Needs: the agent scan (`scan.md`), asked as its own consent; declining it ends this feature. Skip when the `fnl-delegate` skill is not installed. Approval questions use neutral Yes and No with none preselected, as `interview.md` says; a default or timeout is not consent.
+Needs: the agent scan (`scan.md`), asked as its own consent; declining it ends this feature. Skip when the `delegate` skill is not installed. Approval questions use neutral Yes and No with none preselected, as `interview.md` says; a default or timeout is not consent.
 
 Every question follows [interview.md](../interview.md): native question tool, neutral approvals, explicit yes; fallback only as stated there (advisory, agent judgment).
 
-Run the scan procedure with the running host passed explicitly, including its model confirmation, preview and clear yes before its section-only write. If it is unavailable, leave the inventory unverified and point to `/fnl-setup scan`; never guess which families exist.
+Run the scan procedure with the running host passed explicitly, including its model confirmation, preview and clear yes before its section-only write. If it is unavailable, leave the inventory unverified and point to `/setup scan`; never guess which families exist.
 
 Then record what each helper can take, following [levels.md](../levels.md). The assignment matrix in [matrix.md](../matrix.md) (levels, types of work, model and roles in one pass) replaces that flow; the levels path remains until the readers are switched.
 
 Ask: "Save how this computer starts and shares work with other AI helpers?"
-Yes: Fill the shown local host.md from the fnl-delegate template; the saved helper list stays intact. Saving sends nothing; later helper work uses its provider.
+Yes: Fill the shown local host.md from the delegate template; the saved helper list stays intact. Saving sends nothing; later helper work uses its provider.
 No: Leave the file unchanged; ask later.
 Undo: Restore the previous sections or edit them through setup.
 Choices: "Yes, save the helper settings" / "No, leave the file unchanged".
-Create the remaining config from `fnl-delegate`'s `references/host-template.md`, preserving the scan section byte for byte, and fill: how this computer invokes the present agents, which agents may coordinate and which delegates each can reach, the heavy-job limits (load, free memory, wait cap and maximum run time), and the durable folder for briefs and logs. Leave unknown commands as questions in the file rather than guesses.
+Create the remaining config from `delegate`'s `references/host-template.md`, preserving the scan section byte for byte, and fill: how this computer invokes the present agents, which agents may coordinate and which delegates each can reach, the heavy-job limits (load, free memory, wait cap and maximum run time), and the durable folder for briefs and logs. Leave unknown commands as questions in the file rather than guesses.
 Ask as free text, inside the repository being set up: "How many agent runs may work at the same time in this repository?"
 Recommend a small number such as 3 to start; accept an integer from 1 to 32; without an answer the repository keeps the default of 3. Explain that runs of the same family share quota pools, that the limit counts only this repository and that other repositories keep their own.
 Then ask as optional free text: "Any per-family caps for claude, codex or antigravity in this repository? Leave blank for the total limit only."
 Accept any subset as `claude=<n>, codex=<n>, antigravity=<n>`, each n from 1 to the total. A blank answer means the total only: if caps already exist, show them and clear them with `--clear parallel-caps` after the same yes, so an old cap never outlives a smaller total.
 Preview the entries and write each only after a yes, through `python3 -I <this skill folder>/scripts/project_progress.py settings --set parallel=<n>` and `--set parallel-caps=<list>` (clear with `--clear`); never infer a number from silence. They are saved in the repository's own settings file (`.finolabs/vibecode/settings.json` of the main checkout, approved in the data root); the old user-scope `## Limits` lines and the `## Project settings` section of `host.md` are no longer read.
-Validate with `python3 -I <fnl-delegate skill folder>/scripts/parallel_slots.py check-config` from the repository and show its understood total, caps and source.
+Validate with `python3 -I <delegate skill folder>/scripts/parallel_slots.py check-config` from the repository and show its understood total, caps and source.
 Exit 3 means default or unknown: a never configured repository (no approval record, including a file nobody approved) uses the default of 3 with source `default`; a cap above the total, or an approved settings file later edited, deleted, unsafe or unreadable, prints `unknown`. For broken settings every setter refuses: offer the reset in [project-settings.md](../project-settings.md) after its own yes, then ask these questions again. Fix or leave setup unverified; never call a default or unknown the user's choice.
 Asking and honoring caps are advisory (agent judgment); `parallel_slots.py` enforces parsing only, not dispatch admission.
 When more than one agent coordinates, recommend a host config and ledger path every coordinator's sandbox can read and write.

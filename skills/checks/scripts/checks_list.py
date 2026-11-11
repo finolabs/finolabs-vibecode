@@ -43,7 +43,7 @@ PROJECT_KEYS = {'version', 'checks', 'local_receipt'}
 APPROVED = 'state/checks-approved'
 APPROVED_KEYS = {'sha256', 'approved'}
 CHANGED = 'changed since it was approved'
-AGAIN = 'run /fnl-setup add checks again'
+AGAIN = 'run /setup add checks again'
 
 
 # The stored argument form

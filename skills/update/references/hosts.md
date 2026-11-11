@@ -12,7 +12,7 @@ Recheck the relevant host's help if it differs from these observations. Host-nat
 
 ## An exact version
 
-`/fnl-update <version>` needs each host's command for an exact version verified on its installed CLI before it is offered. None is verified yet: for a chosen version, report the accepted target and leave the host step to the user, naming the gap. The latest release goes through the table above.
+`/update <version>` needs each host's command for an exact version verified on its installed CLI before it is offered. None is verified yet: for a chosen version, report the accepted target and leave the host step to the user, naming the gap. The latest release goes through the table above.
 
 ## Privacy of the automatic check
 

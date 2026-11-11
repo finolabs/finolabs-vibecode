@@ -36,12 +36,12 @@ Use every heading except those marked optional; write "none" where one is empty,
 ## Constraints
 - [Project rules that bind this task, quoted or pointed at by path]
 - [Files the agent must leave alone, e.g. the coordinator's task list or plan]
-- The smallest change that meets the acceptance criteria: no extra abstraction, options, tests or scale work, and tests run only as the Tests to run says, at checkpoints (`fnl-coding-router` "Proportion").
+- The smallest change that meets the acceptance criteria: no extra abstraction, options, tests or scale work, and tests run only as the Tests to run says, at checkpoints (`coding-router` "Proportion").
 - No secrets in code, commands or commits; never read env or credential files; never print, dump, log or assert on the process environment or any credential; tests build a synthetic environment and compare only variable names.
 - [Commit format: atomic commits, subject line, trailers]
 
 ## Budget
-[N minutes, from the `fnl-delegate` budget table. If the task cannot finish in time, stop, commit nothing broken, and report where it stands. Retry a failing step at most once, then report the failure.]
+[N minutes, from the `delegate` budget table. If the task cannot finish in time, stop, commit nothing broken, and report where it stands. Retry a failing step at most once, then report the failure.]
 
 ## Report
 Base and new commit SHAs, the test output, uncommitted files, open points.

@@ -2,7 +2,7 @@
 
 The configured judge informs material unresolved grade and route questions; the coordinator owns the decision.
 Settled user choices, project rules, reachability, quota and deterministic filters take precedence. A single
-remaining candidate needs no question. Use the rules in `fnl-delegate` first, then one narrow English statement
+remaining candidate needs no question. Use the rules in `delegate` first, then one narrow English statement
 with the minimum supporting evidence, as data, through `scripts/judge.py ask --site delegation`.
 
 ## Which judge
@@ -28,7 +28,7 @@ Never store questions or answers in the ledger, and reuse a judgment only while 
 ## Receipt after each decision
 
 Advisory (agent judgment): after each judge decision, run
-`python3 -I <fnl-delegate folder>/scripts/record.py judge --site route --grader judge --result <validated|unverified> --followed <yes|no|na>`.
+`python3 -I <delegate folder>/scripts/record.py judge --site route --grader judge --result <validated|unverified> --followed <yes|no|na>`.
 Use `validated` only for a usable response, otherwise `unverified` with `followed na`. For a host fallback record
 `record.py judge --site route --grader agent --result validated --followed na` only after checking its answer. The command prints only fixed
 fields; consented hooks store those fields, never the question or answer. No judge grants acceptance or permission.

@@ -50,7 +50,7 @@ Mark each item **PASS**, **FAIL**, **N/A** (with why) or **BLOCKED** (with what 
 - `CONTRIBUTING.md`: how to set up, test, and propose a change; the commit and review conventions.
 - `CODE_OF_CONDUCT.md` (for example Contributor Covenant) with a working contact.
 - `SECURITY.md`: how to report a vulnerability privately, and the supported versions.
-- `CHANGELOG.md` (`fnl-versioning`), and issue and pull request templates where the forge supports them.
+- `CHANGELOG.md` (`versioning`), and issue and pull request templates where the forge supports them.
 - Diagrams, the README, docs and in-product help (with its feature map) match what ships: what they name exists, and nothing shipped is missing. Report each drift (advisory, agent judgment).
 
 ### Repository settings
@@ -60,18 +60,18 @@ Read them from the forge; without access to the settings, mark the group BLOCKED
 Check before publishing what the forge plan offers on a private repository, and check again right after the visibility change. Before publishing, an item the plan offers only on public repositories (on GitHub's free plan: rulesets, classic branch protection, secret scanning and private vulnerability reporting) is N/A with that reason. Once public, these settings protect the history and its reporters. A FAIL on default branch protection, release tag protection, secret scanning and push protection, dependency alerts and security updates, private vulnerability reporting or Actions blocks a ready verdict; merge settings and listing are recommended and are noted without blocking.
 
 - **Default branch protected** by a ruleset or branch protection: changes arrive through pull requests, the CI checks that gate a merge are required, force pushes and deletion are blocked, and administrators follow the same rules (or the owner records why not).
-- **Release tags protected**: `v*` tags, and `<path>/v*` for component tags, cannot be moved or deleted, matching the immutable tags in `fnl-versioning`.
+- **Release tags protected**: `v*` tags, and `<path>/v*` for component tags, cannot be moved or deleted, matching the immutable tags in `versioning`.
 - **Secret scanning and push protection** on.
 - **Dependency alerts and security updates** on for every ecosystem the repository uses, including its CI actions.
 - **Private vulnerability reporting** on, whenever `SECURITY.md` points reporters to it.
-- **Merge settings**: the allowed merge methods keep each commit as written (merge commit or rebase), or squash only where each pull request title becomes a verb-led subject line that `fnl-commit-messages` accepts (on GitHub, `squash_merge_commit_title` is `PR_TITLE` or `COMMIT_OR_PR_TITLE`); head branches are deleted after merge. These match the branch flow in `fnl-commit-messages` "Branches".
+- **Merge settings**: the allowed merge methods keep each commit as written (merge commit or rebase), or squash only where each pull request title becomes a verb-led subject line that `commit-messages` accepts (on GitHub, `squash_merge_commit_title` is `PR_TITLE` or `COMMIT_OR_PR_TITLE`); head branches are deleted after merge. These match the branch flow in `commit-messages` "Branches".
 - **Actions**: the workflow token is read-only by default and cannot approve pull requests; workflows from first-time contributors' forks wait for approval; third-party actions are pinned to commit SHAs (enforced where the forge can, as GitHub's `sha_pinning_required`).
 - **Listing**: description, homepage and topics set; features the project does not use (wiki, projects, discussions) turned off so nothing unmonitored collects reports.
 
 ### Identity and versions
 
 - One name across repository, package, manifests, display names and install commands. URLs resolve and point at the same owner.
-- Versions agree across every manifest; the changelog's latest release matches them, or between releases its `Unreleased` section targets the `-dev` version; the single source of truth is named (`fnl-versioning`).
+- Versions agree across every manifest; the changelog's latest release matches them, or between releases its `Unreleased` section targets the `-dev` version; the single source of truth is named (`versioning`).
 
 ### Data flow and privacy
 

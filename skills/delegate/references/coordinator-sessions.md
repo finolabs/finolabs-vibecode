@@ -1,6 +1,6 @@
 # Coordinator sessions
 
-The session a spec starts in is its **coordinator**. It works at the level of spec and plan; each task runs in its own app session. Agent choice, briefs, budgets and acceptance follow `fnl-delegate`; this reference adds the session model around them.
+The session a spec starts in is its **coordinator**. It works at the level of spec and plan; each task runs in its own app session. Agent choice, briefs, budgets and acceptance follow `delegate`; this reference adds the session model around them.
 
 ## When to coordinate
 
@@ -25,21 +25,21 @@ The app starts sessions only on a turn the user's own message began, never on on
 
 ## Checkouts and writers
 
-- **One implementing session at a time** in the feature's implementation checkout. Every brief names that checkout by absolute path and branch; the branch follows `fnl-commit-messages` "Branches". The coordinator edits nothing while the session runs.
+- **One implementing session at a time** in the feature's implementation checkout. Every brief names that checkout by absolute path and branch; the branch follows `commit-messages` "Branches". The coordinator edits nothing while the session runs.
 - **Read-only work** (reviews, measurements, lookups) runs beside an implementing session only in a separate worktree at a fixed commit, so its results belong to one revision. The coordinator creates that worktree and puts its path and commit SHA in the brief.
 - **Task sessions commit their own work**: atomic commits per task or group. The report gives base and new commit SHAs, test output, uncommitted files and open points.
-- **Handover between writers** follows the handover steps in `fnl-delegate` before another session gets write access.
+- **Handover between writers** follows the handover steps in `delegate` before another session gets write access.
 
 ## Briefs and acceptance
 
-- Each brief is self-contained: task IDs, the checkout, the files, what done looks like, test-first where `tasks.md` says so, the constraints from `AGENTS.md`, a time budget, and what to report (`fnl-handoff` has the template).
-- The coordinator verifies before marking `[X]`: it reads the diff and the test output itself (`fnl-checks`).
+- Each brief is self-contained: task IDs, the checkout, the files, what done looks like, test-first where `tasks.md` says so, the constraints from `AGENTS.md`, a time budget, and what to report (`handoff` has the template).
+- The coordinator verifies before marking `[X]`: it reads the diff and the test output itself (`checks`).
 
 ## Review gate
 
-The next user story starts only after the story's code review, and a security review where triggered, are recorded and every blocking finding is fixed and verified. This holds even when two stories are independent: they run one after the other and never overlap, because the gate exists to stop work from building on a base nobody has confirmed. Reviews run in their own sessions; `fnl-review-gate` covers dispositions, regression tests and re-review.
+The next user story starts only after the story's code review, and a security review where triggered, are recorded and every blocking finding is fixed and verified. This holds even when two stories are independent: they run one after the other and never overlap, because the gate exists to stop work from building on a base nobody has confirmed. Reviews run in their own sessions; `review-gate` covers dispositions, regression tests and re-review.
 
 ## Titles and archiving
 
-- Titles follow `<project> <scope>: <activity>` (`fnl-session-hygiene` "Titles"): `Demo 003 search: coordinate US4` for the coordinator, `Demo 003 search: T044–T046 rebuild CLI` for a task session, `Demo 003 search: review US4` for a review session. The coordinator names each session it starts and renames itself and those sessions when a phase, story or task changes state. It renames no other session.
+- Titles follow `<project> <scope>: <activity>` (`session-hygiene` "Titles"): `Demo 003 search: coordinate US4` for the coordinator, `Demo 003 search: T044–T046 rebuild CLI` for a task session, `Demo 003 search: review US4` for a review session. The coordinator names each session it starts and renames itself and those sessions when a phase, story or task changes state. It renames no other session.
 - Archive a task session once its tasks are verified and marked `[X]`, and a review session once its findings are disposed. The coordinator never archives itself.

@@ -247,10 +247,10 @@ class ProgressTest(unittest.TestCase):
 
     def test_work_record_template_parses_with_status_reader(self):
         import re
-        template = ROOT / 'skills/fnl-coding-router/references/work-record.md'
+        template = ROOT / 'skills/coding-router/references/work-record.md'
         block = re.search(r'```markdown\n(.*?)\n```', template.read_text(), re.S)
         self.assertIsNotNone(block, 'keep one literal parseable template block')
-        pp = module('template_status_reader', ROOT / 'skills/fnl-status/scripts/project_progress.py')
+        pp = module('template_status_reader', ROOT / 'skills/status/scripts/project_progress.py')
         item = pp.work_record(block[1], 1)
         self.assertIsNotNone(item)
         self.assertEqual(item['state'], 'todo')
@@ -267,7 +267,7 @@ class ProgressTest(unittest.TestCase):
 
     def test_filled_work_record_template_counts(self):
         import re
-        template = (ROOT / 'skills/fnl-coding-router/references/work-record.md').read_text()
+        template = (ROOT / 'skills/coding-router/references/work-record.md').read_text()
         text = re.search(r'```markdown\n(.*?)\n```', template, re.S)[1]
         text = re.sub(r'<[^>]*>', 'Filled content', text).replace('- [ ]', '- [x]')
         item = self.pp.work_record(text, 1)
@@ -737,12 +737,12 @@ class ProgressTest(unittest.TestCase):
         privacy = (ROOT / 'PRIVACY.md').read_text()
         for word in ('P1', 'P9', 'spec.md', 'specs/archive', 'settings.json', 'priority number'):
             self.assertIn(word, privacy)
-        setup = (ROOT / 'skills/fnl-setup/references/features/project.md').read_text()
+        setup = (ROOT / 'skills/setup/references/features/project.md').read_text()
         self.assertIn('project_progress.py label --set', setup)
         self.assertIn('settings.json', setup)
-        self.assertNotIn('## Project labels', (ROOT / 'skills/fnl-delegate/references/host-template.md').read_text())
+        self.assertNotIn('## Project labels', (ROOT / 'skills/delegate/references/host-template.md').read_text())
         self.assertIn('[Dashboard infographics]', (ROOT / 'docs/specs/index.md').read_text())
-        for doc in ('README.md', 'CHANGELOG.md', 'skills/fnl-status/SKILL.md'):
+        for doc in ('README.md', 'CHANGELOG.md', 'skills/status/SKILL.md'):
             for word in ('quota', 'overview', 'now'):
                 self.assertIn(word, (ROOT / doc).read_text())
 
@@ -939,19 +939,19 @@ class ProgressTest(unittest.TestCase):
 
     def test_shared_copies_and_documented_consent_limits_and_ledger_labels(self):
         raw = (ROOT / 'scripts/project_progress.py').read_bytes()
-        for relative in ('skills/fnl-status/scripts/project_progress.py', 'skills/fnl-setup/scripts/project_progress.py'):
+        for relative in ('skills/status/scripts/project_progress.py', 'skills/setup/scripts/project_progress.py'):
             self.assertEqual(raw, (ROOT / relative).read_bytes())
-        metrics = (ROOT / 'skills/fnl-setup/references/features/metrics.md').read_text()
+        metrics = (ROOT / 'skills/setup/references/features/metrics.md').read_text()
         for value in ('project progress', 'FNL_PROGRESS=off', '... off --yes', 'if the root cannot be resolved it is off'):
             self.assertIn(value, metrics)
-        project = (ROOT / 'skills/fnl-setup/references/features/project.md').read_text()
+        project = (ROOT / 'skills/setup/references/features/project.md').read_text()
         self.assertIn('project-settings.md', project)
-        settings = (ROOT / 'skills/fnl-setup/references/project-settings.md').read_text()
+        settings = (ROOT / 'skills/setup/references/project-settings.md').read_text()
         for value in ('Task file:', 'Ledger project:', 'no longer read', 'settings.json'):
             self.assertIn(value, settings)
-        for name in ('PRIVACY.md', 'README.md', 'CHANGELOG.md', 'skills/fnl-status/SKILL.md'):
+        for name in ('PRIVACY.md', 'README.md', 'CHANGELOG.md', 'skills/status/SKILL.md'):
             self.assertIn('FNL_PROGRESS=off', (ROOT / name).read_text())
-        self.assertIn('<feature> T<id>', (ROOT / 'skills/fnl-delegate/references/ledger.md').read_text())
+        self.assertIn('<feature> T<id>', (ROOT / 'skills/delegate/references/ledger.md').read_text())
         self.assertIn('implemented', (ROOT / 'docs/specs/index.md').read_text().split('[Project progress]')[1].split('\n')[0])
 
     def test_notice_channels_once_version_fixed_content_and_no_events(self):

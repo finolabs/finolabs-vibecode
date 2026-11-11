@@ -36,7 +36,7 @@ One standard for every repository: applications, libraries, CLIs, services, plug
 
 - Format `vX.Y.Z`, pre-release `vX.Y.Z-rc.1`. A repository releasing several components prefixes the component path: `<path>/vX.Y.Z`, one tag per released component.
 - Annotated tags with the message `Release vX.Y.Z` and a short summary; signed where signing is configured.
-- Tag only a commit on the default branch, or on a maintenance branch `release/X.Y` for older lines (created and fed as `fnl-commit-messages` "Branches" says), after required CI and release gates pass on that exact commit.
+- Tag only a commit on the default branch, or on a maintenance branch `release/X.Y` for older lines (created and fed as `commit-messages` "Branches" says), after required CI and release gates pass on that exact commit.
 - Published tags are **immutable**: never move, delete or reuse one. A bad release is superseded by a new version and marked (release note, Go `retract`, npm `deprecate`).
 - Go modules at major version 2 or later need the `/vN` module path suffix; plan it with the MAJOR decision.
 
@@ -46,7 +46,7 @@ One standard for every repository: applications, libraries, CLIs, services, plug
 - Keep each entry to one or two sentences: the change and any consumer action. The reasons live in the skill, the commit and the pull request.
 - Every breaking entry names the consumer action needed.
 - The forge release body comes from the same changelog section.
-- In a repository that ships upgrade notes (as `fnl-update` does in its `references/upgrades.json`), the release pull request writes or updates the entry for its version, as part of the documentation review; a test fails when a released manifest version has none.
+- In a repository that ships upgrade notes (as `update` does in its `references/upgrades.json`), the release pull request writes or updates the entry for its version, as part of the documentation review; a test fails when a released manifest version has none.
 - **Advisory (agent judgment):** After the tag and GitHub release, and only with the owner's explicit go for that repository (name it and the fields it changes first; the target is read from the user's marketplace entry, so the owner confirms it), open a pull request in the catalog repository that entry points to, moving `ref` to the new tag and syncing name, description and keywords with the default-branch manifests. The catalog's CI enforces the content against the raw default-branch files, which can lag a few minutes.
 
 ## Authority

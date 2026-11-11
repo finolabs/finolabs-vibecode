@@ -322,7 +322,7 @@
         tipOn(meter, q ? {title: family.agent + " quota", sub: (q.name || "pool") + (stale ? " · unverified" : ""),
           rows: [["remaining", Math.round(fraction * 100) + "%"], ["resets", q.resets ? whenRelative(q.resets) : "unknown"], ["measured", when(q.measured)]],
           bar: {value: fraction, max: 1, marks: [.1]}} : {title: family.agent + " quota", sub: "not read",
-          items: ["quota probe off or no reading yet; turn on in fnl-setup"]});
+          items: ["quota probe off or no reading yet; turn on in /setup"]});
         var label = q ? quotaPoolMark(q.name || "pool") : t("span", "quota-pool-name", "—");
         group.appendChild(h("div", "quota-pool", [label, meter]));
         if (q) quotaRows.push([family.agent, q.name, pct(fraction), q.resets ? whenRelative(q.resets) : "unknown", when(q.measured), stale ? "unverified" : "verified"]);
@@ -475,7 +475,7 @@
   }
   function activeProjects(block) {
     var rows = namedActivity(block), list = h("div", "active-projects"), motion = {index: 0};
-    if (!rows.length) list.appendChild(t("div", "meta", "No named repository active in the last 24 hours. Run fnl-status inside a repository to add it."));
+    if (!rows.length) list.appendChild(t("div", "meta", "No named repository active in the last 24 hours. Run /finolabs-vibecode:status inside a repository to add it."));
     rows.forEach(function (project) {
       var hosts = h("span", "active-hosts");
       activityHosts(project.hosts).forEach(function (host) {
@@ -539,7 +539,7 @@
       ["no task list · Looked for Spec Kit specs/NNN-name, work records, configured checkboxes, docs/specs, docs/spec and specs indexes/status lines, release packages, and exact-project ledger runs."];
     if (p.ledger_join === "none") items.push("No ledger source: no Ledger project override and no runs match the folder name.");
     if (p.ledger_join === "configured-empty") items.push("No ledger source: no runs match the configured Ledger project.");
-    if (p.ledger_join === "unknown") items.push("Ledger source unknown: project settings need setup again (fnl-setup add delegation).");
+    if (p.ledger_join === "unknown") items.push("Ledger source unknown: project settings need setup again (setup add delegation).");
     if (p.work_records && p.work_records.skipped) items.push("Work records skipped: " + p.work_records.skipped);
     if (p.reason) items.push(p.reason);
     return {title: title, sub: sourceName(p), items: items.concat(p.skipped || []).slice(0, 5)};
@@ -903,15 +903,15 @@
     D = { missing: {}, sources: [] };
     ["activity", "router", "use", "load", "depth", "reviews", "delegation"].forEach(function (key) { D.missing[key] = "no data yet"; });
     emptyNotice = h("div", "veil", [h("div", "notice", [h("div", "badge", [brandMark()]), t("strong", "", "No data yet"),
-      t("span", "", "Run fnl-status to build this page from your usage events and dispatch ledger."),
-      t("span", "", "Usage events need your consent in fnl-setup and a session started after it.")])]);
+      t("span", "", "Run /finolabs-vibecode:status to build this page from your usage events and dispatch ledger."),
+      t("span", "", "Usage events need your consent in /setup and a session started after it.")])]);
   }
 
   var sess = D.sessions || {}, k = D.kpi || {}, sp = k.spark || {};
   app.appendChild(tipOn(h("div", "cmd", [
-    t("span", "ps", "$"), t("span", "", "fnl-status" + (D.period ? " --since " + D.period.days + "d" : "")), h("span", "cursor"),
+    t("span", "ps", "$"), t("span", "", "status" + (D.period ? " --since " + D.period.days + "d" : "")), h("span", "cursor"),
     t("span", "meta", D.period ? when(D.period.from) + " → " + when(D.period.to) : "")
-  ]), {title: "~/finolabs-vibecode — fnl-status", items: ["Local usage metadata and dispatch ledger."]}));
+  ]), {title: "~/finolabs-vibecode — status", items: ["Local usage metadata and dispatch ledger."]}));
   if (emptyNotice) app.appendChild(emptyNotice);
 
   /* KPI strip */

@@ -2,7 +2,7 @@
 
 Loaded by [features/autopilot.md](features/autopilot.md) before the Merge question. Questions follow [interview.md](interview.md) (advisory, agent judgment).
 
-Show this table of what must wait for you. `stop` waits for a person; `decide` lets the agents choose among allowed options while you are away (`fnl-autopilot` "Decide"). Fixed rows never move and get no question.
+Show this table of what must wait for you. `stop` waits for a person; `decide` lets the agents choose among allowed options while you are away (`autopilot` "Decide"). Fixed rows never move and get no question.
 
 | Category (key) | Starts | What could go wrong at `decide` |
 | --- | --- | --- |

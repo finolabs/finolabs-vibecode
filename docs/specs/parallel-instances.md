@@ -15,7 +15,7 @@ Owner decision: 2026-11-07. A model family (Claude Code, Codex, Antigravity) is 
 
 ## Plan
 
-Use one stdlib parser/read helper at `scripts/parallel_slots.py`, copied byte-for-byte into `fnl-delegate` and `fnl-status` for standalone skill installs. Trace consumers through SessionStart, refresh, dashboard, setup and routing references. Keep ledger writes and integration-owned files unchanged.
+Use one stdlib parser/read helper at `scripts/parallel_slots.py`, copied byte-for-byte into `delegate` and `status` for standalone skill installs. Trace consumers through SessionStart, refresh, dashboard, setup and routing references. Keep ledger writes and integration-owned files unchanged.
 
 ## Contract
 
@@ -36,7 +36,7 @@ Commands (all run with `python3 -I`):
 - `check --family <claude|codex|antigravity> [--count k]`: k defaults to 1 and is a positive integer of at most 64 digits; requests above capacity report full. Prints exactly `Parallel slots: available`, exit 0, when both total and family capacity fit; otherwise `Parallel slots: full`, exit 3. Unsafe state prints `Parallel slots: unknown`, exit 3. Invalid CLI arguments exit 2.
 - `check-config`: validates canonical config without requiring a ledger; prints JSON `limit`, `caps`, `source`. Exit 0 for a valid total; 3 for default or unknown. Unknown prints only `unknown`.
 
-These are advisory snapshots, not reservations. `ledger.py start` is unchanged and never blocks on slots. Coordinators honor counts by agent judgment, account for pending assignments and recheck before dispatch. Cross-coordinator check/start is not atomic; stale opens are reconciled with evidence through `fnl-status`, and an explicit user override remains possible. No new dispatch lock is added and no ledger record is expired. A start older than its hard cap (budget plus a third, at least ten minutes) is reported as `stale` and left out of the counts, because its run cannot still be within budget; a start with an unknown budget or time stays counted, and its record stays open until someone reconciles it.
+These are advisory snapshots, not reservations. `ledger.py start` is unchanged and never blocks on slots. Coordinators honor counts by agent judgment, account for pending assignments and recheck before dispatch. Cross-coordinator check/start is not atomic; stale opens are reconciled with evidence through `status`, and an explicit user override remains possible. No new dispatch lock is added and no ledger record is expired. A start older than its hard cap (budget plus a third, at least ten minutes) is reported as `stale` and left out of the counts, because its run cannot still be within budget; a start with an unknown budget or time stays counted, and its record stays open until someone reconciles it.
 
 For k independent tasks, capability order, tier and strength overrides still choose eligible families. Skip a family out of quota or at its cap; spill to the next eligible family. Prefer spreading when two families qualify because simultaneous runs share family quota pools; existing model pools and labelled installs still apply. Give each run its own worktree and ledger line. When total capacity is full, excess tasks wait; unknown capacity needs resolution or a user decision. These are advisory agent judgments, not script-enforced routing. User routes, permissions, Delegation mode and review independence still govern.
 
@@ -76,7 +76,7 @@ Tests run through `python3 -I scripts/run_env.py -- python3 -I -c ...`, explicit
 
 ## Integration and limits
 
-Integration now includes the CI copy group for the three `parallel_slots.py` files, the README and `fnl-ask` map, and the public CHANGELOG entry. The preceding evidence records the original package's local checks; it does not establish live-host scheduling or UI behavior. No manifests, hooks, privacy policy, ledger behavior or real account state change here. Live UI, cross-process scheduling, user setup and independent reviews remain unverified in this package; checks never imply slot reservation.
+Integration now includes the CI copy group for the three `parallel_slots.py` files, the README and `ask` map, and the public CHANGELOG entry. The preceding evidence records the original package's local checks; it does not establish live-host scheduling or UI behavior. No manifests, hooks, privacy policy, ledger behavior or real account state change here. Live UI, cross-process scheduling, user setup and independent reviews remain unverified in this package; checks never imply slot reservation.
 
 ## Amendment: project scope (owner decision, 2026-11-08)
 
@@ -95,7 +95,7 @@ Contract:
 - `status` keeps `limit`, `open`, `stale`, `free`, `families`, `source` and adds `scope` (`{"code": "<8hex>", "project": "<ledger name>"}`, or `null` outside a repository, where the default applies and nothing is counted). `source` is `project settings` or `default`. `check` and `check-config` keep their exit codes; `check-config` prints `limit`, `caps`, `source` and `legacy_limits`.
 - SessionStart prints `Parallel slots: <free> free of <limit> (<family> <open> open [of cap <cap>], ...; <source>)` for the session's repository; its fixed-word rule and exit 0 on errors are unchanged.
 - Refresh and the dashboard show the numbers for the repository given by the hook's `--cwd` (else the process directory). The tooltip names the project only by its registered name or user label, never by the ledger name, which is a join key; without one it says `unnamed`. Outside a repository they show the default and `unnamed`. A machine-wide view of every project is not part of this amendment.
-- `fnl-setup add delegation` asks "How many agent runs may work at the same time in this repository?" and the optional family caps, then writes them through `project_progress.py settings`, with the same neutral Yes and No approval and a preview. The user-scope `## Limits` question is removed.
+- `setup add delegation` asks "How many agent runs may work at the same time in this repository?" and the optional family caps, then writes them through `project_progress.py settings`, with the same neutral Yes and No approval and a preview. The user-scope `## Limits` question is removed.
 - Enforcement is unchanged: advisory (agent judgment); `ledger.py start` never blocks.
 
 Amendment acceptance:

@@ -7,7 +7,7 @@ argument-hint: "[restart|shutdown] [--in <minutes>] | status | resume"
 
 # Pause: drain before a restart or shutdown
 
-Dependency: `fnl-delegate`. Resolve <pause> to `<fnl-delegate folder>/scripts/pause.py` and <handover> to `<fnl-delegate folder>/scripts/handover_state.py`; if either is absent, report the missing dependency and stop (advisory (agent judgment)). Pause only drains and records. It never stops a process, sends a signal, shuts the machine down or declares it safe: restarting is the user's call.
+Dependency: `delegate`. Resolve <pause> to `<delegate folder>/scripts/pause.py` and <handover> to `<delegate folder>/scripts/handover_state.py`; if either is absent, report the missing dependency and stop (advisory (agent judgment)). Pause only drains and records. It never stops a process, sends a signal, shuts the machine down or declares it safe: restarting is the user's call.
 
 **Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
 

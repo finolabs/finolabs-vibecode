@@ -1,6 +1,6 @@
 # Delegation host config: <machine name>
 
-Machine-specific facts for the `fnl-delegate` skills. The skills hold what is true on any host; this file holds paths, commands and permission rules for one machine. Keep it as `host.md` under the resolved data root so plugin updates never overwrite it. `ORCHESTRATION_HOST_CONFIG` may supply non-consent settings only; opt-ins and Routing always use the canonical file. When more than one agent coordinates, use `fnl-setup` to locate the data root where every coordinator's sandbox can read and write it and its `ledger.jsonl`. Changing an allow-rule or a shared setting listed here needs the owner's approval.
+Machine-specific facts for the `delegate` skills. The skills hold what is true on any host; this file holds paths, commands and permission rules for one machine. Keep it as `host.md` under the resolved data root so plugin updates never overwrite it. `ORCHESTRATION_HOST_CONFIG` may supply non-consent settings only; opt-ins and Routing always use the canonical file. When more than one agent coordinates, use `setup` to locate the data root where every coordinator's sandbox can read and write it and its `ledger.jsonl`. Changing an allow-rule or a shared setting listed here needs the owner's approval.
 
 ## Delegation mode
 
@@ -58,11 +58,11 @@ Private HOME is an open owner decision and is not offered or created in this pac
 - Quota probe: off
 - Date: <YYYY-MM-DD>
 
-Advisory (agent judgment): use `/fnl-setup add quota` to opt in after the scan and confirm its path preview. The setup script writes `Agents`, `Executable <agent>`, optional `Interpreter <agent>`, and `Claude config: <label>: <absolute folder>` lines; replace this explanation with that generated section when enabling. The on-demand `quota_probe.py read --family <f>` command enforces the canonical opt-in, a minimum 15-minute age, backoff, one in-flight reading and `FNL_QUOTA_PROBE=off`; hooks start no reading. Before routing, run `read` for each candidate family, then `status`. Claude Code alone can record a family-and-time StopFailure rate-limit marker; a newer successful reading overrides it and its advisory exclusion expires at the eligible reset or after one hour, never over five hours. They store only usage pools and measured times in `state/quota/quota.json`, with no environment redirect. Routing is advisory: below 10% with a future reset is out, older than 8 hours is unverified and excludes nothing, the user's statement wins, and Claude uses `week-all` separately for each install.
+Advisory (agent judgment): use `/setup add quota` to opt in after the scan and confirm its path preview. The setup script writes `Agents`, `Executable <agent>`, optional `Interpreter <agent>`, and `Claude config: <label>: <absolute folder>` lines; replace this explanation with that generated section when enabling. The on-demand `quota_probe.py read --family <f>` command enforces the canonical opt-in, a minimum 15-minute age, backoff, one in-flight reading and `FNL_QUOTA_PROBE=off`; hooks start no reading. Before routing, run `read` for each candidate family, then `status`. Claude Code alone can record a family-and-time StopFailure rate-limit marker; a newer successful reading overrides it and its advisory exclusion expires at the eligible reset or after one hour, never over five hours. They store only usage pools and measured times in `state/quota/quota.json`, with no environment redirect. Routing is advisory: below 10% with a future reset is out, older than 8 hours is unverified and excludes nothing, the user's statement wins, and Claude uses `week-all` separately for each install.
 
 ## Limits
 
-- The parallel run limit is per project and lives in each repository's own settings file (set with `fnl-setup add delegation`), as do the ledger name, task file and display label; lines here are ignored, and this file holds no per-repository section.
+- The parallel run limit is per project and lives in each repository's own settings file (set with `setup add delegation`), as do the ledger name, task file and display label; lines here are ignored, and this file holds no per-repository section.
 
 - Machine role: <daily workstation | CI box>. Heavy jobs at one time: <1>.
 - Heavy jobs: <container-backed suites, scale measurements, end-to-end suites>.
@@ -87,13 +87,13 @@ Optional. The plugin's default is `medium` effort on every agent, and one level 
 
 ## Briefs folder
 
-Durable, never `/tmp` or a session scratchpad. Default: `.finolabs/` at the main checkout's root, as `fnl-delegate` "Where files go" says. Per-project exceptions: <project → folder>.
+Durable, never `/tmp` or a session scratchpad. Default: `.finolabs/` at the main checkout's root, as `delegate` "Where files go" says. Per-project exceptions: <project → folder>.
 
 Brief preamble that lets a delegated agent skip its own workflow entry read: "<preamble text>".
 
 ## Coordinators and reach
 
-Which agent can coordinate on this machine, and which delegates each one can reach (`agents.md` "When an agent coordinates"). A delegate marked unreachable is skipped by routing. `/fnl-setup scan` prefills suggested reach with present agents other than the recorded coordinator; the user still confirms reachability and permission. Presence in `Agents on this machine` restricts this table: a reach entry never makes an absent family eligible.
+Which agent can coordinate on this machine, and which delegates each one can reach (`agents.md` "When an agent coordinates"). A delegate marked unreachable is skipped by routing. `/setup scan` prefills suggested reach with present agents other than the recorded coordinator; the user still confirms reachability and permission. Presence in `Agents on this machine` restricts this table: a reach entry never makes an absent family eligible.
 
 | Coordinator | Claude Code | Codex | Antigravity |
 | --- | --- | --- | --- |
@@ -105,7 +105,7 @@ Which agent can coordinate on this machine, and which delegates each one can rea
 
 Judge selection lives in canonical `## Assignment matrix` when that section exists, otherwise in canonical `## Agent roles`; this legacy heading retains instruction-check consent. `judge.py` caps calls at 24 per run, and no skill install is required for calls.
 
-`/fnl-setup add delegation` writes `## Assignment matrix` (`matrix_setup.py`; `migrate` builds it from the old sections, asks for a new consent and removes them in the same write). It replaces `## Agent roles` and `## Agent levels`, which are read only while no matrix exists and are removed in 0.3.0. A valid matrix with its own yes consent alone decides roles and judge, and a role no line names is unassigned; an invalid matrix or one without consent leaves roles and judge unset, never falling back to the old sections. Its shape, shown indented here so that no reader takes it for a section:
+`/setup add delegation` writes `## Assignment matrix` (`matrix_setup.py`; `migrate` builds it from the old sections, asks for a new consent and removes them in the same write). It replaces `## Agent roles` and `## Agent levels`, which are read only while no matrix exists and are removed in 0.3.0. A valid matrix with its own yes consent alone decides roles and judge, and a role no line names is unassigned; an invalid matrix or one without consent leaves roles and judge unset, never falling back to the old sections. Its shape, shown indented here so that no reader takes it for a section:
 
     ## Assignment matrix
 
@@ -123,10 +123,10 @@ Each headless command below starts with `FNL_DISPATCH_ID=<ledger id>`, the id `l
 
 ## Claude Code
 
-- First lint the brief with `brief_check.py` from `fnl-handoff`; set `umask 077` and create the private log folder as the common procedure in `agents.md` requires; the wrapper checks its mode. Headless command: FNL_DISPATCH_ID=<ledger id> python3 -I <delegate skill folder>/scripts/delegate_env.py --family claude -- <hard-cap wrapper> <claude path> -p "$(cat "$B")" --model <full model id> --effort <level> --output-format json --max-turns <n> --max-budget-usd <cap> --allowedTools "<tools the brief needs>" < /dev/null
+- First lint the brief with `brief_check.py` from `handoff`; set `umask 077` and create the private log folder as the common procedure in `agents.md` requires; the wrapper checks its mode. Headless command: FNL_DISPATCH_ID=<ledger id> python3 -I <delegate skill folder>/scripts/delegate_env.py --family claude -- <hard-cap wrapper> <claude path> -p "$(cat "$B")" --model <full model id> --effort <level> --output-format json --max-turns <n> --max-budget-usd <cap> --allowedTools "<tools the brief needs>" < /dev/null
 - Allowed models: <full model ids>.
 - How task sessions start on this host: <desktop app session tools | `claude -p` headless>.
-- Session title convention: <`<project> <scope>: <activity>` as `fnl-session-hygiene` says, or this machine's own>.
+- Session title convention: <`<project> <scope>: <activity>` as `session-hygiene` says, or this machine's own>.
 
 ## Codex
 
@@ -148,7 +148,7 @@ FNL_DISPATCH_ID="<ledger id>" python3 -I <delegate skill folder>/scripts/delegat
 
 ## Antigravity
 
-- First lint with `brief_check.py` from `fnl-handoff`; set `umask 077` and create the private log folder as the common procedure in `agents.md` requires; the wrapper checks its mode. Command: FNL_DISPATCH_ID=<ledger id> python3 -I <delegate skill folder>/scripts/delegate_env.py --family antigravity -- <hard-cap wrapper> <agy path> -p "$(cat "$B")" --model <model id> --mode accept-edits --output-format json --print-timeout 30m, or the `agybird` runner through the same `delegate_env.py --family antigravity --` wrapper when installed: <how to look up the runner's install path at each dispatch, for example a command that reads it from the host's plugin list; not a path>. Resolve it at each dispatch, never from a pinned version folder or the highest folder in the plugin cache, which keeps old versions after an upgrade.
+- First lint with `brief_check.py` from `handoff`; set `umask 077` and create the private log folder as the common procedure in `agents.md` requires; the wrapper checks its mode. Command: FNL_DISPATCH_ID=<ledger id> python3 -I <delegate skill folder>/scripts/delegate_env.py --family antigravity -- <hard-cap wrapper> <agy path> -p "$(cat "$B")" --model <model id> --mode accept-edits --output-format json --print-timeout 30m, or the `agybird` runner through the same `delegate_env.py --family antigravity --` wrapper when installed: <how to look up the runner's install path at each dispatch, for example a command that reads it from the host's plugin list; not a path>. Resolve it at each dispatch, never from a pinned version folder or the highest folder in the plugin cache, which keeps old versions after an upgrade.
 - Allowed models and their pools: <list>.
 - Per-run settings file with allow-rules: <path>. Global allow-rules: <file path and the command prefixes allowed>. Everything else is soft-denied.
 - Rules the user granted per repository (test and check commands), as a record only: the grant itself lives in Antigravity's settings or the user's answer. <repository: literal commands, date approved>.

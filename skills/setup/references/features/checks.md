@@ -20,7 +20,7 @@ Say plainly that this cannot be complete: a program may start a shell itself (np
 
 Run `checks_setup.py preview --check '<name>=<JSON array>'`, one `--check` per check in order, each safely quoted. Show it, then ask: "Save this list of checks for this repository?"
 Yes: Save the list in this repository's .finolabs/vibecode/checks.json and record its approval in your private state folder. The checks run this repository's own code on your computer, as cloud CI does, so use them only on code you are willing to run. Nothing runs now.
-No: Leave the checks unchanged; ask later with /fnl-setup add checks.
+No: Leave the checks unchanged; ask later with /setup add checks.
 Undo: Run checks_setup.py remove for this repository and approve its preview.
 Choices: "Yes, save these checks" / "No, leave checks unchanged".
 On yes run `checks_setup.py apply --yes --digest <Digest>`. It refuses a preview older than 60 minutes, a file changed since the preview, a link on the path and anything the limits above refuse.
@@ -30,7 +30,7 @@ The file sits in the main checkout (linked worktrees share it); apply adds `.fin
 ## Local receipt (optional, its own question)
 
 Offer this only after a list is saved, and only for a repository whose cloud CI cannot run. Run `checks_setup.py receipt on`, show the printed preview, then ask: "Turn on the local receipt for this repository?"
-Yes: When the whole list passes with `fnl-checks`' `checks.py run` (never `--changed`) on a clean tree whose head did not move, a receipt is written; `merge_check.py` accepts it in place of missing or failing cloud checks for that head and list only. What could go wrong: the receipt is self-reported. It proves only that this computer ran the list at that head, and it gives a reviewer nothing they can check. It suits a repository one person works on.
+Yes: When the whole list passes with `checks`' `checks.py run` (never `--changed`) on a clean tree whose head did not move, a receipt is written; `merge_check.py` accepts it in place of missing or failing cloud checks for that head and list only. What could go wrong: the receipt is self-reported. It proves only that this computer ran the list at that head, and it gives a reviewer nothing they can check. It suits a repository one person works on.
 No: Leave the mode off; a missing cloud check keeps blocking the merge.
 Undo: Run `checks_setup.py receipt off` and approve its preview. Removing the list also turns the mode off.
 Choices: "Yes, turn on the local receipt" / "No, keep it off".
@@ -38,7 +38,7 @@ On yes run `checks_setup.py apply --yes --digest <Digest>`. The mode is `local_r
 
 ## Pre-push hook (optional, its own question)
 
-Run `checks_setup.py hook install --checks-script <fnl-checks skill folder>/scripts/checks.py [--base <ref>]` from inside the repository. It asks git where hooks are read (`git rev-parse --git-path hooks`), so a linked worktree gets the main repository's folder, and refuses when `core.hooksPath` is set, never changing it. Show the preview (the hooks folder, that it applies to every worktree, any existing `pre-push` hook, the script), then ask: "Install this pre-push hook?"
+Run `checks_setup.py hook install --checks-script <checks skill folder>/scripts/checks.py [--base <ref>]` from inside the repository. It asks git where hooks are read (`git rev-parse --git-path hooks`), so a linked worktree gets the main repository's folder, and refuses when `core.hooksPath` is set, never changing it. Show the preview (the hooks folder, that it applies to every worktree, any existing `pre-push` hook, the script), then ask: "Install this pre-push hook?"
 Yes: Before every push, git runs `checks.py run --changed`: the stored checks the change touches. A failing check stops the push. `git push --no-verify` skips the hook. It is your own git hook, not a plugin hook.
 No: Install no hook; run `checks.py run` yourself before a push.
 Undo: Run `checks_setup.py hook remove` and approve its preview; it removes only this plugin's hook and keeps a backup.
@@ -54,6 +54,6 @@ Yes: A new file in `.github/workflows` runs the checks on pull requests, default
 No: Write no workflow.
 Undo: Delete the file, or restore the backup shown.
 Choices: "Yes, write the workflow" / "No, leave CI unchanged".
-On yes run `checks_setup.py ci apply --yes --digest <Digest>`; an existing file needs a second yes ("Replace the existing workflow file? A backup is kept.") and `--replace-existing`. Limits and `checks.py usage`: `fnl-checks`' `references/ci.md`.
+On yes run `checks_setup.py ci apply --yes --digest <Digest>`; an existing file needs a second yes ("Replace the existing workflow file? A backup is kept.") and `--replace-existing`. Limits and `checks.py usage`: `checks`' `references/ci.md`.
 
 Enforcers: `checks_setup.py` for the argument form, the limits, the preview and digest before any write, the approved digest, the mode, the hook folder resolution, `core.hooksPath` refusal, and backup and no silent overwrite for the hook and the workflow. Detection, the list, the mode and the workflow writer run no command; the hook commands run only fixed git queries. Nothing makes a network call. Choosing what goes into the list is agent judgment (advisory).

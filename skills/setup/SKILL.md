@@ -9,7 +9,7 @@ argument-hint: "[add <feature> | instructions | check | scan | mode [args]]"
 
 Show `host.md` (local settings) and data root (settings/records folder) before approvals. Scopes: user account, project repository.
 
-| Command (Codex: `$fnl-setup <word>`) | Loads |
+| Command (Codex: `$setup <word>`) | Loads |
 | --- | --- |
 | none | the core path below, then the menu |
 | `add <feature>` | `references/features/<feature>.md` (menu below) |
@@ -23,7 +23,7 @@ A plain sentence selects, never answers a consent question; "install everything"
 
 ## Core path
 
-A bare run says: "Check: `/fnl-setup check` (read-only)." Show config/scan date; ask one scope question, user, project or both, recommendation first (user on a new computer, project in a repository that is not set up). Follow `references/core.md`.
+A bare run says: "Check: `/setup check` (read-only)." Show config/scan date; ask one scope question, user, project or both, recommendation first (user on a new computer, project in a repository that is not set up). Follow `references/core.md`.
 
 Read-back: inert facts only; grants separate, beginner and Quick included, with no default.
 

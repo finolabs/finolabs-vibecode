@@ -12,9 +12,9 @@ Say, in this order: what is recorded (a time, a session id, a short repository c
 Ask as one question of its own, never bundled: "Let this plugin keep a private record of how its skills and helpers are used on this computer?"
 Yes: Save local consent and the chosen 30, 90 or 365 day retention; create the local dashboard and private state records described above. Nothing leaves this computer.
 No: Leave recording off; ask later.
-Undo: Use FNL_METRICS=off to stop recording; fnl-status purge deletes saved records.
+Undo: Use FNL_METRICS=off to stop recording; status purge deletes saved records.
 Choices: "Yes, record it for 30 days", "Yes, record it for 90 days", "Yes, record it for 365 days" / "No, leave recording off". Claude Code records skill and agent use, first edits, commits, review comments, the router's depth, keep and judge receipts. Codex records the same except skill and agent use, and the user must also trust the plugin's hooks once, with `/hooks`, or they stay off.
-Antigravity records the same events as Codex, but its hook is not part of the plugin, because a plugin hook's working folder is unverified. After a yes run `python3 -I <fnl-status folder>/scripts/refresh.py consent --retention <days>` to record it with its date, then `refresh.py run` once so the dashboard exists; `fnl-status` must be installed beside this skill, otherwise say so and skip. A declined or skipped step leaves everything off.
+Antigravity records the same events as Codex, but its hook is not part of the plugin, because a plugin hook's working folder is unverified. After a yes run `python3 -I <status folder>/scripts/refresh.py consent --retention <days>` to record it with its date, then `refresh.py run` once so the dashboard exists; `status` must be installed beside this skill, otherwise say so and skip. A declined or skipped step leaves everything off.
 
 ## Antigravity hook
 
@@ -23,7 +23,7 @@ Yes: Add the shown hook, a command Antigravity runs on its events, to your accou
 No: Leave the shared Gemini file unchanged; ask later.
 Undo: Run refresh.py antigravity-hook --remove.
 Choices: "Yes, add usage recording" / "No, leave the file unchanged".
-Only after the yes run `python3 -I <fnl-status folder>/scripts/refresh.py antigravity-hook --yes`. It merges one group, `finolabs-vibecode`, into `~/.gemini/config/hooks.json` with an absolute path to the script, leaves every other group alone and keeps a backup; `--remove` takes it out. It refuses unless the skill sits inside the `finolabs-vibecode` plugin. That file is shared Gemini configuration, so never run it unasked.
+Only after the yes run `python3 -I <status folder>/scripts/refresh.py antigravity-hook --yes`. It merges one group, `finolabs-vibecode`, into `~/.gemini/config/hooks.json` with an absolute path to the script, leaves every other group alone and keeps a backup; `--remove` takes it out. It refuses unless the skill sits inside the `finolabs-vibecode` plugin. That file is shared Gemini configuration, so never run it unasked.
 
 ## Project progress
 

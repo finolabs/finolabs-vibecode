@@ -4,7 +4,7 @@ Detail behind `SKILL.md` "Instruments", "Who reviews", "The reviewer packet" and
 
 ## Routing
 
-`review_route.py` reads canonical roles, presence, posting checks, commit authorship and quota status locally. The coordinator refreshes due candidate quota readings through `fnl-delegate` before routing; this script never starts a reading, model, process or network call.
+`review_route.py` reads canonical roles, presence, posting checks, commit authorship and quota status locally. The coordinator refreshes due candidate quota readings through `delegate` before routing; this script never starts a reading, model, process or network call.
 
 ## Engines per family
 
@@ -13,15 +13,15 @@ Call the selected family directly (advisory, agent judgment); no reviewer routes
 - **Claude Code**: `fnl-reviewer` with `/code-review`, or `fnl-security-reviewer` with `/security-review`, as the engine.
 - **Codex**: a headless `codex review --base <branch>` run (or `--commit <sha>`), with the packet and the requested review kind.
 - **Antigravity**: a headless `agy` run that reads the diff; `/diff` and the review pane are human tools, not AI review engines.
-- **Companions**: `code-review` from [mattpocock/skills](https://github.com/mattpocock/skills) for standards and spec; `security-audit` from [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) when `fnl-security-review-gate` triggers. Name that requirement in the brief. A cloud multi-agent review needs the owner's approval before code leaves the checkout.
+- **Companions**: `code-review` from [mattpocock/skills](https://github.com/mattpocock/skills) for standards and spec; `security-audit` from [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) when `security-review-gate` triggers. Name that requirement in the brief. A cloud multi-agent review needs the owner's approval before code leaves the checkout.
 
-Delegated runs follow `fnl-delegate` for ledger, brief and hard cap (advisory, agent judgment). A missing engine is disclosed; apply the packet and findings rules directly and tell the caller that `fnl-setup` guides installing it. Re-review resumes the same review run (advisory, agent judgment).
+Delegated runs follow `delegate` for ledger, brief and hard cap (advisory, agent judgment). A missing engine is disclosed; apply the packet and findings rules directly and tell the caller that `setup` guides installing it. Re-review resumes the same review run (advisory, agent judgment).
 
 ## Who reviews
 
 - **Independent**: `review_route.py` chooses an assigned present family with quota before the capability fallback; posting `yes` breaks ties only after independence and a valid assignment. A role or a present CLI grants no permission, reachability or model access.
 - **Both kinds on one family**: one run, one packet, two comments, each with its own marker. The low-risk lane uses the code route for both after the lane check succeeds (rule 7). These are coordinator obligations, advisory (agent judgment).
-- **Tier and effort**: follow `fnl-delegate`; at least strong for code and frontier for a triggered security review. The Claude agent files keep `model: inherit`; select the allowed model through the host when supported (advisory, agent judgment).
+- **Tier and effort**: follow `delegate`; at least strong for code and frontier for a triggered security review. The Claude agent files keep `model: inherit`; select the allowed model through the host when supported (advisory, agent judgment).
 
 ## The reviewer packet
 

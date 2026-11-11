@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def read(file='SKILL.md', skill='fnl-setup'):
+def read(file='SKILL.md', skill='setup'):
     return (ROOT / 'skills' / skill / file).read_text()
 
 

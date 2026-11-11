@@ -9,7 +9,7 @@ Choices: "Yes, explore this option" / "No, skip this option".
 Ask `Needs:` separately; declining it ends the dependent feature and never records consent as given.
 Menu No: `python3 -I <this skill folder>/scripts/setup_features.py decline <feature> --yes`; a bare run does not offer it again (`show` lists them); that record is not a consent; `add <feature>` always asks again. Companions: own procedure. Last offer instructions here: "Draft instructions for how AI helpers should work with you?"
 Yes: Open the instructions interview and draft locally; no instruction file changes before its separate approval. The draft uses your current AI provider.
-No: Leave instruction files unchanged; ask later with /fnl-setup instructions.
+No: Leave instruction files unchanged; ask later with /setup instructions.
 Undo: Discard the draft; saved files have their own backup/undo step.
 Choices: "Yes, draft instructions" / "No, leave instructions unchanged".
 

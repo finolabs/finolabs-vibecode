@@ -39,11 +39,11 @@ def version(value):
 
 
 def locations():
-    """The plugin root and the fnl-update skill folder, from either shipped copy."""
+    """The plugin root and the update skill folder, from either shipped copy."""
     here = Path(__file__).resolve()
-    if here.parent.parent.name == "fnl-update":
+    if here.parent.parent.name == "update":
         return here.parents[3], here.parents[1]
-    return here.parents[1], here.parents[1] / "skills/fnl-update"
+    return here.parents[1], here.parents[1] / "skills/update"
 
 
 def plugin_root():
@@ -118,8 +118,8 @@ def stable(value):
 NOTES_LIMIT = 65536
 KINDS = {"rename", "setup", "migration", "hook", "removed"}
 ITEM_ID = re.compile(r"([0-9]+\.[0-9]+\.[0-9]+)/([a-z0-9-]{1,40})", re.ASCII)
-SETUP = re.compile(r"/fnl-setup add [a-z][a-z0-9-]{0,39}", re.ASCII)
-CHECK_SCRIPT = re.compile(r"(?:scripts|skills/fnl-[a-z0-9-]{1,40}/scripts)/[a-z0-9_]{1,64}\.py", re.ASCII)
+SETUP = re.compile(r"/setup add [a-z][a-z0-9-]{0,39}", re.ASCII)
+CHECK_SCRIPT = re.compile(r"(?:scripts|skills/[a-z][a-z0-9-]{0,39}/scripts)/[a-z0-9_]{1,64}\.py", re.ASCII)
 CHECK_ARG = re.compile(r"[A-Za-z0-9._=-]{1,64}", re.ASCII)
 TEXT = re.compile(r"[ -~]{1,200}", re.ASCII)
 CHECK_TIMEOUT = 10
@@ -329,8 +329,8 @@ def onboard_line(installed):
         return None
     entries = between(notes(), state["last_seen"], installed)
     if any(item["id"] not in state["skipped"] for entry in entries for item in entry["items"]):
-        return ("finolabs-vibecode %s has upgrade notes. Let the user know they can type /fnl-update "
-                "(on Codex $fnl-update) to see what is new and finish its setup; do not run it on your own."
+        return ("finolabs-vibecode %s has upgrade notes. Let the user know they can type /update "
+                "(on Codex $update) to see what is new and finish its setup; do not run it on your own."
                 % installed.split("+")[0])
     return None
 
@@ -419,7 +419,7 @@ def run(argv):
         start_fetch()  # no wait; this invocation only uses the cache read above
     if (newer and state is not None and not state["never_ask"] and "pinned" not in state
             and available not in [tag.removeprefix("v") for tag in state["skipped"]]):
-        print("A newer finolabs-vibecode (%s) is available. Let the user know they can type /fnl-update (on Codex $fnl-update); do not update on your own." % available)
+        print("A newer finolabs-vibecode (%s) is available. Let the user know they can type /update (on Codex $update); do not update on your own." % available)
     try:
         line = onboard_line(installed)
     except Exception:

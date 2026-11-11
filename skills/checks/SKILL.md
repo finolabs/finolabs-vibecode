@@ -15,16 +15,16 @@ Pairs with `tdd` and `diagnosing-bugs` from [mattpocock/skills](https://github.c
 
 - Run the **targeted tests** at checkpoints, not after every edit: those covering the changed code and its traced consumers, plus the project's lint and unit checks for those packages. Pick them from the diff (packages, test name patterns, the end-to-end suite only when the user-facing path changed). Say when no test covers the change; when that change alters runtime behavior, name the gap and propose a test rather than skip it. Advisory (agent judgment): `<this skill folder>/scripts/select_tests.py [--base <ref>]` lists the test modules that name a changed file.
 - Run a **full suite** only when the owner asks. Gates and pull requests use targeted tests; CI runs the rest after an authorized push. When the change touches widely shared code whose consumers you cannot trace in full, propose a full suite and wait for the owner's yes.
-- A repository's stored check list (set by `/fnl-setup add checks`) runs with `<this skill folder>/scripts/checks.py run [--changed] [--base <ref>]`; see [references/checks.md](references/checks.md) for `--changed`, the local receipt and the pre-push hook, and [references/ci.md](references/ci.md) for a cheaper cloud workflow and `checks.py usage`.
+- A repository's stored check list (set by `/setup add checks`) runs with `<this skill folder>/scripts/checks.py run [--changed] [--base <ref>]`; see [references/checks.md](references/checks.md) for `--changed`, the local receipt and the pre-push hook, and [references/ci.md](references/ci.md) for a cheaper cloud workflow and `checks.py usage`.
 - Keep local fixtures small (about 1,000 items) unless the owner asks for larger stages.
-- **Heavy jobs** (container-backed suites, scale measurements, end-to-end runs) run one at a time per machine through `fnl-delegate`'s `heavy_run.py` (it also waits for load and free memory); without it, run one at a time yourself and start only when the one-minute load average is below 12. Run at most two test modules per command. Light targeted runs may overlap. Keep the machine awake for long runs.
+- **Heavy jobs** (container-backed suites, scale measurements, end-to-end runs) run one at a time per machine through `delegate`'s `heavy_run.py` (it also waits for load and free memory); without it, run one at a time yourself and start only when the one-minute load average is below 12. Run at most two test modules per command. Light targeted runs may overlap. Keep the machine awake for long runs.
 
 ## Read the evidence
 
 - Read the output, not the exit code alone: count what ran, what skipped and what was filtered out. A skipped or partially green run is not a pass.
 - Missing setup, a missing API or credential is not a behavioral pass: report it as blocked.
 - Enabled configuration, a tool's DONE, a tick in a task list or a moved HEAD is not proof of behavior.
-- For queries, reports, infrastructure changes and forecasts, a run that completed is not proof the result is right: see `fnl-coding-router` `references/non-code-work.md`.
+- For queries, reports, infrastructure changes and forecasts, a run that completed is not proof the result is right: see `coding-router` `references/non-code-work.md`.
 
 ## Bind proof to final bytes
 
@@ -61,7 +61,7 @@ For a criterion comparing two documents, use `{"id":"C2","documents":[{"path":"d
 
 Read [references/judgments.md](references/judgments.md) for each semantic check, host-answer completion, fallback and validation.
 
-After the coordinator decides to accept, `fnl-delegate`'s `ledger.py finish --outcome accepted --checkout <task checkout>` requires a passing receipt for that checkout's current head (script-enforced).
+After the coordinator decides to accept, `delegate`'s `ledger.py finish --outcome accepted --checkout <task checkout>` requires a passing receipt for that checkout's current head (script-enforced).
 `verify_claim.py` verifies an implementation head and its test receipt; it does not read the dispatch kind. A review dispatch has no implementation head to verify, so `ledger.py finish` refuses `--head` for it and refuses `accepted` without a passing receipt (script-enforced); that refusal is expected, not a defect. After reading the posted marker, accept the review dispatch with `--accept-unverified --reason <text>` (advisory, agent judgment). The ledger logs and counts this escape hatch, storing only the reason's digest; keep the full reason in the coordinator report.
 This gate covers delegated work in the ledger only; the coordinator's own work stays under the review gate and an agent bypassing the ledger is not blocked.
 

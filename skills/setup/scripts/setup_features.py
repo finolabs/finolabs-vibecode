@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Show, record or clear a declined setup feature in the `## Setup features` section of host.md.
 
-A `declined` line only stops a bare `/fnl-setup` from offering that feature again. It is not a consent,
-grants nothing, and `/fnl-setup add <feature>` always asks again. Written only by fnl-setup.
+A `declined` line only stops a bare `/setup` from offering that feature again. It is not a consent,
+grants nothing, and `/setup add <feature>` always asks again. Written only by setup.
 """
 import argparse
 try:

@@ -43,10 +43,10 @@ EXCLUDE_LINE = b'.finolabs/\n'
 EXCLUDE_FORMS = {'.finolabs/', '.finolabs', '/.finolabs/', '/.finolabs', '.finolabs/*', '/.finolabs/*'}
 APPROVAL_NOTICE = ("Apply records the SHA-256 of these exact bytes as approved in your private state folder. A file "
                    "that differs from it (edited by hand, committed or checked out on a branch) or has no approval "
-                   "reads as unset: nothing runs and the local receipt is off until you run /fnl-setup add checks "
+                   "reads as unset: nothing runs and the local receipt is off until you run /setup add checks "
                    "again.")
 HOOK_KEYS = {'action', 'repo', 'hooks', 'content', 'existing', 'ours', 'backup', 'root', 'created'}
-HOOK_MARK = '# fnl-checks pre-push hook'
+HOOK_MARK = '# checks pre-push hook'
 HOOK_LIMIT = 65536
 SAFE_PATH = re.compile(r'/[A-Za-z0-9/._+@ -]{1,1023}')  # no quote, so the path is safe inside single quotes
 REF = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/@{}^~-]{0,199}')
@@ -68,7 +68,7 @@ MAKE_TARGETS = ('test', 'lint', 'check')
 LOCKFILES = (('pnpm-lock.yaml', 'pnpm'), ('yarn.lock', 'yarn'), ('bun.lockb', 'bun'), ('bun.lock', 'bun'))
 
 
-# The stored argument form and the reader live in checks_list.py, shared with fnl-checks and fnl-review-gate.
+# The stored argument form and the reader live in checks_list.py, shared with checks and review-gate.
 
 program_name = cl.program_name
 refused_program = cl.refused_program
@@ -569,7 +569,7 @@ CI_BACKUPS = 'state/checks-ci/backups'
 CI_KEYS = {'repo', 'code', 'name', 'branch', 'list', 'content', 'existing', 'backup', 'root', 'created'}
 CI_FOLDERS = ('.github', 'workflows')
 CI_PATH = re.compile(r'\.github/workflows/([a-z0-9][a-z0-9-]{0,40}\.yml)')
-CI_DEFAULT = '.github/workflows/fnl-checks.yml'
+CI_DEFAULT = '.github/workflows/checks.yml'
 BRANCH = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,99}')
 CI_LIMIT = 256 * 1024
 CI_NOTICE = (
@@ -628,9 +628,9 @@ def run_line(argv):
 def workflow_text(checks, branch, files):
     """Deterministic YAML from a fixed template; `files` is the set of dependency files present at the root."""
     ignore = ''.join(f'      - {quoted(pattern)}\n' for pattern in cl.DOCUMENT_PATTERNS)
-    out = ['# fnl-checks: a cheaper CI workflow written by fnl-setup checks_setup.py from the stored checks of this\n',
+    out = ['# checks: a cheaper CI workflow written by setup checks_setup.py from the stored checks of this\n',
            '# repository. Review it and commit it yourself; the plugin never commits or pushes it.\n',
-           "name: 'fnl-checks'\n",
+           "name: 'checks'\n",
            'on:\n',
            '  pull_request:\n',
            '    paths-ignore:\n', ignore,

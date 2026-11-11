@@ -7,7 +7,7 @@ Usage, from inside the repository:
   checks.py usage --from <runs.json> [--files-from <paths.json>] [--limit-minutes N]
                                              summarise CI runs and minutes from files; no network, no process
 
-Each check is an argument array from the repository's approved check file (written only by fnl-setup's
+Each check is an argument array from the repository's approved check file (written only by setup's
 `checks_setup.py`), launched through `heavy_run.py`'s canonical form with no shell and an allowlisted environment;
 the checks' own output streams through. `--changed` keeps only the checks the change since the base touches: a
 `python -m unittest discover -s tests` check keeps its discovery and gets one `--pattern <file>` run per module
@@ -202,7 +202,7 @@ def run(changed, base):
               file=sys.stderr)
         return 3
     if reason:
-        print(f'Repository {code}: no checks ({reason}); nothing was run. Set them with /fnl-setup add checks.',
+        print(f'Repository {code}: no checks ({reason}); nothing was run. Set them with /setup add checks.',
               file=sys.stderr)
         return 3 if reason in ('invalid', 'unreadable') else 2
     if changed:

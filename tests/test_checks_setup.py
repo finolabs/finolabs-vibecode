@@ -15,7 +15,7 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / 'skills/fnl-setup/scripts'
+SCRIPTS = ROOT / 'skills/setup/scripts'
 SCRIPT = SCRIPTS / 'checks_setup.py'
 PREFIX = b'# Host\n\n## Other\nkeep \xc3\xa9\n'
 
@@ -385,8 +385,8 @@ class ChecksSetupTest(unittest.TestCase):
         self.assertEqual(json.loads((self.repo / '.finolabs/vibecode/settings.json').read_text()),
                          {'version': 1, 'parallel': '5'})
         self.assertEqual(self.module().checks_for(code_, root=self.repo), ([], 'no entry'))
-        for path in (ROOT / 'skills/fnl-delegate/scripts/parallel_slots.py', ROOT / 'scripts/parallel_slots.py',
-                     ROOT / 'skills/fnl-status/scripts/parallel_slots.py'):
+        for path in (ROOT / 'skills/delegate/scripts/parallel_slots.py', ROOT / 'scripts/parallel_slots.py',
+                     ROOT / 'skills/status/scripts/parallel_slots.py'):
             with self.subTest(path=str(path.relative_to(ROOT))):
                 reader = load('settings_reader_' + path.parent.parent.name + path.stem, path)
                 self.assertEqual(reader.parse_config('', self.repo)['limit'], 5)
@@ -782,7 +782,7 @@ class ProjectFileTest(unittest.TestCase):
                 self.assertIsNone(reader.receipt_status(code_, 'a' * 40, root=self.repo))
                 code, out, _ = self.cli('show', '--root', str(self.repo))
                 self.assertIn(CHANGED, out)
-                self.assertIn('/fnl-setup add checks', out)
+                self.assertIn('/setup add checks', out)
 
     def test_receipt_mode_lives_in_the_file(self):
         self.save('test=["make","test"]')
@@ -847,7 +847,7 @@ class HookTest(unittest.TestCase):
         self.git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-qm', 'Start')
         self.hooks = Path(self.git('rev-parse', '--absolute-git-dir')).resolve() / 'hooks'
         self.hooks.mkdir(exist_ok=True)
-        self.script = base / 'plugin/skills/fnl-checks/scripts/checks.py'
+        self.script = base / 'plugin/skills/checks/scripts/checks.py'
         self.script.parent.mkdir(parents=True)
         self.script.write_text('# synthetic\n')
 
@@ -1065,7 +1065,7 @@ class CiWorkflowTest(unittest.TestCase):
 
     @property
     def target(self):
-        return self.repo / '.github/workflows/fnl-checks.yml'
+        return self.repo / '.github/workflows/checks.yml'
 
     def test_preview_shows_the_cheaper_workflow_and_apply_writes_exactly_it(self):
         self.store('unit=["python3","-m","unittest","discover","-s","tests"]', 'lint=["make","lint"]')
@@ -1079,7 +1079,7 @@ class CiWorkflowTest(unittest.TestCase):
                        "run: 'python3 -m unittest discover -s tests'", "run: 'make lint'", "name: 'unit'"):
             self.assertIn(phrase, text)
         self.assertLess(text.index("name: 'unit'"), text.index("name: 'lint'"))
-        for phrase in ('Target: .github/workflows/fnl-checks.yml', 'through its shell', 'never commits',
+        for phrase in ('Target: .github/workflows/checks.yml', 'through its shell', 'never commits',
                        'review the file and commit it yourself', 'stays pending', 'pinning action versions',
                        'runs the repository\'s code in the cloud'):
             self.assertIn(phrase, out)
@@ -1181,7 +1181,7 @@ class CiWorkflowTest(unittest.TestCase):
         self.assertEqual([b.read_text() for b in backups], ['name: mine\n'])
         self.assertEqual(stat.S_IMODE(backups[0].stat().st_mode), 0o600)
         self.assertEqual(other.read_text(), 'name: other\n')
-        self.assertEqual(sorted(p.name for p in self.target.parent.iterdir()), ['ci.yml', 'fnl-checks.yml'])
+        self.assertEqual(sorted(p.name for p in self.target.parent.iterdir()), ['ci.yml', 'checks.yml'])
 
     def test_a_file_changed_or_created_after_the_preview_is_left_alone(self):
         self.store('lint=["make","lint"]')
@@ -1195,7 +1195,7 @@ class CiWorkflowTest(unittest.TestCase):
         self.target.write_text('name: later\n')
         self.assertEqual(self.apply_ci(digest, '--replace-existing')[0], 1)
         self.assertEqual(self.target.read_text(), 'name: later\n')
-        self.assertEqual([p.name for p in self.target.parent.iterdir()], ['fnl-checks.yml'])
+        self.assertEqual([p.name for p in self.target.parent.iterdir()], ['checks.yml'])
 
     def test_a_file_appearing_at_publish_is_not_clobbered(self):
         self.store('lint=["make","lint"]')
@@ -1215,7 +1215,7 @@ class CiWorkflowTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('appeared', err.getvalue())
         self.assertEqual(self.target.read_text(), 'name: racing\n')
-        self.assertEqual([p.name for p in self.target.parent.iterdir()], ['fnl-checks.yml'])
+        self.assertEqual([p.name for p in self.target.parent.iterdir()], ['checks.yml'])
 
     def test_a_dependency_file_voids_the_preview_only_when_the_workflow_would_differ(self):
         self.store('unit=["python3","-m","unittest","discover","-s","tests"]')

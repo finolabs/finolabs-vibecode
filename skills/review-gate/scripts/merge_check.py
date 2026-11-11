@@ -2,13 +2,13 @@
 """Merge check for a GitHub pull request under the review gate.
 
 Reads the pull request with `gh` and applies "Pull requests" rules 4 and 7 of
-`fnl-review-gate`: for the current head, the latest unedited `fnl-review`
+`review-gate`: for the current head, the latest unedited `fnl-review`
 marker of each kind from an author with write access must be APPROVE; a
 security verdict that took the low-risk lane counts only when the pull request
 qualifies for it; a pull request from an author without write access also
 needs an owner's approving review on the head; checks must pass. When the
 pull request's base commit has adopted the gate (its `CLAUDE.md` or
-`AGENTS.md` has a `## Agent skills` section naming `fnl-review-gate`), the body
+`AGENTS.md` has a `## Agent skills` section naming `review-gate` or its older name), the body
 must also carry one router marker line; the marker never changes which review
 markers or lane apply. Prints one line per condition and exits 0 when the
 merge may go ahead, 1 when it is blocked, 2 when it cannot tell.
@@ -25,7 +25,7 @@ never from the head; the ordinary check needs no local clone.
 
 When hosted checks are missing or not passing and the current checkout's
 repository has the local-receipt mode on (in its approved check file, set
-only by fnl-setup), a receipt written by fnl-checks' `checks.py
+only by setup), a receipt written by checks' `checks.py
 run` stands in for them only when its repository code, head and check-list
 digest all match this checkout's repository, the pull request head and the
 current list; the line then reads `checks: local receipt (<head>)`. The receipt
@@ -63,13 +63,13 @@ MERGEABLE = {"CLEAN", "HAS_HOOKS", "UNSTABLE"}
 PAGE = 100  # `gh pr view` returns at most this many comments or reviews
 FIELDS = "author,headRefOid,comments,reviews,statusCheckRollup,mergeStateStatus,state,body"
 
-# The router marker: the values `fnl-delegate`'s `record.py router` accepts.
+# The router marker: the values `delegate`'s `record.py router` accepts.
 DEPTHS = ("MIN", "NORMAL", "DEEP")
 TRIGGERS = ("none", "contract", "security", "privacy", "permission", "migration", "dependency",
             "uncertainty", "consumers", "irreversible", "calculation", "prediction", "input")
 ROUTER = re.compile(r"<!-- fnl-router depth=(%s) trigger=(%s) -->" % ("|".join(DEPTHS), "|".join(TRIGGERS)))
 ADOPTION_FILES = ("CLAUDE.md", "AGENTS.md")
-ADOPTION_TOKEN = re.compile(r"(?<![\w-])fnl-review-gate(?![\w-])")
+ADOPTION_TOKEN = re.compile(r"(?<![\w-])(?:fnl-)?review-gate(?![\w-])")  # the older fnl- name still adopts
 ADOPTION_CAP = 256 * 1024  # maximum size in bytes of one adoption file
 SHA = re.compile(r"[0-9a-f]{40}")
 
@@ -205,7 +205,7 @@ def lane_files(files, read):
 
 
 def adopts(text):
-    """True when a `## Agent skills` section of an agent context file names `fnl-review-gate`."""
+    """True when a `## Agent skills` section of an agent context file names `review-gate`."""
     inside = fenced = False
     for line in text.splitlines():
         if re.match(r" {0,3}(```|~~~)", line):

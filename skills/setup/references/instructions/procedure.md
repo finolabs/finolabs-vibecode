@@ -1,13 +1,13 @@
-# Instructions component (`/fnl-setup instructions`)
+# Instructions component (`/setup instructions`)
 
-User-scope instruction files load in every session the user starts, in every repository. Write them as a short **working contract**: who the user is, how to work with them, what needs their approval, and where the detailed practice lives. Detailed engineering rules stay in the `fnl-` skills; the contract points to them. Project-scope files hold only repository-specific build and test commands, conventions, work-tracking facts, adopted gates and skill pointers; never repeat the user-scope contract in them. The skeleton and question bank are in [contract-template.md](contract-template.md); file locations, include syntax and limits per host are in [hosts.md](hosts.md), rechecked against each host's docs before writing. Talk in the user's language, as `SKILL.md` says (advisory, agent judgment).
+User-scope instruction files load in every session the user starts, in every repository. Write them as a short **working contract**: who the user is, how to work with them, what needs their approval, and where the detailed practice lives. Detailed engineering rules stay in this plugin's skills; the contract points to them. Project-scope files hold only repository-specific build and test commands, conventions, work-tracking facts, adopted gates and skill pointers; never repeat the user-scope contract in them. The skeleton and question bank are in [contract-template.md](contract-template.md); file locations, include syntax and limits per host are in [hosts.md](hosts.md), rechecked against each host's docs before writing. Talk in the user's language, as `SKILL.md` says (advisory, agent judgment).
 
 Ask one scope question, recommendation first: user for a bare invocation or preferences across repositories, project for repository context, both when the request covers both. Wait for the answer before scope-dependent exploration.
 
 ## 1. Explore
 
 - Which hosts the user runs (`claude`, `codex`, `agy` on `PATH`) and which instruction files already exist in the chosen scope (`hosts.md`). Read them as the starting draft; read the user contract for comparison in project-only mode without changing it. Note any text copied into several files (a drift risk to offer to remove).
-- Project scope: the repository root, documented build and test commands and conventions, existing context files and overrides, and the `## Agent skills` block written by the core path. Read and preserve those entries; if missing, point to `/fnl-setup` and leave adoption pending. Run the look-first procedure in [../work-tracking.md](../work-tracking.md) before the work tracking interview.
+- Project scope: the repository root, documented build and test commands and conventions, existing context files and overrides, and the `## Agent skills` block written by the core path. Read and preserve those entries; if missing, point to `/setup` and leave adoption pending. Run the look-first procedure in [../work-tracking.md](../work-tracking.md) before the work tracking interview.
 - Something that cannot be checked here is listed as unverified in one line, with a request that the user paste its contents; missing permissions are not a reason to stop.
 
 Done when the message lists the files found, their sizes, duplication and what is unverified, and ends with the first round of questions, with recommended answers for preferences only; approvals stay neutral. Interview by [../interview.md](../interview.md): map the decisions, look up facts yourself, ask every ready decision in one numbered round, finish with a read-back and a yes. For user scope go section by section through the template; for project scope settle commands, conventions, adopted gates, skill pointers and any migration into `AGENTS.md`, settling each decision once in its own scope. Prefer existing files: ask only about gaps, conflicts and stale lines.
@@ -20,7 +20,7 @@ The **Outcome** line is the anchor the navigator checks drift against: the goal 
 
 ## 3. The standard
 
-Enforcers: agent judgment while drafting (advisory), then `/fnl-setup check` measures the written files.
+Enforcers: agent judgment while drafting (advisory), then `/setup check` measures the written files.
 
 - **Add only what the agent cannot infer from the repository**: exact build, test and lint commands (with the single-test form), misleading spots, decisions made outside the repository, anything the user corrected twice. A controlled study found context files raise cost by over 20% without raising task success. Add a line after an observed failure, not in advance.
 - **Make each line verifiable** and give the reason behind a rule that is not obvious. Plain wording over capitals.
@@ -32,7 +32,7 @@ Enforcers: agent judgment while drafting (advisory), then `/fnl-setup check` mea
 
 - User scope: one shared body with the host-neutral sections plus a short host section per host.
 - Project scope: `AGENTS.md` is the source; `CLAUDE.md` holds an `@AGENTS.md` include plus only Claude-specific lines. Consolidate existing rules without losing them; move the setup-owned `## Agent skills` block intact into the source only in a confirmed migration, never leaving a second copy; resolve conflicts with the user first.
-- Point to skills by name for practice the plugin covers: `fnl-coding-router`, `fnl-delegate`, `fnl-commit-messages`, `fnl-versioning`, `fnl-checks`, `fnl-advisor`, `fnl-session-hygiene`.
+- Point to skills by name for practice the plugin covers: `coding-router`, `delegate`, `commit-messages`, `versioning`, `checks`, `advisor`, `session-hygiene`.
 - Keep it short: about 150 lines in the shared body is the house soft limit (no vendor source), 200 is Anthropic's target for Claude Code; beyond 150 offer to move detail into a skill or reference.
 - Committed context holds no personal, customer or organization names or machine paths. Personal project context goes in the untracked `CLAUDE.local.md`, kept out of git.
 - Drafted content is the template plus the user's answers, never text copied from repository files (advisory, agent judgment).
@@ -52,4 +52,4 @@ Enforcers: the script. It writes only the closed list of targets (the user-level
 
 ## 6. Report
 
-List files written by scope, backups made, files left unchanged and why, pending `/fnl-setup` items and anything unverified. Remind the user to keep local context and backups out of git. To check the result, start a fresh session on each host in the repository and ask the agent to summarize its instruction sources and rules; docs checks alone do not prove runtime loading. Keep agent inventory and host settings out of instruction files: `/fnl-setup scan` and `/fnl-setup mode` own them and ask before writing. For work tracking dashboard settings, point to `/fnl-setup add project`.
+List files written by scope, backups made, files left unchanged and why, pending `/setup` items and anything unverified. Remind the user to keep local context and backups out of git. To check the result, start a fresh session on each host in the repository and ask the agent to summarize its instruction sources and rules; docs checks alone do not prove runtime loading. Keep agent inventory and host settings out of instruction files: `/setup scan` and `/setup mode` own them and ask before writing. For work tracking dashboard settings, point to `/setup add project`.

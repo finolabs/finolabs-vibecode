@@ -42,12 +42,12 @@ import parallel_slots as ps  # noqa: E402
 
 SKILLS = HERE.parent.parent
 PAGE = HERE.parent / "assets/dashboard.html"
-LEDGER = SKILLS / "fnl-delegate/scripts/ledger.py"
+LEDGER = SKILLS / "delegate/scripts/ledger.py"
 WEEKS = 12
 REVIEWS_SHOWN = 12
-NO_CONSENT = "consent not given (run fnl-setup)"
+NO_CONSENT = "consent not given (run /setup)"
 NO_EVENTS = "no events recorded yet"
-ROUTER_SKILL = "fnl-coding-router"
+ROUTER_SKILL = "coding-router"
 HOOK_GROUP = "finolabs-vibecode"
 AGY_TOOLS = "run_command|write_to_file|replace_file_content|multi_replace_file_content"
 
@@ -390,7 +390,7 @@ def running_metrics(generated, events=(), cwd=None):
     rows, note = [], ''
     ledger = load_ledger()
     if ledger is None:
-        note = 'fnl-delegate is not installed'
+        note = 'the delegate skill is not installed'
     else:
         try:
             starts, finishes = ledger.load()
@@ -475,7 +475,9 @@ def build(days=WEEKS * 7, cwd=None):
     start = today - timedelta(days=days - 1)
     consent = fm.read_consent()
     recorded_events = fm.read_events()[0]
-    events = [e for e in recorded_events if local_date(e["ts"]) >= start]
+    # A skill line stored under its older `fnl-` name counts as the skill's current name.
+    events = [{**e, "name": fm.skill_name(e["name"])} if e["event"] == "skill" and fm.skill_name(e["name"]) else e
+              for e in recorded_events if local_date(e["ts"]) >= start]
     by_sid = defaultdict(list)
     for e in events:
         by_sid[e["sid"]].append(e)
@@ -552,7 +554,7 @@ def build(days=WEEKS * 7, cwd=None):
     activity = [{"date": (start + timedelta(days=i)).isoformat(), "count": per_day.get((start + timedelta(days=i)).isoformat(), 0)} for i in range(days)]
 
     delegation, first_pass, fp_week, runs, handed_off = None, None, [None] * WEEKS, 0, None
-    ledger_note = "fnl-delegate is not installed"
+    ledger_note = "the delegate skill is not installed"
     route_rows, has_judge_route, away = [], False, None
     if LEDGER.exists():
         try:
@@ -578,9 +580,9 @@ def build(days=WEEKS * 7, cwd=None):
     if events and not eligible:
         missing["router"] = "no session with an edit in this period"
     if events and not use:
-        missing["use"] = "no fnl- skill or agent used in this period"
+        missing["use"] = "no skill or agent of this plugin used in this period"
     if events and not load:
-        missing["load"] = "no fnl- skill loaded in this period" if not skill_names else "skill files not found beside fnl-status (install the whole plugin)"
+        missing["load"] = "no skill of this plugin loaded in this period" if not skill_names else "skill files not found beside the status skill (install the whole plugin)"
     if not depth_rows:
         missing["depth"] = why or "no router receipt followed by a pull request review yet"
     if not reviews:

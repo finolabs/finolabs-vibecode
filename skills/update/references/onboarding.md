@@ -1,6 +1,6 @@
 # What a new version asks of the user
 
-`references/upgrades.json` holds one entry per released version. Each item has an id `<version>/<slug>`, a kind (`rename`, `setup`, `migration`, `hook`, `removed`), one plain sentence, and optionally the `/fnl-setup add <feature>` step that finishes it, a read-only `check` (a plugin script run without a shell, with a 10-second timeout and the allowlisted environment) and `until` (the version up to which an old name keeps working). `update_check.py` refuses the whole file on any unknown key or bad value.
+`references/upgrades.json` holds one entry per released version. Each item has an id `<version>/<slug>`, a kind (`rename`, `setup`, `migration`, `hook`, `removed`), one plain sentence, and optionally the `/setup add <feature>` step that finishes it, a read-only `check` (a plugin script run without a shell, with a 10-second timeout and the allowlisted environment) and `until` (the version up to which an old name keeps working). `update_check.py` refuses the whole file on any unknown key or bad value.
 
 ## Commands
 
@@ -29,8 +29,8 @@ The target is accepted only when the file (at most 64 KB) holds exactly those fo
 
 ## The session-start line
 
-While the installed version is newer than `last_seen` and has notes the user has not skipped, the startup hook adds one line naming `/fnl-update`, independent of the newer-release notice and of never-ask. The hook only reads `onboard.json`, never writes it, and prints no line on any error. A pin silences only the newer-release notice.
+While the installed version is newer than `last_seen` and has notes the user has not skipped, the startup hook adds one line naming `/update`, independent of the newer-release notice and of never-ask. The hook only reads `onboard.json`, never writes it, and prints no line on any error. A pin silences only the newer-release notice.
 
 ## Who writes what
 
-Only `/fnl-update` calls `onboard seen` and `onboard skip`: `seen` after the user went through the checklist, `skip` when the user chose to skip an item. `fnl-setup` keeps every consent question, preview and write of each setup step; this skill never writes host config itself.
+Only `/update` calls `onboard seen` and `onboard skip`: `seen` after the user went through the checklist, `skip` when the user chose to skip an item. `setup` keeps every consent question, preview and write of each setup step; this skill never writes host config itself.

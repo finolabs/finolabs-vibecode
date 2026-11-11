@@ -19,4 +19,4 @@ Include the affected skill or script, the version, the steps or prompt that repr
 
 ## Scope
 
-In scope: instructions in a skill that could lead an agent to leak secrets or private data, bypass a permission or approval step, or run untrusted code, and defects in the bundled scripts (for example `skills/fnl-delegate/scripts/ledger.py`), including the usage-metrics hooks (`scripts/metrics_hook.py`), the dashboard page and the command that adds a hook to a user's Antigravity configuration (`skills/fnl-status/scripts/refresh.py`).
+In scope: instructions in a skill that could lead an agent to leak secrets or private data, bypass a permission or approval step, or run untrusted code, and defects in the bundled scripts (for example `skills/delegate/scripts/ledger.py`), including the usage-metrics hooks (`scripts/metrics_hook.py`), the dashboard page and the command that adds a hook to a user's Antigravity configuration (`skills/status/scripts/refresh.py`).

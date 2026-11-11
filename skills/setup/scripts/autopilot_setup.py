@@ -17,8 +17,8 @@ import data_root as dr
 import compact_setup as cs
 import setup_features as sf
 
-# Kept local so fnl-setup remains independently installable. Round-trip tests
-# bind these choices and bounds to fnl-delegate's authoritative settings().
+# Kept local so setup remains independently installable. Round-trip tests
+# bind these choices and bounds to delegate's authoritative settings().
 DEFAULTS = {'Hosts': 'Claude Code', 'Task choice': 'choose', 'Push and pull requests': 'yes',
             'Trusted authors': 'own', 'Lease hours': 8, 'Max runs': 20,
             'Max runtime minutes': 480, 'Max actions per hour': 30, 'Quota floor percent': 15}

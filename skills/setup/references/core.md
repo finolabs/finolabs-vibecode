@@ -19,14 +19,14 @@ Choices: "Yes, copy and switch" / "No, keep it here".
 After yes: `data_location.py apply --to <path> --yes --digest <full 64-hex preview digest>`. Script checks digest/target; private copy, no symlinks; pointer last, source kept. Invalid pointer blocks consent writes.
 2. **Scan.** `references/scan.md`.
 3. **Mode/Routing.** `references/mode.md`.
-4. **Knowledge base.** Save judge/date, coordinators/limit/host path through the access those instructions approve; follow `fnl-session-hygiene` "Remember or recall". It asks nothing new; no consent row; report any write that failed.
+4. **Knowledge base.** Save judge/date, coordinators/limit/host path through the access those instructions approve; follow `session-hygiene` "Remember or recall". It asks nothing new; no consent row; report any write that failed.
 5. **Read-back.** Quick confirms inert defaults once; Advanced asks each inert item. Nothing that grants something is in it. Both scopes ask:
 "Save only the notes shown about this setup?"
 Yes: Save shown inert notes at listed local targets; saving sends nothing.
 No: Keep notes unchanged; answer later.
 Undo: Restore prior notes.
 Choices: "Yes, save these notes" / "No, keep current notes".
-6. **Report.** Writes/skips/pending/reasons. **After your first result**: offer instructions (before Codex coding), missing-companion reminders (questions in `companions`, after core), `/fnl-setup check`; ask what to build.
+6. **Report.** Writes/skips/pending/reasons. **After your first result**: offer instructions (before Codex coding), missing-companion reminders (questions in `companions`, after core), `/setup check`; ask what to build.
 
 ## Project scope
 
@@ -43,7 +43,7 @@ Exclude legacy `.orchestration/`; shared `.gitignore` needs request.
 ```markdown
 ## Agent skills
 
-This repository uses the finolabs-vibecode skills. Routing on: use `fnl-coding-router`. <Spec Kit line, when present: use Spec Kit.> <Work-record line, when adopted: use work records.> Pull requests follow `fnl-review-gate` "Pull requests"; reviewers may post code/security reviews. <Single-owner option: Pull requests may take the low-risk lane of `fnl-review-gate`.> Help: `/fnl-ask`.
+This repository uses the finolabs-vibecode skills. Routing on: use `coding-router`. <Spec Kit line, when present: use Spec Kit.> <Work-record line, when adopted: use work records.> Pull requests follow `review-gate` "Pull requests"; reviewers may post code/security reviews. <Single-owner option: Pull requests may take the low-risk lane of `review-gate`.> Help: `/ask`.
 ```
 
    Include only the confirmed workflow line, neither when none. `python3 -I <this skill folder>/scripts/instructions_write.py preview --target <file> --content-file <draft> --block "Agent skills"`; show diff/full digest. Ask: "Save these plugin rules for AI sessions in this repository?"

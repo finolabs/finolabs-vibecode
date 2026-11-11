@@ -1,4 +1,4 @@
-"""fnl-advisor's choose mode: the stated output contract, bound to the record autopilot.py accepts."""
+"""advisor's choose mode: the stated output contract, bound to the record autopilot.py accepts."""
 import argparse
 import importlib.util
 from pathlib import Path
@@ -7,13 +7,13 @@ import shlex
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-ADVISOR = ROOT / "skills/fnl-advisor"
+ADVISOR = ROOT / "skills/advisor"
 CHOOSE = ADVISOR / "references/choose.md"
 SYNTHETIC = {"<agent>": "codex", "<n>": "2", "<k>": "3", "<id>": "d20261110-010000-abcd", "<model>": "gpt-6-astra"}
 
 
 def reader():
-    spec = importlib.util.spec_from_file_location("autopilot_choose_test", ROOT / "skills/fnl-delegate/scripts/autopilot.py")
+    spec = importlib.util.spec_from_file_location("autopilot_choose_test", ROOT / "skills/delegate/scripts/autopilot.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -37,7 +37,7 @@ def attempt(module, values):
 
 class ChooseModeTests(unittest.TestCase):
     def setUp(self):
-        self.assertTrue(CHOOSE.is_file(), "fnl-advisor has no choose mode")
+        self.assertTrue(CHOOSE.is_file(), "advisor has no choose mode")
         self.text = CHOOSE.read_text()
 
     def test_skill_keeps_the_open_mode_decider_line_and_points_to_choose_mode(self):

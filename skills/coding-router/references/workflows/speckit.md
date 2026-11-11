@@ -16,13 +16,13 @@ Tasks and implement only. Specify, clarify and plan are never skipped. After a p
 
 - it fits one implementation pass over one coherent seam, with known consumers;
 - it needs no task ordering or parallel split;
-- it hits none of `fnl-security-review-gate` "Triggers" beyond the contract change below, and crosses no migration, dependency or irreversible boundary; accepting new input, or exposing data to anyone who could not see it before, counts as a trigger;
-- any contract change is small and contained: every consumer is known and updated in the same change, and `fnl-security-review-gate` reviews it before merge;
+- it hits none of `security-review-gate` "Triggers" beyond the contract change below, and crosses no migration, dependency or irreversible boundary; accepting new input, or exposing data to anyone who could not see it before, counts as a trigger;
+- any contract change is small and contained: every consumer is known and updated in the same change, and `security-review-gate` reviews it before merge;
 - the constitution and scoped rules do not require tasks.
 
 Otherwise run `speckit-tasks`, then `speckit-implement`. When these conditions leave the fit unclear, take it from the judge if the host config names one (read [../activity-selection.md](../activity-selection.md) "Depth gate questions"); otherwise decide it yourself, and run `speckit-tasks` when you still cannot tell: ambiguity is not evidence that the change is one seam.
 
-A direct path records the chosen path and its reason in the feature's `plan.md` and meets every acceptance criterion and gate. Its acceptance is `fnl-checks` against each acceptance criterion with fresh targeted tests, plus the two posted reviews of `fnl-review-gate`, whose packet carries the story's acceptance criteria and `plan.md`; it runs no separate analyze or converge step.
+A direct path records the chosen path and its reason in the feature's `plan.md` and meets every acceptance criterion and gate. Its acceptance is `checks` against each acceptance criterion with fresh targeted tests, plus the two posted reviews of `review-gate`, whose packet carries the story's acceptance criteria and `plan.md`; it runs no separate analyze or converge step.
 
 Spec Kit owns the process and artifacts; no work record is created in a Spec Kit repository (advisory, agent judgment).
 

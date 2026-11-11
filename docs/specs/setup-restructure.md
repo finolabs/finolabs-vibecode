@@ -4,14 +4,14 @@ Status: implemented; release 0.2.0 core, features, Quick/Advanced companions and
 
 ## Why
 
-Reading `fnl-setup` and `fnl-setup-instructions` on 2026-11-07, against what the plugin now does, showed seven problems:
+Reading `setup` and `fnl-setup-instructions` on 2026-11-07, against what the plugin now does, showed seven problems:
 
-1. `fnl-setup/SKILL.md` is 33,793 bytes in 132 lines, five of them over 1,500 characters (quota, metrics, compaction,
+1. `setup/SKILL.md` is 33,793 bytes in 132 lines, five of them over 1,500 characters (quota, metrics, compaction,
    snapshot), and all of it loads on every run though a user usually wants one thing. The repository's convention is to
    disclose reference material into `references/`.
 2. Three questions come before any work (scope, set up or check, beginner or mode), then twenty-odd separate consents
    (the inventory below). A new user meets a wall of prompts.
-3. The two skills name the same idea differently: `fnl-setup` says machine and project, `fnl-setup-instructions` says
+3. The two skills name the same idea differently: `setup` says machine and project, `fnl-setup-instructions` says
    user and project.
 4. New features have no place: agent roles, review posting, the judge and TypeSafe guidance (`agent-roles.md` part J);
    the review-tools section and the steward explanation are stale.
@@ -23,33 +23,33 @@ Reading `fnl-setup` and `fnl-setup-instructions` on 2026-11-07, against what the
 
 ## Decisions settled (owner, 2026-11-07)
 
-- Instructions become a component of `fnl-setup`; the skill `fnl-setup-instructions` is removed in the same release
+- Instructions become a component of `setup`; the skill `fnl-setup-instructions` is removed in the same release
   without a deprecation period (the owner exception recorded in `agent-roles.md`).
-- `fnl-scan-agents` and `fnl-set-mode` fold into `fnl-setup` as subcommands.
+- `fnl-scan-agents` and `fnl-set-mode` fold into `setup` as subcommands.
 - The words are user scope (everything under the user's account: host config, consent, user-level instruction files) and
   project scope (one repository). "Machine" is retired from the text.
 - The shape is a short core plus features loaded on demand, each consent still asked on its own.
 - A project-scope default for roles or the judge is not part of this work.
 - The release is 0.2.0.
-- The question "set up, or check?" on a bare run is dropped; Check is `/fnl-setup check`, and a bare run says in one
+- The question "set up, or check?" on a bare run is dropped; Check is `/setup check`, and a bare run says in one
   line where it is.
 - Declined features are remembered (part C) so a later bare run does not ask again; an explicit `add <feature>` always
   asks again.
 
 ## A. Entry and commands
 
-`/fnl-setup` takes an optional first word, documented in the skill's `argument-hint`:
+`/setup` takes an optional first word, documented in the skill's `argument-hint`:
 
 | Command | Does |
 | --- | --- |
-| `/fnl-setup` | the core path (part B) for the chosen scope, then the menu (part C) |
-| `/fnl-setup add <feature>` | one feature on its own |
-| `/fnl-setup instructions` | the instructions component (part D) |
-| `/fnl-setup check` | Check, per scope and per feature (read-only) |
-| `/fnl-setup scan` | the agent inventory refresh (the old `fnl-scan-agents`) |
-| `/fnl-setup mode [args]` | Delegation mode and Routing (the old `fnl-set-mode`) |
+| `/setup` | the core path (part B) for the chosen scope, then the menu (part C) |
+| `/setup add <feature>` | one feature on its own |
+| `/setup instructions` | the instructions component (part D) |
+| `/setup check` | Check, per scope and per feature (read-only) |
+| `/setup scan` | the agent inventory refresh (the old `fnl-scan-agents`) |
+| `/setup mode [args]` | Delegation mode and Routing (the old `fnl-set-mode`) |
 
-On Codex the user types `$fnl-setup <word>`. Whether Codex passes the word to a skill is unverified, so the skill also
+On Codex the user types `$setup <word>`. Whether Codex passes the word to a skill is unverified, so the skill also
 accepts a plain sentence ("add quota", "set up my instruction files"). A sentence only selects what to present; it never
 answers a consent question. A sweeping or ambiguous sentence ("set up everything") gets one clarifying question and
 opens the core path, never several features at once.
@@ -103,7 +103,7 @@ run does not offer it again until the user asks.
 
 Every consent below keeps its own neutral Yes and No (none preselected), is asked once, and has exactly one home.
 
-| # | Consent | Today (`fnl-setup` section) | New home | Prerequisite |
+| # | Consent | Today (`setup` section) | New home | Prerequisite |
 | --- | --- | --- | --- | --- |
 | 1 | Move the data root; copy to the target | Data location | core, user | none |
 | 2 | Write Delegation mode and Routing values | Preferences | core `mode` | none |
@@ -129,11 +129,11 @@ Every consent below keeps its own neutral Yes and No (none preselected), is aske
 
 Review tools and companions (today's E and G) install nothing, but section F gives companions a question process, so rows 22 to 24 below cover it.
 
-| # | Consent | Today (`fnl-setup` section) | New home | Prerequisite |
+| # | Consent | Today (`setup` section) | New home | Prerequisite |
 | --- | --- | --- | --- | --- |
-| 22 | Companion selection (Quick: one multi-select question; Advanced: skipped, each companion is interviewed) | `fnl-setup` | `companions` | none |
-| 23 | Per-companion "Show me how to install" and "Not now" (Quick: at most one per selected companion, at most four; Advanced: after its interview) | `fnl-setup` | `companions` | none; a Yes only prints the pinned install command and records nothing, a No records nothing (answering No to row 22 alone records `companions: declined` with `setup_features.py`) |
-| 24 | Advanced review-tool recommendation (same Yes and No shape as row 23) | `fnl-setup` | `companions` | none |
+| 22 | Companion selection (Quick: one multi-select question; Advanced: skipped, each companion is interviewed) | `setup` | `companions` | none |
+| 23 | Per-companion "Show me how to install" and "Not now" (Quick: at most one per selected companion, at most four; Advanced: after its interview) | `setup` | `companions` | none; a Yes only prints the pinned install command and records nothing, a No records nothing (answering No to row 22 alone records `companions: declined` with `setup_features.py`) |
+| 24 | Advanced review-tool recommendation (same Yes and No shape as row 23) | `setup` | `companions` | none |
 
 ### Size limits (enforced by a test)
 
@@ -144,7 +144,7 @@ them over 600 characters. The budget for a bare run is a static sum: `SKILL.md` 
 
 ## D. The instructions component
 
-`/fnl-setup instructions` runs what `fnl-setup-instructions` does today, from `references/instructions/`
+`/setup instructions` runs what `fnl-setup-instructions` does today, from `references/instructions/`
 (`contract-template.md`, `hosts.md`, the work-tracking block text): ask the scope, explore the existing files, draft,
 show a diff for every file, write only after a yes per file, `AGENTS.md` as the project source with an include in
 `CLAUDE.md`, no machine settings in instruction files. The project-scope `## Work tracking` block gains the `Outcome`
@@ -164,18 +164,18 @@ user-invoked skill implicitly.
 ## E. Removals, moves and compatibility
 
 Removed in 0.2.0: the skills `fnl-setup-instructions`, `fnl-scan-agents` and `fnl-set-mode`. CHANGELOG entries under
-Removed give the consumer action for each (`/fnl-setup instructions`, `/fnl-setup scan`, `/fnl-setup mode`).
+Removed give the consumer action for each (`/setup instructions`, `/setup scan`, `/setup mode`).
 
-Script moves: `agent_scan.py` moves to `skills/fnl-setup/scripts/`; the `data_root.py`, `quota_probe.py` and `mode.py`
+Script moves: `agent_scan.py` moves to `skills/setup/scripts/`; the `data_root.py`, `quota_probe.py` and `mode.py`
 copies in the removed skills are deleted and the CI copy groups in `validate.yml` updated. The folded scripts keep their
 preview-and-digest behaviour.
 
-Consumers to update (none is optional): `fnl-delegate` (its `SKILL.md` and `references/{agents,models,modes,host-template}.md`;
-used standalone it says to fill the inventory by hand), `fnl-ask` (map, contents, start and explain references and the skill
-count), `fnl-setup/references/{check,companions}.md`, the README, CONTRIBUTING, `docs/diagrams`, the manifests,
+Consumers to update (none is optional): `delegate` (its `SKILL.md` and `references/{agents,models,modes,host-template}.md`;
+used standalone it says to fill the inventory by hand), `ask` (map, contents, start and explain references and the skill
+count), `setup/references/{check,companions}.md`, the README, CONTRIBUTING, `docs/diagrams`, the manifests,
 `build-parity-plugins.sh`, `check-references.py` and its tests, `checkup.py` messages, other specs that name the old skills,
-the evals `parity-interview-ours`, `parity-interview-with-grilling`, `quality-fnl-set-mode-env-override`,
-`quality-fnl-setup-instructions-interview`, `quality-fnl-ask-contents` and `quality-fnl-ask-start`, and the tests
+the evals `parity-interview-ours`, `parity-interview-with-grilling`, `quality-set-mode-env-override`,
+`quality-setup-instructions-interview`, `quality-ask-contents` and `quality-ask-start`, and the tests
 `test_agent_scan`, `test_data_root`, `test_delegation_mode`, `test_instruction_standard`, `test_quota_probe`,
 `test_work_tracking_skills` and `test_check_references`.
 
@@ -205,8 +205,8 @@ Decisions settled (owner, 2026-11-07):
   their stack, what it costs or sends (telemetry, fonts, accounts), the fallback the plugin keeps without it, and
   then the same neutral Yes and No. It also holds the other widening features: roles and judge, quota, metrics,
   compaction, project settings, and the review-instrument recommendations (row 24).
-- **Renaming**: the word "detailed" becomes "Advanced" in `fnl-setup` (including section B above), `plain-language.md`,
-  `fnl-ask`, README, the evals and the tests that pin it (`tests/test_native_sweep.py` splits on "Otherwise
+- **Renaming**: the word "detailed" becomes "Advanced" in `setup` (including section B above), `plain-language.md`,
+  `ask`, README, the evals and the tests that pin it (`tests/test_native_sweep.py` splits on "Otherwise
   **detailed**" and moves with the text); the beginner path stays as it is and takes the Quick defaults without the
   companion question. The feature `review-tools` is renamed `companions`; its file `references/features/companions.md`
   holds the procedure and `references/companions.md` stays the data file.
@@ -254,4 +254,4 @@ consents; the dashboard; moving existing data (host config stays where it is).
 ## Open decisions
 
 1. Whether `scan` and `mode` keep thin alias skills for one release (the default here is no alias).
-2. Whether Codex passes a word after `$fnl-setup`; until verified, the plain-sentence path is the contract.
+2. Whether Codex passes a word after `$setup`; until verified, the plain-sentence path is the contract.

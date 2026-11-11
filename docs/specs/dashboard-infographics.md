@@ -65,14 +65,14 @@ to `name` so the closed output schema can distinguish windows and select glyphs.
 group names from different entries. Each pool has a compact ten-brick meter: week pools use a calendar-week glyph, five-hour pools a clock, other names at most eight
 visible characters. Tooltips retain the full group name, remaining percent, reset and measured times.
 Readings older than eight hours are hollow with `?`. Missing cache families have empty pools and
-one dashed placeholder with “not read; quota probe off or no reading yet; turn on in fnl-setup”.
+one dashed placeholder with “not read; quota probe off or no reading yet; turn on in setup”.
 The disclosure has one row per pool including reset/measured/state metadata. Use existing tokens,
 rich tooltips and SVG helpers; keep the capacity row around two lines at 1280 and cleanly wrapped
 at 375 in both themes. The coordinator performs the real-browser checks.
 
 ## Why
 
-The owner reviewed the shipped tabs: both are dense text and a seven-column table, not a data visualisation. `fnl-status` exists to follow the present state so the coordinator can steer, not to manage projects. Each tab must answer one question at a glance, show it as a picture, and keep rarely needed explanations behind a small info button in the pane header.
+The owner reviewed the shipped tabs: both are dense text and a seven-column table, not a data visualisation. `status` exists to follow the present state so the coordinator can steer, not to manage projects. Each tab must answer one question at a glance, show it as a picture, and keep rarely needed explanations behind a small info button in the pane header.
 
 ## Design language (owner lego decision, 2026-11-06)
 
@@ -107,13 +107,13 @@ Beside/below the header, each unfinished spec has a faint `spec 003` header and 
 
 Finished stories and features are not drawn; tiny faint `+2 done` on a spec header accounts for hidden finished work. There are no project task disclosures. A single legend at the bottom of the pane shows brick swatches and `done · agent on it · done, not accepted · to do`. All old data tables remain only behind `show the data as tables` at the bottom.
 
-Only named repositories appear: an explicit host-config label wins over a registered name. There is no short-code fallback. Empty state: `No named project active in the last 24 hours. Run fnl-status inside a repository to add it.`
+Only named repositories appear: an explicit host-config label wins over a registered name. There is no short-code fallback. Empty state: `No named project active in the last 24 hours. Run status inside a repository to add it.`
 
 ## Data changes (all local, metadata only)
 
 - **Active projects.** Each refresh rebuilds `progress.active` from the events already read, deduplicating session ids per repository and counting distinct sessions with at least one recorded event in the last 24 hours. Session activity exactly 24 hours old and future events are excluded; host names are joined from session-start receipts. Only named repositories are kept. Rows contain only `repo` (existing code), `label`, `hosts` (closed host-name set), `sessions` (integer), `last` (ISO time), and `percent` (integer or null). No new event fields or session identifiers are retained. Never carry active rows over: keep validated repository snapshots as before, reconstruct the closed activity schema from validated events each refresh and remove it on purge. Render text with `textContent` only.
 - **Several projects.** `refresh.py` already keeps up to five repositories in the `progress` block; the page draws their unfinished detail inside named activity rows. Each refresh updates the repository it runs in and keeps the others as last written.
-- **Project label and registration.** Running `fnl-status` inside a repository is the act that names it: step 1 invokes `python3 -I <refresh.py> run --open --register-here`. Only this explicit flag, recorded metrics consent and a current working directory inside a git work tree permit registration; hook-started refreshes never register. Find the repository root with the existing no-git-command reader. Store its existing 8-hex repository code and root folder basename locally in `<data root>/state/projects.json`, a closed object of at most 50 entries, in a private folder, atomically with mode 0600 and flock. Replace characters outside `[A-Za-z0-9 ._-]` with `-`, trim, truncate to 40 characters; skip empty names. An existing code can be updated at the cap; new entries beyond 50 are skipped. The `label --set` value always wins; since 0.2.5 it lives in the repository's own settings file (the `## Project labels` section of `host.md` is no longer read), so the dashboard shows it for the repository it runs in. Without either name, a repository is not a project of this plugin and is not shown. Purge or deleting this file removes registered names. `PRIVACY.md` states the kept folder name and this explicit naming act plainly.
+- **Project label and registration.** Running `status` inside a repository is the act that names it: step 1 invokes `python3 -I <refresh.py> run --open --register-here`. Only this explicit flag, recorded metrics consent and a current working directory inside a git work tree permit registration; hook-started refreshes never register. Find the repository root with the existing no-git-command reader. Store its existing 8-hex repository code and root folder basename locally in `<data root>/state/projects.json`, a closed object of at most 50 entries, in a private folder, atomically with mode 0600 and flock. Replace characters outside `[A-Za-z0-9 ._-]` with `-`, trim, truncate to 40 characters; skip empty names. An existing code can be updated at the cap; new entries beyond 50 are skipped. The `label --set` value always wins; since 0.2.5 it lives in the repository's own settings file (the `## Project labels` section of `host.md` is no longer read), so the dashboard shows it for the repository it runs in. Without either name, a repository is not a project of this plugin and is not shown. Purge or deleting this file removes registered names. `PRIVACY.md` states the kept folder name and this explicit naming act plainly.
 - **Story priority.** The reader also reads the story headings of the `spec.md` beside each `tasks.md` and keeps only the tag `P1` to `P9` of a heading of the form `User Story N (Pk)`; the heading text is dropped. A story with no tag sorts last. This extends the metadata kept in `project-progress.md` by one value (a priority number) and `PRIVACY.md` says so.
 - **Reading safety** is as in `project-progress.md` "Reading the files safely"; `spec.md` follows the same rules and counts toward the same file and byte limits.
 
@@ -128,7 +128,7 @@ Editing anything from the page, dependencies between tasks, estimates. The two-t
 3. Reader tests: the `P1` to `P9` tag only, a heading with markup or control characters yields no text, an `archive` folder is skipped, a label with a disallowed character is refused, a missing name hides the repository, a project with 100 percent is flagged done.
 4. Motion: a test asserts the reduced-motion media query disables every animation and no animation name is applied to an element in a hidden tab.
 5. Visual check (owner rule, not skippable): the coordinator serves the page from a localhost server with the rich fixture, screenshots the Overview and Now tabs at 1280 wide and at 390 wide, and attaches them to the pull request.
-6. `PRIVACY.md` (priority tag, labels), README row, CHANGELOG, `docs/specs/index.md`, `fnl-setup` and `fnl-status` text updated; `check-references.py`, `claude plugin validate .` and targeted tests pass under a world-writable `/tmp`; no hook declaration and no `CLAUDE.md` change.
+6. `PRIVACY.md` (priority tag, labels), README row, CHANGELOG, `docs/specs/index.md`, `setup` and `status` text updated; `check-references.py`, `claude plugin validate .` and targeted tests pass under a world-writable `/tmp`; no hook declaration and no `CLAUDE.md` change.
 
 ## Decisions settled (owner, 2026-11-06)
 

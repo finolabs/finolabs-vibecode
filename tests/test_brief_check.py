@@ -44,7 +44,7 @@ class BriefCheckTest(unittest.TestCase):
             brief_check.lint(self.brief() + '\ufeff')
 
     def test_template_and_constraint_extension(self):
-        text = (ROOT / 'skills/fnl-handoff/references/brief-template.md').read_text().split('```\n', 1)[1].split('\n```', 1)[0]
+        text = (ROOT / 'skills/handoff/references/brief-template.md').read_text().split('```\n', 1)[1].split('\n```', 1)[0]
         self.assertEqual(brief_check.lint(text), [])
         self.assertIn('never read env or credential files; ' + brief_check.ENV_RULE, text)
 

@@ -346,7 +346,7 @@ class ParallelSlotsTest(unittest.TestCase):
                 mock.patch.object(subprocess, 'Popen', side_effect=AssertionError('process')):
             self.assertEqual(slots.status()['free'], 5)
         self.assertEqual(snapshot(), before)
-        for folder in ('fnl-delegate', 'fnl-status'):
+        for folder in ('delegate', 'status'):
             self.assertEqual((ROOT / 'scripts/parallel_slots.py').read_bytes(),
                              (ROOT / 'skills' / folder / 'scripts/parallel_slots.py').read_bytes())
 

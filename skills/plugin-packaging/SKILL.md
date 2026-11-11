@@ -25,7 +25,7 @@ Done when every host's validator finds the expected number of skills.
 ## 2. Manifests
 
 - Fill the identity fields consistently on every host: `name` (kebab-case, no host or vendor name as a prefix), display name, description, version, author, homepage, repository, license (SPDX).
-- **Version**: one manifest is the source of truth and the others copy it; CI fails when they differ. Bumps, tags and the changelog follow `fnl-versioning`.
+- **Version**: one manifest is the source of truth and the others copy it; CI fails when they differ. Bumps, tags and the changelog follow `versioning`.
 - **Description**: what the plugin does and for whom, in the length each host recommends (Antigravity suggests 120–160 characters; Codex limits its short description to 30).
 - **Listing metadata**: icon, documentation, support, privacy and terms URLs where the host reads them (Claude's directory fields, Codex's `interface` block). URLs point at files that exist in the public repository.
 
@@ -59,7 +59,7 @@ Run and read each one:
 - every host validator above, strict where available;
 - the trigger suite: one `claude plugin eval` case per model-invoked skill that must fire it, plus negative cases that must fire nothing (`--ablation none` keeps `Skill` graders scored). Run only the cases of skills whose `description` changed since the last release (`--case`), and the whole suite before a MINOR release; a patch release with no `description` change needs none;
 - after installing on Claude Code, `/skill-doctor` for each skill's listing cost, and from the second release on, whether it is ever used (an interactive check: where it cannot run, say so);
-- `fnl-open-source-review` for license, payload, leaks and community files;
+- `open-source-review` for license, payload, leaks and community files;
 - when the plugin is listed in a shared catalog, run the catalog check and, if the catalog pins SHAs, update it after the tag.
 
 A validator pass shows the package loads; only the trigger suite and real use show the skills help.

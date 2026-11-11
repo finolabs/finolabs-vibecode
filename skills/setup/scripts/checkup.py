@@ -256,9 +256,9 @@ def agents_evidence(status, text):
         return item("agents inventory", "unverified", "host config unreadable or symlink refused")
     sections = re.findall(r"^## Agents on this machine[ \t]*\r?$.*?(?=^#{1,2} |\Z)", text, re.M | re.S)
     if not sections:
-        return item("agents inventory", "missing", "section absent; run /fnl-setup scan")
+        return item("agents inventory", "missing", "section absent; run /setup scan")
     if len(sections) != 1:
-        return item("agents inventory", "unverified", "duplicate section; run /fnl-setup scan")
+        return item("agents inventory", "unverified", "duplicate section; run /setup scan")
     rows = {}
     for line in sections[0].splitlines():
         cells = [v.strip() for v in line.strip().strip("|").split("|")]
@@ -274,9 +274,9 @@ def agents_evidence(status, text):
         if max(dates) > today:
             raise ValueError("future check")
     except ValueError:
-        return item("agents inventory", "unverified", "incomplete rows or invalid Checked dates; run /fnl-setup scan")
+        return item("agents inventory", "unverified", "incomplete rows or invalid Checked dates; run /setup scan")
     if (today - min(dates)).days > 30:
-        return item("agents inventory", "missing", "section stale (older than 30 days); run /fnl-setup scan")
+        return item("agents inventory", "missing", "section stale (older than 30 days); run /setup scan")
     return item("agents inventory", "ok", "recent file inventory only; live access unverified")
 
 
@@ -1063,9 +1063,9 @@ def collect(payload=False):
         user_context.extend(instructions)
         plugin, found = plugin_evidence(host, folder)
         hosts[host] = [cli_present(host), plugin, hooks_evidence(host, folder, found),
-                       text_check("instructions", instructions, lambda t: "fnl-coding-router" in t,
-                                  "user file names fnl-coding-router; pointer only",
-                                  "user file or fnl-coding-router pointer absent", reader=context_read),
+                       text_check("instructions", instructions, lambda t: "coding-router" in t,
+                                  "user file names coding-router; pointer only",
+                                  "user file or coding-router pointer absent", reader=context_read),
                        item("runtime", "unverified", "hook trust/execution and approval policy not exercised"),
                        item("compaction", "unverified", "host threshold enforcement not exercised")]
         enforcement = {
@@ -1100,7 +1100,7 @@ def collect(payload=False):
         text_check("agent skills", context, lambda t: bool(re.search(r"^## Agent skills\s*$", t, re.M)),
                    "Agent skills heading present", "Agent skills block absent", reader=context_read),
         text_check("review adoption", context,
-                   lambda t: bool(re.search(r"(?:^|[.>]\s+)Pull requests (?:follow `fnl-review-gate`|merge only after a code review and a security review are posted on them, as `fnl-review-gate` says)", t, re.M)),
+                   lambda t: bool(re.search(r"(?:^|[.>]\s+)Pull requests (?:follow `review-gate`|merge only after a code review and a security review are posted on them, as `review-gate` says)", t, re.M)),
                    "review-gate adoption line present", "review-gate adoption line absent", reader=context_read),
         item("workflow", "unverified", "files cannot prove agents follow routing or review gates"),
     ]

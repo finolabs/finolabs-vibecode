@@ -8,7 +8,7 @@ Every dispatch carries a **budget**, written into the brief, and three numbers d
 | advise | 15–30 minutes |
 | committee member | 30–45 minutes |
 
-Take the upper end of a range for runs that build or test. Once `fnl-status` shows at least five finished runs for the same agent, model and grade, set the budget to about 1.5 times their median instead.
+Take the upper end of a range for runs that build or test. Once `status` shows at least five finished runs for the same agent, model and grade, set the budget to about 1.5 times their median instead.
 
 - The **agent's own timeout** (`--print-timeout`, the agybird `--timeout`, `--max-turns`), a few minutes under the hard cap, so the agent stops and reports before it is killed.
 - The **hard cap** that kills the process (the host config gives the command form): the budget plus a third, and at least 10 minutes over it.

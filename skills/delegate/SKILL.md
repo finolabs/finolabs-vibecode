@@ -1,6 +1,6 @@
 ---
 name: delegate
-description: Hand work to other coding agents (Claude Code, Codex, Antigravity) and run it, coordinating from whichever one you run in. Use whenever work is split across agents or needs a routing decision: giving a task to another agent, choosing the agent and model for each of several tasks, running independent tasks in parallel, an agent's quota running out, a delegated run you are watching that stalls, times out or is interrupted, or running a spec as a coordinator with one session per task. Writing the brief for a single task, or saving a handover, belongs to fnl-handoff.
+description: Hand work to other coding agents (Claude Code, Codex, Antigravity) and run it, coordinating from whichever one you run in. Use whenever work is split across agents or needs a routing decision: giving a task to another agent, choosing the agent and model for each of several tasks, running independent tasks in parallel, an agent's quota running out, a delegated run you are watching that stalls, times out or is interrupted, or running a spec as a coordinator with one session per task. Writing the brief for a single task, or saving a handover, belongs to handoff.
 ---
 
 # Delegate
@@ -15,7 +15,7 @@ Offer neutral Yes and No choices with none preselected or marked recommended; a 
 
 ## The loop
 
-Read [references/loop.md](references/loop.md): grade, route, brief, dispatch, watch, accept, record; name runs as `fnl-session-hygiene` "Titles" says.
+Read [references/loop.md](references/loop.md): grade, route, brief, dispatch, watch, accept, record; name runs as `session-hygiene` "Titles" says.
 Accept starts with `log_scan.py scan <log>` and `log_scan.py show <log>`; finish uses `ledger.py finish --log-path <log>`.
 Report a leak by name, never chase it; the reference owns redaction and the environment-only residual-risk report.
 
@@ -49,7 +49,7 @@ Read [references/heavy-jobs.md](references/heavy-jobs.md) for this step.
 
 ## Accept
 
-Use `fnl-checks` "Accepting someone else's work"; read [references/accept.md](references/accept.md) for the receipt gate and explicit exception. The coordinator retains the verdict.
+Use `checks` "Accepting someone else's work"; read [references/accept.md](references/accept.md) for the receipt gate and explicit exception. The coordinator retains the verdict.
 
 ## Handover after an interrupted run
 
@@ -65,6 +65,6 @@ Record every dispatch with `scripts/ledger.py` in this skill's base directory, a
 
 ## Related skills
 
-- `fnl-handoff`: write the brief and dispatch one task.
-- `fnl-advisor`: one second opinion or two contrasting families for root cause or planning when stuck, all read-only.
-- `fnl-status`: the usage dashboard (router coverage, skill use, load cost, delegation, review gate) and the runs still open.
+- `handoff`: write the brief and dispatch one task.
+- `advisor`: one second opinion or two contrasting families for root cause or planning when stuck, all read-only.
+- `status`: the usage dashboard (router coverage, skill use, load cost, delegation, review gate) and the runs still open.

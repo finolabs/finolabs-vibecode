@@ -29,24 +29,24 @@ Each rule line says who enforces it: a host setting, a hook, the review gate, or
 ## 4. How work is done (required)
 
 - Surgical changes in the existing style; no unsolicited refactors or features.
-- Coding entry: "Before substantive coding, load `fnl-coding-router`." It covers routing, depth, review, verification and delegation.
+- Coding entry: "Before substantive coding, load `coding-router`." It covers routing, depth, review, verification and delegation.
 - Status words for reports: drafted, verified, integrated, delivered, parked.
-- Test scope (recommended: targeted tests for changed code and its consumers; full suites only on request, as `fnl-checks` says).
-- Commits and versions: point to `fnl-commit-messages` and `fnl-versioning`; add only the user's own deviations.
+- Test scope (recommended: targeted tests for changed code and its consumers; full suites only on request, as `checks` says).
+- Commits and versions: point to `commit-messages` and `versioning`; add only the user's own deviations.
 - Learning from corrections: when the user corrects the same behavior twice in a session, propose one line for this contract at the end of the task, at most one proposal per session, and write it only after the user says yes.
 
 ## 5. Delegation (optional)
 
-- Which other agents the user has (Codex, Antigravity, Claude Code sessions) and that `fnl-delegate` governs routing, budgets and acceptance.
-- Acceptance proof for a delegated task (recommended: every test of the package or test module that holds the changed code, plus its traced consumers, chosen from the diff, not a name-filtered subset; a repository-wide suite still runs only on the owner's request, as `fnl-checks` says). A repository whose owner instructions scope task-level proof more narrowly wins for that repository: the coordinator then builds the filter from the diff itself and runs the whole package at the boundary the repository names. This is a default for every repository; a repository's narrower rule lives in that repository's own instructions, not in the user contract.
-- Which Delegation mode the user wants: `manual`, `suggest` (default) or `auto`, and whether Routing is `on` (default) or `off`. `/fnl-setup mode` shows their effective sources and changes them after a clear yes; environment overrides win over host config. `/fnl-setup` asks these preferences during onboarding. Modes govern other-family hand-offs; own-family sessions follow the project and context rules in `fnl-delegate` and retain delegate authority limits.
-- Facts about this computer live in the delegation host config, not here. `/fnl-setup scan` refreshes present families and user-confirmed allowed models; `/fnl-setup` configures their reach.
+- Which other agents the user has (Codex, Antigravity, Claude Code sessions) and that `delegate` governs routing, budgets and acceptance.
+- Acceptance proof for a delegated task (recommended: every test of the package or test module that holds the changed code, plus its traced consumers, chosen from the diff, not a name-filtered subset; a repository-wide suite still runs only on the owner's request, as `checks` says). A repository whose owner instructions scope task-level proof more narrowly wins for that repository: the coordinator then builds the filter from the diff itself and runs the whole package at the boundary the repository names. This is a default for every repository; a repository's narrower rule lives in that repository's own instructions, not in the user contract.
+- Which Delegation mode the user wants: `manual`, `suggest` (default) or `auto`, and whether Routing is `on` (default) or `off`. `/setup mode` shows their effective sources and changes them after a clear yes; environment overrides win over host config. `/setup` asks these preferences during onboarding. Modes govern other-family hand-offs; own-family sessions follow the project and context rules in `delegate` and retain delegate authority limits.
+- Facts about this computer live in the delegation host config, not here. `/setup scan` refreshes present families and user-confirmed allowed models; `/setup` configures their reach.
 
 ## 6. Knowledge base (optional)
 
 - Where durable notes live (a knowledge base such as Orrery, an Obsidian vault, a docs repository) and the only approved way to access them.
 - Which single knowledge base agents use (Orrery where available, or an Obsidian vault), and that any other store is retired from agent use.
-- What gets written back, and where decisions and lessons go. `fnl-session-hygiene` "Remember or recall" covers the practice; the contract holds only the user's stores and access rules.
+- What gets written back, and where decisions and lessons go. `session-hygiene` "Remember or recall" covers the practice; the contract holds only the user's stores and access rules.
 
 ## 7. Evaluators and external services (optional)
 
@@ -60,5 +60,5 @@ Each rule line says who enforces it: a host setting, a hook, the review gate, or
 ## 9. Host section (one per host)
 
 - Session titles: when and how to name or rename the session.
-- Context pressure: when to compact or start fresh (`fnl-session-hygiene` "Context pressure"); the host owns the compaction threshold; about 60% is advisory (agent judgment), not a prescribed host setting. Enforcement belongs to host settings or hooks written by `fnl-setup`; a contract line alone is advisory, and no enforcement is claimed until verified.
+- Context pressure: when to compact or start fresh (`session-hygiene` "Context pressure"); the host owns the compaction threshold; about 60% is advisory (agent judgment), not a prescribed host setting. Enforcement belongs to host settings or hooks written by `setup`; a contract line alone is advisory, and no enforcement is claimed until verified.
 - Host quirks: model selection, review commands, tools that need care.

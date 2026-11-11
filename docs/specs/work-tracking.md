@@ -28,7 +28,7 @@ repository showed three gaps:
   dropped: its per-change artefact count is close to Spec Kit's, so it is not the lighter option the owner wanted,
   and its `tasks.md` checkbox syntax is undocumented. Instead the plugin defines a one-file work record (part E),
   composed with the phase tools of mattpocock/skills, which it points to and does not copy.
-- `fnl-setup` separates user scope from project scope; `/fnl-setup instructions` uses the same split (part F).
+- `setup` separates user scope from project scope; `/setup instructions` uses the same split (part F).
 
 ## A. Per-repository settings in the host config
 
@@ -65,14 +65,14 @@ reach `data.js`, tooltips, events or `checkup.py` output.
 Lookup order: this repository's entry; then the old global `Ledger project:` and `Task file:` lines; then the folder
 name for the ledger and nothing for tasks. A per-repository entry always wins over a global line. The global lines are
 deprecated: still read in 0.2.0 and 0.2.1, reported by `checkup.py` with the one-line conversion, removed in 0.3.0
-(no automatic migration; `fnl-setup` offers to convert them for the current repository only, after a yes).
+(no automatic migration; `setup` offers to convert them for the current repository only, after a yes).
 
 The pipeline strip's ledger source uses the entry. With no entry and no ledger runs under the folder name it uses no
 ledger source and says so in its tooltip.
 
 ## B. Who asks, who writes (each skill stays self-contained)
 
-- **`/fnl-setup instructions`** (project scope) carries a "Work tracking" interview, asked once per repository. It looks
+- **`/setup instructions`** (project scope) carries a "Work tracking" interview, asked once per repository. It looks
   first (`specs/NNN-*/tasks.md` and `.specify/`, work records or spec documents in `docs/specs`, a checkbox file,
   ledger runs whose project resembles the folder name) and recommends an answer. Questions: the workflow (Spec Kit,
   work records as in part E, none); where specs live; how tasks are tracked (Spec Kit `tasks.md`, the `## Tasks`
@@ -80,14 +80,14 @@ ledger source and says so in its tooltip.
   `tasks` setting (part A) is only for a separate checkbox file: a work record's own `## Tasks` section is read
   without it, and when both exist the record's section wins for that record. Its only output is a short `## Work tracking` block in the project's agent context file after the
   user's yes per file: plain sentences, no machine paths, no organisation names, no text copied from repository files.
-  It writes nothing to the host config and calls no script of another skill; it ends by pointing to `/fnl-setup`.
-- **`fnl-setup`** (it already owns host-config writes and sits beside `fnl-status`) gains the two settings in its
+  It writes nothing to the host config and calls no script of another skill; it ends by pointing to `/setup`.
+- **`setup`** (it already owns host-config writes and sits beside `status`) gains the two settings in its
   project progress step: it asks the ledger name and the task file with a separate neutral Yes and No, shows the exact
   line, and records them with `project_progress.py settings --set` only after the yes and only when metrics consent and
   project progress are on. Recommendations come from the same look-first step. Each recommended value is shown
   verbatim and goes through the script's validation; text from repository files is data, never copied unchecked.
 - The host config is the only source for the dashboard. When the instruction-file block and the host config differ,
-  the host config wins for the dashboard; `fnl-setup` Check lists the difference and each side's age, and flags a
+  the host config wins for the dashboard; `setup` Check lists the difference and each side's age, and flags a
   repository whose ledger runs exist under a project name no entry or folder name maps to.
 
 Enforcers: the script for every host-config write and for the grammar; agent judgment (advisory) for asking, for the
@@ -120,7 +120,7 @@ git remotes or plugin names; OpenSpec or any third-party framework recognition; 
 
 ## E. The work record: a one-file lightweight format
 
-Naming: parts of this spec are lettered A to F; `fnl-setup` sections are always written "setup section X" here.
+Naming: parts of this spec are lettered A to F; `setup` sections are always written "setup section X" here.
 
 **What it is.** One Markdown file per piece of work that none.md says needs a spec or plan (MIN depth never creates one), in the
 repository's spec folder (`docs/specs/`, else `docs/spec/`, else `specs/` flat), with a fixed shape:
@@ -142,7 +142,7 @@ It is Spec Kit's spec, plan, tasks and quickstart-results collapsed into one fil
 slash commands. A file counts as a work record when it has the `Status:` line and at least two of the four headings;
 any other spec document stays a plain spec document (state only, no stages).
 
-**Composition (nothing is copied).** The router's none-path (`fnl-coding-router` `references/workflows/none.md`) says to create a
+**Composition (nothing is copied).** The router's none-path (`coding-router` `references/workflows/none.md`) says to create a
 work record from a template kept in `references/work-record.md` of the same skill, whenever none.md's own trigger for
 a spec or plan applies (no new trigger is invented): step 1 (Clarify) fills Goal and acceptance, step 2 (Plan) fills
 Plan and Tasks, steps 3 and 4 tick Tasks, steps 5 and 6 (Prove, Review) fill Evidence. The phase tools of mattpocock/skills carry the steps when installed and the record is where
@@ -178,16 +178,16 @@ vocabulary only; an unknown word is never echoed.
 **In this repository.** The 16 existing specs are not restructured: they get the status vocabulary (part C) and stay
 plain spec documents. New work from 0.2.0 on uses the template, including the implementation of this spec.
 
-## F. The `fnl-setup` scope split
+## F. The `setup` scope split
 
-`fnl-setup` asks first, through the host's native question tool when there is one: "Which scope: user, project, or
+`setup` asks first, through the host's native question tool when there is one: "Which scope: user, project, or
 both?", with a recommendation (user on a first run on a new computer, project inside a repository that is not set
 up, both when unsure). Mapping of every current item:
 
 | Item | Scope |
 | --- | --- |
 | Data location; setup section A host config (delegation, agent scan); quota probe | user |
-| Setup section D user-scoped instructions (loads `/fnl-setup instructions` user scope) | user |
+| Setup section D user-scoped instructions (loads `/setup instructions` user scope) | user |
 | Setup section E review tools; setup section G companions (installation is per user) | user |
 | Setup section F usage metrics, consent, retention; agent snapshot; compaction threshold and stop | user |
 | Setup section B local exclude; setup section C Agent skills block and review line | project |
@@ -208,7 +208,7 @@ script, preview and consent, unchanged.
 - A test fails if `refresh.py` or the dashboard code opens `CLAUDE.md` or `AGENTS.md`.
 - The deprecated global lines still work in 0.2.0, are reported by `checkup.py` and lose to a per-repository entry;
   the existing tests and `project-progress.md` that describe the global lines are updated in the same change.
-- `/fnl-setup instructions` and the setup project flow carry the interview and the two-step flow with their trigger checks;
+- `/setup instructions` and the setup project flow carry the interview and the two-step flow with their trigger checks;
   the instructions component writes no host config; references stay within their size limits.
 - `PRIVACY.md` lists the `## Project settings` section, says its values never reach `data.js`, tooltips, events or
   `checkup.py` output, and says `purge` leaves the host config as it is (the user's own file).
@@ -218,10 +218,10 @@ script, preview and consent, unchanged.
   and creates no work record; overflow of 40 documents, 64 KiB, 200 entries or the one-second budget is reported as
   `skipped`; a symlinked or oversize file is skipped; no title, heading text, Evidence text or file name reaches
   `data.js`.
-- The template exists in `fnl-coding-router` `references/work-record.md`, none.md points to it under its own trigger, a
-  repository test parses the template with the `fnl-status` reader so the two cannot drift, and MIN depth
+- The template exists in `coding-router` `references/work-record.md`, none.md points to it under its own trigger, a
+  repository test parses the template with the `status` reader so the two cannot drift, and MIN depth
   creates none; the reference check and the skill's trigger check pass.
-- `fnl-setup` asks the scope question first; a test lists every setup section and sub-step against the mapping table
+- `setup` asks the scope question first; a test lists every setup section and sub-step against the mapping table
   above (each in exactly one scope, project progress as the stated both case); Check mirrors the two groups with a
   named test; no existing opt-in or consent step changes.
 

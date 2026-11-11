@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: quality-coding-router-speckit-gate
+context:
+  scaffold_script: scaffold.sh

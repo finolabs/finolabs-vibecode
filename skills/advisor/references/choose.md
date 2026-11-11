@@ -1,6 +1,6 @@
 # Choose mode: one option during an away lease
 
-Use this mode only for rung 3 of `fnl-autopilot` "Decide", while an away lease is live. Here the advisor decides: its answer is the decision, not advice. You do not stay the decider: apply the option it returns, and do not re-ask, overrule or shop it to another rung (advisory, agent judgment; the `log --by` record shows who decided). The chosen action still passes `autopilot.py check`, so the answer grants no authority.
+Use this mode only for rung 3 of `autopilot` "Decide", while an away lease is live. Here the advisor decides: its answer is the decision, not advice. You do not stay the decider: apply the option it returns, and do not re-ask, overrule or shop it to another rung (advisory, agent judgment; the `log --by` record shows who decided). The chosen action still passes `autopilot.py check`, so the answer grants no authority.
 
 ## Picking the advisor
 
@@ -11,9 +11,9 @@ Use this mode only for rung 3 of `fnl-autopilot` "Decide", while an away lease i
 Every pick must also fit these limits; a pick that does not is skipped, and the next step is tried (advisory, agent judgment; `autopilot.py check` denies a run whose family is outside the lease's Hosts or is your own):
 
 - Its family is among the lease's recorded Hosts and is not yours. It runs through that family's own command-line program. Never a subagent of your own host; a Claude model served through another host counts as Claude.
-- Its model is the family's frontier tier in `fnl-delegate` `references/models.md`, else its strong tier. Nothing below strong.
+- Its model is the family's frontier tier in `delegate` `references/models.md`, else its strong tier. Nothing below strong.
 
-With no eligible advisor, start no run: record `advisor unavailable` with no `--by`, and the host chooses, as `fnl-autopilot` `references/decide.md` says. An advisor out of quota, unreachable or failing is `advisor unavailable` with its `--by`; do not try a same-family substitute.
+With no eligible advisor, start no run: record `advisor unavailable` with no `--by`, and the host chooses, as `autopilot` `references/decide.md` says. An advisor out of quota, unreachable or failing is `advisor unavailable` with its `--by`; do not try a same-family substitute.
 
 ## Dispatch
 

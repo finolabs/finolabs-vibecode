@@ -368,7 +368,7 @@ def script_command(argv, applied):
         return 'unknown'
     path = Path(argv[index])
     own = Path(__file__).resolve().parent
-    merge = own.parent.parent / 'fnl-review-gate/scripts/merge_check.py'
+    merge = own.parent.parent / 'review-gate/scripts/merge_check.py'
     allowed = {own / name for name in ('ledger.py', 'record.py', 'heavy_run.py')} | {merge}
     if (path not in allowed or path.is_symlink() or not path.is_file()
             or any(parent.is_symlink() for parent in (path.parent, path.parent.parent))):

@@ -16,8 +16,8 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 CORE = ROOT / "scripts/fnl_metrics.py"
-COPIES = [ROOT / "skills/fnl-coding-router/scripts/fnl_metrics.py", ROOT / "skills/fnl-status/scripts/fnl_metrics.py",
-          ROOT / "skills/fnl-update/scripts/fnl_metrics.py"]
+COPIES = [ROOT / "skills/coding-router/scripts/fnl_metrics.py", ROOT / "skills/status/scripts/fnl_metrics.py",
+          ROOT / "skills/update/scripts/fnl_metrics.py"]
 
 spec = importlib.util.spec_from_file_location("fnl_metrics", CORE)
 m = importlib.util.module_from_spec(spec)
@@ -47,7 +47,7 @@ class MetricsTest(unittest.TestCase):
         return [json.loads(line) for path in sorted(self.dir.glob("events-*.jsonl")) for line in path.read_text().splitlines()]
 
     def record(self, event="skill", **fields):
-        fields = fields or {"name": "fnl-coding-router"}
+        fields = fields or {"name": "coding-router"}
         return m.record(event, SID, self.repo, **fields)
 
     def test_nothing_is_written_without_consent(self):
@@ -64,11 +64,30 @@ class MetricsTest(unittest.TestCase):
         self.consent()
         self.assertTrue(self.record())
         [event] = self.events()
-        self.assertEqual({k: event[k] for k in ("sid", "event", "name")}, {"sid": SID, "event": "skill", "name": "fnl-coding-router"})
+        self.assertEqual({k: event[k] for k in ("sid", "event", "name")}, {"sid": SID, "event": "skill", "name": "coding-router"})
         self.assertRegex(event["repo"], r"^[0-9a-f]{8}$")
         self.assertEqual(stat.S_IMODE(self.dir.stat().st_mode), 0o700)
         [path] = self.dir.glob("events-*.jsonl")
         self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_an_older_fnl_skill_name_is_recorded_under_its_current_name(self):
+        self.consent()
+        for name in ("fnl-setup", "setup"):
+            self.assertTrue(self.record(name=name))
+        self.assertEqual([e["name"] for e in self.events()], ["setup", "setup"])
+        for name in ("fnl-x", "grilling", "fnl-reviewer", "Setup", "fnl-fnl-setup"):
+            with self.subTest(name=name):
+                self.assertFalse(self.record(name=name))
+        self.assertEqual(len(self.events()), 2)
+
+    def test_a_skill_line_stored_before_the_rename_stays_valid(self):
+        self.consent()
+        self.record()
+        good = json.loads(next(self.dir.glob("events-*.jsonl")).read_text().splitlines()[0])
+        self.assertTrue(m.valid_event({**good, "name": "fnl-coding-router"}))
+        self.assertFalse(m.valid_event({**good, "name": "grilling"}))
+        self.assertEqual((m.skill_name("fnl-status"), m.skill_name("status"), m.skill_name("fnl-x")),
+                         ("status", "status", None))
 
     def test_an_invalid_event_is_dropped_and_counted(self):
         self.consent()
@@ -388,8 +407,8 @@ class MetricsTest(unittest.TestCase):
     def test_shared_copies_equal_their_source(self):
         groups = [
             (CORE, COPIES),
-            (ROOT / "skills/fnl-help/references/plain-language.md",
-             [ROOT / "skills/fnl-setup/references/plain-language.md"]),
+            (ROOT / "skills/help/references/plain-language.md",
+             [ROOT / "skills/setup/references/plain-language.md"]),
         ]
         for source, copies in groups:
             for copy in copies:
@@ -399,7 +418,7 @@ class MetricsTest(unittest.TestCase):
 
     def test_update_check_copy_equals_core(self):
         self.assertEqual((ROOT / "scripts/update_check.py").read_bytes(),
-                         (ROOT / "skills/fnl-update/scripts/update_check.py").read_bytes())
+                         (ROOT / "skills/update/scripts/update_check.py").read_bytes())
 
 
 if __name__ == "__main__":

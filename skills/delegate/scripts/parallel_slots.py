@@ -249,7 +249,7 @@ def summary(repo=None):
     try:
         state = status(repo)
     except store.SettingsNeedSetup:
-        return 'unknown (project settings need setup again: run fnl-setup add delegation)'
+        return 'unknown (project settings need setup again: run /setup add delegation)'
     except (OSError, ValueError, TypeError, KeyError, RecursionError):
         return 'unknown'
     try:

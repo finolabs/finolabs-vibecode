@@ -2,9 +2,9 @@
 
 Checked 2026-11-01. Review by 2026-12-01.
 
-This tier table is seed data. The machine's user-confirmed `Agents on this machine` section in host config wins for presence, coordinator family and allowed models; `unverified` is not permission to probe or dispatch. Refresh it with `/fnl-setup scan`.
+This tier table is seed data. The machine's user-confirmed `Agents on this machine` section in host config wins for presence, coordinator family and allowed models; `unverified` is not permission to probe or dispatch. Refresh it with `/setup scan`.
 
-Model lineups, quotas and flags change every few weeks: before routing on a row, confirm the model still exists with the recheck command, and update this file when it has drifted. Past the review-by date, treat every row as unverified until its recheck command confirms it; whoever updates the file sets both dates again as ISO dates (`YYYY-MM-DD`), the review-by date at most a month after the check. Vendor benchmark numbers are the vendor's own; the ledger summary (`fnl-status`) is the evidence that counts on this machine.
+Model lineups, quotas and flags change every few weeks: before routing on a row, confirm the model still exists with the recheck command, and update this file when it has drifted. Past the review-by date, treat every row as unverified until its recheck command confirms it; whoever updates the file sets both dates again as ISO dates (`YYYY-MM-DD`), the review-by date at most a month after the check. Vendor benchmark numbers are the vendor's own; the ledger summary (`status`) is the evidence that counts on this machine.
 
 ## Tiers
 
