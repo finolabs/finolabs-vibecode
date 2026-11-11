@@ -582,7 +582,7 @@ class ChecksRunTest(unittest.TestCase):
         code, out, _ = self.run_cli(self.module(), 'run')
         self.assertEqual(code, 0)
         self.assertFalse(self.receipt().exists())
-        self.assertNotIn('receipt', out)
+        self.assertNotIn('receipt', out.replace(str(ROOT), ''))  # the checkout's own path may contain the word
 
     # A dispatch receipt: `run --dispatch <id>` writes the verification receipt `ledger.py finish` reads
 
