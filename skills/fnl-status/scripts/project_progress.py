@@ -5,7 +5,6 @@ try:
     import fcntl
 except ImportError:
     raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
-import hashlib
 import json
 import os
 import re
@@ -21,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
+import project_store as store
 
 LIMIT = 512 * 1024
 SECONDS = 1
@@ -66,88 +66,30 @@ LABEL = re.compile(r'[A-Za-z0-9 ._-]{1,40}')
 
 
 def repository_code(root):
-    """Use the metrics identity for linked worktrees, without running git."""
-    identity = root
-    try:
-        with open_dir(root) as fd:
-            link = read_task(fd, '.git').strip()
-        if len(link) <= 4096 and link.startswith('gitdir:'):
-            gitdir = Path(os.path.abspath(root / link[len('gitdir:'):].strip()))
-            with open_dir(gitdir) as fd:
-                common = read_task(fd, 'commondir').strip()
-            if len(common) <= 4096 and common:
-                shared = Path(os.path.abspath(gitdir / common))
-                # Refuse symlinked metadata ancestors just like the project reader.
-                with open_dir(shared):
-                    identity = shared.parent if shared.name == '.git' else shared
-    except (OSError, ValueError):
-        pass
-    return hashlib.sha256(str(identity).encode('utf-8')).hexdigest()[:8]
+    """The validated identity of `project_store`: a reciprocal linked worktree shares its main checkout's code."""
+    return store.repository_code(root)
 
 
-def project_labels(text):
-    _, body, end = host_section(text, 'Project labels')
-    labels = {}
-    for line in text[body:end].splitlines():
-        if not line.strip():
-            continue
-        match = re.fullmatch(r'- ([0-9a-f]{8}): ([A-Za-z0-9 ._-]{1,40})', line)
-        if not match or match[1] in labels or not match[2].strip():
-            raise ValueError('ambiguous labels')
-        labels[match[1]] = match[2]
-    return labels
+valid_setting = store.valid_setting
 
 
-def valid_setting(key, value):
-    if not isinstance(value, str):
-        return False
-    if key == 'parallel':
-        return bool(re.fullmatch(r'[0-9]{1,2}', value) and 1 <= int(value) <= 32)
-    if key == 'parallel-caps':
-        seen = set()
-        for item in value.split(','):
-            match = re.fullmatch(r'(claude|codex|antigravity)=([0-9]{1,2})', item.strip())
-            if not match or not 1 <= int(match[2]) <= 32 or match[1] in seen:
-                return False
-            seen.add(match[1])
-        return True
-    if key == 'ledger':
-        return bool(LABEL.fullmatch(value) and value.strip())
-    if key == 'tasks':
-        return bool(re.fullmatch(r'[A-Za-z0-9._/-]{1,120}', value) and value.endswith('.md')
-                    and all(part not in ('', '.', '..') for part in value.split('/'))
-                    and value.split('/')[:2] != ['specs', 'archive']
-                    and value.split('/')[-1].upper() not in INSTRUCTION_FILES)
-    return False
+def repository_settings(values, root, stored=None):
+    """The ledger and task-file settings of this repository's approved project file; host.md is never read for them.
 
-
-def project_settings(text):
-    """One malformed entry invalidates the entire section, never just that key."""
-    _, body, end = host_section(text, 'Project settings')
-    entries = {}
-    lines = [line for line in text[body:end].splitlines() if line.strip()]
-    if len(lines) > 100:
-        raise ValueError('invalid project settings')
-    for line in lines:
-        match = re.fullmatch(r'- ([0-9a-f]{8}) (ledger|tasks|parallel|parallel-caps): (.*)', line)
-        if not match or not valid_setting(match[2], match[3]) or (match[1], match[2]) in entries:
-            raise ValueError('invalid project settings')
-        entries[(match[1], match[2])] = match[3]
-    return entries
-
-
-def repository_settings(values, root):
-    """Host entries win over deprecated globals; no repository instruction reads."""
-    result = dict(values)
-    try:
-        entries = project_settings(dr.read_data('host.md', 262144).decode('utf-8'))
-    except (OSError, ValueError, UnicodeError):
-        entries = {}
-    code = repository_code(root)
+    Unset keys are absent, so callers fall back to the folder name and no task file. No repository instruction reads.
+    `stored` is the values of one `settings_state` read the caller already made; None reads them here.
+    """
+    result = {key: value for key, value in values.items() if key not in ('Ledger project', 'Task file')}
+    settings = store.read_settings(root) if stored is None else stored
     for key, old in (('ledger', 'Ledger project'), ('tasks', 'Task file')):
-        if (code, key) in entries:
-            result[old] = entries[(code, key)]
+        if key in settings:
+            result[old] = settings[key]
     return result
+
+
+def project_label(root):
+    """This repository's display label from its approved project file, or None."""
+    return store.read_settings(root).get('label')
 
 
 def set_setting(cwd, key, value):
@@ -166,29 +108,9 @@ def set_setting(cwd, key, value):
     root = find_root(cwd)
     if root is None:
         raise ValueError('no repository')
-    code = repository_code(root)
-    with dr.root_folder() as folder:
-        fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        text = dr.read_file(folder, 'host.md', 262144).decode('utf-8')
-        entries = project_settings(text)
-        if entries.get((code, key)) == value:
-            return False
-        if value is None:
-            entries.pop((code, key), None)
-        else:
-            entries[(code, key)] = value
-        if len(entries) > 100:
-            raise ValueError('project settings cap')
-        start, _, end = host_section(text, 'Project settings')
-        newline = '\r\n' if '\r\n' in text else '\n'
-        section = '## Project settings\n\n' + ''.join(
-            '- ' + c + ' ' + k + ': ' + v + '\n' for (c, k), v in sorted(entries.items())) + '\n'
-        text = text[:start] + (newline if start == end and text and not text.endswith(newline * 2) else '') + section.replace('\n', newline) + text[end:]
-        raw = text.encode('utf-8')
-        if len(raw) > 262144:
-            raise ValueError('host cap')
-        dr.atomic_write(folder, 'host.md', raw)
-    return True
+    changed = store.write_setting(root, key, value)
+    store.ensure_excluded(root)
+    return changed
 
 
 def registered_projects(folder=None):
@@ -233,21 +155,18 @@ def set_label(cwd, label):
     root = find_root(cwd)
     if root is None:
         raise ValueError('no repository')
-    code = repository_code(root)
-    with dr.root_folder(create=True) as folder:
-        fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        text = dr.read_file(folder, 'host.md', 262144).decode('utf-8')
-        labels = project_labels(text)
-        labels[code] = label
-        start, _, end = host_section(text, 'Project labels')
-        newline = '\r\n' if '\r\n' in text else '\n'
-        section = '## Project labels\n\n' + ''.join('- ' + k + ': ' + v + '\n' for k, v in sorted(labels.items())) + '\n'
-        text = text[:start] + (newline if start == end and text and not text.endswith(newline * 2) else '') + section.replace('\n', newline) + text[end:]
-        raw = text.encode('utf-8')
-        if len(raw) > 262144:
-            raise ValueError('host cap')
-        dr.atomic_write(folder, 'host.md', raw)
+    store.write_setting(root, 'label', label)
+    store.ensure_excluded(root)
     return label
+
+
+def reset_settings(cwd):
+    """Discard every project setting of this repository (the recovery from broken settings) under the setters'
+    lock. Records no usage data, so it needs no metrics consent; the setup text asks the user's yes first."""
+    root = find_root(cwd)
+    if root is None:
+        raise ValueError('no repository')
+    store.reset_settings(root)
 
 
 def reader_lines(text, include_fenced=False):
@@ -300,7 +219,8 @@ def config():
             values[match[1]] = match[2]
         if values.get('Project progress', 'on') != 'on':
             return None
-        return values
+        # Global Task file / Ledger project lines left from before 0.2.5 keep the section valid but are never read.
+        return {key: value for key, value in values.items() if key == 'Project progress'}
     except (OSError, ValueError, UnicodeError):
         return None
 
@@ -1067,16 +987,19 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
             root = find_root(cwd)
             if root is None:
                 return empty('no repository')
-            settings = repository_settings(settings, root)
+            # One settings read per collection: alias, task path, label and the broken flag all come from it.
+            state, stored = store.settings_state(root)
+            settings = repository_settings(settings, root, stored)
+            # An approved file that broke keeps no ledger alias: the join is unknown, never the folder name.
+            broken = state != 'unset' and state != 'approved'
             result = empty()
             repo = repo_code(cwd) if repo_code else repo
             result['repo'] = repo
-            try:
-                labels = project_labels(dr.read_data('host.md', 262144).decode('utf-8'))
-            except (OSError, ValueError, UnicodeError):
-                labels = {}
-            result['label'] = labels.get(repo, registered_projects().get(repo, ''))
-            if records:
+            result['label'] = stored.get('label') or registered_projects().get(repo, '')
+            if broken:
+                starts, finishes = {}, {}
+                result['skipped'].append('settings need setup')
+            elif records:
                 ledger = records()
                 if ledger is not None:
                     try:
@@ -1107,7 +1030,8 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
                 if not result['features']:
                     result['source'], result['recognition'], result['features'] = repository_documents(fd, result['skipped'])
                 ledger_rows = ledger_items(settings.get('Ledger project', root.name), starts or {}, finishes or {})
-                result['ledger_join'] = ('configured' if ledger_rows else 'configured-empty') if 'Ledger project' in settings else 'folder' if ledger_rows else 'none'
+                result['ledger_join'] = ('unknown' if broken else ('configured' if ledger_rows else 'configured-empty')
+                                         if 'Ledger project' in settings else 'folder' if ledger_rows else 'none')
                 result['work'] = dict(Counter(item['state'] for item in ledger_rows))
                 if not result['features'] and ledger_rows:
                     result['features'], result['source'], result['recognition'] = ledger_rows, 'ledger', 'ledger'
@@ -1173,15 +1097,32 @@ def installed_version():
     return 'unknown'
 
 
+def exclude_note():
+    """Say so when the project folder could not be listed in .git/info/exclude; the setting itself is saved."""
+    root = find_root(os.getcwd())
+    if root is not None and not store.ensure_excluded(root):
+        print('Saved, but .git/info/exclude could not be changed; add the line .finolabs/ to it yourself.',
+              file=sys.stderr)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('choice', choices=('on', 'off', 'label', 'settings'))
     parser.add_argument('--set', dest='label')
     parser.add_argument('--clear', choices=('ledger', 'tasks', 'parallel', 'parallel-caps'))
+    parser.add_argument('--reset', action='store_true')
     parser.add_argument('--yes', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args(argv)
     try:
+        if args.reset:
+            # Reset has no preview: a dry run or a pre-given yes must never reach the deletion below.
+            if (args.choice != 'settings' or args.label is not None or args.clear is not None
+                    or args.dry_run or args.yes):
+                raise ValueError('reset takes no other option')
+            reset_settings(os.getcwd())
+            print('Project settings reset.')
+            return 0
         if args.choice == 'settings':
             if bool(args.label is not None) == bool(args.clear is not None):
                 raise ValueError('one setting required')
@@ -1193,14 +1134,20 @@ def main(argv=None):
                     raise ValueError('setting requires equals')
             changed = set_setting(os.getcwd(), key, value)
             print(key + (' changed' if changed else ' not changed'))
+            exclude_note()
             return 0
         if args.choice == 'label':
             set_label(os.getcwd(), args.label)
             print('Project label saved.')
+            exclude_note()
             return 0
         result = configure(args.choice, args.yes, args.dry_run)
         print(result if args.dry_run else 'Project progress preference saved.')
         return 0
+    except store.SettingsNeedSetup:
+        print('Project settings need setup again; no setting changed. Run project_progress.py settings --reset to '
+              'discard every project setting, then set them again.', file=sys.stderr)
+        return 1
     except (OSError, ValueError, UnicodeError):
         message = ('Project settings refused; no setting changed.' if args.choice == 'settings'
                    else 'Project progress setup refused; no preference saved.')

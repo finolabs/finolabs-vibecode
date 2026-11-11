@@ -911,28 +911,19 @@ def host_config_text(home):
 
 
 def project_tracking(text, root):
-    """Diagnose host-only joins without exporting values or changing configuration."""
+    """Diagnose the ledger join from the repository's approved settings file without exporting values."""
     import project_progress as pp
     rows = []
     try:
-        entries = pp.project_settings(text)
+        pp.host_section(text)
     except ValueError:
-        entries = {}
-        rows.append(item('project settings', 'unverified', 'invalid Project settings section; all entries ignored'))
-    try:
-        _, body, end = pp.host_section(text)
-    except ValueError:
-        body = end = len(text)
-        rows.append(item('project progress', 'unverified', 'invalid Project progress section; global settings ignored'))
-    globals_ = {}
-    for key, old in (('ledger', 'Ledger project'), ('tasks', 'Task file')):
-        matches = re.findall(r'^(?:- )?' + old + r': (.*)$', text[body:end], re.M)
-        if matches:
-            rows.append(item('deprecated ' + key, 'unverified',
-                             key + ': convert for this repository with project_progress.py settings --set ' + key + '=<value>'))
-        if len(matches) == 1:
-            globals_[key] = matches[0]
-    code = pp.repository_code(root)
+        rows.append(item('project progress', 'unverified', 'invalid Project progress section'))
+    state, stored = pp.store.settings_state(root)
+    if state != 'unset' and state != 'approved':
+        # The approved ledger alias is unknown, so the folder-name heuristic would guess: report setup instead.
+        rows.append(item('project settings', 'unverified', 'project settings need setup again'))
+        return rows
+    settings = pp.repository_settings({}, root, stored)
     try:
         raw = dr.read_data('ledger.jsonl', 16 * 1024 * 1024).decode('utf-8')
         names = set()
@@ -948,7 +939,7 @@ def project_tracking(text, root):
         folder = root.name.lower()
         resembles = any(min(len(folder), len(name)) >= 4 and
                         (folder in name.lower() or name.lower() in folder) for name in names)
-        if (code, 'ledger') not in entries and root.name not in names and resembles:
+        if 'Ledger project' not in settings and root.name not in names and resembles:
             rows.append(item('ledger-project mismatch', 'unverified',
                              'no ledger runs match the folder name; similar project names exist; set a ledger entry to confirm association'))
     except (OSError, ValueError, UnicodeError):

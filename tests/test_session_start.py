@@ -275,7 +275,9 @@ class StateBlockTest(SyntheticStateTest):
         nested.mkdir()
         code = parallel_slots.repository_code(repo)
         self.write("host.md", "## Limits\n- Parallel dispatches: at most 32 at one time.\n"
-                   "## Project settings\n- %s parallel: 6\n- %s parallel-caps: codex=3\n" % (code, code))
+                   "## Project settings\n- %s parallel: 9\n" % code)
+        parallel_slots.store.write_setting(repo, 'parallel', '6')
+        parallel_slots.store.write_setting(repo, 'parallel-caps', 'codex=3')
         records = [dict(event="start", id=str(n), agent=agent, project=repo.name)
                    for n, agent in enumerate(("claude-session", "codex", "codex", "codex"))]
         records.append(dict(event='start', id='other', agent='codex', project='other'))
@@ -285,6 +287,12 @@ class StateBlockTest(SyntheticStateTest):
                           "antigravity 0 open; project settings)\n", self.state())
         with mock.patch('os.getcwd', return_value=str(self.root)):
             self.assertIn(SLOTS_DEFAULT, self.state())
+        # An approved file that changed: the line still prints and says settings need setup, never the default.
+        settings = repo / '.finolabs/vibecode/settings.json'
+        settings.write_bytes(settings.read_bytes() + b' ')
+        with mock.patch('os.getcwd', return_value=str(nested)):
+            self.assertIn("Parallel slots: unknown (project settings need setup again: run fnl-setup add delegation)\n",
+                          self.state())
 
     def test_no_metrics_consent_still_reads_recorded_roles(self):
         self.write("host.md", "## Agents on this machine\n| Codex | yes | x | x | x |\n"

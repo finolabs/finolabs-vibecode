@@ -78,13 +78,25 @@ class NotesSchemaTest(unittest.TestCase):
         self.assertIn('0.2.4/codex-hook-trust', ids)
         rename = next(item for item in parsed[0]['items'] if item['id'] == '0.2.4/checks-rename')
         self.assertEqual(rename['until'], '0.3.0')
-        self.assertEqual([item['kind'] for item in parsed[1]['items']], ['setup'])
+        self.assertEqual([item['kind'] for item in parsed[1]['items']], ['setup', 'setup', 'setup', 'setup'])
         store = parsed[1]['items'][0]
         self.assertEqual(store['id'], '0.2.5/checks-store')
         self.assertEqual(store['setup'], '/fnl-setup add checks')
         for phrase in ('0.2.4', 'no longer read', 'each repository', '## Checks', 'host.md', 'by hand'):
             self.assertIn(phrase, store['text'])
-        self.assertNotIn('migrate', store['text'])
+        # Parallel limits and caps are set again before the old section is deleted.
+        parallel, settings, labels = parsed[1]['items'][1:]
+        self.assertEqual((parallel['id'], parallel['setup']), ('0.2.5/parallel-settings', '/fnl-setup add delegation'))
+        for phrase in ('no longer read', 'host.md', 'each repository', 'parallel', 'caps', 'before', '## Project settings'):
+            self.assertIn(phrase, parallel['text'])
+        self.assertEqual((settings['id'], labels['id']), ('0.2.5/project-settings', '0.2.5/project-labels'))
+        for phrase in ('no longer read', 'host.md', 'each repository', '## Project settings', 'Ledger project:',
+                       'Task file:', 'by hand'):
+            self.assertIn(phrase, settings['text'])
+        for phrase in ('no longer read', 'host.md', 'each repository', '## Project labels', 'by hand'):
+            self.assertIn(phrase, labels['text'])
+        for item in (store, parallel, settings, labels):
+            self.assertNotIn('migrate', item['text'])
 
     def test_release_version_needs_an_entry(self):
         notes = u.parse_notes(json.loads(NOTES.read_text()))

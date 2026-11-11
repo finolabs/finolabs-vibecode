@@ -36,6 +36,24 @@
           "kind": "setup",
           "text": "A check list saved with 0.2.4 is no longer read: run /fnl-setup add checks again in each repository, then delete the old ## Checks section from host.md by hand.",
           "setup": "/fnl-setup add checks"
+        },
+        {
+          "id": "0.2.5/parallel-settings",
+          "kind": "setup",
+          "text": "Parallel limits in host.md are no longer read: set parallel and caps again in each repository before you delete ## Project settings by hand.",
+          "setup": "/fnl-setup add delegation"
+        },
+        {
+          "id": "0.2.5/project-settings",
+          "kind": "setup",
+          "text": "Settings in host.md are no longer read: set them again in each repository, then delete ## Project settings and the Ledger project: and Task file: lines by hand.",
+          "setup": "/fnl-setup add project"
+        },
+        {
+          "id": "0.2.5/project-labels",
+          "kind": "setup",
+          "text": "Labels in host.md are no longer read: set each again inside each repository, then delete the ## Project labels section by hand.",
+          "setup": "/fnl-setup add project"
         }
       ]
     }
