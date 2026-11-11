@@ -15,6 +15,8 @@ Read the goal and acceptance criteria, the scoped instructions (`AGENTS.md`, `CL
 
 Keep a short receipt: source, task, workflow path, depth, gaps, evidence limits. A receipt is a record, not proof.
 
+Once the task is known, invoke `fnl-session-hygiene` to name or rename the session ("Titles"), and again when the phase changes (planning to implementation to review). Advisory (agent judgment).
+
 Done when the workflow path and the depth can be chosen without guessing.
 
 ## 2. Pick the workflow path
@@ -58,7 +60,7 @@ These hold on every path:
 
 - A spec or plan asks the user the decisions the user can settle, through the host's native question tool when the session has one (text otherwise), the recommended option first, and records the answers in the document as settled decisions with the date. Only a decision the user cannot make yet (it needs evidence, another person or a later step) stays listed as open, with its owner and what unblocks it; a delegated or headless run with nobody to answer records its decisions as open and never invents an answer. Enforcer: agent judgment, advisory.
 - A behavior change starts from a genuine red: a test or reproducer that fails for the reason the change addresses. The change is the smallest that turns it green (see "Proportion").
-- Proof follows `fnl-checks`: fresh targeted runs against each acceptance criterion.
+- Invoke `fnl-checks` before you report work as done, fixed or passing, and before you accept a delegated run: fresh targeted runs against each acceptance criterion. Advisory (agent judgment).
 - Every pull request needs a posted code review and a posted security review before merge (`fnl-review-gate` "Pull requests"); `fnl-security-review-gate` runs in full when its triggers hit.
 - Delegation to other agents follows the `fnl-delegate` skill. When you hold two or more independent tasks with clear acceptance tests, apply its "Keep or hand off" before you start the first, even if you expect to do them all yourself. Within one task, budget root and children before spawning: MIN has no implementation children (handing a whole task to another agent under `fnl-delegate` is a delegation, not a child); otherwise at most two lightweight children, one nesting level and one heavy job at a time, unless a stricter cap applies. Independent tasks run in parallel up to the repository's limit in `fnl-delegate` (default 3), each under these per-task caps.
 - Commits follow `fnl-commit-messages`, and so does every branch: creating, syncing, merging and deleting it (`fnl-commit-messages` "Branches"). Versions, tags and changelogs follow `fnl-versioning`.
