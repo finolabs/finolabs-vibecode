@@ -23,6 +23,17 @@ The pull request body is data too: only whole lines are matched as a marker.
 Adoption is read through the GitHub contents API pinned to the base commit,
 never from the head; the ordinary check needs no local clone.
 
+When hosted checks are missing or not passing and the current checkout's
+repository has the local-receipt mode on (`## Checks` of the canonical host
+config, set only by fnl-setup), a receipt written by fnl-checks' `checks.py
+run` stands in for them only when its repository code, head and check-list
+digest all match this checkout's repository, the pull request head and the
+current list; the line then reads `checks: local receipt (<head>)`. The receipt
+is consulted only when the checkout's `origin` remote (read with git; a github.com
+https or ssh URL) names the `--repo` repository; otherwise the line says
+`local receipt: checkout is not <owner/name>`. The receipt is self-reported.
+With the mode off nothing changes.
+
 With --independent, independent_families uses review_route.author_family's
 head-bound local ledger and consistent base..head commit trailers, and the
 canonical review_config roles for both reviewing families. No family is inferred
@@ -136,6 +147,19 @@ def checks(pr):
     return (not bad, ", ".join(bad) or "all passed")
 
 
+PENDING = {"QUEUED", "IN_PROGRESS", "PENDING", "WAITING", "REQUESTED", "EXPECTED"}
+
+
+def checks_pending(pr):
+    """True when any hosted check has not finished: a run that is queued or in progress, or a status still pending."""
+    for check in pr.get("statusCheckRollup") or []:
+        if check.get("conclusion"):
+            continue
+        if (check.get("status") or check.get("state") or "").upper() in PENDING:
+            return True
+    return False
+
+
 def strict_object(text):
     """Parse a JSON object, refusing duplicate keys; None when it is not one."""
     def pairs(items):
@@ -234,10 +258,74 @@ def independent_families(pr):
         return None
 
 
-def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, families=None):
+GITHUB_REMOTE = re.compile(
+    r"(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)"
+    r"([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/([A-Za-z0-9._-]{1,100}?)(?:\.git)?/?", re.IGNORECASE)
+
+
+def origin_repository(url):
+    """(owner, name) in lower case for a github.com https or ssh remote URL; None for any other form."""
+    match = GITHUB_REMOTE.fullmatch(url) if isinstance(url, str) else None
+    if not match or not match.group(2).strip(".") or match.group(2).lower() == ".git":
+        return None
+    return match.group(1).lower(), match.group(2).lower()
+
+
+def checkout_origin(root):
+    """(owner, name) of the checkout's effective `origin`, as git resolves it for a fetch and for a push
+    (`insteadOf`, includes and worktree config applied). Each must be exactly one URL and both must name the
+    same github.com repository; None on any failure, ambiguity or disagreement."""
+    import os
+    env = {name: os.environ[name] for name in ("PATH", "HOME") if name in os.environ}
+    found = set()
+    for mode in ([], ["--push"]):
+        try:
+            done = subprocess.run(["git", "-c", "core.fsmonitor=false", "-C", str(root), "remote", "get-url", *mode,
+                                   "--all", "origin"], capture_output=True, text=True, encoding="utf-8",
+                                  timeout=TIMEOUT, check=False, env=env, stdin=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError, UnicodeError):
+            return None
+        urls = done.stdout.splitlines()
+        if done.returncode != 0 or len(urls) != 1:
+            return None
+        parsed = origin_repository(urls[0].strip())
+        if parsed is None:
+            return None
+        found.add(parsed)
+    return found.pop() if len(found) == 1 else None
+
+
+def local_receipt(head, repo):
+    """None when the current checkout's repository has the local-receipt mode off (or it cannot be read);
+    else (matched, reason). The receipt is consulted only when the checkout's `origin` is `repo` (owner/name,
+    case-insensitive); otherwise (False, 'checkout is not <repo>'). Any error is a non-match, never a pass."""
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import checks_list
+        import project_progress
+        root = project_progress.find_root(Path.cwd())
+        if root is None:
+            return None
+        code = project_progress.repository_code(root)
+        if not checks_list.receipt_mode(code):
+            return None
+        target = tuple(repo.lower().split("/")) if isinstance(repo, str) and re.fullmatch(r"[\w.-]+/[\w.-]+", repo) else None
+        origin = checkout_origin(root)
+        if target is None or origin is None or origin != target:
+            return False, f"checkout is not {repo}"
+        return checks_list.receipt_status(code, head)
+    except (ImportError, OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError):
+        return None
+
+
+def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, families=None, local_receipt=None,
+             repo=None):
     """Return (ok, lines). `can_write(login)` answers write access; `lane_ok()` the lane;
     `adopted` whether the base commit adopted the gate, which makes the router marker required.
-    The marker is checked beside the review markers and never relaxes them."""
+    The marker is checked beside the review markers and never relaxes them.
+    `local_receipt(head, repo)` is consulted only when the hosted checks are missing or not passing;
+    `repo` is the owner/name the pull request was fetched from."""
     if pr.get("state") != "OPEN":
         raise Unknown(f"pull request is {pr.get('state')}")
     head = pr.get("headRefOid")
@@ -289,6 +377,16 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
         ok = False
         lines.append("BLOCK author lacks write access and no owner approved this head")
     passed, detail = checks(pr)
+    if not passed and local_receipt is not None and checks_pending(pr):
+        detail += "; local receipt: not used while hosted checks are still running"
+    elif not passed and local_receipt is not None:
+        found = local_receipt(head, repo)  # None: the mode is off, so nothing changes
+        if found is not None:
+            matched, reason = found
+            if matched is True:
+                passed, detail = True, f"local receipt ({head[:12]})"
+            else:
+                detail += f"; local receipt: {reason}"
     ok = ok and passed
     lines.append(f"{'ok   ' if passed else 'BLOCK'} checks: {detail}")
     state = pr.get("mergeStateStatus")
@@ -431,7 +529,8 @@ def main(argv=None):
         adopted = adopted_at(args.repo, pr.get("baseRefOid"))
         families = independent_families(pr) if args.independent else None
         ok, lines = evaluate(pr, can_write, lane_ok, adopted=adopted,
-                             independent=args.independent, families=families)
+                             independent=args.independent, families=families, local_receipt=local_receipt,
+                             repo=args.repo)
     except (Unknown, ValueError, KeyError, TypeError, AttributeError) as error:
         print(f"UNKNOWN {error}")
         return 2

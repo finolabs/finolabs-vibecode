@@ -505,5 +505,54 @@ class HeavyRunRefusalTest(Base):
         self.assertIn('heavy lock:', out.getvalue())
 
 
+class PackagedCopyRefusalTest(Base):
+    """The fnl-checks copy of heavy_run, run alone in an isolated interpreter, finds its own pause reader."""
+
+    PACKAGED = ROOT / 'skills' / 'fnl-checks' / 'scripts'
+    CHILD = '\n'.join((
+        'import sys, unittest',
+        'from pathlib import Path',
+        'root, home, packaged, touched, when = sys.argv[1:6]',
+        'sys.path.insert(0, root)',
+        'from tests.data_root_fixture import account',
+        'account(unittest.TestCase(), home)',
+        'sys.path.remove(root)',
+        'sys.path.insert(0, packaged)',
+        'import heavy_run',
+        'assert Path(heavy_run.__file__).resolve().parent == Path(packaged)',
+        'heavy_run.read_load = lambda: 1.0',
+        'heavy_run.read_free_gb = lambda: 8.0',
+        'marker = Path(home) / ".finolabs/vibecode/state/pause.json"',
+        'def appears(_config):',
+        '    marker.write_text("{\\"started\\": %f, \\"kind\\": \\"none\\", \\"deadline\\": 0}" % __import__("time").time())',
+        '    marker.chmod(0o600)',
+        'if when == "wait":',
+        '    heavy_run.resource_wait = appears',
+        'command = [sys.executable, "-c", "import pathlib; pathlib.Path(%r).write_text(\\"x\\")" % touched]',
+        'code = heavy_run.main(["--poll", "0.02", "run", "--", *command])',
+        'loaded = sys.modules.get("pause")',
+        'assert loaded is not None and Path(loaded.__file__).resolve().parent == Path(packaged), "pause not packaged"',
+        'sys.exit(code)'))
+
+    def launch(self, when):
+        import subprocess
+        touched = self.home / 'ran'
+        done = subprocess.run([sys.executable, '-I', '-c', self.CHILD, str(ROOT), str(self.home),
+                               str(self.PACKAGED.resolve()), str(touched), when],
+                              capture_output=True, text=True, timeout=60, env={'PATH': os.defpath})
+        return done, touched
+
+    def test_refuses_at_entry_and_after_the_lock_without_starting_the_child(self):
+        for when in ('entry', 'wait'):
+            with self.subTest(when):
+                (self.state / 'pause.json').unlink(missing_ok=True)
+                if when == 'entry':
+                    self.marker()
+                done, touched = self.launch(when)
+                self.assertEqual(done.returncode, 77, done.stderr[-400:])
+                self.assertIn('heavy_run: refused: a pause is active', done.stderr)
+                self.assertFalse(touched.exists())
+
+
 if __name__ == '__main__':
     unittest.main()

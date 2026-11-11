@@ -27,4 +27,25 @@ On yes run `checks_setup.py apply --yes --digest <Digest>`. The script refuses a
 
 `checks_setup.py show` prints this repository's list. The entry is keyed by the same repository code as `## Project settings` (a linked worktree shares the main repository's code); it lives in its own section because the Project settings readers refuse unknown entries. Other repositories' entries are kept.
 
-Enforcers: `checks_setup.py` for the argument form, the limits, the preview and digest before any write and the section-only write; it runs no command and makes no network call. Choosing what goes into the list is agent judgment (advisory).
+## Local receipt (optional, its own question)
+
+Offer this only after a list is saved, and only for a repository whose cloud CI cannot run. Run `checks_setup.py receipt on`, show the printed preview, then ask: "Turn on the local receipt for this repository?"
+Yes: When the whole list passes with `fnl-checks`' `checks.py run` (never from a `--changed` run), on a clean working tree whose head did not move, a receipt is written, and `merge_check.py` accepts it in place of missing or failing cloud checks for that head and this list only. What could go wrong: the receipt is self-reported. It proves only that this computer ran the list at that head, and it gives a reviewer nothing they can check. It suits a repository one person works on.
+No: Leave the mode off; a missing cloud check keeps blocking the merge as before.
+Undo: Run `checks_setup.py receipt off` and approve its preview. Removing the list also turns the mode off.
+Choices: "Yes, turn on the local receipt" / "No, keep it off".
+On yes run `checks_setup.py apply --yes --digest <Digest>`. The mode is the line `- <repository code>: local-receipt = on` in `## Checks`, written only by this script; `local-receipt` is never a check name.
+
+## Pre-push hook (optional, its own question)
+
+Run `checks_setup.py hook install --checks-script <fnl-checks skill folder>/scripts/checks.py [--base <ref>]` from inside the repository. It asks git where hooks are read (`git rev-parse --git-path hooks`), so a linked worktree gets the main repository's hooks folder. It refuses when `core.hooksPath` is set and never changes that setting. Show the preview, which names the hooks folder, says the hook applies to every worktree of the repository, names any existing `pre-push` hook and shows the hook script. Then ask: "Install this pre-push hook?"
+Yes: Before every push, git runs `checks.py run --changed`: the stored checks the change touches. A failing check stops the push. `git push --no-verify` skips the hook. It is your own git hook, not a plugin hook.
+No: Install no hook; run `checks.py run` yourself before a push.
+Undo: Run `checks_setup.py hook remove` and approve its preview; it removes only this plugin's hook and keeps a backup.
+Choices: "Yes, install the hook" / "No, no hook".
+On yes run `checks_setup.py hook apply --yes --digest <Digest>`. When the preview names a different existing hook, the script refuses unless the user also says yes to replacing it (a second, separate question: "Replace the existing pre-push hook? A backup is kept."), and then `--replace-existing` is added. A hook that changed after the preview, a link in place of the hook, or a hooks folder that is not yours is refused.
+
+When no hook existed at the preview, the new hook is published with a hard link that fails if a hook has appeared since, so a concurrent hook is never overwritten.
+When replacing or removing, the script reads the hook again right before the replace or removal and refuses if its bytes differ from the preview. A writer that ignores this and changes the hook between that last read and the replace or removal remains a residual race.
+
+Enforcers: `checks_setup.py` for the argument form, the limits, the preview and digest before any write, the section-only write, the mode line, and the hook folder resolution, `core.hooksPath` refusal, backup and no silent overwrite. Detection, the list and the mode run no command; the hook commands run only fixed git queries. Nothing makes a network call. Choosing what goes into the list is agent judgment (advisory).

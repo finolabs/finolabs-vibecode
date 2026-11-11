@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Detect, preview and apply one repository's entry in the canonical host's Checks section; run no command, make no network call.
+"""Detect, preview and apply one repository's entry in the canonical host's Checks section and its local-receipt
+mode, and install or remove the optional git pre-push hook; make no network call.
 
 A check is a short name and a JSON argument array, never a shell string. Only this script writes `## Checks`.
+Detection, the list and the mode run no command; the hook commands run only fixed git queries, with no shell,
+to find where git reads hooks.
 """
 try:
     import fcntl
@@ -12,31 +15,37 @@ import os
 from pathlib import Path
 import re
 import stat
+import subprocess
 import sys
 import time
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
+import checks_list as cl
 import compact_setup as cs
 import project_progress as pp
+import run_env
 import setup_features as sf
 
 CAP = sf.CAP
 STATE = 'state/checks-setup'
-HEADING = '## Checks'
-NAME = re.compile(r'[a-z0-9][a-z0-9-]{0,31}')
-CODE = re.compile(r'[0-9a-f]{8}')
-LINE = re.compile(r'- ([0-9a-f]{8}): ([a-z0-9][a-z0-9-]{0,31}) = (.+)')
-MAX_CHECKS = 20
-MAX_ARGV = 1024
-SHELLS = {'sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'fish', 'csh', 'tcsh', 'ash', 'cmd', 'powershell', 'pwsh'}
-LAUNCHERS = {'env', 'xargs', 'nohup', 'nice', 'timeout', 'time', 'sudo', 'doas', 'exec', 'eval', 'command',
-             'busybox', 'script', 'watch'}
-INTERPRETER = re.compile(r'python[0-9.]*|node|nodejs|deno|bun|perl[0-9.]*|ruby[0-9.]*|php[0-9.]*')
-INLINE = re.compile(r'-[cerEp].*|--(?:eval|print)(?:=.*)?|-[bBdEiIOPqsSuvx]+c.*|eval')
-SHELL_FLAG = re.compile(r'-c.*|--call(?:=.*)?|--shell-mode')
-PLAN_KEYS = {'code', 'checks', 'root', 'created', 'sha256', 'mode', 'backup'}
+HOOK_STATE = 'state/checks-hook'
+HEADING = cl.HEADING
+NAME, CODE = cl.NAME, cl.CODE
+MAX_CHECKS, MAX_ARGV = cl.MAX_CHECKS, cl.MAX_ARGV
+PLAN_KEYS = {'code', 'checks', 'receipt', 'root', 'created', 'sha256', 'mode', 'backup'}
+HOOK_KEYS = {'action', 'repo', 'hooks', 'content', 'existing', 'ours', 'backup', 'root', 'created'}
+HOOK_MARK = '# fnl-checks pre-push hook'
+HOOK_LIMIT = 65536
+SAFE_PATH = re.compile(r'/[A-Za-z0-9/._+@ -]{1,1023}')  # no quote, so the path is safe inside single quotes
+REF = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/@{}^~-]{0,199}')
+RECEIPT_NOTICE = ("A passing checks.py run of the whole list (never from a --changed run), on a clean working tree whose head "
+                  "did not move, writes a receipt in the private state folder; merge_check.py then accepts it in place of "
+                  "missing or failing hosted checks, only for that head and this exact list.\n"
+                  "What could go wrong: the receipt is self-reported. It proves only that this machine ran the list at that "
+                  "head, on this operating system, and it gives a reviewer nothing they can check. It is meant for a "
+                  "repository one person works on.")
 SOURCE_LIMIT = 256 * 1024
 MAX_WORKFLOWS = 50
 MAX_TEST_FILES = 20
@@ -49,62 +58,26 @@ MAKE_TARGETS = ('test', 'lint', 'check')
 LOCKFILES = (('pnpm-lock.yaml', 'pnpm'), ('yarn.lock', 'yarn'), ('bun.lockb', 'bun'), ('bun.lock', 'bun'))
 
 
-# The stored argument form
+# The stored argument form and the reader live in checks_list.py, shared with fnl-checks and fnl-review-gate.
 
-def program_name(path):
-    """Lowercase base name without a Windows suffix, splitting on both kinds of slash."""
-    name = re.split(r'[\\/]', path)[-1].lower()
-    return re.sub(r'\.(?:exe|cmd|bat|com|ps1)$', '', name)
-
-
-def refused_program(argv):
-    """True when the argument array hands control to a shell, a launcher or inline code (deny on doubt)."""
-    name = program_name(argv[0])
-    if name in SHELLS or name in LAUNCHERS:
-        return True
-    rest = argv[1:]
-    if name == 'yarn' and 'exec' in rest:
-        return True
-    runs_package = name == 'npx' or (name in ('npm', 'pnpm') and any(arg in ('exec', 'x', 'dlx') for arg in rest))
-    if runs_package and any(SHELL_FLAG.fullmatch(arg) for arg in rest):
-        return True
-    return bool(INTERPRETER.fullmatch(name)) and any(INLINE.fullmatch(arg) for arg in argv[1:])
+program_name = cl.program_name
+refused_program = cl.refused_program
+check_argv = cl.check_argv
+check_list = cl.check_list
+section_span = cl.section_span
+parse = cl.parse
+checks_for = cl.checks_for
 
 
-def check_argv(argv):
-    """Refuse anything that is not a bounded argument list, or that hands a string to a shell, a launcher or inline code."""
-    if not isinstance(argv, list) or not argv or len(argv) > 64:
-        raise ValueError('argument array')
-    for item in argv:
-        if not isinstance(item, str) or re.search(r'[\x00-\x1f\x7f]', item):
-            raise ValueError('argument')
-    if not argv[0]:
-        raise ValueError('program')
-    encoded = json.dumps(argv, separators=(',', ':'), ensure_ascii=True)
-    if len(encoded.encode()) > MAX_ARGV:
-        raise ValueError('argument array too long')
-    if refused_program(argv):
-        raise ValueError('shell, launcher or inline code')
-    return encoded
-
-
-def check_list(checks):
-    if not isinstance(checks, list) or not 1 <= len(checks) <= MAX_CHECKS:
-        raise ValueError('checks')
-    names = set()
-    for item in checks:
-        if not isinstance(item, list) or len(item) != 2 or not isinstance(item[0], str):
-            raise ValueError('check')
-        if not NAME.fullmatch(item[0]) or item[0] in names:
-            raise ValueError('check name')
-        check_argv(item[1])
-        names.add(item[0])
+class Said(ValueError):
+    """A refusal whose fixed message is printed as is."""
 
 
 def parse_check(text):
     name, separator, value = text.partition('=')
-    if not separator or not NAME.fullmatch(name):
+    if not separator:
         raise ValueError('check name')
+    cl.check_name(name)
     argv = json.loads(value)
     check_argv(argv)
     return [name, argv]
@@ -116,58 +89,49 @@ def render_line(code, name, argv):
 
 # The section
 
-def section_span(text):
-    """(start, end) of the one real section, None when absent; ambiguity raises."""
-    headings, fence = sf.split(text)
-    indexes = [i for i, (_, title) in enumerate(headings) if title == HEADING]
-    if fence is not None or len(indexes) > 1:
-        raise ValueError('ambiguous section')
-    if not indexes:
-        return None
-    index = indexes[0]
-    return headings[index][0], headings[index + 1][0] if index + 1 < len(headings) else len(text)
-
-
-def parse(text):
-    """Return None when absent, else {code: [[name, argv], ...]} in stored order; any bad line raises."""
-    span = section_span(text)
-    if span is None:
-        return None
-    entries = {}
-    for line in text[span[0]:span[1]].splitlines()[1:]:
-        if not line.strip():
-            continue
-        match = LINE.fullmatch(line)
-        if not match:
-            raise ValueError('unknown line')
-        argv = json.loads(match[3])
-        if check_argv(argv) != match[3]:
-            raise ValueError('argument form')
-        checks = entries.setdefault(match[1], [])
-        if any(name == match[2] for name, _ in checks) or len(checks) >= MAX_CHECKS:
-            raise ValueError('duplicate or too many checks')
-        checks.append([match[2], argv])
-    return entries
-
-
-def render(entries):
+def render(entries, receipts=()):
     if not entries:
         return ''
-    lines = ''.join(render_line(code, name, argv) for code in sorted(entries) for name, argv in entries[code])
+    lines = ''
+    for code in sorted(entries):
+        lines += ''.join(render_line(code, name, argv) for name, argv in entries[code])
+        if code in receipts:
+            lines += f'- {code}: {cl.RECEIPT_MODE} = on\n'
     return f'{HEADING}\n\n{lines}\n'
 
 
-def transform(raw, code, checks):
-    """Replace only this repository's lines; checks None removes them, and the section when it empties."""
+def stored(text, code):
+    """This repository's stored list as [[name, argv], ...]; an absent or invalid section or no entry raises."""
+    parsed = cl.parse_section(text)
+    if parsed is None or code not in parsed[0]:
+        raise Said('this repository has no stored checks; save a list first')
+    return parsed[0][code]
+
+
+def transform(raw, code, checks, receipt=None):
+    """Replace only this repository's lines; checks None removes them and the mode, and the section when it empties.
+
+    receipt True turns the local-receipt mode on, False turns it off, None keeps it as stored.
+    """
     text = raw.decode('utf-8') if raw is not None else ''
-    entries = parse(text) or {}
+    parsed = cl.parse_section(text)
+    entries, receipts = parsed if parsed is not None else ({}, set())
     if checks is None:
+        if receipt is not None:
+            raise ValueError('mode without checks')
         entries.pop(code, None)
+        receipts.discard(code)
     else:
         check_list(checks)
         entries[code] = checks
+        if receipt is True:
+            receipts.add(code)
+        elif receipt is False:
+            receipts.discard(code)
+        elif receipt is not None:
+            raise ValueError('mode')
     newline = '\r\n' if '\r\n' in text else '\n'
-    section = render(entries).replace('\n', newline)
+    section = render(entries, receipts).replace('\n', newline)
     span = section_span(text)
     if span is not None:
         result = text[:span[0]] + section + text[span[1]:]
@@ -180,30 +144,6 @@ def transform(raw, code, checks):
     if len(encoded) > CAP:
         raise ValueError('host too large')
     return encoded
-
-
-def checks_for(repository_code):
-    """Ordered (name, argv) pairs and None, or an empty list and a reason: absent, invalid, unreadable or no entry.
-
-    An invalid section counts as unset as a whole and is never repaired here.
-    """
-    if not isinstance(repository_code, str) or not CODE.fullmatch(repository_code):
-        return [], 'invalid code'
-    try:
-        text = dr.read_data('host.md', CAP).decode('utf-8')
-    except FileNotFoundError:
-        return [], 'absent'
-    except (OSError, ValueError, UnicodeError):
-        return [], 'unreadable'
-    try:
-        entries = parse(text)
-    except (ValueError, TypeError, RecursionError):
-        return [], 'invalid'
-    if entries is None:
-        return [], 'absent'
-    if repository_code not in entries:
-        return [], 'no entry'
-    return [(name, argv) for name, argv in entries[repository_code]], None
 
 
 # Preview, digest, apply
@@ -222,7 +162,8 @@ def repository(root):
     return pp.repository_code(found)
 
 
-def preview(code, checks):
+def preview(code, checks, receipt=None):
+    """checks None removes the entry; receipt True or False changes only the mode and keeps the stored list."""
     if checks is not None:
         check_list(checks)
     root = dr.consent_root()
@@ -231,8 +172,10 @@ def preview(code, checks):
     with dr.root_folder(create=True) as folder:
         fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
         raw, mode = read_host(folder)
-        transform(raw, code, checks)
-        plan = {'code': code, 'checks': checks, 'root': str(root), 'created': time.time(),
+        if receipt is not None:
+            checks = stored(raw.decode('utf-8') if raw is not None else '', code)
+        transform(raw, code, checks, receipt)
+        plan = {'code': code, 'checks': checks, 'receipt': receipt, 'root': str(root), 'created': time.time(),
                 'sha256': cs.content_hash(raw), 'mode': mode, 'backup': cs.backup_name(folder, 'host.md')}
     value = cs.digest(plan)
     with dr.data_folder(STATE, create=True, private=True) as state:
@@ -242,7 +185,13 @@ def preview(code, checks):
             pass
         dr.atomic_write(state, 'preview.json', json.dumps({'plan': plan, 'digest': value}).encode())
     print('Target: ' + str(root / 'host.md'))
-    if checks is None:
+    if receipt is True:
+        print(f'Turn the local-receipt mode on for repository {code} ({HEADING} line '
+              f'"- {code}: {cl.RECEIPT_MODE} = on").')
+        print(RECEIPT_NOTICE)
+    elif receipt is False:
+        print(f'Turn the local-receipt mode off for repository {code}; its check list stays as stored.')
+    elif checks is None:
         print(f'Remove every check of repository {code} from {HEADING}.')
     else:
         print(HEADING + ' entry for repository ' + code + ':')
@@ -270,6 +219,8 @@ def apply(value, yes):
             raise ValueError('invalid plan')
         if plan['checks'] is not None:
             check_list(plan['checks'])
+        if plan['receipt'] not in (None, True, False) or (plan['checks'] is None and plan['receipt'] is not None):
+            raise ValueError('invalid plan')
         if plan['root'] != str(dr.consent_root()):
             raise ValueError('data root changed; preview again')
         if type(plan['created']) not in (int, float) or not 0 <= time.time() - plan['created'] <= 3600:
@@ -281,7 +232,7 @@ def apply(value, yes):
             raw, mode = read_host(folder)
             if cs.content_hash(raw) != plan['sha256'] or mode != plan['mode']:
                 raise ValueError('host changed; preview again')
-            result = transform(raw, plan['code'], plan['checks'])
+            result = transform(raw, plan['code'], plan['checks'], plan['receipt'])
             if result != (raw or b''):
                 if raw is not None:
                     fd = os.open(plan['backup'], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=folder)
@@ -305,7 +256,235 @@ def show(root):
     print(f'Repository {code}:')
     for name, argv in checks:
         print(f'{name} = {check_argv(argv)}')
+    print('local receipt: ' + ('on' if cl.receipt_mode(code) else 'off'))
     return 0
+
+
+# The pre-push hook: the user's own git hook, installed and removed with a preview, a digest and a backup
+
+def git_query(root, *args):
+    """(exit code, stdout) of one fixed read-only git query; no shell, an allowlisted environment."""
+    done = subprocess.run(['git', '-c', 'core.fsmonitor=false', '-C', str(root), *args], capture_output=True,
+                          text=True, encoding='utf-8', timeout=30, check=False, env=run_env.environment())
+    return done.returncode, done.stdout.strip()
+
+
+def hooks_folder(root):
+    """(repository root, resolved hooks folder, linked worktree) where git really reads hooks; refuses core.hooksPath."""
+    found = pp.find_root(root or os.getcwd())
+    if found is None:
+        raise ValueError('no repository')
+    code, value = git_query(found, 'config', '--get', 'core.hooksPath')
+    if code == 0:
+        raise Said('core.hooksPath is set for this repository; another hook manager owns its hooks. '
+                   'The installer refuses and never changes that setting.')
+    if code != 1:
+        raise ValueError('git config failed')
+    answers = []
+    for query in (('--git-path', 'hooks'), ('--absolute-git-dir',), ('--git-common-dir',)):
+        code, value = git_query(found, 'rev-parse', *query)
+        if code or not value or '\n' in value:
+            raise ValueError('git rev-parse failed')
+        answers.append(Path(value) if os.path.isabs(value) else found / value)
+    hooks, git_dir, common = (Path(os.path.realpath(path)) for path in answers)
+    return found, hooks, git_dir != common
+
+
+def open_hooks(hooks):
+    fd = os.open(str(hooks), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    info = os.fstat(fd)
+    if info.st_uid != os.getuid() or info.st_mode & 0o022:
+        os.close(fd)
+        raise Said('the hooks folder is not owned by you or is writable by others')
+    return fd
+
+
+def read_hook(fd):
+    """The current pre-push hook's bytes, None when absent; a link or an unsafe file is refused."""
+    try:
+        info = os.stat('pre-push', dir_fd=fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISREG(info.st_mode):
+        raise Said('pre-push is not a regular file; move it yourself first')
+    return dr.read_file(fd, 'pre-push', HOOK_LIMIT)
+
+
+def ours(raw):
+    return raw is not None and raw.startswith(('#!/bin/sh\n' + HOOK_MARK).encode())
+
+
+def checked_script(value):
+    """An absolute, real, owner-only regular file named checks.py whose path needs no quoting."""
+    path = str(value)
+    if (not SAFE_PATH.fullmatch(path) or os.path.basename(path) != 'checks.py' or '/../' in path + '/'
+            or os.path.realpath(path) != path):
+        raise ValueError('checks script')
+    info = os.lstat(path)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022:
+        raise ValueError('checks script')
+    return path
+
+
+def hook_text(script, base):
+    python = sys.executable
+    if not SAFE_PATH.fullmatch(python or ''):
+        raise ValueError('interpreter path')
+    if base is not None and (not REF.fullmatch(base) or '..' in base):
+        raise ValueError('base')
+    return ('#!/bin/sh\n' + HOOK_MARK + ': runs the stored checks for the change before a push.\n'
+            '# Installed by checks_setup.py hook install; remove it with checks_setup.py hook remove.\n'
+            '# git push --no-verify skips it.\n'
+            f"exec '{python}' -I '{script}' run --changed" + (f" --base '{base}'" if base else '') + '\n')
+
+
+def hook_preview(root, action, script=None, base=None):
+    data = dr.consent_root()
+    if data is None:
+        raise ValueError('invalid data root')
+    found, hooks, linked = hooks_folder(root)
+    content = hook_text(checked_script(script), base) if action == 'install' else None
+    fd = open_hooks(hooks)
+    try:
+        existing = read_hook(fd)
+        if action == 'remove' and existing is None:
+            raise Said('there is no pre-push hook to remove')
+        if action == 'remove' and not ours(existing):
+            raise Said("the pre-push hook is not this plugin's; it is left alone")
+        backup = cs.backup_name(fd, 'pre-push') if existing is not None else None
+    finally:
+        os.close(fd)
+    plan = {'action': action, 'repo': str(found), 'hooks': str(hooks), 'content': content,
+            'existing': cs.content_hash(existing), 'ours': ours(existing), 'backup': backup, 'root': str(data),
+            'created': time.time()}
+    value = cs.digest(plan)
+    with dr.data_folder(HOOK_STATE, create=True, private=True) as state:
+        dr.atomic_write(state, 'preview.json', json.dumps({'plan': plan, 'digest': value}).encode())
+    print('Hooks folder: ' + str(hooks))
+    print('Git reads this folder for every worktree of this repository, so the hook applies to all of them.')
+    if linked:
+        print('This checkout is a linked worktree; the folder above belongs to the main repository.')
+    if existing is None:
+        print('Existing pre-push hook: none')
+    elif ours(existing):
+        print("Existing pre-push hook: this plugin's hook; it is backed up and replaced" if action == 'install'
+              else "Existing pre-push hook: this plugin's hook; it is backed up and removed")
+    else:
+        print('Existing pre-push hook: a different hook; apply needs --replace-existing, and a backup is kept')
+    if content is not None:
+        print('Hook script:')
+        print(content, end='')
+        print('Before every push it runs checks.py run --changed: the stored checks the change touches. '
+              'git push --no-verify skips it.')
+    else:
+        print('Remove the pre-push hook; git push then runs no checks.')
+    if backup:
+        print('Backup: ' + str(hooks / backup))
+    print('Digest: ' + value)
+    print('Preview expires in 60 minutes; nothing changed.')
+
+
+def hook_apply(value, yes, replace):
+    if not yes or not isinstance(value, str) or not re.fullmatch(r'[0-9a-f]{12,64}', value):
+        raise ValueError('clear yes and at least 12 hex digits of the preview digest required')
+    with dr.data_folder(HOOK_STATE, private=True) as state:
+        fcntl.flock(state, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        saved = json.loads(cs.read_plan(state))
+        if not isinstance(saved, dict) or set(saved) != {'plan', 'digest'}:
+            raise ValueError('invalid preview')
+        plan = saved['plan']
+        digest = cs.digest(plan)
+        if saved['digest'] != digest or not digest.startswith(value):
+            raise ValueError('digest mismatch; preview again')
+        if not isinstance(plan, dict) or set(plan) != HOOK_KEYS or plan['action'] not in ('install', 'remove'):
+            raise ValueError('invalid plan')
+        if plan['root'] != str(dr.consent_root()):
+            raise ValueError('data root changed; preview again')
+        if type(plan['created']) not in (int, float) or not 0 <= time.time() - plan['created'] <= 3600:
+            raise ValueError('preview expired; preview again')
+        content = plan['content']
+        if plan['action'] == 'install':
+            if not isinstance(content, str) or len(content) > 4096 or not ours(content.encode()):
+                raise ValueError('invalid plan')
+        elif content is not None:
+            raise ValueError('invalid plan')
+        backup = plan['backup']
+        if backup is not None and (not isinstance(backup, str)
+                                   or not re.fullmatch(r'pre-push\.bak-\d{8}(?:-[1-9][0-9]*)?', backup)):
+            raise ValueError('invalid backup')
+        found, hooks, _ = hooks_folder(plan['repo'])
+        if str(hooks) != plan['hooks']:
+            raise ValueError('hooks folder changed; preview again')
+        fd = open_hooks(hooks)
+        try:
+            existing = read_hook(fd)
+            if cs.content_hash(existing) != plan['existing'] or ours(existing) != plan['ours']:
+                raise Said('the pre-push hook changed since the preview; preview again')
+            if plan['action'] == 'install' and existing is not None and not ours(existing) and not replace:
+                raise Said('a different pre-push hook exists; it is replaced only with --replace-existing')
+            if existing is not None:
+                if backup is None:
+                    raise ValueError('invalid backup')
+                info = os.stat('pre-push', dir_fd=fd, follow_symlinks=False)
+                out = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
+                with os.fdopen(out, 'wb') as stream:
+                    os.fchmod(stream.fileno(), stat.S_IMODE(info.st_mode) & 0o755)
+                    stream.write(existing)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+
+            def still_previewed():
+                # Re-read right before the replace or removal; a writer that ignores this between the re-read and
+                # the change remains a residual race (references/features/checks.md). Any failure of the re-read
+                # refuses: no content stands in for an error.
+                try:
+                    current = read_hook(fd)
+                    matches = current is not None and cs.content_hash(current) == plan['existing']
+                except Exception:
+                    matches = False
+                if not matches:
+                    try:
+                        os.unlink(backup, dir_fd=fd)  # the backup this apply just wrote; the hook is left alone
+                    except FileNotFoundError:
+                        pass
+                    raise Said('the pre-push hook changed since the preview; preview again')
+
+            if plan['action'] == 'install':
+                temporary = '.pre-push-' + os.urandom(8).hex()
+                out = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
+                try:
+                    with os.fdopen(out, 'wb') as stream:
+                        stream.write(content.encode())
+                        os.fchmod(stream.fileno(), 0o755)
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                    if existing is None:
+                        # Publish without clobbering: link fails when a hook appeared since the preview.
+                        try:
+                            os.link(temporary, 'pre-push', src_dir_fd=fd, dst_dir_fd=fd, follow_symlinks=False)
+                        except FileExistsError:
+                            raise Said('a pre-push hook appeared since the preview; it is left alone. '
+                                       'Preview again.') from None
+                        os.unlink(temporary, dir_fd=fd)
+                    else:
+                        still_previewed()
+                        os.replace(temporary, 'pre-push', src_dir_fd=fd, dst_dir_fd=fd)
+                except BaseException:
+                    try:
+                        os.unlink(temporary, dir_fd=fd)
+                    except FileNotFoundError:
+                        pass
+                    raise
+            else:
+                still_previewed()
+                os.unlink('pre-push', dir_fd=fd)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.unlink('preview.json', dir_fd=state)
+        os.fsync(state)
+    print('Pre-push hook installed; git push --no-verify skips it.' if plan['action'] == 'install'
+          else 'Pre-push hook removed.')
 
 
 # Detection: read files only, never run them
@@ -606,7 +785,31 @@ def main(argv=None):
         app.add_argument('--digest', required=True)
         for name in ('show', 'remove'):
             commands.add_parser(name).add_argument('--root')
+        mode = commands.add_parser('receipt')
+        mode.add_argument('state', choices=('on', 'off'))
+        mode.add_argument('--root')
+        hook = commands.add_parser('hook').add_subparsers(dest='hook', required=True)
+        install = hook.add_parser('install')
+        install.add_argument('--root')
+        install.add_argument('--checks-script', required=True)
+        install.add_argument('--base')
+        hook.add_parser('remove').add_argument('--root')
+        done = hook.add_parser('apply')
+        done.add_argument('--yes', action='store_true')
+        done.add_argument('--replace-existing', action='store_true')
+        done.add_argument('--digest', required=True)
         args = parser.parse_args(argv)
+        if args.action == 'hook':
+            if args.hook == 'install':
+                hook_preview(args.root, 'install', args.checks_script, args.base)
+            elif args.hook == 'remove':
+                hook_preview(args.root, 'remove')
+            else:
+                hook_apply(args.digest, args.yes, args.replace_existing)
+            return 0
+        if args.action == 'receipt':
+            preview(repository(args.root), None, args.state == 'on')
+            return 0
         if args.action == 'detect':
             result = detect(args.root)
             if args.json:
@@ -624,7 +827,11 @@ def main(argv=None):
         else:
             apply(args.digest, args.yes)
         return 0
-    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
+    except Said as error:
+        print(f'Checks setup refused: {error}', file=sys.stderr)
+        return 1
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError,
+            subprocess.SubprocessError):
         print('Checks setup refused: invalid arguments, shell string, unsafe or changed file, invalid Checks section, '
               'or stale preview; preview again.', file=sys.stderr)
         return 1

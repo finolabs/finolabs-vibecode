@@ -468,10 +468,290 @@ class ChecksSetupTest(unittest.TestCase):
         self.assertEqual(self.module().checks_for(code_), ([('test', ['make', 'test'])], None))
         self.assertEqual(writer.project_settings(after), {(code_, 'parallel'): '5'})
 
-    def test_no_command_and_no_network(self):
+    def test_no_command_but_fixed_git_queries_and_no_network(self):
         source = SCRIPT.read_text()
-        for word in ('subprocess', 'socket', 'urllib', 'http.client', 'os.system', 'os.exec', 'os.spawn', 'os.popen'):
+        for word in ('socket', 'urllib', 'http.client', 'os.system', 'os.exec', 'os.spawn', 'os.popen', 'Popen',
+                     'shell=True'):
             self.assertNotIn(word, source)
+        # The hook commands ask git where hooks live; that one helper is the only launch.
+        self.assertEqual(source.count('subprocess.run('), 1)
+        self.assertIn("def git_query(root, *args):\n", source)
+
+    # The local-receipt mode
+
+    def test_receipt_mode_is_its_own_previewed_yes_and_states_the_risk(self):
+        digest = self.preview('test=["make","test"]')
+        self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 0)
+        before = self.host.read_bytes()
+        code, out, err = self.cli('receipt', 'on', '--root', str(self.repo))
+        self.assertEqual(code, 0, err)
+        for phrase in ('self-reported', 'gives a reviewer nothing they can check', 'one person works on',
+                       'never from a --changed run'):
+            self.assertIn(phrase, out)
+        self.assertEqual(self.host.read_bytes(), before)
+        value = out.split('Digest: ')[1].splitlines()[0]
+        self.assertEqual(self.cli('apply', '--yes', '--digest', value)[0], 0)
+        code_ = self.code()
+        self.assertIn(('- %s: test = ["make","test"]\n- %s: local-receipt = on\n' % (code_, code_)).encode(),
+                      self.host.read_bytes())
+        reader = load('checks_list_mode', SCRIPTS / 'checks_list.py')
+        self.assertTrue(reader.receipt_mode(code_))
+        self.assertEqual(self.module().checks_for(code_), ([('test', ['make', 'test'])], None))
+        # A new list keeps the mode; its digest changes, so an older receipt no longer matches.
+        digest = self.preview('lint=["make","lint"]')
+        self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 0)
+        self.assertTrue(reader.receipt_mode(code_))
+        code, out, _ = self.cli('receipt', 'off', '--root', str(self.repo))
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        self.assertFalse(reader.receipt_mode(code_))
+        self.assertNotIn(b'local-receipt', self.host.read_bytes())
+
+    def test_receipt_mode_is_off_by_default_and_needs_a_list(self):
+        reader = load('checks_list_default', SCRIPTS / 'checks_list.py')
+        self.assertFalse(reader.receipt_mode(self.code()))
+        code, out, _ = self.cli('receipt', 'on', '--root', str(self.repo))
+        self.assertEqual(code, 1)
+        self.assertNotIn('Digest', out)
+
+    def test_remove_also_turns_the_mode_off(self):
+        digest = self.preview('test=["make","test"]')
+        self.cli('apply', '--yes', '--digest', digest)
+        _, out, _ = self.cli('receipt', 'on', '--root', str(self.repo))
+        self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])
+        _, out, _ = self.cli('remove', '--root', str(self.repo))
+        self.assertEqual(self.cli('apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        self.assertNotIn(b'## Checks', self.host.read_bytes())
+
+    def test_the_mode_name_is_reserved_and_a_bad_mode_line_unsets_the_section(self):
+        code, _, _ = self.cli('preview', '--root', str(self.repo), '--check', 'local-receipt=["make"]')
+        self.assertEqual(code, 1)
+        code_ = self.code()
+        good = '- %s: test = ["make","test"]\n' % code_
+        module = self.module()
+        for body in (good + '- %s: local-receipt = yes\n' % code_,
+                     good + '- %s: local-receipt = on\n' % code_ * 2,
+                     '- %s: local-receipt = on\n' % code_):
+            with self.subTest(body=body):
+                self.host.write_text('## Checks\n\n' + body)
+                self.assertEqual(module.checks_for(code_), ([], 'invalid'))
+
+
+class HookTest(unittest.TestCase):
+    """The optional pre-push hook: resolved hooks folder, preview, digest, backup, no silent overwrite."""
+
+    def setUp(self):
+        scratch = ROOT / '.finolabs/tmp'
+        scratch.mkdir(parents=True, exist_ok=True)
+        self.temp = tempfile.TemporaryDirectory(dir=scratch)
+        self.addCleanup(self.temp.cleanup)
+        base = Path(self.temp.name).resolve()
+        self.home = account(self, base / 'home')
+        self.env = {'HOME': str(self.home), 'PATH': os.defpath + ':/usr/local/bin:/opt/homebrew/bin'}
+        patch = mock.patch.dict(os.environ, self.env, clear=True)
+        patch.start()
+        self.addCleanup(patch.stop)
+        (self.home / '.finolabs/vibecode').mkdir(parents=True)
+        self.repo = base / 'repo'
+        self.repo.mkdir()
+        self.git('init', '-q', '-b', 'main')
+        (self.repo / 'README.md').write_text('x\n')
+        self.git('add', '.')
+        self.git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-qm', 'Start')
+        self.hooks = Path(self.git('rev-parse', '--absolute-git-dir')).resolve() / 'hooks'
+        self.hooks.mkdir(exist_ok=True)
+        self.script = base / 'plugin/skills/fnl-checks/scripts/checks.py'
+        self.script.parent.mkdir(parents=True)
+        self.script.write_text('# synthetic\n')
+
+    def git(self, *argv, cwd=None):
+        env = dict(self.env, GIT_CONFIG_NOSYSTEM='1')
+        return subprocess.run(['git', *argv], cwd=cwd or self.repo, env=env, capture_output=True, text=True,
+                              check=True).stdout.strip()
+
+    def cli(self, *args):
+        writer = load('checks_setup_hook_test', SCRIPT)
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = writer.main(list(args))
+        return code, out.getvalue(), err.getvalue()
+
+    def install(self, root=None, *extra):
+        code, out, err = self.cli('hook', 'install', '--root', str(root or self.repo),
+                                  '--checks-script', str(self.script), *extra)
+        self.assertEqual(code, 0, err)
+        return out, out.split('Digest: ')[1].splitlines()[0]
+
+    def test_install_previews_then_writes_an_executable_hook(self):
+        out, digest = self.install()
+        for phrase in ('Hooks folder: ' + str(self.hooks), 'every worktree of this repository',
+                       'git push --no-verify', 'run --changed', str(self.script), 'Existing pre-push hook: none'):
+            self.assertIn(phrase, out)
+        self.assertFalse((self.hooks / 'pre-push').exists())
+        self.assertEqual(self.cli('hook', 'apply', '--digest', digest)[0], 1)
+        self.assertEqual(self.cli('hook', 'apply', '--yes', '--digest', '0' * 12)[0], 1)
+        code, out, err = self.cli('hook', 'apply', '--yes', '--digest', digest)
+        self.assertEqual(code, 0, err)
+        hook = self.hooks / 'pre-push'
+        text = hook.read_text()
+        self.assertTrue(text.startswith('#!/bin/sh\n'))
+        self.assertIn("'%s' run --changed" % self.script, text)
+        self.assertEqual(hook.stat().st_mode & 0o777, 0o755)
+
+    def test_an_existing_different_hook_needs_a_second_flag_and_is_backed_up(self):
+        hook = self.hooks / 'pre-push'
+        hook.write_text('#!/bin/sh\necho mine\n')
+        out, digest = self.install()
+        self.assertIn('Existing pre-push hook: a different hook', out)
+        self.assertEqual(self.cli('hook', 'apply', '--yes', '--digest', digest)[0], 1)
+        self.assertEqual(hook.read_text(), '#!/bin/sh\necho mine\n')
+        code, _, err = self.cli('hook', 'apply', '--yes', '--replace-existing', '--digest', digest)
+        self.assertEqual(code, 0, err)
+        self.assertIn('run --changed', hook.read_text())
+        backups = list(self.hooks.glob('pre-push.bak-*'))
+        self.assertEqual([b.read_text() for b in backups], ['#!/bin/sh\necho mine\n'])
+
+    def test_a_hook_changed_after_the_preview_is_refused(self):
+        _, digest = self.install()
+        (self.hooks / 'pre-push').write_text('#!/bin/sh\necho later\n')
+        self.assertEqual(self.cli('hook', 'apply', '--yes', '--replace-existing', '--digest', digest)[0], 1)
+        self.assertEqual((self.hooks / 'pre-push').read_text(), '#!/bin/sh\necho later\n')
+
+    def test_a_custom_hooks_path_is_refused_and_left_alone(self):
+        self.git('config', 'core.hooksPath', 'custom-hooks')
+        code, out, err = self.cli('hook', 'install', '--root', str(self.repo), '--checks-script', str(self.script))
+        self.assertEqual(code, 1)
+        self.assertIn('core.hooksPath', err)
+        self.assertNotIn('Digest', out)
+        self.assertEqual(self.git('config', '--get', 'core.hooksPath'), 'custom-hooks')
+
+    def test_a_linked_worktree_resolves_to_the_shared_hooks_folder(self):
+        linked = Path(self.temp.name).resolve() / 'linked'
+        self.git('worktree', 'add', '-q', str(linked), '-b', 'side')
+        out, digest = self.install(linked)
+        self.assertIn('Hooks folder: ' + str(self.hooks), out)
+        self.assertIn('This checkout is a linked worktree', out)
+        self.assertEqual(self.cli('hook', 'apply', '--yes', '--digest', digest)[0], 0)
+        self.assertTrue((self.hooks / 'pre-push').is_file())
+
+    def test_remove_takes_out_only_this_plugins_hook_with_a_backup(self):
+        _, digest = self.install()
+        self.cli('hook', 'apply', '--yes', '--digest', digest)
+        installed = (self.hooks / 'pre-push').read_text()
+        code, out, err = self.cli('hook', 'remove', '--root', str(self.repo))
+        self.assertEqual(code, 0, err)
+        self.assertTrue((self.hooks / 'pre-push').exists())
+        self.assertEqual(self.cli('hook', 'apply', '--yes', '--digest', out.split('Digest: ')[1].splitlines()[0])[0], 0)
+        self.assertFalse((self.hooks / 'pre-push').exists())
+        self.assertEqual([b.read_text() for b in self.hooks.glob('pre-push.bak-*')], [installed])
+        (self.hooks / 'pre-push').write_text('#!/bin/sh\necho mine\n')
+        self.assertEqual(self.cli('hook', 'remove', '--root', str(self.repo))[0], 1)
+        self.assertEqual((self.hooks / 'pre-push').read_text(), '#!/bin/sh\necho mine\n')
+
+    def apply_racing(self, digest, change, *extra):
+        """Apply, while `change()` runs right after apply's own check of the hook: a concurrent writer."""
+        writer = load('checks_setup_race_test', SCRIPT)
+        real, calls = writer.read_hook, []
+
+        def racing(fd):
+            found = real(fd)
+            if not calls:
+                change()
+            calls.append(found)
+            return found
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(writer, 'read_hook', racing), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = writer.main(['hook', 'apply', '--yes', *extra, '--digest', digest])
+        self.assertTrue(calls, 'apply never read the hook')
+        return code, err.getvalue()
+
+    def test_a_hook_created_between_preview_and_apply_is_not_clobbered(self):
+        _, digest = self.install()
+        hook = self.hooks / 'pre-push'
+        code, err = self.apply_racing(digest, lambda: hook.write_bytes(b'#!/bin/sh\necho racing\n'))
+        self.assertEqual(code, 1)
+        self.assertIn('appeared', err)
+        self.assertEqual(hook.read_bytes(), b'#!/bin/sh\necho racing\n')
+        self.assertEqual([p.name for p in self.hooks.iterdir() if p.name.startswith('.pre-push-')], [])
+
+    def test_a_hook_changed_between_preview_and_remove_is_refused(self):
+        _, digest = self.install()
+        self.assertEqual(self.cli('hook', 'apply', '--yes', '--digest', digest)[0], 0)
+        hook = self.hooks / 'pre-push'
+        code, out, err = self.cli('hook', 'remove', '--root', str(self.repo))
+        self.assertEqual(code, 0, err)
+        changed = hook.read_bytes() + b'echo racing\n'
+        code, err = self.apply_racing(out.split('Digest: ')[1].splitlines()[0], lambda: hook.write_bytes(changed))
+        self.assertEqual(code, 1)
+        self.assertIn('changed since the preview', err)
+        self.assertEqual(hook.read_bytes(), changed)
+        self.assertEqual(list(self.hooks.glob('pre-push.bak-*')), [])
+
+    def test_a_hook_changed_between_preview_and_replace_is_refused(self):
+        hook = self.hooks / 'pre-push'
+        hook.write_bytes(b'#!/bin/sh\necho mine\n')
+        _, digest = self.install()
+        code, err = self.apply_racing(digest, lambda: hook.write_bytes(b'#!/bin/sh\necho racing\n'),
+                                      '--replace-existing')
+        self.assertEqual(code, 1)
+        self.assertIn('changed since the preview', err)
+        self.assertEqual(hook.read_bytes(), b'#!/bin/sh\necho racing\n')
+
+    def assert_untouched_refusal(self, code, err):
+        self.assertEqual(code, 1)
+        self.assertIn('changed since the preview', err)
+        self.assertEqual(list(self.hooks.glob('pre-push.bak-*')), [])
+        self.assertEqual([p.name for p in self.hooks.iterdir() if p.name.startswith('.pre-push-')], [])
+
+    def test_an_empty_previewed_hook_replaced_by_a_symlink_is_refused(self):
+        hook = self.hooks / 'pre-push'
+        hook.write_bytes(b'')
+        _, digest = self.install()
+        target = self.hooks.parent / 'elsewhere'
+        target.write_bytes(b'#!/bin/sh\necho elsewhere\n')
+
+        def to_symlink():
+            hook.unlink()
+            hook.symlink_to(target)
+        code, err = self.apply_racing(digest, to_symlink, '--replace-existing')
+        self.assert_untouched_refusal(code, err)
+        self.assertTrue(hook.is_symlink())
+        self.assertEqual(target.read_bytes(), b'#!/bin/sh\necho elsewhere\n')
+
+    def test_an_empty_previewed_hook_whose_re_read_fails_is_refused(self):
+        hook = self.hooks / 'pre-push'
+        hook.write_bytes(b'')
+        _, digest = self.install()
+        writer = load('checks_setup_read_error_test', SCRIPT)
+        real, calls = writer.read_hook, []
+
+        def failing(fd):
+            calls.append(1)
+            if len(calls) > 1:
+                raise OSError('synthetic read error')
+            return real(fd)
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(writer, 'read_hook', failing), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = writer.main(['hook', 'apply', '--yes', '--replace-existing', '--digest', digest])
+        self.assertEqual(len(calls), 2)
+        self.assert_untouched_refusal(code, err.getvalue())
+        self.assertEqual(hook.read_bytes(), b'')
+
+    def test_an_unsafe_checks_script_path_is_refused(self):
+        odd = self.script.parent / "it's" / 'checks.py'
+        odd.parent.mkdir()
+        odd.write_text('# synthetic\n')
+        other = self.script.parent / 'other.py'
+        other.write_text('# synthetic\n')
+        link = self.script.parent / 'link' / 'checks.py'
+        link.parent.mkdir()
+        link.symlink_to(self.script)
+        for path in (odd, other, link, self.script.parent / 'missing' / 'checks.py', Path('checks.py')):
+            with self.subTest(path=str(path)):
+                code, out, _ = self.cli('hook', 'install', '--root', str(self.repo), '--checks-script', str(path))
+                self.assertEqual(code, 1)
+                self.assertNotIn('Digest', out)
 
 
 if __name__ == '__main__':

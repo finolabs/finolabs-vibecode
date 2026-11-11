@@ -15,6 +15,7 @@ Pairs with `tdd` and `diagnosing-bugs` from [mattpocock/skills](https://github.c
 
 - Run the **targeted tests** at checkpoints, not after every edit: those covering the changed code and its traced consumers, plus the project's lint and unit checks for those packages. Pick them from the diff (packages, test name patterns, the end-to-end suite only when the user-facing path changed). Say when no test covers the change; when that change alters runtime behavior, name the gap and propose a test rather than skip it. Advisory (agent judgment): `<this skill folder>/scripts/select_tests.py [--base <ref>]` lists the test modules that name a changed file.
 - Run a **full suite** only when the owner asks. Gates and pull requests use targeted tests; CI runs the rest after an authorized push. When the change touches widely shared code whose consumers you cannot trace in full, propose a full suite and wait for the owner's yes.
+- A repository's stored check list (set by `/fnl-setup add checks`) runs with `<this skill folder>/scripts/checks.py run [--changed] [--base <ref>]`; see [references/checks.md](references/checks.md) for `--changed`, the local receipt and the pre-push hook.
 - Keep local fixtures small (about 1,000 items) unless the owner asks for larger stages.
 - **Heavy jobs** (container-backed suites, scale measurements, end-to-end runs) run one at a time per machine through `fnl-delegate`'s `heavy_run.py` (it also waits for load and free memory); without it, run one at a time yourself and start only when the one-minute load average is below 12. Run at most two test modules per command. Light targeted runs may overlap. Keep the machine awake for long runs.
 
@@ -31,8 +32,7 @@ Evidence belongs to the exact revision, contracts, dependencies, configuration a
 
 Report each check as **PASS**, **FAIL**, **PENDING**, **SKIP**, **WAIVED** (with who waived it and why) or **N/A**. Only the owner waives a check; an agent proposes the waiver with its reason and leaves the check **PENDING** until the owner agrees, unless the project's rules already waive it.
 
-`run_env.py` is the only way the plugin starts a delegate or test command: it builds an allowlisted
-child environment, shared with `delegate_env.py` and `verify_claim.py` (script-enforced).
+`run_env.py` is the only way the plugin starts a delegate or test command: it builds an allowlisted child environment, shared with `delegate_env.py`, `verify_claim.py` and `checks.py` (script-enforced).
 For a manual targeted test: `python3 -I <this skill folder>/scripts/run_env.py -- <test argv>`.
 The quota probe and `ps` snapshot keep their own scoped allowlists under the `CLAUDE.md` exceptions.
 Never print, dump, log or assert on the process environment; test synthetic mappings and key names only.
