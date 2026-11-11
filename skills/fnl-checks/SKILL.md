@@ -1,6 +1,6 @@
 ---
 name: fnl-checks
-description: Verify before claiming or accepting work. Use when an agent or session reports a task done or tests passing, when choosing which tests to run after a change, when deciding whether a full suite is needed, before heavy container-backed or end-to-end runs, before saying anything is done, fixed or passing, and when CI is red or slow, CI minutes or quota run out, or a repository needs checks set up to run locally or in CI.
+description: Verify before claiming or accepting work. Use before saying work is done, fixed or passing, when the user asks "is it done?", "did the tests pass?" or "is it ready to merge?", before accepting a delegated run, when an agent or session reports a task done or tests passing, when choosing which tests to run after a change, when deciding whether a full suite is needed, before heavy container-backed or end-to-end runs, and when CI is red or slow, CI minutes or quota run out, or a repository needs checks set up to run locally or in CI.
 ---
 
 # Checks
