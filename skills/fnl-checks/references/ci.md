@@ -19,7 +19,7 @@ The writer (script-enforced):
 
 - builds the YAML text from a fixed template and never parses an existing workflow;
 - writes one file, `.github/workflows/fnl-checks.yml` by default or `--path .github/workflows/<name>.yml` with a name of lowercase letters, digits and dashes, and refuses a link anywhere on the path inside the repository;
-- refuses to overwrite an existing file without `--replace-existing`, keeps a backup of it in the plugin's private state folder, and refuses when the file, the stored list or a lockfile changed after the preview;
+- refuses to overwrite an existing file without `--replace-existing`, keeps a backup of it in the plugin's private state folder, and refuses when the file or the stored list changed after the preview, or when a dependency file appeared or disappeared so that the generated workflow would differ. A lockfile's contents are not part of the workflow, so editing one does not void the preview;
 - publishes a new file with a hard link that fails if a file appeared since;
 - never edits another workflow, never commits and never pushes. The user reviews the file and commits it.
 
@@ -44,8 +44,8 @@ It prints the run count, the total minutes (each run from `startedAt` to `update
 
 `--files-from` takes a JSON object mapping each run id to its changed paths, built with the host's own command (for a pull request run, `gh pr view <number> --json files`). The output then gives the share of minutes spent on runs whose changed paths are all documents by the same `paths-ignore` rule as the workflow. A run missing from the map is counted as having no paths.
 
-`--limit-minutes N` takes the plan's monthly allowance, a number the user gives; the plugin never assumes one. It prints the minutes left and the days left at the rate the file shows (spread over at least one day).
+`--limit-minutes N` takes a number of minutes the user gives; the plugin never assumes one. It subtracts every minute in the file and prints the minutes left and the days left at the rate the file shows (spread over at least one day). This is a projection from that sample, not a billing balance: for a month's remaining minutes, export only the current billing period, with `gh run list --created` and a `--limit` high enough that nothing is cut off.
 
-Input is capped at 5 MB and 5,000 runs. Times must be ISO 8601 UTC (`2026-11-01T10:00:00Z`). Malformed input exits 3 with a one-line reason; an unreadable file exits 2.
+Input is capped at 5 MB and 5,000 runs. Times must be ISO 8601 UTC (`2026-11-01T10:00:00Z`). A run with no workflow name is grouped as `(unnamed workflow)`. Duplicate JSON keys and non-canonical run ids are malformed. Malformed input exits 3 with a one-line reason; an unreadable file exits 2.
 
 Enforcers: `checks_setup.py` for the writer's template, path, preview, digest, backup and no silent overwrite; `checks.py usage` for the caps and the strict input. Offering the workflow and building the run list are agent judgment (advisory).

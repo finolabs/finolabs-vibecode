@@ -301,8 +301,13 @@ def read_json(path, what):
         raw = stream.read(USAGE_LIMIT + 1)
     if len(raw) > USAGE_LIMIT:
         raise Malformed(f'{what} is over 5 MB')
+    def unique(pairs):
+        keys = [key for key, _ in pairs]
+        if len(set(keys)) != len(keys):
+            raise ValueError('duplicate key')
+        return dict(pairs)
     try:
-        return json.loads(raw.decode('utf-8'))
+        return json.loads(raw.decode('utf-8'), object_pairs_hook=unique)
     except (UnicodeError, ValueError, RecursionError):
         raise Malformed(f'{what} is not valid JSON') from None
 
@@ -320,6 +325,9 @@ def utc_time(value):
     return moment.timestamp() + (float('0.' + match[7]) if match[7] else 0.0)
 
 
+UNNAMED = '(unnamed workflow)'
+
+
 def read_runs(path):
     data = read_json(path, 'the run list')
     if not isinstance(data, list):
@@ -334,15 +342,15 @@ def read_runs(path):
         if type(identifier) is not int or identifier < 0 or identifier in seen:
             raise Malformed('a run has an invalid or repeated databaseId')
         seen.add(identifier)
-        for key in ('event', 'workflowName'):
-            if not isinstance(item[key], str) or not 0 < len(item[key]) <= 200 or not item[key].isprintable():
+        for key, shortest in (('event', 1), ('workflowName', 0)):  # gh reports some ruleset runs with no name
+            if not isinstance(item[key], str) or not shortest <= len(item[key]) <= 200 or not item[key].isprintable():
                 raise Malformed(f'a run has an invalid {key}')
         start, end = utc_time(item['startedAt']), utc_time(item['updatedAt'])
         if 'createdAt' in item:
             utc_time(item['createdAt'])
         if end < start:
             raise Malformed('a run ends before it starts')
-        runs.append({'id': identifier, 'event': item['event'], 'workflow': item['workflowName'],
+        runs.append({'id': identifier, 'event': item['event'], 'workflow': item['workflowName'] or UNNAMED,
                      'start': start, 'end': end, 'minutes': -int(-(end - start) // 60)})
     return runs
 
@@ -353,7 +361,7 @@ def read_files(path):
         raise Malformed('the changed-paths map is not a JSON object of at most 5,000 runs')
     files = {}
     for key, paths in data.items():
-        if not re.fullmatch(r'[0-9]{1,20}', key) or not isinstance(paths, list) or len(paths) > 10000 \
+        if not re.fullmatch(r'0|[1-9][0-9]{0,19}', key) or not isinstance(paths, list) or len(paths) > 10000 \
                 or not all(isinstance(item, str) and 0 < len(item) <= 4096 for item in paths):
             raise Malformed('the changed-paths map needs run ids mapped to lists of paths')
         files[int(key)] = paths

@@ -559,6 +559,23 @@ class UsageTest(unittest.TestCase):
             code = module.main(['usage', *args])
         return code, out.getvalue(), err.getvalue()
 
+    def test_a_run_with_no_workflow_name_is_counted_under_a_label(self):
+        runs = [*RUNS, run_record(5, '', 'push', '2026-11-04T10:00:00Z', '2026-11-04T10:03:00Z')]
+        code, out, err = self.usage('--from', self.write('runs.json', runs))
+        self.assertEqual(code, 0, err)
+        self.assertIn('runs: 5', out)
+        self.assertIn('minutes: 21', out)
+        self.assertIn('(unnamed workflow)', out)
+
+    def test_ambiguous_changed_path_keys_are_malformed(self):
+        runs = self.write('runs.json', RUNS)
+        for name, text in (('duplicate', '{"1":["src/app.py"],"1":["README.md"]}'),
+                           ('non-canonical', '{"1":["src/app.py"],"01":["README.md"]}')):
+            with self.subTest(name):
+                code, out, _ = self.usage('--from', runs, '--files-from', self.write('paths.json', text))
+                self.assertEqual(code, 3)
+                self.assertEqual(out, '')
+
     def test_totals_round_each_run_up_and_split_by_workflow_and_event(self):
         code, out, err = self.usage('--from', self.write('runs.json', RUNS))
         self.assertEqual(code, 0, err)

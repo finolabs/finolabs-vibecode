@@ -929,6 +929,20 @@ class CiWorkflowTest(unittest.TestCase):
         self.assertEqual(self.target.read_text(), 'name: racing\n')
         self.assertEqual([p.name for p in self.target.parent.iterdir()], ['fnl-checks.yml'])
 
+    def test_a_dependency_file_voids_the_preview_only_when_the_workflow_would_differ(self):
+        self.store('unit=["python3","-m","unittest","discover","-s","tests"]')
+        (self.repo / 'requirements.txt').write_text('first==1\n')
+        out, digest = self.ci()
+        (self.repo / 'requirements.txt').write_text('second==2\n')  # contents are not part of the workflow
+        code, _, err = self.apply_ci(digest)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.target.read_text(), self.workflow_text(out))
+        self.target.unlink()
+        _, digest = self.ci()
+        (self.repo / 'requirements.txt').unlink()  # the install step would disappear
+        self.assertEqual(self.apply_ci(digest)[0], 1)
+        self.assertFalse(self.target.exists())
+
     def test_a_list_changed_after_the_preview_is_refused(self):
         self.store('lint=["make","lint"]')
         _, digest = self.ci()
