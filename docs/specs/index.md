@@ -19,7 +19,7 @@
 | [Release 0.2.1: scope](release-0.2.1.md) | released; v0.2.1 tagged 2026-11-09 with packages 1 to 11, 12a and 15; the rest moved to a later release. |
 | [Release 0.2.2: scope](release-0.2.2.md) | released; tagged v0.2.2 on 2026-11-09 with all seven packages; live-host proof partial. |
 | [Release 0.2.3: scope](release-0.2.3.md) | released; tagged v0.2.3 on 2026-11-10 with all fourteen packages; package 7 narrowed to the log folder message; live-host proof of the question gate and the typed-skill hook pending. |
-| [Release 0.2.4: scope](release-0.2.4.md) | implemented; all six packages merged; ready to cut. |
+| [Release 0.2.4: scope](release-0.2.4.md) | released; tagged v0.2.4 on 2026-11-11 with all six packages; a real push through the hook and a run of the generated workflow remain unverified. |
 | [Checks](checks.md) | implemented; in 0.2.4: `fnl-verification` became fnl-checks (alias kept through 0.2.x), a per-repository check list from `/fnl-setup add checks`, `checks.py run`, an optional pre-push hook, a cheaper cloud workflow and a labelled local receipt when cloud CI cannot run. |
 | [Update onboarding](update-onboarding.md) | implemented; in 0.2.4: per-release upgrade notes; `/fnl-update` updates and then walks the checklist (done, open, not applicable, skipped or unknown; the 0.2.4 items have no automatic check and show as unknown) through `fnl-setup`, and `/fnl-update whats-new` only shows it; the verified Codex refresh, latest by default or a chosen and pinnable version, and a release test that requires an entry. |
 | [Release 0.1.10: spec and plan](release-0.1.10.md) | released; the package table lists the pull request behind each package. |

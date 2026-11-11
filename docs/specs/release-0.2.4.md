@@ -1,6 +1,6 @@
 # Release 0.2.4: scope
 
-Status: implemented; scope set by the owner on 2026-11-10; all six packages are merged; ready to cut. A real `git push` through the installed hook and a run of the generated workflow on GitHub Actions remain unverified.
+Status: released; tagged v0.2.4 on 2026-11-11 with all six packages. A real `git push` through the installed hook and a run of the generated workflow on GitHub Actions remain unverified.
 
 ## Scope (owner decisions, 2026-11-10)
 
