@@ -21,6 +21,10 @@ LEDGER_LIMIT = 4 * 1024 * 1024  # a larger ledger reads as unknown at session st
 OPEN_CAP = 99
 
 
+COMPACT_TITLE = (
+    "\nAfter compaction (advisory, agent judgment): invoke fnl-session-hygiene now; compare this session's "
+    "title with the current task and rename it if it is stale, then continue from the handover.\n")
+
 COMPACT_DELEGATION = (
     "\nDelegation after compaction (advisory, agent judgment): before starting the first of two or more "
     "independent tasks, apply fnl-delegate \"Keep or hand off\"; send reviews and parallel work to another "
@@ -234,6 +238,7 @@ def main():
                     pass
             if (isinstance(event, dict) and event.get("source") == "compact"
                     and isinstance(event.get("session_id"), str) and event["session_id"]):
+                print(COMPACT_TITLE, end="")
                 if delegation_word() != "manual":
                     print(COMPACT_DELEGATION, end="")
                 from handover_state import read

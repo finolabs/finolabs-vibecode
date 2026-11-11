@@ -5,7 +5,7 @@ How each host sets a session's title, as checked against each CLI's help and com
 | Host | Interactive session | New or headless session | Notes |
 | --- | --- | --- | --- |
 | Claude Code (CLI) | `/rename <title>` | `claude -n "<title>"` (`--name`) | Resume by name or id with `claude --resume`. |
-| Claude Code (desktop app) | the app's session title control, or its session tools where the agent has them | the title given when the session is started | The app may refuse to start sessions on turns another session or an automated event began. |
+| Claude Code (desktop app) | the agent's session-title tool (`set_session_title` with session id `self`; it is often deferred, so load it through tool search first), or the app's title control | the title given when the session is started | The app may refuse to start sessions on turns another session or an automated event began. |
 | Codex | `/rename` in the TUI, which asks for the name | `codex exec` takes no name: identify the run by its ledger label and log file names | `codex resume`, `archive` and `delete` accept a session name or id. Archive or delete only sessions this agent started, by id, since titles can repeat; `delete` is permanent and needs the user's explicit go. |
 | Antigravity (`agy`) | no session title found in `agy --help` | group runs with `--project <name>`; identify each by its ledger label and log file names | Say that the host has no titles, and carry the name in the handover. |
 
