@@ -791,6 +791,21 @@ class LocalReceiptTest(unittest.TestCase):
         self.assertTrue(ok, lines)
         self.assertEqual(self.checks_line(lines), "ok    checks: all passed")
 
+    def test_running_hosted_checks_are_never_replaced_by_the_receipt(self):
+        self.receipt()
+        def never(head, repo):
+            raise AssertionError("receipt read while hosted checks are running")
+        for check in ({"name": "validate", "status": "IN_PROGRESS", "conclusion": None},
+                      {"name": "validate", "status": "QUEUED", "conclusion": ""},
+                      {"context": "legacy", "state": "PENDING"}):
+            with self.subTest(check=check):
+                ok, lines = mc.evaluate(pr(checks=[check]), lambda who: who in WRITERS, adopted=False,
+                                        local_receipt=never, repo="acme/demo")
+                self.assertFalse(ok)
+                self.assertTrue(self.checks_line(lines).startswith("BLOCK checks: "), lines)
+                self.assertTrue(self.checks_line(lines).endswith(
+                    "; local receipt: not used while hosted checks are still running"), lines)
+
     def test_outside_a_repository_the_mode_is_off(self):
         os.chdir(self.home)
         self.receipt()

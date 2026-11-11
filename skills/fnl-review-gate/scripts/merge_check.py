@@ -147,6 +147,19 @@ def checks(pr):
     return (not bad, ", ".join(bad) or "all passed")
 
 
+PENDING = {"QUEUED", "IN_PROGRESS", "PENDING", "WAITING", "REQUESTED", "EXPECTED"}
+
+
+def checks_pending(pr):
+    """True when any hosted check has not finished: a run that is queued or in progress, or a status still pending."""
+    for check in pr.get("statusCheckRollup") or []:
+        if check.get("conclusion"):
+            continue
+        if (check.get("status") or check.get("state") or "").upper() in PENDING:
+            return True
+    return False
+
+
 def strict_object(text):
     """Parse a JSON object, refusing duplicate keys; None when it is not one."""
     def pairs(items):
@@ -364,7 +377,9 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
         ok = False
         lines.append("BLOCK author lacks write access and no owner approved this head")
     passed, detail = checks(pr)
-    if not passed and local_receipt is not None:
+    if not passed and local_receipt is not None and checks_pending(pr):
+        detail += "; local receipt: not used while hosted checks are still running"
+    elif not passed and local_receipt is not None:
         found = local_receipt(head, repo)  # None: the mode is off, so nothing changes
         if found is not None:
             matched, reason = found
