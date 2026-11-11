@@ -259,7 +259,9 @@ class StateBlockTest(SyntheticStateTest):
         nested.mkdir()
         code = parallel_slots.repository_code(repo)
         self.write("host.md", "## Limits\n- Parallel dispatches: at most 32 at one time.\n"
-                   "## Project settings\n- %s parallel: 6\n- %s parallel-caps: codex=3\n" % (code, code))
+                   "## Project settings\n- %s parallel: 9\n" % code)
+        parallel_slots.store.write_setting(repo, 'parallel', '6')
+        parallel_slots.store.write_setting(repo, 'parallel-caps', 'codex=3')
         records = [dict(event="start", id=str(n), agent=agent, project=repo.name)
                    for n, agent in enumerate(("claude-session", "codex", "codex", "codex"))]
         records.append(dict(event='start', id='other', agent='codex', project='other'))

@@ -375,25 +375,21 @@ class ChecksSetupTest(unittest.TestCase):
 
     # Project settings beside the section
 
-    def test_project_settings_read_and_write_unchanged_beside_checks(self):
+    def test_project_settings_live_beside_the_check_file_and_never_in_host(self):
         code_ = self.code()
-        settings = '## Project settings\n\n- %s parallel: 4\n\n' % code_
-        self.host.write_text(PREFIX.decode() + '\n' + settings + '## Checks\n\n- %s: test = ["make","test"]\n' % code_)
-        text = self.host.read_text()
-        self.assertIn(settings, text)
-        for path in (SCRIPTS / 'project_progress.py', ROOT / 'scripts/project_progress.py',
-                     ROOT / 'skills/fnl-status/scripts/project_progress.py',
-                     ROOT / 'skills/fnl-delegate/scripts/parallel_slots.py', ROOT / 'scripts/parallel_slots.py',
+        self.host.write_text(PREFIX.decode() + '\n## Checks\n\n- %s: test = ["make","test"]\n' % code_)
+        before = self.host.read_bytes()
+        writer = load('project_progress_writer', SCRIPTS / 'project_progress.py')
+        self.assertTrue(writer.set_setting(self.repo, 'parallel', '5'))
+        self.assertEqual(self.host.read_bytes(), before)
+        self.assertEqual(json.loads((self.repo / '.finolabs/vibecode/settings.json').read_text()),
+                         {'version': 1, 'parallel': '5'})
+        self.assertEqual(self.module().checks_for(code_, root=self.repo), ([], 'no entry'))
+        for path in (ROOT / 'skills/fnl-delegate/scripts/parallel_slots.py', ROOT / 'scripts/parallel_slots.py',
                      ROOT / 'skills/fnl-status/scripts/parallel_slots.py'):
             with self.subTest(path=str(path.relative_to(ROOT))):
                 reader = load('settings_reader_' + path.parent.parent.name + path.stem, path)
-                self.assertEqual(reader.project_settings(text), {(code_, 'parallel'): '4'})
-        writer = load('project_progress_writer', SCRIPTS / 'project_progress.py')
-        self.assertTrue(writer.set_setting(self.repo, 'parallel', '5'))
-        after = self.host.read_text()
-        self.assertIn('## Project settings\n\n- %s parallel: 5\n' % code_, after)
-        self.assertEqual(self.module().checks_for(code_, root=self.repo), ([], 'no entry'))
-        self.assertEqual(writer.project_settings(after), {(code_, 'parallel'): '5'})
+                self.assertEqual(reader.parse_config('', self.repo)['limit'], 5)
 
     def test_no_command_but_fixed_git_queries_and_no_network(self):
         source = SCRIPT.read_text()

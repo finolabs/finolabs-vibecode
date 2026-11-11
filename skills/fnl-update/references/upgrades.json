@@ -36,6 +36,18 @@
           "kind": "setup",
           "text": "A check list saved with 0.2.4 is no longer read: run /fnl-setup add checks again in each repository, then delete the old ## Checks section from host.md by hand.",
           "setup": "/fnl-setup add checks"
+        },
+        {
+          "id": "0.2.5/project-settings",
+          "kind": "setup",
+          "text": "Project settings (ledger name, task file, parallel limit and caps) are no longer read from host.md: if you changed them, set them again in each repository with /fnl-setup add project or /fnl-setup add delegation, then delete the old ## Project settings section and any global Ledger project: and Task file: lines from host.md by hand.",
+          "setup": "/fnl-setup add project"
+        },
+        {
+          "id": "0.2.5/project-labels",
+          "kind": "setup",
+          "text": "Dashboard labels are no longer read from host.md: if you set one, set it again inside each repository with /fnl-setup add project, then delete the old ## Project labels section from host.md by hand.",
+          "setup": "/fnl-setup add project"
         }
       ]
     }

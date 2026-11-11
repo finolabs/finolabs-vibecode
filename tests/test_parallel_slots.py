@@ -40,9 +40,28 @@ class ParallelSlotsTest(unittest.TestCase):
         path.chmod(0o600)
         return path
 
-    def host(self, total=6, caps='codex=3'):
-        return self.write('host.md', '## Project settings\n- %s parallel: %s\n' % (self.code, total) +
-                          ('- %s parallel-caps: %s\n' % (self.code, caps) if caps is not None else ''))
+    def settings(self, values, repo=None, approve=True):
+        """Write a project settings file as the setter does (0700 folders, a 0600 file) and approve its bytes."""
+        import hashlib
+        repo = repo or self.repo
+        raw = json.dumps(dict(version=1, **values)).encode()
+        folder = repo / '.finolabs/vibecode'
+        folder.mkdir(parents=True, exist_ok=True)
+        os.chmod(repo / '.finolabs', 0o700)
+        os.chmod(folder, 0o700)
+        (folder / 'settings.json').write_bytes(raw)
+        os.chmod(folder / 'settings.json', 0o600)
+        if approve:
+            with slots.dr.data_folder('state/settings-approved', create=True, private=True) as approvals:
+                slots.dr.atomic_write(approvals, progress.repository_code(repo) + '.json', json.dumps(
+                    dict(sha256=hashlib.sha256(raw).hexdigest(), approved=1)).encode())
+        return raw
+
+    def host(self, total=6, caps='codex=3', **extra):
+        values = dict(parallel=str(total), **extra)
+        if caps is not None:
+            values['parallel-caps'] = caps
+        return self.settings(values)
 
     def ledger(self, agents):
         rows = [dict(event='start', id=str(n), agent=agent, project=self.repo.name) for n, agent in enumerate(agents)]
@@ -138,19 +157,21 @@ class ParallelSlotsTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(output), dict(limit=12, source='project settings',
                                                 caps=dict(claude=4, codex=None, antigravity=2), legacy_limits=False))
-        for caps in ('', 'codex=0', 'codex=13', 'codex=2, codex=3', 'other=1', 'codex=true',
+        # An invalid file reads as unset: the default of three with no caps.
+        for caps in ('', 'codex=0', 'codex=33', 'codex=2, codex=3', 'other=1', 'codex=true',
                      'codex=2,', 'codex=2\n- %s parallel-caps: claude=1' % self.code):
             self.host(12, caps)
-            self.assertEqual(self.command('status'), (3, 'unknown\n'))
-            self.assertEqual(self.command('check-config'), (3, 'unknown\n'))
-        self.write('host.md', '## Project settings\n## Project settings\n')
+            state = json.loads(self.command('status')[1])
+            self.assertEqual((state['limit'], state['source'], state['families']['codex']['cap']), (3, 'default', None))
+            self.assertEqual(self.command('check-config')[0], 3)
+        # A valid cap above the total is a contradiction the reader reports as unknown, as before.
+        self.host(12, 'codex=13')
         self.assertEqual(self.command('status'), (3, 'unknown\n'))
+        self.assertEqual(self.command('check-config'), (3, 'unknown\n'))
 
     def test_repository_scope_alias_other_projects_and_cli_repo(self):
         from datetime import datetime, timedelta, timezone
-        self.host(2, 'codex=1')
-        with (self.root / 'host.md').open('a') as host:
-            host.write('- %s ledger: Alias\n' % self.code)
+        self.host(2, 'codex=1', ledger='Alias')
         other = self.repo.parent / 'other'
         (other / '.git').mkdir(parents=True)
         old = (datetime.now(timezone.utc) - timedelta(hours=10)).isoformat()
@@ -172,31 +193,29 @@ class ParallelSlotsTest(unittest.TestCase):
         code, output = self.command('check-config', '--repo', str(self.repo))
         self.assertEqual((code, json.loads(output)['limit']), (0, 2))
 
-    def test_legacy_ledger_project_alias_counts_and_repository_entry_wins(self):
-        self.host(2, None)
-        with (self.root / 'host.md').open('a') as host:
-            host.write('\n## Project progress\n- Ledger project: LegacyAlias\n')
+    def test_host_md_settings_and_the_global_ledger_line_are_never_read(self):
+        self.write('host.md', '## Project progress\n- Ledger project: LegacyAlias\n\n## Project settings\n'
+                              '- %s parallel: 9\n- %s ledger: HostName\n' % (self.code, self.code))
         rows = [dict(event='start', id='legacy', agent='codex', project='LegacyAlias'),
+                dict(event='start', id='host', agent='codex', project='HostName'),
                 dict(event='start', id='folder', agent='codex', project=self.repo.name)]
         self.write('ledger.jsonl', '\n'.join(map(json.dumps, rows)))
         state = slots.status()
-        self.assertEqual((state['open'], state['other_projects']), (1, 1))
-        self.assertEqual(state['scope']['project'], 'LegacyAlias')
-        self.write('host.md', '## Project progress\n- Ledger project: LegacyAlias\n\n## Project settings\n'
-                              '- %s parallel: 2\n- %s ledger: EntryName\n' % (self.code, self.code))
+        self.assertEqual((state['limit'], state['source'], state['open'], state['other_projects']), (3, 'default', 1, 2))
+        self.assertEqual(state['scope']['project'], self.repo.name)
+        self.host(2, None, ledger='EntryName')
         self.assertEqual(slots.status()['scope']['project'], 'EntryName')
+        self.assertEqual(slots.status()['limit'], 2)
 
-    def test_legacy_alias_is_not_restricted_to_display_label_characters(self):
+    def test_an_unapproved_settings_file_cannot_raise_the_limit(self):
         self.host(2, None)
-        for alias in ("org/demo", "T\u00ean d\u1ef1 \u00e1n", "x" * 41):
-            self.write("host.md", "## Project progress\n- Ledger project: %s\n\n## Project settings\n- %s parallel: 2\n" % (alias, self.code))
-            rows = [dict(event="start", id="a", agent="codex", project=alias),
-                    dict(event="start", id="b", agent="codex", project=alias)]
-            self.write("ledger.jsonl", "\n".join(map(json.dumps, rows)))
-            state = slots.status()
-            self.assertEqual((state["open"], state["free"], state["other_projects"]), (2, 0, 0), alias)
-            self.assertEqual(state["scope"]["project"], alias)
-        self.assertFalse(slots.fits(slots.status(), "codex"))
+        self.ledger(['codex', 'codex'])
+        self.assertEqual(self.command('check', '--family', 'codex'), (3, 'Parallel slots: full\n'))
+        self.settings(dict(parallel='32'), approve=False)
+        state = slots.status()
+        self.assertEqual((state['limit'], state['source']), (3, 'default'))
+        (self.repo / '.finolabs/vibecode/settings.json').write_text(json.dumps(dict(version=1, parallel='32')))
+        self.assertEqual(slots.status()['limit'], 3)
 
     def test_outside_repository_counts_nothing_and_ignores_legacy_limits(self):
         self.write('host.md', '## Limits\n- Parallel dispatches: at most 32 at one time.\n')
@@ -240,25 +259,20 @@ class ParallelSlotsTest(unittest.TestCase):
         (metadata / 'commondir').symlink_to(self.repo / 'missing')
         self.assertEqual(slots.repository_code(worktree), progress.repository_code(worktree))
 
-    def test_strict_project_settings_parity_and_bounds(self):
-        good = '## Project settings\n- %s parallel: 2\n' % self.code
-        for bad in ('parallel: 0', 'parallel: 33', 'parallel: two', 'parallel: 2',
-                    'parallel-caps: codex=3', 'parallel-caps: codex=1, codex=2', 'unknown: x',
-                    'ledger: ', 'tasks: ../bad.md', 'tasks: AGENTS.md'):
-            self.write('host.md', good + '- %s %s\n' % (self.code, bad))
-            self.assertEqual(self.command('status'), (3, 'unknown\n'))
-        for count in (100, 101):
-            text = '## Project settings\n' + ''.join('- %08x parallel: 2\n' % n for n in range(count))
-            self.write('host.md', text)
-            self.assertEqual(self.command('status')[0], 0 if count == 100 else 3)
-        self.write('host.md', '```\n## Project settings\nbad\n```\n' + good)
+    def test_strict_project_settings_file_reads_as_unset_when_any_value_is_invalid(self):
+        for bad in (dict(parallel='0'), dict(parallel='33'), dict(parallel='two'), dict(parallel=2),
+                    {'parallel-caps': 'codex=1, codex=2'}, dict(unknown='x'),
+                    dict(ledger=''), dict(tasks='../bad.md'), dict(tasks='AGENTS.md'), dict(label='a;b')):
+            with self.subTest(bad=bad):
+                self.settings(dict(dict(parallel='2'), **bad))
+                state = json.loads(self.command('status')[1])
+                self.assertEqual((state['limit'], state['source']), (3, 'default'))
+        self.host(2, None)
         self.assertEqual(slots.status()['limit'], 2)
-        self.write('host.md', good + '```\n')
-        self.assertEqual(self.command('status'), (3, 'unknown\n'))
 
     def test_caps_without_total_use_default_and_legacy_sections_are_only_detected(self):
         for cap in (3, 4):
-            self.write('host.md', '## Project settings\n- %s parallel-caps: codex=%s\n' % (self.code, cap))
+            self.settings({'parallel-caps': 'codex=%s' % cap})
             code, output = self.command('status')
             if cap == 3:
                 state = json.loads(output)
@@ -267,6 +281,7 @@ class ParallelSlotsTest(unittest.TestCase):
                 self.assertEqual(self.command('check-config')[0], 3)
             else:
                 self.assertEqual((code, output), (3, 'unknown\n'))
+        (self.repo / '.finolabs/vibecode/settings.json').unlink()
         self.write('host.md', '## Limits\n- Parallel per family: broken\n## Limits\n')
         self.assertEqual(slots.status()['limit'], 3)
         self.assertTrue(json.loads(self.command('check-config')[1])['legacy_limits'])
@@ -315,13 +330,16 @@ class ParallelSlotsTest(unittest.TestCase):
     def test_no_process_network_or_write_and_no_environment_override(self):
         self.host(8, None)
         self.ledger(['codex'] * 3)
-        before = {p.name: p.read_bytes() for p in self.root.iterdir()}
+        def snapshot():
+            return {str(p): p.read_bytes() for folder in (self.root, self.repo)
+                    for p in folder.rglob('*') if p.is_file()}
+        before = snapshot()
         import socket
         import subprocess
         with mock.patch.object(socket, 'socket', side_effect=AssertionError('network')), \
                 mock.patch.object(subprocess, 'Popen', side_effect=AssertionError('process')):
             self.assertEqual(slots.status()['free'], 5)
-        self.assertEqual({p.name: p.read_bytes() for p in self.root.iterdir()}, before)
+        self.assertEqual(snapshot(), before)
         for folder in ('fnl-delegate', 'fnl-status'):
             self.assertEqual((ROOT / 'scripts/parallel_slots.py').read_bytes(),
                              (ROOT / 'skills' / folder / 'scripts/parallel_slots.py').read_bytes())
@@ -346,7 +364,7 @@ class ParallelSlotsTest(unittest.TestCase):
         (relocated / '.root-id').write_text('synthetic')
         (relocated / '.root-id').chmod(0o600)
         slots.dr.write_pointer(relocated, 'synthetic')
-        (relocated / 'host.md').write_text('## Project settings\n- %s parallel: 10\n' % self.code)
+        self.host(10, None)
         self.assertEqual(slots.status()['limit'], 10)
         (relocated / '.root-id').write_text('changed')
         self.assertEqual(self.command('status'), (3, 'unknown\n'))

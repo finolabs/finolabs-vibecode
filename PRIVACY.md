@@ -43,29 +43,38 @@ usage events; purge removes them. The refresh builders enforce these bounds and 
 
 ## Project settings
 
-`project_progress.py settings --set ledger=<name>` or `settings --set tasks=<path>`, run inside a
-repository, writes only that repository's entry in `## Project settings` in canonical host config.
-`settings --clear ledger` or `settings --clear tasks` removes only that key. The script requires
-recorded metrics consent, takes a file lock and writes atomically with mode 0600, as for project labels.
-It splits `--set` on the first `=` and prints only the key and changed/not changed, never the value.
+Since 0.2.5 a repository's settings (`ledger`, `tasks`, `parallel`, `parallel-caps` and the display
+`label`) live in that repository's own folder: `settings.json` in `.finolabs/vibecode/` of the main
+checkout (a linked worktree shares it only when its git metadata is reciprocal). The file never leaves
+the machine; the setter adds `.finolabs/` to the repository's `.git/info/exclude`, never to a tracked
+`.gitignore`. `host.md` is never read or written for these settings, so it no longer lists one entry
+per repository for every agent to read.
 
-The script enforces one value per non-empty line: `- <8 lowercase hex code> ledger|tasks: <value>`.
-It accepts at most 100 entries, ledger names of 1–40 ASCII letters, digits, spaces, dots, dashes or
-underscores with a non-space character, and task paths of 1–120 ASCII letters, digits, dots, dashes,
-underscores or slashes. Task paths must be relative Markdown paths, without empty, `.` or `..`
-components and outside `specs/archive`. Any malformed line, duplicate pair or unknown key makes
-the entire section unreadable; the reader ignores every entry and checkup reports invalid settings.
-Lookup uses the repository entry, then deprecated global `Ledger project:`/`Task file:` lines, then
-the folder name for ledger and no task file. Globals remain readable, with removal
-planned for 0.3.0; there is no automatic migration. Checkup names only each deprecated key and a
-conversion command with a placeholder. It flags an unmatched ledger mapping without disclosing
-project names; a machine-wide ledger cannot establish repository association by itself.
+`project_progress.py settings --set <key>=<value>`, `settings --clear <key>` and `label --set <label>`,
+run inside a repository, write that file (folders 0700, file 0600, atomic, under a file lock) and record
+its SHA-256 and the time in `<data root>/state/settings-approved/<repository code>.json`. `ledger` and
+`tasks` require recorded metrics consent. The script splits `--set` on the first `=` and prints only
+the key and changed/not changed, never the value.
 
-Project settings values never reach `data.js`, tooltips, events or checkup output. They are transient
-join/path inputs, never display labels. The dashboard never reads `CLAUDE.md`, `AGENTS.md` or other
-recognised instruction files for these facts. Purge leaves host config unchanged: it is the user's
-own file, including project settings and labels. The settings reader/writer, checkup and refresh
-builders enforce these boundaries.
+The file has a closed schema, `{"version": 1, ...}` with each key optional and each value a string
+validated as before: ledger names and labels of 1–40 ASCII letters, digits, spaces, dots, dashes or
+underscores with a non-space character; task paths of 1–120 ASCII letters, digits, dots, dashes,
+underscores or slashes, relative Markdown paths without empty, `.` or `..` components, outside
+`specs/archive` and never an instruction file; `parallel` 1–32 and caps per family. The reader opens it
+with no-follow descent, owner-checked and not writable by group or others, and uses it only while its
+bytes match the approved digest: a file edited by hand, supplied by a branch or without an approval,
+or any invalid file, reads as unset, so a repository cannot raise `parallel` or redirect `tasks`.
+Unset means the folder name for ledger, no task file, `parallel` 3 with no caps, and the registered
+folder name as the label. `## Project settings`, `## Project labels` and the global
+`Ledger project:`/`Task file:` lines left in `host.md` are never read; the user deletes them by hand.
+Checkup flags an unmatched ledger mapping without disclosing project names; a machine-wide ledger
+cannot establish repository association by itself.
+
+Project settings values never reach `data.js`, tooltips, events or checkup output, except the user's
+own label, shown on the dashboard only for the repository the refresh runs in. They are transient
+join/path inputs. The dashboard never reads `CLAUDE.md`, `AGENTS.md` or other recognised instruction
+files for these facts. Purge leaves host config and the project settings files unchanged: they are the
+user's own files. The settings reader/writer, checkup and refresh builders enforce these boundaries.
 
 ## Project progress
 
@@ -75,7 +84,7 @@ The refresh recognises local Spec Kit artefacts in `specs/<NNN-name>/`, then one
 
 The `progress` block of local `data.js` stores only task ids, story tags, the priority number from a `User Story N (Pk)` heading (`P1` to `P9` only, otherwise absent), phase and feature numbers, checkbox states/counts, fixed agent families/outcomes, validated model tokens, short session ids and hosts, ledger ids, times, elapsed seconds, rework counts, review verdicts and the plugin manifest version. Heading text, task descriptions, file names, paths, links, session titles and ledger task wording are transient and discarded. Pipeline metadata adds fixed source/recognition/ledger-join enums, ordinals, stage/state enums (`done`, `active`, `todo`, `unknown`, `deferred`, `needs-attention`), counts, artefact-presence booleans, a closed status-keyword hint, closed `status_mark` tokens (`accepted`, `status-not-updated`), a work-record skipped count, review code/security counts and final-presence flags, package ordinals/states, and aggregate latest ledger-task outcomes. Work records expose only checkbox counts and numeric tags, stage presence and the closed Status state. Status wins over Tasks; all tasks checked while Status is in progress adds an amber “status not updated” mark. Evidence content is never kept. Status lines, index cells, links and package wording stay transient; no titles or filenames are stored. `unknown` means no status stated; artefacts never imply review approval. The other kept values are the priority number, the user's optional project label, and the repository folder name registered by running status. `project_progress.py label --set <label>`, run inside the repository, writes a repository-code-to-label entry under `## Project labels` in canonical host config. Labels contain 1 to 40 ASCII letters, digits, spaces, dots, dashes or underscores, with at least one non-space character. An explicit label always wins over a registered name; repositories with neither name are not shown. Labels are local, never sent anywhere, and the ledger project name is never reused as a display label. The ledger fields read are project name and task label for exact matching, id, agent, model, start, finish, outcome and rework rounds. A per-repository `ledger` setting overrides the deprecated global `Ledger project: <name>`, which overrides the folder name for the match; the project name itself is not kept in progress. The usage event `dispatch` is a delegated run id or null, and sessions link through that exact id; a `task` event can link a manual session when its id identifies a single feature. Duplicate task ids across features stay unlinked.
 
-Running `fnl-status` inside a repository is the act that names it as a project of this plugin. Only after the user ran status there, with recorded metrics consent, `run --register-here` keeps the repository folder name locally in `<data root>/state/projects.json`, keyed by its 8-hex repository code. Hook-started refreshes never register names. The folder basename is sanitised to ASCII letters, digits, spaces, dots, dashes and underscores (other characters become `-`), trimmed and limited to 40 characters; empty names are skipped. This closed map has at most 50 entries and is atomically written with mode 0600 in a private folder under a file lock. Names are never sent anywhere. Remove registered names by running `fnl-status purge` or deleting `state/projects.json`; explicit host-config labels remain separately configured. A repository the user never ran status in and never explicitly labelled is not shown as a project.
+Running `fnl-status` inside a repository is the act that names it as a project of this plugin. Only after the user ran status there, with recorded metrics consent, `run --register-here` keeps the repository folder name locally in `<data root>/state/projects.json`, keyed by its 8-hex repository code. Hook-started refreshes never register names. The folder basename is sanitised to ASCII letters, digits, spaces, dots, dashes and underscores (other characters become `-`), trimmed and limited to 40 characters; empty names are skipped. This closed map has at most 50 entries and is atomically written with mode 0600 in a private folder under a file lock. Names are never sent anywhere. Remove registered names by running `fnl-status purge` or deleting `state/projects.json`; explicit labels in each repository's own settings file remain separately configured. A repository the user never ran status in and never explicitly labelled is not shown as a project.
 
 Every refresh replaces the current repository snapshot, keyed by its existing short repository code, and retains up to four other last-written snapshots. The page shows one compact line per named active repository, with unfinished spec/story/task detail in a disclosure closed by default. Finished features and stories are hidden in that detail; all old data tables remain available under "show the data as tables". It is deleted by purge and never appended to events files. The overwritten `progress.active` list keeps only named repositories, newest first, up to 12, and counts distinct sessions with at least one event in the last 24 hours (a rolling window, including across midnight). It keeps the same repository codes and counts the events already hold, resolved local labels, closed host names, latest event times and task completion percentages when available; session ids are used only to deduplicate the counts and are not kept in the activity list. It is rebuilt from existing events each refresh, never carried over, and removed by purge. There is no progress history or separate task cache. The page uses textContent, never interprets task data as instructions, and sends nothing. Done means the box is ticked; task receipts never drive task selection or any gate. Running now is a machine-wide process count, not an identified count of sessions in this project. A one-time page notice and a once-per-version session-start line announce the change; only their delivery flags are stored in `<data root>/state/notices.json`.
 

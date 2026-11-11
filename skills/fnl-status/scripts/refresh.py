@@ -370,7 +370,7 @@ def slot_metrics(cwd=None):
         # The ledger name is a join key, never a label: show only a registered name or a user label.
         scope = state.get('scope')
         code = scope.get('code') if isinstance(scope, dict) else None
-        project = canonical_labels().get(code) if isinstance(code, str) else None
+        project = canonical_labels(cwd).get(code) if isinstance(code, str) else None
         if not (isinstance(project, str) and re.fullmatch(r'[A-Za-z0-9 ._-]{1,40}', project)):
             project = None
         return dict(parallel_limit=limit, family_slots=rows, parallel_source=state['source'],
@@ -440,7 +440,7 @@ def progress_metrics(events, running, cwd=None):
         repositories[code] = with_progress
         repositories = dict(list(repositories.items())[-5:])
         notice = pp.notice('dashboard', with_progress['version'])
-    labels = canonical_labels()
+    labels = canonical_labels(cwd)
     for key, row in repositories.items():
         row['label'] = labels.get(key, '')
     result = {'current': code, 'repositories': repositories,
@@ -451,13 +451,21 @@ def progress_metrics(events, running, cwd=None):
     return result
 
 
-def canonical_labels():
+def canonical_labels(cwd=None):
+    """Registered folder names, with the user label of the repository at `cwd` from its own approved settings file.
+
+    Other repositories' labels live in their own folders, so they show their registered names; with no repository
+    root the registered names alone are used. host.md is never read for labels.
+    """
+    labels = pp.registered_projects()
     try:
-        labels = pp.registered_projects()
-        labels.update(pp.project_labels(fm.dr.read_data('host.md', 262144).decode('utf-8')))
-        return labels
-    except (OSError, ValueError, UnicodeError):
-        return pp.registered_projects()
+        root = pp.find_root(cwd if cwd is not None else os.getcwd())
+        label = pp.project_label(root) if root is not None else None
+        if label:
+            labels[pp.repository_code(root)] = label
+    except (OSError, ValueError, UnicodeError, TypeError):
+        pass
+    return labels
 
 
 def build(days=WEEKS * 7, cwd=None):
@@ -523,8 +531,8 @@ def build(days=WEEKS * 7, cwd=None):
             verdicts[(e["repo"], e["pr"])].append((e["ts"], e["verdict"]))
     groups = {key: sorted(v) for key, v in verdicts.items()}
     newest = sorted(groups.items(), key=lambda x: x[1][0][0], reverse=True)
-    labels = canonical_labels()
-    reviews = [{"repo": "repo-" + repo, "label": labels.get(repo, "repo " + repo[:4]),
+    labels = canonical_labels(cwd)
+    reviews =[{"repo": "repo-" + repo, "label": labels.get(repo, "repo " + repo[:4]),
                 "pr": pr, "verdicts": [v for _, v in vs]} for (repo, pr), vs in newest[:REVIEWS_SHOWN]]
     review_stats = {"total": len(groups), "reworked": sum(any(v == "REWORK" for _, v in vs) for vs in groups.values())}
     depth = {d: [0, 0] for d in fm.DEPTHS}

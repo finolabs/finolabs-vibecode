@@ -60,11 +60,9 @@ Private HOME is an open owner decision and is not offered or created in this pac
 
 Advisory (agent judgment): use `/fnl-setup add quota` to opt in after the scan and confirm its path preview. The setup script writes `Agents`, `Executable <agent>`, optional `Interpreter <agent>`, and `Claude config: <label>: <absolute folder>` lines; replace this explanation with that generated section when enabling. The on-demand `quota_probe.py read --family <f>` command enforces the canonical opt-in, a minimum 15-minute age, backoff, one in-flight reading and `FNL_QUOTA_PROBE=off`; hooks start no reading. Before routing, run `read` for each candidate family, then `status`. Claude Code alone can record a family-and-time StopFailure rate-limit marker; a newer successful reading overrides it and its advisory exclusion expires at the eligible reset or after one hour, never over five hours. They store only usage pools and measured times in `state/quota/quota.json`, with no environment redirect. Routing is advisory: below 10% with a future reset is out, older than 8 hours is unverified and excludes nothing, the user's statement wins, and Claude uses `week-all` separately for each install.
 
-## Project labels
-
 ## Limits
 
-- The parallel run limit is per project and lives in `## Project settings` (set with `fnl-setup add delegation`); lines here are ignored.
+- The parallel run limit is per project and lives in each repository's own settings file (set with `fnl-setup add delegation`), as do the ledger name, task file and display label; lines here are ignored, and this file holds no per-repository section.
 
 - Machine role: <daily workstation | CI box>. Heavy jobs at one time: <1>.
 - Heavy jobs: <container-backed suites, scale measurements, end-to-end suites>.

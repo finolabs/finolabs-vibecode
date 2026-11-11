@@ -1,22 +1,43 @@
 #!/usr/bin/env python3
-"""Validated repository identity and the project data folder, without running git.
+"""Validated repository identity and the project-scoped settings file, without running git.
 
 User scope is the data root; project scope is the same relative path (`PROJECT_FOLDERS`) inside the main checkout.
-A linked worktree shares its main checkout's identity and folder only when its metadata is reciprocal, as
-`git_metadata.git_dirs` requires; anything else resolves to the checkout's own root. Makes no network call and runs
-nothing.
+A linked worktree shares its main checkout's identity and folder only when its metadata is reciprocal, as `git_metadata.git_dirs` requires; anything
+else resolves to the checkout's own root. `settings.json` there counts only while its exact bytes match the SHA-256
+approved in the private state folder, so a branch cannot raise `parallel` or redirect `tasks`. An invalid,
+unapproved or unreadable file reads as unset and is never repaired on read. Makes no network call and runs nothing.
 """
 from contextlib import contextmanager
+try:
+    import fcntl
+except ImportError:
+    raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
 import hashlib
+import json
 import os
 from pathlib import Path
+import re
 import stat
 import sys
+import time
 
 sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import data_root as dr
 
 PROJECT_FOLDERS = ('.finolabs', 'vibecode')
+SETTINGS_FILE = 'settings.json'
+SETTINGS_LIMIT = 16384
+SETTINGS_APPROVED = 'state/settings-approved'
+SETTING_KEYS = ('ledger', 'tasks', 'parallel', 'parallel-caps', 'label')
 METADATA_LIMIT = 4096
+CODE = re.compile(r'[0-9a-f]{8}')
+DIGEST = re.compile(r'[0-9a-f]{64}')
+LABEL = re.compile(r'[A-Za-z0-9 ._-]{1,40}')
+INSTRUCTION_FILES = ('CLAUDE.MD', 'CLAUDE.LOCAL.MD', 'AGENTS.MD', 'AGENTS.OVERRIDE.MD', 'GEMINI.MD',
+                     'COPILOT-INSTRUCTIONS.MD', 'CONVENTIONS.MD', '.CURSORRULES', '.WINDSURFRULES', '.CLINERULES')
+EXCLUDE_LINE = b'.finolabs/\n'
+EXCLUDE_FORMS = {'.finolabs/', '.finolabs', '/.finolabs/', '/.finolabs', '.finolabs/*', '/.finolabs/*'}
 
 
 @contextmanager
@@ -127,3 +148,185 @@ def read_project_file(folder, name, limit):
         return data
     finally:
         os.close(fd)
+
+
+# Settings values, validated exactly as the host.md entries were
+
+def valid_setting(key, value):
+    if not isinstance(value, str):
+        return False
+    if key == 'parallel':
+        return bool(re.fullmatch(r'[0-9]{1,2}', value) and 1 <= int(value) <= 32)
+    if key == 'parallel-caps':
+        seen = set()
+        for item in value.split(','):
+            match = re.fullmatch(r'(claude|codex|antigravity)=([0-9]{1,2})', item.strip())
+            if not match or not 1 <= int(match[2]) <= 32 or match[1] in seen:
+                return False
+            seen.add(match[1])
+        return True
+    if key in ('ledger', 'label'):
+        return bool(LABEL.fullmatch(value) and value.strip())
+    if key == 'tasks':
+        return bool(re.fullmatch(r'[A-Za-z0-9._/-]{1,120}', value) and value.endswith('.md')
+                    and all(part not in ('', '.', '..') for part in value.split('/'))
+                    and value.split('/')[:2] != ['specs', 'archive']
+                    and value.split('/')[-1].upper() not in INSTRUCTION_FILES)
+    return False
+
+
+def _object(pairs):
+    keys = [key for key, _ in pairs]
+    if len(set(keys)) != len(keys):
+        raise ValueError('duplicate key')
+    return dict(pairs)
+
+
+def _constant(value):
+    raise ValueError('constant')
+
+
+def parse_settings(raw):
+    """The settings of the closed schema `{"version": 1, <key>: "<value>", ...}`; anything else raises."""
+    data = json.loads(raw.decode('utf-8'), object_pairs_hook=_object, parse_constant=_constant)
+    if (not isinstance(data, dict) or type(data.get('version')) is not int or data['version'] != 1
+            or not set(data) - {'version'} <= set(SETTING_KEYS)):
+        raise ValueError('invalid settings file')
+    values = {key: value for key, value in data.items() if key != 'version'}
+    for key, value in values.items():
+        if not valid_setting(key, value):
+            raise ValueError('invalid settings file')
+    return values
+
+
+def render_settings(values):
+    """The exact bytes a writer stores: the version, then every set key in fixed order."""
+    data = {'version': 1}
+    for key in SETTING_KEYS:
+        if key in values:
+            data[key] = values[key]
+    raw = (json.dumps(data, indent=2, ensure_ascii=True) + '\n').encode()
+    parse_settings(raw)
+    return raw
+
+
+def read_approved(code):
+    """The approved SHA-256 of this repository's settings file; FileNotFoundError when none, ValueError when invalid."""
+    if not isinstance(code, str) or not CODE.fullmatch(code):
+        raise ValueError('invalid code')
+    with dr.data_folder(SETTINGS_APPROVED, private=True) as folder:
+        record = json.loads(dr.read_file(folder, code + '.json', 4096), object_pairs_hook=_object)
+    if (not isinstance(record, dict) or set(record) != {'sha256', 'approved'} or not isinstance(record['sha256'], str)
+            or not DIGEST.fullmatch(record['sha256']) or type(record['approved']) is not int
+            or record['approved'] < 0):
+        raise ValueError('invalid approval')
+    return record['sha256']
+
+
+def read_settings(root):
+    """This repository's approved settings as a dict of set keys; every doubt is unset (an empty dict).
+
+    `root` is the repository root of the caller's checkout; None means no repository, which is unset too.
+    """
+    if root is None:
+        return {}
+    try:
+        main, _ = layout(root)
+        with project_folder(main) as folder:
+            raw = read_project_file(folder, SETTINGS_FILE, SETTINGS_LIMIT)
+        if read_approved(code_of(main)) != hashlib.sha256(raw).hexdigest():
+            return {}
+        return parse_settings(raw)
+    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
+        return {}
+
+
+def _write_approval(folder, code, raw):
+    record = {'sha256': hashlib.sha256(raw).hexdigest(), 'approved': int(time.time())}
+    dr.atomic_write(folder, code + '.json', json.dumps(record, sort_keys=True).encode())
+
+
+def write_setting(root, key, value):
+    """Set (or clear, with None) one key in this repository's settings file and approve the new bytes.
+
+    Starts from what readers see: an unapproved or invalid file counts as unset, so its values are never carried
+    forward. Returns False when nothing changed. Never opens host.md.
+    """
+    if key not in SETTING_KEYS or value is not None and not valid_setting(key, value):
+        raise ValueError('invalid project setting')
+    main, _ = layout(root)
+    code = code_of(main)
+    with dr.data_folder(SETTINGS_APPROVED, create=True, private=True) as approvals:
+        fcntl.flock(approvals, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        values = read_settings(root)
+        if values.get(key) == value:
+            return False
+        if value is None:
+            values.pop(key)
+        else:
+            values[key] = value
+        raw = render_settings(values)
+        with project_folder(main, create=True) as folder:
+            if values:
+                dr.atomic_write(folder, SETTINGS_FILE, raw)
+                _write_approval(approvals, code, raw)
+            else:
+                try:
+                    os.unlink(SETTINGS_FILE, dir_fd=folder)
+                    os.fsync(folder)
+                except FileNotFoundError:
+                    pass
+                try:
+                    os.unlink(code + '.json', dir_fd=approvals)
+                    os.fsync(approvals)
+                except FileNotFoundError:
+                    pass
+    return True
+
+
+def ensure_excluded(root):
+    """Add `.finolabs/` to the git common folder's info/exclude when missing, never to a tracked .gitignore.
+
+    True when the line is present afterwards; False when it could not be added (a link, an unsafe file, no folder).
+    """
+    try:
+        _, common = layout(root)
+        with open_dir(common) as git:
+            try:
+                os.mkdir('info', 0o755, dir_fd=git)
+            except FileExistsError:
+                pass
+            info = os.open('info', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=git)
+            try:
+                if os.fstat(info).st_uid != os.getuid() or os.fstat(info).st_mode & 0o022:
+                    return False
+                try:
+                    raw = dr.read_file(info, 'exclude', 262144)
+                    mode = stat.S_IMODE(os.stat('exclude', dir_fd=info, follow_symlinks=False).st_mode)
+                except FileNotFoundError:
+                    raw, mode = b'', 0o644
+                lines = {line.strip() for line in raw.decode('utf-8', 'replace').splitlines()}
+                if lines & EXCLUDE_FORMS:
+                    return True
+                if raw and not raw.endswith(b'\n'):
+                    raw += b'\n'
+                temporary = '.write-' + os.urandom(12).hex()
+                fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=info)
+                try:
+                    with os.fdopen(fd, 'wb') as stream:
+                        os.fchmod(stream.fileno(), mode)
+                        stream.write(raw + EXCLUDE_LINE)
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                    os.replace(temporary, 'exclude', src_dir_fd=info, dst_dir_fd=info)
+                    os.fsync(info)
+                finally:
+                    try:
+                        os.unlink(temporary, dir_fd=info)
+                    except FileNotFoundError:
+                        pass
+                return True
+            finally:
+                os.close(info)
+    except (OSError, ValueError, UnicodeError):
+        return False

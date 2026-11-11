@@ -5,7 +5,6 @@ try:
     import fcntl
 except ImportError:
     raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
-import hashlib
 import json
 import os
 import re
@@ -71,69 +70,25 @@ def repository_code(root):
     return store.repository_code(root)
 
 
-def project_labels(text):
-    _, body, end = host_section(text, 'Project labels')
-    labels = {}
-    for line in text[body:end].splitlines():
-        if not line.strip():
-            continue
-        match = re.fullmatch(r'- ([0-9a-f]{8}): ([A-Za-z0-9 ._-]{1,40})', line)
-        if not match or match[1] in labels or not match[2].strip():
-            raise ValueError('ambiguous labels')
-        labels[match[1]] = match[2]
-    return labels
-
-
-def valid_setting(key, value):
-    if not isinstance(value, str):
-        return False
-    if key == 'parallel':
-        return bool(re.fullmatch(r'[0-9]{1,2}', value) and 1 <= int(value) <= 32)
-    if key == 'parallel-caps':
-        seen = set()
-        for item in value.split(','):
-            match = re.fullmatch(r'(claude|codex|antigravity)=([0-9]{1,2})', item.strip())
-            if not match or not 1 <= int(match[2]) <= 32 or match[1] in seen:
-                return False
-            seen.add(match[1])
-        return True
-    if key == 'ledger':
-        return bool(LABEL.fullmatch(value) and value.strip())
-    if key == 'tasks':
-        return bool(re.fullmatch(r'[A-Za-z0-9._/-]{1,120}', value) and value.endswith('.md')
-                    and all(part not in ('', '.', '..') for part in value.split('/'))
-                    and value.split('/')[:2] != ['specs', 'archive']
-                    and value.split('/')[-1].upper() not in INSTRUCTION_FILES)
-    return False
-
-
-def project_settings(text):
-    """One malformed entry invalidates the entire section, never just that key."""
-    _, body, end = host_section(text, 'Project settings')
-    entries = {}
-    lines = [line for line in text[body:end].splitlines() if line.strip()]
-    if len(lines) > 100:
-        raise ValueError('invalid project settings')
-    for line in lines:
-        match = re.fullmatch(r'- ([0-9a-f]{8}) (ledger|tasks|parallel|parallel-caps): (.*)', line)
-        if not match or not valid_setting(match[2], match[3]) or (match[1], match[2]) in entries:
-            raise ValueError('invalid project settings')
-        entries[(match[1], match[2])] = match[3]
-    return entries
+valid_setting = store.valid_setting
 
 
 def repository_settings(values, root):
-    """Host entries win over deprecated globals; no repository instruction reads."""
-    result = dict(values)
-    try:
-        entries = project_settings(dr.read_data('host.md', 262144).decode('utf-8'))
-    except (OSError, ValueError, UnicodeError):
-        entries = {}
-    code = repository_code(root)
+    """The ledger and task-file settings of this repository's approved project file; host.md is never read for them.
+
+    Unset keys are absent, so callers fall back to the folder name and no task file. No repository instruction reads.
+    """
+    result = {key: value for key, value in values.items() if key not in ('Ledger project', 'Task file')}
+    settings = store.read_settings(root)
     for key, old in (('ledger', 'Ledger project'), ('tasks', 'Task file')):
-        if (code, key) in entries:
-            result[old] = entries[(code, key)]
+        if key in settings:
+            result[old] = settings[key]
     return result
+
+
+def project_label(root):
+    """This repository's display label from its approved project file, or None."""
+    return store.read_settings(root).get('label')
 
 
 def set_setting(cwd, key, value):
@@ -152,29 +107,9 @@ def set_setting(cwd, key, value):
     root = find_root(cwd)
     if root is None:
         raise ValueError('no repository')
-    code = repository_code(root)
-    with dr.root_folder() as folder:
-        fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        text = dr.read_file(folder, 'host.md', 262144).decode('utf-8')
-        entries = project_settings(text)
-        if entries.get((code, key)) == value:
-            return False
-        if value is None:
-            entries.pop((code, key), None)
-        else:
-            entries[(code, key)] = value
-        if len(entries) > 100:
-            raise ValueError('project settings cap')
-        start, _, end = host_section(text, 'Project settings')
-        newline = '\r\n' if '\r\n' in text else '\n'
-        section = '## Project settings\n\n' + ''.join(
-            '- ' + c + ' ' + k + ': ' + v + '\n' for (c, k), v in sorted(entries.items())) + '\n'
-        text = text[:start] + (newline if start == end and text and not text.endswith(newline * 2) else '') + section.replace('\n', newline) + text[end:]
-        raw = text.encode('utf-8')
-        if len(raw) > 262144:
-            raise ValueError('host cap')
-        dr.atomic_write(folder, 'host.md', raw)
-    return True
+    changed = store.write_setting(root, key, value)
+    store.ensure_excluded(root)
+    return changed
 
 
 def registered_projects(folder=None):
@@ -219,20 +154,8 @@ def set_label(cwd, label):
     root = find_root(cwd)
     if root is None:
         raise ValueError('no repository')
-    code = repository_code(root)
-    with dr.root_folder(create=True) as folder:
-        fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        text = dr.read_file(folder, 'host.md', 262144).decode('utf-8')
-        labels = project_labels(text)
-        labels[code] = label
-        start, _, end = host_section(text, 'Project labels')
-        newline = '\r\n' if '\r\n' in text else '\n'
-        section = '## Project labels\n\n' + ''.join('- ' + k + ': ' + v + '\n' for k, v in sorted(labels.items())) + '\n'
-        text = text[:start] + (newline if start == end and text and not text.endswith(newline * 2) else '') + section.replace('\n', newline) + text[end:]
-        raw = text.encode('utf-8')
-        if len(raw) > 262144:
-            raise ValueError('host cap')
-        dr.atomic_write(folder, 'host.md', raw)
+    store.write_setting(root, 'label', label)
+    store.ensure_excluded(root)
     return label
 
 
@@ -286,7 +209,8 @@ def config():
             values[match[1]] = match[2]
         if values.get('Project progress', 'on') != 'on':
             return None
-        return values
+        # Global Task file / Ledger project lines left from before 0.2.5 keep the section valid but are never read.
+        return {key: value for key, value in values.items() if key == 'Project progress'}
     except (OSError, ValueError, UnicodeError):
         return None
 
@@ -1057,11 +981,7 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
             result = empty()
             repo = repo_code(cwd) if repo_code else repo
             result['repo'] = repo
-            try:
-                labels = project_labels(dr.read_data('host.md', 262144).decode('utf-8'))
-            except (OSError, ValueError, UnicodeError):
-                labels = {}
-            result['label'] = labels.get(repo, registered_projects().get(repo, ''))
+            result['label'] = project_label(root) or registered_projects().get(repo, '')
             if records:
                 ledger = records()
                 if ledger is not None:
@@ -1159,6 +1079,14 @@ def installed_version():
     return 'unknown'
 
 
+def exclude_note():
+    """Say so when the project folder could not be listed in .git/info/exclude; the setting itself is saved."""
+    root = find_root(os.getcwd())
+    if root is not None and not store.ensure_excluded(root):
+        print('Saved, but .git/info/exclude could not be changed; add the line .finolabs/ to it yourself.',
+              file=sys.stderr)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('choice', choices=('on', 'off', 'label', 'settings'))
@@ -1179,10 +1107,12 @@ def main(argv=None):
                     raise ValueError('setting requires equals')
             changed = set_setting(os.getcwd(), key, value)
             print(key + (' changed' if changed else ' not changed'))
+            exclude_note()
             return 0
         if args.choice == 'label':
             set_label(os.getcwd(), args.label)
             print('Project label saved.')
+            exclude_note()
             return 0
         result = configure(args.choice, args.yes, args.dry_run)
         print(result if args.dry_run else 'Project progress preference saved.')

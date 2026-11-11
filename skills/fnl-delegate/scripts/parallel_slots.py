@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Read advisory parallel capacity from canonical local config and ledger only."""
+"""Read advisory parallel capacity from the repository's approved project settings and the ledger only."""
 
 import argparse
 from contextlib import contextmanager
-import hashlib
 import os
 import stat
 from datetime import datetime, timezone
@@ -25,79 +24,13 @@ LEDGER_LIMIT = 4 * 1024 * 1024
 DEFAULT_LIMIT = 3
 
 
-INSTRUCTION_FILES = ('CLAUDE.MD', 'CLAUDE.LOCAL.MD', 'AGENTS.MD', 'AGENTS.OVERRIDE.MD', 'GEMINI.MD',
-                     'COPILOT-INSTRUCTIONS.MD', 'CONVENTIONS.MD', '.CURSORRULES', '.WINDSURFRULES', '.CLINERULES')
-
-# Keep repository identity and strict settings in parity with project_progress.
-def host_section(text, title="Project progress"):
-    """Return authoritative section bounds, ignoring fenced examples; ambiguity fails closed."""
-    headings, fence, offset = [], None, 0
-    for line in text.splitlines(keepends=True):
-        match = re.match(r'^\s*(`{3,}|~{3,})', line)
-        if match:
-            token = match[1]
-            if fence is None:
-                fence = token
-            elif token[0] == fence[0] and len(token) >= len(fence):
-                fence = None
-        elif fence is None and re.match(r'^#{1,2} ', line):
-            headings.append((offset, offset + len(line), line.strip()))
-        offset += len(line)
-    indexes = [i for i, (_, _, heading) in enumerate(headings) if heading == '## ' + title]
-    if fence is not None or len(indexes) > 1:
-        raise ValueError('ambiguous host')
-    if not indexes:
-        return len(text), len(text), len(text)
-    index = indexes[0]
-    start, body, _ = headings[index]
-    end = headings[index + 1][0] if index + 1 < len(headings) else len(text)
-    return start, body, end
-
-
-LABEL = re.compile(r'[A-Za-z0-9 ._-]{1,40}')
-
-
+# Repository identity and the settings file are project_store's, shared with project_progress.
 def repository_code(root):
     """The validated identity of `project_store`, the same as project_progress's."""
     return store.repository_code(root)
 
 
-def valid_setting(key, value):
-    if not isinstance(value, str):
-        return False
-    if key == 'parallel':
-        return bool(re.fullmatch(r'[0-9]{1,2}', value) and 1 <= int(value) <= 32)
-    if key == 'parallel-caps':
-        seen = set()
-        for item in value.split(','):
-            match = re.fullmatch(r'(claude|codex|antigravity)=([0-9]{1,2})', item.strip())
-            if not match or not 1 <= int(match[2]) <= 32 or match[1] in seen:
-                return False
-            seen.add(match[1])
-        return True
-    if key == 'ledger':
-        return bool(LABEL.fullmatch(value) and value.strip())
-    if key == 'tasks':
-        return bool(re.fullmatch(r'[A-Za-z0-9._/-]{1,120}', value) and value.endswith('.md')
-                    and all(part not in ('', '.', '..') for part in value.split('/'))
-                    and value.split('/')[:2] != ['specs', 'archive']
-                    and value.split('/')[-1].upper() not in INSTRUCTION_FILES)
-    return False
-
-
-def project_settings(text):
-    """One malformed entry invalidates the entire section, never just that key."""
-    _, body, end = host_section(text, 'Project settings')
-    entries = {}
-    lines = [line for line in text[body:end].splitlines() if line.strip()]
-    if len(lines) > 100:
-        raise ValueError('invalid project settings')
-    for line in lines:
-        match = re.fullmatch(r'- ([0-9a-f]{8}) (ledger|tasks|parallel|parallel-caps): (.*)', line)
-        if not match or not valid_setting(match[2], match[3]) or (match[1], match[2]) in entries:
-            raise ValueError('invalid project settings')
-        entries[(match[1], match[2])] = match[3]
-    return entries
+valid_setting = store.valid_setting
 
 
 @contextmanager
@@ -133,26 +66,6 @@ def find_root(cwd):
     return None
 
 
-def read_metadata(root_fd, name):
-    """Read .git/commondir with project_progress's bounded, owned-file rules."""
-    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=root_fd)
-    try:
-        info = os.fstat(fd)
-        limit = 512 * 1024
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_size > limit:
-            raise ValueError('invalid repository metadata')
-        chunks, size = [], 0
-        while size <= limit:
-            chunk = os.read(fd, min(65536, limit + 1 - size))
-            if not chunk:
-                return b''.join(chunks).decode('utf-8', 'replace')
-            chunks.append(chunk)
-            size += len(chunk)
-        raise ValueError('invalid repository metadata')
-    finally:
-        os.close(fd)
-
-
 def legacy_limits(text):
     """Detect the retired section, ignoring fenced examples and its contents."""
     fence = None
@@ -169,27 +82,16 @@ def legacy_limits(text):
     return False
 
 
-def legacy_ledger_alias(text):
-    """The deprecated global `Ledger project:` line that project progress still honors; any doubt means none."""
-    try:
-        _, body, end = host_section(text)
-    except ValueError:
-        return None
-    values = [m[1] for m in (re.fullmatch(r'(?:- )?Ledger project: (.+)', line)
-                             for line in text[body:end].splitlines()) if m]
-    if len(values) != 1 or not values[0].strip():
-        return None
-    return values[0]
-
-
 def parse_config(text, root=None):
-    """Project settings are strict; absent settings use the default of three with no caps."""
-    entries = project_settings(text)
+    """Settings come only from the repository's approved project file (`project_store.read_settings`); an unset,
+    unapproved or invalid file means the default of three with no caps. `text` (host.md) only reports the retired
+    `## Limits` section; its project settings and global ledger line are never read."""
+    settings = store.read_settings(root)
     code = repository_code(root) if root is not None else None
-    total = entries.get((code, 'parallel'))
+    total = settings.get('parallel')
     limit = int(total) if total is not None else DEFAULT_LIMIT
     caps = {family: None for family in FAMILIES}
-    value = entries.get((code, 'parallel-caps'))
+    value = settings.get('parallel-caps')
     if value is not None:
         for item in value.split(','):
             family, count = item.strip().split('=')
@@ -197,7 +99,7 @@ def parse_config(text, root=None):
                 raise ValueError('invalid cap')
             caps[family] = int(count)
     scope = None if root is None else dict(
-        code=code, project=entries.get((code, 'ledger')) or legacy_ledger_alias(text) or root.name)
+        code=code, project=settings.get('ledger') or root.name)
     return dict(limit=limit, caps=caps, source='project settings' if total is not None else 'default',
                 scope=scope, legacy_limits=legacy_limits(text))
 
