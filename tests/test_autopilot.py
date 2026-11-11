@@ -94,7 +94,12 @@ class AutopilotTest(AutopilotBase):
         self.assertEqual(self.lease()['expiry'] - self.lease()['start'], 7200)
         self.assertEqual(stat.S_IMODE(self.state.stat().st_mode), 0o700)
         self.assertEqual(stat.S_IMODE((self.state / 'lease.json').stat().st_mode), 0o600)
-        self.assertEqual(self.invoke('start')[0], 3)
+        before = (self.state / 'lease.json').read_bytes()
+        status, joined = self.invoke('start')
+        self.assertEqual(status, 0, joined)  # a second session joins the machine-wide lease instead of failing
+        self.assertIn('Autopilot already live until ', joined)
+        self.assertIn('covers every session on this machine', joined)
+        self.assertEqual((self.state / 'lease.json').read_bytes(), before)  # nothing extended or reset
         for _ in range(2):
             status, output = self.invoke('stop')
             self.assertEqual(status, 0, output)

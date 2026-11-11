@@ -7,7 +7,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | --- | --- |
 | Setup is one canonical ## Autopilot key/value section; Merge has no default, hours are 1..24 | settings, start |
 | State stays outside Git, private (directories 0700/files 0600), no links, atomic and serialized | private_folder, read_private, write_private, data_root, flock |
-| One live lease; stop removes it and leaves a stop marker; starting clears that marker | start, stop |
+| One live lease for the machine; a second start reports it and changes nothing; stop removes it and leaves a stop marker; starting clears that marker | start, stop |
 | Missing/expired/stopped/changed setup or exhausted runs, wall/runtime minutes or rolling-hour actions denies every check | lease_guard |
 | Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release and npm/pnpm publish forms whose every applicable category is `decide`, and a deploy matching a `Non-production targets` entry exactly with no production or live word; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
 | Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
@@ -196,7 +196,12 @@ def start(folder, args):
     previous = read_lease(folder)
     read_private(folder, 'stop')
     if previous and previous['expiry'] > current:
-        raise ValueError('Autopilot already has a live lease')
+        # One lease covers the machine: a second session joins it instead of starting, extending or failing.
+        from datetime import datetime, timezone
+        until = datetime.fromtimestamp(previous['expiry'], timezone.utc).isoformat(timespec='minutes')
+        print(f'Autopilot already live until {until}; this lease covers every session on this machine. '
+              'Nothing was changed: work under it (check before each action, Decide for every question).')
+        return
     lease = dict(id=uuid.uuid4().hex, start=current, expiry=current + hours * 3600,
                  settings_hash=digest(applied), counters=dict(runs=0, runtime_minutes=0, actions=0, hour_actions=[]))
     save_lease(folder, lease)
