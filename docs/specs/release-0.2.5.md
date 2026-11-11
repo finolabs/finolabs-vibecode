@@ -27,6 +27,7 @@ Settings, labels and check lists saved in `host.md` with 0.2.4 or earlier are no
 
 - The dashboard shows a user label only for the repository it runs in; other repositories show their registered folder name, because their settings live in their own folders.
 - `fnl_metrics.repo_code`, the metrics identity, is not changed by this release; for a real repository and a real linked worktree it gives the same code. It still accepts nonreciprocal worktree metadata, so a crafted `.git` file can attribute metrics events to another repository's code; validating it like `project_store.layout` is deferred to a later release (security review finding 4 on the 0.2.5 pull request). It selects no settings, checks or limits.
+- A missing approval record in `<data root>/state/settings-approved/` reads as never configured, so its repository returns to the defaults (owner decision, 2026-11-11). Loss of private data-root state is outside the threat model: whoever can write the data root can also write an approval that matches any settings file, so a separate configured marker there would stop no one. Recovery from a broken file stays the explicit `project_progress.py settings --reset` (round 2 security review, finding 1).
 
 ## Evidence
 
