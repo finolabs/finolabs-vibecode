@@ -25,7 +25,7 @@ Undo: Run checks_setup.py remove for this repository and approve its preview.
 Choices: "Yes, save these checks" / "No, leave checks unchanged".
 On yes run `checks_setup.py apply --yes --digest <Digest>`. It refuses a preview older than 60 minutes, a file changed since the preview, a link on the path and anything the limits above refuse.
 
-The file sits in the main checkout (linked worktrees share it); apply adds `.finolabs/` to `.git/info/exclude` once, never to `.gitignore`, and keeps a replaced file as `checks.json.bak-<date>`. A file edited or supplied by a branch no longer matches its approval: nothing runs and the receipt is off until setup runs again. An invalid file is unset for that repository only, never repaired. Lists in `## Checks` of host.md (before 0.2.5) apply without a file; a save, or `checks_setup.py migrate` then `migrate --yes --digest <Digest>`, moves them out with a host.md backup.
+The file sits in the main checkout (linked worktrees share it); apply adds `.finolabs/` to `.git/info/exclude` once, never to `.gitignore`, and keeps a replaced file as `checks.json.bak-<date>`. A file edited or supplied by a branch no longer matches its approval: nothing runs and the receipt is off until setup runs again. An invalid file is unset for that repository only, never repaired. A list in `## Checks` of host.md (0.2.4) is never read: save it again, then delete that section by hand.
 
 ## Local receipt (optional, its own question)
 

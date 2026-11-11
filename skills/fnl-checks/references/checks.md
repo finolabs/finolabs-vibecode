@@ -2,7 +2,7 @@
 
 `fnl-setup`'s `checks_setup.py` stores each repository's checks in the main checkout's `.finolabs/vibecode/checks.json`: an ordered list of short names and JSON argument arrays, never shell strings.
 Apply records the SHA-256 of the exact file in the private state folder; a file that differs from it (edited, or committed or checked out on a branch) or has none runs nothing, turns the local receipt off, and says to run `/fnl-setup add checks` again, so a repository cannot change which commands run.
-A repository that has never saved a project file still reads a list saved before 0.2.5 in `## Checks` of the canonical host config; once it has an approval record, the project file alone decides, and a missing file runs nothing; `checks_setup.py migrate` moves it. Undo is `checks_setup.py remove` for this repository. `scripts/checks.py` in this skill runs the list.
+The project file is the only store: a missing file runs nothing, and a list saved with 0.2.4 in `## Checks` of the canonical host config is never read, so run `/fnl-setup add checks` again and delete that section by hand. Undo is `checks_setup.py remove` for this repository. `scripts/checks.py` in this skill runs the list.
 
 ## Commands
 
