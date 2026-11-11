@@ -74,7 +74,7 @@ class SessionStartTest(SyntheticStateTest):
         raw = json.dumps({"source": "compact", "session_id": "synthetic"}).encode()
         for mode in ("suggest", "auto", None):
             out, _ = self.run_hook(raw, delegation=mode)
-            self.assertIn(b'apply delegate "Keep or hand off"', out)
+            self.assertIn(b'apply the delegate skill\'s "Keep or hand off"', out)
             self.assertIn(b"another agent family", out)
         out, _ = self.run_hook(raw, delegation="manual")
         self.assertNotIn(b"Keep or hand off", out)
@@ -87,7 +87,7 @@ class SessionStartTest(SyntheticStateTest):
         raw = json.dumps({"source": "compact", "session_id": "synthetic"}).encode()
         for mode in ("manual", "suggest", "auto", None):
             out, _ = self.run_hook(raw, delegation=mode)
-            self.assertIn(b"invoke session-hygiene", out)
+            self.assertIn(b"invoke the session-hygiene skill", out)
             self.assertIn(b"rename it", out)
         for source in ("startup", "resume", "clear"):
             startup = json.dumps({"source": source, "session_id": "synthetic"}).encode()
