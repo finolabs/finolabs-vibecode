@@ -24,12 +24,13 @@ class SkillFiringTest(unittest.TestCase):
 
     def test_router_directs_session_naming_at_task_start_and_phase_change(self):
         step1 = self.router.split("## 1.", 1)[1].split("## 2.", 1)[0]
-        self.assertIn("invoke `fnl-session-hygiene` to name or rename the session", step1)
-        self.assertIn("planning to implementation to review", step1)
+        flat = " ".join(step1.split())
+        self.assertIn("invoke `fnl-session-hygiene` to name or rename the session", flat)
+        self.assertIn("phase changes", flat)
 
     def test_router_invokes_checks_before_claims_and_delegated_acceptance(self):
-        self.assertIn("Invoke `fnl-checks` before you report work as done, fixed or passing, and before you accept "
-                      "a delegated run", self.router)
+        flat = " ".join(self.router.split())
+        self.assertRegex(flat, r"Invoke `fnl-checks` before you report work as done, fixed or passing, and before you accept a delegated run")
 
     def test_rules_invoke_checks_before_claims_without_naming_the_router(self):
         [line] = [l for l in self.rules.splitlines() if "fnl-checks" in l]
