@@ -110,11 +110,16 @@ including a configured task path with such a name.
 
 The schema is closed: `version` 1 and the optional string keys `ledger`, `tasks`, `parallel`,
 `parallel-caps` and `label`. An unknown key, a duplicate key, a wrong version or any bad value makes the
-file invalid, which reads as unset for that repository only and is never repaired on read. The file is
+file invalid; nothing is repaired on read. The file is
 read with no-follow descent, owner-checked and not writable by group or others (as `checks.json`), at
 most 16 KiB, and only while its bytes match the SHA-256 that a setter recorded in
-`<data root>/state/settings-approved/<repository code>.json`: a hand-edited, branch-supplied or
-unapproved file reads as unset, so a repository cannot raise `parallel` or redirect `tasks`.
+`<data root>/state/settings-approved/<repository code>.json`. A repository is in one of three states.
+Never configured: no approval record, so a branch-supplied or hand-written file nobody approved here sets
+nothing and the defaults hold. Approved: the record exists and the file matches it. Broken: the record
+exists but the file is now missing, unreadable, unsafe, invalid or edited, or the record cannot be read;
+capacity and the ledger join are unknown (never the defaults or the folder name), the task file and label
+are off, and every setter refuses. So a repository cannot raise `parallel`, relax an approved limit or
+redirect `tasks`.
 Ledger values are 1–40 ASCII letters/digits/spaces/dots/dashes/underscores, at least one non-space.
 Tasks values are 1–120 ASCII letters/digits/dots/dashes/underscores/slashes, relative, ending in `.md`,
 without empty, `.` or `..` components and outside `specs/archive`. The descriptor-based file reader
@@ -125,11 +130,18 @@ Inside a repository, `project_progress.py settings --set <key>=<value>` (`ledger
 `parallel-caps`) or `label --set <label>` changes only that repository's file; split the argument on the
 first `=`. `settings --clear <key>` removes only that key, and clearing the last key removes the file
 and its approval. `ledger` and `tasks` require recorded metrics consent. The setter takes a lock on the
-private approval folder, starts from what readers see (an unapproved file's values are never carried
-forward), writes the file atomically (folders 0700, file 0600), records its digest, and adds `.finolabs/`
+private approval folder and starts from the full settings state: never configured starts empty (an
+unapproved file's values are never carried forward), approved starts from the approved values, and
+broken refuses with nothing written and a fixed message naming `settings --reset`, so a partial update
+never drops the other keys. `settings --reset` is the one recovery: under the same lock, with no metrics
+consent needed because it records nothing, it removes the settings file and then its approval record,
+so the repository reads as never configured; the setup text previews it as discarding every project
+setting before the yes. The setter writes the file atomically (folders 0700, file 0600), records its digest, and adds `.finolabs/`
 to the git common folder's `info/exclude` when missing, never to a tracked `.gitignore`; if that line
 cannot be added, the command says the setting was saved and asks the user to add it. It never opens
-`host.md`, prints only the key and changed/not changed, and never runs from a hook. Values never reach
+`host.md` and never runs from a hook. `settings --set` and `--clear` print only the key and changed or not
+changed, `label --set` prints `Project label saved.` and `settings --reset` prints `Project settings
+reset.`; none prints a value. Values never reach
 `data.js`, tooltips, events or checkup output, except the label of the repository the refresh runs in.
 Purge leaves host config and project settings files unchanged.
 
