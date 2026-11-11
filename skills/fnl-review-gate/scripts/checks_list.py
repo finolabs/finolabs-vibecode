@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Read a repository's check list, its local-receipt mode and the local checks receipts.
 
-The list lives in the main checkout's `.finolabs/vibecode/checks.json` and counts only while its exact bytes match
+The list lives in the main checkout's project data folder (`PROJECT_FOLDERS`), in `checks.json`, and counts only while its exact bytes match
 the digest approved in the private state folder; without that file the legacy `## Checks` section of the canonical
 host config is read (through 0.2.x). Shared, read-mostly: `checks_setup.py` writes the file and its approval,
 `checks.py` writes a receipt, `merge_check.py` reads both. A check is a short name and a JSON argument array, never a
@@ -214,7 +214,7 @@ def read_section():
     return parsed[0], parsed[1], None
 
 
-# The project file: <main checkout>/.finolabs/vibecode/checks.json, bound to an approved digest in user scope
+# The project file: checks.json in the main checkout's project data folder, bound to an approved digest in user scope
 
 def layout(root):
     """(main checkout root, git common folder) of a repository root, resolved the way
@@ -244,7 +244,7 @@ def code_of(main):
 
 @contextmanager
 def project_folder(main, create=False):
-    """An fd of <main>/.finolabs/vibecode opened with no-follow descent from the filesystem root; each folder owned by
+    """An fd of the project data folder under <main> opened with no-follow descent from the filesystem root; each folder owned by
     this account and not writable by others. Created folders are 0700. A link anywhere on the path is refused."""
     with pp.open_dir(main) as top:
         fd = os.dup(top)

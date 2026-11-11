@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Detect, preview and apply one repository's check list and local-receipt mode in its own
-`.finolabs/vibecode/checks.json` (in the main checkout) with an approved digest in the private state folder, move a
+`checks.json` in the main checkout's project data folder with an approved digest in the private state folder, move a
 legacy `## Checks` entry out of the canonical host config (`migrate`), install or remove the optional git pre-push
 hook, and write one cheaper CI workflow file from the stored list (`ci preview|apply`, never committed or pushed);
 make no network call.
@@ -305,7 +305,7 @@ def preview(found, action, checks=None, receipt=None):
             print(line)
         return
     main, code = Path(plan['main']), plan['code']
-    target = main / '.finolabs/vibecode' / cl.PROJECT_FILE
+    target = main.joinpath(*cl.PROJECT_FOLDERS, cl.PROJECT_FILE)
     print('Target: ' + str(target))
     if action == 'mode':
         print(f'Turn the local-receipt mode {"on" if receipt else "off"} for repository {code}; its check list '
