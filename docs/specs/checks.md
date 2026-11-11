@@ -1,6 +1,6 @@
 # Checks: where a repository's checks run and what they cost (draft, scoped to release 0.2.4)
 
-Status: draft; the owner settled the direction and the name on 2026-11-10. Built: items 1 to 7 (`checks.py` with `usage`, the shared reader `checks_list.py` with the document-only rule, the pre-push hook installer, the workflow writer `checks_setup.py ci`, `fnl-checks`' `references/ci.md` and the local receipt in `merge_check.py`).
+Status: implemented; for release 0.2.4, the owner settled the direction and the name on 2026-11-10. Built: items 1 to 7 (`checks.py` with `usage`, the shared reader `checks_list.py` with the document-only rule, the pre-push hook installer, the workflow writer `checks_setup.py ci`, `fnl-checks`' `references/ci.md` and the local receipt in `merge_check.py`).
 
 ## Why
 
@@ -45,4 +45,4 @@ The plugin already proves work locally (`fnl-verification`, now fnl-checks: targ
 
 ## Evidence
 
-None yet. A build needs a red test per behavior: the rename and the alias (counts, map, copy groups), list detection from each source without running anything, the stored argument form and its refusal of shell strings, preview and digest before any write, existing project settings reading and writing unchanged beside `## Checks`, `checks.py run` order, stop on failure and `--changed`, the hook install and removal with backup and no silent overwrite, a linked worktree resolving to the shared hooks folder, a refusal when `core.hooksPath` is set, the workflow writer's preview, `usage` from a fixture file, the local receipt refused on a dirty tree, a changed head or a `--changed` run, `merge_check.py` accepting it only for a matching repository, head and list digest and reporting it, and the mode off by default.
+Covered by `tests/test_checks.py`, `tests/test_checks_setup.py` and `tests/test_merge_check.py`. A real `git push` through an installed hook and a run of the generated workflow on GitHub Actions remain unverified. The behaviors a build needed a red test for: the rename and the alias (counts, map, copy groups), list detection from each source without running anything, the stored argument form and its refusal of shell strings, preview and digest before any write, existing project settings reading and writing unchanged beside `## Checks`, `checks.py run` order, stop on failure and `--changed`, the hook install and removal with backup and no silent overwrite, a linked worktree resolving to the shared hooks folder, a refusal when `core.hooksPath` is set, the workflow writer's preview, `usage` from a fixture file, the local receipt refused on a dirty tree, a changed head or a `--changed` run, `merge_check.py` accepting it only for a matching repository, head and list digest and reporting it, and the mode off by default.

@@ -1,6 +1,6 @@
 # Release 0.2.4: scope
 
-Status: in progress; scope set by the owner on 2026-11-10; package 1 is in review.
+Status: in progress; scope set by the owner on 2026-11-10; packages 1 to 5 are merged, package 6 is in review.
 
 ## Scope (owner decisions, 2026-11-10)
 
