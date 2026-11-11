@@ -144,7 +144,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 
 | Path | Purpose |
 | --- | --- |
-| `skills/fnl-checks/scripts/checks.py` | Runs or shows the repository's stored checks in order through `heavy_run.py`, stops at the first failure, narrows Python test modules with `--changed`, and writes a local receipt only for a whole passing run on a clean, unmoved head when that mode is on. |
+| `skills/fnl-checks/scripts/checks.py` | Runs or shows the repository's stored checks in order through `heavy_run.py`, stops at the first failure, narrows Python test modules with `--changed`, and writes a local receipt only for a whole passing run on a clean, unmoved head when that mode is on. `usage --from <file>` summarises hosted CI runs, minutes, the document-only share and days left from a run list the agent produced; no network call and no process. |
 | `skills/fnl-delegate/scripts/autopilot.py` | Autopilot lease, closed action classification (Tier 1 or Tier 3) and private action log; executes nothing. |
 | `skills/fnl-delegate/scripts/heavy_run.py` | Runs one heavy command at a time per machine under a kernel lock, with load and memory gates, a wait cap and a maximum run time. |
 | `skills/fnl-delegate/scripts/ledger.py` | Records runs; accepted finishes need a current-head receipt or explicit reason-digested exception. |
@@ -154,7 +154,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `skills/fnl-review-gate/scripts/merge_check.py` | Checks posted reviews, the low-risk lane and router marker when the base adopted the gate; with the local-receipt mode on, a matching local checks receipt stands in for missing or failing hosted checks and is named as such. |
 | `skills/fnl-setup/scripts/agent_scan.py` | Previews fixed local `--version` inventory; writes only after confirmation. |
 | `skills/fnl-setup/scripts/autopilot_setup.py` | Previews and writes only the `## Autopilot` section of the host config, with a digest and backup. |
-| `skills/fnl-setup/scripts/checks_setup.py` | Detects a repository's checks from its files without running them, then previews and applies only that repository's entry in the host config's `## Checks` after a digest-bound yes; a check is an argument array, never a shell string. Also turns the per-repository local-receipt mode on or off and installs or removes the optional pre-push hook (resolved hooks folder, refusal under `core.hooksPath`, backup, no silent overwrite). |
+| `skills/fnl-setup/scripts/checks_setup.py` | Detects a repository's checks from its files without running them, then previews and applies only that repository's entry in the host config's `## Checks` after a digest-bound yes; a check is an argument array, never a shell string. Also turns the per-repository local-receipt mode on or off and installs or removes the optional pre-push hook (resolved hooks folder, refusal under `core.hooksPath`, backup, no silent overwrite). `ci` writes one cheaper CI workflow from the list, previewed; never commits. |
 | `skills/fnl-setup/scripts/checkup.py` | Read-only setup/instruction evidence; no host commands or credentials. |
 | `skills/fnl-setup/scripts/compact_stop_setup.py` | Previews/installs/removes the separately consented Antigravity size-stop hook. |
 | `skills/fnl-setup/scripts/data_location.py` | Previews/copies plugin data into an empty approved folder and publishes the pointer last. |

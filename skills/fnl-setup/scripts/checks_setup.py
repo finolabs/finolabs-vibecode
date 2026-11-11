@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Detect, preview and apply one repository's entry in the canonical host's Checks section and its local-receipt
-mode, and install or remove the optional git pre-push hook; make no network call.
+mode, install or remove the optional git pre-push hook, and write one cheaper CI workflow file from the stored
+list (`ci preview|apply`, never committed or pushed); make no network call.
 
 A check is a short name and a JSON argument array, never a shell string. Only this script writes `## Checks`.
 Detection, the list and the mode run no command; the hook commands run only fixed git queries, with no shell,

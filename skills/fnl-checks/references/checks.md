@@ -10,6 +10,7 @@ Run from inside the repository:
 - `checks.py run --changed [--base <ref>]` (default base `origin/main`) keeps only the checks the change since the base touches. Only `python -m unittest discover -s tests` (optionally with `-p test_*.py`, which the stored-list guard cannot hold today) is narrowed, and only while the `tests` folder is flat: no sub-folder holds a Python file, and no top-level file matches discovery's default `test*.py` without matching `test_*.py`. A bare `python -m unittest` or `discover` starts at the repository root and recurses into packages, so it runs whole.
   Such a check keeps its discovery and only changes the pattern: one `discover -s tests --pattern <file>` command per test module `select_tests.py` names, so imports behave as in the whole run. It is skipped when no module names a changed file. Every other unittest form (another directory or pattern, an explicit module list, any other option) and every other check (pytest, npm, make and the rest) runs whole. With no changed file every check is skipped. Each skipped check is printed with its reason. An unknown base refuses.
 - `checks.py show` prints the stored list and whether the local-receipt mode is on.
+- `checks.py usage --from <file>` summarises hosted CI runs and minutes from a file; see [ci.md](ci.md).
 
 Exits: 0 passed, 1 a check failed, 2 refused (no list, unknown base, outside a repository), 3 the stored section is invalid or unreadable.
 
