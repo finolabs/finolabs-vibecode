@@ -1258,10 +1258,11 @@ class SettingsFileTest(unittest.TestCase):
         import fcntl
         self.pp.set_setting(self.repo, 'parallel', '2')
         for argv in (['settings', '--reset', '--set', 'parallel=4'], ['settings', '--reset', '--clear', 'parallel'],
-                     ['label', '--reset']):
+                     ['label', '--reset'], ['settings', '--reset', '--dry-run'], ['settings', '--reset', '--yes']):
             with self.subTest(argv=argv):
+                before = (self.file().read_bytes(), self.approval().read_bytes())
                 self.assertEqual(self.run_cli(argv)[0], 1)
-                self.assertTrue(self.approval().exists())
+                self.assertEqual((self.file().read_bytes(), self.approval().read_bytes()), before)
         fd = os.open(self.approval().parent, os.O_RDONLY)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)

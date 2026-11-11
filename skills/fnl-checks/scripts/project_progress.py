@@ -1116,8 +1116,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.reset:
-            if args.choice != 'settings' or args.label is not None or args.clear is not None:
-                raise ValueError('reset takes no other setting')
+            # Reset has no preview: a dry run or a pre-given yes must never reach the deletion below.
+            if (args.choice != 'settings' or args.label is not None or args.clear is not None
+                    or args.dry_run or args.yes):
+                raise ValueError('reset takes no other option')
             reset_settings(os.getcwd())
             print('Project settings reset.')
             return 0
