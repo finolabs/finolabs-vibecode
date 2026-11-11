@@ -126,6 +126,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/post_review.py` | Posts a bounded marker-checked private draft to the checkout's repository only when authorized. |
 | `scripts/precompact.py` | Prints a nonblocking reminder; Claude stdout feeds summary instructions, Codex plain stdout does not reach the model. |
 | `scripts/project_progress.py` | Reads bounded task/work-record/repository facts and manages consented per-repository settings, labels and registration. |
+| `scripts/project_store.py` | Resolves a validated repository identity (a linked worktree only when its metadata points back) and reads or writes the approved project settings file. |
 | `scripts/quota_limit_hook.py` | Records only Claude family/time on opt-in StopFailure `rate_limit`; starts no reading. |
 | `scripts/quota_probe.py` | Reads quota on demand before routing and reports cached per-install pools and advisory markers. |
 | `scripts/record.py` | Router, keep, task and judge metadata receipts; persists current-head verification metadata. |

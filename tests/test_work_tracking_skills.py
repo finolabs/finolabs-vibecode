@@ -52,7 +52,7 @@ class WorkTrackingSkillsTests(unittest.TestCase):
         for phrase in ('metrics consent', 'project progress are on', 'separate question',
                        'neutral Yes and No', 'none preselected or marked recommended',
                        'only after its explicit yes', 'one argument', 'verbatim',
-                       'script validates', '- <code> ledger: <name>', '- <code> tasks: <relative path>',
+                       'script validates', '"ledger": "<name>"', '"tasks": "<relative path>"',
                        'project_progress.py settings --set ledger=<name>',
                        'project_progress.py settings --set tasks=<relative path>',
                        'separate checkbox file', 'work record', 'wins', 'Task file:', 'Ledger project:'):
