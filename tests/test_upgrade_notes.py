@@ -78,10 +78,13 @@ class NotesSchemaTest(unittest.TestCase):
         self.assertIn('0.2.4/codex-hook-trust', ids)
         rename = next(item for item in parsed[0]['items'] if item['id'] == '0.2.4/checks-rename')
         self.assertEqual(rename['until'], '0.3.0')
-        migrations = [item for item in parsed[1]['items'] if item['kind'] == 'migration']
-        self.assertEqual(len(migrations), 1)
-        self.assertIn('checks_setup.py migrate', migrations[0]['text'])
-        self.assertIn('host.md', migrations[0]['text'])
+        self.assertEqual([item['kind'] for item in parsed[1]['items']], ['setup'])
+        store = parsed[1]['items'][0]
+        self.assertEqual(store['id'], '0.2.5/checks-store')
+        self.assertEqual(store['setup'], '/fnl-setup add checks')
+        for phrase in ('0.2.4', 'no longer read', 'each repository', '## Checks', 'host.md', 'by hand'):
+            self.assertIn(phrase, store['text'])
+        self.assertNotIn('migrate', store['text'])
 
     def test_release_version_needs_an_entry(self):
         notes = u.parse_notes(json.loads(NOTES.read_text()))

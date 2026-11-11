@@ -33,8 +33,9 @@
       "items": [
         {
           "id": "0.2.5/checks-store",
-          "kind": "migration",
-          "text": "Check lists move out of host.md into each repository's .finolabs/vibecode folder; run checks_setup.py migrate from each repository to move its list."
+          "kind": "setup",
+          "text": "A check list saved with 0.2.4 is no longer read: run /fnl-setup add checks again in each repository, then delete the old ## Checks section from host.md by hand.",
+          "setup": "/fnl-setup add checks"
         }
       ]
     }
