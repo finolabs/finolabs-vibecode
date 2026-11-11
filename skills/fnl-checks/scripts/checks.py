@@ -8,8 +8,9 @@ Usage, from inside the repository:
 Each check is an argument array from `## Checks` of the canonical host config (written only by fnl-setup's
 `checks_setup.py`), launched through `heavy_run.py`'s canonical form with no shell and an allowlisted environment;
 the checks' own output streams through. `--changed` keeps only the checks the change since the base touches: a
-`python -m unittest discover -s tests` check is narrowed to the modules `select_tests.py` names only when the tests
-folder is flat (see `layout_covered`); every other check, unittest form and layout runs whole.
+`python -m unittest discover -s tests` check keeps its discovery and gets one `--pattern <file>` run per module
+`select_tests.py` names, only when the tests folder is flat (see `layout_covered`); every other check, unittest form
+and layout runs whole.
 A run of the whole list first removes any earlier receipt for the repository, so the latest full run decides; when
 the repository's local-receipt mode is on, a passing run of the whole list on a clean tree whose head did not
 move writes a receipt (repository code, head, list digest) in the private state folder. One whole-list run per
@@ -130,6 +131,15 @@ def narrowable(argv):
             and all(DISCOVERY_OPTIONS.get(flag) == value for flag, value in pairs))
 
 
+def discovery_without_pattern(argv):
+    """The stored `discover` argv with any `-p <pattern>` pair removed; `narrowable` has already checked its form."""
+    kept = list(argv[:4])
+    for index in range(4, len(argv), 2):
+        if argv[index] != '-p':
+            kept += argv[index:index + 2]
+    return kept
+
+
 def layout_covered(root, argv):
     """True when the selector's flat index of `tests/test_*.py` is exactly what discovery would find: no folder
     under `tests/` holds a Python file (discovery recurses into packages), and with the default pattern `test*.py`
@@ -172,8 +182,11 @@ def narrow(checks, base, root):
         elif not modules:
             skipped.append((name, 'no Python test module names a changed file'))
         else:
-            for group in select_tests.groups(modules):
-                plan.append((name, [argv[0], '-m', 'unittest', *group]))
+            # Keep the stored discovery and change only its pattern: the start folder, import path and module names
+            # stay those of the whole run, which a rewrite to `unittest tests.test_x` would change.
+            stored = discovery_without_pattern(argv)
+            for module in modules:
+                plan.append((name, [*stored, '--pattern', module.removeprefix('tests.') + '.py']))
     return plan, skipped
 
 

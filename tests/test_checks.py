@@ -182,7 +182,7 @@ class ChecksRunTest(unittest.TestCase):
         code, out, err = self.run_cli(self.module(), 'run', '--changed', '--base', 'main')
         self.assertEqual(code, 0, err)
         launched = [args[args.index('--') + 1:] for args in self.launched()]
-        self.assertEqual(launched, [[sys.executable, '-m', 'unittest', 'tests.test_alpha'], self.mark('other')])
+        self.assertEqual(launched, [[*self.unittest_check(), '--pattern', 'test_alpha.py'], self.mark('other')])
         self.assertEqual(self.marked(), ['other'])
 
     def change_alpha(self):
@@ -200,7 +200,7 @@ class ChecksRunTest(unittest.TestCase):
     def test_changed_narrows_only_the_supported_unittest_forms(self):
         self.change_alpha()
         py = sys.executable
-        narrowed = [py, '-m', 'unittest', 'tests.test_alpha']
+        narrowed = [py, '-m', 'unittest', 'discover', '-s', 'tests', '--pattern', 'test_alpha.py']
         # The stored-list guard refuses any `-p...` argument after an interpreter, so the -p forms are checked
         # on the selector itself below; the forms a list can hold run end to end.
         code, err, launched = self.changed_launches([py, '-m', 'unittest', 'discover', '-s', 'tests'])
@@ -252,7 +252,24 @@ class ChecksRunTest(unittest.TestCase):
                 else:
                     target.unlink()
         _, _, launched = self.changed_launches(check)
-        self.assertEqual(launched, [[sys.executable, '-m', 'unittest', 'tests.test_alpha']])
+        self.assertEqual(launched, [[*check, '--pattern', 'test_alpha.py']])
+
+    def test_changed_keeps_the_import_context_of_the_whole_run(self):
+        self.change_alpha()
+        (self.repo / 'helper.py').write_text("raise RuntimeError('the root helper was imported')\n")
+        (self.repo / 'tests/helper.py').write_text("VALUE = 'tests'\n")
+        test = self.repo / 'tests/test_alpha.py'
+        test.write_text("import helper\nassert helper.VALUE == 'tests'\nassert __name__ == 'test_alpha'\n"
+                        + test.read_text())
+        code, err, launched = self.changed_launches(self.unittest_check())
+        self.assertEqual(code, 0, err)
+        self.assertEqual(launched, [[*self.unittest_check(), '--pattern', 'test_alpha.py']])
+
+    def test_narrowing_replaces_a_stored_pattern_rather_than_adding_a_second(self):
+        module = self.module()
+        stored = [sys.executable, '-m', 'unittest', 'discover', '-p', 'test_*.py', '-s', 'tests']
+        self.assertEqual(module.discovery_without_pattern(stored),
+                         [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests'])
 
     def test_changed_skips_python_tests_no_module_names_and_says_why(self):
         self.store(('unit', self.unittest_check()), ('other', self.mark('other')))
