@@ -7,7 +7,8 @@ mode-checked layout `<main>/.git/worktrees/<name>` that `git_metadata.git_dirs` 
 the checkout's own root. `settings.json` there counts only while its exact bytes match the SHA-256
 approved in the private state folder, so a branch cannot raise `parallel` or redirect `tasks`. A file with no
 approval record reads as unset; an approved file that is now missing, invalid, unsafe or changed is broken, which
-capacity and ledger readers report as unknown (`settings_state`). Nothing is repaired on read. Makes no network call and runs nothing.
+capacity and ledger readers report as unknown (`settings_state`) and writers refuse to change. Nothing is repaired on
+read; `reset_settings` discards every setting to recover. Makes no network call and runs nothing.
 """
 from contextlib import contextmanager
 try:
@@ -289,11 +290,21 @@ def _write_approval(folder, code, raw):
     dr.atomic_write(folder, code + '.json', json.dumps(record, sort_keys=True).encode())
 
 
+def _remove(name, folder):
+    try:
+        os.unlink(name, dir_fd=folder)
+        os.fsync(folder)
+    except FileNotFoundError:
+        pass
+
+
 def write_setting(root, key, value):
     """Set (or clear, with None) one key in this repository's settings file and approve the new bytes.
 
-    Starts from what readers see: an unapproved or invalid file counts as unset, so its values are never carried
-    forward. Returns False when nothing changed. Never opens host.md.
+    Starts from the full settings state: unset starts empty (an unapproved file's values are never carried forward),
+    approved starts from the approved values, and broken raises `SettingsNeedSetup` with nothing written, so a
+    partial update never drops the keys the broken file held; `reset_settings` is the recovery. Returns False when
+    nothing changed. Never opens host.md.
     """
     if key not in SETTING_KEYS or value is not None and not valid_setting(key, value):
         raise ValueError('invalid project setting')
@@ -301,7 +312,10 @@ def write_setting(root, key, value):
     code = code_of(main)
     with dr.data_folder(SETTINGS_APPROVED, create=True, private=True) as approvals:
         fcntl.flock(approvals, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        values = read_settings(root)
+        state, values = settings_state(root)
+        if state not in ('unset', 'approved'):
+            raise SettingsNeedSetup('project settings need setup again')
+        values = dict(values)
         if values.get(key) == value:
             return False
         if value is None:
@@ -314,17 +328,27 @@ def write_setting(root, key, value):
                 dr.atomic_write(folder, SETTINGS_FILE, raw)
                 _write_approval(approvals, code, raw)
             else:
-                try:
-                    os.unlink(SETTINGS_FILE, dir_fd=folder)
-                    os.fsync(folder)
-                except FileNotFoundError:
-                    pass
-                try:
-                    os.unlink(code + '.json', dir_fd=approvals)
-                    os.fsync(approvals)
-                except FileNotFoundError:
-                    pass
+                _remove(SETTINGS_FILE, folder)
+                _remove(code + '.json', approvals)
     return True
+
+
+def reset_settings(root):
+    """Discard every project setting of this repository: remove its settings file, then its approval record, under
+    the setters' lock, so the repository reads as never configured. The one recovery from broken settings.
+
+    A project folder that is a link or unsafe refuses with the record kept, so the state stays broken, never unset.
+    """
+    main, _ = layout(root)
+    code = code_of(main)
+    with dr.data_folder(SETTINGS_APPROVED, create=True, private=True) as approvals:
+        fcntl.flock(approvals, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            with project_folder(main) as folder:
+                _remove(SETTINGS_FILE, folder)
+        except FileNotFoundError:
+            pass
+        _remove(code + '.json', approvals)
 
 
 def ensure_excluded(root):

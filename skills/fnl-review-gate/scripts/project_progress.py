@@ -159,6 +159,15 @@ def set_label(cwd, label):
     return label
 
 
+def reset_settings(cwd):
+    """Discard every project setting of this repository (the recovery from broken settings) under the setters'
+    lock. Records no usage data, so it needs no metrics consent; the setup text asks the user's yes first."""
+    root = find_root(cwd)
+    if root is None:
+        raise ValueError('no repository')
+    store.reset_settings(root)
+
+
 def reader_lines(text, include_fenced=False):
     """Shared bounded Markdown view; fenced examples never supply structure."""
     fence = None
@@ -1098,10 +1107,17 @@ def main(argv=None):
     parser.add_argument('choice', choices=('on', 'off', 'label', 'settings'))
     parser.add_argument('--set', dest='label')
     parser.add_argument('--clear', choices=('ledger', 'tasks', 'parallel', 'parallel-caps'))
+    parser.add_argument('--reset', action='store_true')
     parser.add_argument('--yes', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args(argv)
     try:
+        if args.reset:
+            if args.choice != 'settings' or args.label is not None or args.clear is not None:
+                raise ValueError('reset takes no other setting')
+            reset_settings(os.getcwd())
+            print('Project settings reset.')
+            return 0
         if args.choice == 'settings':
             if bool(args.label is not None) == bool(args.clear is not None):
                 raise ValueError('one setting required')
@@ -1123,6 +1139,10 @@ def main(argv=None):
         result = configure(args.choice, args.yes, args.dry_run)
         print(result if args.dry_run else 'Project progress preference saved.')
         return 0
+    except store.SettingsNeedSetup:
+        print('Project settings need setup again; no setting changed. Run project_progress.py settings --reset to '
+              'discard every project setting, then set them again.', file=sys.stderr)
+        return 1
     except (OSError, ValueError, UnicodeError):
         message = ('Project settings refused; no setting changed.' if args.choice == 'settings'
                    else 'Project progress setup refused; no preference saved.')

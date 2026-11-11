@@ -1188,6 +1188,90 @@ class SettingsFileTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.slots.parse_config('', self.repo)
 
+    def configure_everything(self):
+        self.pp.set_setting(self.repo, 'parallel', '1')
+        self.pp.set_setting(self.repo, 'parallel-caps', 'codex=1')
+        self.pp.set_setting(self.repo, 'ledger', 'Alias')
+        self.pp.set_label(self.repo, 'Synthetic label')
+
+    def run_cli(self, argv):
+        import io
+        with mock.patch('os.getcwd', return_value=str(self.repo)), \
+                mock.patch('sys.stdout', new_callable=io.StringIO) as out, \
+                mock.patch('sys.stderr', new_callable=io.StringIO) as err:
+            code = self.pp.main(argv)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_writers_refuse_a_partial_update_while_approved_settings_are_broken(self):
+        self.configure_everything()
+        good, record = self.file().read_bytes(), self.approval().read_bytes()
+        for case in ('modified', 'missing'):
+            if case == 'modified':
+                self.file().write_bytes(good + b' ')
+            else:
+                self.file().unlink()
+            broken = self.file().read_bytes() if self.file().exists() else None
+            for argv in (['label', '--set', 'Other label'], ['settings', '--set', 'tasks=docs/tasks.md'],
+                         ['settings', '--set', 'parallel=5'], ['settings', '--clear', 'parallel']):
+                with self.subTest(case=case, argv=argv):
+                    code, out, err = self.run_cli(argv)
+                    self.assertEqual(code, 1)
+                    self.assertEqual(out, '')
+                    self.assertIn('settings --reset', err)
+                    self.assertNotIn('Other label', err + out)
+                    self.assertEqual(self.file().read_bytes() if self.file().exists() else None, broken)
+                    self.assertEqual(self.approval().read_bytes(), record)
+                    with self.assertRaises(ValueError):
+                        self.slots.parse_config('', self.repo)
+                    with mock.patch('os.getcwd', return_value=str(self.repo)):
+                        self.assertTrue(self.slots.summary().startswith('unknown'))
+            with self.assertRaises(self.pp.store.SettingsNeedSetup):
+                self.pp.store.write_setting(self.repo, 'parallel', '5')
+            self.file().write_bytes(good)
+            os.chmod(self.file(), 0o600)
+        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 1)
+
+    def test_reset_discards_every_setting_and_returns_to_never_configured(self):
+        self.configure_everything()
+        self.file().write_bytes(self.file().read_bytes() + b' ')
+        code, out, err = self.run_cli(['settings', '--reset'])
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(out, 'Project settings reset.\n')
+        self.assertFalse(self.file().exists())
+        self.assertFalse(self.approval().exists())
+        self.assertEqual(self.pp.store.settings_state(self.repo), ('unset', {}))
+        config = self.slots.parse_config('', self.repo)
+        self.assertEqual((config['limit'], config['source'], config['scope']['project']), (3, 'default', 'one'))
+        self.assertEqual(self.run_cli(['settings', '--set', 'parallel=5'])[0], 0)
+        self.assertEqual(json.loads(self.file().read_text()), {'version': 1, 'parallel': '5'})
+        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 5)
+        # Reset on a never configured repository, or while the file is missing, also ends unset.
+        self.assertEqual(self.run_cli(['settings', '--reset'])[:2], (0, 'Project settings reset.\n'))
+        self.assertEqual(self.run_cli(['settings', '--reset'])[:2], (0, 'Project settings reset.\n'))
+        self.pp.set_setting(self.repo, 'parallel', '2')
+        self.file().unlink()
+        self.assertEqual(self.run_cli(['settings', '--reset'])[0], 0)
+        self.assertFalse(self.approval().exists())
+        self.assertEqual(self.pp.store.settings_state(self.repo), ('unset', {}))
+
+    def test_reset_takes_the_setters_lock_and_combines_with_nothing(self):
+        import fcntl
+        self.pp.set_setting(self.repo, 'parallel', '2')
+        for argv in (['settings', '--reset', '--set', 'parallel=4'], ['settings', '--reset', '--clear', 'parallel'],
+                     ['label', '--reset']):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.run_cli(argv)[0], 1)
+                self.assertTrue(self.approval().exists())
+        fd = os.open(self.approval().parent, os.O_RDONLY)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.assertEqual(self.run_cli(['settings', '--reset'])[0], 1)
+        finally:
+            os.close(fd)
+        self.assertTrue(self.file().exists())
+        self.assertTrue(self.approval().exists())
+        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 2)
+
     def test_never_configured_and_unapproved_files_keep_the_defaults(self):
         self.assertEqual(self.pp.store.settings_state(self.repo), ('unset', {}))
         self.file().parent.mkdir(parents=True, mode=0o700)
