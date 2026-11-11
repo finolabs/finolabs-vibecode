@@ -80,7 +80,12 @@ class ProgressTest(unittest.TestCase):
                 (approvals / (self.pp.repository_code(self.repo) + '.json')).write_text(
                     json.dumps({'sha256': hashlib.sha256(raw).hexdigest(), 'approved': 1}))
                 self.assertEqual(self.pp.repository_settings({}, self.repo), {})
-                self.assertEqual(self.collect(), before)
+                # Approved but invalid: nothing is read from it, and the ledger join says unknown rather than guessing.
+                got = self.collect()
+                self.assertEqual(got['ledger_join'], 'unknown')
+                self.assertEqual(got['skipped'], before['skipped'] + ['settings need setup'])
+                self.assertEqual({k: v for k, v in got.items() if k not in ('ledger_join', 'skipped')},
+                                 {k: v for k, v in before.items() if k not in ('ledger_join', 'skipped')})
                 self.settings_file().unlink()
 
     def test_settings_consent_atomic_private_and_cli_output(self):
@@ -1085,17 +1090,24 @@ class SettingsFileTest(unittest.TestCase):
                 self.file().write_bytes(edited)
                 if case == 'no approval':
                     self.approval().unlink(missing_ok=True)
-                self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 3)
+                if case == 'edited':
+                    # The approval record still exists: an approved file that changed is unknown, never the default.
+                    with self.assertRaises(ValueError):
+                        self.slots.parse_config('', self.repo)
+                else:
+                    self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 3)
                 self.assertEqual(self.settings(), {})
                 self.assertNotEqual(self.pp.collect(self.repo, 'aaaaaaaa').get('source'), 'checkbox')
         # A setter starts from what readers see, so the edited values are not carried forward.
         self.pp.set_setting(self.repo, 'parallel', '4')
         self.assertEqual(json.loads(self.file().read_text()), {'version': 1, 'parallel': '4'})
 
-    def test_unsafe_or_invalid_files_read_as_unset(self):
+    def test_unsafe_or_invalid_approved_files_are_unknown(self):
         self.pp.set_setting(self.repo, 'parallel', '4')
         os.chmod(self.file(), 0o620)
-        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 3)
+        with self.assertRaises(ValueError):
+            self.slots.parse_config('', self.repo)
+        self.assertEqual(self.settings(), {})
         os.chmod(self.file(), 0o600)
         self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 4)
         import hashlib
@@ -1104,7 +1116,86 @@ class SettingsFileTest(unittest.TestCase):
             with self.subTest(raw=raw):
                 self.file().write_bytes(raw)
                 self.approval().write_text(json.dumps({'sha256': hashlib.sha256(raw).hexdigest(), 'approved': 1}))
-                self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 3)
+                with self.assertRaises(ValueError):
+                    self.slots.parse_config('', self.repo)
+                self.assertEqual(self.settings(), {})
+
+    def broken_cases(self):
+        """Each case breaks an approved file; yields its name after breaking and restores the approved bytes after."""
+        good = self.file().read_bytes()
+        for case in ('appended byte', 'deleted', 'unreadable', 'unsafe mode', 'approved but malformed'):
+            if case == 'appended byte':
+                self.file().write_bytes(good + b' ')
+            elif case == 'deleted':
+                self.file().unlink()
+            elif case == 'unreadable':
+                os.chmod(self.file(), 0)
+            elif case == 'unsafe mode':
+                os.chmod(self.file(), 0o620)
+            else:
+                import hashlib
+                raw = b'{"version": 1, "parallel": "33"}'
+                self.file().write_bytes(raw)
+                approved = json.loads(self.approval().read_text())
+                self.approval().write_text(json.dumps({'sha256': hashlib.sha256(raw).hexdigest(), 'approved': 1}))
+            try:
+                yield case
+            finally:
+                if self.file().exists():
+                    os.chmod(self.file(), 0o600)
+                self.file().write_bytes(good)
+                if case == 'approved but malformed':
+                    self.approval().write_text(json.dumps(approved))
+
+    def test_an_approved_file_that_breaks_never_relaxes_limits(self):
+        import io
+        self.pp.set_setting(self.repo, 'parallel', '1')
+        self.pp.set_setting(self.repo, 'parallel-caps', 'codex=1')
+        self.pp.set_label(self.repo, 'Synthetic label')
+        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 1)
+        for case in self.broken_cases():
+            with self.subTest(case=case):
+                with self.assertRaises(ValueError):
+                    self.slots.parse_config('', self.repo)
+                for argv in (['check', '--family', 'codex', '--repo', str(self.repo)],
+                             ['check', '--family', 'claude', '--repo', str(self.repo)],
+                             ['check-config', '--repo', str(self.repo)]):
+                    with mock.patch('sys.stdout', new_callable=io.StringIO) as out:
+                        self.assertEqual(self.slots.main(argv), 3)
+                    self.assertNotIn('available', out.getvalue())
+                    self.assertIn('unknown', out.getvalue())
+                with mock.patch('os.getcwd', return_value=str(self.repo)):
+                    words = self.slots.summary()
+                self.assertTrue(words.startswith('unknown'), words)
+                self.assertIn('settings need setup again', words)
+                self.assertEqual(self.settings(), {})
+                self.assertIsNone(self.pp.project_label(self.repo))
+        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 1)
+
+    def test_an_approved_ledger_alias_that_breaks_never_joins_under_the_folder_name(self):
+        self.pp.set_setting(self.repo, 'ledger', 'Alias')
+        starts = {'folder': dict(project=self.repo.name, task='T1 folder', ts='2026-11-06T09:00:00Z'),
+                  'alias': dict(project='Alias', task='T2 alias', ts='2026-11-06T09:00:00Z')}
+        code = self.pp.repository_code(self.repo)
+        self.assertEqual(self.pp.collect(self.repo, code, starts=starts)['ledger_join'], 'configured')
+        for case in self.broken_cases():
+            with self.subTest(case=case):
+                result = self.pp.collect(self.repo, code, starts=dict(starts))
+                self.assertEqual(result['ledger_join'], 'unknown')
+                self.assertEqual(result['work'], {})
+                self.assertNotEqual(result['source'], 'ledger')
+                self.assertIn('settings need setup', result['skipped'])
+                with self.assertRaises(ValueError):
+                    self.slots.parse_config('', self.repo)
+
+    def test_never_configured_and_unapproved_files_keep_the_defaults(self):
+        self.assertEqual(self.pp.store.settings_state(self.repo), ('unset', {}))
+        self.file().parent.mkdir(parents=True, mode=0o700)
+        self.file().write_bytes(json.dumps({'version': 1, 'parallel': '32', 'ledger': 'Branch'}).encode())
+        os.chmod(self.file(), 0o600)
+        self.assertEqual(self.pp.store.settings_state(self.repo), ('unset', {}))
+        config = self.slots.parse_config('', self.repo)
+        self.assertEqual((config['limit'], config['source'], config['scope']['project']), (3, 'default', 'one'))
 
     def test_defaults_when_nothing_is_set(self):
         config = self.slots.parse_config('', self.repo)

@@ -306,7 +306,7 @@ def previous_projects():
         enums = {'source': pp.SOURCES, 'stage': pp.STAGES, 'status_hint': pp.HINTS, 'status_mark': pp.STATUS_MARKS,
                  'state': (*pp.STATES, 'in progress', 'accepted, not ticked'),
                  'recognition': ('work-record', 'index', 'status', 'artifacts', 'checkbox', 'ledger', 'none'),
-                 'ledger_join': ('configured', 'configured-empty', 'folder', 'none')}
+                 'ledger_join': ('configured', 'configured-empty', 'folder', 'none', 'unknown')}
         def clean(value, key='', depth=0):
             if depth > 9:
                 raise ValueError('depth')
@@ -341,7 +341,7 @@ def previous_projects():
                 if value in (*pp.AGENTS, *pp.HOSTS, *pp.OUTCOMES, *pp.STATES, 'other', 'unknown', 'open', 'todo', 'done', 'active',
                              'in progress', 'accepted, not ticked', 'APPROVE', 'REWORK', '', 'task file skipped',
                              'spec file skipped', 'unsafe task path', 'file limit', 'entry limit', 'feature limit', 'ledger unavailable',
-                             'progress timed out', 'progress unavailable', 'no repository'):
+                             'progress timed out', 'progress unavailable', 'no repository', 'settings need setup'):
                     return value
             raise ValueError('metadata')
         return {code: clean(row) for code, row in list(repositories.items())[-5:]
@@ -375,6 +375,8 @@ def slot_metrics(cwd=None):
             project = None
         return dict(parallel_limit=limit, family_slots=rows, parallel_source=state['source'],
                     parallel_project=project)
+    except ps.store.SettingsNeedSetup:
+        return dict(parallel_limit=None, family_slots=None, parallel_source='settings need setup', parallel_project=None)
     except (OSError, ValueError, KeyError, TypeError, RecursionError):
         return dict(parallel_limit=None, family_slots=None, parallel_source='unknown', parallel_project=None)
 

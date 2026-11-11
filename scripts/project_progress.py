@@ -978,11 +978,16 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
             if root is None:
                 return empty('no repository')
             settings = repository_settings(settings, root)
+            # An approved file that broke keeps no ledger alias: the join is unknown, never the folder name.
+            broken = store.settings_state(root)[0] == 'broken'
             result = empty()
             repo = repo_code(cwd) if repo_code else repo
             result['repo'] = repo
             result['label'] = project_label(root) or registered_projects().get(repo, '')
-            if records:
+            if broken:
+                starts, finishes = {}, {}
+                result['skipped'].append('settings need setup')
+            elif records:
                 ledger = records()
                 if ledger is not None:
                     try:
@@ -1013,7 +1018,8 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
                 if not result['features']:
                     result['source'], result['recognition'], result['features'] = repository_documents(fd, result['skipped'])
                 ledger_rows = ledger_items(settings.get('Ledger project', root.name), starts or {}, finishes or {})
-                result['ledger_join'] = ('configured' if ledger_rows else 'configured-empty') if 'Ledger project' in settings else 'folder' if ledger_rows else 'none'
+                result['ledger_join'] = ('unknown' if broken else ('configured' if ledger_rows else 'configured-empty')
+                                         if 'Ledger project' in settings else 'folder' if ledger_rows else 'none')
                 result['work'] = dict(Counter(item['state'] for item in ledger_rows))
                 if not result['features'] and ledger_rows:
                     result['features'], result['source'], result['recognition'] = ledger_rows, 'ledger', 'ledger'

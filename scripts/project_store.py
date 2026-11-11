@@ -5,8 +5,9 @@ User scope is the data root; project scope is the same relative path (`PROJECT_F
 A linked worktree shares its main checkout's identity and folder only in the canonical, reciprocal, owner- and
 mode-checked layout `<main>/.git/worktrees/<name>` that `git_metadata.git_dirs` requires; anything else resolves to
 the checkout's own root. `settings.json` there counts only while its exact bytes match the SHA-256
-approved in the private state folder, so a branch cannot raise `parallel` or redirect `tasks`. An invalid,
-unapproved or unreadable file reads as unset and is never repaired on read. Makes no network call and runs nothing.
+approved in the private state folder, so a branch cannot raise `parallel` or redirect `tasks`. A file with no
+approval record reads as unset; an approved file that is now missing, invalid, unsafe or changed is broken, which
+capacity and ledger readers report as unknown (`settings_state`). Nothing is repaired on read. Makes no network call and runs nothing.
 """
 from contextlib import contextmanager
 try:
@@ -246,22 +247,41 @@ def read_approved(code):
     return record['sha256']
 
 
-def read_settings(root):
-    """This repository's approved settings as a dict of set keys; every doubt is unset (an empty dict).
+class SettingsNeedSetup(ValueError):
+    """An approved settings file is now missing, unreadable, unsafe, malformed or changed: limits are unknown."""
 
-    `root` is the repository root of the caller's checkout; None means no repository, which is unset too.
+
+def settings_state(root):
+    """('unset', {}), ('approved', values) or ('broken', {}) for this repository's settings file.
+
+    Unset means no approval record: never configured, or a file nobody approved here (a branch-supplied file sets
+    nothing). Broken means an approval record exists but the file is missing, unreadable, unsafe, malformed or its
+    digest differs, or the record itself cannot be read; callers then report unknown instead of the defaults.
+    `root` None means no repository, which is unset.
     """
     if root is None:
-        return {}
+        return 'unset', {}
     try:
         main, _ = layout(root)
+        expected = read_approved(code_of(main))
+    except FileNotFoundError:
+        return 'unset', {}
+    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
+        return 'broken', {}
+    try:
         with project_folder(main) as folder:
             raw = read_project_file(folder, SETTINGS_FILE, SETTINGS_LIMIT)
-        if read_approved(code_of(main)) != hashlib.sha256(raw).hexdigest():
-            return {}
-        return parse_settings(raw)
+        if expected != hashlib.sha256(raw).hexdigest():
+            return 'broken', {}
+        return 'approved', parse_settings(raw)
     except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
-        return {}
+        return 'broken', {}
+
+
+def read_settings(root):
+    """This repository's approved settings as a dict of set keys; unset and broken are both empty here, so task-file
+    and label readers fall back to off and none. Capacity and ledger readers use `settings_state` to tell them apart."""
+    return settings_state(root)[1]
 
 
 def _write_approval(folder, code, raw):

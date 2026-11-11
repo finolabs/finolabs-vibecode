@@ -62,10 +62,13 @@ underscores with a non-space character; task paths of 1–120 ASCII letters, dig
 underscores or slashes, relative Markdown paths without empty, `.` or `..` components, outside
 `specs/archive` and never an instruction file; `parallel` 1–32 and caps per family. The reader opens it
 with no-follow descent, owner-checked and not writable by group or others, and uses it only while its
-bytes match the approved digest: a file edited by hand, supplied by a branch or without an approval,
-or any invalid file, reads as unset, so a repository cannot raise `parallel` or redirect `tasks`.
-Unset means the folder name for ledger, no task file, `parallel` 3 with no caps, and the registered
-folder name as the label. `## Project settings`, `## Project labels` and the global
+bytes match the approved digest. A file with no approval record, such as one supplied by a branch,
+reads as unset. Once an approval exists, a file that is missing, unreadable, unsafe, invalid or edited
+is broken: capacity reads unknown (`parallel_slots.py` exits 3), the ledger join reads unknown instead
+of the folder name, the task file and label are off, and the session-start line and dashboard say the
+settings need setup again. So a repository cannot raise `parallel`, relax an approved limit or redirect
+`tasks`. Unset means the folder name for ledger, no task file, `parallel` 3 with no caps, and the
+registered folder name as the label. `## Project settings`, `## Project labels` and the global
 `Ledger project:`/`Task file:` lines left in `host.md` are never read; the user deletes them by hand.
 Checkup flags an unmatched ledger mapping without disclosing project names; a machine-wide ledger
 cannot establish repository association by itself.

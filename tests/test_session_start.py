@@ -271,6 +271,12 @@ class StateBlockTest(SyntheticStateTest):
                           "antigravity 0 open; project settings)\n", self.state())
         with mock.patch('os.getcwd', return_value=str(self.root)):
             self.assertIn(SLOTS_DEFAULT, self.state())
+        # An approved file that changed: the line still prints and says settings need setup, never the default.
+        settings = repo / '.finolabs/vibecode/settings.json'
+        settings.write_bytes(settings.read_bytes() + b' ')
+        with mock.patch('os.getcwd', return_value=str(nested)):
+            self.assertIn("Parallel slots: unknown (project settings need setup again: run fnl-setup add delegation)\n",
+                          self.state())
 
     def test_no_metrics_consent_still_reads_recorded_roles(self):
         self.write("host.md", "## Agents on this machine\n| Codex | yes | x | x | x |\n"

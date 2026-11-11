@@ -535,13 +535,21 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(block['family_slots'], dict(claude=dict(open=2, cap=4), codex=dict(open=3, cap=3),
                                                    antigravity=dict(open=0, cap=None)))
         self.assertEqual(original, self.ledger.read_bytes())
-        # An edited (unapproved) file reads as unset: the default.
+        # An approved file that was edited or deleted is unknown and says settings need setup, never the default.
         settings = repo / '.finolabs/vibecode/settings.json'
         settings.write_text(json.dumps({'version': 1, 'parallel': '32'}))
         self.refresh('run', cwd=repo)
         block = self.data()['running']
-        self.assertEqual((block['parallel_limit'], block['parallel_source']), (3, 'default'))
+        self.assertEqual((block['parallel_limit'], block['family_slots'], block['parallel_source']),
+                         (None, None, 'settings need setup'))
         settings.unlink()
+        self.refresh('run', cwd=repo)
+        self.assertEqual(self.data()['running']['parallel_source'], 'settings need setup')
+        # With no approval record either, the repository was never configured: the default.
+        (self.ledger.parent / 'state/settings-approved' / (code + '.json')).unlink()
+        self.refresh('run', cwd=repo)
+        block = self.data()['running']
+        self.assertEqual((block['parallel_limit'], block['parallel_source']), (3, 'default'))
         host.write_text('## Limits\n- Parallel dispatches: at most 12 at one time.\n')
         self.refresh('run', cwd=repo)
         block = self.data()['running']

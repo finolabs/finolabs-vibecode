@@ -84,7 +84,7 @@ keywords, so “merged rule; no pull request yet” remains active. Negated comp
 status that otherwise completes every package. Stage enum: `spec`, `plan`, `design`,
 `tasks`, `verify`, `review`, `ship`, `packages`, `work`. Sources: `speckit`, `work-record`, `checkbox`, `docs/specs`,
 `docs/spec`, `specs`, `ledger`, `none`; recognition: `artifacts`, `work-record`, `checkbox`, `index`, `status`, `ledger`,
-`none`. Ledger join metadata: `configured`, `configured-empty`, `folder`, `none`.
+`none`. Ledger join metadata: `configured`, `configured-empty`, `folder`, `none`, and `unknown` when an approved settings file broke (no ledger runs are joined then).
 
 New stored fields are source/recognition/join enums, item ordinals/states, stage enums and counts,
 artefact booleans, a status-hint enum, code/security counts and final booleans, package ordinals/states,

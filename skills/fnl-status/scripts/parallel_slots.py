@@ -135,10 +135,14 @@ def legacy_limits(text):
 
 
 def parse_config(text, root=None):
-    """Settings come only from the repository's approved project file (`project_store.read_settings`); an unset,
-    unapproved or invalid file means the default of three with no caps. `text` (host.md) only reports the retired
-    `## Limits` section; its project settings and global ledger line are never read."""
-    settings = store.read_settings(root)
+    """Settings come only from the repository's approved project file (`project_store.settings_state`). Never
+    configured (no approval record) means the default of three with no caps and the folder name as the ledger key;
+    an approved file that is now missing, invalid, unsafe or changed raises `SettingsNeedSetup`, so capacity and the
+    ledger scope are unknown rather than relaxed. `text` (host.md) only reports the retired `## Limits` section; its
+    project settings and global ledger line are never read."""
+    state, settings = store.settings_state(root)
+    if state == 'broken':
+        raise store.SettingsNeedSetup('project settings need setup again')
     code = repository_code(root) if root is not None else None
     total = settings.get('parallel')
     limit = int(total) if total is not None else DEFAULT_LIMIT
@@ -244,6 +248,11 @@ def summary(repo=None):
     """Fixed words and integers only, including the default source in hook output."""
     try:
         state = status(repo)
+    except store.SettingsNeedSetup:
+        return 'unknown (project settings need setup again: run fnl-setup add delegation)'
+    except (OSError, ValueError, TypeError, KeyError, RecursionError):
+        return 'unknown'
+    try:
         parts = []
         for family in FAMILIES:
             row = state['families'][family]

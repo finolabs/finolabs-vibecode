@@ -287,7 +287,7 @@
     var lit = known ? Math.min(slotOpen, limit) + " of " + limit : "unknown";
     if (!known) slots.appendChild(t("span", "nodata", "unknown"));
     slotRows.unshift(["lit", lit]);
-    if (r.parallel_source === "default" || r.parallel_source === "project settings" || r.parallel_source === "host config" || r.parallel_source === "unknown")
+    if (r.parallel_source === "default" || r.parallel_source === "project settings" || r.parallel_source === "host config" || r.parallel_source === "unknown" || r.parallel_source === "settings need setup")
       slotRows.push(["source", r.parallel_source]);
     if (typeof r.parallel_project === "string" && r.parallel_project.length <= 40) slotRows.push(["project", r.parallel_project]);
     else if (r.parallel_project === null) slotRows.push(["project", "unnamed"]);
@@ -539,6 +539,7 @@
       ["no task list · Looked for Spec Kit specs/NNN-name, work records, configured checkboxes, docs/specs, docs/spec and specs indexes/status lines, release packages, and exact-project ledger runs."];
     if (p.ledger_join === "none") items.push("No ledger source: no Ledger project override and no runs match the folder name.");
     if (p.ledger_join === "configured-empty") items.push("No ledger source: no runs match the configured Ledger project.");
+    if (p.ledger_join === "unknown") items.push("Ledger source unknown: project settings need setup again (fnl-setup add delegation).");
     if (p.work_records && p.work_records.skipped) items.push("Work records skipped: " + p.work_records.skipped);
     if (p.reason) items.push(p.reason);
     return {title: title, sub: sourceName(p), items: items.concat(p.skipped || []).slice(0, 5)};
