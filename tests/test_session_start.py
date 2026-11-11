@@ -68,7 +68,7 @@ class SessionStartTest(SyntheticStateTest):
         return out.getvalue().encode(), handover.read
 
     def after_compact(self):
-        return self.baseline("on") + hook.COMPACT_DELEGATION.encode()
+        return self.baseline("on") + hook.COMPACT_TITLE.encode() + hook.COMPACT_DELEGATION.encode()
 
     def test_compact_reminds_about_delegation_unless_mode_is_manual_and_startup_never_does(self):
         raw = json.dumps({"source": "compact", "session_id": "synthetic"}).encode()
@@ -82,6 +82,22 @@ class SessionStartTest(SyntheticStateTest):
             startup = json.dumps({"source": source, "session_id": "synthetic"}).encode()
             out, _ = self.run_hook(startup, delegation="auto")
             self.assertNotIn(b"Keep or hand off", out)
+
+    def test_compact_reminds_to_check_the_title_in_every_mode_and_startup_never_does(self):
+        raw = json.dumps({"source": "compact", "session_id": "synthetic"}).encode()
+        for mode in ("manual", "suggest", "auto", None):
+            out, _ = self.run_hook(raw, delegation=mode)
+            self.assertIn(b"invoke fnl-session-hygiene", out)
+            self.assertIn(b"rename it", out)
+        for source in ("startup", "resume", "clear"):
+            startup = json.dumps({"source": source, "session_id": "synthetic"}).encode()
+            out, _ = self.run_hook(startup, delegation="auto")
+            self.assertNotIn(b"After compaction", out)
+
+    def test_compact_title_reminder_is_fixed_text_without_data(self):
+        text = hook.COMPACT_TITLE
+        self.assertLessEqual(len(text), 300)
+        self.assertNotIn("/", text)
 
     def test_compact_reminder_is_fixed_text_without_data(self):
         text = hook.COMPACT_DELEGATION
