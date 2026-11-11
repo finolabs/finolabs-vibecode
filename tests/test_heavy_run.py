@@ -39,7 +39,7 @@ class HeavyRunTest(unittest.TestCase):
             patcher = mock.patch.object(heavy, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
-        window = mock.patch.dict(heavy.DEFAULTS, {'memory_window_seconds': 0.0})
+        window = mock.patch.dict(heavy.DEFAULTS, {'memory_window_seconds': 0.01})
         window.start()
         self.addCleanup(window.stop)
 
@@ -57,7 +57,7 @@ class HeavyRunTest(unittest.TestCase):
         pre = ('import sys, pwd, types; sys.path.insert(0, %r); '
                'pwd.getpwuid = lambda uid: types.SimpleNamespace(pw_dir=%r); import heavy_run as h; '
                'h.read_load = lambda: 1.0; h.read_free_gb = lambda: 8.0; h.read_pressure = lambda: "normal"; '
-               'h.read_swapout_bytes = lambda: 0; h.DEFAULTS["memory_window_seconds"] = 0.0; '
+               'h.read_swapout_bytes = lambda: 0; h.DEFAULTS["memory_window_seconds"] = 0.01; '
                % (str(SCRIPTS), str(self.home)))
         code = pre + 'sys.exit(h.main(%r))' % (['--poll', '0.02', *cli],)
         child = subprocess.Popen([sys.executable, '-c', code], cwd=cwd, env={'PATH': os.environ['PATH'], **(extra_env or {})})
@@ -455,11 +455,11 @@ class HeavyRunTest(unittest.TestCase):
 
     def test_config_section_sets_limits_and_bad_values_fall_back(self):
         (self.root / 'host.md').write_text('## Heavy jobs\n- Load limit: 3\n- Memory minimum GB: 99999\n- Wait cap minutes: 5\n- Max job minutes: 30\n'
-                                           '- Memory window seconds: 99999\n- Swap-out limit MB per second: 99999\n')
+                                           '- Memory window seconds: 0\n- Swap-out limit MB per second: 99999\n')
         os.chmod(self.root / 'host.md', 0o600)
         limits = heavy.limits()
         self.assertEqual((limits['load'], limits['memory_gb'], limits['wait_minutes'], limits['max_minutes']), (3.0, 4.0, 5.0, 30.0))
-        self.assertEqual((limits['memory_window_seconds'], limits['swapout_mb_per_second']), (0.0, 5.0))
+        self.assertEqual((limits['memory_window_seconds'], limits['swapout_mb_per_second']), (0.01, 5.0))  # a zero window is refused
         (self.root / 'host.md').write_text('## Heavy jobs\n- Memory window seconds: 30\n- Swap-out limit MB per second: 2.5\n')
         limits = heavy.limits()
         self.assertEqual((limits['memory_window_seconds'], limits['swapout_mb_per_second']), (30.0, 2.5))
@@ -666,6 +666,40 @@ class MemoryWatchTest(unittest.TestCase):
         self.assertIn('unreadable', self.at(0, pressure=None))
         self.assertIn('unreadable', self.at(100, swapped_mb=None))
         self.assertIn('unreadable', self.at(200, pressure=None))
+
+    def test_a_tiny_window_still_needs_two_distinct_samples_for_the_rate(self):
+        self.config.update(memory_window_seconds=0.0, swapout_mb_per_second=0.0)
+        self.assertIn('swap-out', self.at(0, swapped_mb=0))  # one sample is no rate, never a pass
+        self.assertIn('swap-out', self.at(1, swapped_mb=500))
+        self.assertIsNone(self.at(2, swapped_mb=500))
+
+    def test_readings_are_stamped_when_they_complete(self):
+        clock = [0.0]
+        latency = [9.0]
+
+        def slow_pressure():
+            clock[0] += latency[0] / 2
+            return 'normal'
+
+        def slow_swap():
+            clock[0] += latency[0] / 2
+            return int(5.5 * 2 ** 20 * max(0.0, clock[0] - 9.0))  # steady 5.5 MB/s from the first completed reading
+
+        with mock.patch.object(heavy, 'read_pressure', slow_pressure), mock.patch.object(heavy, 'read_swapout_bytes', slow_swap), \
+                mock.patch.object(heavy.time, 'monotonic', lambda: clock[0]):
+            self.watch.reason(self.config)
+            self.assertEqual(self.watch.samples[-1][0], 9.0)
+            latency[0] = 0.0
+            for start in (24.0, 39.0, 54.0, 69.0):
+                clock[0] = start
+                reason = self.watch.reason(self.config)
+        self.assertIn('swap-out', reason)  # 330 MB over the 60 s from 9 to 69 is 5.5 MB/s
+
+    def test_a_counter_that_goes_backwards_restarts_the_window(self):
+        self.at(0, swapped_mb=1000)
+        self.assertIn('normal for', self.at(15, swapped_mb=0))
+        self.assertIn('normal for', self.at(60, swapped_mb=200))
+        self.assertIsNone(self.at(75, swapped_mb=200))
 
     def test_gates_are_off_where_the_kernel_readings_do_not_exist(self):
         with mock.patch.object(heavy, 'memory_gates_available', lambda: False):

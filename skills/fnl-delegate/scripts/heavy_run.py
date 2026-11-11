@@ -52,7 +52,7 @@ EXE = re.compile(r'[A-Za-z0-9._+-]{1,40}')
 DEFAULTS = {'load': 12.0, 'memory_gb': 4.0, 'wait_minutes': 40.0, 'max_minutes': 90.0, 'memory_window_seconds': 60.0,
             'swapout_mb_per_second': 5.0}
 BOUNDS = {'load': (1.0, 256.0), 'memory_gb': (0.0, 64.0), 'wait_minutes': (1.0, 720.0), 'max_minutes': (1.0, 720.0),
-          'memory_window_seconds': (0.0, 900.0), 'swapout_mb_per_second': (0.0, 10000.0)}
+          'memory_window_seconds': (1.0, 900.0), 'swapout_mb_per_second': (0.0, 10000.0)}
 KEYS = {'Load limit': 'load', 'Memory minimum GB': 'memory_gb', 'Wait cap minutes': 'wait_minutes', 'Max job minutes': 'max_minutes',
         'Memory window seconds': 'memory_window_seconds', 'Swap-out limit MB per second': 'swapout_mb_per_second'}
 KEY_LINE = re.compile(r'(?:- )?(%s): (\d{1,6}(?:\.\d{1,3})?)' % '|'.join(re.escape(key) for key in KEYS))
@@ -174,18 +174,22 @@ class MemoryWatch:
     """Pressure and swap-out readings across the polls of one wait.
 
     A start is allowed only when the pressure has read normal at every poll for the whole window and swap-outs since
-    the newest sample at least a window old average at most the limit. Any unreadable reading waits and ends the run
-    of normal readings, so the window starts again."""
+    the newest earlier sample at least a window old average at most the limit. Each poll is stamped when both readings
+    have completed. Any unreadable reading, or a swap-out count lower than the last one, waits and ends the run of
+    normal readings, so the window starts again; one sample alone is never a rate."""
 
     def __init__(self):
         self.normal_since = None
         self.samples = []
 
-    def reason(self, config, now):
+    def reason(self, config, now=None):
         if not memory_gates_available():
             return None
         window, limit = config['memory_window_seconds'], config['swapout_mb_per_second']
         level, swapped = read_pressure(), read_swapout_bytes()
+        now = time.monotonic() if now is None else now
+        if swapped is not None and self.samples and swapped < self.samples[-1][1]:
+            self.samples, self.normal_since = [], None
         if level != 'normal' or swapped is None:
             self.normal_since = None
         elif self.normal_since is None:
@@ -200,12 +204,12 @@ class MemoryWatch:
             return 'the swap-out count is unreadable'
         if now - self.normal_since < window:
             return 'memory pressure has been normal for %d of %d s' % (now - self.normal_since, window)
-        old = [sample for sample in self.samples if now - sample[0] >= window]
+        old = [sample for sample in self.samples if now - sample[0] >= window and sample[0] < now]
         if not old:
             return 'the swap-out rate needs %d s of readings' % window
         since, base = old[-1]
         self.samples = self.samples[self.samples.index(old[-1]):]
-        rate = (swapped - base) / (now - since) / 2 ** 20 if now > since else 0.0
+        rate = (swapped - base) / (now - since) / 2 ** 20
         if rate > limit:
             return 'swap-out %.1f MB/s over %d s is above %.1f MB/s' % (rate, now - since, limit)
         return None
@@ -460,7 +464,7 @@ def record(fd, data):
 
 def resource_wait(config, watch=None):
     """None when a start is allowed, else the reason to keep waiting. The memory watch is read at every call."""
-    memory = watch.reason(config, time.monotonic()) if watch is not None else None
+    memory = watch.reason(config) if watch is not None else None
     load = read_load()
     if load is not None and load >= config['load']:
         return 'load %.1f is at or above %.1f' % (load, config['load'])

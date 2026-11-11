@@ -444,7 +444,7 @@ class HeavyRunRefusalTest(Base):
             patcher = mock.patch.object(heavy, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
-        window = mock.patch.dict(heavy.DEFAULTS, {'memory_window_seconds': 0.0})
+        window = mock.patch.dict(heavy.DEFAULTS, {'memory_window_seconds': 0.01})
         window.start()
         self.addCleanup(window.stop)
         self.touched = self.home / 'ran'
