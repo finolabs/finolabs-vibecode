@@ -73,13 +73,14 @@ def repository_code(root):
 valid_setting = store.valid_setting
 
 
-def repository_settings(values, root):
+def repository_settings(values, root, stored=None):
     """The ledger and task-file settings of this repository's approved project file; host.md is never read for them.
 
     Unset keys are absent, so callers fall back to the folder name and no task file. No repository instruction reads.
+    `stored` is the values of one `settings_state` read the caller already made; None reads them here.
     """
     result = {key: value for key, value in values.items() if key not in ('Ledger project', 'Task file')}
-    settings = store.read_settings(root)
+    settings = store.read_settings(root) if stored is None else stored
     for key, old in (('ledger', 'Ledger project'), ('tasks', 'Task file')):
         if key in settings:
             result[old] = settings[key]
@@ -986,13 +987,15 @@ def collect(cwd, repo, starts=None, finishes=None, events=(), now=None, records=
             root = find_root(cwd)
             if root is None:
                 return empty('no repository')
-            settings = repository_settings(settings, root)
+            # One settings read per collection: alias, task path, label and the broken flag all come from it.
+            state, stored = store.settings_state(root)
+            settings = repository_settings(settings, root, stored)
             # An approved file that broke keeps no ledger alias: the join is unknown, never the folder name.
-            broken = store.settings_state(root)[0] == 'broken'
+            broken = state != 'unset' and state != 'approved'
             result = empty()
             repo = repo_code(cwd) if repo_code else repo
             result['repo'] = repo
-            result['label'] = project_label(root) or registered_projects().get(repo, '')
+            result['label'] = stored.get('label') or registered_projects().get(repo, '')
             if broken:
                 starts, finishes = {}, {}
                 result['skipped'].append('settings need setup')

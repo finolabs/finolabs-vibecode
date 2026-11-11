@@ -1272,6 +1272,37 @@ class SettingsFileTest(unittest.TestCase):
         self.assertTrue(self.approval().exists())
         self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 2)
 
+    def test_collect_reads_the_settings_once(self):
+        self.pp.set_setting(self.repo, 'ledger', 'Alias')
+        self.pp.set_label(self.repo, 'Synthetic label')
+        good = self.file().read_bytes()
+        starts = {'folder': dict(project=self.repo.name, task='T1 folder', ts='2026-11-06T09:00:00Z'),
+                  'alias': dict(project='Alias', task='T2 alias', ts='2026-11-06T09:00:00Z')}
+        code = self.pp.repository_code(self.repo)
+        real = self.pp.store.settings_state
+        calls = []
+
+        def restoring(root):
+            # The first read sees the broken file; the approved bytes come back before any later read.
+            value = real(root)
+            calls.append(value[0])
+            self.file().write_bytes(good)
+            return value
+
+        self.file().write_bytes(good + b' ')
+        with mock.patch.object(self.pp.store, 'settings_state', side_effect=restoring):
+            result = self.pp.collect(self.repo, code, starts=dict(starts))
+        self.assertEqual(calls, ['broken'])
+        self.assertEqual(result['ledger_join'], 'unknown')
+        self.assertEqual(result['work'], {})
+        self.assertIn('settings need setup', result['skipped'])
+        self.assertNotEqual(result['label'], 'Synthetic label')
+        # Approved on the first read: alias and label come from that one read.
+        with mock.patch.object(self.pp.store, 'settings_state', side_effect=lambda root: calls.append(1) or real(root)):
+            result = self.pp.collect(self.repo, code, starts=dict(starts))
+        self.assertEqual(calls, ['broken', 1])
+        self.assertEqual((result['ledger_join'], result['label']), ('configured', 'Synthetic label'))
+
     def test_never_configured_and_unapproved_files_keep_the_defaults(self):
         self.assertEqual(self.pp.store.settings_state(self.repo), ('unset', {}))
         self.file().parent.mkdir(parents=True, mode=0o700)
