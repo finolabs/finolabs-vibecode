@@ -40,13 +40,13 @@
         {
           "id": "0.2.5/project-settings",
           "kind": "setup",
-          "text": "Project settings (ledger name, task file, parallel limit and caps) are no longer read from host.md: if you changed them, set them again in each repository with /fnl-setup add project or /fnl-setup add delegation, then delete the old ## Project settings section and any global Ledger project: and Task file: lines from host.md by hand.",
+          "text": "Settings in host.md are no longer read: set them again in each repository, then delete ## Project settings and the Ledger project: and Task file: lines by hand.",
           "setup": "/fnl-setup add project"
         },
         {
           "id": "0.2.5/project-labels",
           "kind": "setup",
-          "text": "Dashboard labels are no longer read from host.md: if you set one, set it again inside each repository with /fnl-setup add project, then delete the old ## Project labels section from host.md by hand.",
+          "text": "Labels in host.md are no longer read: set each again inside each repository, then delete the ## Project labels section by hand.",
           "setup": "/fnl-setup add project"
         }
       ]
