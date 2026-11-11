@@ -60,6 +60,8 @@ One engineering practice for AI coding agents, packaged as a single plugin with 
 
 The [0.2.0 changes](CHANGELOG.md#020---2026-11-08) include [review roles, the navigator and verification receipts](docs/specs/agent-roles.md), [setup modes and companions](docs/specs/setup-restructure.md), [run hygiene](docs/specs/run-hygiene.md), [work records](docs/specs/work-tracking.md), [quota on demand](docs/specs/quota-on-demand.md) and [parallel slots](docs/specs/parallel-instances.md). [`route_task.py`](scripts/route_task.py) prints the delegation matrix's tier, effort, budget and family order; the coordinator still selects an available allowed model.
 
+Release 0.2.4 adds [repository checks](docs/specs/checks.md) you can run locally or in a cheaper CI workflow, and an [`/fnl-update`](docs/specs/update-onboarding.md) that walks you through what each new version adds.
+
 Release 0.2.3 adds [`fnl-pause`](docs/specs/pause.md) for draining work before a restart, the [assignment matrix](docs/specs/assignment-matrix.md) that `route_pick.py` answers from, and [away decisions](docs/specs/away-decisions.md): a decision ladder, a record of who decided and a question gate during an away lease. See the [release record](docs/specs/release-0.2.3.md).
 
 This pack owns the decisions between tools: routing, depth, delegation, gates and conventions. For the work itself it points to trusted skills and native commands from known publishers (Matt Pocock's skills, Cloudflare's security audit, Spec Kit, each host's own review commands) instead of rewriting them, and every such pointer carries a fallback that keeps the skill working when the companion is not installed.
@@ -150,7 +152,7 @@ Start any of them with `/fnl-setup` (on Codex, also `$fnl-setup instructions` ri
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-It targets Claude Code, Codex and Antigravity from one `skills/` folder. Release documented here: **0.2.3** (phase 0; see `fnl-versioning` and the [release record](docs/specs/release-0.2.3.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.4-dev`.
+It targets Claude Code, Codex and Antigravity from one `skills/` folder. Release documented here: **0.2.4** (phase 0; see `fnl-versioning` and the [release record](docs/specs/release-0.2.4.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.5-dev`.
 
 <p align="center">
   <picture>
@@ -247,7 +249,7 @@ macOS and Linux are supported. Native Windows is not: the plugin's scripts rely 
 
 Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh). Choose one way per agent, because both together list every skill twice.
 
-Claude Code and Codex install the plugin from the [FINOLABS catalog](https://github.com/finolabs/plugins), marketplace `finolabs`, which groups the FINOLABS plugins together. This repository also remains its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. The catalog selects the installed ref; direct installs from this repository track `main`, which moves to `0.2.4-dev` after 0.2.3. Releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
+Claude Code and Codex install the plugin from the [FINOLABS catalog](https://github.com/finolabs/plugins), marketplace `finolabs`, which groups the FINOLABS plugins together. This repository also remains its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. The catalog selects the installed ref; direct installs from this repository track `main`, which moves to `0.2.5-dev` after 0.2.4. Releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
 
 ### Claude Code
 
