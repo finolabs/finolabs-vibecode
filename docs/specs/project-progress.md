@@ -141,8 +141,10 @@ to the git common folder's `info/exclude` when missing, never to a tracked `.git
 cannot be added, the command says the setting was saved and asks the user to add it. It never opens
 `host.md` and never runs from a hook. `settings --set` and `--clear` print only the key and changed or not
 changed, `label --set` prints `Project label saved.` and `settings --reset` prints `Project settings
-reset.`; none prints a value. Values never reach
-`data.js`, tooltips, events or checkup output, except the label of the repository the refresh runs in.
+reset.`; none prints a value. The settings-derived ledger and task strings never reach `data.js`,
+tooltips, events or checkup output; the approved label of the repository the refresh runs in and the
+bounded numeric parallel limit and family caps do reach `data.js` and tooltips. `settings --reset` takes
+no other option: it has no preview, so `--dry-run` and `--yes` are refused before anything changes.
 Purge leaves host config and project settings files unchanged.
 
 Unset means the defaults: the folder name for ledger, no task file, `parallel` 3 with no caps, and the
