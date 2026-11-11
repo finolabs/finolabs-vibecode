@@ -62,6 +62,7 @@ For a criterion comparing two documents, use `{"id":"C2","documents":[{"path":"d
 Read [references/judgments.md](references/judgments.md) for each semantic check, host-answer completion, fallback and validation.
 
 After the coordinator decides to accept, `fnl-delegate`'s `ledger.py finish --outcome accepted --checkout <task checkout>` requires a passing receipt for that checkout's current head (script-enforced).
+When the repository has an approved check list, `checks.py run --dispatch <dispatch id>` in the task checkout writes that receipt: only a whole-list pass on a clean tree whose head and list did not move writes it, and every run with `--dispatch` first removes the dispatch's earlier receipt (script-enforced). Without a list, `verify_claim.py` over the brief's tests writes it.
 `verify_claim.py` verifies an implementation head and its test receipt; it does not read the dispatch kind. A review dispatch has no implementation head to verify, so `ledger.py finish` refuses `--head` for it and refuses `accepted` without a passing receipt (script-enforced); that refusal is expected, not a defect. After reading the posted marker, accept the review dispatch with `--accept-unverified --reason <text>` (advisory, agent judgment). The ledger logs and counts this escape hatch, storing only the reason's digest; keep the full reason in the coordinator report.
 This gate covers delegated work in the ledger only; the coordinator's own work stays under the review gate and an agent bypassing the ledger is not blocked.
 

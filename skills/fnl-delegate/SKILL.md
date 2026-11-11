@@ -49,7 +49,7 @@ Read [references/heavy-jobs.md](references/heavy-jobs.md) for this step.
 
 ## Accept
 
-Use `fnl-checks` "Accepting someone else's work"; read [references/accept.md](references/accept.md) for the receipt gate and explicit exception. The coordinator retains the verdict.
+Use `fnl-checks` "Accepting someone else's work"; read [references/accept.md](references/accept.md) for the receipt gate, which of `checks.py run --dispatch <id>` (an approved check list) or `verify_claim.py` (the brief's tests) writes the receipt, and the explicit exception for work with nothing to check. The coordinator retains the verdict.
 
 ## Handover after an interrupted run
 
