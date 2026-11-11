@@ -8,8 +8,8 @@ Usage, from inside the repository:
 Each check is an argument array from `## Checks` of the canonical host config (written only by fnl-setup's
 `checks_setup.py`), launched through `heavy_run.py`'s canonical form with no shell and an allowlisted environment;
 the checks' own output streams through. `--changed` keeps only the checks the change since the base touches: a
-`python -m unittest` check in a form `narrowable` accepts is narrowed to the modules `select_tests.py` names, every
-other check and every other unittest form runs whole.
+`python -m unittest discover -s tests` check is narrowed to the modules `select_tests.py` names only when the tests
+folder is flat (see `layout_covered`); every other check, unittest form and layout runs whole.
 A run of the whole list first removes any earlier receipt for the repository, so the latest full run decides; when
 the repository's local-receipt mode is on, a passing run of the whole list on a clean tree whose head did not
 move writes a receipt (repository code, head, list digest) in the private state folder. One whole-list run per
@@ -115,19 +115,42 @@ DISCOVERY_OPTIONS = {'-s': 'tests', '-p': 'test_*.py'}
 
 
 def narrowable(argv):
-    """True only for the forms the selector understands: `<python> -m unittest`, or `<python> -m unittest discover`
-    optionally followed by `-s tests` and/or `-p test_*.py` in either order. Every other form runs whole."""
+    """True only for the forms the selector understands: `<python> -m unittest discover -s tests`, optionally with
+    `-p test_*.py`, in either order. A bare `unittest` or `discover` starts at the repository root and recurses into
+    every importable package, so it runs whole, as does every other form."""
     if not (len(argv) >= 3 and cl.program_name(argv[0]).startswith('python')
             and cl.INTERPRETER.fullmatch(cl.program_name(argv[0])) and argv[1:3] == ['-m', 'unittest']):
         return False
     rest = argv[3:]
-    if not rest:
-        return True
-    if rest[0] != 'discover' or len(rest) % 2 == 0:
+    if not rest or rest[0] != 'discover' or len(rest) % 2 == 0:
         return False
     pairs = [(rest[i], rest[i + 1]) for i in range(1, len(rest), 2)]
     flags = [flag for flag, _ in pairs]
-    return len(set(flags)) == len(flags) and all(DISCOVERY_OPTIONS.get(flag) == value for flag, value in pairs)
+    return ('-s' in flags and len(set(flags)) == len(flags)
+            and all(DISCOVERY_OPTIONS.get(flag) == value for flag, value in pairs))
+
+
+def layout_covered(root, argv):
+    """True when the selector's flat index of `tests/test_*.py` is exactly what discovery would find: no folder
+    under `tests/` holds a Python file (discovery recurses into packages), and with the default pattern `test*.py`
+    no top-level file matches it that `test_*.py` does not. Any doubt (a link, an unreadable folder) is False."""
+    import fnmatch
+    folder = Path(root) / 'tests'
+    pattern = 'test_*.py' if '-p' in argv else 'test*.py'
+    try:
+        if folder.is_symlink() or not folder.is_dir():
+            return False
+        for entry in folder.iterdir():
+            if entry.is_symlink():
+                return False
+            if entry.is_dir():
+                if any(entry.rglob('*.py')):
+                    return False
+            elif fnmatch.fnmatchcase(entry.name, pattern) and not fnmatch.fnmatchcase(entry.name, 'test_*.py'):
+                return False
+    except OSError:
+        return False
+    return True
 
 
 def narrow(checks, base, root):
@@ -143,7 +166,8 @@ def narrow(checks, base, root):
     modules, _ = select_tests.select(str(root), changed)
     plan, skipped = [], []
     for name, argv in checks:
-        if not narrowable(argv) or not all(MODULE.fullmatch(module) for module in modules):
+        if (not narrowable(argv) or not layout_covered(root, argv)
+                or not all(MODULE.fullmatch(module) for module in modules)):
             plan.append((name, argv))  # deny on doubt: an odd module name runs the check whole
         elif not modules:
             skipped.append((name, 'no Python test module names a changed file'))
