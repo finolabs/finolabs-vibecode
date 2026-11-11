@@ -108,7 +108,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/check-references.py` | Checks local links, headings, names, inventories, ledger flags and shared mode copies. |
 | `scripts/compact_setup.py` | Previews/applies an approved documented native compaction threshold. |
 | `scripts/compact_stop_hook.py` | Opt-in Antigravity transcript-size stop; no content read, live delivery unverified. |
-| `scripts/checks_list.py` | Reads a repository's `.finolabs/vibecode/checks.json` only while it matches its approved digest (else the legacy `## Checks` of the host config), with its local-receipt mode, digests a list, and writes or matches the private local checks receipt; runs no command. |
+| `scripts/checks_list.py` | Reads a repository's `.finolabs/vibecode/checks.json` only while it matches its approved digest (a repository with no approval yet still reads the legacy `## Checks` of the host config), with its local-receipt mode, digests a list, and writes or matches the private local checks receipt; runs no command. |
 | `scripts/context_snapshot.py` | Records/reads Claude Code or Antigravity status-line context counts and feeds the steward; Codex is out of scope. |
 | `scripts/context_steward.py` | Applies the deterministic action table to supplied counts, threshold and boundary; never compacts. |
 | `scripts/data_root.py` | Resolves account-owned canonical storage and checks safe paths; environment overrides cannot select trusted state. |

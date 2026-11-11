@@ -681,6 +681,65 @@ class ProjectFileTest(unittest.TestCase):
         self.assertEqual(self.host.read_bytes(), before)
         self.assertEqual(self.reader().checks_for(code_, root=self.repo), ([('unit', ['make', 'unit'])], None))
 
+    def failing_host_apply(self, digest):
+        module = self.module()
+        real = module.cs.write_target
+
+        def only_host_fails(folder, name, *rest):
+            if name == 'host.md':
+                raise OSError('disk')
+            return real(folder, name, *rest)
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), \
+                mock.patch.object(module.cs, 'write_target', side_effect=only_host_fails):
+            code = module.main(['apply', '--yes', '--digest', digest])
+        return code, err.getvalue()
+
+    def test_a_vanished_project_file_never_revives_the_legacy_entry(self):
+        code_ = self.code()
+        self.legacy('- %s: test = ["make","test"]\n- %s: local-receipt = on\n' % (code_, code_))
+        code, _ = self.failing_host_apply(self.preview('unit=["make","unit"]'))
+        self.assertEqual(code, 1)
+        self.project().unlink()
+        reader = self.reader()
+        self.assertEqual(reader.checks_for(code_, root=self.repo), ([], reader.CHANGED))
+        self.assertFalse(reader.receipt_mode(code_, root=self.repo))
+
+    def test_a_remove_whose_legacy_cleanup_fails_leaves_nothing_active(self):
+        code_ = self.code()
+        self.save('unit=["make","unit"]')
+        self.legacy('- %s: test = ["make","test"]\n- %s: local-receipt = on\n' % (code_, code_))
+        out = self.cli('remove', '--root', str(self.repo))[1]
+        code, err = self.failing_host_apply(out.split('Digest: ')[1].splitlines()[0])
+        self.assertEqual(code, 1)
+        self.assertIn('removed', err)
+        self.assertIn('ignored', err)
+        self.assertFalse(self.project().exists())
+        reader = self.reader()
+        self.assertEqual(reader.checks_for(code_, root=self.repo), ([], 'no entry'))
+        self.assertFalse(reader.receipt_mode(code_, root=self.repo))
+
+    def test_a_failed_legacy_cleanup_still_adds_the_exclude_line(self):
+        code_ = self.code()
+        self.legacy('- %s: test = ["make","test"]\n' % code_)
+        exclude = self.repo / '.git/info/exclude'
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        exclude.write_text('')
+        code, err = self.failing_host_apply(self.preview('unit=["make","unit"]'))
+        self.assertEqual(code, 1)
+        self.assertIn('.finolabs/', exclude.read_text())
+
+    def test_migrate_does_not_revive_a_repository_that_already_moved(self):
+        code_ = self.code()
+        self.save('unit=["make","unit"]')
+        self.project().unlink()
+        self.legacy('- %s: test = ["make","test"]\n' % code_)
+        before = self.host.read_bytes()
+        code, out, err = self.cli('migrate', '--root', str(self.repo))
+        self.assertIn('already moved', out + err)
+        self.assertFalse(self.project().exists())
+        self.assertEqual(self.host.read_bytes(), before)
+
     def test_an_invalid_file_reads_as_unset_for_that_repository_only(self):
         self.save('test=["make","test"]', root=self.other)
         code_ = self.code()

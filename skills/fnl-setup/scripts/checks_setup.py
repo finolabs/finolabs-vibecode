@@ -256,6 +256,9 @@ def plan_for(found, action, checks=None, receipt=None):
         if previous is not None:
             return None, None, ['Skipped: the project check file already exists and wins on read; '
                                 'its legacy lines in host.md stay. Nothing changed.']
+        if cl.has_approval(code):
+            return None, None, ['Skipped: this repository already moved off host.md, so its legacy lines are ignored. '
+                                'Save a list with /fnl-setup add checks. Nothing changed.']
         checks, mode = legacy
     elif action == 'mode':
         if previous is not None:
@@ -263,7 +266,7 @@ def plan_for(found, action, checks=None, receipt=None):
             if reason:
                 raise Said(f'the project check file is unset ({reason}); save a list first')
             checks = [list(item) for item in found_checks]
-        elif legacy is not None:
+        elif legacy is not None and not cl.has_approval(code):
             checks = legacy[0]
         else:
             raise Said('this repository has no stored checks; save a list first')
@@ -384,7 +387,6 @@ def write_project(plan, main, code):
             if previous is not None:
                 os.unlink(cl.PROJECT_FILE, dir_fd=fd)
                 os.fsync(fd)
-            cl.remove_approved(code)
         else:
             raw = plan['content'].encode()
             dr.atomic_write(fd, cl.PROJECT_FILE, raw)
@@ -413,29 +415,37 @@ def apply(value, yes):
                     raise Said('host.md changed since the preview; preview again')
             if plan['add_exclude'] and cs.content_hash(exclude_state(common)[0]) != plan['exclude']:
                 raise Said('.git/info/exclude changed since the preview; preview again')
-            if plan['content'] is None and plan['previous'] is None:
+            removing = plan['content'] is None
+            if removing:
+                # Recorded first, so an interruption or a failed cleanup below cannot revive the legacy entry.
+                cl.write_approved(code, cl.REMOVED)
+            if removing and plan['previous'] is None:
                 if current_project(main) is not None:
                     raise Said('the project check file changed since the preview; preview again')
-                cl.remove_approved(code)
             else:
                 write_project(plan, main, code)
             os.unlink('preview.json', dir_fd=state)
             os.fsync(state)
+            done = 'the check list was removed' if removing else 'the check file was saved'
+            problems = []
             if plan['legacy']:
-                # The file is saved; a failure here leaves the legacy entry, which the file outranks on read.
+                # The approval record already outranks the legacy entry, so a failure here cannot bring it back.
                 try:
                     result = transform(host, code, None)
                     write_private(folder, plan['host_backup'], host, host_mode)
                     cs.write_target(folder, 'host.md', result, host_mode)
                 except (OSError, ValueError, TypeError, UnicodeError):
-                    raise Said('the check file was saved, but host.md could not be changed, so its legacy entry for '
-                               'this repository stays; the file wins on read') from None
+                    problems.append('host.md could not be changed, so its legacy lines for this repository stay '
+                                    'there and are ignored')
             if plan['add_exclude']:
                 try:
                     add_exclude(common, plan['exclude'])
                 except (OSError, ValueError, UnicodeError):
-                    raise Said('the check file was saved, but .git/info/exclude could not be changed; add the line '
-                               '.finolabs/ to it yourself') from None
+                    problems.append('.git/info/exclude could not be changed; add the line .finolabs/ to it yourself')
+            if problems:
+                raise Said(done + ', but ' + '; '.join(problems))
+            if removing:
+                cl.remove_approved(code)
     print('Check file removed; no command was run.' if plan['content'] is None
           else 'Check file saved and approved; no command was run.')
 

@@ -323,6 +323,10 @@ def render_project(checks, receipt):
     return (json.dumps(data, indent=2, ensure_ascii=True) + '\n').encode()
 
 
+# An approval record that names no file: the list was removed while a legacy entry could not be cleaned up.
+REMOVED = '0' * 64
+
+
 def read_approved(code):
     """The approved SHA-256 of this repository's project file; FileNotFoundError when none, ValueError when invalid."""
     if not isinstance(code, str) or not CODE.fullmatch(code):
@@ -344,6 +348,17 @@ def write_approved(code, sha256):
         dr.atomic_write(folder, code + '.json', json.dumps(record, sort_keys=True).encode())
 
 
+def has_approval(code):
+    """True when any approval record exists for this repository, or one that cannot be read (deny on doubt)."""
+    try:
+        read_approved(code)
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
+        return True
+    return True
+
+
 def remove_approved(code):
     """Remove this repository's approved digest, if any; a missing record or folder is fine."""
     if not isinstance(code, str) or not CODE.fullmatch(code):
@@ -360,7 +375,10 @@ def remove_approved(code):
 
 
 def read_project(code, root):
-    """None when there is no project file (the legacy section then applies); else (checks, receipt, reason).
+    """None when this repository never moved off the legacy section; else (checks, receipt, reason).
+
+    Once an approval record exists the project file alone decides: a file that disappeared reads as unset and never
+    revives the legacy entry it replaced.
 
     A file whose bytes do not match the approved digest, or with none, reads as unset with CHANGED: this is what stops
     a committed or branch-supplied file from choosing commands. Never repaired here.
@@ -371,7 +389,13 @@ def read_project(code, root):
     try:
         raw = read_project_bytes(main)
     except FileNotFoundError:
-        return None
+        try:
+            recorded = read_approved(code)
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
+            return [], False, 'unreadable'
+        return [], False, 'no entry' if recorded == REMOVED else CHANGED
     except (OSError, ValueError):
         return [], False, 'unreadable'
     try:
