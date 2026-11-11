@@ -6,20 +6,20 @@
         {
           "id": "0.2.4/checks-rename",
           "kind": "rename",
-          "text": "The fnl-verification skill is now called fnl-checks, and /fnl-verification keeps working as an alias until 0.3.0.",
+          "text": "The verification skill is now called checks, and /verification keeps working as an alias until 0.3.0.",
           "until": "0.3.0"
         },
         {
           "id": "0.2.4/checks-setup",
           "kind": "setup",
-          "text": "Run /fnl-setup add checks to save a check list per repository, with the optional local receipt and pre-push hook.",
-          "setup": "/fnl-setup add checks"
+          "text": "Run /setup add checks to save a check list per repository, with the optional local receipt and pre-push hook.",
+          "setup": "/setup add checks"
         },
         {
           "id": "0.2.4/ci-workflow",
           "kind": "setup",
           "text": "The same setup step can write, after a previewed yes, a cheaper CI workflow that runs on pull requests and skips document-only changes.",
-          "setup": "/fnl-setup add checks"
+          "setup": "/setup add checks"
         },
         {
           "id": "0.2.4/codex-hook-trust",
@@ -34,26 +34,31 @@
         {
           "id": "0.2.5/checks-store",
           "kind": "setup",
-          "text": "A check list saved with 0.2.4 is no longer read: run /fnl-setup add checks again in each repository, then delete the old ## Checks section from host.md by hand.",
-          "setup": "/fnl-setup add checks"
+          "text": "A check list saved with 0.2.4 is no longer read: run /setup add checks again in each repository, then delete the old ## Checks section from host.md by hand.",
+          "setup": "/setup add checks"
         },
         {
           "id": "0.2.5/parallel-settings",
           "kind": "setup",
           "text": "Parallel limits in host.md are no longer read: set parallel and caps again in each repository before you delete ## Project settings by hand.",
-          "setup": "/fnl-setup add delegation"
+          "setup": "/setup add delegation"
         },
         {
           "id": "0.2.5/project-settings",
           "kind": "setup",
           "text": "Settings in host.md are no longer read: set them again in each repository, then delete ## Project settings and the Ledger project: and Task file: lines by hand.",
-          "setup": "/fnl-setup add project"
+          "setup": "/setup add project"
         },
         {
           "id": "0.2.5/project-labels",
           "kind": "setup",
           "text": "Labels in host.md are no longer read: set each again inside each repository, then delete the ## Project labels section by hand.",
-          "setup": "/fnl-setup add project"
+          "setup": "/setup add project"
+        },
+        {
+          "id": "0.2.5/skill-names",
+          "kind": "rename",
+          "text": "Skills lost the fnl- prefix (fnl-setup is now setup). Old names still work when typed, and your files that reference old names keep working through the aliases."
         }
       ]
     }
