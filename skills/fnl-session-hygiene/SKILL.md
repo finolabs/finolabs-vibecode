@@ -1,6 +1,6 @@
 ---
 name: fnl-session-hygiene
-description: Keep agent sessions healthy across long work. Use when a session's context passes about 60% (advisory, agent judgment), a phase or task changes, a session needs a name or its title is stale, work moves to a fresh session or another writer, the task ends with decisions and evidence to preserve, or the user asks to remember something or recall earlier decisions, lessons or project state.
+description: Name and rename agent sessions, save handovers and write back decisions so long work stays healthy. Use when a session's first task starts and it needs a name, right after a compaction, when the task or phase changes or the title is stale, when the user asks to rename, wrap up, save progress, hand over or resume later, when context passes about 60% (advisory, agent judgment), when work moves to a fresh session or another writer, or when the user asks to remember or recall decisions, lessons or project state.
 ---
 
 # Session hygiene
