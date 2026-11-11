@@ -4,6 +4,8 @@
 Usage, from inside the repository:
   checks.py run [--changed] [--base <ref>]   run the stored list in order, stop at the first failure
   checks.py show                             print the stored list and the local-receipt mode
+  checks.py usage --from <runs.json> [--files-from <paths.json>] [--limit-minutes N]
+                                             summarise CI runs and minutes from files; no network, no process
 
 Each check is an argument array from `## Checks` of the canonical host config (written only by fnl-setup's
 `checks_setup.py`), launched through `heavy_run.py`'s canonical form with no shell and an allowlisted environment;
@@ -17,9 +19,11 @@ move writes a receipt (repository code, head, list digest) in the private state 
 repository at a time: it holds a private lock file beside the receipt from before the removal until the receipt is
 written or declined, and a second one refuses. `--changed` neither writes nor removes a receipt and takes no lock.
 It edits no file of the
-repository and makes no network call. Exits: 0 passed, 1 a check failed, 2 refused or unknown, 3 invalid list.
+repository and makes no network call. Exits: 0 passed, 1 a check failed, 2 refused or unknown, 3 invalid list or malformed
+usage input.
 """
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -271,6 +275,141 @@ def show():
     return 0
 
 
+# What the minutes cost: read a run list the agent produced with the host's own command; no network, no process
+
+USAGE_LIMIT = 5 * 1024 * 1024
+MAX_RUNS = 5000
+RUN_REQUIRED = {'databaseId', 'event', 'workflowName', 'startedAt', 'updatedAt'}
+RUN_ALLOWED = RUN_REQUIRED | {'headBranch', 'conclusion', 'createdAt', 'status'}
+UTC_TIME = re.compile(r'(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?Z')
+
+
+class Malformed(Exception):
+    pass
+
+
+def read_json(path, what):
+    """The parsed JSON of a regular file of at most USAGE_LIMIT bytes; Refused when it cannot be read."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    except OSError:
+        raise Refused(f'{what} could not be opened') from None
+    with os.fdopen(fd, 'rb') as stream:
+        import stat
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise Refused(f'{what} is not a regular file')
+        raw = stream.read(USAGE_LIMIT + 1)
+    if len(raw) > USAGE_LIMIT:
+        raise Malformed(f'{what} is over 5 MB')
+    def unique(pairs):
+        keys = [key for key, _ in pairs]
+        if len(set(keys)) != len(keys):
+            raise ValueError('duplicate key')
+        return dict(pairs)
+    try:
+        return json.loads(raw.decode('utf-8'), object_pairs_hook=unique)
+    except (UnicodeError, ValueError, RecursionError):
+        raise Malformed(f'{what} is not valid JSON') from None
+
+
+def utc_time(value):
+    """Seconds since the epoch of a strict ISO 8601 UTC time such as 2026-11-01T10:00:00Z (optional fraction)."""
+    import datetime
+    match = UTC_TIME.fullmatch(value) if isinstance(value, str) else None
+    if not match:
+        raise Malformed('a time is not ISO 8601 UTC (YYYY-MM-DDTHH:MM:SSZ)')
+    try:
+        moment = datetime.datetime(*(int(part) for part in match.groups()[:6]), tzinfo=datetime.timezone.utc)
+    except ValueError:
+        raise Malformed('a time is not a valid date') from None
+    return moment.timestamp() + (float('0.' + match[7]) if match[7] else 0.0)
+
+
+UNNAMED = '(unnamed workflow)'
+
+
+def read_runs(path):
+    data = read_json(path, 'the run list')
+    if not isinstance(data, list):
+        raise Malformed('the run list is not a JSON array')
+    if len(data) > MAX_RUNS:
+        raise Malformed('the run list has more than 5,000 runs')
+    runs, seen = [], set()
+    for item in data:
+        if not isinstance(item, dict) or not RUN_REQUIRED <= set(item) or not set(item) <= RUN_ALLOWED:
+            raise Malformed('a run lacks a required field or has an unknown one')
+        identifier = item['databaseId']
+        if type(identifier) is not int or identifier < 0 or identifier in seen:
+            raise Malformed('a run has an invalid or repeated databaseId')
+        seen.add(identifier)
+        for key, shortest in (('event', 1), ('workflowName', 0)):  # gh reports some ruleset runs with no name
+            if not isinstance(item[key], str) or not shortest <= len(item[key]) <= 200 or not item[key].isprintable():
+                raise Malformed(f'a run has an invalid {key}')
+        start, end = utc_time(item['startedAt']), utc_time(item['updatedAt'])
+        if 'createdAt' in item:
+            utc_time(item['createdAt'])
+        if end < start:
+            raise Malformed('a run ends before it starts')
+        runs.append({'id': identifier, 'event': item['event'], 'workflow': item['workflowName'] or UNNAMED,
+                     'start': start, 'end': end, 'minutes': -int(-(end - start) // 60)})
+    return runs
+
+
+def read_files(path):
+    data = read_json(path, 'the changed-paths map')
+    if not isinstance(data, dict) or len(data) > MAX_RUNS:
+        raise Malformed('the changed-paths map is not a JSON object of at most 5,000 runs')
+    files = {}
+    for key, paths in data.items():
+        if not re.fullmatch(r'0|[1-9][0-9]{0,19}', key) or not isinstance(paths, list) or len(paths) > 10000 \
+                or not all(isinstance(item, str) and 0 < len(item) <= 4096 for item in paths):
+            raise Malformed('the changed-paths map needs run ids mapped to lists of paths')
+        files[int(key)] = paths
+    return files
+
+
+def by_minutes(totals):
+    return sorted(totals.items(), key=lambda pair: (-pair[1], pair[0]))
+
+
+def usage(source, files_source, limit):
+    """Print runs, minutes per workflow and event, the document-only share and days left; 0, 2 or 3."""
+    runs = read_runs(source)
+    files = read_files(files_source) if files_source else None
+    total = sum(run['minutes'] for run in runs)
+    print(f'runs: {len(runs)}')
+    print(f'minutes: {total} (each run from startedAt to updatedAt, rounded up to whole minutes; GitHub bills each '
+          'job this way, so a run with parallel jobs costs more)')
+    for title, key in (('by workflow:', 'workflow'), ('by event:', 'event')):
+        totals = {}
+        for run in runs:
+            totals[run[key]] = totals.get(run[key], 0) + run['minutes']
+        if totals:
+            print(title)
+            for name, minutes in by_minutes(totals):
+                print(f'  {name}: {minutes}')
+    if files is not None:
+        documents = [run for run in runs if cl.document_only(files.get(run['id']))]
+        unknown = sum(1 for run in runs if run['id'] not in files)
+        spent = sum(run['minutes'] for run in documents)
+        share = round(100 * spent / total) if total else 0
+        print(f'document-only: {len(documents)} run{"" if len(documents) == 1 else "s"}, {spent} minutes '
+              f'({share}% of minutes), {unknown} run{"" if unknown == 1 else "s"} without changed paths; '
+              'documents are paths matching ' + ', '.join(cl.DOCUMENT_PATTERNS))
+    if limit is not None:
+        left = limit - total
+        if not runs:
+            print(f'limit: {limit} minutes, {left} left; no runs to measure a rate')
+        elif left <= 0:
+            print(f'limit: {limit} minutes; limit reached by the runs in this file')
+        else:
+            days = max((max(run['end'] for run in runs) - min(run['start'] for run in runs)) / 86400, 1.0)
+            rate = total / days
+            print(f'limit: {limit} minutes, {left} left; the runs span {days:.1f} days at {rate:.1f} minutes a day, '
+                  f'about {left / rate:.0f} days left' if rate else f'limit: {limit} minutes, {left} left')
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     commands = parser.add_subparsers(dest='action', required=True)
@@ -278,8 +417,20 @@ def main(argv=None):
     runner.add_argument('--changed', action='store_true')
     runner.add_argument('--base', default=DEFAULT_BASE)
     commands.add_parser('show')
+    counter = commands.add_parser('usage')
+    counter.add_argument('--from', dest='source', required=True)
+    counter.add_argument('--files-from')
+    counter.add_argument('--limit-minutes', type=int)
     args = parser.parse_args(argv)
     try:
+        if args.action == 'usage':
+            if args.limit_minutes is not None and not 0 < args.limit_minutes <= 10_000_000:
+                raise Refused('--limit-minutes must be a positive whole number')
+            try:
+                return usage(args.source, args.files_from, args.limit_minutes)
+            except Malformed as error:
+                print(f'checks: malformed input: {error}', file=sys.stderr)
+                return 3
         if args.action == 'show':
             return show()
         if args.base != DEFAULT_BASE and not args.changed:

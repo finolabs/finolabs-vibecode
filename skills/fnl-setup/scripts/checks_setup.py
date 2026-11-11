@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Detect, preview and apply one repository's entry in the canonical host's Checks section and its local-receipt
-mode, and install or remove the optional git pre-push hook; make no network call.
+mode, install or remove the optional git pre-push hook, and write one cheaper CI workflow file from the stored
+list (`ci preview|apply`, never committed or pushed); make no network call.
 
 A check is a short name and a JSON argument array, never a shell string. Only this script writes `## Checks`.
 Detection, the list and the mode run no command; the hook commands run only fixed git queries, with no shell,
@@ -487,6 +488,301 @@ def hook_apply(value, yes, replace):
           else 'Pre-push hook removed.')
 
 
+# The cheaper cloud workflow: one new file under .github/workflows, written from a fixed template after a preview
+
+CI_STATE = 'state/checks-ci'
+CI_BACKUPS = 'state/checks-ci/backups'
+CI_KEYS = {'repo', 'code', 'name', 'branch', 'list', 'content', 'existing', 'backup', 'root', 'created'}
+CI_FOLDERS = ('.github', 'workflows')
+CI_PATH = re.compile(r'\.github/workflows/([a-z0-9][a-z0-9-]{0,40}\.yml)')
+CI_DEFAULT = '.github/workflows/fnl-checks.yml'
+BRANCH = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,99}')
+CI_LIMIT = 256 * 1024
+CI_NOTICE = (
+    "The cloud runner runs each run: line through its shell (bash), unlike checks.py, which never uses a shell; each "
+    "line is the stored argument array joined with shell quoting.\n"
+    "What could go wrong: a workflow runs the repository's code in the cloud, on every pull request, including one "
+    "from a fork where the repository allows it. A required status check on a skipped document-only pull request "
+    "stays pending on GitHub unless the repository's rules allow it; make the check not required, or allow skipped "
+    "checks, before relying on paths-ignore.\n"
+    "The actions are named by major version tag (actions/checkout@v4); pinning action versions to a commit is your "
+    "choice.\n"
+    "The plugin writes only this file: it never edits another workflow, never commits and never pushes; review the "
+    "file and commit it yourself.")
+
+
+def ci_name(path):
+    match = CI_PATH.fullmatch(path or '')
+    if not match:
+        raise Said('the workflow path must be .github/workflows/<name>.yml, the name of lowercase letters, digits '
+                   'and dashes (at most 45 characters)')
+    return match[1]
+
+
+def ci_branch(branch):
+    if (not isinstance(branch, str) or not BRANCH.fullmatch(branch) or '..' in branch or branch.endswith(('/', '.'))
+            or branch.endswith('.lock')):
+        raise Said('invalid branch name')
+    return branch
+
+
+def ecosystem(argv):
+    """'python' or 'npm' for a check whose program names a known ecosystem, else None."""
+    name = program_name(argv[0])
+    if (name.startswith('python') and cl.INTERPRETER.fullmatch(name)) or name in ('pytest', 'pip', 'pip3'):
+        return 'python'
+    if name in ('npm', 'npx', 'node'):
+        return 'npm'
+    return None
+
+
+def quoted(text):
+    """A YAML single-quoted scalar; the caller has refused unprintable text."""
+    return "'" + text.replace("'", "''") + "'"
+
+
+def run_line(argv):
+    """The shell-quoted command line of one stored argument array; refuses an Actions expression or unprintable text."""
+    import shlex
+    check_argv(argv)
+    line = shlex.join(argv)
+    if '${{' in line or not line.isprintable() or len(line) > 4096:
+        raise Said('a check holds an Actions expression (${{) or unprintable text; it cannot become a run line')
+    return line
+
+
+def workflow_text(checks, branch, files):
+    """Deterministic YAML from a fixed template; `files` is the set of dependency files present at the root."""
+    ignore = ''.join(f'      - {quoted(pattern)}\n' for pattern in cl.DOCUMENT_PATTERNS)
+    out = ['# fnl-checks: a cheaper CI workflow written by fnl-setup checks_setup.py from the stored checks of this\n',
+           '# repository. Review it and commit it yourself; the plugin never commits or pushes it.\n',
+           "name: 'fnl-checks'\n",
+           'on:\n',
+           '  pull_request:\n',
+           '    paths-ignore:\n', ignore,
+           '  push:\n',
+           f'    branches: [{quoted(ci_branch(branch))}]\n',
+           '    paths-ignore:\n', ignore,
+           '  schedule:\n',
+           "    - cron: '17 4 * * 1'\n",
+           '  workflow_dispatch:\n',
+           'concurrency:\n',
+           '  group: ${{ github.workflow }}-${{ github.ref }}\n',
+           '  cancel-in-progress: true\n',
+           'permissions:\n',
+           '  contents: read\n',
+           'jobs:\n',
+           '  checks:\n',
+           '    runs-on: ubuntu-latest\n',
+           '    timeout-minutes: 60\n',
+           '    steps:\n',
+           '      - uses: actions/checkout@v4\n',
+           '        with:\n',
+           '          persist-credentials: false\n']
+    kinds = {ecosystem(argv) for _, argv in checks}
+    if 'python' in kinds:
+        out += ['      - uses: actions/setup-python@v5\n', '        with:\n', "          python-version: '3.x'\n"]
+        if 'requirements.txt' in files:
+            out += ['          cache: pip\n', "          cache-dependency-path: 'requirements.txt'\n",
+                    "      - name: 'install Python dependencies'\n",
+                    "        run: 'python3 -m pip install -r requirements.txt'\n"]
+    if 'npm' in kinds:
+        out += ['      - uses: actions/setup-node@v4\n', '        with:\n', "          node-version: 'lts/*'\n"]
+        if 'package-lock.json' in files:
+            out += ['          cache: npm\n', "      - name: 'install npm dependencies'\n", "        run: 'npm ci'\n"]
+    for name, argv in checks:
+        out += [f'      - name: {quoted(cl.check_name(name))}\n', f'        run: {quoted(run_line(argv))}\n']
+    return ''.join(out)
+
+
+def dependency_files(root_fd):
+    return sorted(name for name in ('requirements.txt', 'package-lock.json') if exists(root_fd, name))
+
+
+def ci_folder(root_fd, create):
+    """An fd of .github/workflows under the repository root, opened without following links, owned by this account
+    and not writable by others; None when absent and not created. A link or an unsafe folder is refused."""
+    fd = os.dup(root_fd)
+    try:
+        for part in CI_FOLDERS:
+            try:
+                info = os.stat(part, dir_fd=fd, follow_symlinks=False)
+            except FileNotFoundError:
+                if not create:
+                    os.close(fd)
+                    return None
+                os.mkdir(part, 0o755, dir_fd=fd)
+                info = os.stat(part, dir_fd=fd, follow_symlinks=False)
+            if not stat.S_ISDIR(info.st_mode):
+                raise Said(f'{part} is a link or not a folder; the workflow is not written through it')
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+            os.close(fd)
+            fd = child
+            info = os.fstat(fd)
+            if info.st_uid != os.getuid() or info.st_mode & 0o022:
+                raise Said(f'{part} is not owned by you or is writable by others')
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def read_existing(fd, name):
+    """The current workflow file's bytes, None when absent; a link or an unsafe file is refused."""
+    if fd is None:
+        return None
+    try:
+        info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISREG(info.st_mode):
+        raise Said(f'{name} is a link or not a regular file; move it yourself first')
+    return dr.read_file(fd, name, CI_LIMIT)
+
+
+def ci_source(root, name, branch):
+    """(repository root, code, list digest, content) for the stored list; refuses when there is none."""
+    found = pp.find_root(root or os.getcwd())
+    if found is None:
+        raise ValueError('no repository')
+    code = pp.repository_code(found)
+    checks, reason = checks_for(code)
+    if reason:
+        raise Said(f'this repository has no stored checks ({reason}); save a list first')
+    with pp.open_dir(found) as root_fd:
+        files = dependency_files(root_fd)
+    return found, code, cl.list_digest(checks), workflow_text(checks, branch, files)
+
+
+def ci_preview(root, path, branch):
+    data = dr.consent_root()
+    if data is None:
+        raise ValueError('invalid data root')
+    name = ci_name(path)
+    found, code, digest_, content = ci_source(root, name, branch)
+    with pp.open_dir(found) as root_fd:
+        fd = ci_folder(root_fd, create=False)
+        try:
+            existing = read_existing(fd, name)
+        finally:
+            if fd is not None:
+                os.close(fd)
+    with dr.data_folder(CI_BACKUPS, create=True, private=True) as backups:
+        backup = cs.backup_name(backups, f'{code}-{name}') if existing is not None else None
+    plan = {'repo': str(found), 'code': code, 'name': name, 'branch': branch, 'list': digest_, 'content': content,
+            'existing': cs.content_hash(existing), 'backup': backup, 'root': str(data), 'created': time.time()}
+    value = cs.digest(plan)
+    with dr.data_folder(CI_STATE, create=True, private=True) as state:
+        dr.atomic_write(state, 'preview.json', json.dumps({'plan': plan, 'digest': value}).encode())
+    print(f'Target: .github/workflows/{name} in {found}')
+    print('Existing file: none' if existing is None else
+          'Existing file: a different file; apply needs --replace-existing, and a backup is kept in the private '
+          'state folder')
+    print(f'It runs on pull requests, on pushes to {branch} only, weekly on a schedule and by hand '
+          '(workflow_dispatch); a newer push cancels the older run, and changes that touch only documents are '
+          'skipped. Pass --branch when the default branch has another name.')
+    print('--- workflow ---')
+    print(content, end='')
+    print('--- end ---')
+    print(CI_NOTICE)
+    if backup:
+        print('Backup: ' + str(data / CI_BACKUPS / backup))
+    print('Digest: ' + value)
+    print('Preview expires in 60 minutes; nothing changed.')
+
+
+def ci_apply(value, yes, replace):
+    if not yes or not isinstance(value, str) or not re.fullmatch(r'[0-9a-f]{12,64}', value):
+        raise ValueError('clear yes and at least 12 hex digits of the preview digest required')
+    with dr.data_folder(CI_STATE, private=True) as state:
+        fcntl.flock(state, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        saved = json.loads(cs.read_plan(state))
+        if not isinstance(saved, dict) or set(saved) != {'plan', 'digest'}:
+            raise ValueError('invalid preview')
+        plan = saved['plan']
+        digest = cs.digest(plan)
+        if saved['digest'] != digest or not digest.startswith(value):
+            raise ValueError('digest mismatch; preview again')
+        if not isinstance(plan, dict) or set(plan) != CI_KEYS or not isinstance(plan['code'], str) \
+                or not CODE.fullmatch(plan['code']) or not isinstance(plan['repo'], str):
+            raise ValueError('invalid plan')
+        name = ci_name('.github/workflows/' + str(plan['name']))
+        if plan['root'] != str(dr.consent_root()):
+            raise ValueError('data root changed; preview again')
+        if type(plan['created']) not in (int, float) or not 0 <= time.time() - plan['created'] <= 3600:
+            raise ValueError('preview expired; preview again')
+        backup = plan['backup']
+        if backup is not None and (not isinstance(backup, str) or not re.fullmatch(
+                re.escape(f"{plan['code']}-{name}") + r'\.bak-\d{8}(?:-[1-9][0-9]*)?', backup)):
+            raise ValueError('invalid backup')
+        found, code, list_digest, content = ci_source(plan['repo'], name, plan['branch'])
+        if str(found) != plan['repo'] or code != plan['code']:
+            raise ValueError('repository changed; preview again')
+        if list_digest != plan['list'] or content != plan['content']:
+            raise Said('the stored checks or the dependency files changed since the preview; preview again')
+        with pp.open_dir(found) as root_fd:
+            fd = ci_folder(root_fd, create=True)
+            try:
+                existing = read_existing(fd, name)
+                if cs.content_hash(existing) != plan['existing']:
+                    raise Said('the workflow file changed since the preview; preview again')
+                if existing is not None and not replace:
+                    raise Said('a workflow file with this name exists; it is replaced only with --replace-existing')
+                if existing is not None:
+                    if backup is None:
+                        raise ValueError('invalid backup')
+                    with dr.data_folder(CI_BACKUPS, create=True, private=True) as backups:
+                        out = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
+                                      dir_fd=backups)
+                        with os.fdopen(out, 'wb') as stream:
+                            stream.write(existing)
+                            stream.flush()
+                            os.fsync(stream.fileno())
+                temporary = '.fnl-checks-' + os.urandom(8).hex()
+                out = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
+                try:
+                    with os.fdopen(out, 'wb') as stream:
+                        stream.write(content.encode('utf-8'))
+                        os.fchmod(stream.fileno(), 0o644)
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                    if existing is None:
+                        # Publish without clobbering: link fails when a file appeared since the preview.
+                        try:
+                            os.link(temporary, name, src_dir_fd=fd, dst_dir_fd=fd, follow_symlinks=False)
+                        except FileExistsError:
+                            raise Said(f'{name} appeared since the preview; it is left alone. Preview again.') from None
+                        os.unlink(temporary, dir_fd=fd)
+                    else:
+                        # Re-read right before the replace; a writer that changes the file between this read and
+                        # the replace remains a residual race, as for the pre-push hook.
+                        try:
+                            same = cs.content_hash(read_existing(fd, name)) == plan['existing']
+                        except Exception:
+                            same = False
+                        if not same:
+                            with dr.data_folder(CI_BACKUPS, private=True) as backups:
+                                try:
+                                    os.unlink(backup, dir_fd=backups)  # the backup this apply just wrote
+                                except FileNotFoundError:
+                                    pass
+                            raise Said('the workflow file changed since the preview; preview again')
+                        os.replace(temporary, name, src_dir_fd=fd, dst_dir_fd=fd)
+                except BaseException:
+                    try:
+                        os.unlink(temporary, dir_fd=fd)
+                    except FileNotFoundError:
+                        pass
+                    raise
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        os.unlink('preview.json', dir_fd=state)
+        os.fsync(state)
+    print(f'Workflow written to .github/workflows/{name}; nothing was committed or pushed. Review the file and '
+          'commit it yourself.')
+
+
 # Detection: read files only, never run them
 
 def read_source(root_fd, relative, skipped):
@@ -798,7 +1094,22 @@ def main(argv=None):
         done.add_argument('--yes', action='store_true')
         done.add_argument('--replace-existing', action='store_true')
         done.add_argument('--digest', required=True)
+        workflow = commands.add_parser('ci').add_subparsers(dest='ci', required=True)
+        draft = workflow.add_parser('preview')
+        draft.add_argument('--root')
+        draft.add_argument('--path', default=CI_DEFAULT)
+        draft.add_argument('--branch', default='main')
+        write = workflow.add_parser('apply')
+        write.add_argument('--yes', action='store_true')
+        write.add_argument('--replace-existing', action='store_true')
+        write.add_argument('--digest', required=True)
         args = parser.parse_args(argv)
+        if args.action == 'ci':
+            if args.ci == 'preview':
+                ci_preview(args.root, args.path, args.branch)
+            else:
+                ci_apply(args.digest, args.yes, args.replace_existing)
+            return 0
         if args.action == 'hook':
             if args.hook == 'install':
                 hook_preview(args.root, 'install', args.checks_script, args.base)

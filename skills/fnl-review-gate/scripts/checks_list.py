@@ -102,6 +102,21 @@ def list_digest(checks):
     return hashlib.sha256(json.dumps(canonical, separators=(',', ':'), ensure_ascii=True).encode()).hexdigest()
 
 
+# Document-only changes: the paths-ignore rule of the cheaper workflow, shared by its writer and `checks.py usage`
+
+DOCUMENT_PATTERNS = ('**/*.md', 'docs/**', 'LICENSE')
+
+
+def document_path(path):
+    """True when one changed path matches a DOCUMENT_PATTERNS entry as GitHub filters read it (case-sensitive)."""
+    return isinstance(path, str) and (path.endswith('.md') or path.startswith('docs/') or path == 'LICENSE')
+
+
+def document_only(paths):
+    """True when there is at least one changed path and every one is a document; no paths is never document-only."""
+    return bool(paths) and all(document_path(path) for path in paths)
+
+
 # The section
 
 def split(text):

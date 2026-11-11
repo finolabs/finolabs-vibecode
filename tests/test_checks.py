@@ -517,5 +517,136 @@ class ChecksRunTest(unittest.TestCase):
             self.assertNotIn('<inherited>', names)
 
 
+def run_record(identifier, workflow, event, started, updated, **extra):
+    record = {'databaseId': identifier, 'event': event, 'headBranch': 'feature', 'conclusion': 'success',
+              'createdAt': started, 'updatedAt': updated, 'startedAt': started, 'workflowName': workflow}
+    record.update(extra)
+    return record
+
+
+RUNS = [
+    run_record(1, 'CI', 'pull_request', '2026-11-01T10:00:00Z', '2026-11-01T10:04:10Z'),  # 5 minutes
+    run_record(2, 'CI', 'push', '2026-11-01T11:00:00Z', '2026-11-01T11:02:00Z'),  # exactly 2 minutes
+    run_record(3, 'Docs', 'pull_request', '2026-11-02T09:00:00Z', '2026-11-02T09:00:01Z'),  # 1 minute
+    run_record(4, 'CI', 'pull_request', '2026-11-03T10:00:00.250Z', '2026-11-03T10:09:30Z'),  # 10 minutes
+]
+FILES = {'1': ['README.md', 'docs/guide.md'], '2': ['src/app.py', 'README.md'], '3': ['LICENSE', 'docs/x/y.png']}
+
+
+class UsageTest(unittest.TestCase):
+    """checks.py usage: minutes from a run list the agent produced; no network call and no process."""
+
+    def setUp(self):
+        scratch = ROOT / '.finolabs/tmp'
+        scratch.mkdir(parents=True, exist_ok=True)
+        self.temp = tempfile.TemporaryDirectory(dir=scratch)
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name).resolve()
+
+    def write(self, name, value):
+        path = self.base / name
+        path.write_text(value if isinstance(value, str) else json.dumps(value))
+        return str(path)
+
+    def usage(self, *args):
+        self.assertTrue(SCRIPT.is_file(), 'checks.py is missing')
+        module = load('checks_usage_test', SCRIPT)
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), \
+                mock.patch('subprocess.run', side_effect=AssertionError('process started')), \
+                mock.patch('subprocess.Popen', side_effect=AssertionError('process started')), \
+                mock.patch('socket.socket', side_effect=AssertionError('network call')):
+            code = module.main(['usage', *args])
+        return code, out.getvalue(), err.getvalue()
+
+    def test_a_run_with_no_workflow_name_is_counted_under_a_label(self):
+        runs = [*RUNS, run_record(5, '', 'push', '2026-11-04T10:00:00Z', '2026-11-04T10:03:00Z')]
+        code, out, err = self.usage('--from', self.write('runs.json', runs))
+        self.assertEqual(code, 0, err)
+        self.assertIn('runs: 5', out)
+        self.assertIn('minutes: 21', out)
+        self.assertIn('(unnamed workflow)', out)
+
+    def test_ambiguous_changed_path_keys_are_malformed(self):
+        runs = self.write('runs.json', RUNS)
+        for name, text in (('duplicate', '{"1":["src/app.py"],"1":["README.md"]}'),
+                           ('non-canonical', '{"1":["src/app.py"],"01":["README.md"]}')):
+            with self.subTest(name):
+                code, out, _ = self.usage('--from', runs, '--files-from', self.write('paths.json', text))
+                self.assertEqual(code, 3)
+                self.assertEqual(out, '')
+
+    def test_totals_round_each_run_up_and_split_by_workflow_and_event(self):
+        code, out, err = self.usage('--from', self.write('runs.json', RUNS))
+        self.assertEqual(code, 0, err)
+        self.assertIn('runs: 4', out)
+        self.assertIn('minutes: 18', out)
+        self.assertIn('  CI: 17', out)
+        self.assertIn('  Docs: 1', out)
+        self.assertIn('  pull_request: 16', out)
+        self.assertIn('  push: 2', out)
+        self.assertNotIn('document-only', out)
+        self.assertNotIn('days left', out)
+
+    def test_document_only_share_follows_the_paths_ignore_rule(self):
+        code, out, err = self.usage('--from', self.write('runs.json', RUNS),
+                                    '--files-from', self.write('files.json', FILES))
+        self.assertEqual(code, 0, err)
+        # Runs 1 and 3 changed documents only (6 of 18 minutes); run 2 touched code; run 4 has no paths listed.
+        self.assertIn('document-only: 2 runs, 6 minutes (33% of minutes)', out)
+        self.assertIn('1 run without changed paths', out)
+
+    def test_document_rule_matches_the_workflow_paths_ignore(self):
+        module = load('checks_usage_rule', SCRIPT)
+        for paths, expected in ((['README.md'], True), (['a/b/c.md'], True), (['docs/a/b.py'], True),
+                                (['LICENSE'], True), (['sub/LICENSE'], False), (['README.MD'], False),
+                                (['docsx/a.md', 'x.py'], False), ([], False), (['src/docs/a.py'], False)):
+            with self.subTest(paths=paths):
+                self.assertEqual(module.cl.document_only(paths), expected)
+
+    def test_limit_prints_days_left_at_the_observed_rate(self):
+        code, out, err = self.usage('--from', self.write('runs.json', RUNS), '--limit-minutes', '2000')
+        self.assertEqual(code, 0, err)
+        # The runs span 2026-11-01T10:00 to 2026-11-03T10:09:30, about 2 days: 9 minutes a day, 1982 left.
+        self.assertIn('limit: 2000 minutes, 1982 left', out)
+        self.assertIn('days left', out)
+        code, out, _ = self.usage('--from', self.write('runs.json', RUNS), '--limit-minutes', '10')
+        self.assertEqual(code, 0)
+        self.assertIn('limit reached', out)
+
+    def test_malformed_input_exits_3_with_one_line(self):
+        bad = [
+            '{"not": "a list"}', 'not json', json.dumps([{'databaseId': 1}]),
+            json.dumps([run_record(1, 'CI', 'push', '2026-11-01 10:00:00', '2026-11-01T10:01:00Z')]),
+            json.dumps([run_record(1, 'CI', 'push', '2026-11-01T10:00:00+07:00', '2026-11-01T10:01:00Z')]),
+            json.dumps([run_record(1, 'CI', 'push', '2026-11-01T10:05:00Z', '2026-11-01T10:01:00Z')]),
+            json.dumps([run_record(True, 'CI', 'push', '2026-11-01T10:00:00Z', '2026-11-01T10:01:00Z')]),
+            json.dumps([RUNS[0], RUNS[0]]),
+            json.dumps([run_record(1, 'CI', 'push', '2026-11-01T10:00:00Z', '2026-11-01T10:01:00Z', extra=1)]),
+            json.dumps([run_record(1, 'CI', 'push', '2026-13-01T10:00:00Z', '2026-11-01T10:01:00Z')]),
+        ]
+        for index, text in enumerate(bad):
+            with self.subTest(text=text[:60]):
+                code, out, err = self.usage('--from', self.write(f'bad{index}.json', text))
+                self.assertEqual(code, 3)
+                self.assertEqual(len(err.strip().splitlines()), 1, err)
+                self.assertEqual(out, '')
+        code, _, err = self.usage('--from', self.write('runs.json', RUNS),
+                                  '--files-from', self.write('files.json', {'1': 'README.md'}))
+        self.assertEqual(code, 3)
+
+    def test_input_is_capped_in_size_and_runs(self):
+        many = [run_record(n, 'CI', 'push', '2026-11-01T10:00:00Z', '2026-11-01T10:01:00Z') for n in range(5001)]
+        self.assertEqual(self.usage('--from', self.write('many.json', many))[0], 3)
+        self.assertEqual(self.usage('--from', self.write('many.json', many[:5000]))[0], 0)
+        self.assertEqual(self.usage('--from', self.write('big.json', ' ' * (5 * 1024 * 1024 + 1) + '[]'))[0], 3)
+
+    def test_empty_list_and_missing_file(self):
+        code, out, _ = self.usage('--from', self.write('none.json', []))
+        self.assertEqual(code, 0)
+        self.assertIn('runs: 0', out)
+        self.assertEqual(self.usage('--from', str(self.base / 'missing.json'))[0], 2)
+
+
 if __name__ == '__main__':
     unittest.main()

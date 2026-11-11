@@ -1,6 +1,6 @@
 # Checks: where a repository's checks run and what they cost (draft, scoped to release 0.2.4)
 
-Status: draft; the owner settled the direction and the name on 2026-11-10. Built: items 1 to 4 and 7 (`checks.py`, the shared reader `checks_list.py`, the pre-push hook installer and the local receipt in `merge_check.py`); items 5 and 6 are not.
+Status: draft; the owner settled the direction and the name on 2026-11-10. Built: items 1 to 7 (`checks.py` with `usage`, the shared reader `checks_list.py` with the document-only rule, the pre-push hook installer, the workflow writer `checks_setup.py ci`, `fnl-checks`' `references/ci.md` and the local receipt in `merge_check.py`).
 
 ## Why
 

@@ -754,5 +754,228 @@ class HookTest(unittest.TestCase):
                 self.assertNotIn('Digest', out)
 
 
+class CiWorkflowTest(unittest.TestCase):
+    """The previewed workflow writer: one new file from the stored list, a digest, a backup, no silent overwrite."""
+
+    setUp, module, cli, preview, code = (ChecksSetupTest.setUp, ChecksSetupTest.module, ChecksSetupTest.cli,
+                                         ChecksSetupTest.preview, ChecksSetupTest.code)
+
+    def store(self, *checks):
+        digest = self.preview(*checks)
+        self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 0)
+
+    def ci(self, *extra):
+        code, out, err = self.cli('ci', 'preview', '--root', str(self.repo), *extra)
+        self.assertEqual(code, 0, err)
+        return out, out.split('Digest: ')[1].splitlines()[0]
+
+    def apply_ci(self, digest, *extra):
+        return self.cli('ci', 'apply', '--yes', '--digest', digest, *extra)
+
+    def workflow_text(self, out):
+        return out.split('--- workflow ---\n')[1].split('--- end ---\n')[0]
+
+    @property
+    def target(self):
+        return self.repo / '.github/workflows/fnl-checks.yml'
+
+    def test_preview_shows_the_cheaper_workflow_and_apply_writes_exactly_it(self):
+        self.store('unit=["python3","-m","unittest","discover","-s","tests"]', 'lint=["make","lint"]')
+        host = self.host.read_bytes()
+        out, digest = self.ci()
+        self.assertFalse(self.target.exists())
+        text = self.workflow_text(out)
+        for phrase in ("pull_request:", "push:\n    branches: ['main']", "'**/*.md'", "'docs/**'", "'LICENSE'",
+                       "group: ${{ github.workflow }}-${{ github.ref }}", 'cancel-in-progress: true',
+                       'schedule:', 'workflow_dispatch:', 'permissions:\n  contents: read',
+                       "run: 'python3 -m unittest discover -s tests'", "run: 'make lint'", "name: 'unit'"):
+            self.assertIn(phrase, text)
+        self.assertLess(text.index("name: 'unit'"), text.index("name: 'lint'"))
+        for phrase in ('Target: .github/workflows/fnl-checks.yml', 'through its shell', 'never commits',
+                       'review the file and commit it yourself', 'stays pending', 'pinning action versions',
+                       'runs the repository\'s code in the cloud'):
+            self.assertIn(phrase, out)
+        again, digest = self.ci()
+        self.assertEqual(self.workflow_text(again), text)  # deterministic text
+        code, done, err = self.apply_ci(digest)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.target.read_text(), text)
+        self.assertIn('commit', done)
+        self.assertEqual(self.host.read_bytes(), host)
+        self.assertEqual(self.apply_ci(digest)[0], 1)  # one preview, one write
+
+    def test_run_lines_are_shell_quoted_and_yaml_single_quoted(self):
+        self.store('pick=["python3","-m","pytest","-k","it\'s a b"]')
+        text = self.workflow_text(self.ci()[0])
+        self.assertIn("run: 'python3 -m pytest -k ''it''\"''\"''s a b'''", text)
+
+    def test_cache_follows_a_known_ecosystem_and_its_lockfile(self):
+        self.store('unit=["python3","-m","pytest"]')
+        text = self.workflow_text(self.ci()[0])
+        self.assertIn('actions/setup-python', text)
+        self.assertNotIn('cache:', text)
+        (self.repo / 'requirements.txt').write_text('pytest\n')
+        text = self.workflow_text(self.ci()[0])
+        self.assertIn('cache: pip', text)
+        self.assertIn("cache-dependency-path: 'requirements.txt'", text)
+        self.store('lint=["npm","run","lint"]')
+        (self.repo / 'package-lock.json').write_text('{}')
+        text = self.workflow_text(self.ci()[0])
+        self.assertIn('actions/setup-node', text)
+        self.assertIn('cache: npm', text)
+        self.assertIn("run: 'npm ci'", text)
+        self.assertNotIn('setup-python', text)
+        self.store('lint=["make","lint"]')
+        text = self.workflow_text(self.ci()[0])
+        self.assertNotIn('actions/setup-', text)
+        self.assertNotIn('cache', text)
+
+    def test_refuses_without_a_stored_list(self):
+        code, out, err = self.cli('ci', 'preview', '--root', str(self.repo))
+        self.assertEqual(code, 1)
+        self.assertIn('no stored checks', err)
+        self.assertFalse((self.repo / '.github').exists())
+
+    def test_refuses_names_and_paths_outside_the_workflows_folder(self):
+        self.store('lint=["make","lint"]')
+        for path in ('.github/workflows/Bad.yml', '.github/workflows/x.yaml', '../x.yml', '.github/x.yml',
+                     '.github/workflows/sub/x.yml', '.github/workflows/-x.yml', str(self.repo / 'x.yml'),
+                     '.github/workflows/../workflows/x.yml', '.github/workflows/' + 'a' * 42 + '.yml'):
+            with self.subTest(path=path):
+                code, out, _ = self.cli('ci', 'preview', '--root', str(self.repo), '--path', path)
+                self.assertEqual(code, 1)
+                self.assertNotIn('Digest', out)
+        out, _ = self.ci('--path', '.github/workflows/cheap-ci.yml')
+        self.assertIn('Target: .github/workflows/cheap-ci.yml', out)
+
+    def test_symlink_components_are_refused(self):
+        self.store('lint=["make","lint"]')
+        elsewhere = self.home / 'elsewhere'
+        (elsewhere / 'workflows').mkdir(parents=True)
+        (self.repo / '.github').symlink_to(elsewhere)
+        self.assertEqual(self.cli('ci', 'preview', '--root', str(self.repo))[0], 1)
+        (self.repo / '.github').unlink()
+        (self.repo / '.github').mkdir()
+        (self.repo / '.github/workflows').symlink_to(elsewhere / 'workflows')
+        self.assertEqual(self.cli('ci', 'preview', '--root', str(self.repo))[0], 1)
+        (self.repo / '.github/workflows').unlink()
+        (self.repo / '.github/workflows').mkdir()
+        self.target.symlink_to(elsewhere / 'target.yml')
+        self.assertEqual(self.cli('ci', 'preview', '--root', str(self.repo))[0], 1)
+        self.assertEqual(list((elsewhere / 'workflows').iterdir()), [])
+        self.assertFalse((elsewhere / 'target.yml').exists())
+
+    def test_folders_replaced_by_a_symlink_after_the_preview_are_refused(self):
+        self.store('lint=["make","lint"]')
+        _, digest = self.ci()
+        elsewhere = self.home / 'elsewhere'
+        (elsewhere / 'workflows').mkdir(parents=True)
+        (self.repo / '.github').symlink_to(elsewhere)
+        self.assertEqual(self.apply_ci(digest)[0], 1)
+        self.assertEqual(list((elsewhere / 'workflows').iterdir()), [])
+
+    def test_an_existing_file_needs_replace_and_is_backed_up(self):
+        self.store('lint=["make","lint"]')
+        self.target.parent.mkdir(parents=True)
+        self.target.write_text('name: mine\n')
+        other = self.target.parent / 'ci.yml'
+        other.write_text('name: other\n')
+        out, digest = self.ci()
+        self.assertIn('a different file', out)
+        code, _, err = self.apply_ci(digest)
+        self.assertEqual(code, 1)
+        self.assertIn('--replace-existing', err)
+        self.assertEqual(self.target.read_text(), 'name: mine\n')
+        code, _, err = self.apply_ci(digest, '--replace-existing')
+        self.assertEqual(code, 0, err)
+        self.assertIn("run: 'make lint'", self.target.read_text())
+        backups = list((self.host.parent / 'state/checks-ci/backups').iterdir())
+        self.assertEqual([b.read_text() for b in backups], ['name: mine\n'])
+        self.assertEqual(stat.S_IMODE(backups[0].stat().st_mode), 0o600)
+        self.assertEqual(other.read_text(), 'name: other\n')
+        self.assertEqual(sorted(p.name for p in self.target.parent.iterdir()), ['ci.yml', 'fnl-checks.yml'])
+
+    def test_a_file_changed_or_created_after_the_preview_is_left_alone(self):
+        self.store('lint=["make","lint"]')
+        _, digest = self.ci()
+        self.target.parent.mkdir(parents=True)
+        self.target.write_text('name: racing\n')
+        code, _, err = self.apply_ci(digest, '--replace-existing')
+        self.assertEqual(code, 1)
+        self.assertEqual(self.target.read_text(), 'name: racing\n')
+        _, digest = self.ci()
+        self.target.write_text('name: later\n')
+        self.assertEqual(self.apply_ci(digest, '--replace-existing')[0], 1)
+        self.assertEqual(self.target.read_text(), 'name: later\n')
+        self.assertEqual([p.name for p in self.target.parent.iterdir()], ['fnl-checks.yml'])
+
+    def test_a_file_appearing_at_publish_is_not_clobbered(self):
+        self.store('lint=["make","lint"]')
+        _, digest = self.ci()
+        writer = self.module()
+        real = writer.read_existing
+
+        def racing(fd, name):
+            found = real(fd, name)
+            Path(self.target).write_text('name: racing\n')
+            return found
+
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(writer, 'read_existing', racing), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = writer.main(['ci', 'apply', '--yes', '--digest', digest])
+        self.assertEqual(code, 1)
+        self.assertIn('appeared', err.getvalue())
+        self.assertEqual(self.target.read_text(), 'name: racing\n')
+        self.assertEqual([p.name for p in self.target.parent.iterdir()], ['fnl-checks.yml'])
+
+    def test_a_dependency_file_voids_the_preview_only_when_the_workflow_would_differ(self):
+        self.store('unit=["python3","-m","unittest","discover","-s","tests"]')
+        (self.repo / 'requirements.txt').write_text('first==1\n')
+        out, digest = self.ci()
+        (self.repo / 'requirements.txt').write_text('second==2\n')  # contents are not part of the workflow
+        code, _, err = self.apply_ci(digest)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.target.read_text(), self.workflow_text(out))
+        self.target.unlink()
+        _, digest = self.ci()
+        (self.repo / 'requirements.txt').unlink()  # the install step would disappear
+        self.assertEqual(self.apply_ci(digest)[0], 1)
+        self.assertFalse(self.target.exists())
+
+    def test_a_list_changed_after_the_preview_is_refused(self):
+        self.store('lint=["make","lint"]')
+        _, digest = self.ci()
+        self.store('test=["make","test"]')
+        self.assertEqual(self.apply_ci(digest)[0], 1)
+        self.assertFalse(self.target.exists())
+
+    def test_apply_needs_yes_and_a_matching_digest(self):
+        self.store('lint=["make","lint"]')
+        _, digest = self.ci()
+        self.assertEqual(self.cli('ci', 'apply', '--digest', digest)[0], 1)
+        self.assertEqual(self.apply_ci('0' * 12)[0], 1)
+        with mock.patch('time.time', return_value=time.time() + 3601):
+            self.assertEqual(self.apply_ci(digest)[0], 1)
+        self.assertFalse(self.target.exists())
+
+    def test_expressions_and_unprintable_lines_are_refused(self):
+        code_ = self.code()
+        for argv in (['make', '${{ secrets.TOKEN }}'], ['make', 'a‮b']):
+            with self.subTest(argv=argv):
+                self.host.write_text('## Checks\n\n- %s: lint = %s\n' % (code_, json.dumps(argv, separators=(',', ':'))))
+                code, out, _ = self.cli('ci', 'preview', '--root', str(self.repo))
+                self.assertEqual(code, 1)
+                self.assertNotIn('Digest', out)
+
+    def test_a_bad_branch_is_refused(self):
+        self.store('lint=["make","lint"]')
+        out, _ = self.ci('--branch', 'trunk')
+        self.assertIn("branches: ['trunk']", out)
+        for branch in ("a'b", 'a..b', '-x', 'a b', ''):
+            with self.subTest(branch=branch):
+                self.assertEqual(self.cli('ci', 'preview', '--root', str(self.repo), '--branch', branch)[0], 1)
+
+
 if __name__ == '__main__':
     unittest.main()
