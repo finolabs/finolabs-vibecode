@@ -1187,6 +1187,72 @@ class IdentityTest(unittest.TestCase):
                 self.assertEqual(self.codes(linked), {self.own(linked)})
                 self.assertEqual(self.checks.layout(linked)[0], linked)
 
+    def test_unsafe_metadata_modes_fall_back_to_the_own_root(self):
+        linked = self.link('linked', self.main / '.git/worktrees/linked')
+        self.assertEqual(self.codes(linked), {self.own(self.main)})
+        for path, mode in ((linked / '.git', 0o666), (self.main / '.git/worktrees/linked/commondir', 0o666),
+                           (self.main / '.git/worktrees/linked/gitdir', 0o646),
+                           (self.main / '.git/worktrees/linked', 0o777), (self.main / '.git/worktrees', 0o775)):
+            with self.subTest(path=path.name, mode=oct(mode)):
+                before = stat.S_IMODE(path.stat().st_mode)
+                os.chmod(path, mode)
+                try:
+                    self.assertEqual(self.codes(linked), {self.own(linked)})
+                    self.assertEqual(self.checks.layout(linked), (linked, linked / '.git'))
+                finally:
+                    os.chmod(path, before)
+        self.assertEqual(self.codes(linked), {self.own(self.main)})
+
+
+class ForeignCommonTest(unittest.TestCase):
+    """A reciprocal pair under a common folder that is not named .git borrows nothing (security finding 1)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        base = Path(self.tmp.name).resolve()
+        self.home = account(self, base / 'home')
+        self.data = self.home / '.finolabs/vibecode'
+        self.data.mkdir(parents=True)
+        (self.data / 'host.md').write_text('# Host\n\n## Project progress\n\n- Project progress: on\n')
+        self.addCleanup(mock.patch.stopall)
+        mock.patch.dict(os.environ, {'FNL_PROGRESS': '', 'FNL_METRICS': ''}).start()
+        self.pp = module('project_progress_foreign', ROOT / 'scripts/project_progress.py')
+        self.slots = module('parallel_slots_foreign', ROOT / 'scripts/parallel_slots.py')
+        self.checks = module('checks_list_foreign', ROOT / 'scripts/checks_list.py')
+        self.a, self.b = base / 'A', base / 'B'
+        meta = self.a / 'worktrees/x'
+        meta.mkdir(parents=True)
+        self.b.mkdir()
+        (meta / 'commondir').write_text('../..\n')
+        (meta / 'gitdir').write_text(str(self.b / '.git') + '\n')
+        (self.b / '.git').write_text('gitdir: %s\n' % meta)
+
+    def test_b_keeps_its_own_code_settings_checks_and_exclude(self):
+        import hashlib
+        store = self.pp.store
+        store.write_setting(self.a, 'parallel', '1')
+        store.write_setting(self.a, 'label', 'Owner label')
+        code_a = store.code_of(self.a)
+        raw = self.checks.render_project([['unit', ['make', 'unit']]], True)
+        with store.project_folder(self.a) as folder:
+            self.checks.dr.atomic_write(folder, 'checks.json', raw)
+        self.checks.write_approved(code_a, hashlib.sha256(raw).hexdigest())
+        self.assertEqual(self.checks.checks_for(code_a, self.a)[1], None)
+        code_b = hashlib.sha256(str(self.b).encode('utf-8')).hexdigest()[:8]
+        self.assertEqual({self.pp.repository_code(self.b), self.slots.repository_code(self.b),
+                          self.checks.code_of(self.checks.layout(self.b)[0])}, {code_b})
+        self.assertEqual(store.read_settings(self.b), {})
+        self.assertIsNone(self.pp.project_label(self.b))
+        self.assertEqual(self.slots.parse_config('', self.b)['limit'], 3)
+        self.assertEqual(self.checks.checks_for(code_b, self.b), ([], 'no entry'))
+        self.assertEqual(self.checks.checks_for(code_a, self.b), ([], 'invalid code'))
+        self.assertFalse(self.checks.receipt_mode(code_b, self.b))
+        self.assertFalse(self.checks.receipt_mode(code_a, self.b))
+        self.assertFalse(store.ensure_excluded(self.b))
+        self.assertFalse((self.a / 'info').exists())
+        self.assertFalse((self.b / '.finolabs').exists())
+
 
 if __name__ == '__main__':
     unittest.main()

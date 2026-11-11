@@ -2,8 +2,9 @@
 """Validated repository identity and the project-scoped settings file, without running git.
 
 User scope is the data root; project scope is the same relative path (`PROJECT_FOLDERS`) inside the main checkout.
-A linked worktree shares its main checkout's identity and folder only when its metadata is reciprocal, as `git_metadata.git_dirs` requires; anything
-else resolves to the checkout's own root. `settings.json` there counts only while its exact bytes match the SHA-256
+A linked worktree shares its main checkout's identity and folder only in the canonical, reciprocal, owner- and
+mode-checked layout `<main>/.git/worktrees/<name>` that `git_metadata.git_dirs` requires; anything else resolves to
+the checkout's own root. `settings.json` there counts only while its exact bytes match the SHA-256
 approved in the private state folder, so a branch cannot raise `parallel` or redirect `tasks`. An invalid,
 unapproved or unreadable file reads as unset and is never repaired on read. Makes no network call and runs nothing.
 """
@@ -55,48 +56,70 @@ def open_dir(path):
         os.close(fd)
 
 
-def read_metadata(path, name):
-    """One stripped line of a small regular file this account owns, opened with no-follow descent."""
-    with open_dir(path) as folder:
-        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=folder)
-        try:
-            info = os.fstat(fd)
-            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_size > METADATA_LIMIT:
-                raise ValueError('invalid repository metadata')
-            data = os.read(fd, METADATA_LIMIT + 1)
-        finally:
+@contextmanager
+def _guarded(path, *, directory=False):
+    """`git_metadata.opened`: walk from / with no-follow descriptors; every folder owned by root or this account and
+    not group- or world-writable (a root-owned sticky ancestor excepted), the leaf owned by this account."""
+    path = Path(os.path.abspath(path))
+    fd = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for index, part in enumerate(path.parts[1:]):
+            last = index == len(path.parts) - 2
+            is_dir = not last or directory
+            flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | (os.O_DIRECTORY if is_dir else 0)
+            child = os.open(part, flags, dir_fd=fd)
             os.close(fd)
+            fd = child
+            info = os.fstat(fd)
+            owners = {os.getuid()} if last else {0, os.getuid()}
+            sticky = not last and info.st_uid == 0 and info.st_mode & stat.S_ISVTX
+            if (info.st_uid not in owners or (info.st_mode & 0o022 and not sticky)
+                    or not (stat.S_ISDIR(info.st_mode) if is_dir else stat.S_ISREG(info.st_mode))):
+                raise ValueError('unsafe git metadata')
+        yield fd
+    finally:
+        os.close(fd)
+
+
+def _guarded_line(path):
+    """One stripped line of a small metadata file opened through `_guarded`."""
+    with _guarded(path) as fd:
+        if os.fstat(fd).st_size > METADATA_LIMIT:
+            raise ValueError('invalid repository metadata')
+        data = os.read(fd, METADATA_LIMIT + 1)
     if len(data) > METADATA_LIMIT:
         raise ValueError('invalid repository metadata')
     return data.decode('utf-8').strip()
 
 
 def layout(root):
-    """(main checkout root, git common folder) of a repository root.
+    """(main checkout root, git common folder) of a repository root, the rules of `git_metadata.git_dirs`.
 
-    A `.git` file counts as a linked worktree only when it is reciprocal: its gitdir is `<common>/worktrees/<name>`
-    outside this checkout, that folder's `commondir` resolves to `<common>`, and its `gitdir` points back to this
-    checkout's `.git`. Anything else is the checkout's own root, so it cannot borrow another repository's identity.
+    A `.git` file counts as a linked worktree only in the canonical layout `<main>/.git/worktrees/<name>`: that
+    folder lies outside this checkout, its `commondir` resolves to `<main>/.git`, and its `gitdir` points back to this
+    checkout's `.git`. Every file and folder on the way is owner- and mode-checked. Anything else is the checkout's own
+    root, so it cannot borrow another repository's identity, settings, checks or exclude file.
     """
     root = Path(os.path.abspath(root))
     own = (root, root / '.git')
     try:
-        line = read_metadata(root, '.git')
+        line = _guarded_line(root / '.git')
         if not line.startswith('gitdir:'):
             return own
         gitdir = Path(os.path.abspath(root / line[len('gitdir:'):].strip()))
         common = gitdir.parent.parent
-        if gitdir.parent.name != 'worktrees' or not gitdir.name or gitdir.is_relative_to(root):
+        if (gitdir.parent.name != 'worktrees' or common.name != '.git' or not gitdir.name
+                or gitdir.is_relative_to(root)):
             return own
-        relative = read_metadata(gitdir, 'commondir')
+        relative = _guarded_line(gitdir / 'commondir')
         if not relative or Path(os.path.abspath(gitdir / relative)) != common:
             return own
-        back = read_metadata(gitdir, 'gitdir')
+        back = _guarded_line(gitdir / 'gitdir')
         if not back or Path(os.path.abspath(gitdir / back)) != root / '.git':
             return own
-        with open_dir(common):
+        with _guarded(gitdir, directory=True), _guarded(common, directory=True):
             pass
-        return (common.parent if common.name == '.git' else common), common
+        return common.parent, common
     except (OSError, ValueError, UnicodeError):
         return own
 
@@ -285,13 +308,16 @@ def write_setting(root, key, value):
 
 
 def ensure_excluded(root):
-    """Add `.finolabs/` to the git common folder's info/exclude when missing, never to a tracked .gitignore.
+    """Add `.finolabs/` to `<main>/.git/info/exclude` of the validated layout when missing, never to a tracked
+    .gitignore and never under any other folder.
 
     True when the line is present afterwards; False when it could not be added (a link, an unsafe file, no folder).
     """
     try:
-        _, common = layout(root)
-        with open_dir(common) as git:
+        main, common = layout(root)
+        if common != main / '.git':
+            return False
+        with _guarded(common, directory=True) as git:
             try:
                 os.mkdir('info', 0o755, dir_fd=git)
             except FileExistsError:
