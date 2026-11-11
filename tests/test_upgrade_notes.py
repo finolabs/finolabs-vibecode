@@ -78,14 +78,19 @@ class NotesSchemaTest(unittest.TestCase):
         self.assertIn('0.2.4/codex-hook-trust', ids)
         rename = next(item for item in parsed[0]['items'] if item['id'] == '0.2.4/checks-rename')
         self.assertEqual(rename['until'], '0.3.0')
-        self.assertEqual([item['kind'] for item in parsed[1]['items']], ['setup', 'setup', 'setup', 'setup'])
+        self.assertEqual([item['kind'] for item in parsed[1]['items']], ['setup', 'setup', 'setup', 'setup', 'rename'])
         store = parsed[1]['items'][0]
         self.assertEqual(store['id'], '0.2.5/checks-store')
         self.assertEqual(store['setup'], '/setup add checks')
         for phrase in ('0.2.4', 'no longer read', 'each repository', '## Checks', 'host.md', 'by hand'):
             self.assertIn(phrase, store['text'])
         # Parallel limits and caps are set again before the old section is deleted.
-        parallel, settings, labels = parsed[1]['items'][1:]
+        parallel, settings, labels, names = parsed[1]['items'][1:]
+        # Skills lost the fnl- prefix; the old names keep working as aliases.
+        self.assertEqual(names['id'], '0.2.5/skill-names')
+        self.assertNotIn('setup', names)
+        for phrase in ('fnl- prefix', 'still work when typed', 'aliases'):
+            self.assertIn(phrase, names['text'])
         self.assertEqual((parallel['id'], parallel['setup']), ('0.2.5/parallel-settings', '/setup add delegation'))
         for phrase in ('no longer read', 'host.md', 'each repository', 'parallel', 'caps', 'before', '## Project settings'):
             self.assertIn(phrase, parallel['text'])
