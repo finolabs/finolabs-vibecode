@@ -125,6 +125,14 @@ SessionStart reads only the starting session's fresh snapshot and prints percent
 
 `statusline_setup.py` changes settings only after an approved full preview digest and explicit yes. It keeps a private preview in `<data root>/state/statusline/preview.json`, containing target settings paths, original file hashes/modes, backup names, the proposed status-line command, removal choice, data-root path and creation time. Apply accepts it only within 60 minutes and removes it after success; an expired preview remains until replaced or manually deleted. Adjacent `settings.json.bak-YYYYMMDD[-N]` backups contain the previous settings and remain until the user deletes them; backups and every settings file the writer rewrites end up with mode 0600. An existing status line gets only a printed recipe, with no new plan or settings write. Removal only deletes the exact configured recorder command. The preview and settings backups are local configuration artifacts, never events or receipts, and are not removed by metrics purge. Installed-host delivery and composition with an existing status line remain unverified.
 
+## Repository checks
+
+`/fnl-setup add checks` stores a repository's check list, as argument arrays you approved, under `## Checks` in canonical `<data root>/host.md`. Running the checks runs the repository's own code on your machine; the plugin sends nothing anywhere.
+
+The opt-in local receipt is `<data root>/state/checks-receipts/<repository code>.json`, mode 0600 in a 0700 folder. It holds the repository code, the head, the digest of the check list and the time, and no command text or output. An empty `<repository code>.lock` beside it allows one full run at a time. `checks_setup.py receipt off` stops new receipts.
+
+`checks.py usage` reads a file you produced and makes no network call. The optional workflow writer creates one file in your repository and never commits or pushes it; a workflow you commit runs your repository's code on your CI provider, under that provider's policy. When it replaces a workflow, the old file is kept in `<data root>/state/checks-ci/backups/`.
+
 ## What the plugin stores on your machine
 
 - With the auto gate enabled, `<data root>/state/auto-gate/<key>.json`: a repository key in the filename (the first 12 hex characters of SHA-256 of the normalized repository root), `decision` (`handoff` or `keep`) with `decided`, and optionally `denied`, both ISO timestamps. Before a decision, the file can contain only `denied`. The script stores no path, task label or session id and sends nothing over the network. This local-only state is independent of usage metrics. The account home comes from the operating system, never `HOME`, `FNL_STATE_DIR` or `XDG_STATE_HOME`. The hook uses an 8-hour window; stale state can be replaced on the next write, not automatically purged. Turning the gate off leaves existing files unchanged; delete them to clear the state.
