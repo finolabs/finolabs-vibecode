@@ -2,11 +2,10 @@
 """Read a repository's check list, its local-receipt mode and the local checks receipts.
 
 The list lives in the main checkout's project data folder (`PROJECT_FOLDERS`), in `checks.json`, and counts only while its exact bytes match
-the digest approved in the private state folder; without that file the legacy `## Checks` section of the canonical
-host config is read (through 0.2.x). Shared, read-mostly: `checks_setup.py` writes the file and its approval,
-`checks.py` writes a receipt, `merge_check.py` reads both. A check is a short name and a JSON argument array, never a
-shell string. An invalid file or section counts as unset and is never repaired here. Runs no command and makes no
-network call.
+the digest approved in the private state folder; nothing else is read, and the host config is never consulted.
+Shared, read-mostly: `checks_setup.py` writes the file and its approval, `checks.py` writes a receipt,
+`merge_check.py` reads both. A check is a short name and a JSON argument array, never a shell string. An invalid file
+counts as unset and is never repaired here. Runs no command and makes no network call.
 """
 from contextlib import contextmanager
 import hashlib
@@ -23,13 +22,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
 import project_progress as pp
 
-CAP = 262144
-HEADING = '## Checks'
-NAME = re.compile(r'[a-z0-9][a-z0-9-]{0,31}')
+NAME =re.compile(r'[a-z0-9][a-z0-9-]{0,31}')
 CODE = re.compile(r'[0-9a-f]{8}')
 HEAD = re.compile(r'[0-9a-f]{40}|[0-9a-f]{64}')
 DIGEST = re.compile(r'[0-9a-f]{64}')
-LINE = re.compile(r'- ([0-9a-f]{8}): ([a-z0-9][a-z0-9-]{0,31}) = (.+)')
 RECEIPT_MODE = 'local-receipt'  # reserved: never a check name
 MAX_CHECKS = 20
 MAX_ARGV = 1024
@@ -129,89 +125,6 @@ def document_path(path):
 def document_only(paths):
     """True when there is at least one changed path and every one is a document; no paths is never document-only."""
     return bool(paths) and all(document_path(path) for path in paths)
-
-
-# The section
-
-def split(text):
-    """Return (headings as (offset, line), fenced) for the level-one and level-two headings outside code fences."""
-    headings, fence, offset = [], None, 0
-    for line in text.splitlines(keepends=True):
-        match = re.match(r"^\s*(`{3,}|~{3,})", line)
-        if match:
-            token = match[1]
-            if fence is None:
-                fence = token
-            elif token[0] == fence[0] and len(token) >= len(fence) and line.strip() == token:
-                fence = None  # a line with an info string after the run does not close a fence
-        elif fence is None and re.match(r"^#{1,2} ", line):
-            headings.append((offset, line.strip()))
-        offset += len(line)
-    return headings, fence
-
-
-def section_span(text):
-    """(start, end) of the one real section, None when absent; ambiguity raises."""
-    headings, fence = split(text)
-    indexes = [i for i, (_, title) in enumerate(headings) if title == HEADING]
-    if fence is not None or len(indexes) > 1:
-        raise ValueError('ambiguous section')
-    if not indexes:
-        return None
-    index = indexes[0]
-    return headings[index][0], headings[index + 1][0] if index + 1 < len(headings) else len(text)
-
-
-def parse_section(text):
-    """None when absent, else ({code: [[name, argv], ...]}, {codes with the local-receipt mode on}); any bad line raises."""
-    span = section_span(text)
-    if span is None:
-        return None
-    entries, receipts = {}, set()
-    for line in text[span[0]:span[1]].splitlines()[1:]:
-        if not line.strip():
-            continue
-        match = LINE.fullmatch(line)
-        if not match:
-            raise ValueError('unknown line')
-        if match[2] == RECEIPT_MODE:
-            if match[3] != 'on' or match[1] in receipts:
-                raise ValueError('mode line')
-            receipts.add(match[1])
-            continue
-        argv = json.loads(match[3])
-        if check_argv(argv) != match[3]:
-            raise ValueError('argument form')
-        checks = entries.setdefault(match[1], [])
-        if any(name == match[2] for name, _ in checks) or len(checks) >= MAX_CHECKS:
-            raise ValueError('duplicate or too many checks')
-        checks.append([match[2], argv])
-    if receipts - set(entries):
-        raise ValueError('mode without checks')
-    return entries, receipts
-
-
-def parse(text):
-    """Return None when absent, else {code: [[name, argv], ...]} in stored order; any bad line raises."""
-    parsed = parse_section(text)
-    return None if parsed is None else parsed[0]
-
-
-def read_section():
-    """(entries, receipts, None) or (None, None, reason): absent, unreadable or invalid."""
-    try:
-        text = dr.read_data('host.md', CAP).decode('utf-8')
-    except FileNotFoundError:
-        return None, None, 'absent'
-    except (OSError, ValueError, UnicodeError):
-        return None, None, 'unreadable'
-    try:
-        parsed = parse_section(text)
-    except (ValueError, TypeError, RecursionError):
-        return None, None, 'invalid'
-    if parsed is None:
-        return None, None, 'absent'
-    return parsed[0], parsed[1], None
 
 
 # The project file: checks.json in the main checkout's project data folder, bound to an approved digest in user scope
@@ -323,10 +236,6 @@ def render_project(checks, receipt):
     return (json.dumps(data, indent=2, ensure_ascii=True) + '\n').encode()
 
 
-# An approval record that names no file: the list was removed while a legacy entry could not be cleaned up.
-REMOVED = '0' * 64
-
-
 def read_approved(code):
     """The approved SHA-256 of this repository's project file; FileNotFoundError when none, ValueError when invalid."""
     if not isinstance(code, str) or not CODE.fullmatch(code):
@@ -348,17 +257,6 @@ def write_approved(code, sha256):
         dr.atomic_write(folder, code + '.json', json.dumps(record, sort_keys=True).encode())
 
 
-def has_approval(code):
-    """True when any approval record exists for this repository, or one that cannot be read (deny on doubt)."""
-    try:
-        read_approved(code)
-    except FileNotFoundError:
-        return False
-    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
-        return True
-    return True
-
-
 def remove_approved(code):
     """Remove this repository's approved digest, if any; a missing record or folder is fine."""
     if not isinstance(code, str) or not CODE.fullmatch(code):
@@ -375,10 +273,7 @@ def remove_approved(code):
 
 
 def read_project(code, root):
-    """None when this repository never moved off the legacy section; else (checks, receipt, reason).
-
-    Once an approval record exists the project file alone decides: a file that disappeared reads as unset and never
-    revives the legacy entry it replaced.
+    """(checks, receipt, reason): no file reads as 'no entry'.
 
     A file whose bytes do not match the approved digest, or with none, reads as unset with CHANGED: this is what stops
     a committed or branch-supplied file from choosing commands. Never repaired here.
@@ -389,13 +284,7 @@ def read_project(code, root):
     try:
         raw = read_project_bytes(main)
     except FileNotFoundError:
-        try:
-            recorded = read_approved(code)
-        except FileNotFoundError:
-            return None
-        except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
-            return [], False, 'unreadable'
-        return [], False, 'no entry' if recorded == REMOVED else CHANGED
+        return [], False, 'no entry'
     except (OSError, ValueError):
         return [], False, 'unreadable'
     try:
@@ -411,39 +300,24 @@ def read_project(code, root):
     return checks, receipt, None
 
 
-def checks_for(repository_code, root=None):
-    """Ordered (name, argv) pairs and None, or an empty list and a reason: absent, invalid, unreadable, no entry or
-    CHANGED.
+def checks_for(repository_code, root):
+    """Ordered (name, argv) pairs and None, or an empty list and a reason: no entry, invalid, unreadable or CHANGED.
 
-    `root` is the repository root of the caller's checkout; with it the project file is read first, and the legacy
-    section only when there is no project file. An invalid file or section counts as unset and is never repaired.
+    `root` is the repository root of the caller's checkout. An invalid file counts as unset and is never repaired.
     """
     if not isinstance(repository_code, str) or not CODE.fullmatch(repository_code):
         return [], 'invalid code'
-    if root is not None:
-        found = read_project(repository_code, root)
-        if found is not None:
-            checks, _, reason = found
-            return ([], reason) if reason else ([(name, argv) for name, argv in checks], None)
-    entries, _, reason = read_section()
-    if reason:
-        return [], reason
-    if repository_code not in entries:
-        return [], 'no entry'
-    return [(name, argv) for name, argv in entries[repository_code]], None
+    checks, _, reason = read_project(repository_code, root)
+    return ([], reason) if reason else ([(name, argv) for name, argv in checks], None)
 
 
-def receipt_mode(repository_code, root=None):
-    """True only when a valid, approved file (or, without one, a valid legacy section) turns the local-receipt mode on
-    for this repository; every doubt is off."""
+def receipt_mode(repository_code, root):
+    """True only when a valid, approved file turns the local-receipt mode on for this repository; every doubt is
+    off."""
     if not isinstance(repository_code, str) or not CODE.fullmatch(repository_code):
         return False
-    if root is not None:
-        found = read_project(repository_code, root)
-        if found is not None:
-            return found[2] is None and found[1] is True
-    _, receipts, reason = read_section()
-    return reason is None and repository_code in receipts
+    _, receipt, reason = read_project(repository_code, root)
+    return reason is None and receipt is True
 
 
 # The local receipt
@@ -489,7 +363,7 @@ def read_receipt(code):
     return validate_receipt(record)
 
 
-def receipt_status(code, head, root=None):
+def receipt_status(code, head, root):
     """None when the mode is off for this repository; else (matched, reason) for the pull request head."""
     if not receipt_mode(code, root=root):
         return None

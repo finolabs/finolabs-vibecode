@@ -97,6 +97,10 @@ class ChecksRunTest(unittest.TestCase):
         return [sys.executable, 'mark.py', str(self.marks), name, str(exit_code)]
 
     def store(self, *checks, receipt=False):
+        self.store_file(*checks, receipt=receipt)
+
+    def legacy(self, *checks, receipt=False):
+        """A `## Checks` section as 0.2.4 wrote it in host.md; it is never read."""
         code = self.code()
         lines = ''.join('- %s: %s = %s\n' % (code, name, json.dumps(argv, separators=(',', ':')))
                         for name, argv in checks)
@@ -155,10 +159,30 @@ class ChecksRunTest(unittest.TestCase):
         self.assertEqual(self.launched(), [])
 
     def test_an_invalid_stored_list_runs_nothing(self):
-        self.host.write_text('# Host\n\n## Checks\n\n- %s: test = ["sh","-c","x"]\n' % self.code())
+        import hashlib
+        self.store_file(('test', ['make', 'test']))
+        raw = json.dumps({'version': 1, 'checks': [{'name': 'test', 'argv': ['sh', '-c', 'x']}],
+                          'local_receipt': False}).encode()
+        (self.repo / '.finolabs/vibecode/checks.json').write_bytes(raw)
+        load('checks_list_invalid', SCRIPTS / 'checks_list.py').write_approved(self.code(),
+                                                                              hashlib.sha256(raw).hexdigest())
         code, _, _ = self.run_cli(self.module(), 'run')
         self.assertEqual(code, 3)
         self.assertEqual(self.launched(), [])
+
+    def test_a_legacy_section_in_host_md_runs_nothing(self):
+        for receipt in (False, True):
+            with self.subTest(receipt=receipt):
+                self.legacy(('a', self.mark('a')), receipt=receipt)
+                module = self.module()
+                code, out, err = self.run_cli(module, 'run')
+                self.assertEqual(code, 2)
+                self.assertIn('no checks (no entry)', out + err)
+                self.assertEqual(self.launched(), [])
+                self.assertFalse(self.receipt().exists())
+                code, out, _ = self.run_cli(module, 'show')
+                self.assertEqual(code, 0)
+                self.assertNotIn('local receipt: on', out)
 
     def test_show_prints_the_list_and_the_mode(self):
         self.store(('lint', ['make', 'lint']), receipt=True)
@@ -190,7 +214,7 @@ class ChecksRunTest(unittest.TestCase):
         return raw
 
     def test_run_reads_the_approved_project_file(self):
-        self.store(('legacy', self.mark('legacy')))
+        self.legacy(('legacy', self.mark('legacy')), receipt=True)
         self.store_file(('first', self.mark('first')), ('second', self.mark('second')))
         code, out, err = self.run_cli(self.module(), 'run')
         self.assertEqual(code, 0, err)

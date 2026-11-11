@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Detect, preview and apply one repository's check list and local-receipt mode in its own
-`checks.json` in the main checkout's project data folder with an approved digest in the private state folder, move a
-legacy `## Checks` entry out of the canonical host config (`migrate`), install or remove the optional git pre-push
-hook, and write one cheaper CI workflow file from the stored list (`ci preview|apply`, never committed or pushed);
-make no network call.
+`checks.json` in the main checkout's project data folder with an approved digest in the private state folder, install
+or remove the optional git pre-push hook, and write one cheaper CI workflow file from the stored list
+(`ci preview|apply`, never committed or pushed); never read or write the host config for checks; make no network
+call.
 
 A check is a short name and a JSON argument array, never a shell string. Only this script writes the check file and
 its approval. Detection, the list and the mode run no command; the hook commands run only fixed git queries, with no
@@ -34,12 +34,11 @@ import setup_features as sf
 CAP = sf.CAP
 STATE = 'state/checks-setup'
 HOOK_STATE = 'state/checks-hook'
-HEADING = cl.HEADING
 NAME, CODE = cl.NAME, cl.CODE
 MAX_CHECKS, MAX_ARGV = cl.MAX_CHECKS, cl.MAX_ARGV
 PLAN_KEYS = {'action', 'code', 'repo', 'main', 'common', 'content', 'previous', 'backup', 'exclude', 'add_exclude',
-             'legacy', 'host', 'host_mode', 'host_backup', 'root', 'created'}
-ACTIONS = ('save', 'mode', 'remove', 'migrate')
+             'root', 'created'}
+ACTIONS = ('save', 'mode', 'remove')
 EXCLUDE_LINE = b'.finolabs/\n'
 EXCLUDE_FORMS = {'.finolabs/', '.finolabs', '/.finolabs/', '/.finolabs', '.finolabs/*', '/.finolabs/*'}
 APPROVAL_NOTICE = ("Apply records the SHA-256 of these exact bytes as approved in your private state folder. A file "
@@ -75,8 +74,6 @@ program_name = cl.program_name
 refused_program = cl.refused_program
 check_argv = cl.check_argv
 check_list = cl.check_list
-section_span = cl.section_span
-parse = cl.parse
 checks_for = cl.checks_for
 
 
@@ -94,69 +91,7 @@ def parse_check(text):
     return [name, argv]
 
 
-def render_line(code, name, argv):
-    return f'- {code}: {name} = {check_argv(argv)}\n'
-
-
-# The section
-
-def render(entries, receipts=()):
-    if not entries:
-        return ''
-    lines = ''
-    for code in sorted(entries):
-        lines += ''.join(render_line(code, name, argv) for name, argv in entries[code])
-        if code in receipts:
-            lines += f'- {code}: {cl.RECEIPT_MODE} = on\n'
-    return f'{HEADING}\n\n{lines}\n'
-
-
-def transform(raw, code, checks, receipt=None):
-    """Replace only this repository's lines; checks None removes them and the mode, and the section when it empties.
-
-    receipt True turns the local-receipt mode on, False turns it off, None keeps it as stored.
-    """
-    text = raw.decode('utf-8') if raw is not None else ''
-    parsed = cl.parse_section(text)
-    entries, receipts = parsed if parsed is not None else ({}, set())
-    if checks is None:
-        if receipt is not None:
-            raise ValueError('mode without checks')
-        entries.pop(code, None)
-        receipts.discard(code)
-    else:
-        check_list(checks)
-        entries[code] = checks
-        if receipt is True:
-            receipts.add(code)
-        elif receipt is False:
-            receipts.discard(code)
-        elif receipt is not None:
-            raise ValueError('mode')
-    newline = '\r\n' if '\r\n' in text else '\n'
-    section = render(entries, receipts).replace('\n', newline)
-    span = section_span(text)
-    if span is not None:
-        result = text[:span[0]] + section + text[span[1]:]
-    elif section:
-        separator = newline * (2 if not text.endswith(newline) else 1) if text and not text.endswith(newline * 2) else ''
-        result = text + separator + section
-    else:
-        result = text
-    encoded = result.encode('utf-8')
-    if len(encoded) > CAP:
-        raise ValueError('host too large')
-    return encoded
-
-
 # Preview, digest, apply
-
-def read_host(folder):
-    raw, mode = cs.read_target(folder, 'host.md')
-    if raw is not None and len(raw) > CAP:
-        raise ValueError('host too large')
-    return raw, mode
-
 
 def repository(root):
     """The repository root of the checkout at `root` (or the current folder)."""
@@ -164,15 +99,6 @@ def repository(root):
     if found is None:
         raise ValueError('no repository')
     return found
-
-
-def legacy_entry(raw, code):
-    """(checks, receipt) of this repository's legacy lines in host.md, None when it has none; an invalid section
-    raises, so the caller decides whether that refuses (migrate) or counts as no entry (a new list)."""
-    parsed = cl.parse_section(raw.decode('utf-8') if raw is not None else '')
-    if parsed is None or code not in parsed[0]:
-        return None
-    return parsed[0][code], code in parsed[1]
 
 
 def current_project(main):
@@ -229,8 +155,8 @@ def write_private(folder, name, raw, mode=0o600):
 
 
 def plan_for(found, action, checks=None, receipt=None):
-    """Build and save the plan for one repository: action save (checks), mode (receipt True or False), remove or
-    migrate; returns (plan, digest, notes) without changing anything outside the private state folder."""
+    """Build and save the plan for one repository: action save (checks), mode (receipt True or False) or remove;
+    returns (plan, digest, mode) without changing anything outside the private state folder."""
     root = dr.consent_root()
     if root is None:
         raise ValueError('invalid data root')
@@ -239,45 +165,20 @@ def plan_for(found, action, checks=None, receipt=None):
     if cl.code_of(main) != code:
         raise ValueError('repository identity')
     previous = current_project(main)
-    with dr.root_folder(create=True) as folder:
-        fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        host, host_mode = read_host(folder)
-        try:
-            legacy = legacy_entry(host, code)
-        except (ValueError, TypeError, RecursionError):
-            if action == 'migrate':
-                raise Said('the legacy Checks section of host.md is invalid; fix it by hand first. Nothing changed.') \
-                    from None
-            legacy = None
-        host_backup = cs.backup_name(folder, 'host.md') if legacy is not None else None
-    if action == 'migrate':
-        if legacy is None:
-            return None, None, ['host.md has no legacy checks for this repository; nothing to migrate.']
-        if previous is not None:
-            return None, None, ['Skipped: the project check file already exists and wins on read; '
-                                'its legacy lines in host.md stay. Nothing changed.']
-        if cl.has_approval(code):
-            return None, None, ['Skipped: this repository already moved off host.md, so its legacy lines are ignored. '
-                                'Save a list with /fnl-setup add checks. Nothing changed.']
-        checks, mode = legacy
-    elif action == 'mode':
-        if previous is not None:
-            found_checks, _, reason = cl.read_project(code, found)
-            if reason:
-                raise Said(f'the project check file is unset ({reason}); save a list first')
-            checks = [list(item) for item in found_checks]
-        elif legacy is not None and not cl.has_approval(code):
-            checks = legacy[0]
-        else:
+    if action == 'mode':
+        if previous is None:
             raise Said('this repository has no stored checks; save a list first')
+        found_checks, _, reason = cl.read_project(code, found)
+        if reason:
+            raise Said(f'the project check file is unset ({reason}); save a list first')
+        checks = [list(item) for item in found_checks]
         mode = receipt
     elif action == 'save':
         check_list(checks)
+        mode = False
         if previous is not None:
             _, kept, reason = cl.read_project(code, found)
             mode = kept if reason is None else False
-        else:
-            mode = legacy[1] if legacy is not None else False
     else:
         checks = mode = None
     content = None if action == 'remove' else cl.render_project(checks, mode).decode()
@@ -289,8 +190,7 @@ def plan_for(found, action, checks=None, receipt=None):
     plan = {'action': action, 'code': code, 'repo': str(found), 'main': str(main), 'common': str(common),
             'content': content, 'previous': cs.content_hash(previous), 'backup': backup,
             'exclude': None if listed else cs.content_hash(exclude), 'add_exclude': not listed,
-            'legacy': legacy is not None, 'host': cs.content_hash(host), 'host_mode': host_mode,
-            'host_backup': host_backup, 'root': str(root), 'created': time.time()}
+            'root': str(root), 'created': time.time()}
     value = cs.digest(plan)
     with dr.data_folder(STATE, create=True, private=True) as state:
         try:
@@ -303,10 +203,6 @@ def plan_for(found, action, checks=None, receipt=None):
 
 def preview(found, action, checks=None, receipt=None):
     plan, value, mode = plan_for(found, action, checks, receipt)
-    if plan is None:
-        for line in mode:
-            print(line)
-        return
     main, code = Path(plan['main']), plan['code']
     target = main.joinpath(*cl.PROJECT_FOLDERS, cl.PROJECT_FILE)
     print('Target: ' + str(target))
@@ -318,8 +214,6 @@ def preview(found, action, checks=None, receipt=None):
     elif action == 'remove':
         print(f'Remove the check file and the approved digest of repository {code}; backups beside it stay.')
     else:
-        if action == 'migrate':
-            print(f'Move the legacy checks of repository {code} into its own check file.')
         print('Check list for repository ' + code + ' (local receipt ' + ('on' if mode else 'off') + '):')
         print(plan['content'], end='')
         print(PREVIEW_NOTICE)
@@ -330,9 +224,6 @@ def preview(found, action, checks=None, receipt=None):
     if plan['add_exclude']:
         print(f'The repository\'s .git/info/exclude ({Path(plan["common"]) / "info/exclude"}) does not list '
               '.finolabs/; apply adds that one line (never to a tracked .gitignore).')
-    if plan['legacy']:
-        print('Also removes this repository\'s legacy lines from ' + str(Path(plan['root']) / 'host.md')
-              + ', keeping a backup: ' + str(Path(plan['root']) / plan['host_backup']))
     print('Undo: checks_setup.py remove for this repository.')
     print('Digest: ' + value)
     print('Preview expires in 60 minutes; nothing changed.')
@@ -357,9 +248,6 @@ def checked_plan(plan):
         raise ValueError('preview expired; preview again')
     if plan['backup'] is not None and (not isinstance(plan['backup'], str) or not re.fullmatch(
             r'checks\.json\.bak-\d{8}(?:-[1-9][0-9]*)?', plan['backup'])):
-        raise ValueError('invalid backup')
-    if plan['legacy'] and (not isinstance(plan['host_backup'], str)
-                           or not re.fullmatch(r'host\.md\.bak-\d{8}(?:-[1-9][0-9]*)?', plan['host_backup'])):
         raise ValueError('invalid backup')
     found = pp.find_root(plan['repo'])
     if found is None or str(found) != plan['repo'] or pp.repository_code(found) != plan['code']:
@@ -407,45 +295,25 @@ def apply(value, yes):
             raise ValueError('digest mismatch; preview again')
         main, common = checked_plan(plan)
         code = plan['code']
-        with dr.root_folder() as folder:
-            fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            if plan['legacy']:
-                host, host_mode = read_host(folder)
-                if cs.content_hash(host) != plan['host'] or host_mode != plan['host_mode']:
-                    raise Said('host.md changed since the preview; preview again')
-            if plan['add_exclude'] and cs.content_hash(exclude_state(common)[0]) != plan['exclude']:
-                raise Said('.git/info/exclude changed since the preview; preview again')
-            removing = plan['content'] is None
-            if removing:
-                # Recorded first, so an interruption or a failed cleanup below cannot revive the legacy entry.
-                cl.write_approved(code, cl.REMOVED)
-            if removing and plan['previous'] is None:
-                if current_project(main) is not None:
-                    raise Said('the project check file changed since the preview; preview again')
-            else:
-                write_project(plan, main, code)
-            os.unlink('preview.json', dir_fd=state)
-            os.fsync(state)
-            done = 'the check list was removed' if removing else 'the check file was saved'
-            problems = []
-            if plan['legacy']:
-                # The approval record already outranks the legacy entry, so a failure here cannot bring it back.
-                try:
-                    result = transform(host, code, None)
-                    write_private(folder, plan['host_backup'], host, host_mode)
-                    cs.write_target(folder, 'host.md', result, host_mode)
-                except (OSError, ValueError, TypeError, UnicodeError):
-                    problems.append('host.md could not be changed, so its legacy lines for this repository stay '
-                                    'there and are ignored')
-            if plan['add_exclude']:
-                try:
-                    add_exclude(common, plan['exclude'])
-                except (OSError, ValueError, UnicodeError):
-                    problems.append('.git/info/exclude could not be changed; add the line .finolabs/ to it yourself')
-            if problems:
-                raise Said(done + ', but ' + '; '.join(problems))
-            if removing:
-                cl.remove_approved(code)
+        if plan['add_exclude'] and cs.content_hash(exclude_state(common)[0]) != plan['exclude']:
+            raise Said('.git/info/exclude changed since the preview; preview again')
+        removing = plan['content'] is None
+        # Each path refuses a stale preview before it changes anything.
+        if removing and plan['previous'] is None:
+            if current_project(main) is not None:
+                raise Said('the project check file changed since the preview; preview again')
+        else:
+            write_project(plan, main, code)
+        if removing:
+            cl.remove_approved(code)
+        os.unlink('preview.json', dir_fd=state)
+        os.fsync(state)
+        if plan['add_exclude']:
+            try:
+                add_exclude(common, plan['exclude'])
+            except (OSError, ValueError, UnicodeError):
+                raise Said('the check file was saved, but .git/info/exclude could not be changed; add the line '
+                           '.finolabs/ to it yourself') from None
     print('Check file removed; no command was run.' if plan['content'] is None
           else 'Check file saved and approved; no command was run.')
 
@@ -1290,10 +1158,6 @@ def main(argv=None):
         mode = commands.add_parser('receipt')
         mode.add_argument('state', choices=('on', 'off'))
         mode.add_argument('--root')
-        move = commands.add_parser('migrate')
-        move.add_argument('--root')
-        move.add_argument('--yes', action='store_true')
-        move.add_argument('--digest')
         hook = commands.add_parser('hook').add_subparsers(dest='hook', required=True)
         install = hook.add_parser('install')
         install.add_argument('--root')
@@ -1331,14 +1195,6 @@ def main(argv=None):
         if args.action == 'receipt':
             preview(repository(args.root), 'mode', receipt=args.state == 'on')
             return 0
-        if args.action == 'migrate':
-            if args.digest is not None:
-                apply(args.digest, args.yes)
-            elif args.yes:
-                raise ValueError('migrate --yes needs --digest')
-            else:
-                preview(repository(args.root), 'migrate')
-            return 0
         if args.action == 'detect':
             result = detect(args.root)
             if args.json:
@@ -1361,8 +1217,8 @@ def main(argv=None):
         return 1
     except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError,
             subprocess.SubprocessError):
-        print('Checks setup refused: invalid arguments, shell string, unsafe or changed file, invalid check file or '
-              'Checks section, or stale preview; preview again.', file=sys.stderr)
+        print('Checks setup refused: invalid arguments, shell string, unsafe or changed file, invalid check file '
+              'or stale preview; preview again.', file=sys.stderr)
         return 1
 
 

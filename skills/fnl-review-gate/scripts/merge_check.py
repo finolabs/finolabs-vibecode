@@ -24,8 +24,8 @@ Adoption is read through the GitHub contents API pinned to the base commit,
 never from the head; the ordinary check needs no local clone.
 
 When hosted checks are missing or not passing and the current checkout's
-repository has the local-receipt mode on (its approved check file, or the
-legacy `## Checks` of the canonical host config, set only by fnl-setup), a receipt written by fnl-checks' `checks.py
+repository has the local-receipt mode on (in its approved check file, set
+only by fnl-setup), a receipt written by fnl-checks' `checks.py
 run` stands in for them only when its repository code, head and check-list
 digest all match this checkout's repository, the pull request head and the
 current list; the line then reads `checks: local receipt (<head>)`. The receipt
