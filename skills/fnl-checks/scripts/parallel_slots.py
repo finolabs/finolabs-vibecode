@@ -24,6 +24,38 @@ LEDGER_LIMIT = 4 * 1024 * 1024
 DEFAULT_LIMIT = 3
 
 
+INSTRUCTION_FILES = ('CLAUDE.MD', 'CLAUDE.LOCAL.MD', 'AGENTS.MD', 'AGENTS.OVERRIDE.MD', 'GEMINI.MD',
+                     'COPILOT-INSTRUCTIONS.MD', 'CONVENTIONS.MD', '.CURSORRULES', '.WINDSURFRULES', '.CLINERULES')
+
+# Kept for heavy_run and autopilot, which read these names from this module.
+def host_section(text, title="Project progress"):
+    """Return authoritative section bounds, ignoring fenced examples; ambiguity fails closed."""
+    headings, fence, offset = [], None, 0
+    for line in text.splitlines(keepends=True):
+        match = re.match(r'^\s*(`{3,}|~{3,})', line)
+        if match:
+            token = match[1]
+            if fence is None:
+                fence = token
+            elif token[0] == fence[0] and len(token) >= len(fence):
+                fence = None
+        elif fence is None and re.match(r'^#{1,2} ', line):
+            headings.append((offset, offset + len(line), line.strip()))
+        offset += len(line)
+    indexes = [i for i, (_, _, heading) in enumerate(headings) if heading == '## ' + title]
+    if fence is not None or len(indexes) > 1:
+        raise ValueError('ambiguous host')
+    if not indexes:
+        return len(text), len(text), len(text)
+    index = indexes[0]
+    start, body, _ = headings[index]
+    end = headings[index + 1][0] if index + 1 < len(headings) else len(text)
+    return start, body, end
+
+
+LABEL = re.compile(r'[A-Za-z0-9 ._-]{1,40}')
+
+
 # Repository identity and the settings file are project_store's, shared with project_progress.
 def repository_code(root):
     """The validated identity of `project_store`, the same as project_progress's."""
@@ -64,6 +96,26 @@ def find_root(cwd):
         except OSError:
             return None
     return None
+
+
+def read_metadata(root_fd, name):
+    """Read .git/commondir with project_progress's bounded, owned-file rules."""
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=root_fd)
+    try:
+        info = os.fstat(fd)
+        limit = 512 * 1024
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_size > limit:
+            raise ValueError('invalid repository metadata')
+        chunks, size = [], 0
+        while size <= limit:
+            chunk = os.read(fd, min(65536, limit + 1 - size))
+            if not chunk:
+                return b''.join(chunks).decode('utf-8', 'replace')
+            chunks.append(chunk)
+            size += len(chunk)
+        raise ValueError('invalid repository metadata')
+    finally:
+        os.close(fd)
 
 
 def legacy_limits(text):
