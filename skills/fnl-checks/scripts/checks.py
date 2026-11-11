@@ -218,6 +218,12 @@ def write_verification(dispatch, start_head, root):
 
 def run(changed, base, dispatch=None):
     root, code = repository()
+    if dispatch and not changed:
+        # Drop the dispatch's earlier receipt before any early return, so a changed or missing list leaves none.
+        try:
+            remove_verification(dispatch)
+        except (OSError, ValueError):
+            raise Refused('the earlier verification receipt could not be removed; nothing was run') from None
     checks, reason = cl.checks_for(code, root=root)
     if reason == cl.CHANGED:
         print(f'Repository {code}: no checks (the check file {reason}); nothing was run. To use it, {cl.AGAIN}.',

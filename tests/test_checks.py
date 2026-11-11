@@ -678,6 +678,35 @@ class ChecksRunTest(unittest.TestCase):
                 self.assertIn('checks: refused:', err)
         self.assertEqual(self.launched(), [])
 
+    def test_a_changed_list_drops_an_earlier_dispatch_receipt_before_refusing(self):
+        self.store(('a', self.mark('a')))
+        ident = self.dispatch(self.repo)
+        self.assertEqual(self.run_cli(self.module(), 'run', '--dispatch', ident)[0], 0)
+        self.assertTrue(self.verification(ident).exists())
+        listed = self.repo / '.finolabs/vibecode/checks.json'
+        listed.write_bytes(listed.read_bytes() + b' ')
+        code, _, _ = self.run_cli(self.module(), 'run', '--dispatch', ident)
+        self.assertEqual(code, 3)
+        self.assertFalse(self.verification(ident).exists())
+        self.assertNotEqual(self.accept(ident, self.repo).returncode, 0)
+
+    def test_a_receipt_copied_to_another_dispatch_is_refused(self):
+        self.store(('a', self.mark('a')))
+        first, second = self.dispatch(self.repo), self.dispatch(self.repo)
+        self.assertEqual(self.run_cli(self.module(), 'run', '--dispatch', first)[0], 0)
+        self.verification(second).write_bytes(self.verification(first).read_bytes())
+        os.chmod(self.verification(second), 0o600)
+        self.assertNotEqual(self.accept(second, self.repo).returncode, 0)
+        self.assertEqual(self.accept(first, self.repo).returncode, 0)
+
+    def test_a_tracked_edit_after_the_pass_refuses_acceptance(self):
+        self.store(('a', self.mark('a')))
+        ident = self.dispatch(self.repo)
+        self.assertEqual(self.run_cli(self.module(), 'run', '--dispatch', ident)[0], 0)
+        tracked = self.repo / self.git('ls-files').splitlines()[0]
+        tracked.write_text(tracked.read_text() + 'changed\n')
+        self.assertNotEqual(self.accept(ident, self.repo).returncode, 0)
+
     def test_a_dispatch_run_without_an_approved_list_runs_nothing_and_writes_nothing(self):
         ident = self.dispatch(self.repo)
         code, _, _ = self.run_cli(self.module(), 'run', '--dispatch', ident)

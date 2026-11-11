@@ -264,9 +264,12 @@ def finish_locked(args, status):
                      "reason_id": hashlib.sha256(args.reason.encode()).hexdigest()}
         else:
             try:
-                from record import checkout_identity, current_head, read_verification
+                from record import checkout_identity, current_head, git, read_verification
                 receipt = read_verification(args.id)
                 identity = checkout_identity(args.checkout)
+                # The tracked tree must still be what passed: an edit after the run changes nothing in HEAD.
+                if git(args.checkout, "status", "--porcelain", "--untracked-files=no"):
+                    raise ValueError("checkout changed since the receipt")
                 if (starts[args.id].get("checkout_id") != identity or receipt["checkout_id"] != identity
                         or receipt["head"] != current_head(args.checkout)
                         or (args.head is not None and receipt["head"] != args.head)
