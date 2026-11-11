@@ -224,6 +224,7 @@ class ParallelSlotsTest(unittest.TestCase):
         metadata.mkdir(parents=True)
         (metadata / 'commondir').write_text('../..\n')
         (worktree / '.git').write_text('gitdir: ../repository/.git/worktrees/linked\n')
+        (metadata / 'gitdir').write_text(str(worktree / '.git') + '\n')
         nested = worktree / 'nested'
         nested.mkdir()
         for path in (self.repo, self.repo / '.git', worktree, nested, self.repo.parent):

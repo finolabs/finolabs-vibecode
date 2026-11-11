@@ -15,6 +15,7 @@ import sys
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
 import data_root as dr
+import project_store as store
 
 FAMILIES = ('claude', 'codex', 'antigravity')
 AGENTS = {'claude': 'claude', 'claude-session': 'claude', 'subagent': 'claude',
@@ -57,23 +58,8 @@ LABEL = re.compile(r'[A-Za-z0-9 ._-]{1,40}')
 
 
 def repository_code(root):
-    """Use the metrics identity for linked worktrees, without running git."""
-    identity = root
-    try:
-        with open_dir(root) as fd:
-            link = read_metadata(fd, '.git').strip()
-        if len(link) <= 4096 and link.startswith('gitdir:'):
-            gitdir = Path(os.path.abspath(root / link[len('gitdir:'):].strip()))
-            with open_dir(gitdir) as fd:
-                common = read_metadata(fd, 'commondir').strip()
-            if len(common) <= 4096 and common:
-                shared = Path(os.path.abspath(gitdir / common))
-                # Refuse symlinked metadata ancestors just like the project reader.
-                with open_dir(shared):
-                    identity = shared.parent if shared.name == '.git' else shared
-    except (OSError, ValueError):
-        pass
-    return hashlib.sha256(str(identity).encode('utf-8')).hexdigest()[:8]
+    """The validated identity of `project_store`, the same as project_progress's."""
+    return store.repository_code(root)
 
 
 def valid_setting(key, value):

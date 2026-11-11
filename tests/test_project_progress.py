@@ -707,6 +707,7 @@ class ProgressTest(unittest.TestCase):
         linked = main.with_name('linked')
         linked.mkdir()
         (linked / '.git').write_text('gitdir: ' + str(metadata) + '\n')
+        (metadata / 'gitdir').write_text(str(linked / '.git') + '\n')
         expected = hashlib.sha256(str(main).encode()).hexdigest()[:8]
         self.assertEqual(self.pp.repository_code(linked), expected)
         self.pp.set_label(linked, 'Shared project')
@@ -930,6 +931,77 @@ class ProgressTest(unittest.TestCase):
             self.assertEqual(self.pp.notice(channel, '0.1.11-dev'), channel == 'session')
         self.assertTrue((self.data / 'state/notices.json').is_file())
         self.assertEqual(list((self.data / 'state').glob('events*')), [])
+
+
+class IdentityTest(unittest.TestCase):
+    """Validated repository identity: only a reciprocal linked worktree borrows the main checkout's code."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name).resolve()
+        self.main = self.base / 'main'
+        (self.main / '.git').mkdir(parents=True)
+        self.pp = module('project_progress_identity', ROOT / 'scripts/project_progress.py')
+        self.slots = module('parallel_slots_identity', ROOT / 'scripts/parallel_slots.py')
+        self.checks = module('checks_list_identity', ROOT / 'scripts/checks_list.py')
+
+    def own(self, root):
+        import hashlib
+        return hashlib.sha256(str(root).encode('utf-8')).hexdigest()[:8]
+
+    def codes(self, root):
+        return {self.pp.repository_code(root), self.slots.repository_code(root),
+                self.checks.code_of(self.checks.layout(root)[0])}
+
+    def link(self, name, gitdir, commondir='../..', back=None):
+        linked = self.base / name
+        linked.mkdir(exist_ok=True)
+        (linked / '.git').write_text('gitdir: %s\n' % gitdir)
+        gitdir.mkdir(parents=True, exist_ok=True)
+        (gitdir / 'commondir').write_text(commondir + '\n')
+        (gitdir / 'gitdir').write_text(str(back or linked / '.git') + '\n')
+        return linked
+
+    def test_a_real_git_worktree_keeps_the_main_checkouts_code(self):
+        import subprocess
+        shutil.rmtree(self.main / '.git')
+        env = {'HOME': str(self.base), 'PATH': os.defpath + ':/usr/local/bin:/opt/homebrew/bin',
+               'GIT_CONFIG_NOSYSTEM': '1'}
+
+        def git(*argv):
+            subprocess.run(['git', *argv], cwd=self.main, env=env, capture_output=True, check=True)
+        git('init', '-q', '-b', 'main')
+        git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-q',
+            '--allow-empty', '-m', 'Start')
+        git('worktree', 'add', '-q', str(self.base / 'linked'), '-b', 'side')
+        self.assertEqual(self.codes(self.main), {self.own(self.main)})
+        self.assertEqual(self.codes(self.base / 'linked'), {self.own(self.main)})
+        self.assertEqual(self.checks.layout(self.base / 'linked'), (self.main, self.main / '.git'))
+
+    def test_a_reciprocal_layout_without_git_keeps_the_main_code(self):
+        linked = self.link('linked', self.main / '.git/worktrees/linked')
+        self.assertEqual(self.codes(linked), {self.own(self.main)})
+
+    def test_a_mismatched_back_pointer_falls_back_to_the_own_root(self):
+        real = self.link('real', self.main / '.git/worktrees/real')
+        intruder = self.base / 'intruder'
+        intruder.mkdir()
+        (intruder / '.git').write_text('gitdir: %s\n' % (self.main / '.git/worktrees/real'))
+        self.assertEqual(self.codes(real), {self.own(self.main)})
+        self.assertEqual(self.codes(intruder), {self.own(intruder)})
+        self.assertEqual(self.checks.layout(intruder)[0], intruder)
+
+    def test_a_fake_metadata_folder_cannot_borrow_another_repositorys_code(self):
+        for name, gitdir, commondir in (
+                ('borrow', self.base / 'borrow/meta/.git/worktrees/x', str(self.main / '.git')),
+                ('inside', self.base / 'inside/meta/.git/worktrees/x', '../..'),
+                ('flat', self.base / 'flat-meta/worktrees/x', str(self.main / '.git')),
+                ('named', self.base / 'named-meta/x', '..')):
+            with self.subTest(name=name):
+                linked = self.link(name, gitdir, commondir, back=self.base / name / '.git')
+                self.assertEqual(self.codes(linked), {self.own(linked)})
+                self.assertEqual(self.checks.layout(linked)[0], linked)
 
 
 if __name__ == '__main__':

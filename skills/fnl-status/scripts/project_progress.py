@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
+import project_store as store
 
 LIMIT = 512 * 1024
 SECONDS = 1
@@ -66,23 +67,8 @@ LABEL = re.compile(r'[A-Za-z0-9 ._-]{1,40}')
 
 
 def repository_code(root):
-    """Use the metrics identity for linked worktrees, without running git."""
-    identity = root
-    try:
-        with open_dir(root) as fd:
-            link = read_task(fd, '.git').strip()
-        if len(link) <= 4096 and link.startswith('gitdir:'):
-            gitdir = Path(os.path.abspath(root / link[len('gitdir:'):].strip()))
-            with open_dir(gitdir) as fd:
-                common = read_task(fd, 'commondir').strip()
-            if len(common) <= 4096 and common:
-                shared = Path(os.path.abspath(gitdir / common))
-                # Refuse symlinked metadata ancestors just like the project reader.
-                with open_dir(shared):
-                    identity = shared.parent if shared.name == '.git' else shared
-    except (OSError, ValueError):
-        pass
-    return hashlib.sha256(str(identity).encode('utf-8')).hexdigest()[:8]
+    """The validated identity of `project_store`: a reciprocal linked worktree shares its main checkout's code."""
+    return store.repository_code(root)
 
 
 def project_labels(text):

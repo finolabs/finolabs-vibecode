@@ -569,6 +569,32 @@ class ProjectFileTest(unittest.TestCase):
         self.assertEqual(reader.checks_for(self.code(), root=self.repo), ([('test', ['make', 'test'])], None))
         self.assertIn('.finolabs/', (self.repo / '.git/info/exclude').read_text())
 
+    def test_a_checkout_with_borrowed_metadata_cannot_read_another_repositorys_list(self):
+        self.save('test=["make","test"]')
+        reader = self.reader()
+        real = self.linked_worktree()
+        intruders = []
+        # A back-pointer that names another checkout.
+        mismatched = self.repo.parent / 'mismatched'
+        mismatched.mkdir()
+        (mismatched / '.git').write_text('gitdir: %s\n' % (self.repo / '.git/worktrees/side'))
+        intruders.append(mismatched)
+        # A metadata folder of its own whose commondir names this repository.
+        fake = self.repo.parent / 'fake'
+        gitdir = fake / 'meta/worktrees/x'
+        gitdir.mkdir(parents=True)
+        (gitdir / 'commondir').write_text(str(self.repo / '.git') + '\n')
+        (gitdir / 'gitdir').write_text(str(fake / '.git') + '\n')
+        (fake / '.git').write_text('gitdir: %s\n' % gitdir)
+        intruders.append(fake)
+        self.assertEqual(reader.checks_for(self.code(real), root=real), ([('test', ['make', 'test'])], None))
+        for intruder in intruders:
+            with self.subTest(intruder=intruder.name):
+                self.assertNotEqual(self.code(intruder), self.code())
+                self.assertEqual(reader.layout(intruder)[0], intruder)
+                self.assertEqual(reader.checks_for(self.code(intruder), root=intruder), ([], 'no entry'))
+                self.assertEqual(reader.checks_for(self.code(), root=intruder), ([], 'invalid code'))
+
     def test_the_file_wins_over_a_legacy_entry(self):
         code_ = self.code()
         self.save('lint=["make","lint"]')
