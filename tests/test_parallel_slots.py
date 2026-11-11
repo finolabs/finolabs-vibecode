@@ -157,13 +157,13 @@ class ParallelSlotsTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(output), dict(limit=12, source='project settings',
                                                 caps=dict(claude=4, codex=None, antigravity=2), legacy_limits=False))
-        # An invalid file reads as unset: the default of three with no caps.
+        # An approved but invalid file is unknown, never the default of three.
         for caps in ('', 'codex=0', 'codex=33', 'codex=2, codex=3', 'other=1', 'codex=true',
                      'codex=2,', 'codex=2\n- %s parallel-caps: claude=1' % self.code):
             self.host(12, caps)
-            state = json.loads(self.command('status')[1])
-            self.assertEqual((state['limit'], state['source'], state['families']['codex']['cap']), (3, 'default', None))
-            self.assertEqual(self.command('check-config')[0], 3)
+            self.assertEqual(self.command('status'), (3, 'unknown\n'))
+            self.assertEqual(self.command('check-config'), (3, 'unknown\n'))
+            self.assertEqual(self.command('check', '--family', 'codex'), (3, 'Parallel slots: unknown\n'))
         # A valid cap above the total is a contradiction the reader reports as unknown, as before.
         self.host(12, 'codex=13')
         self.assertEqual(self.command('status'), (3, 'unknown\n'))
@@ -211,7 +211,12 @@ class ParallelSlotsTest(unittest.TestCase):
         self.host(2, None)
         self.ledger(['codex', 'codex'])
         self.assertEqual(self.command('check', '--family', 'codex'), (3, 'Parallel slots: full\n'))
+        # Replacing an approved file is unknown, never available and never the default.
         self.settings(dict(parallel='32'), approve=False)
+        self.assertEqual(self.command('status'), (3, 'unknown\n'))
+        self.assertEqual(self.command('check', '--family', 'codex'), (3, 'Parallel slots: unknown\n'))
+        # With no approval record at all, a file nobody approved here sets nothing: the default.
+        (self.root / 'state/settings-approved' / (self.code + '.json')).unlink()
         state = slots.status()
         self.assertEqual((state['limit'], state['source']), (3, 'default'))
         (self.repo / '.finolabs/vibecode/settings.json').write_text(json.dumps(dict(version=1, parallel='32')))
@@ -259,14 +264,13 @@ class ParallelSlotsTest(unittest.TestCase):
         (metadata / 'commondir').symlink_to(self.repo / 'missing')
         self.assertEqual(slots.repository_code(worktree), progress.repository_code(worktree))
 
-    def test_strict_project_settings_file_reads_as_unset_when_any_value_is_invalid(self):
+    def test_strict_project_settings_file_is_unknown_when_any_approved_value_is_invalid(self):
         for bad in (dict(parallel='0'), dict(parallel='33'), dict(parallel='two'), dict(parallel=2),
                     {'parallel-caps': 'codex=1, codex=2'}, dict(unknown='x'),
                     dict(ledger=''), dict(tasks='../bad.md'), dict(tasks='AGENTS.md'), dict(label='a;b')):
             with self.subTest(bad=bad):
                 self.settings(dict(dict(parallel='2'), **bad))
-                state = json.loads(self.command('status')[1])
-                self.assertEqual((state['limit'], state['source']), (3, 'default'))
+                self.assertEqual(self.command('status'), (3, 'unknown\n'))
         self.host(2, None)
         self.assertEqual(slots.status()['limit'], 2)
 
@@ -282,6 +286,8 @@ class ParallelSlotsTest(unittest.TestCase):
             else:
                 self.assertEqual((code, output), (3, 'unknown\n'))
         (self.repo / '.finolabs/vibecode/settings.json').unlink()
+        self.assertEqual(self.command('status'), (3, 'unknown\n'))
+        (self.root / 'state/settings-approved' / (self.code + '.json')).unlink()
         self.write('host.md', '## Limits\n- Parallel per family: broken\n## Limits\n')
         self.assertEqual(slots.status()['limit'], 3)
         self.assertTrue(json.loads(self.command('check-config')[1])['legacy_limits'])
