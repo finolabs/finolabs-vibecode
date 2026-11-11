@@ -68,8 +68,7 @@ No filename, title, table cell or line content enters `data.js`.
    Accepted is `done`, open is `active`, cancelled is `deferred`; stalled, needs-permission, blocked,
    error, quota, rejected or timeout means `needs-attention`. Unknown outcomes remain `unknown`.
    Beside recognised documents, keep this as a small `work` outcome strip (counts of latest task
-   outcomes), not one block per run. No matching folder-name runs and no per-repository `ledger` entry
-   or deprecated `Ledger project:` override
+   outcomes), not one block per run. No matching folder-name runs and no per-repository `ledger` setting
    means no ledger source; say so in the tooltip. A configured override with no runs also says so.
 5. **C — nothing recognised:** retain the simple name, hosts and last-activity row, with a tooltip
    listing the sources searched. Do not invent stages.
@@ -96,46 +95,58 @@ and `work_records.skipped` as a non-negative count. Existing `skipped` reasons r
 Existing ledger/session
 identifiers and the optional project label keep their existing contracts.
 
-## Host-only project settings
+## Project settings file
 
-The `project_progress.py` reader and writer enforce the grammar below; `checkup.py` reports invalid
-sections, deprecated globals and an unmatched ledger mapping. The dashboard never opens `CLAUDE.md`,
-`AGENTS.md` or other recognised instruction files, including a configured task path with such a name.
+Since 0.2.5 (owner decision, 2026-11-11) a repository's settings live in its own folder, mirroring the
+user-scope layout: `<main checkout>/.finolabs/vibecode/settings.json`, shared by linked worktrees whose
+git metadata is reciprocal (`project_store.layout`). `project_store.py` (shared by `project_progress.py`,
+`parallel_slots.py` and `checks_list.py`) reads and writes it; `checkup.py` reports an unmatched ledger
+mapping. The dashboard never opens `CLAUDE.md`, `AGENTS.md` or other recognised instruction files,
+including a configured task path with such a name.
 
-```text
-## Project settings
-- aaaaaaaa ledger: example-project
-- aaaaaaaa tasks: docs/tasks.md
+```json
+{"version": 1, "ledger": "example-project", "tasks": "docs/tasks.md", "parallel": "4", "label": "Example"}
 ```
 
-Each non-empty line is exactly `- `, eight lowercase ASCII hex characters, a space, `ledger` or
-`tasks`, `: ` and one value. At most 100 entries. Any bad line, duplicate (code, key), unknown key or
-bad value invalidates the whole section; every entry is ignored without disabling other sources.
+The schema is closed: `version` 1 and the optional string keys `ledger`, `tasks`, `parallel`,
+`parallel-caps` and `label`. An unknown key, a duplicate key, a wrong version or any bad value makes the
+file invalid, which reads as unset for that repository only and is never repaired on read. The file is
+read with no-follow descent, owner-checked and not writable by group or others (as `checks.json`), at
+most 16 KiB, and only while its bytes match the SHA-256 that a setter recorded in
+`<data root>/state/settings-approved/<repository code>.json`: a hand-edited, branch-supplied or
+unapproved file reads as unset, so a repository cannot raise `parallel` or redirect `tasks`.
 Ledger values are 1–40 ASCII letters/digits/spaces/dots/dashes/underscores, at least one non-space.
 Tasks values are 1–120 ASCII letters/digits/dots/dashes/underscores/slashes, relative, ending in `.md`,
 without empty, `.` or `..` components and outside `specs/archive`. The descriptor-based file reader
-remains the final safety enforcer.
+remains the final safety enforcer. Labels follow the ledger rule; `parallel` is 1–32 and
+`parallel-caps` names each family at most once with 1–32 (a cap above the total reports unknown).
 
-Inside a repository, `project_progress.py settings --set ledger=<name>` or
-`settings --set tasks=<path>` changes only that repository's entry; split the argument on the first
-`=`. `settings --clear ledger` or `settings --clear tasks` removes only that key. The script refuses
-without recorded metrics consent, locks host config and replaces it atomically with mode 0600 like
-`label --set`. It prints only the key and changed/not changed. Values never reach `data.js`, tooltips,
-events or checkup output. Purge leaves host config unchanged, including settings and labels.
+Inside a repository, `project_progress.py settings --set <key>=<value>` (`ledger`, `tasks`, `parallel`,
+`parallel-caps`) or `label --set <label>` changes only that repository's file; split the argument on the
+first `=`. `settings --clear <key>` removes only that key, and clearing the last key removes the file
+and its approval. `ledger` and `tasks` require recorded metrics consent. The setter takes a lock on the
+private approval folder, starts from what readers see (an unapproved file's values are never carried
+forward), writes the file atomically (folders 0700, file 0600), records its digest, and adds `.finolabs/`
+to the git common folder's `info/exclude` when missing, never to a tracked `.gitignore`; if that line
+cannot be added, the command says the setting was saved and asks the user to add it. It never opens
+`host.md`, prints only the key and changed/not changed, and never runs from a hook. Values never reach
+`data.js`, tooltips, events or checkup output, except the label of the repository the refresh runs in.
+Purge leaves host config and project settings files unchanged.
 
-Lookup is entry, deprecated global, then folder name for ledger or no task file. Globals remain read
-in 0.2.0 and 0.2.1 and are scheduled for removal in 0.3.0. No automatic migration. Checkup names each
-key and prints a conversion command with `<value>`, never the old value. It reports when ledger
-projects exist but none match the repository mapping; association remains unverified because the
+Unset means the defaults: the folder name for ledger, no task file, `parallel` 3 with no caps, and the
+registered folder name as label. A reader given no repository root uses the defaults. `## Project
+settings`, `## Project labels` and the global `Ledger project:`/`Task file:` lines of `host.md` are never
+read (no fallback, no migration command); the 0.2.5 upgrade note asks the user to set them again per
+repository and delete the old lines by hand. Checkup reports when ledger projects exist but none match
+the repository mapping; association remains unverified because the
 ledger is machine-wide and has no repository identifier. A per-repository match suppresses that warning.
 
 ## Which agent, which task, which session
 
 The ledger is machine-wide, so the join is keyed three ways, each by an exact identifier:
 
-1. **Repository to project.** The repository's `ledger` entry under `## Project settings` in canonical
-   host config wins; then deprecated `Ledger project: <name>` under `## Project progress`, then the
-   root folder name. The reader ignores runs of other projects and never uses the join key as a label.
+1. **Repository to project.** The `ledger` value of the repository's approved settings file wins; else
+   the root folder name. The reader ignores runs of other projects and never uses the join key as a label.
 2. **Task to run.** A run belongs to task `T012` of feature `003` when its project matches and its label
    contains, as whole anchored tokens (`(?<![A-Za-z0-9])…(?![A-Za-z0-9])`), a three-digit feature number
    equal to the feature's and a task id equal to the task's, compared as integers (`T12` equals `T012`).
@@ -182,9 +193,8 @@ reuse that timer and never reset the deadline.
   file), at most 20 levels, without running `git` (a hostile repository could redirect git into running
   code). No `.git`: no progress. The block is keyed by the short repository code the metrics already use
   (`repo_code`), at most five repositories are kept, and the page shows the one for the current folder.
-- Configured task file: read from the host config in the data root only (per-repository `tasks`, then
-  deprecated `Task file: <relative path>`),
-  never from a file inside the repository.
+- Configured task file: the `tasks` value of the repository's settings file, read only while that file
+  matches the digest approved in the data root, so the repository itself cannot choose it.
 - Paths: `specs/`, `docs/specs/`, `docs/spec/` under the root, plus the one configured task file. A configured path is
   relative, with no `..`. The descent
   opens every component (root, `specs`, feature folder, file) with `os.open(..., dir_fd=...)`, `O_NOFOLLOW`

@@ -2,6 +2,8 @@
 
 Status: implemented; release 0.2.0 per-repository settings, work records and project progress have local tests; real-host dashboard delivery remains unverified.
 
+Since 0.2.5 (owner decision, 2026-11-11) these settings live in each repository's own settings file and the `## Project settings` section and global lines below are no longer read; see `project-progress.md` "Project settings file" and `release-0.2.5.md`. The rest of this document records the 0.2.0 design.
+
 ## Why
 
 The status dashboard can only draw a project's delivery pipeline from what it can recognise (`dashboard-infographics.md`,
