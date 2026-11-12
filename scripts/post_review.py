@@ -14,7 +14,7 @@ the user's approved host setup. Preparing a file is not permission to post.
 
 Exit 0: prepared or posted and observed; 1: cannot-post; 2: invalid/unsafe input.
 A failed or unobserved post is never retried automatically. The coordinator calls
-posting_verified before fnl-setup records posting=yes; this script writes no host
+posting_verified before setup records posting=yes; this script writes no host
 settings, event, relay count or verification receipt.
 """
 import argparse

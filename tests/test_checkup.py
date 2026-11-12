@@ -18,7 +18,7 @@ from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = ROOT / "skills/fnl-setup/scripts/checkup.py"
+SCRIPT = ROOT / "skills/setup/scripts/checkup.py"
 spec = importlib.util.spec_from_file_location("checkup", SCRIPT)
 checkup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checkup)
@@ -190,7 +190,7 @@ class CheckupTest(unittest.TestCase):
 
     def test_claude_config_dir_also_selects_the_instruction_file(self):
         other = self.home / ".claude-elsewhere"
-        self.write(other / "CLAUDE.md", "Use fnl-coding-router first.\n")
+        self.write(other / "CLAUDE.md", "Use coding-router first.\n")
         self.env["CLAUDE_CONFIG_DIR"] = str(other)
         row = next(r for r in self.data()["hosts"]["claude"] if r["check"] == "instructions")
         self.assertEqual(row["status"], "ok")
@@ -383,7 +383,7 @@ class CheckupTest(unittest.TestCase):
         self.assertIn("Delegate environment", row["reason"])
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)))
         self.assertEqual(self.setup_item("host config")["status"], "ok")
-        template = (ROOT / "skills/fnl-delegate/references/host-template.md").read_text()
+        template = (ROOT / "skills/delegate/references/host-template.md").read_text()
         self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Heavy jobs"})
         for heading in ("Agent roles", "Review posting", "Delegate environment"):
             with self.subTest(heading=heading):
@@ -423,7 +423,7 @@ class CheckupTest(unittest.TestCase):
         self.assertIn("assignments: matrix without consent; roles and judge unset", row["reason"])
 
     def test_template_structure_and_instruction_consent(self):
-        template = (ROOT / "skills/fnl-delegate/references/host-template.md").read_text()
+        template = (ROOT / "skills/delegate/references/host-template.md").read_text()
         headings = re.findall(r"^## (.+)$", template, re.M)
         expected = ['Delegation mode', 'Routing', 'Agents on this machine', 'Delegate environment',
                     'Agent roles', 'Review posting', 'Quota probe', 'Limits', 'Heavy jobs',
@@ -450,7 +450,7 @@ class CheckupTest(unittest.TestCase):
 
     def test_unverified_runtime_never_becomes_ok(self):
         self.install_claude()
-        self.write(self.home / ".claude/CLAUDE.md", "Start coding with fnl-coding-router.\n")
+        self.write(self.home / ".claude/CLAUDE.md", "Start coding with coding-router.\n")
         data = self.data()
         for rows in data["hosts"].values():
             for row in rows:
@@ -554,19 +554,19 @@ class CheckupTest(unittest.TestCase):
         legacy.unlink()
 
     def test_review_adoption_inside_the_generated_paragraph(self):
-        skill = (ROOT / "skills/fnl-setup/references/core.md").read_text()
+        skill = (ROOT / "skills/setup/references/core.md").read_text()
         paragraph = next(line for line in skill.splitlines() if line.startswith("This repository uses the finolabs-vibecode skills."))
         self.write(self.repo / "AGENTS.md", "## Agent skills\n\n" + paragraph + "\n")
         self.assertEqual(self.setup_item("review adoption")["status"], "ok")
 
     def test_repo_adoption_and_user_instruction_pointers(self):
         self.write(self.repo / "CLAUDE.md", "## Agent skills\n\n"
-                   "Pull requests follow `fnl-review-gate` \"Pull requests\".\n")
+                   "Pull requests follow `review-gate` \"Pull requests\".\n")
         self.assertEqual(self.setup_item("agent skills")["status"], "ok")
         self.assertEqual(self.setup_item("review adoption")["status"], "ok")
         custom = self.base / "custom-codex"
         self.env["CODEX_HOME"] = str(custom)
-        self.write(custom / "AGENTS.md", "Start coding work with fnl-coding-router.\n")
+        self.write(custom / "AGENTS.md", "Start coding work with coding-router.\n")
         self.assertEqual(self.data()["hosts"]["codex"][3]["status"], "ok")
 
     def test_symlinked_path_folder_is_unverified(self):
@@ -1017,7 +1017,7 @@ class CheckupTest(unittest.TestCase):
         self.assertTrue(all(len(line) <= 300 for line in payload.splitlines()))
 
     def test_review_check_steps_are_sequential(self):
-        text = (ROOT / "skills/fnl-setup/references/check.md").read_text().split("## Settings")[0]
+        text = (ROOT / "skills/setup/references/check.md").read_text().split("## Settings")[0]
         self.assertEqual(re.findall(r"^(\d+)\. ", text, re.M), ["1", "2", "3", "4", "5"])
 
     def test_low_long_identifier_secret_is_filtered(self):

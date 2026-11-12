@@ -13,7 +13,7 @@ Editable sources are icon.svg and icon-dark.svg. The two PNG files are transpare
 
 ## Dashboard screenshots
 
-`dashboard-dark.png` and `dashboard-light.png` are screenshots of `skills/fnl-status/assets/dashboard.html` filled with the synthetic numbers in `tests/fixtures/status-sample.json`, taken with headless Chrome at 1280 px width and scale 2. They show no real usage data.
+`dashboard-dark.png` and `dashboard-light.png` are screenshots of `skills/status/assets/dashboard.html` filled with the synthetic numbers in `tests/fixtures/status-sample.json`, taken with headless Chrome at 1280 px width and scale 2. They show no real usage data.
 
 ## Social preview
 

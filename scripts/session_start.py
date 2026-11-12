@@ -22,15 +22,15 @@ OPEN_CAP = 99
 
 
 COMPACT_TITLE = (
-    "\nAfter compaction (advisory, agent judgment): invoke fnl-session-hygiene now; compare this session's "
+    "\nAfter compaction (advisory, agent judgment): invoke the session-hygiene skill now; compare this session's "
     "title with the current task and rename it if it is stale, then continue from the handover.\n")
 
 COMPACT_DELEGATION = (
     "\nDelegation after compaction (advisory, agent judgment): before starting the first of two or more "
-    "independent tasks, apply fnl-delegate \"Keep or hand off\"; send reviews and parallel work to another "
+    "independent tasks, apply the delegate skill's \"Keep or hand off\"; send reviews and parallel work to another "
     "agent family when one is present instead of doing them yourself or in a session of your own family; "
     "start each run in the host's background mode, never `( … ) &` or nohup; "
-    "name it with the label `ledger.py start` prints; re-read fnl-delegate if its steps are not in context.\n")
+    "name it with the label `ledger.py start` prints; re-read the delegate skill if its steps are not in context.\n")
 
 
 def delegation_word():
@@ -164,7 +164,7 @@ def parallel_words():
         return "unknown"
 
 
-AWAY_LINE = 'Away mandate active: do not ask the user; follow fnl-autopilot "Decide"\n'
+AWAY_LINE = 'Away mandate active: do not ask the user; follow autopilot "Decide"\n'
 
 
 def away_line():
@@ -200,11 +200,11 @@ def main():
     try:
         text = (Path(__file__).resolve().parent.parent / "rules/AGENTS.md").read_text(encoding="utf-8")
         if routing == "off":
-            text = "\n".join(line for line in text.splitlines() if "fnl-coding-router" not in line) + "\n"
+            text = "\n".join(line for line in text.splitlines() if "coding-router" not in line) + "\n"
     except (OSError, UnicodeError):
-        text = "Invoke fnl-delegate before handing work to another agent.\n"
+        text = "Invoke the delegate skill before handing work to another agent.\n"
         if routing == "on":
-            text = "Start coding work with fnl-coding-router.\n" + text
+            text = "Start coding work with the coding-router skill.\n" + text
     try:
         print(text, end="")
     except (OSError, UnicodeError):

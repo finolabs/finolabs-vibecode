@@ -19,9 +19,9 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
 
 1. **The brief forbids it.** Every brief names, under Constraints: never print, dump, log or assert on the process
    environment or any credential; tests build a synthetic environment and compare only variable names. Enforcer: the
-   `fnl-handoff` template carries the line (it extends the existing bullet "never read env or credential files" instead of repeating it), and `brief_check.py <brief>` is a lint that refuses a brief without it,
+   `handoff` template carries the line (it extends the existing bullet "never read env or credential files" instead of repeating it), and `brief_check.py <brief>` is a lint that refuses a brief without it,
    without the required headings, or containing a secret-shaped value; its message names the rule and the line number,
-   never the matched text. The dispatch command forms in `fnl-delegate` `references/agents.md` call it before a dispatch. It is a lint, not a control: the
+   never the matched text. The dispatch command forms in `delegate` `references/agents.md` call it before a dispatch. It is a lint, not a control: the
    allowlist in rule 2 is the control.
 2. **A headless delegate starts with an allowlisted environment.** `delegate_env.py`, called by the dispatch command forms in `agents.md` and never by a hook (it runs only when the coordinator dispatches), reuses the `environment()` pattern of `quota_probe.py` and runs the agent command with only
    `PATH`, `HOME`, `LANG`, `TMPDIR`, `FNL_DISPATCH_ID` and the names listed in a `## Delegate environment` section of
@@ -36,7 +36,7 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    `CURL_CA_BUNDLE`, `NODE_TLS_REJECT_UNAUTHORIZED`, `NODE_PATH`, `PERLLIB`, `SHELLOPTS`, `PS4`,
    `PROMPT_COMMAND`, `JAVA_TOOL_OPTIONS`). A name that looks secret (contains KEY, TOKEN, SECRET, PASSWORD,
    CREDENTIAL, SESSIONID or SESSID anywhere, or has PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION or PRIVATE as an underscore-delimited name part)
-   needs its own neutral Yes and No in `fnl-setup` that names the variable and the receiving agent family.
+   needs its own neutral Yes and No in `setup` that names the variable and the receiving agent family.
    `--claude-config-dir` is Claude-only: absolute, no `..`, a current-user-owned directory, no symlink
    components, not group/world-writable and outside git work trees (including ancestor markers); ancestors
    must be root- or user-owned and not group/world-writable, as in the quota probe.
@@ -112,25 +112,25 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    look for the credential's source or read credential stores; rotation is the owner's (advisory, matching the
    user-scope rule that credentials are never hunted).
 8. **The lesson is kept.** The incident is stored as a lesson in the user's knowledge base and cited in
-   `fnl-session-hygiene` "Remember or recall" as an example (advisory).
+   `session-hygiene` "Remember or recall" as an example (advisory).
 
 ## Where the code lives
 
-`fnl-delegate` owns `delegate_env.py`, `run_env.py`, `log_scan.py` and `secret_patterns.py`; `fnl-handoff` carries
-`brief_check.py` with its own copy of `secret_patterns.py`, and `run_env.py` is copied into `fnl-checks`. Each copy
+`delegate` owns `delegate_env.py`, `run_env.py`, `log_scan.py` and `secret_patterns.py`; `handoff` carries
+`brief_check.py` with its own copy of `secret_patterns.py`, and `run_env.py` is copied into `checks`. Each copy
 is listed in the CI copy groups and in the test that compares them, so each skill folder stays self-contained.
 
 ## Changes
 
-- `fnl-handoff`: Constraints line and a short "Secrets and environments" paragraph; the template check by
+- `handoff`: Constraints line and a short "Secrets and environments" paragraph; the template check by
   `brief_check.py`.
-- `fnl-delegate`: dispatch forms in `references/agents.md` go through `delegate_env.py`; the host template gains
+- `delegate`: dispatch forms in `references/agents.md` go through `delegate_env.py`; the host template gains
   `## Delegate environment`; "Accept" gains the log scan; `ledger.py finish` records `log_scan`.
-- `fnl-setup`: `delegation` feature asks, per present agent family, whether any variable must pass through (default
+- `setup`: `delegation` feature asks, per present agent family, whether any variable must pass through (default
   none), with a neutral Yes and No; names only.
-- `fnl-checks`: states that the environment helper (`run_env.py`) is the only way the plugin starts a delegate or a test command; the quota probe and the `ps` snapshot keep their own scoped allowlists.
+- `checks`: states that the environment helper (`run_env.py`) is the only way the plugin starts a delegate or a test command; the quota probe and the `ps` snapshot keep their own scoped allowlists.
 - `PRIVACY.md`: the log scan and redaction are local; `log_scan` is one of three fixed words.
-- `CHANGELOG.md`, README, `fnl-ask` map: current-surface wording.
+- `CHANGELOG.md`, README, `ask` map: current-surface wording.
 - No change to `CLAUDE.md`: no network call, no new class of command (the helper starts the same agent commands the
   dispatch already starts).
 
@@ -151,7 +151,7 @@ is listed in the CI copy groups and in the test that compares them, so each skil
 - `log_scan.py show` refuses a `not_scanned` log; a run-log folder wider than 0700 is refused; a descriptor-level check
   fails a hardlinked or swapped file (tests).
 - Setup consent for pass-through names is a separate neutral Yes and No; none preselected.
-- Rule 8 (the lesson) has an acceptance line: `fnl-session-hygiene` cites the incident as a corrected-lesson example
+- Rule 8 (the lesson) has an acceptance line: `session-hygiene` cites the incident as a corrected-lesson example
   (a test greps the sentence).
 - Every touched skill file respects the size limits of `setup-restructure.md`.
 

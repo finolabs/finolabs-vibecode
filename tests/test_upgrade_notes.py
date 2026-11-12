@@ -8,7 +8,7 @@ import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
-NOTES = ROOT / 'skills/fnl-update/references/upgrades.json'
+NOTES = ROOT / 'skills/update/references/upgrades.json'
 sys.path.insert(0, str(ROOT / 'scripts'))
 spec = importlib.util.spec_from_file_location('update_check_notes', ROOT / 'scripts/update_check.py')
 u = importlib.util.module_from_spec(spec)
@@ -16,7 +16,7 @@ spec.loader.exec_module(u)
 
 VALID = {'versions': [{'version': '0.3.1', 'items': [
     {'id': '0.3.1/new-thing', 'kind': 'setup', 'text': 'A synthetic feature needs its own setup.',
-     'setup': '/fnl-setup add thing', 'check': ['scripts/thing_check.py', 'state']},
+     'setup': '/setup add thing', 'check': ['scripts/thing_check.py', 'state']},
     {'id': '0.3.1/old-name', 'kind': 'rename', 'text': 'The old command is renamed.', 'until': '0.4.0'},
 ]}]}
 
@@ -46,8 +46,8 @@ class NotesSchemaTest(unittest.TestCase):
             lambda d: item(d).update(text='x' * 201),
             lambda d: item(d).update(text='two\nlines'),
             lambda d: item(d).update(text=''),
-            lambda d: item(d).update(setup='/fnl-setup add thing; rm'),
-            lambda d: item(d).update(setup='fnl-setup add thing'),
+            lambda d: item(d).update(setup='/setup add thing; rm'),
+            lambda d: item(d).update(setup='setup add thing'),
             lambda d: item(d).update(check='scripts/thing_check.py'),
             lambda d: item(d).update(check=[]),
             lambda d: item(d).update(check=['/abs/thing.py']),
@@ -78,15 +78,20 @@ class NotesSchemaTest(unittest.TestCase):
         self.assertIn('0.2.4/codex-hook-trust', ids)
         rename = next(item for item in parsed[0]['items'] if item['id'] == '0.2.4/checks-rename')
         self.assertEqual(rename['until'], '0.3.0')
-        self.assertEqual([item['kind'] for item in parsed[1]['items']], ['setup', 'setup', 'setup', 'setup'])
+        self.assertEqual([item['kind'] for item in parsed[1]['items']], ['setup', 'setup', 'setup', 'setup', 'rename'])
         store = parsed[1]['items'][0]
         self.assertEqual(store['id'], '0.2.5/checks-store')
-        self.assertEqual(store['setup'], '/fnl-setup add checks')
+        self.assertEqual(store['setup'], '/setup add checks')
         for phrase in ('0.2.4', 'no longer read', 'each repository', '## Checks', 'host.md', 'by hand'):
             self.assertIn(phrase, store['text'])
         # Parallel limits and caps are set again before the old section is deleted.
-        parallel, settings, labels = parsed[1]['items'][1:]
-        self.assertEqual((parallel['id'], parallel['setup']), ('0.2.5/parallel-settings', '/fnl-setup add delegation'))
+        parallel, settings, labels, names = parsed[1]['items'][1:]
+        # Skills lost the fnl- prefix; the old names keep working as aliases.
+        self.assertEqual(names['id'], '0.2.5/skill-names')
+        self.assertNotIn('setup', names)
+        for phrase in ('fnl- prefix', 'still work when typed', 'aliases'):
+            self.assertIn(phrase, names['text'])
+        self.assertEqual((parallel['id'], parallel['setup']), ('0.2.5/parallel-settings', '/setup add delegation'))
         for phrase in ('no longer read', 'host.md', 'each repository', 'parallel', 'caps', 'before', '## Project settings'):
             self.assertIn(phrase, parallel['text'])
         self.assertEqual((settings['id'], labels['id']), ('0.2.5/project-settings', '0.2.5/project-labels'))

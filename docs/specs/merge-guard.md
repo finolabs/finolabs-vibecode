@@ -9,7 +9,7 @@ The design below stays for that use.
 Decision: 2026-11-06, owner agreed (harness synthesis, step 1). Goal: add a host prompt on the
 common merge and publish commands, so "merge, tag and publish need the owner" is more than advice there,
 with no new blocking plugin hook and so no new `CLAUDE.md` exception. It is a prompt, not a complete
-guard (see "What it does not cover"). `fnl-setup` writes the rule after a
+guard (see "What it does not cover"). `setup` writes the rule after a
 separate consent, a stored preview and a digest, like `compaction-threshold.md`.
 
 ## What the hosts document (not yet run by us; the writers must verify with the host's own checker)
@@ -27,7 +27,7 @@ separate consent, a stored preview and a digest, like `compaction-threshold.md`.
 
 ## Parts
 
-### `skills/fnl-setup/scripts/merge_guard_setup.py` (stdlib; no network, no subprocess)
+### `skills/setup/scripts/merge_guard_setup.py` (stdlib; no network, no subprocess)
 
 Pattern: `compact_setup.py` (stored private preview 0600 at `<data root>/state/merge-guard/preview.json`,
 digest, 60-minute expiry, owner/mode/symlink/git-work-tree refusals, backups
@@ -64,12 +64,12 @@ unique backups (below), atomic writes, fixed content-free errors).
 
 ### Skill and doc text
 
-`fnl-setup` gets one optional step (after the compaction steps): a separate neutral Yes/No consent
+`setup` gets one optional step (after the compaction steps): a separate neutral Yes/No consent
 (none preselected), the list of rules with the recommended set, the preview, then apply. Advisory
 (agent judgment) that the question is asked and the preview shown; the script enforces digest,
 expiry and file safety; the host enforces the prompt. State that a prompt asks the human, that
-it applies to the agent's own merges too, and that matching is best-effort. `fnl-review-gate` "Pull
-requests" and `fnl-delegate` say the merge prompt is a prompt on those commands where the guard
+it applies to the agent's own merges too, and that matching is best-effort. `review-gate` "Pull
+requests" and `delegate` say the merge prompt is a prompt on those commands where the guard
 is installed, and still advisory where it is not. `PRIVACY.md`: the script writes only to the
 named settings/rules files and the private preview; nothing is sent. README row, CHANGELOG
 `Unreleased`, `docs/specs/index.md`.

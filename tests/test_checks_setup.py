@@ -15,7 +15,7 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / 'skills/fnl-setup/scripts'
+SCRIPTS = ROOT / 'skills/setup/scripts'
 SCRIPT = SCRIPTS / 'checks_setup.py'
 PREFIX = b'# Host\n\n## Other\nkeep \xc3\xa9\n'
 
@@ -385,8 +385,8 @@ class ChecksSetupTest(unittest.TestCase):
         self.assertEqual(json.loads((self.repo / '.finolabs/vibecode/settings.json').read_text()),
                          {'version': 1, 'parallel': '5'})
         self.assertEqual(self.module().checks_for(code_, root=self.repo), ([], 'no entry'))
-        for path in (ROOT / 'skills/fnl-delegate/scripts/parallel_slots.py', ROOT / 'scripts/parallel_slots.py',
-                     ROOT / 'skills/fnl-status/scripts/parallel_slots.py'):
+        for path in (ROOT / 'skills/delegate/scripts/parallel_slots.py', ROOT / 'scripts/parallel_slots.py',
+                     ROOT / 'skills/status/scripts/parallel_slots.py'):
             with self.subTest(path=str(path.relative_to(ROOT))):
                 reader = load('settings_reader_' + path.parent.parent.name + path.stem, path)
                 self.assertEqual(reader.parse_config('', self.repo)['limit'], 5)
@@ -782,7 +782,7 @@ class ProjectFileTest(unittest.TestCase):
                 self.assertIsNone(reader.receipt_status(code_, 'a' * 40, root=self.repo))
                 code, out, _ = self.cli('show', '--root', str(self.repo))
                 self.assertIn(CHANGED, out)
-                self.assertIn('/fnl-setup add checks', out)
+                self.assertIn('/setup add checks', out)
 
     def test_receipt_mode_lives_in_the_file(self):
         self.save('test=["make","test"]')
@@ -847,7 +847,7 @@ class HookTest(unittest.TestCase):
         self.git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-qm', 'Start')
         self.hooks = Path(self.git('rev-parse', '--absolute-git-dir')).resolve() / 'hooks'
         self.hooks.mkdir(exist_ok=True)
-        self.script = base / 'plugin/skills/fnl-checks/scripts/checks.py'
+        self.script = base / 'plugin/skills/checks/scripts/checks.py'
         self.script.parent.mkdir(parents=True)
         self.script.write_text('# synthetic\n')
 

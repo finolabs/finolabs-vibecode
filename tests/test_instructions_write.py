@@ -17,7 +17,7 @@ from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/instructions_write.py"
-COPY = ROOT / "skills/fnl-setup/scripts/instructions_write.py"
+COPY = ROOT / "skills/setup/scripts/instructions_write.py"
 spec = importlib.util.spec_from_file_location("instructions_write", SCRIPT)
 iw = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(iw)

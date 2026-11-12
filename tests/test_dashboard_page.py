@@ -1,4 +1,4 @@
-"""Static checks of skills/fnl-status/assets/dashboard.html and its fit with the data refresh.py writes."""
+"""Static checks of skills/status/assets/dashboard.html and its fit with the data refresh.py writes."""
 
 from collections import Counter
 import importlib.util
@@ -15,9 +15,9 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGE = ROOT / "skills/fnl-status/assets/dashboard.html"
+PAGE = ROOT / "skills/status/assets/dashboard.html"
 FIXTURE = ROOT / "tests/fixtures/status-sample.json"
-REFRESH = ROOT / "skills/fnl-status/scripts/refresh.py"
+REFRESH = ROOT / "skills/status/scripts/refresh.py"
 SVG_NAMESPACE = "http://www.w3.org/2000/svg"
 
 
@@ -172,7 +172,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertIn('cmd', out['shared']); self.assertIn('kpis', out['shared'])
         self.assertIn('veil', self.render()['shared'])
         prompt = self.render(FIXTURE, {'actions': [dict(scope='prompt', tooltip='focus')]})
-        self.assertIn('~/finolabs-vibecode — fnl-status', prompt['tipStates'][0]['text'])
+        self.assertIn('~/finolabs-vibecode — status', prompt['tipStates'][0]['text'])
 
     def test_click_keyboard_and_hash_navigation(self):
         actions = [{'click': 'Now'}, {'tab': 'Now', 'key': 'ArrowRight'},
@@ -357,7 +357,7 @@ class DashboardScriptTest(unittest.TestCase):
         for meter in (meters[2], meters[3]):
             self.assertEqual(meter['text'].strip(), '?')
         self.assertIn('unread', meters[3]['cls'])
-        for text in ('not read', 'quota probe off or no reading yet', 'turn on in fnl-setup'):
+        for text in ('not read', 'quota probe off or no reading yet', 'turn on in /setup'):
             self.assertIn(text, meters[3]['tooltip'])
         for meter in (meters[0], meters[1], meters[2], meters[4]):
             for text in ('remaining', '68%', 'resets', 'measured'):
@@ -690,7 +690,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual(len({m['text'] for m in self.marks(out, 'active-host')}), 3)
         self.assertNotIn('img', out['tags'])
         data['progress']['active'] = []
-        self.assertIn('No named repository active in the last 24 hours. Run fnl-status inside a repository to add it.', self.render_freshness(data)['text'])
+        self.assertIn('No named repository active in the last 24 hours. Run /finolabs-vibecode:status inside a repository to add it.', self.render_freshness(data)['text'])
 
     def test_short_and_long_budget_track_uses_hard_cap(self):
         data = self.sample()
@@ -1193,7 +1193,7 @@ class DashboardScriptTest(unittest.TestCase):
         self.assertEqual([p['attrs']['data-repo'] for p in self.marks(out, 'active-project')], ['cccccccc', 'aaaaaaaa', 'eeeeeeee'])
         data['progress']['active'] = [dict(repo='bbbbbbbb', label='', hosts=[], sessions=1, last='2026-11-06T10:00:00Z')]
         out = self.render_freshness(data, {'hash': '#project'})
-        self.assertIn('No named repository active in the last 24 hours. Run fnl-status inside a repository to add it.', out['panels'][1]['text'])
+        self.assertIn('No named repository active in the last 24 hours. Run /finolabs-vibecode:status inside a repository to add it.', out['panels'][1]['text'])
         self.assertEqual(self.marks(out, 'active-project'), [])
         self.assertEqual(self.marks(out, 'project-disclosure'), [])
         self.assertEqual(out['tabs'][1]['text'], 'Now 4')
@@ -1240,7 +1240,7 @@ class DashboardScriptTest(unittest.TestCase):
 
     def test_the_sample_data_draws_every_chart_without_an_error(self):
         out = self.render(FIXTURE)
-        for expected in ("Router coverage", "events per day", "October 2026", "skill and agent use", "fnl-coding-router",
+        for expected in ("Router coverage", "events per day", "October 2026", "skill and agent use", "coding-router",
                          "kept and handed off tasks kept receipts implementation runs handed off 7 3 14",
                          "claude / needs-context / table",
                          "away decisions per lease", "2025-11-10 05:00 3 2 advisor 1, jev 1, park 1 codex gpt-6-astra 1 "
@@ -1265,7 +1265,7 @@ class DashboardScriptTest(unittest.TestCase):
             path.write_text(json.dumps(data), encoding="utf-8")
             out = self.render(path)
         self.assertIn("no data: no session with an edit in this period", out["text"])
-        self.assertIn("fnl-coding-router", out["text"])
+        self.assertIn("coding-router", out["text"])
 
     def test_kept_work_shows_even_when_no_dispatch_has_finished(self):
         data = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -1419,12 +1419,12 @@ class DashboardScriptTest(unittest.TestCase):
         out = self.render(FIXTURE, {"fail": True, "ticks": 2})
         self.assertEqual(len(out["loads"]), 2)
         self.assertFalse(out["redrawn"])
-        self.assertIn("fnl-coding-router", out["text"])
+        self.assertIn("coding-router", out["text"])
 
     def test_the_empty_page_draws_the_data_once_it_arrives(self):
         out = self.render(None, {"next": self.sample()})
         self.assertNotIn("No data yet", out["text"])
-        self.assertIn("fnl-coding-router", out["text"])
+        self.assertIn("coding-router", out["text"])
 
 
 if __name__ == "__main__":

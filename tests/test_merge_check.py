@@ -1,4 +1,4 @@
-"""Tests for skills/fnl-review-gate/scripts/merge_check.py."""
+"""Tests for skills/review-gate/scripts/merge_check.py."""
 
 import base64
 import importlib.util
@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-SCRIPT = Path(__file__).resolve().parent.parent / "skills/fnl-review-gate/scripts/merge_check.py"
+SCRIPT = Path(__file__).resolve().parent.parent / "skills/review-gate/scripts/merge_check.py"
 spec = importlib.util.spec_from_file_location("merge_check", SCRIPT)
 mc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mc)
@@ -84,7 +84,7 @@ else:
 """
 
 
-ADOPTED = "# Demo\n\n## Agent skills\n\nPull requests follow `fnl-review-gate`.\n"
+ADOPTED = "# Demo\n\n## Agent skills\n\nPull requests follow `review-gate`.\n"
 ROUTED = "Summary\n<!-- fnl-router depth=NORMAL trigger=none -->\n"
 
 
@@ -345,9 +345,9 @@ class RouterMarkerTest(unittest.TestCase):
 
     def test_adopts_reads_only_the_agent_skills_section(self):
         self.assertTrue(mc.adopts(ADOPTED))
-        self.assertTrue(mc.adopts("## Agent skills\n- fnl-review-gate\n## Other\n"))
+        self.assertTrue(mc.adopts("## Agent skills\n- review-gate\n## Other\n"))
         self.assertTrue(mc.adopts("## Agent skills\n```sh\n# a shell comment\n```\nfnl-review-gate\n"))
-        for text in ("", "fnl-review-gate\n", "## Reviews\nfnl-review-gate\n",
+        for text in ("", "review-gate\n", "## Reviews\nfnl-review-gate\n",
                      "## Agent skills\n## Reviews\nfnl-review-gate\n",
                      "## Agent skills\n# Other\nfnl-review-gate\n",
                      "## Agent skills\nfnl-review-gates\n", "## Agent skills\nmy-fnl-review-gate\n",
@@ -363,7 +363,7 @@ class RouterMarkerTest(unittest.TestCase):
                 self.assertIn(f"ok    router marker: depth={depth} trigger={trigger}", lines)
 
     def test_the_values_match_the_router_receipt(self):
-        path = SCRIPT.parents[2] / "fnl-delegate/scripts/record.py"
+        path = SCRIPT.parents[2] / "delegate/scripts/record.py"
         record_spec = importlib.util.spec_from_file_location("record_for_merge_check", path)
         record = importlib.util.module_from_spec(record_spec)
         record_spec.loader.exec_module(record)
@@ -693,7 +693,7 @@ class LocalReceiptTest(unittest.TestCase):
         cwd = os.getcwd()
         os.chdir(self.repo)
         self.addCleanup(os.chdir, cwd)
-        scripts = root / "skills/fnl-review-gate/scripts"
+        scripts = root / "skills/review-gate/scripts"
         for name in ("checks_list", "project_progress"):
             loaded = importlib.util.spec_from_file_location(name + "_for_receipt", scripts / (name + ".py"))
             module = importlib.util.module_from_spec(loaded)

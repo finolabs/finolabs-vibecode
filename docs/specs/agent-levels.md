@@ -4,11 +4,11 @@ Status: implemented; the writer, strict reader and candidates command are merged
 
 Owner decisions, 2026-11-09: the declaration belongs to `delegation` setup. When the user adds an agent, setup asks which of five difficulty levels it can take and saves the answer in the host config so delegation routes well later. A Claude Code command the user already has, such as `claudework` or `claudeomni`, is declared the same way, by its command name and levels; nothing else is asked per command. The user confirms once, at setup, that task briefs and repository files may go to the account each listed command is logged into (it can belong to another organization); routing then uses the agent inside its level range without asking again per task. A declared agent is preferred to the default `claude` install for a task in its range while it has quota; otherwise the default install takes the task.
 
-Levels are the grades of `fnl-delegate`: 1 easy, 2 medium, 3 hard, 4 very hard, 5 ultra hard.
+Levels are the grades of `delegate`: 1 easy, 2 medium, 3 hard, 4 very hard, 5 ultra hard.
 
 ## Goal and acceptance
 
-- AC1: `/fnl-setup add delegation` asks, per present agent family and for any extra Claude Code command the user names, "Which task levels can it take?" (free text `L-H`; for a family blank means all five and writes no line, for an extra command blank records `1-5` so the declaration is kept; with nothing to write the step is skipped), previews and, after a clear yes, writes one `## Agent levels` section in the canonical `host.md` with backup, digest and 60-minute expiry like the other setup writers.
+- AC1: `/setup add delegation` asks, per present agent family and for any extra Claude Code command the user names, "Which task levels can it take?" (free text `L-H`; for a family blank means all five and writes no line, for an extra command blank records `1-5` so the declaration is kept; with nothing to write the step is skipped), previews and, after a clear yes, writes one `## Agent levels` section in the canonical `host.md` with backup, digest and 60-minute expiry like the other setup writers.
 - AC2: An entry name is `claude`, `codex`, `antigravity` or a command `claude<suffix>` (lowercase letters and digits, 1 to 24 after `claude`); a range is `L-H` with 1 <= L <= H <= 5; at most 8 entries, no duplicate names.
 - AC3: `show` reads the section strictly: absent prints `none`; valid prints JSON; a duplicate section, a duplicate or unknown line or a bad range prints `unreadable` and exits 3.
 - AC4: The consent line is `- Consent: yes (<date>)`; `--off` writes `- Consent: no` and no entries. Entries without consent `yes` are unreadable.
@@ -33,7 +33,7 @@ Whether a declared command exists is checked by the coordinator in the user's sh
 
 - [x] T1 Writer and reader script with tests.
 - [x] T2 Level questions in the `delegation` feature file.
-- [x] T3 Routing, dispatch and host template text in `fnl-delegate`.
+- [x] T3 Routing, dispatch and host template text in `delegate`.
 - [x] T4 Changelog and index; targeted tests and reference check.
 
 ## Evidence

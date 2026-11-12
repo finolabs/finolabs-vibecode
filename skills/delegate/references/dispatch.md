@@ -1,0 +1,52 @@
+# Dispatch mechanics
+
+Procedures from `SKILL.md` that only some runs reach.
+
+## Quota fallback
+
+Classify the stopped run using [agents.md](agents.md) before applying this fallback (advisory, agent judgment).
+
+When a model's quota runs out, move to the next route the rules give: another model of the same tier on the same agent, then the same tier on the next agent in the capability order. Antigravity pools are separate, so one empty pool leaves its other models usable. Moving to a weaker agent at the same tier, split the task smaller. Moving up a tier spends more quota: ask first. Moving down a tier is allowed only for easy and medium work; for hard work, wait for the reset or ask. When every reachable agent is out, report the reset times and wait. Record the fallback in the ledger as `references/ledger.md` says.
+
+## Parallel dispatch
+
+Read [parallel-dispatch.md](parallel-dispatch.md) for family pools, shared quota and advisory total/per-family slots before assigning runs (advisory, agent judgment). Several independent runs may use the same family.
+
+- Size each run small: one task or a tight pair, budget up to 90 minutes. A long run holding many tasks is slower, bloats the agent's context and loses more when it breaks.
+- Give each parallel run its own git worktree on its own branch, cut from the integration branch tip. One writer per worktree.
+- Merge back one branch at a time into the integration branch, rerunning the targeted tests after each merge. Resolve conflicts yourself or brief a fix run. Naming, syncing, conflicts and cleanup of these branches follow `commit-messages` "Branches".
+
+## Heavy-job lock
+
+Run each heavy command through the wrapper, which holds one machine-wide lock and waits for load and free memory:
+
+```bash
+python3 -I <this skill folder>/scripts/heavy_run.py run --label "<what it is>" -- <heavy command...>
+```
+
+It records who started the job in the lock file itself (label, repository code and folder name, dispatch id, the command's program name, pids, start time and deadline; never paths, arguments or environment values), and `status` prints it. It stops a command that runs past its maximum time (default 90 minutes, exit 124). It starts the command only when the one-minute load average is below the limit (default 12), free memory is at least
+the minimum (default 3 GB) and no other heavy job holds the lock, in any repository. It waits up to the cap (default 40
+minutes), then exits 75 and names the holder when it can. `python3 -I <this skill folder>/scripts/heavy_run.py status`
+shows whether the lock is held and by whom, or "owner unknown". The lock is released when the command and anything it
+left running have ended; nothing needs removing by hand, and a killed wrapper does not leave a lock to repair. Detached
+Docker launches (the short and long detach flags) are refused; wrap a foreground script that starts, tests and tears down. The limits
+come from `## Heavy jobs` in the host config (`Load limit`, `Memory minimum GB`, `Wait cap minutes`). The enforcer is
+the script for commands run through it; using it is advisory (agent judgment).
+
+## Handover after an interrupted run
+
+When a run times out, fails or stops with uncommitted work, before any other agent gets write access to that checkout:
+
+1. Confirm the process has stopped (`ps`, the run's exit status).
+2. Capture its state in the briefs folder: `git status`, the diff saved as a patch, the last lines of its log.
+3. Keep the work: commit it on the run's behalf as work in progress, or name the files in the next brief.
+4. Write the next brief's "Current state" and "What was tried" from that capture.
+
+## Where files go
+
+Sort every file that delegation produces by who will read it:
+
+- **Shared**: documentation, design notes and briefs with lasting value for the project's community or as future usage docs. Put them in the project's normal documentation folders (`docs/`, `specs/` or whatever the project uses) and commit them under the project's rules for public content.
+- **Local**: logs, working notes, handoff briefs, captured state from interrupted runs; anything that only serves development on this machine. Put them in the hidden folder `.finolabs/` at the main checkout's root (`git rev-parse --path-format=absolute --git-common-dir`, then its parent): `briefs/` for briefs and notes, `logs/` for logs and final outputs. Keep it out of git with a local `.finolabs/` line in `.git/info/exclude`; the shared `.gitignore` changes only with the user's approval. The host config may name another durable local folder. Temporary directories and session scratchpads are wiped on restart, so never keep briefs there.
+
+When unsure, treat a file as local; promoting it to shared later is a deliberate edit and commit.

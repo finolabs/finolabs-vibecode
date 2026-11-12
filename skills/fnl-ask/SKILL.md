@@ -1,10 +1,10 @@
 ---
 name: fnl-ask
-description: Older name for fnl-help, which answers questions about this plugin (where to start, what it holds, which skill to use next); follows fnl-help's procedure.
+description: "Older name for ask, kept so the old name still works when typed; follows ask with the same arguments."
 disable-model-invocation: true
 ---
 
-# Ask
+# fnl-ask
 
-Dependency: `fnl-help`. Load and follow it with the same arguments (advisory (agent judgment)).
+Dependency: `ask`. Load and follow it with the same arguments (advisory (agent judgment)).
 This alias holds no rules of its own.

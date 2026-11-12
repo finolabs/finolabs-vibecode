@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PATH = ROOT / 'skills/fnl-setup/scripts/assignments.py'
+PATH = ROOT / 'skills/setup/scripts/assignments.py'
 
 
 def load():

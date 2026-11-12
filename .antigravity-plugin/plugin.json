@@ -24,8 +24,8 @@
   ],
   "suggestedPrompts": [
     "Route this change through the coding router and tell me the depth you chose.",
-    "Use fnl-delegate to coordinate this spec with one session per task.",
-    "Use /fnl-setup scan to refresh my local agent inventory, then /fnl-setup mode to show effective settings.",
-    "Use /fnl-setup to choose Quick or Advanced, then show add <feature>, instructions and check."
+    "Use delegate to coordinate this spec with one session per task.",
+    "Use /setup scan to refresh my local agent inventory, then /setup mode to show effective settings.",
+    "Use /setup to choose Quick or Advanced, then show add <feature>, instructions and check."
   ]
 }

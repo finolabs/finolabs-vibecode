@@ -14,53 +14,57 @@ CHECKER = "scripts/check-references.py"
 # (file, text to replace, replacement, expected message fragment)
 BREAKS = [
     ("scripts/mode.py", '"suggest"', '"manual"', "mode.py copies differ"),
-    ("skills/fnl-setup/scripts/mode.py", '"suggest"', '"manual"', "mode.py copies differ"),
-    ("skills/fnl-status/SKILL.md", '"Budget and liveness"', '"Budget and live"',
-     '`fnl-delegate` has no section "Budget and live"'),
-    ("skills/fnl-delegate/SKILL.md", "`fnl-handoff`: write", "`fnl-handof`: write",
+    ("skills/setup/scripts/mode.py", '"suggest"', '"manual"', "mode.py copies differ"),
+    ("skills/status/SKILL.md", '"Budget and liveness"', '"Budget and live"',
+     '`delegate` has no section "Budget and live"'),
+    ("skills/delegate/SKILL.md", "`handoff`: write", "`fnl-handof`: write",
      "unknown skill or agent `fnl-handof`"),
-    ("skills/fnl-delegate/references/host-template.md", '"When an agent coordinates"', '"When coordinating"',
+    ("skills/delegate/SKILL.md", "`handoff`: write", "`fnl-handoff`: write",
+     "older name `fnl-handoff`; use `handoff`"),
+    ("skills/fnl-pause/SKILL.md", "Dependency: `pause`.", "Dependency: `gtg`.",
+     "skills/fnl-pause: alias does not load `pause`"),
+    ("skills/delegate/references/host-template.md", '"When an agent coordinates"', '"When coordinating"',
      '`agents.md` has no section "When coordinating"'),
-    ("skills/fnl-session-hygiene/SKILL.md", "(references/titles.md)", "(references/title.md)",
+    ("skills/session-hygiene/SKILL.md", "(references/titles.md)", "(references/title.md)",
      "link target references/title.md does not exist"),
-    ("skills/fnl-delegate/references/ledger.md", "--rework-rounds 1", "--rework 1",
+    ("skills/delegate/references/ledger.md", "--rework-rounds 1", "--rework 1",
      "ledger.py has no option --rework"),
-    ("skills/fnl-delegate/references/ledger.md", "--reason fallback-quota", "--reason fallback-quotas",
+    ("skills/delegate/references/ledger.md", "--reason fallback-quota", "--reason fallback-quotas",
      "--reason fallback-quotas is not one of"),
-    ("skills/fnl-delegate/references/ledger.md", "--reason fallback-quota", "--reason FALLBACK",
+    ("skills/delegate/references/ledger.md", "--reason fallback-quota", "--reason FALLBACK",
      "--reason FALLBACK is not one of"),
-    ("skills/fnl-delegate/references/dispatch.md", "## Heavy-job lock", "## Heavy job lock",
+    ("skills/delegate/references/dispatch.md", "## Heavy-job lock", "## Heavy job lock",
      '`dispatch.md` has no section "Heavy-job lock"'),
-    ("skills/fnl-delegate/references/ledger.md", 'python3 -I "$L" open', 'python3 -I "$L" opn',
+    ("skills/delegate/references/ledger.md", 'python3 -I "$L" open', 'python3 -I "$L" opn',
      "ledger.py has no subcommand opn"),
-    ("skills/fnl-delegate/references/ledger.md", 'python3 -I "$L" open', 'python3 -I "$L" open --outcome accepted',
+    ("skills/delegate/references/ledger.md", 'python3 -I "$L" open', 'python3 -I "$L" open --outcome accepted',
      "ledger.py open takes no option --outcome"),
-    ("skills/fnl-delegate/references/ledger.md", "--model gpt-6.1-sol", "--model gpt-6.1-sol --rework-rounds 1",
+    ("skills/delegate/references/ledger.md", "--model gpt-6.1-sol", "--model gpt-6.1-sol --rework-rounds 1",
      "ledger.py start takes no option --rework-rounds"),
-    ("skills/fnl-status/SKILL.md", "`python3 -I <ledger.py> open --project <this repository's ledger project>`", "`python3 -I <ledger.py> opn --project <this repository's ledger project>`",
+    ("skills/status/SKILL.md", "`python3 -I <ledger.py> open --project <this repository's ledger project>`", "`python3 -I <ledger.py> opn --project <this repository's ledger project>`",
      "ledger.py has no subcommand opn"),
-    ("skills/fnl-advisor/SKILL.md", "`--kind advise`", "`--kind advice`",
+    ("skills/advisor/SKILL.md", "`--kind advise`", "`--kind advice`",
      "--kind advice is not one of"),
-    ("skills/fnl-delegate/references/route-judgment.md", "`--route-by table`", "`--route-by tables`",
+    ("skills/delegate/references/route-judgment.md", "`--route-by table`", "`--route-by tables`",
      "--route-by tables is not one of"),
-    ("skills/fnl-delegate/references/host-template.md", "--max-turns <n>", "--max-turnz <n>",
+    ("skills/delegate/references/host-template.md", "--max-turns <n>", "--max-turnz <n>",
      "--max-turnz is not described in agents.md"),
-    ("skills/fnl-delegate/SKILL.md", '`fnl-checks` "Accepting someone else\'s work"', '`fnl-checks` "No such heading"',
-     '`fnl-checks` has no section "No such heading"'),
-    ("skills/fnl-status/SKILL.md", '`fnl-delegate` "Ledger"', "`fnl-delegate`'s \"Nope\"",
-     '`fnl-delegate` has no section "Nope"'),
-    ("skills/fnl-delegate/references/ledger.md", 'python3 -I "$L" open', "python3 -I $L open --outcom accepted",
+    ("skills/delegate/SKILL.md", '`checks` "Accepting someone else\'s work"', '`checks` "No such heading"',
+     '`checks` has no section "No such heading"'),
+    ("skills/status/SKILL.md", '`delegate` "Ledger"', "`delegate`'s \"Nope\"",
+     '`delegate` has no section "Nope"'),
+    ("skills/delegate/references/ledger.md", 'python3 -I "$L" open', "python3 -I $L open --outcom accepted",
      "ledger.py has no option --outcom"),
-    ("skills/fnl-delegate/references/models.md", "Review by 2026-12-01.", "Review by 01/12/2026.",
+    ("skills/delegate/references/models.md", "Review by 2026-12-01.", "Review by 01/12/2026.",
      "needs a line"),
 ]
 
-FENCED_HEADING = ("skills/fnl-status/SKILL.md", '`fnl-delegate` "Ledger"', '`fnl-handoff` "Budget"',
-                  '`fnl-handoff` has no section "Budget"')
+FENCED_HEADING = ("skills/status/SKILL.md", '`delegate` "Ledger"', '`handoff` "Budget"',
+                  '`handoff` has no section "Budget"')
 
 
 # A prose line that names the script in one span and a subcommand in another.
-TWO_SPANS = ("skills/fnl-delegate/references/ledger.md", "Record every dispatch with `scripts/ledger.py`",
+TWO_SPANS = ("skills/delegate/references/ledger.md", "Record every dispatch with `scripts/ledger.py`",
              "Record every dispatch with `scripts/ledger.py` (`ledger.py summary` reports it)")
 
 
@@ -89,9 +93,9 @@ class CheckReferencesTest(unittest.TestCase):
         checker = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(checker)
         replacements = {
-            "fnl-setup-instructions": "/fnl-setup instructions",
-            "fnl-scan-agents": "/fnl-setup scan",
-            "fnl-set-mode": "/fnl-setup mode",
+            "fnl-setup-instructions": "/setup instructions",
+            "fnl-scan-agents": "/setup scan",
+            "fnl-set-mode": "/setup mode",
         }
         for old, replacement in replacements.items():
             for relative, allowed in (
@@ -102,8 +106,8 @@ class CheckReferencesTest(unittest.TestCase):
                 ("docs/specs/work-tracking.md", True),
                 ("docs/specs/new-feature.md", False),
                 ("README.md", False),
-                ("skills/fnl-help/references/map.md", False),
-                ("skills/fnl-setup/SKILL.md", False),
+                ("skills/help/references/map.md", False),
+                ("skills/setup/SKILL.md", False),
             ):
                 with self.subTest(name=old, file=relative):
                     path = self.root / relative
@@ -120,7 +124,7 @@ class CheckReferencesTest(unittest.TestCase):
                     self.assertEqual(not problems, allowed, problems)
             for mapping, allowed in ((f"`{old}` → `{replacement}`", True),
                                      (f"`{old}`", False),
-                                     (f"`{old}` → `/fnl-setup wrong`", False)):
+                                     (f"`{old}` → `/setup wrong`", False)):
                 with self.subTest(mapping=mapping):
                     path = self.root / "CHANGELOG.md"
                     original = path.read_text()
@@ -161,13 +165,13 @@ class CheckReferencesTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_skill_lists_match_folders(self):
-        for relative in ("README.md", "skills/fnl-help/references/map.md"):
+        for relative in ("README.md", "skills/help/references/map.md"):
             path = self.root / relative
             original = path.read_text()
-            for replacement, expected in (("", "skill folder fnl-advisor missing from skill list"),
+            for replacement, expected in (("", "skill folder advisor missing from skill list"),
                                           ("| `fnl-missing` | Missing. |", "listed skill fnl-missing has no folder")):
                 with self.subTest(file=relative, replacement=replacement):
-                    row = next(line for line in original.splitlines() if line.startswith("| `fnl-advisor` |"))
+                    row = next(line for line in original.splitlines() if line.startswith("| `advisor` |"))
                     path.write_text(original.replace(row, replacement, 1))
                     try:
                         result = self.check()
@@ -178,7 +182,7 @@ class CheckReferencesTest(unittest.TestCase):
 
     def test_retired_names_fail_outside_released_sections_and_mapping(self):
         for suffix in ("committee", "coordinator-sessions", "knowledge"):
-            for relative in ("scripts/session_start.py", "skills/fnl-advisor/SKILL.md", "CHANGELOG.md"):
+            for relative in ("scripts/session_start.py", "skills/advisor/SKILL.md", "CHANGELOG.md"):
                 with self.subTest(name=suffix, file=relative):
                     path = self.root / relative
                     original = path.read_text()
@@ -205,15 +209,15 @@ class CheckReferencesTest(unittest.TestCase):
     def test_retired_name_mapping_passes_in_unreleased(self):
         path = self.root / "CHANGELOG.md"
         text = path.read_text()
-        path.write_text(text.replace("### Changed", "### Changed\n\n- `fnl-" + "committee` → `fnl-advisor`", 1))
+        path.write_text(text.replace("### Changed", "### Changed\n\n- `fnl-" + "committee` → `advisor`", 1))
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_retired_agents_are_allowed_only_in_history_or_migration_mapping(self):
         for suffix, replacement in (("verifier", "verification"), ("steward", "session-hygiene")):
-            name, target = "fnl-" + suffix, "fnl-" + replacement
+            name, target = "fnl-" + suffix, replacement
             for relative in ("docs/specs/agent-roles.md", "docs/specs/compaction-steward.md",
-                             "README.md", "skills/fnl-help/references/map.md", "skills/fnl-setup/SKILL.md"):
+                             "README.md", "skills/help/references/map.md", "skills/setup/SKILL.md"):
                 with self.subTest(name=name, file=relative):
                     path = self.root / relative
                     original = path.read_text()

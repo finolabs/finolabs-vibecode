@@ -74,7 +74,7 @@ class SessionStartTest(SyntheticStateTest):
         raw = json.dumps({"source": "compact", "session_id": "synthetic"}).encode()
         for mode in ("suggest", "auto", None):
             out, _ = self.run_hook(raw, delegation=mode)
-            self.assertIn(b'apply fnl-delegate "Keep or hand off"', out)
+            self.assertIn(b'apply the delegate skill\'s "Keep or hand off"', out)
             self.assertIn(b"another agent family", out)
         out, _ = self.run_hook(raw, delegation="manual")
         self.assertNotIn(b"Keep or hand off", out)
@@ -87,7 +87,7 @@ class SessionStartTest(SyntheticStateTest):
         raw = json.dumps({"source": "compact", "session_id": "synthetic"}).encode()
         for mode in ("manual", "suggest", "auto", None):
             out, _ = self.run_hook(raw, delegation=mode)
-            self.assertIn(b"invoke fnl-session-hygiene", out)
+            self.assertIn(b"invoke the session-hygiene skill", out)
             self.assertIn(b"rename it", out)
         for source in ("startup", "resume", "clear"):
             startup = json.dumps({"source": source, "session_id": "synthetic"}).encode()
@@ -103,12 +103,12 @@ class SessionStartTest(SyntheticStateTest):
         text = hook.COMPACT_DELEGATION
         self.assertLessEqual(len(text), 500)
         self.assertIn("in the host's background mode, never `( … ) &` or nohup;", text)
-        self.assertNotIn("/", text.replace("fnl-delegate", ""))
+        self.assertNotIn("/", text.replace("delegate", ""))
 
     def baseline(self, routing):
         text = (ROOT / "rules/AGENTS.md").read_text(encoding="utf-8")
         if routing == "off":
-            text = "\n".join(line for line in text.splitlines() if "fnl-coding-router" not in line) + "\n"
+            text = "\n".join(line for line in text.splitlines() if "coding-router" not in line) + "\n"
         return (text + STATE_BASELINE).encode()
 
     def test_idle_stdin_does_not_hold_the_start(self):
@@ -291,7 +291,7 @@ class StateBlockTest(SyntheticStateTest):
         settings = repo / '.finolabs/vibecode/settings.json'
         settings.write_bytes(settings.read_bytes() + b' ')
         with mock.patch('os.getcwd', return_value=str(nested)):
-            self.assertIn("Parallel slots: unknown (project settings need setup again: run fnl-setup add delegation)\n",
+            self.assertIn("Parallel slots: unknown (project settings need setup again: run /setup add delegation)\n",
                           self.state())
 
     def test_no_metrics_consent_still_reads_recorded_roles(self):
@@ -409,7 +409,7 @@ class StateBlockTest(SyntheticStateTest):
             self.qp.write_json(folder, "limits.json", {"claude": stamp(current - hours(minutes=10))})
         self.assertIn("Quota (cached): claude-code limited, codex out 3%", self.state())
 
-    AWAY = 'Away mandate active: do not ask the user; follow fnl-autopilot "Decide"\n'
+    AWAY = 'Away mandate active: do not ask the user; follow autopilot "Decide"\n'
 
     def write_lease(self, start, expiry):
         self.write("state/autopilot/lease.json", json.dumps({

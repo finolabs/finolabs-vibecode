@@ -169,15 +169,15 @@ class SnapshotConsentTest(unittest.TestCase):
 
     def test_copies_and_phase_one_docs_match_the_policy_without_hook_changes(self):
         original = (ROOT / 'scripts/agent_processes.py').read_bytes()
-        for skill in ('fnl-status', 'fnl-setup'):
+        for skill in ('status', 'setup'):
             self.assertEqual(original, (ROOT / f'skills/{skill}/scripts/agent_processes.py').read_bytes())
         for file, phrases in {
             'PRIVACY.md': ('## Agent snapshot', 'FNL_AGENT_SNAPSHOT=off', 'comm', 'data.js', 'user-chosen names'),
             'README.md': ('Running now', 'FNL_AGENT_SNAPSHOT=off'),
             'CHANGELOG.md': ('## [Unreleased]', 'process snapshot'),
             'docs/specs/index.md': ('implemented; phase 1',),
-            'skills/fnl-status/SKILL.md': ('same `running` block', 'advisory'),
-            'skills/fnl-setup/references/features/metrics.md': ('agent_processes.py on --yes', 'unresolved means off'),
+            'skills/status/SKILL.md': ('same `running` block', 'advisory'),
+            'skills/setup/references/features/metrics.md': ('agent_processes.py on --yes', 'unresolved means off'),
             'CLAUDE.md': ('absolute path owned by root', '2-second limit', '256 KiB output cap'),
         }.items():
             for phrase in phrases:

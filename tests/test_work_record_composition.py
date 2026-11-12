@@ -12,7 +12,7 @@ def read(skill, file):
 
 class WorkRecordCompositionTests(unittest.TestCase):
     def test_record_composes_under_existing_trigger(self):
-        text = read('fnl-coding-router', 'references/workflows/none.md')
+        text = read('coding-router', 'references/workflows/none.md')
         self.assertIn('references/work-record.md', text)
         self.assertIn('MIN depth never creates one', text)
         self.assertIn('no new trigger', text)
@@ -20,8 +20,8 @@ class WorkRecordCompositionTests(unittest.TestCase):
         self.assertEqual(len(steps), 6)
         for (number, body), section in zip(steps, ('Goal and acceptance', 'Plan', 'Tasks', 'Tasks', 'Evidence', 'Evidence')):
             self.assertIn(section, body, number)
-        self.assertIn('no work record', read('fnl-coding-router', 'references/workflows/speckit.md'))
-        pack = read('fnl-coding-router', 'references/workflows/mattpocock.md')
+        self.assertIn('no work record', read('coding-router', 'references/workflows/speckit.md'))
+        pack = read('coding-router', 'references/workflows/mattpocock.md')
         for phrase in ('work record', 'Goal and acceptance', 'Plan', 'Tasks', 'Evidence', 'issue tracker'):
             self.assertIn(phrase, pack)
 

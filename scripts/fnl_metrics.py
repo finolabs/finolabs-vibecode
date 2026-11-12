@@ -4,8 +4,8 @@ Metadata only. An event carries a time, a session id, a short repository code an
 enum or name fields; no prompt, code, command text, file path or review text. Nothing is
 written until the user has consented (consent.json) and FNL_METRICS is not "off".
 
-This file is copied byte for byte into the skills that import it (fnl-coding-router,
-fnl-status, fnl-update); a test keeps the copies equal.
+This file is copied byte for byte into the skills that import it (coding-router,
+status, update); a test keeps the copies equal.
 """
 
 import hashlib
@@ -41,7 +41,13 @@ NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 
 ID = re.compile(r"^[A-Za-z0-9_-]{1,64}\Z")
 TASK_ID = re.compile(r"^T[0-9]{1,4}\Z")
-NAME = re.compile(r"^fnl-[a-z][a-z-]{0,39}\Z")
+NAME = re.compile(r"^fnl-[a-z][a-z-]{0,39}\Z")  # agent names, and skill names stored before 0.2.5
+# The plugin's skill names: a closed set, so a name from another plugin is never recorded.
+# Each also answers to its older `fnl-` name, which is recorded under the name here.
+SKILLS = ("advisor", "afk", "ask", "autopilot", "brb", "checks", "coding-router", "commit-messages",
+          "delegate", "gtg", "handoff", "help", "open-source-review", "pause", "plugin-packaging",
+          "restore-point", "review-gate", "security-review-gate", "session-hygiene", "setup", "status",
+          "update", "verification", "versioning")
 REPO = re.compile(r"^[0-9a-f]{8}\Z")
 TS = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+00:00\Z")
 EVENT_FILE = re.compile(r"^events-(\d{4})-(\d{2})\.jsonl\Z")
@@ -53,6 +59,19 @@ def valid_id(v):
 
 def _name(v):
     return isinstance(v, str) and NAME.match(v) is not None
+
+
+def skill_name(v):
+    """The current name of one of the plugin's skills, given that name or its older `fnl-` alias; else None."""
+    if not isinstance(v, str):
+        return None
+    name = v[len("fnl-"):] if v.startswith("fnl-") else v
+    return name if name in SKILLS else None
+
+
+def _skill(v):
+    # A current name, or an `fnl-` name in a line stored before 0.2.5 (shown under its current name).
+    return skill_name(v) == v or _name(v)
 
 
 def _tasks(v):
@@ -67,7 +86,7 @@ def _pr(v):
 SCHEMA = {
     "session_start": {"host": lambda v: v in HOSTS, "dispatch": lambda v: v is None or valid_id(v),
                       "source": lambda v: v in SOURCES},
-    "skill": {"name": _name},
+    "skill": {"name": _skill},
     "agent": {"name": _name},
     "first_edit": {},
     "commit": {},
@@ -220,6 +239,12 @@ def build_event(event, sid, repo, fields):
         raise ValueError("fields do not match the event")
     if not valid_id(sid) or not isinstance(repo, str) or not REPO.match(repo):
         raise ValueError("bad session id or repository code")
+    if event == "skill":
+        # A new line holds the current name of one of the plugin's skills; an older `fnl-` name maps to it.
+        name = skill_name(fields["name"])
+        if name is None:
+            raise ValueError("bad value for name")
+        fields = {**fields, "name": name}
     for key, check in schema.items():
         if not check(fields[key]):
             raise ValueError("bad value for " + key)

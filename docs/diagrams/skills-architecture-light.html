@@ -24,7 +24,7 @@ svg { width: 100%; min-width: 900px; display: block; }
 <p class="sub">Setup is one skill with Quick, Advanced and subcommands. The hook points the agent at the router; the router hands work to delegation (parallel pools), gates, and session and git skills; the commands you type keep the machine's config and logs current, start an away lease or drain work before a restart.</p>
 <svg viewBox="0 0 1280 1152" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="skills-architecture-light-title skills-architecture-light-desc">
 <title id="skills-architecture-light-title">How the finolabs-vibecode skills work together</title>
-<desc id="skills-architecture-light-desc">Architecture of the skill set for release 0.2.4: a session-start hook reminds the agent to use the coding router, which hands work to delegation (route_pick over the assignment matrix, parallel pools, log_scan, the advisor's choose mode), gates (verify_claim with judge, review_route, post_review, merge_check), and session and git skills (context snapshots, fnl-navigator). The commands you type manage configuration and logs on the user machine: fnl-setup (with the assignment matrix in add delegation), fnl-status, fnl-restore-point, fnl-help (alias fnl-ask), fnl-update, fnl-afk (alias fnl-brb, loading fnl-autopilot) for the away lease and its decision ladder, and fnl-pause (alias fnl-gtg) to drain work before a restart.</desc>
+<desc id="skills-architecture-light-desc">Architecture of the skill set for release 0.2.4: a session-start hook reminds the agent to use the coding router, which hands work to delegation (route_pick over the assignment matrix, parallel pools, log_scan, the advisor's choose mode), gates (verify_claim with judge, review_route, post_review, merge_check), and session and git skills (context snapshots, fnl-navigator). The commands you type manage configuration and logs on the user machine: setup (with the assignment matrix in add delegation), status, restore-point, help (alias ask), update, afk (alias brb, loading autopilot) for the away lease and its decision ladder, and pause (alias gtg) to drain work before a restart.</desc>
 <defs>
 <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5B5B79"/></marker>
 <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#14627A"/></marker>
@@ -87,7 +87,7 @@ svg { width: 100%; min-width: 900px; display: block; }
 <rect x="512" y="76" width="240" height="72" rx="8" fill="#EDDFF7" stroke="#4B1E73" stroke-width="1.2"/>
 <rect x="520" y="82" width="38" height="12" rx="2" fill="none" stroke="#4B1E73" stroke-opacity="0.5" stroke-width="0.8"/>
 <text x="539.0" y="91" fill="#4B1E73" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">ENTRY</text>
-<text x="632.0" y="114" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-coding-router</text>
+<text x="632.0" y="114" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">coding-router</text>
 <text x="632.0" y="132" fill="#5B5B79" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Spec Kit first · depth · gates</text>
 <rect x="840" y="76" width="200" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="840" y="76" width="200" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
@@ -99,47 +99,47 @@ svg { width: 100%; min-width: 900px; display: block; }
 <rect x="64" y="252" width="336" height="72" rx="8" fill="#EDDFF7" stroke="#4B1E73" stroke-width="1.2"/>
 <rect x="72" y="258" width="38" height="12" rx="2" fill="none" stroke="#4B1E73" stroke-opacity="0.5" stroke-width="0.8"/>
 <text x="91.0" y="267" fill="#4B1E73" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">COORD</text>
-<text x="232.0" y="284" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-delegate</text>
+<text x="232.0" y="284" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">delegate</text>
 <text x="232.0" y="301" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">route_pick (matrix) · parallel pools · log_scan</text>
 <text x="232.0" y="314" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">brief · dispatch · receipt-gated accept</text>
 <rect x="64" y="364" width="152" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="64" y="364" width="152" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
-<text x="140.0" y="398" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-handoff</text>
+<text x="140.0" y="398" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">handoff</text>
 <text x="140.0" y="413" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">brief_check.py</text>
 <text x="140.0" y="426" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">dispatch · resume</text>
 <rect x="248" y="364" width="152" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="248" y="364" width="152" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
-<text x="324.0" y="402" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-advisor</text>
+<text x="324.0" y="402" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">advisor</text>
 <text x="324.0" y="420" fill="#5B5B79" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">opinion · committee · choose</text>
 <rect x="480" y="252" width="304" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="480" y="252" width="304" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
-<text x="632.0" y="284" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-checks</text>
+<text x="632.0" y="284" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">checks</text>
 <text x="632.0" y="301" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">verify_claim.py · judge (Jev/host)</text>
 <text x="632.0" y="314" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">receipts gate ledger acceptance</text>
 <rect x="480" y="364" width="304" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="480" y="364" width="304" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
-<text x="632.0" y="396" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-review-gate</text>
+<text x="632.0" y="396" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">review-gate</text>
 <text x="632.0" y="413" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">agent: fnl-reviewer · review_route.py</text>
 <text x="632.0" y="426" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">post_review.py · merge_check.py</text>
 <rect x="480" y="476" width="304" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="480" y="476" width="304" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
 <rect x="488" y="482" width="56" height="12" rx="2" fill="none" stroke="#5B5B79" stroke-opacity="0.5" stroke-width="0.8"/>
 <text x="516.0" y="491" fill="#5B5B79" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SECURITY</text>
-<text x="632.0" y="508" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-security-review-gate</text>
+<text x="632.0" y="508" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">security-review-gate</text>
 <text x="632.0" y="524" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">agent: fnl-security-reviewer</text>
 <text x="632.0" y="537" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">review_route.py · post_review.py</text>
 <rect x="864" y="252" width="352" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="864" y="252" width="352" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
-<text x="1040.0" y="284" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-session-hygiene</text>
+<text x="1040.0" y="284" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">session-hygiene</text>
 <text x="1040.0" y="301" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">context snapshots (Claude/Agy) · steward</text>
 <text x="1040.0" y="314" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">titles · handovers · knowledge</text>
 <rect x="864" y="364" width="168" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="864" y="364" width="168" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
-<text x="948.0" y="402" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-commit-messages</text>
+<text x="948.0" y="402" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">commit-messages</text>
 <text x="948.0" y="420" fill="#5B5B79" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">commits · branches</text>
 <rect x="1048" y="364" width="168" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="1048" y="364" width="168" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
-<text x="1132.0" y="402" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-versioning</text>
+<text x="1132.0" y="402" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">versioning</text>
 <text x="1132.0" y="420" fill="#5B5B79" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">SemVer · tags · changelog</text>
 <rect x="864" y="476" width="352" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="864" y="476" width="352" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
@@ -172,55 +172,55 @@ svg { width: 100%; min-width: 900px; display: block; }
 <rect x="928" y="676" width="288" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
 <rect x="936" y="682" width="26" height="12" rx="2" fill="none" stroke="#5B5B79" stroke-opacity="0.5" stroke-width="0.8"/>
 <text x="949.0" y="691" fill="#5B5B79" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">KIT</text>
-<text x="1072.0" y="710" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-plugin-packaging</text>
-<text x="1072.0" y="728" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-open-source-review</text>
+<text x="1072.0" y="710" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">plugin-packaging</text>
+<text x="1072.0" y="728" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">open-source-review</text>
 <rect x="68" y="880" width="148" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="68" y="880" width="148" height="72" rx="8" fill="rgba(11,11,23,0.02)" stroke="rgba(11,11,23,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="142.0" y="912" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-setup</text>
+<text x="142.0" y="912" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">setup</text>
 <text x="142.0" y="927" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Quick &amp; Advanced</text>
 <text x="142.0" y="939" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">add: assignment matrix</text>
 <rect x="234" y="880" width="148" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="234" y="880" width="148" height="72" rx="8" fill="rgba(11,11,23,0.02)" stroke="rgba(11,11,23,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="308.0" y="912" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-setup scan · mode</text>
+<text x="308.0" y="912" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">setup scan · mode</text>
 <text x="308.0" y="927" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">scan: agent inventory</text>
 <text x="308.0" y="939" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">mode: delegation · routing</text>
 <rect x="400" y="880" width="148" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="400" y="880" width="148" height="72" rx="8" fill="rgba(11,11,23,0.02)" stroke="rgba(11,11,23,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="474.0" y="912" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-setup instructions</text>
+<text x="474.0" y="912" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">setup instructions</text>
 <text x="474.0" y="927" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">CLAUDE.md · AGENTS.md</text>
 <text x="474.0" y="939" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">contracts · tracking</text>
 <rect x="566" y="880" width="148" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="566" y="880" width="148" height="72" rx="8" fill="rgba(11,11,23,0.02)" stroke="rgba(11,11,23,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="640.0" y="912" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-status</text>
+<text x="640.0" y="912" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">status</text>
 <text x="640.0" y="927" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">Now tab &amp; overview</text>
 <text x="640.0" y="939" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">repos · quota pools</text>
 <rect x="732" y="880" width="148" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="732" y="880" width="148" height="72" rx="8" fill="rgba(11,11,23,0.02)" stroke="rgba(11,11,23,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="806.0" y="912" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-restore-point</text>
+<text x="806.0" y="912" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">restore-point</text>
 <text x="806.0" y="927" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">save &amp; restore git ref</text>
 <text x="806.0" y="939" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">safe tree before edits</text>
 <rect x="898" y="880" width="148" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="898" y="880" width="148" height="72" rx="8" fill="rgba(11,11,23,0.02)" stroke="rgba(11,11,23,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="972.0" y="914" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-help</text>
-<text x="972.0" y="930" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">alias fnl-ask · what fits</text>
+<text x="972.0" y="914" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">help</text>
+<text x="972.0" y="930" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">alias ask · what fits</text>
 <text x="972.0" y="942" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">plain language register</text>
 <rect x="1064" y="880" width="148" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="1064" y="880" width="148" height="72" rx="8" fill="rgba(11,11,23,0.02)" stroke="rgba(11,11,23,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="1138.0" y="914" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-update</text>
+<text x="1138.0" y="914" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">update</text>
 <text x="1138.0" y="930" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">check release · update</text>
 <text x="1138.0" y="942" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">skip · suppress notices</text>
 <rect x="68" y="968" width="148" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="68" y="968" width="148" height="72" rx="8" fill="rgba(11,11,23,0.02)" stroke="rgba(11,11,23,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="142.0" y="1000" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-afk</text>
-<text x="142.0" y="1015" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">→ fnl-autopilot lease</text>
+<text x="142.0" y="1000" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">afk</text>
+<text x="142.0" y="1015" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">→ autopilot lease</text>
 <text x="142.0" y="1027" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">decision ladder · gate</text>
 <rect x="234" y="968" width="148" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="234" y="968" width="148" height="72" rx="8" fill="rgba(11,11,23,0.02)" stroke="rgba(11,11,23,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="308.0" y="1000" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">fnl-pause</text>
+<text x="308.0" y="1000" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">pause</text>
 <text x="308.0" y="1015" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">drain before a restart</text>
 <text x="308.0" y="1027" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">handovers · --in &lt;min&gt;</text>
 <text x="410" y="1000" fill="#5B5B79" font-size="13" font-style="italic" font-family="'Space Grotesk', system-ui, sans-serif">Short aliases follow the same procedure:</text>
-<text x="410" y="1020" fill="#5B5B79" font-size="13" font-style="italic" font-family="'Space Grotesk', system-ui, sans-serif">fnl-brb → fnl-afk, fnl-gtg → fnl-pause, fnl-ask → fnl-help.</text>
+<text x="410" y="1020" fill="#5B5B79" font-size="13" font-style="italic" font-family="'Space Grotesk', system-ui, sans-serif">brb → afk, gtg → pause, ask → help.</text>
 <line x1="40" y1="1096" x2="1240" y2="1096" stroke="rgba(11,11,23,0.12)" stroke-width="0.8"/>
 <text x="40" y="1116" fill="#5B5B79" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.18em">LEGEND</text>
 <rect x="40" y="1128" width="24" height="12" rx="4" fill="#EDDFF7" stroke="#4B1E73" stroke-width="1.2"/>
