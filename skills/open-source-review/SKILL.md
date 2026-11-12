@@ -9,9 +9,7 @@ A read-only review: it finds and reports, it does not publish. Fixes, history re
 
 ## 1. Fix the scope
 
-Name the repository, the exact commit, and what will become public: the working tree, the full git history, release archives, or a packaged plugin. History counts unless the owner will publish a fresh history; say which.
-
-Done when the scope line is written in the report.
+Name the repository, the exact commit, and what will become public: the working tree, the full git history, release archives, or a packaged plugin. History counts unless the owner will publish a fresh history; say which. Done when the scope line is written in the report.
 
 ## 2. Run every check
 
@@ -45,29 +43,10 @@ Mark each item **PASS**, **FAIL**, **N/A** (with why) or **BLOCKED** (with what 
 - Large files are justified; binaries are justified and their source is published.
 
 ### Community files
-
-- `README.md`: what it does, who it is for, install, a first use, configuration, limits. At least a few paragraphs of prose, not only code.
-- `CONTRIBUTING.md`: how to set up, test, and propose a change; the commit and review conventions.
-- `CODE_OF_CONDUCT.md` (for example Contributor Covenant) with a working contact.
-- `SECURITY.md`: how to report a vulnerability privately, and the supported versions.
-- `CHANGELOG.md` (`versioning`), and issue and pull request templates where the forge supports them.
-- Diagrams, the README, docs and in-product help (with its feature map) match what ships: what they name exists, and nothing shipped is missing. Report each drift (advisory, agent judgment).
+Mark every item in [references/community-files.md](references/community-files.md): README, CONTRIBUTING, code of conduct, SECURITY, changelog and templates, and docs that match what ships.
 
 ### Repository settings
-
-Read them from the forge; without access to the settings, mark the group BLOCKED. On GitHub, read-only `gh api` calls under `repos/<owner>/<repo>`: the repository itself (merge and listing settings, and `security_and_analysis`, which only admins see), `rules/branches/<branch>` for the rules in effect, `rulesets` and `branches/<branch>/protection`, `vulnerability-alerts` and `automated-security-fixes`, `private-vulnerability-reporting`, `actions/permissions` (including `sha_pinning_required`), `actions/permissions/workflow` and `actions/permissions/fork-pr-contributor-approval`.
-
-Check before publishing what the forge plan offers on a private repository, and check again right after the visibility change. Before publishing, an item the plan offers only on public repositories (on GitHub's free plan: rulesets, classic branch protection, secret scanning and private vulnerability reporting) is N/A with that reason.
-Once public, these settings protect the history and its reporters. A FAIL on default branch protection, release tag protection, secret scanning and push protection, dependency alerts and security updates, private vulnerability reporting or Actions blocks a ready verdict; merge settings and listing are recommended and are noted without blocking.
-
-- **Default branch protected** by a ruleset or branch protection: changes arrive through pull requests, the CI checks that gate a merge are required, force pushes and deletion are blocked, and administrators follow the same rules (or the owner records why not).
-- **Release tags protected**: `v*` tags, and `<path>/v*` for component tags, cannot be moved or deleted, matching the immutable tags in `versioning`.
-- **Secret scanning and push protection** on.
-- **Dependency alerts and security updates** on for every ecosystem the repository uses, including its CI actions.
-- **Private vulnerability reporting** on, whenever `SECURITY.md` points reporters to it.
-- **Merge settings**: the allowed merge methods keep each commit as written (merge commit or rebase), or squash only where each pull request title becomes a verb-led subject line that `commit-messages` accepts (on GitHub, `squash_merge_commit_title` is `PR_TITLE` or `COMMIT_OR_PR_TITLE`); head branches are deleted after merge. These match the branch flow in `commit-messages` "Branches".
-- **Actions**: the workflow token is read-only by default and cannot approve pull requests; workflows from first-time contributors' forks wait for approval; third-party actions are pinned to commit SHAs (enforced where the forge can, as GitHub's `sha_pinning_required`).
-- **Listing**: description, homepage and topics set; features the project does not use (wiki, projects, discussions) turned off so nothing unmonitored collects reports.
+Read them from the forge, then mark every item in [references/repository-settings.md](references/repository-settings.md): branch and tag protection, secret scanning, dependency alerts, vulnerability reporting, merge, Actions and listing settings, and which of them block a ready verdict.
 
 ### Identity and versions
 
@@ -80,19 +59,11 @@ Once public, these settings protect the history and its reporters. A FAIL on def
 - Behavior that runs, fetches or sends anything is documented, and dependencies are pinned.
 
 ### Plugin and skill packages
-
-Only when the repository ships a plugin or skills:
-
-- The validators pass: `claude plugin validate .` (and `--profile directory --strict` before a directory submission); the Codex manifest is checked against its current schema. Run them on a fresh clone: in a working checkout they also read untracked files such as `.DS_Store`.
-- Before a directory submission, walk that directory's own pre-submission list ([Anthropic](https://claude.com/docs/plugins/pre-submission-checklist.md), [OpenAI](https://developers.openai.com/plugins/deploy/submission)) against the submitted folder or ZIP; `plugin-packaging` lists what each refuses or holds.
-  Portal validation uploads the package and is not part of this review: list what only the portal can confirm beside the recheck items, so a ready verdict does not hide it.
-- Each skill has a valid `name` and a trigger-rich `description`; a trigger check shows each model-invoked skill fires on a representative prompt and stays quiet on an unrelated one.
-- Host-specific facts (paths, commands, allow-rules) live in configuration or references, not in skill bodies.
-- Listing assets that the target directory requires (icon, URLs) exist inside the package.
+When the repository ships a plugin or skills, mark every item in [references/plugin-packages.md](references/plugin-packages.md): validators on a fresh clone, the target directory's own checks, skill triggers and listing assets.
 
 ## 3. Report
 
 A table per group with status and evidence, then the FAIL and BLOCKED items ordered by severity: secrets and private data first, then internal leaks, license, payload, everything else. For each, the smallest fix and whether it needs the owner's authority (history rewrite, visibility change, repository settings, publishing). List every item marked N/A until publishing as a **recheck after the visibility change**, so a ready verdict does not hide it.
 End with a one-line verdict: **ready**, **ready after fixes**, or **not ready**. A BLOCKED item in secrets and private data, internal leaks or license caps the verdict at **not ready**, naming the group that could not be checked, because what was not scanned cannot be called clean.
 
-Done when every item above has a status and every FAIL has a fix.
+Done when every item above and in each reference it links has a status and every FAIL has a fix.
