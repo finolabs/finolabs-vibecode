@@ -1,4 +1,4 @@
-"""Tests for skills/fnl-delegate/scripts/ledger.py, run through its CLI."""
+"""Tests for skills/delegate/scripts/ledger.py, run through its CLI."""
 
 import importlib.util
 import contextlib
@@ -15,7 +15,7 @@ from pathlib import Path
 from tests.data_root_fixture import account
 from unittest import mock
 
-LEDGER = Path(__file__).resolve().parent.parent / "skills/fnl-delegate/scripts/ledger.py"
+LEDGER = Path(__file__).resolve().parent.parent / "skills/delegate/scripts/ledger.py"
 START = ["start", "--project", "demo", "--task", "add parser", "--kind", "implement",
          "--grade", "medium", "--agent", "codex", "--model", "m1", "--budget", "40"]
 

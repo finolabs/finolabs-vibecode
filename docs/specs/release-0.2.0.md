@@ -40,7 +40,7 @@ A merged design records intent; it does not establish that every mechanism was i
 This POLISH package re-cuts the combined release notes, updates the README installation entry and version
 wording, defines supported security versions and response targets, clarifies contributor checks/reviews,
 adds CODEOWNERS and indexes this record. It changes no runtime, manifest, workflow, skill or asset.
-`fnl-update` and `fnl-restore-point` shipped before 0.2.0 and are not new capabilities in this release.
+`update` and `restore-point` shipped before 0.2.0 and are not new capabilities in this release.
 
 ## Decisions settled
 
@@ -48,7 +48,7 @@ Recorded in the accepted area specs on 2026-11-07:
 
 - The owner chose the phase-0 minor release for incompatible removals and explicitly waived a deprecation
   period for the retired verifier/steward agents and standalone instructions skill; setup also absorbs scan
-  and mode. Callers use `fnl-verification`, `fnl-session-hygiene` and `/fnl-setup` subcommands instead.
+  and mode. Callers use `verification`, `session-hygiene` and `/setup` subcommands instead.
 - Review families are user-assigned; independence is preferred and same-family fallback is disclosed.
   Roles grant no posting authority. Relay remains subject to the existing approval rules; its proposed
   counted fallback has not been built.
@@ -68,11 +68,11 @@ backlog. That scheduling decision supersedes the older 0.2.0 targets, not the de
 
 ## Upgrade
 
-1. Update through the host's supported path, then open a new session and run `/fnl-setup check` (`$` on Codex).
+1. Update through the host's supported path, then open a new session and run `/setup check` (`$` on Codex).
 2. On Codex, inspect `/hooks` trust again because bundle file changes can invalidate trust without new declarations.
-3. Review `/fnl-setup add delegation` for `## Limits`: totals are 1–32, optional family caps cannot exceed the total,
+3. Review `/setup add delegation` for `## Limits`: totals are 1–32, optional family caps cannot exceed the total,
    and missing/invalid totals fall back to 5. Older parenthetical total lines need replacing through setup.
-4. Use `/fnl-setup add roles` for roles, posting and judge choices, and `/fnl-setup add compaction` for optional
+4. Use `/setup add roles` for roles, posting and judge choices, and `/setup add compaction` for optional
    status-line context recording. Existing status lines receive a composition recipe rather than an overwrite.
 5. Replace removed entry points using the changelog's Removed group. Data root and consent do not migrate;
    global ledger/task lines remain readable through 0.2.1, with per-repository replacements required before 0.3.0.

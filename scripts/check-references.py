@@ -4,9 +4,12 @@
 - README and the help map list exactly the skill folders (tests/test_manifests.py checks the count).
 - Retired names occur only in dated releases, Unreleased migration mappings or
   the explicitly listed historical setup specs.
-- Every `fnl-<name>` in backticks names a skill, an agent or the review marker,
+- Every `fnl-<name>` in backticks names an agent, an alias folder or the review marker,
   except explicitly retired setup names in the historical specs listed below.
-- Every `fnl-<name>` "Heading" names a heading in that skill or agent.
+- The older `fnl-<name>` of a renamed skill appears only where the alias is meant: the changelog,
+  the release spec that renamed the skills, or a line that says "alias" or "older name".
+- Every `<skill>` or `fnl-<agent>` "Heading" names a heading in that skill or agent.
+- Every `skills/fnl-<name>/` folder is a thin alias holding only SKILL.md, beside a `<name>` folder.
 - Every `file.md` "Heading" or [file.md](file.md) "Heading" names a heading in that file, in the same skill.
 - Every relative Markdown link points to an existing file.
 - Every ledger subcommand a skill cites exists in ledger.py, with its own flags and allowed values.
@@ -23,17 +26,17 @@ import sys
 from pathlib import Path
 
 # Names in backticks that are neither skills nor agents.
-OTHER_NAMES = {"fnl-review"}  # the review marker in pull request comments
+OTHER_NAMES = {"fnl-review", "fnl-router"}  # the review and router markers in pull requests
 # Spell retired names only in the changelog, not in this source.
-RETIRED = {"fnl-" + old: "fnl-" + new for old, new in (
+RETIRED = {"fnl-" + old: new for old, new in (
     ("committee", "advisor"), ("coordinator-sessions", "delegate"),
     ("knowledge", "session-hygiene"))}
 # Historical specs and released entries retain these names; current callers use the replacements.
-RETIRED_AGENTS = {"fnl-" + old: "fnl-" + new for old, new in (
+RETIRED_AGENTS = {"fnl-" + old: new for old, new in (
     ("verifier", "verification"), ("steward", "session-hygiene"))}
 # Setup commands were folded into one skill in 0.2.0. Keep the original
 # decisions in these specs; current surfaces must use the replacement commands.
-SETUP_RETIRED = {"fnl-" + old: "/fnl-setup " + new for old, new in (
+SETUP_RETIRED = {"fnl-" + old: "/setup " + new for old, new in (
     ("setup-instructions", "instructions"), ("scan-agents", "scan"), ("set-mode", "mode"))}
 SETUP_HISTORY = {
     "docs/specs/agent-roles.md", "docs/specs/agent-scan-and-consolidation.md",
@@ -41,15 +44,18 @@ SETUP_HISTORY = {
     "docs/specs/work-tracking.md",
 }
 RELEASED = re.compile(r"^## \[\d[^\]]*\] - \d{4}-\d{2}-\d{2}$")
-# Agent CLI flags that fnl-delegate cites beside the ledger's.
+# Agent CLI flags that delegate cites beside the ledger's.
 AGENT_FLAGS = {"print-timeout", "timeout", "max-turns"}
 # Files whose inline `--flag` spans are ledger flags.
-LEDGER_PROSE = ["skills/fnl-delegate/SKILL.md", "skills/fnl-delegate/references/dispatch.md",
-                "skills/fnl-delegate/references/ledger.md", "skills/fnl-delegate/references/route-judgment.md",
-                "skills/fnl-status/SKILL.md", "skills/fnl-advisor/SKILL.md", "skills/fnl-advisor/references/committee.md"]
+LEDGER_PROSE = ["skills/delegate/SKILL.md", "skills/delegate/references/dispatch.md",
+                "skills/delegate/references/ledger.md", "skills/delegate/references/route-judgment.md",
+                "skills/status/SKILL.md", "skills/advisor/SKILL.md", "skills/advisor/references/committee.md"]
 
 NAME = re.compile(r"`(fnl-[a-z-]+)`")
-SECTION = re.compile(r"`(fnl-[a-z-]+)`(?:'s)? \(?\"([^\"]+)\"")
+SECTION = re.compile(r"`((?:fnl-)?[a-z][a-z-]*)`(?:'s)? \(?\"([^\"]+)\"")
+# Files that may name a renamed skill by its older fnl- name; elsewhere only a line about the alias may.
+OLD_NAME_FILES = {"CHANGELOG.md", "docs/specs/release-0.2.5.md"}
+OLD_NAME_LINE = re.compile(r"\balias|\bolder name", re.I)
 FILE_SECTION = re.compile(r"(?:`([A-Za-z0-9_-][A-Za-z0-9_/-]*\.md)`|\[[^\]]+\]\(([A-Za-z0-9_/.-]+\.md)\))(?:'s)? \(?\"([^\"]+)\"")
 REVIEW_BY = re.compile(r"^Checked \d{4}-\d{2}-\d{2}\. Review by \d{4}-\d{2}-\d{2}\.$", re.M)
 LINK = re.compile(r"\]\(([^)\s]+)\)")
@@ -94,7 +100,7 @@ def lines(path):
 def targets(root):
     """Skill and agent names mapped to the files that hold their headings."""
     found = {}
-    for skill in root.glob("skills/fnl-*/SKILL.md"):
+    for skill in root.glob("skills/*/SKILL.md"):
         found[skill.parent.name] = skill
     for agent in root.glob("agents/fnl-*.md"):
         found[agent.stem] = agent
@@ -107,6 +113,10 @@ def check_names_and_sections(root, docs, problems):
         rel = path.relative_to(root)
         for n, line in lines(path):
             for name in NAME.findall(line):
+                current = name[len("fnl-"):]
+                if (name in known and (root / "skills" / current / "SKILL.md").is_file()
+                        and rel.as_posix() not in OLD_NAME_FILES and not OLD_NAME_LINE.search(line)):
+                    problems.append(f"{rel}:{n}: older name `{name}`; use `{current}`")
                 if name not in known and name not in OTHER_NAMES:
                     if name in RETIRED_AGENTS:
                         if rel.parts[:2] == ("docs", "specs"):
@@ -153,7 +163,7 @@ def check_links(root, docs, problems):
 
 def ledger_options(root):
     sys.dont_write_bytecode = True  # keep __pycache__ out of the skill folder
-    spec = importlib.util.spec_from_file_location("ledger", root / "skills/fnl-delegate/scripts/ledger.py")
+    spec = importlib.util.spec_from_file_location("ledger", root / "skills/delegate/scripts/ledger.py")
     ledger = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ledger)
     parser = ledger.build_parser()
@@ -242,7 +252,7 @@ def cli_flags(text):
 
 
 def check_host_template(root, problems):
-    base = root / "skills/fnl-delegate/references"
+    base = root / "skills/delegate/references"
     template, contracts = sections(base / "host-template.md"), sections(base / "agents.md")
     for agent in ("Claude Code", "Codex", "Antigravity"):
         if agent not in template or agent not in contracts:
@@ -254,27 +264,38 @@ def check_host_template(root, problems):
 
 
 def check_review_by(root, problems):
-    models = root / "skills/fnl-delegate/references/models.md"
+    models = root / "skills/delegate/references/models.md"
     if not REVIEW_BY.search(models.read_text()):
         problems.append(f"{models.relative_to(root)}: needs a line \"Checked YYYY-MM-DD. Review by YYYY-MM-DD.\"")
 
 
 def check_mode_copies(root, problems):
-    source = root / "skills/fnl-delegate/scripts/mode.py"
-    for relative in ("scripts/mode.py", "skills/fnl-setup/scripts/mode.py"):
+    source = root / "skills/delegate/scripts/mode.py"
+    for relative in ("scripts/mode.py", "skills/setup/scripts/mode.py"):
         copy = root / relative
         if not source.is_file() or not copy.is_file() or source.read_bytes() != copy.read_bytes():
             problems.append(f"{relative}: mode.py copies differ or are missing")
 
 
 def check_skill_inventory(root, problems):
-    folders = {p.name for p in (root / "skills").iterdir() if p.is_dir()}
-    for relative in ("README.md", "skills/fnl-help/references/map.md"):
+    every = {p.name for p in (root / "skills").iterdir() if p.is_dir()}
+    # An fnl- folder is the older name of a renamed skill: a thin alias, not listed in the tables.
+    folders = {name for name in every if not name.startswith("fnl-")}
+    for name in sorted(every - folders):
+        alias = root / "skills" / name
+        target = name[len("fnl-"):]
+        if target not in folders:
+            problems.append(f"skills/{name}: alias of missing skill {target}")
+        if sorted(p.name for p in alias.iterdir()) != ["SKILL.md"]:
+            problems.append(f"skills/{name}: an alias folder holds only SKILL.md")
+        elif f"Dependency: `{target}`." not in (alias / "SKILL.md").read_text():
+            problems.append(f"skills/{name}: alias does not load `{target}`")
+    for relative in ("README.md", "skills/help/references/map.md"):
         path = root / relative
         # The canonical skill table lives under Skills, before the next heading.
         section = sections(path).get("Skills", "")
         section = re.split(r"^#{1,6} ", section, maxsplit=1, flags=re.M)[0]
-        listed = set(re.findall(r"^\| `(fnl-[a-z-]+)` \|", section, re.M))
+        listed = set(re.findall(r"^\| `([a-z][a-z-]*)` \|", section, re.M))
         for name in sorted(folders - listed):
             problems.append(f"{relative}: skill folder {name} missing from skill list")
         for name in sorted(listed - folders):

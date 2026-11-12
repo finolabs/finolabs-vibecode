@@ -128,7 +128,7 @@ class SelectTestsTest(unittest.TestCase):
         self.assertEqual(done.stdout, '')
 
     def test_skill_copy_matches(self):
-        copy = ROOT / 'skills/fnl-checks/scripts/select_tests.py'
+        copy = ROOT / 'skills/checks/scripts/select_tests.py'
         self.assertEqual(copy.read_bytes(), SCRIPT.read_bytes())
 
 

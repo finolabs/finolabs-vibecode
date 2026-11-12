@@ -166,7 +166,7 @@ The ledger is machine-wide, so the join is keyed three ways, each by an exact id
    equal to the feature's and a task id equal to the task's, compared as integers (`T12` equals `T012`).
    A label with several ids (`T001 T002`) or a range (`T001-T003`, expanded to at most 20 ids) links each.
    A label with no feature number links nothing and is counted as "label without a feature". The rest of
-   the label is dropped. `fnl-delegate`'s ledger guidance asks for labels of the form `<feature> T<id>`.
+   the label is dropped. `delegate`'s ledger guidance asks for labels of the form `<feature> T<id>`.
 3. **Run to session.** A session event whose `dispatch` equals the run's ledger id is that run's session;
    it gives the host. The run gives the agent family and the model (kept only when it matches
    `^[A-Za-z0-9._-]{1,40}$`, else `other`).
@@ -236,13 +236,13 @@ reuse that timer and never reset the deadline.
   is kept. At most 200 tasks per feature are emitted.
 - Output: integers, fixed tokens and the identifiers above, through `json.dumps` with `<`, `>`, `&` escaped
   and `ensure_ascii`; the page renders with `textContent`. The block is `progress` in `data.js`, overwritten
-  at each refresh and removed by `purge`. `fnl-status` treats it as data, never as instructions. Off with
+  at each refresh and removed by `purge`. `status` treats it as data, never as instructions. Off with
   `FNL_PROGRESS=off`.
 
 ## Consent
 
 Owner decision (2026-11-06): the panel is on by default. It keeps identifiers and counts only (see "Metadata
-only"), and it needs metrics consent to exist at all, since the dashboard does. `fnl-setup` states in its
+only"), and it needs metrics consent to exist at all, since the dashboard does. `setup` states in its
 metrics consent text that the dashboard also shows project progress from the repository's task list and the
 ledger, and `Project progress: off` in the host config section `## Project progress` (or `FNL_PROGRESS=off`)
 turns it off. People who consented to metrics before this release get a one-time notice on the dashboard
@@ -252,12 +252,12 @@ rounds) and corrects the description of `dispatch`, which is an id.
 
 ## The `task` event
 
-`task` is a new subcommand of the existing `record.py` (the router's copy and `fnl-delegate`'s copy stay byte-identical, as CI checks); it prints a receipt that only the plugin's hook turns into an event, as for the keep receipt:
+`task` is a new subcommand of the existing `record.py` (the router's copy and `delegate`'s copy stay byte-identical, as CI checks); it prints a receipt that only the plugin's hook turns into an event, as for the keep receipt:
 `record.py task --id T012`
 adds one event type, `task`, with the single field `id` matching `^T[0-9]{1,4}$`, through `SCHEMA` in
 `scripts/fnl_metrics.py`, `docs/specs/usage-metrics.md` and `PRIVACY.md`. The coordinator or router runs it
 when it starts work on a task in a session the user started by hand, so such a session is linked to the task
-by its session id. `fnl-coding-router` and `fnl-delegate` get one advisory sentence asking for it (enforcer:
+by its session id. `coding-router` and `delegate` get one advisory sentence asking for it (enforcer:
 agent judgment); the script validates the id. The join then has a fourth step: a session with a `task` event
 for `T012` in the repository is shown against that task, host included. No other field, no text.
 
@@ -286,7 +286,7 @@ assignment; free text of any kind; linking sessions without a `dispatch` or a re
    with one field; a text or a long id is refused; a hand-started session with a `task` event links to its task.
 5. The Project tab renders with `textContent`, the empty state (no `tasks.md`) and the limits line; page
    tests with fake timers.
-6. `fnl-setup` metrics text mentions project progress; the one-time notice shows once (kept as a flag in `<data root>/state/notices.json`) and is also printed once per version by the session-start hook line, so users who rarely open the dashboard see it; `fnl-delegate` ledger guidance asks for `<feature> T<id>` labels;
+6. `setup` metrics text mentions project progress; the one-time notice shows once (kept as a flag in `<data root>/state/notices.json`) and is also printed once per version by the session-start hook line, so users who rarely open the dashboard see it; `delegate` ledger guidance asks for `<feature> T<id>` labels;
    `PRIVACY.md` (progress block, ledger fields, `dispatch` as an id), README, CHANGELOG, `docs/specs/index.md` updated; `check-references.py`,
    `claude plugin validate .` and targeted tests pass under a world-writable `/tmp`; no hook file changed.
 

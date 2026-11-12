@@ -4,7 +4,7 @@ Status: implemented; phase 1: ledger and opt-in process snapshot in Running now;
 
 Idea: owner, 2026-11-06. Agents now start sub-agents of their own family and the coordinator delegates
 to other families, so a user often cannot tell how many agents and background processes are alive.
-`fnl-status` should show it. Phase 1 only; phase 2 is listed so the design does not close it off.
+`status` should show it. Phase 1 only; phase 2 is listed so the design does not close it off.
 
 ## What can be seen (and what cannot)
 
@@ -35,13 +35,13 @@ dashboard refresh may run `ps` once per refresh, read-only, as the current user,
 command-line agent processes; fixed argv, absolute owner-checked path, no shell, allowlisted
 environment, neutral working folder, 2-second limit with the process group killed, 256 KiB output cap;
 it keeps only fixed family names, counts and elapsed seconds, never arguments, paths, environment or user-chosen names;
-it runs only when metrics consent is recorded and `fnl-setup` has turned the snapshot on (off by default); `FNL_AGENT_SNAPSHOT=off` stops it; no other command and
+it runs only when metrics consent is recorded and `setup` has turned the snapshot on (off by default); `FNL_AGENT_SNAPSHOT=off` stops it; no other command and
 no network. No code lands before that rule is merged.
 
 ## Phase 1
 
 Order inside the package: the ledger and hook-event parts of the panel first, the process snapshot last, off by
-default until `fnl-setup` offers it. The `ps` exception merges into `CLAUDE.md` only when that code is about to
+default until `setup` offers it. The `ps` exception merges into `CLAUDE.md` only when that code is about to
 land (owner approved the text on 2026-11-06).
 
 ### Snapshot `scripts/agent_processes.py` (stdlib)
@@ -69,7 +69,7 @@ land (owner approved the text on 2026-11-06).
 ### Dashboard (`refresh.py`, page)
 
 - `data.js` gains a `running` block: ledger open dispatches (age against budget, the liveness verdict
-  `fnl-status` already computes) and the snapshot. It is written to `data.js` (a local file the
+  `status` already computes) and the snapshot. It is written to `data.js` (a local file the
   dashboard owns), overwritten at each refresh and removed by `purge`; it is not written to the events
   files.
 - All values are emitted through `json.dumps` with `<`, `>` and `&` escaped, and rendered with
@@ -80,8 +80,8 @@ land (owner approved the text on 2026-11-06).
   with its time.
 - The snapshot is taken only by `refresh.py`, at most every 10 seconds (the existing throttle), only
   when metrics consent is recorded in the canonical consent file; the hook path starts the refresh
-  exactly as it does today and never waits for it. `fnl-status` runs it in the foreground.
-- `fnl-status` SKILL: step 3 reads the same data; verdict wording is advisory (agent judgment), the
+  exactly as it does today and never waits for it. `status` runs it in the foreground.
+- `status` SKILL: step 3 reads the same data; verdict wording is advisory (agent judgment), the
   data is produced by the script.
 
 ### Docs

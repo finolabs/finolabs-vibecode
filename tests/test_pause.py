@@ -13,7 +13,7 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / 'skills' / 'fnl-delegate' / 'scripts'
+SCRIPTS = ROOT / 'skills' / 'delegate' / 'scripts'
 sys.path.insert(0, str(SCRIPTS))
 import heavy_run as heavy
 import pause
@@ -506,9 +506,9 @@ class HeavyRunRefusalTest(Base):
 
 
 class PackagedCopyRefusalTest(Base):
-    """The fnl-checks copy of heavy_run, run alone in an isolated interpreter, finds its own pause reader."""
+    """The checks copy of heavy_run, run alone in an isolated interpreter, finds its own pause reader."""
 
-    PACKAGED = ROOT / 'skills' / 'fnl-checks' / 'scripts'
+    PACKAGED = ROOT / 'skills' / 'checks' / 'scripts'
     CHILD = '\n'.join((
         'import sys, unittest',
         'from pathlib import Path',

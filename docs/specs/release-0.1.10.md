@@ -37,7 +37,7 @@ where only advice exists.
 | 9 | Dashboard freshness: ledger and Antigravity trigger a rebuild, a freshness line per host | [dashboard-freshness.md](dashboard-freshness.md) | released; merged (pull request 108) |
 | 10 | Ask in the host's native question form: always-loaded rule, interview rules for rounds larger than the tool allows, router and map wording | none (text only; see "Package 10") | released; merged (pull request 106) |
 
-Order of work: 4, then 9 (small, and the other dashboard packages rely on it), then 6, then 8 (it shares the page and the refresh with 6), then 10 (text only, any time), then 7. Package 5 is not in this release. Packages 4 to 6 all edit `fnl-setup`, the README and the
+Order of work: 4, then 9 (small, and the other dashboard packages rely on it), then 6, then 8 (it shares the page and the refresh with 6), then 10 (text only, any time), then 7. Package 5 is not in this release. Packages 4 to 6 all edit `setup`, the README and the
 changelog, so they run one at a time, each through its own pull request with both reviews.
 
 ## Decisions settled (owner, 2026-11-06)
@@ -45,7 +45,7 @@ changelog, so they run one at a time, each through its own pull request with bot
 - Audit correction: a ledger write by a hooked coordinator already triggers a rebuild (see `dashboard-freshness.md`); the real gaps are Antigravity, writes outside a hooked session, idle periods, and untrusted Codex hooks.
 - All four dashboard packages (tabs and progress in 8, running agents in 6, freshness in 9) ship in 0.1.10: a release should carry features users notice, and time is not the constraint.
 - The `ps` exception for the process snapshot is approved. The snapshot is the last piece of package 6 and is
-  off until `fnl-setup` turns it on; the exception text merges into `CLAUDE.md` only when that code is about to land.
+  off until `setup` turns it on; the exception text merges into `CLAUDE.md` only when that code is about to land.
 - Project progress is on by default (it keeps identifiers and counts only, and needs metrics consent); the
   dashboard shows a one-time notice of what it reads and how to switch it off. The `task` event is in this
   release.
@@ -60,7 +60,7 @@ changelog, so they run one at a time, each through its own pull request with bot
 - A second blocking hook is accepted, only as the opt-in Antigravity compaction stop, scoped by the
   second exception in `CLAUDE.md`.
 - A prompt on the common merge and publish commands goes through permission rules written by
-  `fnl-setup` after a separate consent (package 5), not through a plugin hook. It is not a complete guard.
+  `setup` after a separate consent (package 5), not through a plugin hook. It is not a complete guard.
 - The dashboard also becomes a project view (package 8): task progress from Spec Kit `tasks.md` or a
   configured task file, joined with delegated runs and sessions; local files and records only.
 - Running agents: phase 1 now; hook-reported sub-agents (phase 2) wait until phase 1 shows what users
@@ -85,7 +85,7 @@ changelog, so they run one at a time, each through its own pull request with bot
 Owner request, 2026-11-06, clarified: whichever skill an agent uses to brainstorm or clarify with the user
 (`grilling` from mattpocock/skills, `brainstorming` from superpowers, Spec Kit's clarify step, or the pack's own
 interview rules), the agent should put the user's decisions through the host's native question tool, not plain text.
-The pack already does this for its own skills (0.1.8, package 1) and for specs and plans (`fnl-coding-router`
+The pack already does this for its own skills (0.1.8, package 1) and for specs and plans (`coding-router`
 section 4). Gaps: an agent that needs a decision outside those skills asks in text, a third-party skill's own
 instructions may say "ask the user" without naming the tool, and a round larger than the tool takes (four on Claude
 Code) falls back to a numbered text list.
@@ -100,7 +100,7 @@ Changes, all text and advisory (agent judgment; no host mechanism can force an a
   sentence: run that skill's interview, but put its questions through the native tool.
 - The shared `interview.md` copies say how to stage a larger round: blocking questions first, at most the tool's
   limit per call, the rest in the next call, a numbered text list only as the last resort.
-- `fnl-ask` map names the behaviour in its "Requirements unclear" row.
+- `ask` map names the behaviour in its "Requirements unclear" row.
 
 The pack has no brainstorming skill of its own and builds none (compose before build); it composes with whichever the
 repository adopts, and the interview rules stay the fallback.
@@ -123,7 +123,7 @@ From reviews and research; each is small and independent.
   `compaction-threshold.md` (Codex scope and percent keys, the writer's own range); Antigravity
   `PostToolUse` matcher `write_file` is dead (real names `write_to_file`, `replace_file_content`,
   `multi_replace_file_content`) and `suggestedPrompts` allows three, the plugin ships four.
-- The keep-manual behaviour of `fnl-delegate` needs a check outside the model's wording.
+- The keep-manual behaviour of `delegate` needs a check outside the model's wording.
 - `finolabs/plugins`: the catalog check should verify the pinned ref and read manifests at it (issue 8).
 
 ## Verification and limits

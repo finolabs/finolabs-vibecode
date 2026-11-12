@@ -215,7 +215,7 @@ class RunEnvironmentTest(unittest.TestCase):
             delegate_env.names_from_host(text.replace('-->', ''), 'codex')
 
     def test_template_strictly_parses_for_each_family(self):
-        text = (ROOT / 'skills/fnl-delegate/references/host-template.md').read_text()
+        text = (ROOT / 'skills/delegate/references/host-template.md').read_text()
         for family in delegate_env.FAMILIES:
             self.assertEqual(delegate_env.names_from_host(text, family), [])
 

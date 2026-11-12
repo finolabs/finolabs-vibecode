@@ -14,7 +14,7 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / 'skills/fnl-setup/scripts/matrix_setup.py'
+SCRIPT = ROOT / 'skills/setup/scripts/matrix_setup.py'
 PREFIX = b'# Host\r\n\r\n## Other\r\nkeep \xc3\xa9  \r\n'
 TODAY = '2026-11-09'
 LINES = ('--line', 'claude: levels 1-5; works on frontend, design; model claude-opus-5-5',

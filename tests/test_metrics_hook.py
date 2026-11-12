@@ -24,7 +24,7 @@ sys.modules["fnl_metrics"] = fm
 spec.loader.exec_module(fm)
 
 REMINDER = json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": (
-    "fnl: this session edited a file before any fnl-coding-router receipt; invoke the fnl-coding-router skill before "
+    "fnl: this session edited a file before any coding-router receipt; invoke the coding-router skill before "
     "further coding work (advisory reminder, shown once per session).")}}) + "\n"
 MARKER = "<!-- fnl-review kind=code head=0123456789abcdef0123456789abcdef01234567 verdict=REWORK -->"
 
@@ -67,17 +67,17 @@ class HookTest(unittest.TestCase):
         return [json.loads(line) for path in sorted(self.dir.glob("events-*.jsonl")) for line in path.read_text().splitlines()]
 
     def test_nothing_is_recorded_without_consent(self):
-        self.post("Skill", {"skill": "fnl-coding-router"})
+        self.post("Skill", {"skill": "coding-router"})
         self.assertFalse(self.dir.exists())
 
     def test_a_skill_and_an_agent_are_recorded_by_their_fnl_name(self):
         self.consent()
-        self.post("Skill", {"skill": "finolabs-vibecode:fnl-coding-router"})
+        self.post("Skill", {"skill": "finolabs-vibecode:coding-router"})
         self.post("Agent", {"subagent_type": "finolabs-vibecode:fnl-reviewer", "prompt": "secret task text"})
         self.post("Skill", {"skill": "grilling"})
         self.post("Agent", {"subagent_type": "Explore"})
         got = [(e["event"], e["name"]) for e in self.events()]
-        self.assertEqual(got, [("skill", "fnl-coding-router"), ("agent", "fnl-reviewer")])
+        self.assertEqual(got, [("skill", "coding-router"), ("agent", "fnl-reviewer")])
 
     def test_only_the_first_edit_of_a_session_is_recorded(self):
         self.consent()
@@ -150,7 +150,7 @@ class HookTest(unittest.TestCase):
 
     def test_commit_and_router_words_inside_other_commands_are_not_triggers(self):
         self.consent()
-        base = "python3 -I skills/fnl-coding-router/scripts/record.py router --depth DEEP --trigger none"
+        base = "python3 -I skills/coding-router/scripts/record.py router --depth DEEP --trigger none"
         for command in ("echo git commit", 'grep "git commit" notes.txt', "grep '" + base + "' log.txt"):
             self.post("Bash", {"command": command})
         self.assertEqual(self.events(), [])
@@ -290,7 +290,7 @@ class HookTest(unittest.TestCase):
 
     def test_the_router_receipt_command_is_recorded_with_its_depth_and_trigger(self):
         self.consent()
-        base = "python3 -I skills/fnl-coding-router/scripts/record.py router "
+        base = "python3 -I skills/coding-router/scripts/record.py router "
         self.post("Bash", {"command": base + "--depth DEEP --trigger security"})
         self.post("Bash", {"command": base + "--depth HUGE --trigger security"})
         self.post("Bash", {"command": base + "--depth MIN --trigger made-up"})
@@ -298,7 +298,7 @@ class HookTest(unittest.TestCase):
         self.assertEqual((event["event"], event["depth"], event["trigger"]), ("router", "DEEP", "security"))
 
     def test_the_router_receipt_command_prints_one_line_and_rejects_a_bad_value(self):
-        record = ROOT / "skills/fnl-coding-router/scripts/record.py"
+        record = ROOT / "skills/coding-router/scripts/record.py"
         ok = subprocess.run([sys.executable, "-I", str(record), "router", "--depth", "NORMAL", "--trigger", "none"],
                             capture_output=True, text=True)
         self.assertEqual((ok.returncode, ok.stdout.strip()), (0, "router receipt: depth=NORMAL trigger=none"))
@@ -308,7 +308,7 @@ class HookTest(unittest.TestCase):
 
     def test_the_keep_receipt_command_is_recorded_with_fixed_values_only(self):
         self.consent()
-        base = 'python3 -I "/a/skills/fnl-delegate/scripts/record.py" keep '
+        base = 'python3 -I "/a/skills/delegate/scripts/record.py" keep '
         self.post("Bash", {"command": base + "--tasks 3 --reason needs-context"})
         self.post("Bash", {"command": base + "--tasks=2 --reason=user-choice --route-by=user"})
         self.post("Bash", {"command": base + "--tasks 0 --reason needs-context"})
@@ -329,7 +329,7 @@ class HookTest(unittest.TestCase):
                 self.assertEqual(self.events(), [])
 
     def test_judge_receipts_record_on_each_host_and_respect_consent(self):
-        command = "python3 -I skills/fnl-delegate/scripts/record.py judge --site route --grader judge --result validated --followed yes"
+        command = "python3 -I skills/delegate/scripts/record.py judge --site route --grader judge --result validated --followed yes"
         self.post("Bash", {"command": command})
         self.assertEqual(self.events(), [])
         self.consent()
@@ -377,7 +377,7 @@ class HookTest(unittest.TestCase):
         self.assertEqual([e["site"] for e in self.events()], ["route", "depth"])
 
     def test_judge_receipt_copies_accept_the_same_values_and_pairs_without_writes(self):
-        records = [ROOT / ("skills/" + skill + "/scripts/record.py") for skill in ("fnl-delegate", "fnl-coding-router")]
+        records = [ROOT / ("skills/" + skill + "/scripts/record.py") for skill in ("delegate", "coding-router")]
         cases = list(itertools.product(("route", "depth", "activity", "instruction"), ("judge", "agent"),
                                        ("validated", "unverified"), ("yes", "no", "na")))
         cases += [("free text", "judge", "validated", "yes"), ("route", "other", "validated", "yes"),
@@ -412,7 +412,7 @@ class HookTest(unittest.TestCase):
 
     def test_task_receipt_copies_validate_without_writing(self):
         records = [ROOT / ("skills/" + skill + "/scripts/record.py")
-                   for skill in ("fnl-coding-router", "fnl-delegate")]
+                   for skill in ("coding-router", "delegate")]
         self.assertEqual(records[0].read_bytes(), records[1].read_bytes())
         for record in records:
             for task_id in ("T1", "T012", "T9999", "task text", "T12345", "T12\n", "T１２", "t12", ""):
@@ -429,7 +429,7 @@ class HookTest(unittest.TestCase):
         self.assertEqual(list(self.repo.iterdir()), [self.repo / ".git"])
 
     def test_task_receipt_records_one_id_on_each_host_with_consent_only(self):
-        command = "python3 -I skills/fnl-coding-router/scripts/record.py task --id T012"
+        command = "python3 -I skills/coding-router/scripts/record.py task --id T012"
         self.post("Bash", {"command": command})
         self.assertEqual(self.events(), [])
         self.consent()
@@ -466,7 +466,7 @@ class HookTest(unittest.TestCase):
         self.assertEqual(self.events(), [])
 
     def test_the_keep_receipt_command_prints_one_line_and_offers_the_schema_values(self):
-        record = ROOT / "skills/fnl-delegate/scripts/record.py"
+        record = ROOT / "skills/delegate/scripts/record.py"
         ok = subprocess.run([sys.executable, "-I", str(record), "keep", "--tasks", "2", "--reason", "no-delegate"],
                             capture_output=True, text=True)
         self.assertEqual((ok.returncode, ok.stdout.strip()), (0, "keep receipt: tasks=2 reason=no-delegate route_by=table"))
@@ -513,7 +513,7 @@ class HookTest(unittest.TestCase):
         self.consent()
         self.run_hook({"hook_event_name": "SessionStart", "session_id": "s1", "cwd": str(self.repo), "source": "startup"})
         self.assertTrue((self.dir / "data.js").is_file())
-        self.assertEqual((self.dir / "dashboard.html").read_bytes(), (ROOT / "skills/fnl-status/assets/dashboard.html").read_bytes())
+        self.assertEqual((self.dir / "dashboard.html").read_bytes(), (ROOT / "skills/status/assets/dashboard.html").read_bytes())
 
     def tool_call(self, **extra):
         return {"hook_event_name": "PostToolUse", "session_id": "s1", "cwd": str(self.repo), "tool_name": "Bash",
@@ -602,27 +602,39 @@ class HookTest(unittest.TestCase):
 
     def test_a_typed_fnl_skill_is_recorded_by_name_without_the_prompt_text(self):
         self.consent()
-        self.prompt("/finolabs-vibecode:fnl-setup secret argument text")
-        self.prompt("/fnl-status")
+        self.prompt("/finolabs-vibecode:setup secret argument text")
+        self.prompt("/finolabs-vibecode:status")
         got = [(e["event"], e["name"]) for e in self.events()]
-        self.assertEqual(got, [("skill", "fnl-setup"), ("skill", "fnl-status")])
+        self.assertEqual(got, [("skill", "setup"), ("skill", "status")])
         stored = "".join(path.read_text() for path in self.dir.glob("events-*.jsonl"))
         self.assertNotIn("secret", stored)
         self.assertNotIn("argument", stored)
 
+    def test_an_older_fnl_name_counts_as_the_current_skill_and_host_commands_do_not(self):
+        self.consent()
+        for text in ("/fnl-setup add metrics", "/finolabs-vibecode:fnl-checks", "/plugin:fnl-delegate", "/setup",
+                     "/help", "/status", "/other:setup", "/fnl-x", "/finolabs-vibecode:help"):
+            self.prompt(text)
+        self.post("Skill", {"skill": "fnl-review-gate"})
+        self.post("Skill", {"skill": "finolabs-vibecode:fnl-handoff"})
+        self.post("Skill", {"skill": "versioning"})
+        self.post("Skill", {"skill": "other-plugin:setup"})
+        got = [e["name"] for e in self.events()]
+        self.assertEqual(got, ["setup", "checks", "delegate", "setup", "help", "review-gate", "handoff", "versioning"])
+
     def test_a_typed_command_that_is_not_a_plugin_skill_or_prose_is_not_recorded(self):
         self.consent()
-        for text in ("/compact", "/grilling fnl-setup", "please run /fnl-setup", " /fnl-setup", "/fnl-Setup",
-                     "/fnl-setup/../x", "/other:fnl-", "fnl-setup", ""):
+        for text in ("/compact", "/grilling setup", "please run /setup", " /setup", "/fnl-Setup",
+                     "/setup/../x", "/other:fnl-", "setup", ""):
             self.prompt(text)
-        self.run_hook({"hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": str(self.repo), "prompt": ["/fnl-setup"]})
+        self.run_hook({"hook_event_name": "UserPromptSubmit", "session_id": "s1", "cwd": str(self.repo), "prompt": ["/setup"]})
         self.assertEqual(self.events(), [])
 
     def test_a_typed_skill_is_not_recorded_without_consent_or_when_off(self):
-        self.prompt("/fnl-setup")
+        self.prompt("/setup")
         self.assertFalse(self.dir.exists())
         self.consent()
-        self.prompt("/fnl-setup", env={**self.env, "FNL_METRICS": "off"})
+        self.prompt("/setup", env={**self.env, "FNL_METRICS": "off"})
         self.assertEqual(self.events(), [])
 
     def test_the_first_edit_without_a_router_receipt_prints_one_reminder_once(self):
@@ -636,10 +648,10 @@ class HookTest(unittest.TestCase):
     def test_no_reminder_after_a_router_receipt_of_any_kind(self):
         self.consent()
         receipts = [lambda sid: self.run_hook({"hook_event_name": "PostToolUse", "session_id": sid, "cwd": str(self.repo),
-                                               "tool_name": "Skill", "tool_input": {"skill": "finolabs-vibecode:fnl-coding-router"}}),
+                                               "tool_name": "Skill", "tool_input": {"skill": "finolabs-vibecode:coding-router"}}),
                     lambda sid: self.run_hook({"hook_event_name": "PostToolUse", "session_id": sid, "cwd": str(self.repo),
                                                "tool_name": "Bash", "tool_input": {"command": "python3 x/record.py router --depth MIN --trigger none"}}),
-                    lambda sid: self.prompt("/fnl-coding-router fix it", sid=sid)]
+                    lambda sid: self.prompt("/coding-router fix it", sid=sid)]
         for index, receipt in enumerate(receipts):
             sid = "r%d" % index
             receipt(sid)

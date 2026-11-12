@@ -12,7 +12,7 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "skills/fnl-setup/scripts/setup_features.py"
+SCRIPT = ROOT / "skills/setup/scripts/setup_features.py"
 spec = importlib.util.spec_from_file_location("setup_features", SCRIPT)
 sf = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sf)
@@ -75,7 +75,7 @@ class SetupFeaturesTest(unittest.TestCase):
 
     def test_companions_decline_is_distinct_and_closed(self):
         self.assertEqual(set(sf.FEATURES),
-                         {"delegation", "roles", "quota", "autopilot", "metrics", "compaction", "companions", "project",
+                         {"delegation", "roles", "quota", "afk", "metrics", "compaction", "companions", "project",
                           "checks"})
         self.assertEqual(self.run_cli("decline", "companions", "--yes")[0], 0)
         self.assertEqual(self.run_cli("show")[1].strip(), "declined: companions")

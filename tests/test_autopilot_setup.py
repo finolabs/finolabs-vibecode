@@ -13,7 +13,7 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / 'skills/fnl-setup/scripts/autopilot_setup.py'
+SCRIPT = ROOT / 'skills/setup/scripts/autopilot_setup.py'
 
 
 def load(name, path):
@@ -73,7 +73,7 @@ class AutopilotSetupTest(unittest.TestCase):
                 for p in self.home.rglob('*') if p.is_file()}
 
     def reader(self):
-        return load('autopilot_reader_test', ROOT / 'skills/fnl-delegate/scripts/autopilot.py')
+        return load('autopilot_reader_test', ROOT / 'skills/delegate/scripts/autopilot.py')
 
     def test_round_trip_defaults_and_preview_only(self):
         before = self.host.read_bytes()

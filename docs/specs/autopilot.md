@@ -8,12 +8,12 @@ waiting to be asked. The user stops it when they return. It is not on by default
 
 ## Owner decisions recorded here (2026-11-06)
 
-- The user's standing choices live in `fnl-setup`; starting autopilot applies them. A user who has not set autopilot up
+- The user's standing choices live in `setup`; starting autopilot applies them. A user who has not set autopilot up
   is asked when they first start it; a user who has is shown the current settings in one summary and the agent then
   follows them exactly, while the user stays free to change the setup at any time.
 - Where a user's own instructions require authority for an action (merge, tag, publish, deploy), a durable
   authorization recorded in setup is that authority; a time-boxed or relayed yes in a conversation is not. This
-  changes the user-away rule in `fnl-delegate` (decisions that need the user's authority wait) for exactly
+  changes the user-away rule in `delegate` (decisions that need the user's authority wait) for exactly
   the actions the user authorized in setup, and the change to that rule is part of this release's work. Authority
   setup does not grant stays with the user.
 - An advisor acts as the user's avatar for judgments inside the lease; only decisions of very high authority notify
@@ -22,12 +22,12 @@ waiting to be asked. The user stops it when they return. It is not on by default
 ## Owner decisions recorded here (2026-11-09)
 
 - One skill, not two. The away-mode idea (a user-run command that hands the host agents a time-boxed standing mandate
-  while the user is asleep or out) is autopilot itself. The skill folder keeps the fnl-autopilot name as the
+  while the user is asleep or out) is autopilot itself. The skill folder keeps the autopilot name as the
   canonical, documented command; entries with friendlier names are only thin aliases that load the same
   procedure (a skill folder cannot point outside itself, so the alias holds a pointer sentence and the dependency
-  on fnl-autopilot, never a copy of the rules). Aliases are built together with fnl-autopilot, not before it.
-- On 2026-11-09, the owner named `fnl-afk` (away from keyboard) the main short name and kept `fnl-brb` (be right back) as an alias; both load `fnl-autopilot` and hold no rules of their own.
-- Merge: the authority is the user's affirmative Merge answer in `fnl-setup` (the Merge setting still has no default,
+  on autopilot, never a copy of the rules). Aliases are built together with autopilot, not before it.
+- On 2026-11-09, the owner named `afk` (away from keyboard) the main short name and kept `brb` (be right back) as an alias; both load `autopilot` and hold no rules of their own.
+- Merge: the authority is the user's affirmative Merge answer in `setup` (the Merge setting still has no default,
   and Tier 3 still forbids a merge when setup says no); starting a lease only applies that answer. The owner's own
   answer is yes (2026-11-09). With a yes recorded, the agent may merge a pull request without asking when both review
   markers are APPROVE at the current head, every check is green (the hosted CI and the local test run of the touched
@@ -43,7 +43,7 @@ waiting to be asked. The user stops it when they return. It is not on by default
 - Entry and exit stay one command each: start applies the recorded setup and states the lease length; the user
   stops it on return.
 
-## What the user sets up (`fnl-setup`, new section, host config `## Autopilot`)
+## What the user sets up (`setup`, new section, host config `## Autopilot`)
 
 | Setting | Meaning | Recommended default |
 | --- | --- | --- |
@@ -68,12 +68,12 @@ preview and digest like the other setup writers. Setup writes nothing outside th
 receives the argv of the command, or the list of paths a change touches, and returns the tier. A model never decides
 a tier; unknown commands and paths are Tier 3.
 
-- **Tier 1, decides alone:** which task next, order, which agent and model (`fnl-delegate` routing), splitting work,
+- **Tier 1, decides alone:** which task next, order, which agent and model (`delegate` routing), splitting work,
   fixing review findings, pushing its own branches and opening and updating its own pull requests, merging main into
   its own branches, and (only when setup says so) merging pull requests of its own or of a trusted author that pass `merge_check.py` and the complete merge gate.
 - **Tier 2, the advisor decides and records why:** an ambiguous requirement, a small design change, whether a LOW
   finding is worth a change, a choice between two reasonable approaches. The advisor is the user's avatar:
-  `fnl-advisor` (one opinion, or a committee for design), Jev for narrow judgments, and preferences the user put in
+  `advisor` (one opinion, or a committee for design), Jev for narrow judgments, and preferences the user put in
   setup or an allowlisted preferences file (private notes never leave the machine unless the user allowlisted them).
   It receives only the evidence the case supplies, classified first; it chooses among options `check` already
   allowed and cannot raise a case to a higher authority. It informs; it never grants authority the user reserved.
@@ -126,7 +126,7 @@ Setup is read again at every tick: tightening it takes effect at the next tick; 
 
 ## Host backstop installed with autopilot
 
-When autopilot is set up, `fnl-setup` offers (separate consent, preview, digest, backup, as `merge-guard.md`) the host
+When autopilot is set up, `setup` offers (separate consent, preview, digest, backup, as `merge-guard.md`) the host
 rules that make the lease and setup files read-only for the agent and make tag, release, publish and, when setup says
 no merge, `gh pr merge` stall on a prompt. These are prompts and denials the host enforces in its normal modes; their
 behaviour in non-interactive and bypass modes is unverified and the setup text says so. `merge-guard.md` is the design
@@ -142,7 +142,7 @@ and cloud routines are later.
 
 ## Stopping and returning
 
-`/fnl-autopilot stop` creates the stop file, deletes the lease and deletes the scheduled task named in it (if the task
+`/autopilot stop` creates the stop file, deletes the lease and deletes the scheduled task named in it (if the task
 cannot be deleted, every tick exits at once because there is no lease). Running delegated runs are not killed; they are
 recorded as orphaned for the user to decide. The lease also ends at expiry, below the quota floor, at the limits, and
 when a lease or setup hash mismatch is found. A non-blocking `SessionStart`/`UserPromptSubmit` hook prints a one-line
@@ -163,13 +163,13 @@ start. It rebuilds at most every 10 seconds, with a wall-clock cap per rebuild.
 2. A statement that the plugin's scripts make no network call and never read credentials; the agent's `gh` use is
    the user's own program under the user's login.
 3. No blocking hook is added (the notice hook never blocks). The existing two exceptions are unchanged.
-4. The user-away rule in `fnl-delegate` amended as recorded above; `fnl-review-gate` and `merge_check.py` get the
+4. The user-away rule in `delegate` amended as recorded above; `review-gate` and `merge_check.py` get the
    `--independent` check and its text.
 
 ## Layout
 
-The fnl-autopilot skill folder names `fnl-delegate` as its dependency and calls
-`skills/fnl-delegate/scripts/autopilot.py`. The script lives beside `heavy_run.py`, `mode.py` and `ledger.py`,
+The autopilot skill folder names `delegate` as its dependency and calls
+`skills/delegate/scripts/autopilot.py`. The script lives beside `heavy_run.py`, `mode.py` and `ledger.py`,
 reusing `data_root.py`, `parallel_slots.py` and `secret_patterns.py` there without new shared copies.
 The live loop and notice hook are later work in the autopilot skill's own `scripts/` folder.
 

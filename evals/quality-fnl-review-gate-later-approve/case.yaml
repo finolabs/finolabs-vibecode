@@ -1,4 +1,0 @@
-schema_version: "1.1"
-name: quality-fnl-review-gate-later-approve
-context:
-  scaffold_script: scaffold.sh

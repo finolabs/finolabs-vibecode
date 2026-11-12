@@ -209,7 +209,7 @@ class VerificationTest(unittest.TestCase):
         self.assertEqual([c['answer'] for c in receipt['criteria']], ['insufficient'] * 3)
         brief = self.root / 'brief.json'
         brief.write_text(json.dumps(self.brief))
-        for script in (SCRIPTS / 'verify_claim.py', ROOT / 'skills/fnl-checks/scripts/verify_claim.py'):
+        for script in (SCRIPTS / 'verify_claim.py', ROOT / 'skills/checks/scripts/verify_claim.py'):
             with self.subTest(script=script):
                 done = subprocess.run([sys.executable, '-I', str(script), '--brief', str(brief),
                                        '--base', self.base, '--head', self.head, '--ledger-id', self.dispatch,
@@ -352,7 +352,7 @@ class VerificationTest(unittest.TestCase):
         brief = self.root / 'brief.json'
         brief.write_text(json.dumps(self.brief))
         requests = self.root / 'requests.json'
-        command = [sys.executable, '-I', str(ROOT / 'skills/fnl-checks/scripts/verify_claim.py'),
+        command = [sys.executable, '-I', str(ROOT / 'skills/checks/scripts/verify_claim.py'),
                    '--brief', str(brief), '--base', self.base, '--head', self.head,
                    '--ledger-id', self.dispatch, '--checkout', str(self.checkout),
                    '--judge', 'host', '--requests-out', str(requests)]
@@ -370,8 +370,8 @@ class VerificationTest(unittest.TestCase):
                     capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(self.receipt()['criteria'][0]['answer'], 'yes')
-        for name, skills in [('judge.py', ['fnl-delegate', 'fnl-checks', 'fnl-session-hygiene']),
-                             ('verify_claim.py', ['fnl-checks'])]:
+        for name, skills in [('judge.py', ['delegate', 'checks', 'session-hygiene']),
+                             ('verify_claim.py', ['checks'])]:
             for skill in skills:
                 self.assertEqual((ROOT / 'skills' / skill / 'scripts' / name).read_bytes(),
                                  (SCRIPTS / name).read_bytes())
@@ -379,8 +379,8 @@ class VerificationTest(unittest.TestCase):
     def test_record_cli_and_copies(self):
         metadata = self.root / 'criteria.json'
         metadata.write_text('[]')
-        for path in [SCRIPTS / 'record.py', ROOT / 'skills/fnl-checks/scripts/record.py',
-                     ROOT / 'skills/fnl-delegate/scripts/record.py', ROOT / 'skills/fnl-coding-router/scripts/record.py']:
+        for path in [SCRIPTS / 'record.py', ROOT / 'skills/checks/scripts/record.py',
+                     ROOT / 'skills/delegate/scripts/record.py', ROOT / 'skills/coding-router/scripts/record.py']:
             self.assertEqual(path.read_bytes(), (SCRIPTS / 'record.py').read_bytes())
             done = subprocess.run([sys.executable, '-I', str(path), 'verify', '--id', self.dispatch,
                                    '--head', self.head, '--tests', 'passed', '--mechanical', 'passed',

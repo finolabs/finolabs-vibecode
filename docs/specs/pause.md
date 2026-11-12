@@ -2,7 +2,7 @@
 
 Status: implemented; in release 0.2.3.
 
-Idea: owner, 2026-11-09. The opposite of `fnl-brb`. Autopilot hands the agents a mandate to keep working while the
+Idea: owner, 2026-11-09. The opposite of `brb`. Autopilot hands the agents a mandate to keep working while the
 user is away; pause is what the user runs before a restart or shutdown of the machine, so that no running session or
 process is stopped abruptly and nothing is lost when the machine goes down.
 
@@ -12,13 +12,13 @@ process is stopped abruptly and nothing is lost when the machine goes down.
 - Pause drains, then checkpoints. It stops starting new work, lets running work finish or reach a safe point, writes a
   handover for each session, and reports what recorded work remains so the user can decide. It does not stop running
   processes by itself and never declares the machine safe to shut down.
-- It is its own user-run skill, not a branch of `fnl-autopilot`. It may read autopilot's state and end an active lease,
+- It is its own user-run skill, not a branch of `autopilot`. It may read autopilot's state and end an active lease,
   and it shares no lease or log with it.
-- Names (revised the same day): the documented skill is fnl-pause, and fnl-gtg ("got to go", the counterpart of
-  "be right back") is its friendly alias, as fnl-brb is the alias of fnl-autopilot. Because an abbreviation says nothing
+- Names (revised the same day): the documented skill is pause, and gtg ("got to go", the counterpart of
+  "be right back") is its friendly alias, as brb is the alias of autopilot. Because an abbreviation says nothing
   to a new user, the alias skill's `description` must state in plain words what it does (drain running work before
   a restart or shutdown), with the same trigger phrases as the main skill.
-- The away skill is renamed: fnl-afk becomes its main friendly name and fnl-brb stays as its alias (owner, confirmed
+- The away skill is renamed: afk becomes its main friendly name and brb stays as its alias (owner, confirmed
   2026-11-09; the earlier "brd" was a typo for "brb"). This changes a released skill, so it goes through the autopilot
   spec and skills in its own package.
 - Release: the pause skill and the away-skill rename are both scoped to 0.2.3 (owner, 2026-11-09).
@@ -27,7 +27,7 @@ process is stopped abruptly and nothing is lost when the machine goes down.
 - A deadline exists, and the user states it as the time left before the machine goes down, in minutes, in the user's
   own words: "I will shut the machine down (or restart it) in 15 minutes". The parameter is `--in <minutes>`, not
   `--wait-minutes`, because the user is not choosing how long to wait but when the machine goes away. The kind is the
-  word `restart` or `shutdown` (for example "/fnl-gtg shutdown --in 15"). When the time is up, the skill asks the user
+  word `restart` or `shutdown` (for example "/gtg shutdown --in 15"). When the time is up, the skill asks the user
   about each remaining run, one at a time, and stops none by itself.
 
 ## What pause can and cannot do

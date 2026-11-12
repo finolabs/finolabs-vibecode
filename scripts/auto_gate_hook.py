@@ -38,7 +38,7 @@ def main():
             # Claude Code's documented PreToolUse JSON decision, with exit 0.
             os.write(1, b'{"hookSpecificOutput":{"hookEventName":"PreToolUse",'
                      b'"permissionDecision":"deny","permissionDecisionReason":'
-                     b'"Run the keep-or-hand-off step of fnl-delegate, then retry."}}\n')
+                     b'"Run the keep-or-hand-off step of delegate, then retry."}}\n')
     except Exception:
         pass
     finally:

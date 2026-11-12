@@ -1,4 +1,4 @@
-"""Tests for skills/fnl-delegate/scripts/route_pick.py: the routing query over the assignment matrix."""
+"""Tests for skills/delegate/scripts/route_pick.py: the routing query over the assignment matrix."""
 
 import contextlib
 import importlib.util
@@ -15,7 +15,7 @@ from unittest import mock
 
 from tests.data_root_fixture import account
 
-SCRIPTS = Path(__file__).resolve().parent.parent / "skills/fnl-delegate/scripts"
+SCRIPTS = Path(__file__).resolve().parent.parent / "skills/delegate/scripts"
 SCRIPT = SCRIPTS / "route_pick.py"
 sys.path.insert(0, str(SCRIPTS))
 

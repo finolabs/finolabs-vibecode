@@ -185,7 +185,7 @@ class DataRootTest(unittest.TestCase):
         self.assertIsNone(fm.read_consent())
 
     def location(self):
-        spec = importlib.util.spec_from_file_location("data_location", ROOT / "skills/fnl-setup/scripts/data_location.py")
+        spec = importlib.util.spec_from_file_location("data_location", ROOT / "skills/setup/scripts/data_location.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
@@ -265,7 +265,7 @@ class DataRootTest(unittest.TestCase):
         self.pointer_to()
         self.default.joinpath("host.md").write_text("## Route judgment\n- Instruction check: on\n")
         self.target.joinpath("host.md").write_text("## Route judgment\n- Instruction check: off\n")
-        spec = importlib.util.spec_from_file_location("root_checkup", ROOT / "skills/fnl-setup/scripts/checkup.py")
+        spec = importlib.util.spec_from_file_location("root_checkup", ROOT / "skills/setup/scripts/checkup.py")
         check = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(check)
         with mock.patch.object(check, "instruction_scan", return_value=({}, [], {})) as scan, mock.patch.object(
@@ -312,7 +312,7 @@ class DataRootTest(unittest.TestCase):
         decoy = self.home / "events"
         decoy.mkdir()
         (decoy / "consent.json").write_text("keep decoy unchanged")
-        spec = importlib.util.spec_from_file_location("root_refresh", ROOT / "skills/fnl-status/scripts/refresh.py")
+        spec = importlib.util.spec_from_file_location("root_refresh", ROOT / "skills/status/scripts/refresh.py")
         refresh = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(refresh)
         with mock.patch.dict(os.environ, {"FNL_STATE_DIR": str(decoy)}), mock.patch("builtins.print"):
@@ -322,7 +322,7 @@ class DataRootTest(unittest.TestCase):
 
     def test_invalid_root_consent_commands_exit_with_one_error_and_no_writes(self):
         self.pointer_to(identity="mismatch")
-        spec = importlib.util.spec_from_file_location("root_refresh_invalid", ROOT / "skills/fnl-status/scripts/refresh.py")
+        spec = importlib.util.spec_from_file_location("root_refresh_invalid", ROOT / "skills/status/scripts/refresh.py")
         refresh = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(refresh)
         before = {p.relative_to(self.home): p.read_bytes() for p in self.home.rglob("*") if p.is_file()}
@@ -335,7 +335,7 @@ class DataRootTest(unittest.TestCase):
             self.assertEqual(before, {p.relative_to(self.home): p.read_bytes() for p in self.home.rglob("*") if p.is_file()})
 
     def test_revoke_without_state_is_idempotent(self):
-        spec = importlib.util.spec_from_file_location("root_refresh_empty", ROOT / "skills/fnl-status/scripts/refresh.py")
+        spec = importlib.util.spec_from_file_location("root_refresh_empty", ROOT / "skills/status/scripts/refresh.py")
         refresh = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(refresh)
         with mock.patch("builtins.print"):
@@ -370,7 +370,7 @@ class DataRootTest(unittest.TestCase):
         self.pointer_to(identity="mismatch")
         old = self.default / "ledger.jsonl"
         old.write_text("old ledger must not be read")
-        spec = importlib.util.spec_from_file_location("root_ledger", ROOT / "skills/fnl-delegate/scripts/ledger.py")
+        spec = importlib.util.spec_from_file_location("root_ledger", ROOT / "skills/delegate/scripts/ledger.py")
         ledger = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ledger)
         with mock.patch.dict(os.environ, {"ORCHESTRATION_LEDGER": str(old), "HOME": str(self.default),
@@ -383,14 +383,14 @@ class DataRootTest(unittest.TestCase):
 
 
 COPIES = ["scripts/data_root.py",
-          "skills/fnl-coding-router/scripts/data_root.py",
-          "skills/fnl-delegate/scripts/data_root.py",
-          "skills/fnl-review-gate/scripts/data_root.py",
-          "skills/fnl-setup/scripts/data_root.py",
-          "skills/fnl-status/scripts/data_root.py",
-          "skills/fnl-session-hygiene/scripts/data_root.py",
-          "skills/fnl-checks/scripts/data_root.py",
-          "skills/fnl-restore-point/scripts/data_root.py", "skills/fnl-update/scripts/data_root.py"]
+          "skills/coding-router/scripts/data_root.py",
+          "skills/delegate/scripts/data_root.py",
+          "skills/review-gate/scripts/data_root.py",
+          "skills/setup/scripts/data_root.py",
+          "skills/status/scripts/data_root.py",
+          "skills/session-hygiene/scripts/data_root.py",
+          "skills/checks/scripts/data_root.py",
+          "skills/restore-point/scripts/data_root.py", "skills/update/scripts/data_root.py"]
 
 
 class DataRootCopiesTest(unittest.TestCase):

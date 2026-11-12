@@ -12,8 +12,8 @@ RULE = (
 ADVISORY = "**Advisory (agent judgment):** " + RULE
 # These skills ask or offer choices without mentioning the native question tool.
 OTHER_ASKING_SKILLS = {
-    "fnl-advisor", "fnl-commit-messages", "fnl-handoff", "fnl-plugin-packaging",
-    "fnl-session-hygiene", "fnl-checks", "fnl-versioning",
+    "advisor", "commit-messages", "handoff", "plugin-packaging",
+    "session-hygiene", "checks", "versioning",
 }
 
 
@@ -33,7 +33,7 @@ class UserLanguageTests(unittest.TestCase):
 
     def test_plain_language_copies_match_and_use_the_users_language(self):
         paths = [ROOT / "skills" / name / "references" / "plain-language.md"
-                 for name in ("fnl-help", "fnl-setup")]
+                 for name in ("help", "setup")]
         self.assertEqual(paths[0].read_bytes(), paths[1].read_bytes())
         self.assertIn("beginner register in the user's language", paths[0].read_text())
         ci = (ROOT / ".github" / "workflows" / "validate.yml").read_text()
