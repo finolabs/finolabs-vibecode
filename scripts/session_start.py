@@ -27,6 +27,20 @@ LEDGER_LIMIT = 4 * 1024 * 1024  # a larger ledger reads as unknown at session st
 OPEN_CAP = 99
 
 
+# The skills marked `disable-model-invocation: true` (tests/test_session_start.py keeps this list equal to the folders).
+USER_ONLY = ("help", "ask", "setup", "status", "afk", "autopilot", "brb", "pause", "gtg", "update", "restore-point",
+             "verification")
+USER_ONLY_LINE = (
+    "User-only skills (" + ", ".join(USER_ONLY) + " and every fnl- alias) are for the user to type; never call them "
+    "with the Skill tool. Answer questions about this plugin by reading the help skill's references{route}; "
+    "when a user-only skill is needed, tell the user the command to type (advisory, agent judgment).\n")
+ROUTE_CLAUSE = ", route coding work through coding-router and second opinions through advisor"
+
+
+def user_only_line(routing):
+    return USER_ONLY_LINE.format(route=ROUTE_CLAUSE if routing == "on" else ", get second opinions through advisor")
+
+
 COMPACT_TITLE = (
     "\nAfter compaction (advisory, agent judgment): invoke the session-hygiene skill now; compare this session's "
     "title with the current task and rename it if it is stale, then continue from the handover.\n")
@@ -235,6 +249,7 @@ def main():
         text = "Invoke the delegate skill before handing work to another agent.\n"
         if routing == "on":
             text = "Start coding work with the coding-router skill.\n" + text
+    text += user_only_line(routing)
     try:
         print(text, end="")
     except (OSError, UnicodeError):

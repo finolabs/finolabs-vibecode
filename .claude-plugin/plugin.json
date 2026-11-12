@@ -8,7 +8,7 @@
   "privacyPolicyUrl": "https://github.com/finolabs/finolabs-vibecode/blob/main/PRIVACY.md",
   "termsOfServiceUrl": "https://github.com/finolabs/finolabs-vibecode/blob/main/TERMS.md",
   "version": "0.2.5-dev",
-  "description": "24 skills and 3 agents (fnl-reviewer, fnl-security-reviewer, fnl-navigator) for review routing, verification, setup, run hygiene and quota on demand.",
+  "description": "25 skills and 3 agents (fnl-reviewer, fnl-security-reviewer, fnl-navigator) for review routing, verification, setup, run hygiene and quota on demand.",
   "author": {
     "name": "FINOLABS",
     "url": "https://github.com/finolabs"
