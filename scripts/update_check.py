@@ -116,7 +116,7 @@ def stable(value):
 # Upgrade notes: a closed schema read from the skill's own references folder.
 
 NOTES_LIMIT = 65536
-KINDS = {"rename", "setup", "migration", "hook", "removed"}
+KINDS = {"rename", "setup", "migration", "hook", "removed", "info"}
 ITEM_ID = re.compile(r"([0-9]+\.[0-9]+\.[0-9]+)/([a-z0-9-]{1,40})", re.ASCII)
 SETUP = re.compile(r"/setup add [a-z][a-z0-9-]{0,39}", re.ASCII)
 CHECK_SCRIPT = re.compile(r"(?:scripts|skills/[a-z][a-z0-9-]{0,39}/scripts)/[a-z0-9_]{1,64}\.py", re.ASCII)
@@ -133,7 +133,7 @@ EVIDENCE_URL = "https://github.com/finolabs/finolabs-vibecode/releases/tag/"
 
 def parse_item(release, item):
     if not isinstance(item, dict) or not {"id", "kind", "text"} <= set(item) <= {
-            "id", "kind", "text", "setup", "check", "until"}:
+            "id", "kind", "text", "setup", "check", "until", "where"}:
         raise ValueError("item keys")
     found = ITEM_ID.fullmatch(item["id"]) if isinstance(item["id"], str) else None
     if not found or found.group(1) != release or item["kind"] not in KINDS:
@@ -151,6 +151,8 @@ def parse_item(release, item):
             raise ValueError("item check")
     if "until" in item and item["until"] != stable(item["until"]):
         raise ValueError("item until")
+    if "where" in item and (item["where"] != "repository" or "check" not in item):
+        raise ValueError("item where")
     return item
 
 
@@ -195,8 +197,10 @@ def between(entries, low, high):
             and version(entry["version"]) <= version(high)]
 
 
-def check_state(argv):
-    """Run one read-only plugin script: exit 0 done, 1 open, 3 not applicable, else unknown."""
+def check_state(argv, where=None):
+    """Run one read-only plugin script: exit 0 done, 1 open, 3 not applicable, else unknown.
+
+    It runs in the script's folder, or in the user's current folder for a check about that repository."""
     root = plugin_root()
     if root is None:
         return "unknown"
@@ -207,7 +211,8 @@ def check_state(argv):
         result = subprocess.run([sys.executable, "-I", str(script), *argv[1:]],
                                 env=run_env.environment(), stdin=subprocess.DEVNULL,
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                timeout=CHECK_TIMEOUT, cwd=str(script.parent))
+                                timeout=CHECK_TIMEOUT,
+                                cwd=os.getcwd() if where == "repository" else str(script.parent))
     except (OSError, ValueError, subprocess.SubprocessError):
         return "unknown"
     return CHECK_STATES.get(result.returncode, "unknown")
@@ -237,7 +242,8 @@ def whats_new(installed):
             if item["id"] in state["skipped"]:
                 lines.append("- [skipped] %s: %s" % (item["id"], item["text"]))
                 continue
-            status = check_state(item["check"]) if "check" in item else "unknown"
+            status = (check_state(item["check"], item.get("where")) if "check" in item
+                      else "info" if item["kind"] == "info" else "unknown")
             line = "- [%s] %s: %s" % (status, item["id"], item["text"])
             if "setup" in item and status in ("open", "unknown"):
                 line += " (setup: %s)" % item["setup"]
@@ -245,7 +251,27 @@ def whats_new(installed):
     print("\n".join(lines))
 
 
+def fresh_data_root():
+    """True only when neither the host config nor the onboarding state exists yet."""
+    for name in ("host.md", "state/onboard.json"):
+        try:
+            dr.read_data(Path(name), ONBOARD_LIMIT)
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError):
+            pass  # present but unreadable still means an earlier install
+        return False
+    return True
+
+
 def onboard(argv):
+    if argv == ["first"]:
+        # Setup on a fresh data root: the installed release is the user's first, so no notes are due.
+        installed = installed_version()
+        if installed is None or not fresh_data_root():
+            return
+        write_json("onboard.json", {"last_seen": ".".join(map(str, version(installed)[:3])), "skipped": []})
+        return
     if len(argv) != 2 or argv[0] not in ("seen", "skip"):
         return
     state = onboard_state() or {"last_seen": None, "skipped": []}

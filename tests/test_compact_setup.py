@@ -52,6 +52,14 @@ class CompactSetupTest(unittest.TestCase):
         self.env.start()
         self.addCleanup(self.env.stop)
         self.plan = self.home / ".finolabs/vibecode/state/compact/preview.json"
+        # Project, local and managed settings come only from a synthetic repository and file.
+        self.repo = base / "repo"
+        (self.repo / ".git").mkdir(parents=True)
+        self.managed = base / "managed-settings.json"
+        for patch in (mock.patch.object(cs.os, "getcwd", return_value=str(self.repo)),
+                      mock.patch.object(cs, "managed_settings", return_value=[("managed", self.managed)])):
+            patch.start()
+            self.addCleanup(patch.stop)
 
     def run_cli(self, *args):
         out, err = io.StringIO(), io.StringIO()
@@ -283,6 +291,37 @@ class CompactSetupTest(unittest.TestCase):
                 if tokens[0] == "--tokens":
                     expected["autoCompactWindow"] = int(tokens[1])
                 self.assertEqual(json.loads(self.target.read_bytes()), expected)
+
+    def test_claude_preview_warns_when_auto_compaction_is_off_anywhere(self):
+        for label, path in (("user", self.target), ("project", self.repo / ".claude/settings.json"),
+                            ("local", self.repo / ".claude/settings.local.json"), ("managed", self.managed)):
+            with self.subTest(source=label):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps({"autoCompactEnabled": False, "zq-key": "zq-value"}))
+                code, out, err = self.run_cli("preview", "--host", "claude", "--tokens", "150000")
+                self.assertEqual(code, 0, err)
+                self.assertIn(f"Warning: autoCompactEnabled is false in {label} settings, so the window shown "
+                              "here does nothing until auto-compaction is on.", out)
+                self.assertNotIn("zq-", out)
+                path.write_text(json.dumps({"autoCompactEnabled": True}) if path == self.target else "{}")
+        code, out, err = self.run_cli("preview", "--host", "claude", "--tokens", "150000")
+        self.assertNotIn("autoCompactEnabled", out)
+        # Environment variables are named, never valued.
+        with mock.patch.dict(os.environ, {"DISABLE_AUTO_COMPACT": "zq-value",
+                                          "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "zq-value"}):
+            code, out, err = self.run_cli("preview", "--host", "claude", "--tokens", "150000")
+        for name in ("DISABLE_AUTO_COMPACT", "CLAUDE_CODE_AUTO_COMPACT_WINDOW"):
+            self.assertIn(f"Warning: {name} is set", out)
+        self.assertNotIn("zq-", out)
+
+    def test_conflicts_read_only_the_compaction_keys(self):
+        files = [("user", b'{"autoCompactWindow": 300000, "x": "private"}'), ("local", b'{"autoCompactEnabled": false}'),
+                 ("project", b"not json"), ("managed", b"[]")]
+        self.assertEqual(cs.auto_compact_conflicts(files, {"DISABLE_AUTO_COMPACT": "private"}),
+                         (True, ["autoCompactEnabled is false in local settings", "DISABLE_AUTO_COMPACT is set"]))
+        self.assertEqual(cs.auto_compact_conflicts([("user", b'{"modelSettings": {"m": {"autoCompactWindow": 1}}}')], {}),
+                         (True, []))
+        self.assertEqual(cs.auto_compact_conflicts([], {}), (False, []))
 
     def test_claude_only_per_model_threshold_keys_warn(self):
         for models in (None, [], "private-value", {"private-model": None},

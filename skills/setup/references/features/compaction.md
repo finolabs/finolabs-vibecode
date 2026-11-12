@@ -32,7 +32,8 @@ No: Leave this host’s display and recording unchanged; ask later.
 Undo: Cancel now, or later approve removal of this command.
 Choices: "Yes, prepare the space display" / "No, leave the display unchanged".
 A No leaves it off.
-After a yes follow [../context-reading.md](../context-reading.md): the previewed `statusline_setup.py` plan with its own separate approval, including in Quick setup, or the printed recipe when a status line already exists. Asking is advisory (agent judgment); the script enforces the plan, digest, expiry and safe writes. The reading is no compaction trigger; Codex is not covered. Antigravity uses `--host antigravity` and keeps its separate byte-proxy stop.
+After a yes follow [../context-reading.md](../context-reading.md): the previewed `statusline_setup.py` plan with its own separate approval, including in Quick setup, or the printed recipe when a status line already exists. Asking is advisory (agent judgment); the script enforces the plan, digest, expiry and safe writes. The reading is no compaction trigger; Codex is not covered.
+Reading the current session's size on request instead (the context probe, Claude Code and Codex) needs `/setup add quota`, which confirms the program it runs. Antigravity uses `--host antigravity` and keeps its separate byte-proxy stop.
 
 ## Antigravity stop
 
