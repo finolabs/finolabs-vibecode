@@ -273,8 +273,10 @@ class SessionStartTest(SyntheticStateTest):
                 notice = manifest["hooks"]["PostToolUse"].pop()
                 self.assertEqual(notice["matcher"], "Bash")
                 self.assertIn("merge_notice_hook.py", notice["hooks"][0]["command"])
-                # Typed-skill recording adds only UserPromptSubmit.
-                self.assertEqual(len(manifest["hooks"].pop("UserPromptSubmit")), 1)
+                # Typed-skill recording adds UserPromptSubmit; the compaction nudge adds its own group there.
+                prompt = manifest["hooks"].pop("UserPromptSubmit")
+                self.assertEqual(len(prompt), 2)
+                self.assertIn("compact_nudge.py", prompt[1]["hooks"][0]["command"])
                 raw = (json.dumps(manifest, indent=2) + "\n").encode()
             self.assertEqual(hashlib.sha256(raw).hexdigest(), digest)
 

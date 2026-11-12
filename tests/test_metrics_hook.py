@@ -670,7 +670,7 @@ class HookTest(unittest.TestCase):
 
     def test_the_prompt_hook_is_registered_async_on_claude_code_only(self):
         hooks = json.loads((ROOT / ".claude-plugin/hooks.json").read_text())["hooks"]["UserPromptSubmit"]
-        entries = [h for group in hooks for h in group["hooks"]]
+        entries = [h for group in hooks for h in group["hooks"] if "compact_nudge.py" not in h["command"]]
         self.assertEqual(len(entries), 1)
         self.assertIn("metrics_hook.py", entries[0]["command"])
         self.assertTrue(entries[0]["async"])

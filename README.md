@@ -414,7 +414,7 @@ The judge defaults to a small host model. Choose Jev through `setup` only with a
 
 ```text
 .claude-plugin/plugin.json        Claude Code manifest (the version's single source of truth)
-.claude-plugin/hooks.json         Claude Code hooks: the session reminder, the update notice, usage metrics, the PreCompact reminder, the opt-in auto gate, the away question gate and the advisory StopFailure hook
+.claude-plugin/hooks.json         Claude Code hooks: the session reminder, the update notice, usage metrics, the compaction nudge, the PreCompact summary instructions, the opt-in auto gate, the away question gate and the advisory StopFailure hook
 .claude-plugin/marketplace.json   Claude Code marketplace listing this repository
 .codex-plugin/plugin.json         Codex manifest, version kept equal
 .codex-plugin/hooks.json          Codex hooks for the session reminder, update notices and usage metrics (named by the manifest)
