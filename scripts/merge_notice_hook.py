@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Code PostToolUse hook: after a successful `gh pr merge`, remind the agent to sweep its worktree.
+"""Claude Code PostToolUse hook: after a successful `gh pr merge`, remind the agent to clean up its worktree.
 
 Reads one hook payload from stdin. When the event is PostToolUse for the Bash tool, the call was not
 interrupted, any exit code the payload reports is 0, and the last command of the line is `gh pr merge`
@@ -11,7 +11,9 @@ The hook stores nothing, starts nothing, always exits 0 and never blocks the ses
 The payload carries only the whole command's outcome, so the hook trusts it only where that outcome is
 the merge's own: one line whose commands are joined by `;` or `&&` alone and whose last command is the
 merge. It prints nothing for `||`, a pipe, a background `&`, a subshell or group, a redirection, a
-command substitution, a line break, unbalanced quotes, or a merge that is not the last command. It cannot
+command substitution, a line break, unbalanced quotes, a quote glued to other text, or a merge that is
+not the last command. Quotes are removed from each word before the excluded flags are matched, as the
+shell would, so `'--auto'` counts as `--auto`. It cannot
 tell from the payload whether the shell ran with errexit off inside a sourced script, whether an alias or
 function named `gh` replaced the real program, or whether a merge queue only queued the pull request.
 """
@@ -24,7 +26,8 @@ OPERATORS = (";", "&&")  # the only separators whose last command decides the sh
 NOT_A_MERGE = ("--auto", "--disable-auto", "--help", "-h")
 EXIT_KEYS = ("exit_code", "exitCode", "returnCode", "return_code")
 MAX_COMMAND = 8192  # longer command text is not tested at all
-LINE = "fnl: a pull request merged; run worktree_sweep.py to remove its clean worktree (advisory)."
+LINE = ("fnl: a pull request merged; run worktree_sweep.py list and, for its worktree when a candidate, "
+        "the two git commands it prints (advisory).")
 
 
 def succeeded(response):
@@ -46,8 +49,12 @@ def last_command(command):
     # Not posix: a quoted ';' keeps its quotes, so it never reads as an operator.
     lexer = shlex.shlex(command, posix=False, punctuation_chars=True)
     lexer.whitespace_split = True
+    shell = shlex.shlex(command, posix=True, punctuation_chars=True)
+    shell.whitespace_split = True
     try:
         tokens = list(lexer)
+        if len(list(shell)) != len(tokens):
+            return None  # a quote glued to other text, like "--"auto, which the shell reads as one word
     except ValueError:  # unbalanced quotes
         return None
     commands = [[]]
@@ -60,7 +67,19 @@ def last_command(command):
             commands[-1].append(token)
     while commands and not commands[-1]:
         commands.pop()  # a trailing ;
-    return commands[-1] if commands else None
+    if not commands:
+        return None
+    # Now that operators are known, read each word as the shell passes it on: '--auto' is --auto.
+    words = []
+    for token in commands[-1]:
+        try:
+            parts = shlex.split(token)
+        except ValueError:
+            return None
+        if len(parts) != 1:
+            return None
+        words.append(parts[0])
+    return words
 
 
 def merged(command):

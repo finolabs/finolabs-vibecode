@@ -8,7 +8,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "scripts/merge_notice_hook.py"
-LINE = "fnl: a pull request merged; run worktree_sweep.py to remove its clean worktree (advisory)."
+LINE = ("fnl: a pull request merged; run worktree_sweep.py list and, for its worktree when a candidate, "
+        "the two git commands it prints (advisory).")
 
 
 class MergeNoticeHookTest(unittest.TestCase):
@@ -27,6 +28,7 @@ class MergeNoticeHookTest(unittest.TestCase):
         for command in ("gh pr merge 12 --merge --match-head-commit 0123abc --delete-branch",
                         "cd repo && gh pr merge 12 --merge && gh pr merge 13 --merge",
                         "git fetch; GH_REPO=demo/repo gh pr merge 5 --squash;",
+                        "gh pr merge 6 --merge --subject 'Merge the sweep; keep it'",
                         ["gh", "pr", "merge", "4", "--merge"]):
             with self.subTest(command=command):
                 output = self.run_hook(self.payload(command, {"stdout": "", "stderr": "", "interrupted": False}))
@@ -57,7 +59,13 @@ class MergeNoticeHookTest(unittest.TestCase):
                  self.payload("echo ';' gh pr merge 245"),
                  self.payload("echo \\; gh pr merge 245"),
                  self.payload("gh pr merge 245 2>&1"),
-                 self.payload("gh pr merge 245 --merge 'unclosed")]
+                 self.payload("gh pr merge 245 --merge 'unclosed"),
+                 # The shell strips quotes, so a quoted excluded flag is still that flag.
+                 self.payload('gh pr merge 245 "--help"'),
+                 self.payload("gh pr merge 245 '--auto'"),
+                 self.payload("gh pr merge 245 --merge \"--\"auto"),
+                 self.payload("gh pr merge 245 '-h'"),
+                 self.payload("gh pr merge 245 \"--disable-auto\" --merge")]
         for payload in cases:
             with self.subTest(payload=payload["tool_input"]["command"][:40]):
                 self.assertEqual(self.run_hook(payload), "")
