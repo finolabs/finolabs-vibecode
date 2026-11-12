@@ -17,7 +17,7 @@ PLUGIN = "finolabs-vibecode"
 PRINCIPLE = "A file that says something is on is not proof that it runs."
 # Required sections; Effort preference, Delegation mode and Routing are optional.
 HEADINGS = {"Limits", "Briefs folder", "Coordinators and reach", "Route judgment",
-            "Dispatch marker", "Claude Code", "Codex", "Antigravity",
+            "Dispatch marker", "Claude Code", "Codex", "Antigravity", "ZCode",
             "Agent roles", "Review posting", "Delegate environment"}
 MAX_BYTES = 262144
 
@@ -262,12 +262,12 @@ def agents_evidence(status, text):
     rows = {}
     for line in sections[0].splitlines():
         cells = [v.strip() for v in line.strip().strip("|").split("|")]
-        if len(cells) == 5 and cells[0] in {"Claude Code", "Codex", "Antigravity"}:
+        if len(cells) == 5 and cells[0] in {"Claude Code", "Codex", "Antigravity", "ZCode"}:
             if cells[0] in rows:
                 return item("agents inventory", "unverified", "duplicate agent row")
             rows[cells[0]] = cells[-1]
     try:
-        if len(rows) != 3:
+        if len(rows) != 4:
             raise ValueError("incomplete rows")
         dates = [datetime.date.fromisoformat(value) for value in rows.values()]
         today = datetime.date.today()

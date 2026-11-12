@@ -253,7 +253,7 @@ class CheckupTest(unittest.TestCase):
     def inventory(self, date):
         return "## Agents on this machine\n\nCoordinator: Codex\n\n" + "\n".join(
             f"| {name} | yes | fake | unverified | {date} |"
-            for name in ("Claude Code", "Codex", "Antigravity")) + "\n"
+            for name in ("Claude Code", "Codex", "Antigravity", "ZCode")) + "\n"
 
     def ledger_entry(self, name):
         """Set this repository's ledger name in its own approved settings file, as the setter does."""
@@ -428,7 +428,7 @@ class CheckupTest(unittest.TestCase):
         expected = ['Delegation mode', 'Routing', 'Agents on this machine', 'Delegate environment',
                     'Agent roles', 'Review posting', 'Quota probe', 'Limits', 'Heavy jobs',
                     'Effort preference', 'Briefs folder', 'Coordinators and reach', 'Route judgment',
-                    'Dispatch marker', 'Claude Code', 'Codex', 'Antigravity']
+                    'Dispatch marker', 'Claude Code', 'Codex', 'Antigravity', 'ZCode']
         self.assertEqual(headings, expected)
         self.assertTrue(all('`' not in heading and len(heading) <= 60 for heading in headings))
         config = template.replace('Instruction check: <on | off>', 'Instruction check: on')

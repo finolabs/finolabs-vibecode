@@ -14,9 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import assignments as am
 import data_root as dr
 
-FAMILIES = ("claude", "codex", "antigravity")
+FAMILIES = ("claude", "codex", "antigravity", "zcode")
 ROLES = ("code review", "security review", "navigator", "judge")
-AGENTS = {"Claude Code": "claude", "Codex": "codex", "Antigravity": "antigravity"}
+AGENTS = {"Claude Code": "claude", "Codex": "codex", "Antigravity": "antigravity", "ZCode": "zcode"}
 
 
 def section(text, heading, maximum=10):
@@ -117,7 +117,7 @@ def read_posting(text, today=None):
     if lines is None:
         return result
     for line in lines:
-        match = re.fullmatch(r"- (claude|codex|antigravity): (yes|no|unverified) \(checked (\d{4}-\d{2}-\d{2})\)", line)
+        match = re.fullmatch(r"- (claude|codex|antigravity|zcode): (yes|no|unverified) \(checked (\d{4}-\d{2}-\d{2})\)", line)
         if not match or match[1] in result:
             return {}
         family, value, checked = match.groups()

@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
 
-ROOTS = ('claude', 'codex', 'agy')
+ROOTS = ('claude', 'codex', 'agy', 'zcode')
 APPS = ('Claude', 'Codex', 'Antigravity')
 CHILDREN = frozenset(('node', 'python', 'python3', 'bash', 'zsh', 'sh', 'git', 'npm', 'pnpm',
                       'npx', 'pytest', 'cargo', 'go', 'make', 'docker', 'ssh', 'rg', 'grep'))

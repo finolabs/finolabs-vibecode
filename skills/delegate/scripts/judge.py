@@ -295,7 +295,7 @@ def configured_judge():
         inventory = text.split("## Agents on this machine\n")
         named = set()
         if len(inventory) == 2:
-            names = {"Claude Code": "claude", "Codex": "codex", "Antigravity": "antigravity"}
+            names = {"Claude Code": "claude", "Codex": "codex", "Antigravity": "antigravity", "ZCode": "zcode"}
             table = inventory[1].split("\n## ", 1)[0]
             named = {names[match.group(1)] for match in re.finditer(
                 r"^\|\s*(Claude Code|Codex|Antigravity)\s*\|", table, re.M)}
@@ -304,7 +304,7 @@ def configured_judge():
             key, value = line.removeprefix("- ").split(": ")
             if not line.startswith("- ") or key in roles or key not in ("code review", "security review", "navigator", "judge"):
                 return "host"
-            if value not in (("jev", "host") if key == "judge" else ("claude", "codex", "antigravity")):
+            if value not in (("jev", "host") if key == "judge" else ("claude", "codex", "antigravity", "zcode")):
                 return "host"
             if key != "judge" and value not in named:
                 return "host"

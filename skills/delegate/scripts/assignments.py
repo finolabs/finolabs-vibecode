@@ -10,7 +10,7 @@ import re
 HEADING = '## Assignment matrix'
 TYPES = ('frontend', 'design', 'video', 'three-d', 'image-generation', 'transcription')
 ROLES = ('code-review', 'security-review', 'navigator', 'advisor')
-NAME = re.compile(r'claude|codex|antigravity|claude[a-z0-9]{1,24}')
+NAME = re.compile(r'claude|codex|antigravity|zcode|claude[a-z0-9]{1,24}|zcode[a-z0-9]{1,24}')
 MODEL = re.compile(r'[A-Za-z0-9][A-Za-z0-9.-]{0,63}')
 DATE = re.compile(r'\d{4}-\d{2}-\d{2}')
 CONSENT = re.compile(r'yes \((\d{4}-\d{2}-\d{2})\)|no')

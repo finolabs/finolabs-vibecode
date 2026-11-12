@@ -14,11 +14,11 @@ Route by tier first, then by agent. A tier names what the work needs; the agent 
 - **strong**: everyday agentic coding across several files, reviews of easy work.
 - **fast**: bounded edits, mechanical changes, extraction, bulk runs.
 
-| Tier | Claude Code | Codex | Antigravity |
-| --- | --- | --- | --- |
-| frontier | Opus 5.5; Fable 5.1 when Opus has already fallen short | `gpt-6-astra` | `claude-opus-5-5-*` (Claude pool) |
-| strong | Sonnet 5.5 | `gpt-6.1-sol` | `gemini-4-argon-*`, `claude-sonnet-5-5-*` |
-| fast | Haiku 5.5 | `gpt-6.1-terra`, `gpt-6-luna` | `gemini-3.8-flash-*` |
+| Tier | Claude Code | Codex | Antigravity | ZCode |
+| --- | --- | --- | --- | --- |
+| frontier | Opus 5.5; Fable 5.1 when Opus has already fallen short | `gpt-6-astra` | `claude-opus-5-5-*` (Claude pool) | GLM coding plan models, when configured |
+| strong | Sonnet 5.5 | `gpt-6.1-sol` | `gemini-4-argon-*`, `claude-sonnet-5-5-*` | <as configured> |
+| fast | Haiku 5.5 | `gpt-6.1-terra`, `gpt-6-luna` | `gemini-3.8-flash-*` | <as configured> |
 
 The model places the work in a tier; effort is a separate choice. **Default to `medium` effort on every agent and tier, hard work included**: a `medium` run still does hard work, and it spends less quota and time. By grade (`SKILL.md` "Grade"): `medium` for easy, medium and hard work, `high` for very hard, `xhigh` for ultra hard, and `max` only when `xhigh` has fallen short. A run that fell short at its level is retried one level up. A host config's "Effort preference" overrides this default.
 
@@ -50,6 +50,16 @@ Recheck: `agy models`, `agy --help`, and `agy -p /usage --output-format json`.
 - Strengths: 1M context with image, video, audio and PDF input: long logs, screenshots, recordings and large documents go to Argon. Flash is cheap and fast for easy and medium edits.
 - Weak spots: terminal-heavy work, where Argon trails Opus 5.5 by third-party reports. Headless runs soft-deny every shell command outside the allow-rules.
 - Quota: separate pools for the Gemini models, for Argon, and for the Claude and GPT models; each pool has a 5-hour and a weekly limit. `/usage` in JSON gives `remaining_fraction` and `reset_time` per bucket. One empty pool leaves the others usable.
+
+## ZCode
+
+Recheck: `zcode --help` (or the bundled CLI at `<ZCode.app>/Contents/Resources/glm/zcode.cjs`), `/model` in a session, and `~/.zcode/v2/provider_config.json`.
+
+- Models: chosen in ZCode's own settings (`/model` or provider config), not per-dispatch CLI flags; the model the user confirmed for delegation is recorded in host config `## ZCode`. Commonly GLM models on a coding plan; <list the confirmed model ids here>.
+- Effort: no per-dispatch effort flag exists; the session's configured reasoning level applies, so the effort default above cannot be raised for a zcode dispatch.
+- Strengths: headless runs with `--cwd`, `--mode build|edit|plan|guarded` and `--json` output; `--disallowed-tools` restricts tools when the user asks.
+- Weak spots: no headless quota query and no `--model`/`--effort` flags; the hard-cap wrapper alone bounds a run.
+- Quota: coding-plan limits in the user's account; no probe parser exists yet, so treat quota as unverified.
 
 ## Strength overrides
 
