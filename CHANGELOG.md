@@ -38,6 +38,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
   `checks_setup.py` adds `.finolabs/` to the repository's `.git/info/exclude` once (never to `.gitignore`), keeps a replaced file as `checks.json.bak-<date>`, and never opens `host.md`. Undo is `checks_setup.py remove` for this repository; a stale remove preview changes nothing.
 - Breaking for lists saved with 0.2.4: the `## Checks` section of `host.md` is no longer read, with no fallback and no migration command (owner decision, 2026-11-11). Until you run `/setup add checks` again in each repository, it has no checks and its local receipt is off; then delete the old section from `host.md` by hand. The 0.2.5 upgrade note in `/update` says so.
 
+### Fixed
+
+- An alias whose skill is user-only (`fnl-help`, `ask`, `afk`, `brb`, `gtg` and the older names of `autopilot`, `pause`, `restore-point`, `setup`, `status` and `update`) no longer tells the agent to load that skill, which made it call the Skill tool and get refused: it now says the skill is user-only and to read its `SKILL.md` in the plugin's skills folder and follow it, never through the Skill tool. Older names of short names load the final skill directly (`fnl-ask` → `help`, `fnl-verification` → `checks`, `fnl-afk` and `fnl-brb` → `autopilot`, `fnl-gtg` → `pause`); a test and `check-references.py` hold both rules for every alias.
+
 ## [0.2.4] - 2026-11-11
 
 ### Added

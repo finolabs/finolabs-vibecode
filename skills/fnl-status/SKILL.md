@@ -7,5 +7,5 @@ argument-hint: "[purge]"
 
 # fnl-status
 
-Dependency: `status`. Load and follow it with the same arguments (advisory (agent judgment)).
+Dependency: `status`. `status` is user-only (`disable-model-invocation: true`), so the Skill tool refuses it: read `status`'s `SKILL.md` in this plugin's skills folder and follow it with the same arguments; never call the Skill tool for it (advisory (agent judgment)).
 This alias holds no rules of its own.

@@ -8,6 +8,21 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFESTS = [ROOT / d / "plugin.json" for d in (".claude-plugin", ".codex-plugin", ".antigravity-plugin")]
 
 
+def user_only(name):
+    return "\ndisable-model-invocation: true\n" in (ROOT / "skills" / name / "SKILL.md").read_text().split("---", 2)[1]
+
+
+def alias_target(name):
+    """The skill a thin alias loads, or None for a skill with rules of its own."""
+    text = (ROOT / "skills" / name / "SKILL.md").read_text()
+    found = re.search(r"Dependency: `([a-z][a-z-]*)`\.", text)
+    return found.group(1) if found and "This alias holds no rules of its own." in text else None
+
+
+def final_target(name):
+    return alias_target(name) or name
+
+
 class ManifestTest(unittest.TestCase):
     def setUp(self):
         self.docs = [json.loads(p.read_text()) for p in MANIFESTS]
@@ -57,9 +72,28 @@ class ManifestTest(unittest.TestCase):
             self.assertEqual(fields["name"], alias.name)
             self.assertEqual(fields["disable-model-invocation"], "true")
             self.assertEqual(fields.get("argument-hint"), target.get("argument-hint"), alias.name)
-            self.assertIn(f"Dependency: `{skill.name}`. Load and follow it with the same arguments", body)
+            self.assertIn(f"Dependency: `{final_target(skill.name)}`.", body)
             self.assertIn("This alias holds no rules of its own.", body)
             self.assertEqual(sorted(p.name for p in alias.iterdir()), ["SKILL.md"])
+
+    def test_aliases_load_their_final_target_and_never_call_a_user_only_one_through_the_skill_tool(self):
+        # The Skill tool refuses a skill with disable-model-invocation, so an alias of one tells the agent to read it.
+        aliases = [p.parent.name for p in (ROOT / "skills").glob("*/SKILL.md") if alias_target(p.parent.name)]
+        self.assertTrue({"fnl-help", "ask", "afk", "brb", "gtg", "verification"} <= set(aliases))
+        for name in aliases:
+            target = alias_target(name)
+            body = (ROOT / "skills" / name / "SKILL.md").read_text().split("---", 2)[2]
+            with self.subTest(alias=name):
+                self.assertIsNone(alias_target(target), "no two-hop alias chains")
+                if user_only(target):
+                    self.assertIn(f"Dependency: `{target}`. `{target}` is user-only (`disable-model-invocation: true`), "
+                                  "so the Skill tool refuses it: read "
+                                  f"`{target}`'s `SKILL.md` in this plugin's skills folder and follow it with the same "
+                                  "arguments; never call the Skill tool for it", body)
+                    self.assertNotIn("Load and follow it", body)
+                else:
+                    self.assertIn(f"Dependency: `{target}`. Load and follow it with the same arguments", body)
+                    self.assertNotIn("user-only", body)
 
     def test_agents_match_the_folders(self):
         agents = {p.stem for p in (ROOT / "agents").glob("fnl-*.md")}
