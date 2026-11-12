@@ -945,6 +945,10 @@ class AwayDecisionTest(AutopilotBase):
 
     def test_branch_deletion_bundled_with_a_merge_needs_its_own_category(self):
         module = self.load()
+        # Bind the merge target to a fixed origin, not to whatever Git config the test runner's checkout holds.
+        patcher = patch.object(module, 'remotes', return_value={'origin': ['https://github.com/example/demo']})
+        patcher.start()
+        self.addCleanup(patcher.stop)
         argv = ['gh', 'pr', 'merge', '215', '--merge', '--match-head-commit=' + 'a' * 40]
         applied = {**module.DEFAULTS, **{c: 'stop' for c in module.CATEGORIES}, 'Merge': 'yes',
                    module.CONSENT: 'no', module.TARGETS: []}
