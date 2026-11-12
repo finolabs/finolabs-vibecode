@@ -43,8 +43,10 @@ usage events; purge removes them. The refresh builders enforce these bounds and 
 
 ## Project settings
 
-Since 0.2.5 a repository's settings (`ledger`, `tasks`, `parallel`, `parallel-caps` and the display
-`label`) live in that repository's own folder: `settings.json` in `.finolabs/vibecode/` of the main
+Since 0.2.5 a repository's settings (`ledger`, `tasks`, `parallel`, `parallel-caps`, the display
+`label` and the optional `autopilot` object: the repository's own away choices for task choice, push and pull
+requests, merge, trusted authors and extra top-level code folders, which `autopilot.py check` reads in memory and never
+stores) live in that repository's own folder: `settings.json` in `.finolabs/vibecode/` of the main
 checkout (a linked worktree shares it only in the canonical, reciprocal, owner-checked layout
 `<main>/.git/worktrees/<name>`). The file never leaves
 the machine; the setter adds `.finolabs/` to the repository's `.git/info/exclude`, never to a tracked
@@ -53,12 +55,20 @@ per repository for every agent to read.
 
 `project_progress.py settings --set <key>=<value>`, `settings --clear <key>` and `label --set <label>`,
 run inside a repository, write that file (folders 0700, file 0600, atomic, under a file lock) and record
-its SHA-256 and the time in `<data root>/state/settings-approved/<repository code>.json`. `ledger` and
-`tasks` require recorded metrics consent. The script splits `--set` on the first `=` and prints only
-the key and changed/not changed, never the value.
+its SHA-256, the time and the SHA-256 of the main checkout path (never the path itself) in
+`<data root>/state/settings-approved/<repository code>.json`; when the file
+holds an `autopilot` object, that record also keeps the GitHub repository name of the checkout's origin
+(`github.com/<owner>/<name>`, or null) the object was approved for, read from the repository's own Git
+config. `ledger` and `tasks` require recorded metrics consent. The script splits `--set` on the first `=`
+and prints only the key and changed/not changed, never the value. The one exception is the local preview
+of the `autopilot` object (`--dry-run`, which writes nothing): it prints, on the user's own terminal, the
+repository's main checkout and worktree paths, its code, its state, that GitHub repository name, the
+object, the effective value of each key and a token that the apply repeats.
 
 The file has a closed schema, `{"version": 1, ...}` with each key optional and each value a string
-validated as before: ledger names and labels of 1–40 ASCII letters, digits, spaces, dots, dashes or
+validated as before, except `autopilot`, a closed object of up to five keys (fixed words for task choice,
+push and pull requests, merge and trusted authors, and `roots`, a list of 1–16 top-level folder names):
+ledger names and labels of 1–40 ASCII letters, digits, spaces, dots, dashes or
 underscores with a non-space character; task paths of 1–120 ASCII letters, digits, dots, dashes,
 underscores or slashes, relative Markdown paths without empty, `.` or `..` components, outside
 `specs/archive` and never an instruction file; `parallel` 1–32 and caps per family. The reader opens it
