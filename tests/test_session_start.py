@@ -29,8 +29,15 @@ STATE_BASELINE = ("\nPlugin state (local files; fixed words and counts only)\n"
 
 
 class SyntheticStateTest(unittest.TestCase):
+    # Keep other tests independent of the checkout they run in; CheckoutLineTest reads synthetic repositories.
+    real_checkout = False
+
     def setUp(self):
         self.root = setup_store(self)
+        if not self.real_checkout and hasattr(hook, "checkout_line"):
+            patch = mock.patch.object(hook, "checkout_line", return_value="")
+            patch.start()
+            self.addCleanup(patch.stop)
         environment = mock.patch.dict(os.environ, {}, clear=True)
         environment.start()
         self.addCleanup(environment.stop)
@@ -462,3 +469,101 @@ class StateBlockTest(SyntheticStateTest):
         popen.assert_not_called()
         fork.assert_not_called()
         spawn.assert_not_called()
+
+
+class CheckoutLineTest(SyntheticStateTest):
+    """The main checkout off its default branch adds one fixed line; every other state prints nothing."""
+    real_checkout = True
+    LINE = ('The main checkout is not on its default branch: keep it on the default branch and work in a worktree '
+            '(commit-messages "Branches").\n')
+
+    def repository(self, head="ref: refs/heads/main", default="ref: refs/remotes/origin/main"):
+        main = self.root / "repos" / "synthetic-app"
+        git = main / ".git"
+        (git / "refs" / "remotes" / "origin").mkdir(parents=True)
+        (git / "HEAD").write_text(head + "\n")
+        if default is not None:
+            (git / "refs" / "remotes" / "origin" / "HEAD").write_text(default + "\n")
+        return main
+
+    def worktree(self, main, branch):
+        tree = self.root / "repos" / "synthetic-tree"
+        tree.mkdir(parents=True)
+        meta = main / ".git" / "worktrees" / "synthetic-tree"
+        meta.mkdir(parents=True)
+        (meta / "HEAD").write_text("ref: refs/heads/%s\n" % branch)
+        (meta / "commondir").write_text("../..\n")
+        (meta / "gitdir").write_text(str(tree / ".git") + "\n")
+        (tree / ".git").write_text("gitdir: %s\n" % meta)
+        return tree
+
+    def line_in(self, folder):
+        with mock.patch("os.getcwd", return_value=str(folder)):
+            return hook.checkout_line()
+
+    def test_on_default_is_silent(self):
+        main = self.repository()
+        self.assertEqual(self.line_in(main), "")
+        nested = main / "src"
+        nested.mkdir()
+        self.assertEqual(self.line_in(nested), "")
+
+    def test_off_default_prints_the_fixed_line(self):
+        main = self.repository(head="ref: refs/heads/feat/synthetic-change")
+        self.assertEqual(self.line_in(main), self.LINE)
+
+    def test_detached_head_prints_the_fixed_line(self):
+        main = self.repository(head="0123456789abcdef0123456789abcdef01234567")
+        self.assertEqual(self.line_in(main), self.LINE)
+
+    def test_linked_worktree_on_another_branch_with_main_on_default_is_silent(self):
+        main = self.repository()
+        tree = self.worktree(main, "fix/synthetic-bug")
+        self.assertEqual(self.line_in(tree), "")
+
+    def test_linked_worktree_while_main_is_off_default_prints_the_line(self):
+        main = self.repository(head="ref: refs/heads/fix/synthetic-bug")
+        tree = self.worktree(main, "fix/other")
+        self.assertEqual(self.line_in(tree), self.LINE)
+
+    def test_unknown_default_is_silent(self):
+        import shutil
+        for default in (None, "", "0123456789abcdef0123456789abcdef01234567", "ref: refs/remotes/origin/"):
+            with self.subTest(default=default):
+                main = self.repository(head="ref: refs/heads/feat/synthetic-change", default=default)
+                self.assertEqual(self.line_in(main), "")
+                shutil.rmtree(self.root / "repos")
+
+    def test_unreadable_or_unsafe_metadata_is_silent(self):
+        main = self.repository(head="ref: refs/heads/feat/synthetic-change")
+        head = main / ".git" / "HEAD"
+        head.chmod(0)
+        self.addCleanup(head.chmod, 0o600)
+        self.assertEqual(self.line_in(main), "")
+        head.chmod(0o600)
+        target = main / ".git" / "HEAD.real"
+        head.rename(target)
+        head.symlink_to(target)
+        self.assertEqual(self.line_in(main), "")
+        head.unlink()
+        target.rename(head)
+        (main / ".git" / "refs" / "remotes" / "origin" / "HEAD").write_bytes(b"\xff" * 8)
+        self.assertEqual(self.line_in(main), "")
+
+    def test_outside_a_repository_is_silent(self):
+        outside = self.root / "plain"
+        outside.mkdir(parents=True)
+        self.assertEqual(self.line_in(outside), "")
+
+    def test_the_line_is_fixed_words_and_ends_the_state_block(self):
+        self.assertNotIn("/", self.LINE)
+        main = self.repository(head="ref: refs/heads/feat/synthetic-change")
+        out = io.StringIO()
+        with mock.patch("os.getcwd", return_value=str(main)), \
+                mock.patch.object(sys, "stdin", io.TextIOWrapper(io.BytesIO(b""), encoding="utf-8")), \
+                contextlib.redirect_stdout(out):
+            self.assertEqual(hook.main(), 0)
+        text = out.getvalue()
+        self.assertTrue(text.endswith(self.LINE), text[-300:])
+        self.assertNotIn("synthetic", text)
+        self.assertNotIn(str(self.root), text)
