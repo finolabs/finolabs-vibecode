@@ -1,6 +1,6 @@
 # Compaction nudge: tell the agent before the host compacts
 
-Status: rule recorded (eighth scoped exception in `CLAUDE.md`, owner decision 2026-11-12); no code yet.
+Status: accepted; rule recorded as the eighth scoped exception in `CLAUDE.md` (owner decision 2026-11-12); no code yet.
 
 ## Why
 
