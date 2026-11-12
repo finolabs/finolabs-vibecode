@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings Scopes</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#050510;color:#FFFFFF;font-family:'Space Grotesk', system-ui, sans-serif;padding:3rem 2rem}
+.frame{max-width:1280px;margin:0 auto}
+.eyebrow{font-family:'JetBrains Mono', ui-monospace, monospace;font-size:.66rem;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:#BCBCD0;margin-bottom:.5rem}
+h1{font-family:'Anton', Impact, sans-serif;font-size:1.75rem;font-weight:400;text-transform:uppercase;letter-spacing:-.01em;margin-bottom:.75rem}
+.sub{color:#BCBCD0;font-size:.95rem;margin-bottom:1.5rem;max-width:72ch}
+svg{width:100%;min-width:900px;display:block}
+@media(max-width:1000px){.frame{overflow-x:auto}}
+</style></head><body><div class="frame">
+<p class="eyebrow">Scopes · finolabs-vibecode</p>
+<h1>Where your settings live: user scope and project scope</h1>
+<p class="sub">Your own choices live in your home folder; a repository&#x27;s check list and settings live in that repository, and count only while they match what you approved.</p>
+<svg viewBox="0 0 1280 808" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="settings-scopes-dark-title settings-scopes-dark-desc">
+<title id="settings-scopes-dark-title">Where your settings live: user scope and project scope</title>
+<desc id="settings-scopes-dark-desc">Two scopes of settings: user scope in ~/.finolabs/vibecode/ holds host.md (roles, judge, assignment matrix, afk choices and lease limits, delegation mode) and the approved digests; project scope in the repository&#x27;s .finolabs/vibecode/ holds checks.json and settings.json (ledger, tasks, parallel limit, label and optional afk overrides). Setup writes host.md and, after your yes, the digest of each project file; a project file counts only while its bytes match that digest, so a branch or pull request cannot change it or widen what you approved.</desc>
+<defs><marker id="settings-scopes-dark-default" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#BCBCD0"/></marker><marker id="settings-scopes-dark-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#E5D2F4"/></marker><marker id="settings-scopes-dark-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#87D3E1"/></marker></defs>
+<rect width="100%" height="100%" fill="#050510"/>
+<rect x="40" y="160" width="520" height="416" rx="12" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+<text x="64" y="188" fill="#BCBCD0" font-size="12" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.14em" text-anchor="start">USER SCOPE</text>
+<text x="64" y="208" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">~/.finolabs/vibecode/</text>
+<rect x="720" y="160" width="520" height="416" rx="12" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+<text x="744" y="188" fill="#BCBCD0" font-size="12" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.14em" text-anchor="start">PROJECT SCOPE</text>
+<text x="744" y="208" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">&lt;repo&gt;/.finolabs/vibecode/</text>
+<text x="64" y="552" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">outside every repository</text>
+<text x="744" y="552" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">kept out of git · shared by linked worktrees</text>
+<rect x="40" y="608" width="1200" height="112" rx="12" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.14)" stroke-width="1" stroke-dasharray="4,4"/>
+<text x="64" y="636" fill="#BCBCD0" font-size="12" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.14em" text-anchor="start">THE RULE</text>
+<path d="M272,112 V232" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#settings-scopes-dark-default)"/>
+<path d="M504,112 V400" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#settings-scopes-dark-default)"/>
+<path d="M528,464 H752" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#settings-scopes-dark-default)"/>
+<path d="M528,424 H632 Q640,424 640,416 V280 Q640,272 648,272 H752" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#settings-scopes-dark-default)"/>
+<rect class="lm" x="280" y="132" width="56" height="16" rx="2" fill="#050510"/><text x="284" y="144" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start" letter-spacing="0.06em">WRITES</text>
+<rect class="lm" x="512" y="132" width="72" height="16" rx="2" fill="#050510"/><text x="516" y="144" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start" letter-spacing="0.06em">YOUR YES</text>
+<rect class="lm" x="596" y="440" width="88" height="16" rx="2" fill="#050510"/><text x="640" y="452" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">MUST MATCH</text>
+<rect class="lm" x="544" y="336" width="88" height="16" rx="2" fill="#050510"/><text x="628" y="348" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="end" letter-spacing="0.06em">MUST MATCH</text>
+<g class="node">
+<rect x="72" y="32" width="456" height="80" rx="8" fill="#050510"/>
+<rect x="72" y="32" width="456" height="80" rx="8" fill="rgba(188,188,208,0.10)" stroke="#8B8BA6" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="300" y="68" fill="#FFFFFF" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">You, in setup</text>
+<text x="300" y="92" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">it previews, then waits for your yes</text>
+</g>
+<g class="node">
+<rect x="72" y="232" width="400" height="112" rx="8" fill="#050510"/>
+<rect x="72" y="232" width="400" height="112" rx="8" fill="#16162A" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
+<text x="272" y="264" fill="#FFFFFF" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">host.md</text>
+<text x="272" y="288" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">roles · judge · assignment matrix</text>
+<text x="272" y="308" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">afk choices + lease limits</text>
+<text x="272" y="328" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">delegation mode · routing</text>
+</g>
+<g class="node">
+<rect x="72" y="400" width="456" height="96" rx="8" fill="#050510"/>
+<rect x="72" y="400" width="456" height="96" rx="8" fill="rgba(151,80,196,0.18)" stroke="#E5D2F4" stroke-width="1.2"/>
+<text x="300" y="432" fill="#FFFFFF" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Approved digests</text>
+<text x="300" y="456" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">state/ · one SHA-256 per file</text>
+<text x="300" y="476" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">written only after your yes</text>
+</g>
+<g class="node">
+<rect x="752" y="232" width="456" height="80" rx="8" fill="#050510"/>
+<rect x="752" y="232" width="456" height="80" rx="8" fill="rgba(127,226,206,0.14)" stroke="#BFF0E3" stroke-width="1"/>
+<text x="980" y="268" fill="#FFFFFF" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">checks.json</text>
+<text x="980" y="292" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">the repository&#x27;s check list</text>
+</g>
+<g class="node">
+<rect x="752" y="352" width="456" height="144" rx="8" fill="#050510"/>
+<rect x="752" y="352" width="456" height="144" rx="8" fill="rgba(127,226,206,0.14)" stroke="#BFF0E3" stroke-width="1"/>
+<text x="980" y="388" fill="#FFFFFF" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">settings.json</text>
+<text x="980" y="412" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">ledger · tasks · parallel · label</text>
+<text x="980" y="432" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">afk overrides, if you set them:</text>
+<text x="980" y="452" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">task choice · push and pull requests</text>
+<text x="980" y="472" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">merge · trusted authors · folders</text>
+</g>
+<text x="64" y="668" fill="#FFFFFF" font-size="16" font-weight="400" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="start">A project file counts only while its exact bytes match the digest you approved, so a branch or pull request cannot change it.</text>
+<text x="64" y="696" fill="#FFFFFF" font-size="16" font-weight="400" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="start">Unapproved, edited, missing or broken: it stops counting and nothing widens. Lease limits and hosts stay in user scope.</text>
+<line x1="40" y1="744" x2="1240" y2="744" stroke="rgba(255,255,255,0.12)" stroke-width="0.8"/>
+<text x="40" y="776" fill="#BCBCD0" font-size="12" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.14em" text-anchor="start">LEGEND</text>
+<rect x="160" y="764" width="32" height="16" rx="4" fill="rgba(188,188,208,0.10)" stroke="#8B8BA6" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="204" y="776" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">your yes</text>
+<rect x="308" y="764" width="32" height="16" rx="4" fill="#16162A" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
+<text x="352" y="776" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">user file</text>
+<rect x="464" y="764" width="32" height="16" rx="4" fill="rgba(127,226,206,0.14)" stroke="#BFF0E3" stroke-width="1"/>
+<text x="508" y="776" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">project file</text>
+<rect x="644" y="764" width="32" height="16" rx="4" fill="rgba(151,80,196,0.18)" stroke="#E5D2F4" stroke-width="1"/>
+<text x="688" y="776" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">approved digest</text>
+<path d="M848,772 H880" stroke="#BCBCD0" stroke-width="1.2" fill="none" marker-end="url(#settings-scopes-dark-default)"/>
+<text x="892" y="776" fill="#BCBCD0" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">writes or binds</text>
+</svg>
+</div></body></html>

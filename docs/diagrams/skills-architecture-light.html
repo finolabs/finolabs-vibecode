@@ -24,7 +24,7 @@ svg { width: 100%; min-width: 900px; display: block; }
 <p class="sub">Setup is one skill with Quick, Advanced and subcommands. The hook points the agent at the router; the router hands work to delegation (parallel pools), gates, and session and git skills; the commands you type keep the machine's config and logs current, start an away lease or drain work before a restart.</p>
 <svg viewBox="0 0 1280 1152" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="skills-architecture-light-title skills-architecture-light-desc">
 <title id="skills-architecture-light-title">How the finolabs-vibecode skills work together</title>
-<desc id="skills-architecture-light-desc">Architecture of the skill set for release 0.2.4: a session-start hook reminds the agent to use the coding router, which hands work to delegation (route_pick over the assignment matrix, parallel pools, log_scan, the advisor's choose mode), gates (verify_claim with judge, review_route, post_review, merge_check), and session and git skills (context snapshots, fnl-navigator). The commands you type manage configuration and logs on the user machine: setup (with the assignment matrix in add delegation), status, restore-point, help (alias ask), update, afk (alias brb) for the away lease and its decision ladder, and pause (alias gtg) to drain work before a restart.</desc>
+<desc id="skills-architecture-light-desc">Architecture of the skill set for release 0.2.5: a session-start hook reminds the agent to use the coding router, which hands work to delegation (route_pick over the assignment matrix, parallel pools, log_scan, the advisor's choose mode), gates (verify_claim with judge, review_route, post_review, merge_check), and session and git skills (context snapshots, fnl-navigator). The commands you type manage configuration and logs on the user machine: setup (with the assignment matrix in add delegation), status, restore-point, help (alias ask), update, afk (alias brb, loading afk) for the away lease and its decision ladder, and pause (alias gtg) to drain work before a restart.</desc>
 <defs>
 <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5B5B79"/></marker>
 <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#14627A"/></marker>
@@ -41,7 +41,7 @@ svg { width: 100%; min-width: 900px; display: block; }
 <rect x="904" y="628" width="336" height="156" rx="12" fill="none" stroke="#BCBCD0" stroke-width="1"/>
 <text x="928" y="656" fill="#5B5B79" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.18em">PUBLISHER KIT</text>
 <rect x="40" y="832" width="1200" height="240" rx="12" fill="none" stroke="#BCBCD0" stroke-width="1"/>
-<text x="64" y="860" fill="#5B5B79" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.18em">YOU TYPE THESE</text>
+<text x="1216" y="860" text-anchor="end" fill="#5B5B79" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.18em">YOU TYPE THESE</text>
 <path d="M840 112 H752" fill="none" stroke="#5B5B79" stroke-width="1.2" marker-end="url(#arrow)"/>
 <path d="M572 148 V168 Q572 176 564 176 H240 Q232 176 232 184 V252" fill="none" stroke="#5B5B79" stroke-width="1.2" marker-end="url(#arrow)"/>
 <path d="M632 148 V252" fill="none" stroke="#5B5B79" stroke-width="1.2" marker-end="url(#arrow)"/>
@@ -154,7 +154,7 @@ svg { width: 100%; min-width: 900px; display: block; }
 <text x="88.0" y="691" fill="#156B58" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">FILE</text>
 <text x="280.0" y="706" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">host config</text>
 <text x="280.0" y="722" fill="#5B5B79" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">~/.finolabs/vibecode/host.md</text>
-<text x="280.0" y="735" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">assignment matrix · roles &amp; judge · quota · parallel · mode</text>
+<text x="280.0" y="735" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">assignment matrix · roles &amp; judge · quota · afk · mode</text>
 <rect x="520" y="676" width="192" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="520" y="676" width="192" height="72" rx="8" fill="#DCF3E8" stroke="#156B58" stroke-width="1" stroke-opacity="0.75"/>
 <rect x="528" y="682" width="32" height="12" rx="2" fill="none" stroke="#156B58" stroke-opacity="0.5" stroke-width="0.8"/>

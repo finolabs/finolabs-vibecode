@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Session Health</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#F7F7FB;color:#0B0B17;font-family:'Space Grotesk', system-ui, sans-serif;padding:3rem 2rem}
+.frame{max-width:1280px;margin:0 auto}
+.eyebrow{font-family:'JetBrains Mono', ui-monospace, monospace;font-size:.66rem;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:#5B5B79;margin-bottom:.5rem}
+h1{font-family:'Anton', Impact, sans-serif;font-size:1.75rem;font-weight:400;text-transform:uppercase;letter-spacing:-.01em;margin-bottom:.75rem}
+.sub{color:#5B5B79;font-size:.95rem;margin-bottom:1.5rem;max-width:72ch}
+svg{width:100%;min-width:900px;display:block}
+@media(max-width:1000px){.frame{overflow-x:auto}}
+</style></head><body><div class="frame">
+<p class="eyebrow">Loop · finolabs-vibecode</p>
+<h1>Keeping a long session healthy</h1>
+<p class="sub">tidy names the session, watches its context size and writes a handover before compaction, so the work picks up where it left off.</p>
+<svg viewBox="0 0 1280 568" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="session-health-light-title session-health-light-desc">
+<title id="session-health-light-title">Keeping a long session healthy</title>
+<desc id="session-health-light-desc">Loop of session hygiene: the agent names the session at the first task and when the phase changes; reads the context size from the status line snapshot or, on request, the probe (Claude Code&#x27;s /context or Codex&#x27;s app-server); context_steward.py answers ok, prepare from 80 percent, wait or compact at your threshold; on prepare the agent writes a private handover; the host compacts at its threshold or you run /compact; the compact hook at session start re-injects the handover and reminds the agent to check the title.</desc>
+<defs><marker id="session-health-light-default" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5B5B79"/></marker><marker id="session-health-light-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4B1E73"/></marker><marker id="session-health-light-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#14627A"/></marker></defs>
+<rect width="100%" height="100%" fill="#F7F7FB"/>
+<path d="M360,96 H480" fill="none" stroke="#5B5B79" stroke-width="1.2" marker-end="url(#session-health-light-default)"/>
+<path d="M800,96 H920" fill="none" stroke="#5B5B79" stroke-width="1.2" marker-end="url(#session-health-light-default)"/>
+<path d="M1080,152 V272" fill="none" stroke="#5B5B79" stroke-width="1.2" marker-end="url(#session-health-light-default)"/>
+<path d="M920,328 H800" fill="none" stroke="#5B5B79" stroke-width="1.2" marker-end="url(#session-health-light-default)"/>
+<path d="M480,328 H360" fill="none" stroke="#5B5B79" stroke-width="1.2" marker-end="url(#session-health-light-default)"/>
+<path d="M200,272 V152" fill="none" stroke="#5B5B79" stroke-width="1.2" marker-end="url(#session-health-light-default)"/>
+<rect class="lm" x="1088" y="204" width="64" height="16" rx="2" fill="#F7F7FB"/><text x="1092" y="216" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start" letter-spacing="0.06em">PREPARE</text>
+<rect class="lm" x="208" y="204" width="96" height="16" rx="2" fill="#F7F7FB"/><text x="212" y="216" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start" letter-spacing="0.06em">CHECK TITLE</text>
+<g class="node">
+<rect x="40" y="40" width="320" height="112" rx="8" fill="#F7F7FB"/>
+<rect x="40" y="40" width="320" height="112" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.70)" stroke-width="1"/>
+<text x="200" y="72" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Name the session</text>
+<text x="200" y="96" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">at the first task</text>
+<text x="200" y="116" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">again when the phase changes</text>
+<text x="200" y="136" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">project scope: activity</text>
+</g>
+<g class="node">
+<rect x="480" y="40" width="320" height="112" rx="8" fill="#F7F7FB"/>
+<rect x="480" y="40" width="320" height="112" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.70)" stroke-width="1"/>
+<text x="640" y="72" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Read context size</text>
+<text x="640" y="96" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">status line snapshot, or</text>
+<text x="640" y="116" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">the probe on request:</text>
+<text x="640" y="136" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">/context or Codex app-server</text>
+</g>
+<g class="node">
+<rect x="920" y="40" width="320" height="112" rx="8" fill="#F7F7FB"/>
+<rect x="920" y="40" width="320" height="112" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.70)" stroke-width="1"/>
+<text x="1080" y="72" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Steward check</text>
+<text x="1080" y="96" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">context_steward.py check</text>
+<text x="1080" y="116" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">ok · prepare from 80%</text>
+<text x="1080" y="136" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">wait or compact at threshold</text>
+</g>
+<g class="node">
+<rect x="920" y="272" width="320" height="112" rx="8" fill="#F7F7FB"/>
+<rect x="920" y="272" width="320" height="112" rx="8" fill="#EDDFF7" stroke="#4B1E73" stroke-width="1.2"/>
+<text x="1080" y="304" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Prepare a handover</text>
+<text x="1080" y="328" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">goal, decisions, next action</text>
+<text x="1080" y="348" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">handover_state.py write</text>
+<text x="1080" y="368" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">private · 8 KiB · 24 hours</text>
+</g>
+<g class="node">
+<rect x="480" y="272" width="320" height="112" rx="8" fill="#F7F7FB"/>
+<rect x="480" y="272" width="320" height="112" rx="8" fill="rgba(91,91,121,0.10)" stroke="#8B8BA6" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="640" y="304" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Compaction</text>
+<text x="640" y="328" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">the host at its threshold,</text>
+<text x="640" y="348" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">or you run /compact</text>
+<text x="640" y="368" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">the plugin never sends it</text>
+</g>
+<g class="node">
+<rect x="40" y="272" width="320" height="112" rx="8" fill="#F7F7FB"/>
+<rect x="40" y="272" width="320" height="112" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.70)" stroke-width="1"/>
+<text x="200" y="304" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Handover comes back</text>
+<text x="200" y="328" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">compact hook at session start</text>
+<text x="200" y="348" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">re-injects the handover</text>
+<text x="200" y="368" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">reminds to check the title</text>
+</g>
+<text x="40" y="436" fill="#5B5B79" font-size="16" font-weight="400" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="start">Re-injection is declared on Claude Code and Codex; live delivery is unverified. Antigravity keeps the manual handover,</text>
+<text x="40" y="460" fill="#5B5B79" font-size="16" font-weight="400" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="start">and the probe does not cover it. Every step here is the agent&#x27;s judgment; the scripts enforce their limits.</text>
+<line x1="40" y1="496" x2="1240" y2="496" stroke="rgba(11,11,23,0.12)" stroke-width="0.8"/>
+<text x="40" y="528" fill="#5B5B79" font-size="12" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.14em" text-anchor="start">LEGEND</text>
+<rect x="160" y="516" width="32" height="16" rx="4" fill="#FFFFFF" stroke="rgba(11,11,23,0.70)" stroke-width="1"/>
+<text x="204" y="528" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">the agent, on its own</text>
+<rect x="412" y="516" width="32" height="16" rx="4" fill="#EDDFF7" stroke="#4B1E73" stroke-width="1"/>
+<text x="456" y="528" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">before compaction</text>
+<rect x="632" y="516" width="32" height="16" rx="4" fill="rgba(91,91,121,0.10)" stroke="#8B8BA6" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="676" y="528" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">the host or you</text>
+<path d="M836,524 H868" stroke="#5B5B79" stroke-width="1.2" fill="none" marker-end="url(#session-health-light-default)"/>
+<text x="880" y="528" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">next step</text>
+</svg>
+</div></body></html>
