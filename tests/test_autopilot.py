@@ -830,6 +830,16 @@ class AwayDecisionTest(AutopilotBase):
         self.check_as(AGY, coordinator='antigravity', tier=3, code='unknown')
         self.assertEqual(self.lease()['counters']['actions'], 3)
 
+    def test_the_zcode_advisor_form_denies_even_with_an_approved_program(self):
+        ap = self.load()
+        tail = ['--family', 'zcode', '--', '/opt/synthetic/zcode', '-p', BRIEF, '--model', 'glm-synthetic',
+                '--mode', 'plan', '--output-format', 'json']
+        applied = {'Hosts': 'Claude Code, ZCode'}
+        # Antigravity's grammar would accept this shape; a zcode family must never reach it.
+        with patch.object(ap, 'approved_program', return_value=1) as approved:
+            self.assertEqual(ap.advisor_command(tail, applied, 'claude'), 'unknown')
+        approved.assert_not_called()
+
     def test_the_advisor_program_is_the_owner_approved_executable(self):
         self.start_away()
         program = CODEX.index('codex', 6)

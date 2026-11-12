@@ -16,9 +16,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
 import data_root as dr
 import project_store as store
 
-FAMILIES = ('claude', 'codex', 'antigravity')
+FAMILIES = ('claude', 'codex', 'antigravity', 'zcode')
 AGENTS = {'claude': 'claude', 'claude-session': 'claude', 'subagent': 'claude',
-          'codex': 'codex', 'antigravity': 'antigravity'}
+          'codex': 'codex', 'antigravity': 'antigravity', 'zcode': 'zcode'}
 HOST_LIMIT = 262144
 LEDGER_LIMIT = 4 * 1024 * 1024
 DEFAULT_LIMIT = 3

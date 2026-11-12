@@ -20,10 +20,10 @@ spec.loader.exec_module(hook)
 
 # Reader failures and absent assignments have different fixed-word fallbacks.
 ROLES_UNKNOWN = ("Roles: code review unknown; security review unknown; navigator unknown; judge unknown; "
-                 "posting claude unknown, codex unknown, antigravity unknown\n")
+                 "posting claude unknown, codex unknown, antigravity unknown, zcode unknown\n")
 ROLES_DEFAULT = ("Roles: code review unassigned; security review unassigned; navigator unassigned; judge host; "
-                 "posting claude unverified, codex unverified, antigravity unverified\n")
-SLOTS_DEFAULT = "Parallel slots: 3 free of 3 (claude 0 open, codex 0 open, antigravity 0 open; default)\n"
+                 "posting claude unverified, codex unverified, antigravity unverified, zcode unverified\n")
+SLOTS_DEFAULT = "Parallel slots: 3 free of 3 (claude 0 open, codex 0 open, antigravity 0 open, zcode 0 open; default)\n"
 STATE_BASELINE = ("\nPlugin state (local files; fixed words and counts only)\n"
                   "Delegation mode: unknown\n" + ROLES_DEFAULT + "Quota (cached): unknown\nOpen ledger dispatches: 0\n" + SLOTS_DEFAULT)
 
@@ -333,7 +333,7 @@ class StateBlockTest(SyntheticStateTest):
         self.write("ledger.jsonl", "\n".join(map(json.dumps, records)))
         with mock.patch('os.getcwd', return_value=str(nested)):
             self.assertIn("Parallel slots: 2 free of 6 (claude 1 open, codex 3 open of cap 3, "
-                          "antigravity 0 open; project settings)\n", self.state())
+                          "antigravity 0 open, zcode 0 open; project settings)\n", self.state())
         with mock.patch('os.getcwd', return_value=str(self.root)):
             self.assertIn(SLOTS_DEFAULT, self.state())
         # An approved file that changed: the line still prints and says settings need setup, never the default.
@@ -348,7 +348,7 @@ class StateBlockTest(SyntheticStateTest):
                    "## Agent roles\n- code review: codex\n- security review: codex\n- navigator: codex\n")
         self.assertFalse((self.root / "state" / "consent.json").exists())
         self.assertIn("Roles: code review codex; security review codex; navigator codex; judge host; "
-                      "posting claude unverified, codex unverified, antigravity unverified\n", self.state())
+                      "posting claude unverified, codex unverified, antigravity unverified, zcode unverified\n", self.state())
 
     def test_invalid_root_grants_no_roles_from_an_existing_config(self):
         self.write("host.md", "## Agents on this machine\n| Codex | yes | x | x | x |\n"
@@ -387,7 +387,7 @@ class StateBlockTest(SyntheticStateTest):
                    "## Review posting\n- codex: yes (checked 2026-01-01)\n"
                    "- claude: no (checked 2026-01-01)\n")
         self.assertIn("Roles: code review codex; security review claude; navigator claude; judge jev; "
-                      "posting claude no, codex yes, antigravity unverified\n", self.state())
+                      "posting claude no, codex yes, antigravity unverified, zcode unverified\n", self.state())
         original = (self.root / "host.md").read_bytes()
         self.state()
         self.assertEqual((self.root / "host.md").read_bytes(), original)
@@ -402,7 +402,7 @@ class StateBlockTest(SyntheticStateTest):
         self.write("host.md", legacy + matrix)
         state = self.state()
         self.assertIn("Roles: code review unassigned; security review codex; navigator claude; judge host; "
-                      "posting claude unverified, codex unverified, antigravity unverified\n" + line, state)
+                      "posting claude unverified, codex unverified, antigravity unverified, zcode unverified\n" + line, state)
         self.assertLessEqual(len(line), 80)
         # Absent: legacy roles as before and no assignments line.
         self.write("host.md", legacy)

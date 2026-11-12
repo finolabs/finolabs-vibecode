@@ -197,6 +197,17 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(self.pick(host(roles="- code review: codex", posting=posting))[0][0], "codex")
         self.assertEqual(self.pick(host(("claude", "codex"), posting=posting))[0][0], "codex")
 
+    def test_family_without_review_form_is_skipped_not_raised(self):
+        self.assertNotIn("zcode", route.ORDER)
+        self.assertTrue(set(route.ORDER) <= set(route.FORMS))
+        present = ("claude", "codex", "antigravity", "zcode")
+        rows = self.pick(host(present, "- code review: zcode\n- security review: zcode"))
+        self.assertEqual(rows, [("codex", "headless", "capability-one-run-two-comments")] * 2)
+        rows = self.pick(host(("claude", "zcode"), "- code review: zcode"), kinds=("code",))
+        self.assertEqual(rows, [("claude", "agent", "same-family")])
+        with self.assertRaisesRegex(ValueError, "unverified author"):
+            route.route("zcode", host(present), [])
+
     def test_no_available_family_is_error(self):
         with self.assertRaises(ValueError):
             self.pick(host(()))

@@ -34,7 +34,7 @@ RETRY_EFFORT = {"ultra-hard": "max"}
 # `delegate` "Budget and liveness" for the other kinds.
 BUDGET = {"review": "30", "advise": "15-30", "committee": "30-45"}
 # `delegate` "Route", step 3: the capability order for code.
-CODE_ORDER = "claude-code>codex>antigravity"
+CODE_ORDER = "claude-code>codex>antigravity>zcode"
 
 
 def route(kind, grade):

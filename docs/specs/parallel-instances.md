@@ -2,7 +2,7 @@
 
 Status: implemented; amended 2026-11-08 to project scope (see Amendment); shared helper, setup, SessionStart, dashboard, CI copy group and documentation are integrated locally; targeted verification is recorded below, while live-host scheduling and UI behavior remain unverified.
 
-Owner decision: 2026-11-07. A model family (Claude Code, Codex, Antigravity) is a pool of agents, not one seat. Independent tasks may use any number of runs of the same family within the user's total and optional per-family caps. This supersedes the former ceiling of five.
+Owner decision: 2026-11-07. A model family (Claude Code, Codex, Antigravity, ZCode) is a pool of agents, not one seat. Independent tasks may use any number of runs of the same family within the user's total and optional per-family caps. This supersedes the former ceiling of five.
 
 ## Goal and acceptance
 
@@ -33,7 +33,7 @@ The total is 1 to 32; 32 is a sanity cap. A missing total falls back to 3, sourc
 Commands (all run with `python3 -I`):
 
 - `status`: exit 0, JSON with `limit`, `open`, `free`, `families`, `source`. Each family has `open`, nullable `cap`, nullable `free`. Total and capped family free counts floor at zero; uncapped family free is null. Unreadable state prints `unknown`, exit 3.
-- `check --family <claude|codex|antigravity> [--count k]`: k defaults to 1 and is a positive integer of at most 64 digits; requests above capacity report full. Prints exactly `Parallel slots: available`, exit 0, when both total and family capacity fit; otherwise `Parallel slots: full`, exit 3. Unsafe state prints `Parallel slots: unknown`, exit 3. Invalid CLI arguments exit 2.
+- `check --family <claude|codex|antigravity|zcode> [--count k]`: k defaults to 1 and is a positive integer of at most 64 digits; requests above capacity report full. Prints exactly `Parallel slots: available`, exit 0, when both total and family capacity fit; otherwise `Parallel slots: full`, exit 3. Unsafe state prints `Parallel slots: unknown`, exit 3. Invalid CLI arguments exit 2.
 - `check-config`: validates canonical config without requiring a ledger; prints JSON `limit`, `caps`, `source`. Exit 0 for a valid total; 3 for default or unknown. Unknown prints only `unknown`.
 
 These are advisory snapshots, not reservations. `ledger.py start` is unchanged and never blocks on slots. Coordinators honor counts by agent judgment, account for pending assignments and recheck before dispatch. Cross-coordinator check/start is not atomic; stale opens are reconciled with evidence through `status`, and an explicit user override remains possible. No new dispatch lock is added and no ledger record is expired. A start older than its hard cap (budget plus a third, at least ten minutes) is reported as `stale` and left out of the counts, because its run cannot still be within budget; a start with an unknown budget or time stays counted, and its record stays open until someone reconciles it.

@@ -161,6 +161,13 @@ class MetricsTest(unittest.TestCase):
                 self.assertTrue(m.record(event, SID, self.repo, **fields))
         self.assertEqual(len(self.events()), len(cases))
 
+    def test_host_values_stay_within_the_documented_schema(self):
+        # Nothing emits a ZCode session start, so the schema does not list it.
+        self.consent()
+        self.assertEqual(m.HOSTS, ("claude", "codex", "antigravity", "other"))
+        self.assertFalse(m.record("session_start", SID, self.repo, host="zcode", dispatch=None, source="startup"))
+        self.assertEqual(self.events(), [])
+
     def test_an_unwritable_state_dir_never_raises(self):
         self.consent()
         self.dir.chmod(0o500)

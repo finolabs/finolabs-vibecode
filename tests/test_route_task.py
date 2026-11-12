@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/route_task.py"
 COPY = ROOT / "skills/delegate/scripts/route_task.py"
-CODE_ORDER = "agents=claude-code>codex>antigravity"
+CODE_ORDER = "agents=claude-code>codex>antigravity>zcode"
 
 # Written out from `delegate` "Decision matrix" and "Budget and liveness",
 # independently of the script's tables.

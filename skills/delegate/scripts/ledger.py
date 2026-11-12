@@ -30,8 +30,8 @@ import data_root as dr
 
 KINDS = ["implement", "review", "advise", "committee"]
 GRADES = ["easy", "medium", "hard", "very-hard", "ultra-hard"]
-AGENTS = ["claude", "claude-session", "codex", "antigravity", "subagent"]
-COORDINATORS = ["claude", "codex", "antigravity"]
+AGENTS = ["claude", "claude-session", "codex", "antigravity", "zcode", "subagent"]
+COORDINATORS = ["claude", "codex", "antigravity", "zcode"]
 ROUTE_BY = ["table", "judge", "user"]
 REASONS = ["routing", "fallback-quota", "fallback-failure", "user-choice"]
 OUTCOMES = [
@@ -41,7 +41,7 @@ OUTCOMES = [
 TESTS = ["passed", "failed", "not-run"]
 # Same closed lists as the assignment matrix (assignments.py); local ledger only.
 WORK_TYPES = ["frontend", "design", "video", "three-d", "image-generation", "transcription"]
-INSTALL = re.compile(r"claude|codex|antigravity|claude[a-z0-9]{1,24}")
+INSTALL = re.compile(r"claude|codex|antigravity|zcode|claude[a-z0-9]{1,24}|zcode[a-z0-9]{1,24}")
 # Keys open and summary read from each kind of line.
 REQUIRED = {
     "start": {"id", "ts", "project", "task", "kind", "grade", "agent", "model", "reason"},

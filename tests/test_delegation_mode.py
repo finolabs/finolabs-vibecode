@@ -33,7 +33,7 @@ class DelegationModeTest(unittest.TestCase):
         self.assertEqual(result.stderr, "")
         if script == HOOK:
             self.assertIn("Roles: code review unassigned; security review unassigned; navigator unassigned; "
-                          "judge host; posting claude unverified, codex unverified, antigravity unverified\n",
+                          "judge host; posting claude unverified, codex unverified, antigravity unverified, zcode unverified\n",
                           result.stdout)
         return result.stdout
 
@@ -229,7 +229,7 @@ class DelegationModeTest(unittest.TestCase):
         output = self.run_script(copy)
         self.assertIn("coding-router", output)
         self.assertIn("Roles: code review unknown; security review unknown; navigator unknown; judge unknown; "
-                      "posting claude unknown, codex unknown, antigravity unknown\n", output)
+                      "posting claude unknown, codex unknown, antigravity unknown, zcode unknown\n", output)
 
 
 if __name__ == "__main__":

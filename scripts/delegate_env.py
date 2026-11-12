@@ -18,7 +18,7 @@ import run_env
 
 REFUSED = 125
 
-FAMILIES = ('claude', 'codex', 'antigravity')
+FAMILIES = ('claude', 'codex', 'antigravity', 'zcode')
 DISPATCH_ID = re.compile(r'd[0-9]{8}-[0-9]{6}-[0-9a-f]{4}')  # the ids `ledger.py start` writes
 
 
@@ -59,7 +59,7 @@ def names_from_host(text, family):
     for line in lines[begin:end]:
         if not line.strip():
             continue
-        match = re.fullmatch(r'- (claude|codex|antigravity): ([A-Z][A-Z0-9_]{0,63}|none)(; approved: yes)?', line)
+        match = re.fullmatch(r'- (claude|codex|antigravity|zcode): ([A-Z][A-Z0-9_]{0,63}|none)(; approved: yes)?', line)
         if not match:
             raise ValueError('invalid environment section')
         agent, name, approval = match.groups()
