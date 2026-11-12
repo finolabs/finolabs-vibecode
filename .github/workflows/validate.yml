@@ -94,7 +94,7 @@ jobs:
                     ["scripts/quota_probe.py", "skills/setup/scripts/quota_probe.py", "skills/delegate/scripts/quota_probe.py", "skills/update/scripts/quota_probe.py", "skills/review-gate/scripts/quota_probe.py", "skills/session-hygiene/scripts/quota_probe.py"],
                     ["scripts/review_route.py", "skills/delegate/scripts/review_route.py", "skills/review-gate/scripts/review_route.py"],
                     ["scripts/review_config.py", "skills/delegate/scripts/review_config.py", "skills/review-gate/scripts/review_config.py"],
-                    ["scripts/git_metadata.py", "skills/delegate/scripts/git_metadata.py", "skills/review-gate/scripts/git_metadata.py"],
+                    ["scripts/git_metadata.py", "skills/delegate/scripts/git_metadata.py", "skills/review-gate/scripts/git_metadata.py", "skills/checks/scripts/git_metadata.py", "skills/setup/scripts/git_metadata.py", "skills/status/scripts/git_metadata.py"],
                     ["scripts/post_review.py", "skills/review-gate/scripts/post_review.py"],
                     ["scripts/project_progress.py", "skills/status/scripts/project_progress.py", "skills/setup/scripts/project_progress.py", "skills/checks/scripts/project_progress.py", "skills/review-gate/scripts/project_progress.py"],
                     ["scripts/agent_processes.py", "skills/status/scripts/agent_processes.py", "skills/setup/scripts/agent_processes.py"],

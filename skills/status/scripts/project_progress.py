@@ -92,11 +92,79 @@ def project_label(root):
     return store.read_settings(root).get('label')
 
 
-def set_setting(cwd, key, value):
-    # The away object arrives as JSON text; the parallel and away keys record no usage data either.
-    if key == 'autopilot' and value is not None:
-        value = store.autopilot_value(value)
-    if key not in ('ledger', 'tasks', 'parallel', 'parallel-caps', 'autopilot') or value is not None and not valid_setting(key, value):
+AWAY_KEYS = (('task-choice', 'Task choice'), ('push-and-pull-requests', 'Push and pull requests'), ('merge', 'Merge'),
+             ('trusted-authors', 'Trusted authors'))
+AWAY_USER = {'Task choice': ('choose', 'listed'), 'Push and pull requests': ('yes', 'no'), 'Merge': ('yes', 'no'),
+             'Trusted authors': ('own',)}
+AWAY_DEFAULTS = {'Task choice': 'choose', 'Push and pull requests': 'yes', 'Trusted authors': 'own'}
+
+
+def user_away():
+    """The user-scope values of the four away keys in host.md `## Autopilot`, for the setup preview only.
+
+    A missing section, an unreadable host file or an unknown value reads as not set; `autopilot.py` stays the reader
+    that enforces them.
+    """
+    try:
+        text = dr.read_data('host.md', 262144).decode('utf-8')
+        start, body, end = host_section(text, 'Autopilot')
+    except (OSError, ValueError, UnicodeError):
+        return {}
+    if start == body == end:
+        return {}
+    found = dict(AWAY_DEFAULTS)
+    for line in text[body:end].splitlines():
+        match = re.fullmatch(r'- ([A-Za-z -]+): (.+)', line)
+        if match and match[1] in AWAY_USER:
+            found[match[1]] = match[2] if match[2] in AWAY_USER[match[1]] else 'not set'
+    return found
+
+
+def autopilot_preview(cwd, value):
+    """What `settings --set autopilot=<JSON>` (or `--clear autopilot`, value None) would do here; writes nothing.
+
+    Shows the validated repository identity, its current state, the origin the approval would bind, the action
+    (replace, remove or none), the desired object, the effective value of each key and the token its apply repeats.
+    """
+    desired = store.autopilot_value(value) if value is not None else None
+    found, ident = store.identity(cwd)
+    if found != 'found':
+        raise ValueError('no validated repository')
+    state, values, prior, record = store.autopilot_binding(ident)
+    if state == 'broken':
+        raise store.SettingsNeedSetup('project settings need setup again')
+    current, target = values.get('autopilot'), store.origin_target(ident)
+    if desired == current and (current is None or (record or {}).get('target', ...) == target):
+        action = 'none'
+    else:
+        action = 'remove' if desired is None else 'replace'
+    user, shown = user_away(), {}
+    for key, name in AWAY_KEYS:
+        shown[name] = ('%s (repository)' % desired[key] if desired and key in desired
+                       else '%s (user)' % user.get(name, 'not set'))
+    shown['Roots'] = (', '.join(desired['roots']) + ' (repository)' if desired and 'roots' in desired
+                      else 'none (user)')
+    return dict(repository=str(ident.main), worktree=str(ident.checkout), code=store.code_of(ident.main),
+                target=target, state=state, action=action, autopilot=desired, effective=shown,
+                token=store.preview_token(ident, state, prior, target, desired))
+
+
+def set_setting(cwd, key, value, expect=None):
+    # The away object arrives as JSON text and is written only with the token of its shown preview, for the validated
+    # repository identity; the parallel and away keys record no usage data either.
+    if key == 'autopilot':
+        value = store.autopilot_value(value) if value is not None else None
+        if not isinstance(expect, str) or not re.fullmatch(r'[0-9a-f]{64}', expect):
+            raise ValueError('away settings need the token of their shown preview')
+        found, ident = store.identity(cwd)
+        if found != 'found':
+            raise ValueError('no validated repository')
+        changed = store.write_setting(ident.checkout, key, value, ident=ident, expect=expect)
+        store.ensure_excluded(ident.checkout)
+        return changed
+    if expect is not None:
+        raise ValueError('only the away object takes a preview token')
+    if key not in ('ledger', 'tasks', 'parallel', 'parallel-caps') or value is not None and not valid_setting(key, value):
         raise ValueError('invalid project setting')
     # Keep the consent schema shared with metrics, without a cross-skill import. The parallel keys
     # record no usage data, so they never need that consent.
@@ -1116,12 +1184,13 @@ def main(argv=None):
     parser.add_argument('--reset', action='store_true')
     parser.add_argument('--yes', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--expect')
     args = parser.parse_args(argv)
     try:
         if args.reset:
             # Reset has no preview: a dry run or a pre-given yes must never reach the deletion below.
             if (args.choice != 'settings' or args.label is not None or args.clear is not None
-                    or args.dry_run or args.yes):
+                    or args.dry_run or args.yes or args.expect is not None):
                 raise ValueError('reset takes no other option')
             reset_settings(os.getcwd())
             print('Project settings reset.')
@@ -1136,12 +1205,15 @@ def main(argv=None):
                 if not separator:
                     raise ValueError('setting requires equals')
             if args.dry_run:
-                # Only the away object has a preview: it prints the object the setter would store, writing nothing.
-                if key != 'autopilot' or value is None or args.yes:
-                    raise ValueError('dry run previews only an autopilot object')
-                print(json.dumps({'autopilot': store.autopilot_value(value)}, indent=2))
+                # Only the away object has a preview: identity, action, effective values and the apply token.
+                if key != 'autopilot' or args.yes or args.expect is not None:
+                    raise ValueError('dry run previews only the autopilot object')
+                print(json.dumps(autopilot_preview(os.getcwd(), value), indent=2))
                 return 0
-            changed = set_setting(os.getcwd(), key, value)
+            if args.expect is None:
+                changed = set_setting(os.getcwd(), key, value)
+            else:
+                changed = set_setting(os.getcwd(), key, value, expect=args.expect)
             print(key + (' changed' if changed else ' not changed'))
             exclude_note()
             return 0

@@ -17,11 +17,12 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Credentials/env names, .github, hooks, agent instructions, settings, host/setup/lease files are Tier 3 anywhere in argv or paths | protected |
 | Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3 | classify_paths |
 | Read-only Git/gh queries use closed verbs and option sets; command/config overrides and unknown options deny | classify_argv, options |
-| Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and merge origin/main are Tier 1 | classify_argv, branch_context |
+| Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and whose effective destination (origin's single pushurl, else its url) is the verified target, and merge origin/main into a work branch of a found repository (the synchronization exemption) are Tier 1 | classify_argv, branch_context |
 | A local branch merge ([--no-ff] [--no-edit], refs/heads/<b> or an unambiguous bare name that exists only as a branch) is Tier 1 only into a named non-default branch with effective Merge=yes | local_merge, local_branch |
-| A repository's approved settings.json `autopilot` object wins for Task choice, push, Merge, Trusted authors and Roots, read on every check; unset gives user values, broken or unreadable turns them off; the lease hash covers host.md only | effective, project_store.settings_state |
-| A repository that cannot be discovered (search error, unusual .git, over 512 levels) is the strict state, never unset | discover_root, effective |
-| PR merge/create/edit act only on the checkout's own origin (plain github.com URL in its own config); --repo/-R must name it, without it origin is the only remote | target_check, remotes, remote_id |
+| One identity per check (found, absent or unknown; a rejected linked worktree is unknown) feeds settings, branch and remote reads | project_store.identity, effective, Context |
+| The five project values start strict; a positively absent approval gives user values; an approved valid `autopilot` object whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding |
+| PR merge/create/edit need exactly one `--repo github.com/OWNER/NAME` equal to the verified target; create needs one validated `--head`; implicit targets are Tier 3 | target_check, head_check, project_store.origin_target |
+| `effective` prints the same context read-only for the advisory Task choice and Trusted authors | show_effective |
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
 | Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths | classify_paths |
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
@@ -36,7 +37,9 @@ checks out/tests a PR. It never executes argv, reads credentials, reads the
 process environment, or persists argv/paths/settings contents. The live tick,
 quota probe, scheduler, notices and host backstop are outside this first part.
 Counters are reservations, not evidence that a command ran. Setup changes need
-a new lease. There is no status command or long-lived process.
+a new lease. There is no long-lived process. `check` classifies; it cannot
+guarantee that a later command runs with the same working directory, metadata or
+environment.
 """
 import argparse
 from contextlib import contextmanager
@@ -53,6 +56,7 @@ import re
 import stat
 import sys
 import time
+from typing import NamedTuple
 import unicodedata
 import uuid
 
@@ -103,6 +107,7 @@ DOCUMENTS = {'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md'}  # top-level docume
 PROJECT_KEYS = {'task-choice': 'Task choice', 'push-and-pull-requests': 'Push and pull requests', 'merge': 'Merge',
                 'trusted-authors': 'Trusted authors'}
 OFF = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', 'Trusted authors': 'own', 'Roots': []}
+CONTEXT = 'Repository context'  # the applied-settings entry holding the check's Context
 EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yaml', '.yml'}
 MAX_LOG = 8 * 1024 * 1024
 ENFORCERS = {'autopilot.py', 'data_root.py', 'parallel_slots.py', 'secret_patterns.py', 'merge_check.py',
@@ -293,57 +298,57 @@ def plugin_code(name):
         return True
 
 
-def discover_root(cwd):
-    """('found', root), ('absent', None) after every parent was checked, or ('unknown', None).
+class Context(NamedTuple):
+    """The policy context of one check: how the repository resolved, its validated identity, which values apply and
+    the GitHub repository a mutation may name (None: no GitHub mutation or push qualifies)."""
+    repository: str  # found, absent or unknown
+    ident: object  # project_store.Identity when found, else None
+    state: str  # user, project, strict or no-repository
+    target: object  # 'github.com/<owner>/<name>' or None
 
-    Unlike parallel_slots.find_root there is no depth bound: a bounded or failed search is unknown, never absent, so it
-    cannot stand in for "no repository" (which would restore the user values). A `.git` that is neither a regular file
-    nor a folder (a link Git would follow) is unknown too, never skipped for a parent repository.
-    """
-    try:
-        start = Path(os.path.abspath(cwd))
-        folders = (start, *start.parents)
-        if len(folders) > 512:
-            return 'unknown', None
-        for folder in folders:
-            with slots.open_dir(folder) as fd:
-                try:
-                    info = os.stat('.git', dir_fd=fd, follow_symlinks=False)
-                except FileNotFoundError:
-                    continue
-            if stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode):
-                return 'found', folder
-            return 'unknown', None
-    except (OSError, ValueError, TypeError, UnicodeError):
-        return 'unknown', None
-    return 'absent', None
+
+UNKNOWN = Context('unknown', None, 'strict', None)
+
+
+def context_of(applied):
+    found = applied.get(CONTEXT)
+    return found if isinstance(found, Context) else UNKNOWN
 
 
 def effective(applied, cwd):
-    """User settings with this repository's approved project values on top (docs/specs/autopilot.md "Project scope").
+    """The five project-scoped values and the repository context of one check (docs/specs/autopilot.md "Project scope").
 
-    Unset gives the user values; an approved object wins for its five keys; broken, or any error while reading it,
-    turns those keys off, which is never wider than user scope. A repository that cannot be discovered (an error or an
-    unusual `.git`) is the same strict state, never unset. Read on every check, never stored in the lease.
+    Starts from the strict vector and leaves it only once each prerequisite holds: a validated identity
+    (`project_store.identity`), then either a positively absent approval (user values, no extra roots) or approved
+    settings whose `autopilot` object is valid and whose recorded origin binding equals the origin read now (explicit
+    project values replace user values, omitted keys inherit). Unknown identity, an unreadable approval, a digest
+    mismatch, invalid settings, a changed origin or any error keeps the whole strict vector. Positively no repository
+    keeps the user values with no context to act on, so no repository mutation qualifies. Read on every check, never
+    stored in the lease.
     """
-    result = {**applied, 'Roots': []}
+    strict = {**applied, **OFF, CONTEXT: UNKNOWN}
     try:
-        found, root = discover_root(cwd)
-        if found == 'unknown':
-            return {**result, **OFF}
-        state, values = store.settings_state(root)
-        project = values.get('autopilot', {})
-        if state == 'approved' and project and not store.valid_autopilot(project):
-            state = 'broken'
-    except (OSError, ValueError, TypeError, UnicodeError):
-        state, project = 'broken', {}
-    if state == 'broken':
-        return {**result, **OFF}
-    for key, name in PROJECT_KEYS.items():
-        if key in project:
-            result[name] = project[key]
-    result['Roots'] = [r for r in project.get('roots', []) if not protected(r)]
-    return result
+        found, ident = store.identity(cwd)
+        if found == 'absent':
+            return {**applied, 'Roots': [], CONTEXT: Context('absent', None, 'no-repository', None)}
+        if found != 'found':
+            return strict
+        state, values, _, record = store.autopilot_binding(ident)
+        target = store.origin_target(ident)
+        if state == 'unset' or state == 'approved' and 'autopilot' not in values:
+            return {**applied, 'Roots': [], CONTEXT: Context('found', ident, 'user', target)}
+        project = values.get('autopilot') if state == 'approved' else None
+        if not store.valid_autopilot(project) or 'target' not in record or record['target'] != target:
+            return {**strict, CONTEXT: Context('found', ident, 'strict', None)}
+        result = dict(applied)
+        for key, name in PROJECT_KEYS.items():
+            if key in project:
+                result[name] = project[key]
+        result['Roots'] = [r for r in project.get('roots', []) if not protected(r)]
+        result[CONTEXT] = Context('found', ident, 'project', target)
+        return result
+    except (OSError, ValueError, TypeError, UnicodeError, KeyError, RecursionError):
+        return strict
 
 
 def classify_paths(paths, roots=()):
@@ -403,35 +408,16 @@ def options(tokens, flags=(), valued=(), *, positional=True):
     return operands
 
 
-def git_dirs():
-    """(git folder, common folder) of the current checkout from local metadata only; (None, None) outside one."""
-    found, root = discover_root(os.getcwd())
-    if found != 'found':
-        return None, None
-    with slots.open_dir(root) as fd:
-        info = os.stat('.git', dir_fd=fd, follow_symlinks=False)
-        if stat.S_ISREG(info.st_mode):
-            link = slots.read_metadata(fd, '.git').strip()
-            if not link.startswith('gitdir: '):
-                return None, None
-            git = Path(os.path.abspath(root / link[8:]))
-        elif stat.S_ISDIR(info.st_mode):
-            git = root / '.git'
-        else:
-            return None, None
-    with slots.open_dir(git) as fd:
-        try:
-            common = Path(os.path.abspath(git / slots.read_metadata(fd, 'commondir').strip()))
-        except FileNotFoundError:
-            common = git
-    return git, common
+def git_dirs(context):
+    """(git folder, common folder) of the check's validated identity; ValueError without one."""
+    if context.ident is None:
+        raise ValueError('no validated repository')
+    return context.ident.git, context.ident.common
 
 
-def branch_context():
-    """Only local metadata, no Git process, config execution or credential helper."""
-    git, common = git_dirs()
-    if git is None:
-        return None, None
+def branch_context(context):
+    """Only local metadata of the context's identity, no Git process, config execution or credential helper."""
+    git, common = git_dirs(context)
     with slots.open_dir(git) as fd:
         head = slots.read_metadata(fd, 'HEAD').strip()
     with slots.open_dir(common / 'refs/remotes/origin') as fd:
@@ -464,105 +450,55 @@ def branch_context():
     return chain[-1], default
 
 
-GITHUB = 'github.com'
-OWNER_OR_NAME = re.compile(r'[A-Za-z0-9_.-]{1,100}')
-SECTION = re.compile(r'\s*\[\s*([A-Za-z0-9-]+)(?:\s+"((?:[^"\\\n]|\\.)*)")?\s*\]\s*(?:[#;].*)?')
-ENTRY = re.compile(r'\s*([A-Za-z][A-Za-z0-9-]*)\s*(?:=\s*(.*?))?\s*')
+def flag_operands(tail, flag):
+    """Every value given to a long `flag`, in the separate and the `=` forms."""
+    return ([tail[i + 1] if i + 1 < len(tail) else '' for i, t in enumerate(tail) if t == flag]
+            + [t[len(flag) + 1:] for t in tail if t.startswith(flag + '=')])
 
 
-def repository_id(host, owner, name):
-    """A casefolded (host, owner, name) of a GitHub repository, or None for anything else."""
-    name = name.removesuffix('.git')
-    if host.casefold() != GITHUB or not all(OWNER_OR_NAME.fullmatch(p) and p not in {'.', '..'} for p in (owner, name)):
-        return None
-    return GITHUB, owner.casefold(), name.casefold()
-
-
-def remote_id(url):
-    """The repository of a plain GitHub remote URL (https, ssh:// or scp form); None for any other form."""
-    for pattern in (r'https://([A-Za-z0-9.-]+)/([^/]+)/([^/]+)', r'ssh://git@([A-Za-z0-9.-]+)/([^/]+)/([^/]+)',
-                    r'git@([A-Za-z0-9.-]+):([^/]+)/([^/]+)'):
-        match = re.fullmatch(pattern, url)
-        if match:
-            return repository_id(*match.groups())
-    return None
-
-
-def remotes():
-    """{remote name: [url, ...]} from the checkout's own Git config, read as local metadata; None on any doubt.
-
-    Doubt: no config, a per-worktree config, an include, a URL rewrite (insteadOf), a continuation line or any line
-    this small reader does not recognize. Global and system config are not read (an advisory limit in the spec).
-    """
-    git, common = git_dirs()
-    if git is None:
-        return None
-    for folder in {git, common}:
-        with slots.open_dir(folder) as fd:
-            try:
-                os.stat('config.worktree', dir_fd=fd, follow_symlinks=False)
-                return None
-            except FileNotFoundError:
-                pass
-    with slots.open_dir(common) as fd:
-        text = slots.read_metadata(fd, 'config')
-    found, section, subsection = {}, None, None
-    for line in text.splitlines():
-        if not line.strip() or line.lstrip().startswith(('#', ';')):
-            continue
-        if line.rstrip().endswith('\\'):
-            return None
-        header = SECTION.fullmatch(line)
-        if header:
-            section, subsection = header[1].casefold(), header[2]
-            if section in {'include', 'includeif', 'url'}:
-                return None
-            if section == 'remote':
-                if subsection is None:
-                    return None
-                found.setdefault(subsection, [])
-            continue
-        entry = ENTRY.fullmatch(line)
-        if not entry or section is None:
-            return None
-        key = entry[1].casefold()
-        if key in {'insteadof', 'pushinsteadof'}:
-            return None
-        if section == 'remote' and key == 'url':
-            if not entry[2] or not re.fullmatch(r'[^\s"\\#;]+', entry[2]):
-                return None
-            found[subsection].append(entry[2])
-    return found
-
-
-def target_check(tail):
-    """'allowed' when a gh pull request mutation targets the checkout's own origin, 'forbidden' when it names another
-    repository, else 'unknown'. Without --repo/-R gh picks among the remotes itself, so origin must be the only one."""
-    named = [t.split('=', 1)[1] if '=' in t else tail[i + 1] if i + 1 < len(tail) else ''
-             for i, t in enumerate(tail) if t in {'--repo', '-R'} or t.startswith(('--repo=', '-R='))]
-    try:
-        found = remotes()
-    except (OSError, ValueError, UnicodeError):
-        found = None
-    if len(named) > 1 or not found or len(found.get('origin', [])) != 1:
+def target_check(tail, context):
+    """'allowed' only for exactly one explicit `--repo github.com/OWNER/NAME` equal to the context's verified target,
+    'forbidden' for another GitHub repository, else 'unknown'. gh's implicit choice (remotes, gh-resolved, GH_REPO) is
+    never predicted: an explicit --repo takes precedence over all of them, so any form without one is Tier 3, and so
+    are the short -R spellings, other hosts, URL forms, `.git` names and a repeated --repo."""
+    if any(t.startswith('-R') for t in tail):
         return 'unknown'
-    origin = remote_id(found['origin'][0])
-    if origin is None:
+    named = flag_operands(tail, '--repo')
+    if len(named) != 1 or context.target is None:
         return 'unknown'
-    if not named:
-        return 'allowed' if set(found) == {'origin'} else 'unknown'
-    match = re.fullmatch(r'(?:([^/]+)/)?([^/]+)/([^/]+)', named[0])
+    match = re.fullmatch(r'([^/]+)/([^/]+)/([^/]+)', named[0])
     if not match or named[0].endswith('.git'):
         return 'unknown'
-    target = repository_id(match[1] or GITHUB, match[2], match[3])
-    return 'allowed' if target == origin else 'forbidden'
+    target = store.repository_target(*match.groups())
+    if target is None:
+        return 'unknown'
+    return 'allowed' if target == context.target else 'forbidden'
 
 
-def local_branch(name, bare):
+def head_check(tail, context):
+    """`gh pr create` names its head explicitly (`--head <branch>`, once), so gh pushes nothing itself; the branch is a
+    plain name that is not the default branch, `main`, `master` or `trunk`."""
+    if any(t.startswith('-H') for t in tail):
+        return 'unknown'
+    heads = flag_operands(tail, '--head')
+    if len(heads) != 1:
+        return 'unknown'
+    name = heads[0]
+    if (not BRANCH.fullmatch(name) or name.startswith('refs/') or '..' in name or '//' in name or '/.' in name
+            or name.endswith(('/', '.', '.lock', 'HEAD'))):
+        return 'unknown'
+    try:
+        _, default = branch_context(context)
+    except (OSError, ValueError, UnicodeError):
+        return 'unknown'
+    if any(kept and name.casefold() == kept.casefold() for kept in ('main', 'master', 'trunk', default)):
+        return 'forbidden'
+    return 'allowed' if default else 'unknown'
+
+
+def local_branch(name, bare, context):
     """True when refs/heads/<name> exists (loose or packed) and, for a bare name, no ref git would pick first does."""
-    _, common = git_dirs()
-    if common is None:
-        return False
+    _, common = git_dirs(context)
 
     def loose(ref):
         try:
@@ -602,11 +538,12 @@ def local_merge(tail, applied):
         return 'unknown'  # a bare name that could read as a commit id or another ref
     if applied['Merge'] != 'yes':
         return 'merge-disabled'
+    context = context_of(applied)
     try:
-        current, default = branch_context()
+        current, default = branch_context(context)
         if current in {None, default, 'main', 'master', 'trunk'}:
             return 'forbidden'  # never into the default branch or a detached head
-        if not default or name == current or not local_branch(name, not explicit):
+        if not default or name == current or not local_branch(name, not explicit, context):
             return 'unknown'
     except (OSError, ValueError, UnicodeError):
         return 'unknown'
@@ -898,9 +835,10 @@ def classify_argv(argv, applied, coordinator=None):
             if any(b.startswith('refs/') and not b.startswith('refs/heads/')
                    or b.split('/')[0] in {'tags', 'remotes', 'notes', 'replace', 'stash', 'changes'} for b in refspec):
                 return 'forbidden'
+            context = context_of(applied)
             try:
-                current, default = branch_context()
-            except (OSError, ValueError):
+                current, default = branch_context(context)
+            except (OSError, ValueError, UnicodeError):
                 return 'unknown'
             destination = refspec[-1]
             target = destination.removeprefix('refs/heads/')
@@ -912,13 +850,19 @@ def classify_argv(argv, applied, coordinator=None):
             # A bare or abbreviated destination can resolve to a tag, so only an explicit branch ref is a known push.
             if len(refspec) != 2 or not destination.startswith('refs/heads/'):
                 return 'unknown'
-            return 'allowed' if applied['Push and pull requests'] == 'yes' else 'push-disabled'
+            if applied['Push and pull requests'] != 'yes':
+                return 'push-disabled'
+            # Git pushes to origin's pushurl when one is set, else its url: that one destination must be the target.
+            if context.target is None or store.push_target(context.ident) != context.target:
+                return 'unknown'
+            return 'allowed'
         if verb == 'merge':
             if tail not in (['origin/main'], ['--no-edit', 'origin/main']):
                 return local_merge(tail, applied)
+            # The synchronization exemption: a local merge of origin/main into a work branch needs no Merge setting.
             try:
-                current, default = branch_context()
-            except (OSError, ValueError):
+                current, default = branch_context(context_of(applied))
+            except (OSError, ValueError, UnicodeError):
                 return 'unknown'
             return 'allowed' if current and default and current not in {default, 'main', 'master', 'trunk'} else 'forbidden'
         if verb == 'add':
@@ -965,14 +909,21 @@ def classify_argv(argv, applied, coordinator=None):
             operands = options(tail, {'--squash', '--merge', '--rebase', '--delete-branch'}, {'--match-head-commit', '--repo', '-R'})
             if operands is None or len(operands) != 1 or not operands[0].isdigit():
                 return 'unknown'
-            return target_check(tail)  # the permission is this checkout's: never another repository's
+            return target_check(tail, context_of(applied))  # the permission is this context's target, never another
         if group == 'pr' and verb in {'create', 'edit'}:
             if applied['Push and pull requests'] != 'yes':
                 return 'push-disabled'
             operands = options(tail, {'--draft', '--fill'}, {'--title', '-t', '--body', '-b', '--base', '-B', '--head', '-H', '--repo', '-R', '--add-label', '--remove-label'})
-            if operands is None or operands and (len(operands) != 1 or not operands[0].isdigit()):
+            # Create takes no operand; edit names one pull request by number (never the current branch's).
+            expected = 0 if verb == 'create' else 1
+            if operands is None or len(operands) != expected or not all(o.isdigit() for o in operands):
                 return 'unknown'
-            return target_check(tail)
+            context = context_of(applied)
+            if verb == 'create':
+                head = head_check(tail, context)
+                if head != 'allowed':
+                    return head
+            return target_check(tail, context)
         queries = {'pr': {'view', 'checks', 'list', 'status', 'diff'}, 'issue': {'view', 'list', 'status'},
                    'repo': {'view'}, 'run': {'view', 'list'}}
         if verb in queries.get(group, set()):
@@ -1005,6 +956,17 @@ def check(folder, args):
                 counters['runs'] += 1
             save_lease(folder, lease)
     print(json.dumps({'tier': 1 if code == 'allowed' else 3, 'code': code}, separators=(',', ':')))
+
+
+def show_effective(folder):
+    """Read-only: the five values `check` would apply in this working directory now, for advisory consumers (Task
+    choice, Trusted authors). Reserves nothing and changes no counter; prints no path."""
+    code, _, applied = lease_guard(folder, now())
+    result = effective(applied if applied is not None else settings(), os.getcwd())
+    context = result[CONTEXT]
+    print(json.dumps({'lease': code or 'live', 'repository': context.repository, 'state': context.state,
+                      'target': context.target, 'values': {name: result[name] for name in OFF}},
+                     separators=(',', ':')))
 
 
 def safe_note(note):
@@ -1198,6 +1160,7 @@ def main(argv=None):
     begin = sub.add_parser('start', allow_abbrev=False)
     begin.add_argument('--hours')
     sub.add_parser('stop', allow_abbrev=False)
+    sub.add_parser('effective', allow_abbrev=False)
     inspect = sub.add_parser('check', allow_abbrev=False)
     group = inspect.add_mutually_exclusive_group(required=True)
     group.add_argument('--argv-json')
@@ -1221,6 +1184,8 @@ def main(argv=None):
                 stop(folder)
             elif args.command == 'check':
                 check(folder, args)
+            elif args.command == 'effective':
+                show_effective(folder)
             elif args.command == 'review':
                 review(folder, args)
             elif args.command == 'packet-check':
