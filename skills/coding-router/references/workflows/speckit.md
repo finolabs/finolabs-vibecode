@@ -28,7 +28,7 @@ Spec Kit owns the process and artifacts; no work record is created in a Spec Kit
 
 ## What yields
 
-Spec Kit replaces the overlapping generic process skills (brainstorming, writing-plans, executing-plans, subagent-driven-development, finishing-a-development-branch, and mattpocock/skills' `to-spec`, `to-tickets`, `implement`, `implement-spec`). Domain skills, debugging, testing, verification, review and security work still apply inside the active phase, each limited to its own responsibility: phase tools such as `grilling`, `prototype`, `tdd` and `diagnosing-bugs` work inside Spec Kit phases. Any nested instruction that duplicates Spec Kit planning, artifacts or execution yields to this rule.
+Spec Kit replaces the overlapping generic process skills (brainstorming, writing-plans, executing-plans, subagent-driven-development, finishing-a-development-branch, and mattpocock/skills' `to-spec`, `to-tickets`, `implement`, `implement-spec`). Domain skills, debugging, testing, verification, review and security work still apply inside the active phase, each limited to its own responsibility: phase tools such as `grilling`, `clarify`, `prototype`, `tdd` and `diagnosing-bugs` work inside Spec Kit phases, and `grilling` and `clarify` yield to Spec Kit's own clarify step. Any nested instruction that duplicates Spec Kit planning, artifacts or execution yields to this rule.
 
 ## Gaps
 
