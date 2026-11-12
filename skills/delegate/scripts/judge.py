@@ -298,7 +298,7 @@ def configured_judge():
             names = {"Claude Code": "claude", "Codex": "codex", "Antigravity": "antigravity", "ZCode": "zcode"}
             table = inventory[1].split("\n## ", 1)[0]
             named = {names[match.group(1)] for match in re.finditer(
-                r"^\|\s*(Claude Code|Codex|Antigravity)\s*\|", table, re.M)}
+                r"^\|\s*(" + "|".join(map(re.escape, names)) + r")\s*\|", table, re.M)}
         roles = {}
         for line in lines:
             key, value = line.removeprefix("- ").split(": ")
