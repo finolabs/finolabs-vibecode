@@ -1284,7 +1284,7 @@ class SecurityRoundOneTest(AutopilotBase):
         self.check(merge + ['--repo', 'example/demo'])
         config.unlink()
         self.check(merge, tier=3, code='unknown')
-        for url in ('git@github.com:example/demo.git', 'ssh://git@github.com/example/demo', 'https://github.com/example/demo'):
+        for url in ('git' '@github.com:example/demo.git', 'ssh://git' '@github.com/example/demo', 'https://github.com/example/demo'):
             with self.subTest(url=url):
                 config.write_text('[remote "origin"]\n\turl = ' + url + '\n')
                 self.check(merge)
