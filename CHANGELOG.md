@@ -4,6 +4,11 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- `commit-messages`' `worktree_sweep.py` (copy in `review-gate`) cleans up worktrees after a pull request merges, so they no longer use up storage (owner decision, 2026-11-12). `list` (the default) shows each linked worktree of the repository with its branch, size on disk, clean or dirty, unpushed commits and merged (an ancestor of `origin/<default>`, or a merged pull request when `gh` is present; otherwise unknown). `--remove` takes only a worktree that is merged, clean, has nothing unpushed, is not the working directory or a parent of it, has no open ledger dispatch, and is named with `--path` or was the checkout of a finished dispatch; it runs `git worktree remove` without `--force` and `git branch -d`, never `-D`, then `git worktree prune`, and lists what it kept with the reason. Files git ignores go with a removed worktree. `commit-messages` "After merge", the `review-gate` merge step and the `autopilot` merge gate now run it right after a merge and tell the user what was kept and its size (advisory).
+- On Claude Code, a hook prints one fixed line after a successful `gh pr merge`: "fnl: a pull request merged; run worktree_sweep.py to remove its clean worktree (advisory)." It stores, logs and sends nothing, never blocks and always exits 0. Codex and Antigravity get no hook, because their hook output is not verified here.
+
 ### Changed
 
 - A second `/afk start` while a lease is live now reports when that lease ends and tells the session to work under it, instead of a generic refusal that led a second session to work outside the lease. The lease covers every session on the machine; nothing is extended or reset.
