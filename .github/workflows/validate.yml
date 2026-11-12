@@ -91,7 +91,7 @@ jobs:
                     ["scripts/fnl_metrics.py", "skills/coding-router/scripts/fnl_metrics.py", "skills/status/scripts/fnl_metrics.py", "skills/update/scripts/fnl_metrics.py"],
                     ["skills/help/references/plain-language.md", "skills/setup/references/plain-language.md"],
                     ["skills/help/references/plain-terms.md", "skills/setup/references/plain-terms.md"],
-                    ["scripts/quota_probe.py", "skills/setup/scripts/quota_probe.py", "skills/delegate/scripts/quota_probe.py", "skills/update/scripts/quota_probe.py", "skills/review-gate/scripts/quota_probe.py"],
+                    ["scripts/quota_probe.py", "skills/setup/scripts/quota_probe.py", "skills/delegate/scripts/quota_probe.py", "skills/update/scripts/quota_probe.py", "skills/review-gate/scripts/quota_probe.py", "skills/session-hygiene/scripts/quota_probe.py"],
                     ["scripts/review_route.py", "skills/delegate/scripts/review_route.py", "skills/review-gate/scripts/review_route.py"],
                     ["scripts/review_config.py", "skills/delegate/scripts/review_config.py", "skills/review-gate/scripts/review_config.py"],
                     ["scripts/git_metadata.py", "skills/delegate/scripts/git_metadata.py", "skills/review-gate/scripts/git_metadata.py"],
