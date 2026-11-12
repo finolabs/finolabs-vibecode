@@ -14,7 +14,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
 | Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
 | A precedent packet holds at most eight excerpts and 8 KB; a secret or machine path drops an excerpt; excerpts need the separate consent | packet_check |
-| Credentials/env names, .github, hooks, agent instructions, settings, host/setup/lease files are Tier 3 anywhere in argv or paths | protected |
+| Credentials/env names, .github, hooks, agent instructions, settings, host/setup/lease files are Tier 3 anywhere in argv or paths, except the one exact script path of this install's own trusted wrapper (the install may lie under ~/.claude or ~/.codex) | protected, own_wrapper_index |
 | Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3 | classify_paths |
 | Read-only Git/gh queries use closed verbs and option sets; command/config overrides and unknown options deny | classify_argv, options |
 | Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and whose effective destination (origin's single pushurl, else its url) is the verified target, and merge origin/main into a work branch of a found repository (the synchronization exemption) are Tier 1 | classify_argv, branch_context |
@@ -581,6 +581,26 @@ def local_merge(tail, applied):
     return 'allowed'
 
 
+def own_wrapper_index(argv):
+    """Index of the script token when argv runs one of this install's own trusted wrappers, else None.
+
+    The install folder itself may lie under ~/.claude or ~/.codex; only that one exact token is spared the
+    lexical protected check, and every other token (including a nested command's) is still checked."""
+    if len(argv) < 3 or argv[0] not in {'python3', sys.executable} or argv[1] != '-I':
+        return None
+    index = 3 if argv[2] == '-B' else 2
+    if index >= len(argv):
+        return None
+    own = Path(__file__).resolve().parent
+    trusted = {own / name for name in ('ledger.py', 'record.py', 'heavy_run.py', 'judge.py', 'delegate_env.py')}
+    trusted.add(own.parent.parent / 'review-gate/scripts/merge_check.py')
+    path = Path(argv[index])
+    if (path not in trusted or path.is_symlink() or not path.is_file()
+            or any(parent.is_symlink() for parent in (path.parent, path.parent.parent))):
+        return None
+    return index
+
+
 def script_command(argv, applied):
     if argv[0] not in {'python3', sys.executable} or len(argv) < 3 or argv[1] != '-I':
         return 'unknown'
@@ -841,7 +861,8 @@ def classify_argv(argv, applied, coordinator=None):
         return 'unknown'
     if any(t in {';', '&&', '||', '|', '>', '>>', '<'} or '$(' in t or '`' in t for t in argv):
         return 'unknown'
-    if any(protected(t) for t in argv):
+    wrapper = own_wrapper_index(argv)
+    if any(protected(t) for i, t in enumerate(argv) if i != wrapper):
         return 'protected'
     command = argv[0]
     categories, deploy = command_categories(argv), is_deploy(argv)
