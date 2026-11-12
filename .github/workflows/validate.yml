@@ -88,6 +88,7 @@ jobs:
                     ['scripts/brief_check.py', 'skills/handoff/scripts/brief_check.py'],
                     ["scripts/instructions_write.py", "skills/setup/scripts/instructions_write.py"],
                     ["scripts/data_root.py", "skills/coding-router/scripts/data_root.py", "skills/delegate/scripts/data_root.py", "skills/review-gate/scripts/data_root.py", "skills/setup/scripts/data_root.py", "skills/status/scripts/data_root.py", "skills/session-hygiene/scripts/data_root.py", "skills/checks/scripts/data_root.py", "skills/restore-point/scripts/data_root.py", "skills/update/scripts/data_root.py"],
+                    ["skills/commit-messages/scripts/worktree_sweep.py", "skills/review-gate/scripts/worktree_sweep.py"],
                     ["scripts/fnl_metrics.py", "skills/coding-router/scripts/fnl_metrics.py", "skills/status/scripts/fnl_metrics.py", "skills/update/scripts/fnl_metrics.py"],
                     ["skills/help/references/plain-language.md", "skills/setup/references/plain-language.md"],
                     ["skills/help/references/plain-terms.md", "skills/setup/references/plain-terms.md"],

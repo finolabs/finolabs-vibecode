@@ -120,6 +120,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/instructions_write.py` | Previews and writes one approved instruction file/block with digest and backups. |
 | `scripts/judge.py` | Screens bounded questions, validates supplied host answers or calls optional Jev, and discloses fallback; neither judge accepts work. |
 | `scripts/log_scan.py` | Scans logs, shows redacted views and applies digest-bound local redaction; never reads a raw log into a receipt. |
+| `scripts/merge_notice_hook.py` | Claude Code reminder after a successful `gh pr merge` that ends the command line: one fixed line pointing to `worktree_sweep.py list` and the git commands it prints; quoted excluded flags print nothing; stores nothing, always exits 0. |
 | `scripts/metrics_hook.py` | Records consented usage metadata and triggers local dashboard refreshes. |
 | `scripts/mode.py` | Shows effective settings/sources and writes previewed confirmed changes for `/setup mode`. |
 | `scripts/nav_state.py` | Collects bounded current anchors/metadata, screens payloads and checks report references; it does not prove drift. |
@@ -136,7 +137,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/route_task.py` | Prints matrix tier, effort, budget and family order for a kind/grade; the coordinator chooses the model. |
 | `scripts/run_env.py` | Builds the allowlisted child environment for headless delegates and verification commands. |
 | `scripts/secret_patterns.py` | Shared secret-pattern and environment-dump detection for briefs and logs. |
-| `scripts/session_start.py` | Read-only Claude Code/Codex reminder and fixed state summary, with advisory slots, a validated session id line and optional context/handover. |
+| `scripts/session_start.py` | Read-only Claude Code/Codex reminder and fixed state summary, with advisory slots, a fixed warning when the main checkout is off its default branch, a validated session id line and optional context/handover. |
 | `scripts/statusline_setup.py` | Previews/applies/removes the opt-in context recorder; existing status lines get a manual recipe. |
 | `scripts/update_check.py` | Cached update status, skip/never/pin preferences, the detached fixed-endpoint release check, the upgrade-notes checklist (`whats-new`, `onboard seen`/`skip`) and evidence-checked `target`. |
 | `scripts/verify_claim.py` | Checks head, scope and targeted tests, writes verification metadata and prepares host-judge evidence; grants no acceptance. |
@@ -146,6 +147,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 
 | Path | Purpose |
 | --- | --- |
+| `skills/commit-messages/scripts/worktree_sweep.py` | Read-only list of linked worktrees (path as git lists it, branch, size, clean or dirty, unpushed, merged, candidate); under each candidate prints `git worktree remove <path>` and `git branch -d <branch>` for the agent to run, so git does the removal. Deletes nothing. Copy in `review-gate`. |
 | `skills/checks/scripts/checks.py` | Runs or shows the repository's approved stored checks (a changed or unapproved check file runs nothing) in order through `heavy_run.py`, stops at the first failure, narrows Python test modules with `--changed`, and writes a local receipt only for a whole passing run on a clean, unmoved head when that mode is on; `run --dispatch <id>` writes, on the same conditions and whatever that mode, the verification receipt `ledger.py finish --outcome accepted` needs. `usage --from <file>` summarises hosted CI runs, minutes, the document-only share and days left from a run list the agent produced; no network call and no process. |
 | `skills/delegate/scripts/autopilot.py` | Autopilot lease, closed action classification (Tier 1 or Tier 3) against one repository identity and target, a read-only view of the values it applies, and private action log; executes nothing. |
 | `skills/delegate/scripts/heavy_run.py` | Runs one heavy command at a time per machine under a kernel lock, with load and memory gates, a wait cap and a maximum run time. |
