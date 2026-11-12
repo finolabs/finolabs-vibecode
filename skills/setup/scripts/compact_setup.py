@@ -237,6 +237,73 @@ def notices(host):
     print("The new value applies to sessions started afterwards; a running session is unverified.")
 
 
+MANAGED = {"darwin": "/Library/Application Support/ClaudeCode/managed-settings.json",
+           "linux": "/etc/claude-code/managed-settings.json"}
+
+
+def managed_settings():
+    """The managed settings file for this platform, read only when it is readable."""
+    path = MANAGED.get(sys.platform if sys.platform != "linux2" else "linux")
+    return [("managed", Path(path))] if path else []
+
+
+def auto_compact_conflicts(files, environ):
+    """(window configured, findings) from (label, raw JSON) pairs; reads only the compaction keys.
+
+    Findings hold fixed text, the file's label and a variable's name, never another key or any value."""
+    window, findings = False, []
+    for label, raw in files:
+        try:
+            data = json.loads(raw)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        models = data.get("modelSettings")
+        if "autoCompactWindow" in data or (isinstance(models, dict) and any(
+                isinstance(settings, dict) and "autoCompactWindow" in settings for settings in models.values())):
+            window = True
+        if data.get("autoCompactEnabled") is False:
+            findings.append(f"autoCompactEnabled is false in {label} settings")
+    findings += [f"{name} is set" for name in ("DISABLE_AUTO_COMPACT", "CLAUDE_CODE_AUTO_COMPACT_WINDOW")
+                 if name in environ]
+    return window, findings
+
+
+def read_settings(path):
+    """Bytes of one settings file, or None when absent, a link, too large or unreadable."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > LIMIT:
+            return None
+        return os.read(fd, LIMIT + 1)[:LIMIT]
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+
+
+def other_settings():
+    """Project, local and managed Claude Code settings that can turn the user's window off."""
+    cwd = Path(os.getcwd())
+    root = next((p for p in (cwd, *cwd.parents) if os.path.lexists(p / ".git")), None)
+    files = [("project", root / ".claude/settings.json"), ("local", root / ".claude/settings.local.json")] \
+        if root else []
+    return [(label, raw) for label, path in [*files, *managed_settings()]
+            for raw in [read_settings(path)] if raw is not None]
+
+
+def disabled_notice(raws):
+    """Warn when the window being set would do nothing; environment variables are named by notices()."""
+    _, findings = auto_compact_conflicts([*raws, *other_settings()], {})
+    for finding in findings:
+        print(f"Warning: {finding}, so the window shown here does nothing until auto-compaction is on.")
+
+
 def target_notice(host, raw):
     # Called only after transform has validated the target JSON.
     if host == "claude" and raw is not None:
@@ -260,7 +327,7 @@ def preview(host, folders, tokens):
     root = dr.consent_root()
     if root is None:
         raise Refusal("invalid data root")
-    targets, identities, displays = [], set(), []
+    targets, identities, displays, raws = [], set(), [], []
     for folder_path in folders:
         path = checked_path(Path(folder_path) / ("settings.json" if host == "claude" else "config.toml"), host)
         with dr.relocated_folder(path.parent) as folder:
@@ -272,6 +339,8 @@ def preview(host, folders, tokens):
             raw, mode = read_target(folder, path.name)
             result, change = transform(host, raw, tokens)
             target_notice(host, raw)
+            if raw is not None:
+                raws.append(("user", raw))
             backup = backup_name(folder, path.name)
             targets.append({"path": str(path), "sha256": content_hash(raw), "mode": mode, "backup": backup})
             displays.append((path, raw is not None, change, backup, result != raw))
@@ -287,6 +356,8 @@ def preview(host, folders, tokens):
     for path, exists, change, backup, changed in displays:
         print(f"Target: {path}\nExists: {'yes' if exists else 'no'}\n{change}")
         print(f"Backup: {path.parent / backup}" + (" (not needed)" if not exists or not changed else ""))
+    if host == "claude":
+        disabled_notice(raws)
     notices(host)
     print("Digest: " + value)
 
