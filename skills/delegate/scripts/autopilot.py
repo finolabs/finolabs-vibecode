@@ -18,6 +18,9 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3 | classify_paths |
 | Read-only Git/gh queries use closed verbs and option sets; command/config overrides and unknown options deny | classify_argv, options |
 | Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and merge origin/main are Tier 1 | classify_argv, branch_context |
+| A local branch merge ([--no-ff] [--no-edit], refs/heads/<b> or an unambiguous bare name that exists only as a branch) is Tier 1 only into a named non-default branch with effective Merge=yes | local_merge, local_branch |
+| A repository's approved settings.json `autopilot` object wins for Task choice, push, Merge, Trusted authors and Roots, read on every check; unset gives user values, broken or unreadable turns them off; the lease hash covers host.md only | effective, project_store.settings_state |
+| Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths | classify_paths |
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
 | Only this install's ledger/record/heavy_run/merge_check script paths, with isolated Python, are allowed wrappers; nested heavy commands are classified too | script_command |
 | Each Tier 1 check reserves one action; ledger start also reserves a run, even if the caller never executes | check |
@@ -54,6 +57,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
 import data_root as dr
 import parallel_slots as slots
+import project_store as store
 import secret_patterns
 from away_lease import finite, private_info, read_lease, read_private  # the one safe lease reader
 
@@ -91,13 +95,18 @@ ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,39}')
 SHA = re.compile(r'[0-9a-f]{40}')
 BRANCH = re.compile(r'(?:refs/heads/)?[A-Za-z0-9][A-Za-z0-9._/-]{0,160}')
 ROOTS = {'src', 'lib', 'app', 'tests', 'docs', 'scripts', 'skills'}
+DOCUMENTS = {'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md'}  # top-level documentation files that are known paths
+# The project-scoped keys of settings.json `autopilot` and their host.md names; broken project settings turn them off.
+PROJECT_KEYS = {'task-choice': 'Task choice', 'push-and-pull-requests': 'Push and pull requests', 'merge': 'Merge',
+                'trusted-authors': 'Trusted authors'}
+OFF = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', 'Trusted authors': 'own', 'Roots': []}
 EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yaml', '.yml'}
 MAX_LOG = 8 * 1024 * 1024
 ENFORCERS = {'autopilot.py', 'data_root.py', 'parallel_slots.py', 'secret_patterns.py', 'merge_check.py',
              'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
              'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py', 'heavy_run.py', 'delegate_env.py',
              'auto_gate.py', 'mode.py', 'judge.py', 'log_scan.py', 'route_task.py', 'brief_check.py', 'assignments.py',
-             'away_lease.py', 'away_gate_hook.py'}
+             'away_lease.py', 'away_gate_hook.py', 'project_store.py', 'project_progress.py'}
 ENFORCERS = {name.casefold() for name in ENFORCERS}  # case-insensitive filesystems name one file many ways
 
 
@@ -281,7 +290,30 @@ def plugin_code(name):
         return True
 
 
-def classify_paths(paths):
+def effective(applied, cwd):
+    """User settings with this repository's approved project values on top (docs/specs/autopilot.md "Project scope").
+
+    Unset gives the user values; an approved object wins for its five keys; broken, or any error while reading it,
+    turns those keys off, which is never wider than user scope. Read on every check, never stored in the lease.
+    """
+    result = {**applied, 'Roots': []}
+    try:
+        state, values = store.settings_state(slots.find_root(cwd))
+        project = values.get('autopilot', {})
+        if state == 'approved' and project and not store.valid_autopilot(project):
+            state = 'broken'
+    except (OSError, ValueError, TypeError, UnicodeError):
+        state, project = 'broken', {}
+    if state == 'broken':
+        return {**result, **OFF}
+    for key, name in PROJECT_KEYS.items():
+        if key in project:
+            result[name] = project[key]
+    result['Roots'] = [r for r in project.get('roots', []) if not protected(r)]
+    return result
+
+
+def classify_paths(paths, roots=()):
     if not paths:
         return 'unknown'
     for name in paths:
@@ -291,8 +323,12 @@ def classify_paths(paths):
         if path.name.casefold() in ENFORCERS or path.name.upper() in slots.INSTRUCTION_FILES or plugin_code(name):
             return 'protected'
         if (not re.fullmatch(r'[A-Za-z0-9_./-]{1,240}', name) or path.is_absolute()
-                or any(p in {'', '.', '..'} for p in name.split('/'))
-                or len(path.parts) < 2 or path.parts[0] not in ROOTS or path.suffix not in EXTENSIONS):
+                or any(p in {'', '.', '..'} for p in name.split('/'))):
+            return 'unknown'
+        if len(path.parts) < 2:
+            if name not in DOCUMENTS:
+                return 'unknown'
+        elif path.parts[0] not in ROOTS and path.parts[0] not in roots or path.suffix not in EXTENSIONS:
             return 'unknown'
         # Inspect link metadata only, never the target or any file contents.
         candidate = Path(os.getcwd())
@@ -334,8 +370,8 @@ def options(tokens, flags=(), valued=(), *, positional=True):
     return operands
 
 
-def branch_context():
-    """Only local metadata, no Git process, config execution or credential helper."""
+def git_dirs():
+    """(git folder, common folder) of the current checkout from local metadata only; (None, None) outside one."""
     root = slots.find_root(os.getcwd())
     if root is None:
         return None, None
@@ -351,16 +387,79 @@ def branch_context():
         else:
             return None, None
     with slots.open_dir(git) as fd:
-        head = slots.read_metadata(fd, 'HEAD').strip()
         try:
             common = Path(os.path.abspath(git / slots.read_metadata(fd, 'commondir').strip()))
         except FileNotFoundError:
             common = git
+    return git, common
+
+
+def branch_context():
+    """Only local metadata, no Git process, config execution or credential helper."""
+    git, common = git_dirs()
+    if git is None:
+        return None, None
+    with slots.open_dir(git) as fd:
+        head = slots.read_metadata(fd, 'HEAD').strip()
     with slots.open_dir(common / 'refs/remotes/origin') as fd:
         default = slots.read_metadata(fd, 'HEAD').strip()
     current = head.removeprefix('ref: refs/heads/') if head.startswith('ref: refs/heads/') else None
     default = default.removeprefix('ref: refs/remotes/origin/') if default.startswith('ref: refs/remotes/origin/') else None
     return current, default
+
+
+def local_branch(name, bare):
+    """True when refs/heads/<name> exists (loose or packed) and, for a bare name, no ref git would pick first does."""
+    _, common = git_dirs()
+    if common is None:
+        return False
+
+    def loose(ref):
+        try:
+            with slots.open_dir(common / Path(ref).parent) as fd:
+                slots.read_metadata(fd, Path(ref).name)  # a folder, link or foreign file raises: deny on doubt
+            return True
+        except (FileNotFoundError, NotADirectoryError):
+            return False
+    try:
+        with slots.open_dir(common) as fd:
+            packed = slots.read_metadata(fd, 'packed-refs')
+    except FileNotFoundError:
+        packed = ''
+    names = {line.split(' ', 1)[1].strip() for line in packed.splitlines() if ' ' in line and line[:1] not in '#^'}
+
+    def has(ref):
+        return ref in names or loose(ref)
+    if not has('refs/heads/' + name):
+        return False
+    # git resolves a bare name as <git dir>/<name>, refs/<name> and refs/tags/<name> before refs/heads/<name>.
+    return not bare or not any(has(ref) for ref in (name, 'refs/' + name, 'refs/tags/' + name))
+
+
+def local_merge(tail, applied):
+    """`git merge [--no-ff] [--no-edit] refs/heads/<branch>|<branch>` of a local branch into a work branch."""
+    flags, operands = [t for t in tail if t.startswith('-')], [t for t in tail if not t.startswith('-')]
+    if len(operands) != 1 or len(set(flags)) != len(flags) or not set(flags) <= {'--no-ff', '--no-edit'}:
+        return 'unknown'
+    explicit = operands[0].startswith('refs/heads/')
+    name = operands[0].removeprefix('refs/heads/')
+    if (not BRANCH.fullmatch(name) or name.startswith('refs/') or '..' in name or '//' in name
+            or name.endswith(('/', '.', '.lock')) or '/.' in name):
+        return 'unknown'
+    if not explicit and (re.fullmatch(r'[0-9a-f]{4,40}', name) or name.endswith('HEAD')
+                         or name.split('/')[0] in {'origin', 'tags', 'heads', 'remotes'}):
+        return 'unknown'  # a bare name that could read as a commit id or another ref
+    if applied['Merge'] != 'yes':
+        return 'merge-disabled'
+    try:
+        current, default = branch_context()
+        if current in {None, default, 'main', 'master', 'trunk'}:
+            return 'forbidden'  # never into the default branch or a detached head
+        if not default or name == current or not local_branch(name, not explicit):
+            return 'unknown'
+    except (OSError, ValueError, UnicodeError):
+        return 'unknown'
+    return 'allowed'
 
 
 def script_command(argv, applied):
@@ -665,14 +764,14 @@ def classify_argv(argv, applied, coordinator=None):
             return 'allowed' if applied['Push and pull requests'] == 'yes' else 'push-disabled'
         if verb == 'merge':
             if tail not in (['origin/main'], ['--no-edit', 'origin/main']):
-                return 'unknown'
+                return local_merge(tail, applied)
             try:
                 current, default = branch_context()
             except (OSError, ValueError):
                 return 'unknown'
             return 'allowed' if current and default and current not in {default, 'main', 'master', 'trunk'} else 'forbidden'
         if verb == 'add':
-            return classify_paths(tail[1:] if tail[:1] == ['--'] else tail)
+            return classify_paths(tail[1:] if tail[:1] == ['--'] else tail, applied.get('Roots', ()))
         if verb == 'commit':
             return 'allowed' if tail and options(tail, {'--amend', '--no-edit'}, {'-m', '--message'}, positional=False) == [] else 'unknown'
         query = {
@@ -696,7 +795,7 @@ def classify_argv(argv, applied, coordinator=None):
                     revision = r'(?:HEAD(?:[~^][0-9]*)?|[0-9a-f]{7,40}|origin/[A-Za-z0-9_./-]+)'
                     if re.fullmatch(revision + r'(?:\.\.\.?' + revision + r')?', operand):
                         continue
-                    if classify_paths([operand]) != 'allowed':
+                    if classify_paths([operand], applied.get('Roots', ())) != 'allowed':
                         return 'unknown'
                 return 'allowed'
         return 'unknown'
@@ -732,6 +831,8 @@ def check(folder, args):
     current = now()
     code, lease, applied = lease_guard(folder, current)
     if code is None:
+        # The lease hash covers the user section only; the repository's project values are read on every check.
+        applied = effective(applied, os.getcwd())
         if args.argv_json is not None:
             try:
                 argv = json.loads(args.argv_json)
@@ -740,7 +841,7 @@ def check(folder, args):
             code = classify_argv(argv, applied, args.coordinator)
         else:
             argv = None
-            code = classify_paths(args.paths)
+            code = classify_paths(args.paths, applied['Roots'])
         if code == 'allowed':
             counters = lease['counters']
             counters['actions'] += 1

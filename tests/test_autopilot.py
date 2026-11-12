@@ -1012,5 +1012,180 @@ class AwayDecisionTest(AutopilotBase):
         self.assertEqual(json.loads(output)['excerpts'], [])
 
 
+PIN = ['--match-head-commit', 'a' * 40]
+NO = SETUP.replace('- Merge: yes', '- Merge: no').replace('requests: yes', 'requests: no')
+
+
+class ProjectScopeTest(AutopilotBase):
+    """A repository's approved `autopilot` object in its settings file wins for five keys; user scope stays default."""
+
+    def setUp(self):
+        super().setUp()
+        spec = importlib.util.spec_from_file_location('project_store_tested', SCRIPT.parent / 'project_store.py')
+        self.store = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.store)
+
+    def project(self, value):
+        self.store.write_setting(self.repo, 'autopilot', value)
+
+    def settings_file(self):
+        return self.repo / '.finolabs/vibecode/settings.json'
+
+    def test_a_project_value_wins_over_the_user_value_for_merge_and_push(self):
+        self.start(NO)
+        self.project({'merge': 'yes', 'push-and-pull-requests': 'yes'})
+        self.check(['gh', 'pr', 'merge', '7'] + PIN)
+        self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'])
+        self.check(['gh', 'pr', 'create'])
+        self.project({'merge': 'no', 'push-and-pull-requests': 'no'})
+        # check re-reads the project values on each call; the user-only lease hash is unchanged.
+        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+        self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
+        self.check(['git', 'status'])
+
+    def test_the_lease_hash_covers_the_user_section_only(self):
+        self.start()
+        before = self.lease()['settings_hash']
+        self.project({'merge': 'no', 'roots': ['packages']})
+        self.check(['git', 'status'])
+        self.assertEqual(self.lease()['settings_hash'], before)
+        self.setup_config(SETUP + '- Max runs: 5\n')
+        self.check(['git', 'status'], tier=3, code='setup-changed')
+
+    def test_an_unapproved_or_branch_supplied_file_sets_nothing(self):
+        self.start(NO)
+        self.settings_file().parent.mkdir(parents=True, mode=0o700)
+        self.settings_file().write_text(json.dumps({'version': 1, 'autopilot': {'merge': 'yes', 'roots': ['packages']}}))
+        self.settings_file().chmod(0o600)
+        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+        (self.repo / 'packages').mkdir()
+        self.check(paths=['packages/app.py'], tier=3, code='unknown')
+
+    def test_a_broken_approved_file_falls_back_to_off_never_wider(self):
+        self.start()
+        self.project({'roots': ['packages']})
+        self.check(['gh', 'pr', 'merge', '7'] + PIN)
+        self.check(paths=['packages/app.py'])
+        for change in (lambda f: f.write_bytes(f.read_bytes() + b' '), lambda f: f.unlink(),
+                       lambda f: f.chmod(0o666)):
+            with self.subTest(change=change):
+                self.store.reset_settings(self.repo)
+                self.project({'roots': ['packages']})
+                change(self.settings_file())
+                self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+                self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
+                self.check(['gh', 'pr', 'create'], tier=3, code='push-disabled')
+                self.check(paths=['packages/app.py'], tier=3, code='unknown')
+                self.check(['git', 'status'])
+        # An unreadable project state (an error while resolving it) is off too.
+        self.store.reset_settings(self.repo)
+        ap = self.load()
+        with patch.object(ap.store, 'settings_state', side_effect=OSError('synthetic')):
+            self.assertEqual(ap.effective(dict(ap.DEFAULTS, Merge='yes', Roots=[]), str(self.repo))['Merge'], 'no')
+
+    def test_project_roots_join_the_built_in_roots_with_the_same_path_rules(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        (self.repo / 'packages/app').mkdir(parents=True)
+        self.check(paths=['packages/app/main.ts'], tier=3, code='unknown')
+        self.project({'roots': ['packages', 'services']})
+        self.check(paths=['packages/app/main.ts', 'services/api.py', 'src/example.py'])
+        self.check(['git', 'add', '--', 'packages/app/main.ts'])
+        self.check(['git', 'diff', '--stat', 'services/api.py'])
+        for path, code in (('packages/app/main.exe', 'unknown'), ('packages/../src/example.py', 'unknown'),
+                           ('/packages/app/main.ts', 'unknown'), ('packages', 'unknown'), ('packages/app', 'unknown'),
+                           ('packages/.env', 'protected'), ('packages/app/settings.json', 'protected'),
+                           ('packages/hooks/pre-push.py', 'protected'), ('packages/CLAUDE.md', 'protected'),
+                           ('packages/app/autopilot.py', 'protected'), ('tools/build.py', 'unknown')):
+            with self.subTest(path=path):
+                self.check(paths=[path], tier=3, code=code)
+        target = self.home / 'synthetic'
+        target.write_text('unread')
+        (self.repo / 'packages/linked.py').symlink_to(target)
+        self.check(paths=['packages/linked.py'], tier=3, code='protected')
+        (self.repo / 'services').symlink_to(self.home, target_is_directory=True)
+        self.check(paths=['services/api.py'], tier=3, code='protected')
+
+    def test_top_level_documentation_files_are_known_paths(self):
+        self.start()
+        self.check(paths=['README.md', 'CHANGELOG.md', 'CONTRIBUTING.md'])
+        self.check(['git', 'add', 'README.md'])
+        for path, code in (('LICENSE', 'unknown'), ('NOTES.md', 'unknown'), ('readme.txt', 'unknown'),
+                           ('CLAUDE.md', 'protected'), ('AGENTS.md', 'protected'), ('./README.md', 'unknown')):
+            with self.subTest(path=path):
+                self.check(paths=[path], tier=3, code=code)
+        (self.repo / 'README.md').symlink_to(self.home / 'missing')
+        self.check(paths=['README.md'], tier=3, code='protected')
+
+    def branch(self, name, packed=False):
+        if packed:
+            with open(self.repo / '.git/packed-refs', 'a') as stream:
+                stream.write('a' * 40 + ' refs/heads/' + name + '\n')
+        else:
+            path = self.repo / '.git/refs/heads' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('a' * 40 + '\n')
+
+    def test_a_local_branch_merge_into_a_work_branch_is_tier_one_when_merge_is_yes(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.branch('feature/one')
+        self.branch('packed', packed=True)
+        for argv in (['git', 'merge', '--no-ff', 'refs/heads/feature/one'], ['git', 'merge', 'feature/one'],
+                     ['git', 'merge', '--no-ff', '--no-edit', 'refs/heads/feature/one'],
+                     ['git', 'merge', '--no-ff', 'packed'], ['git', 'merge', 'origin/main']):
+            with self.subTest(argv=argv):
+                self.check(argv)
+        for argv in (['git', 'merge', 'missing'], ['git', 'merge', 'refs/heads/missing'],
+                     ['git', 'merge', 'refs/tags/v1'], ['git', 'merge', 'refs/remotes/origin/x'],
+                     ['git', 'merge', '-s', 'ours', 'feature/one'], ['git', 'merge', '--squash', 'feature/one'],
+                     ['git', 'merge', 'feature/one', 'packed'], ['git', 'merge', '--no-ff'],
+                     ['git', 'merge', 'refs/heads/../feature/one'], ['git', 'merge', 'topic'],
+                     ['git', 'merge', '-X', 'theirs', 'feature/one'], ['git', 'merge', '--no-ff=x', 'feature/one'],
+                     ['git', 'merge', 'feature/one~1'], ['git', 'merge', '--abort']):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code='unknown')
+        # A bare name that is also a tag (or another ref) is ambiguous: git would pick the tag first.
+        (self.repo / '.git/refs/tags').mkdir(parents=True)
+        (self.repo / '.git/refs/tags/shared').write_text('b' * 40 + '\n')
+        self.branch('shared')
+        self.check(['git', 'merge', 'shared'], tier=3, code='unknown')
+        self.check(['git', 'merge', 'refs/heads/shared'])
+        with open(self.repo / '.git/packed-refs', 'a') as stream:
+            stream.write('c' * 40 + ' refs/tags/packed\n')
+        self.check(['git', 'merge', 'packed'], tier=3, code='unknown')
+        self.branch('abcdef1')
+        self.check(['git', 'merge', 'abcdef1'], tier=3, code='unknown')  # could also read as a commit id
+        self.check(['git', 'merge', 'refs/heads/abcdef1'])
+
+    def test_a_local_merge_needs_merge_yes_and_never_targets_the_default_branch(self):
+        self.start(NO)
+        self.branch('feature')
+        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='merge-disabled')
+        self.project({'merge': 'yes'})
+        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'])
+        for head in ('main', 'stable'):
+            with self.subTest(head=head):
+                (self.repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/stable\n')
+                (self.repo / '.git/HEAD').write_text('ref: refs/heads/' + head + '\n')
+                self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='forbidden')
+        (self.repo / '.git/HEAD').write_text('a' * 40 + '\n')  # a detached head is not a work branch
+        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='forbidden')
+        (self.repo / '.git/HEAD').write_text('ref: refs/heads/topic\n')
+        (self.repo / '.git/refs/remotes/origin/HEAD').unlink()
+        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='unknown')
+
+    def test_delegated_runs_outside_the_wrapper_or_in_write_modes_stay_tier_three(self):
+        self.start(SETUP.replace('Claude Code', 'Claude Code, Codex') + '- Max actions per hour: 1000\n')
+        for argv in (['claude', '-p', '--model', 'm', '--output-format', 'json', '--', BRIEF],
+                     ['claudework', '-p', BRIEF], ['/bin/zsh', '-ic', 'claudework "$@"', 'claudework', '-p', BRIEF],
+                     ['codex', 'exec', '-m', 'm', '-s', 'workspace-write', '--', BRIEF],
+                     ['perl', '-e', 'alarm 900; exec @ARGV', 'codex', 'exec', '--', BRIEF],
+                     ENV + ['--family', 'claude', '--', '/bin/zsh', '-ic', 'claudework "$@"', 'claudework', '-p', BRIEF],
+                     CODEX[:CODEX.index('read-only')] + ['workspace-write'] + CODEX[CODEX.index('read-only') + 1:],
+                     CLAUDE[:CLAUDE.index('plan')] + ['acceptEdits'] + CLAUDE[CLAUDE.index('plan') + 1:]):
+            with self.subTest(argv=argv[:6]):
+                self.check(argv, tier=3, code='unknown')
+        self.assertEqual(self.lease()['counters']['actions'], 0)
+
+
 if __name__ == '__main__':
     unittest.main()
