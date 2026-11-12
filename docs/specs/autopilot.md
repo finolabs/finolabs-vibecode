@@ -1,5 +1,7 @@
 # Autopilot (release 0.2.1 first slice)
 
+> Renamed in 0.2.5 (owner decision, 12/11/2026): the skill is `afk`, the script `skills/delegate/scripts/afk.py`, the setup writer `afk_setup.py` and the host config section `## afk` (the old `## Autopilot` heading is no longer read). The `autopilot` name and its older fnl- alias are dropped; `brb` and the fnl- aliases of afk and brb load `afk`. The repository settings object keeps the key `autopilot` and the lease keeps `state/autopilot/`, so stored data still reads. This document keeps the names of its time.
+
 Status: accepted; owner decisions recorded on 2026-11-06 and 2026-11-09; release 0.2.1 takes the first slice named under the 2026-11-09 decisions, the rest stays design only. Nothing was built in 0.2.0. Implementation and unresolved host decisions still need owner approval; open questions are listed under "Open".
 
 Idea: owner, 2026-11-06. An agent that, only when the user asks, coordinates the repository's work while the

@@ -11,7 +11,7 @@ Yes: Choose a limit measured in tokens, small pieces of text; a separate approva
 No: Leave conversation settings unchanged; ask later.
 Undo: Cancel before applying; after applying, approve a removal plan.
 Choices: "Yes, choose a limit" / "No, keep current settings".
-After a clear yes, recheck the installed host's documented control from `session-hygiene` "Context pressure", then ask the token value as free text: "How many tokens should the conversation reach before it is shortened?"
+After a clear yes, recheck the installed host's documented control from `tidy` "Context pressure", then ask the token value as free text: "How many tokens should the conversation reach before it is shortened?"
 Description: Enter a token count to prepare a local plan; nothing sent or applied. Skip to keep settings; choose later or change the number before approval.
 Claude Code allows 100000 to 1000000; Codex 1000 to 10000000. Explain that models with a 1M window compact late by default, so a lower value compacts earlier; prescribe no value. Antigravity has no documented native setting: skip this and offer the stop below (advisory, agent judgment).
 Antigravity vendor docs through 1.5.3 (07/11/2026) document automatic compaction and `/context`, but no threshold or off switch; `/compact` may not exist. Offer `/new` or `/fork` (advisory, agent judgment).
@@ -59,4 +59,4 @@ Enforcer: `compact_stop_hook.py` acts only on Antigravity `PreInvocation` with `
 
 ## Steward explanation
 
-Explain the existing session-hygiene check and its limits from [compaction-details.md](../compaction-details.md); this adds no setup write (advisory, agent judgment).
+Explain the existing tidy check and its limits from [compaction-details.md](../compaction-details.md); this adds no setup write (advisory, agent judgment).

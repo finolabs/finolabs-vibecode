@@ -4,7 +4,7 @@ Status: implemented; release 0.2.5 `context_snapshot.py probe` for Claude Code a
 
 ## Why
 
-`session-hygiene` needs a real context reading to decide when to prepare a handover or compact. The status-line recorder (`context-snapshot.md`) only works where the host delivers status-line input; its delivery in the Claude Code desktop app is undocumented, and the desktop session observed on 2026-11-11 had no fresh snapshot (exit 3 from `read --latest`). Local usage data from November 2026 showed no model-initiated call of `session-hygiene`.
+`tidy` needs a real context reading to decide when to prepare a handover or compact. The status-line recorder (`context-snapshot.md`) only works where the host delivers status-line input; its delivery in the Claude Code desktop app is undocumented, and the desktop session observed on 2026-11-11 had no fresh snapshot (exit 3 from `read --latest`). Local usage data from November 2026 showed no model-initiated call of `tidy`.
 
 ## Owner decision (2026-11-11)
 

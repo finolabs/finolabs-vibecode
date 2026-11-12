@@ -1,4 +1,4 @@
-"""Autopilot setup acceptance with synthetic accounts and the real lease reader."""
+"""afk setup acceptance with synthetic accounts and the real lease reader."""
 import contextlib
 import importlib.util
 import io
@@ -13,7 +13,7 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / 'skills/setup/scripts/autopilot_setup.py'
+SCRIPT = ROOT / 'skills/setup/scripts/afk_setup.py'
 
 
 def load(name, path):
@@ -23,7 +23,7 @@ def load(name, path):
     return module
 
 
-class AutopilotSetupTest(unittest.TestCase):
+class AfkSetupTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -51,8 +51,8 @@ class AutopilotSetupTest(unittest.TestCase):
         self.plan = self.host.parent / 'state/autopilot-setup/preview.json'
 
     def cli(self, *args):
-        self.assertTrue(SCRIPT.is_file(), 'Autopilot setup preview/apply writer is missing')
-        writer = load('autopilot_setup_test', SCRIPT)
+        self.assertTrue(SCRIPT.is_file(), 'afk setup preview/apply writer is missing')
+        writer = load('afk_setup_test', SCRIPT)
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = writer.main(list(args))
@@ -73,7 +73,7 @@ class AutopilotSetupTest(unittest.TestCase):
                 for p in self.home.rglob('*') if p.is_file()}
 
     def reader(self):
-        return load('autopilot_reader_test', ROOT / 'skills/delegate/scripts/autopilot.py')
+        return load('afk_reader_test', ROOT / 'skills/delegate/scripts/afk.py')
 
     def test_round_trip_defaults_and_preview_only(self):
         before = self.host.read_bytes()
@@ -123,7 +123,7 @@ class AutopilotSetupTest(unittest.TestCase):
         self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 1)
         self.assertEqual(self.snapshot(), before)
         digest = self.preview()
-        writer = load('autopilot_setup_clock', SCRIPT)
+        writer = load('afk_setup_clock', SCRIPT)
         with mock.patch.object(writer.time, 'time', return_value=0):
             self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 1)
         self.assertEqual(self.host.read_bytes(), before['.finolabs/vibecode/host.md'])
@@ -181,7 +181,7 @@ class AutopilotSetupTest(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
 
     def writer(self):
-        return load('autopilot_setup_names', SCRIPT)
+        return load('afk_setup_names', SCRIPT)
 
     def test_category_names_match_the_reader(self):
         writer, reader = self.writer(), self.reader()

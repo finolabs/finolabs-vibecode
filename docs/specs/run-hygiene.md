@@ -112,7 +112,7 @@ agent that reads credential **files** it can reach (see rule 2, residual risk).
    look for the credential's source or read credential stores; rotation is the owner's (advisory, matching the
    user-scope rule that credentials are never hunted).
 8. **The lesson is kept.** The incident is stored as a lesson in the user's knowledge base and cited in
-   `session-hygiene` "Remember or recall" as an example (advisory).
+   `tidy` "Remember or recall" as an example (advisory).
 
 ## Where the code lives
 
@@ -151,7 +151,7 @@ is listed in the CI copy groups and in the test that compares them, so each skil
 - `log_scan.py show` refuses a `not_scanned` log; a run-log folder wider than 0700 is refused; a descriptor-level check
   fails a hardlinked or swapped file (tests).
 - Setup consent for pass-through names is a separate neutral Yes and No; none preselected.
-- Rule 8 (the lesson) has an acceptance line: `session-hygiene` cites the incident as a corrected-lesson example
+- Rule 8 (the lesson) has an acceptance line: `tidy` cites the incident as a corrected-lesson example
   (a test greps the sentence).
 - Every touched skill file respects the size limits of `setup-restructure.md`.
 

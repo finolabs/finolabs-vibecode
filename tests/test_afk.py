@@ -1,4 +1,4 @@
-"""Synthetic, offline autopilot lease and classification tests."""
+"""Synthetic, offline afk lease and classification tests."""
 import contextlib
 import hashlib
 import importlib.util
@@ -15,7 +15,7 @@ from unittest.mock import patch
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / 'skills/delegate/scripts/autopilot.py'
+SCRIPT = ROOT / 'skills/delegate/scripts/afk.py'
 SETUP = ('## Autopilot\n- Hosts: Claude Code\n- Task choice: choose\n'
          '- Push and pull requests: yes\n- Merge: yes\n- Trusted authors: own\n')
 ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
@@ -23,7 +23,7 @@ ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
                  '\tfetch = +refs/heads/*:refs/remotes/origin/*\n')
 
 
-class AutopilotBase(unittest.TestCase):
+class AfkBase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -39,8 +39,8 @@ class AutopilotBase(unittest.TestCase):
         self.clock = 1800000000
 
     def load(self):
-        self.assertTrue(SCRIPT.exists(), 'autopilot lease/classifier has not been implemented')
-        spec = importlib.util.spec_from_file_location('autopilot_tested', SCRIPT)
+        self.assertTrue(SCRIPT.exists(), 'afk lease/classifier has not been implemented')
+        spec = importlib.util.spec_from_file_location('afk_tested', SCRIPT)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
@@ -81,7 +81,7 @@ class AutopilotBase(unittest.TestCase):
         self.assertEqual(json.loads(output), {'tier': tier, 'code': code})
 
 
-class AutopilotTest(AutopilotBase):
+class AfkTest(AfkBase):
     def test_start_requires_setup_and_merge(self):
         for text in ('', '## Other\n', SETUP.replace('- Merge: yes\n', '')):
             self.setup_config(text)
@@ -102,7 +102,7 @@ class AutopilotTest(AutopilotBase):
         before = (self.state / 'lease.json').read_bytes()
         status, joined = self.invoke('start')
         self.assertEqual(status, 0, joined)  # a second session joins the machine-wide lease instead of failing
-        self.assertIn('Autopilot already live until ', joined)
+        self.assertIn('afk already live until ', joined)
         self.assertIn('covers every session on this machine', joined)
         self.assertEqual((self.state / 'lease.json').read_bytes(), before)  # nothing extended or reset
         for _ in range(2):
@@ -210,7 +210,7 @@ class AutopilotTest(AutopilotBase):
         for skill in ('delegate', 'review-gate'):
             shutil.copytree(ROOT / 'skills' / skill / 'scripts', install / skill / 'scripts')
         global SCRIPT
-        saved, SCRIPT = SCRIPT, install / 'delegate/scripts/autopilot.py'
+        saved, SCRIPT = SCRIPT, install / 'delegate/scripts/afk.py'
         try:
             self.start()
             own = install / 'delegate/scripts'
@@ -259,7 +259,7 @@ class AutopilotTest(AutopilotBase):
                      'src/settings.json', 'host.md', 'state/autopilot/lease.json', 'setup.json',
                      '.env.local', 'src/secret.key', '.ssh/id_rsa', 'unknown/file.py', '../src/example.py',
                      '/tmp/example.py', 'skills/example/SKILL.md',
-                     'skills/delegate/scripts/autopilot.py', 'skills/review-gate/scripts/merge_check.py'):
+                     'skills/delegate/scripts/afk.py', 'skills/review-gate/scripts/merge_check.py'):
             with self.subTest(path=path):
                 self.check(paths=[path], tier=3, code='unknown' if path in {'unknown/file.py', '../src/example.py', '/tmp/example.py'} else 'protected')
 
@@ -325,9 +325,9 @@ class AutopilotTest(AutopilotBase):
         (checkout / 'merge_check.py').write_text('# synthetic')
         (install / 'review-gate').symlink_to(self.home / 'other/skills/review-gate')
         ap = self.load()
-        copy = install / 'delegate/scripts/autopilot.py'
+        copy = install / 'delegate/scripts/afk.py'
         copy.write_text(SCRIPT.read_text())
-        spec = importlib.util.spec_from_file_location('autopilot_linked', copy)
+        spec = importlib.util.spec_from_file_location('afk_linked', copy)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         with patch('os.getcwd', return_value=str(self.home / 'other')):
@@ -448,7 +448,7 @@ DANGER = {'codex': '--dangerously-bypass-approvals-and-sandbox', 'claude': '--da
           'antigravity': '--yolo'}
 
 
-class AwayDecisionTest(AutopilotBase):
+class AwayDecisionTest(AfkBase):
     """Away decisions, scripts part: decision records, reviews, categories, the two ladder forms and the packet check."""
 
     def ledger(self):
@@ -634,7 +634,7 @@ class AwayDecisionTest(AutopilotBase):
         other, _ = self.recorded(*ROWS['park yes'][0])
         self.assertNotEqual(other, first)
 
-    def test_a_decision_needs_a_lease_and_the_autopilot_log_keeps_only_a_redacted_note(self):
+    def test_a_decision_needs_a_lease_and_the_afk_log_keeps_only_a_redacted_note(self):
         self.setup_config()
         self.refused(*ROWS['park yes'][0])
         self.start()
@@ -1060,7 +1060,7 @@ PIN = ['--match-head-commit', 'a' * 40]
 NO = SETUP.replace('- Merge: yes', '- Merge: no').replace('requests: yes', 'requests: no')
 
 
-class ProjectScopeTest(AutopilotBase):
+class ProjectScopeTest(AfkBase):
     """A repository's approved `autopilot` object in its settings file wins for five keys; user scope stays default."""
 
     def setUp(self):
@@ -1140,7 +1140,7 @@ class ProjectScopeTest(AutopilotBase):
                            ('/packages/app/main.ts', 'unknown'), ('packages', 'unknown'), ('packages/app', 'unknown'),
                            ('packages/.env', 'protected'), ('packages/app/settings.json', 'protected'),
                            ('packages/hooks/pre-push.py', 'protected'), ('packages/CLAUDE.md', 'protected'),
-                           ('packages/app/autopilot.py', 'protected'), ('tools/build.py', 'unknown')):
+                           ('packages/app/afk.py', 'protected'), ('tools/build.py', 'unknown')):
             with self.subTest(path=path):
                 self.check(paths=[path], tier=3, code=code)
         target = self.home / 'synthetic'
@@ -1232,7 +1232,7 @@ class ProjectScopeTest(AutopilotBase):
         self.assertEqual(self.lease()['counters']['actions'], 0)
 
 
-class SecurityRoundOneTest(AutopilotBase):
+class SecurityRoundOneTest(AfkBase):
     """Repository identity, merge target binding, symbolic branches and hexadecimal names fail closed."""
 
     def setUp(self):
@@ -1440,7 +1440,7 @@ PUSH = ['git', 'push', 'origin', 'HEAD:refs/heads/topic']
 STRICT = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', 'Trusted authors': 'own', 'Roots': []}
 
 
-class PolicyContextTest(AutopilotBase):
+class PolicyContextTest(AfkBase):
     """One identity-bound policy context decides the five project-scoped values, through the full check entry point."""
 
     def setUp(self):

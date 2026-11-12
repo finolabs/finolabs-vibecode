@@ -43,7 +43,7 @@ requires each reviewing family to differ from the author. Configured roles are
 route evidence, not proof that the assigned agent actually posted: following the
 route and associating each posted marker with that run remain agent judgment,
 advisory. This flag does not establish trusted authors, local test results or
-Tier 3 path eligibility; those are the autopilot caller's separate gates.
+Tier 3 path eligibility; those are the afk caller's separate gates.
 """
 
 import argparse

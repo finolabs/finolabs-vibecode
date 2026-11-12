@@ -30,7 +30,7 @@ Call the selected family directly (advisory, agent judgment); no reviewer routes
 
 Build a self-contained packet with `review_route.build_packet(...)` (script): acceptance criteria and decisions, the exact base and head binding, known consumers, tests run, requested coverage and the report format. The full contents: [references/reviewers.md](references/reviewers.md) "The reviewer packet".
 
-Give the reviewer a time budget and a check deadline (`delegate`), and start it under a name that says its role and the pull request (`code review: <project> PR <n>`, `sec review: <project> PR <n>`; `session-hygiene` "Titles").
+Give the reviewer a time budget and a check deadline (`delegate`), and start it under a name that says its role and the pull request (`code review: <project> PR <n>`, `sec review: <project> PR <n>`; `tidy` "Titles").
 
 ## Review scope
 

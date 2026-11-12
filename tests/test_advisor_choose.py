@@ -1,4 +1,4 @@
-"""advisor's choose mode: the stated output contract, bound to the record autopilot.py accepts."""
+"""advisor's choose mode: the stated output contract, bound to the record afk.py accepts."""
 import argparse
 import importlib.util
 from pathlib import Path
@@ -13,7 +13,7 @@ SYNTHETIC = {"<agent>": "codex", "<n>": "2", "<k>": "3", "<id>": "d20261110-0100
 
 
 def reader():
-    spec = importlib.util.spec_from_file_location("autopilot_choose_test", ROOT / "skills/delegate/scripts/autopilot.py")
+    spec = importlib.util.spec_from_file_location("afk_choose_test", ROOT / "skills/delegate/scripts/afk.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -54,7 +54,7 @@ class ChooseModeTests(unittest.TestCase):
             self.assertIn(case, self.text)
 
     def test_the_documented_check_names_the_coordinator(self):
-        self.assertIn("autopilot.py check --coordinator <your own family> --argv-json", CHOOSE.read_text())
+        self.assertIn("afk.py check --coordinator <your own family> --argv-json", CHOOSE.read_text())
 
     def test_tier_and_family_rule(self):
         for rule in ("frontier tier", "else its strong tier", "Nothing below strong", "is not yours",

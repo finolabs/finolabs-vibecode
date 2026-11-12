@@ -103,7 +103,7 @@ class CompactNudgeTest(unittest.TestCase):
         self.turn(810000)
         output = self.run_hook()
         self.assertEqual(output, message(81))
-        self.assertIn("run session-hygiene now", output)
+        self.assertIn("run tidy now", output)
         self.assertTrue(output.isascii())
 
     def test_off_switch_prints_nothing(self):

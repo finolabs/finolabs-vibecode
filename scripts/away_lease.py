@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Safe away-lease reader and away ledger appender, shared by autopilot.py, the question gate and session start.
+"""Safe away-lease reader and away ledger appender, shared by afk.py, the question gate and session start.
 
 The reader takes no lock, creates nothing, never follows a link and accepts only private (0600)
-regular files owned by the user. Every caller other than autopilot.py treats any error as no lease.
+regular files owned by the user. Every caller other than afk.py treats any error as no lease.
 """
 import json
 import math
@@ -30,7 +30,7 @@ def private_info(folder, name):
         return None
     if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1
             or stat.S_IMODE(info.st_mode) != 0o600):
-        raise ValueError('Autopilot state file is unsafe')
+        raise ValueError('afkstate file is unsafe')
     return info
 
 
@@ -50,14 +50,14 @@ def read_lease(folder):
             or not all(finite(value[k]) for k in ('start', 'expiry'))
             or not value['start'] < value['expiry'] <= value['start'] + 24 * 3600
             or not isinstance(value['settings_hash'], str) or not re.fullmatch(r'[0-9a-f]{64}', value['settings_hash'])):
-        raise ValueError('Autopilot lease is invalid')
+        raise ValueError('afklease is invalid')
     counters = value['counters']
     if (not isinstance(counters, dict) or set(counters) != {'runs', 'runtime_minutes', 'actions', 'hour_actions'}
             or any(type(counters[k]) is not int or counters[k] < 0 for k in ('runs', 'actions'))
             or not finite(counters['runtime_minutes']) or not isinstance(counters['hour_actions'], list)
             or len(counters['hour_actions']) > 10000
             or not all(finite(t) for t in counters['hour_actions'])):
-        raise ValueError('Autopilot counters are invalid')
+        raise ValueError('afkcounters are invalid')
     return value
 
 

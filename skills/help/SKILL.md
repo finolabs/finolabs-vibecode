@@ -18,8 +18,8 @@ Read [references/plain-language.md](references/plain-language.md) first to decid
 | Route | Which skill fits a situation, or which agent takes which work | [references/map.md](references/map.md) |
 
 Read the target file before describing it so the answer is current.
-The map lists every skill, including `setup` (with `add <feature>`, `instructions`, `check`, `scan` and `mode` subcommands) and the user-only `restore-point` save-and-restore command, plus `autopilot` for a time-boxed away mandate and `afk` as its main short name and `brb` as an older alias, `pause` (short name `gtg`) for draining work before a restart or shutdown, and `ask`, the older name of this skill.
-`advisor` owns both one opinion and committees, `delegate` owns spec coordinator sessions, and `session-hygiene` owns knowledge and handovers.
+The map lists every skill, including `setup` (with `add <feature>`, `instructions`, `check`, `scan` and `mode` subcommands) and the user-only `restore-point` save-and-restore command, plus `afk` for a time-boxed away mandate and `brb` as an older alias, `pause` (short name `gtg`) for draining work before a restart or shutdown, and `ask`, the older name of this skill.
+`advisor` owns both one opinion and committees, `delegate` owns spec coordinator sessions, and `tidy` owns knowledge and handovers.
 Read a procedure reference only when the question concerns that procedure. Answer and stop: invoke nothing; leave the how-to to the target skill when it runs.
 On Codex the user types `$` instead of `/` for skill commands; Claude Code and Antigravity use `/`. Skills the user types, such as `setup`, may be missing from your own skill list; do not warn the user that they are missing.
 

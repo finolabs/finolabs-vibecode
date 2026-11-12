@@ -15,7 +15,7 @@ Read the goal and acceptance criteria, the scoped instructions (`AGENTS.md`, `CL
 
 Keep a short receipt: source, task, workflow path, depth, gaps, evidence limits. A receipt is a record, not proof.
 
-Once the task is known, invoke `session-hygiene` to name or rename the session ("Titles"), and again when the phase changes (planning to implementation to review). Advisory (agent judgment).
+Once the task is known, invoke `tidy` to name or rename the session ("Titles"), and again when the phase changes (planning to implementation to review). Advisory (agent judgment).
 
 Done when the workflow path and the depth can be chosen without guessing.
 
@@ -64,7 +64,7 @@ These hold on every path:
 - Every pull request needs a posted code review and a posted security review before merge (`review-gate` "Pull requests"); `security-review-gate` runs in full when its triggers hit.
 - Delegation to other agents follows the `delegate` skill. When you hold two or more independent tasks with clear acceptance tests, apply its "Keep or hand off" before you start the first, even if you expect to do them all yourself. Within one task, budget root and children before spawning: MIN has no implementation children (handing a whole task to another agent under `delegate` is a delegation, not a child); otherwise at most two lightweight children, one nesting level and one heavy job at a time, unless a stricter cap applies. Independent tasks run in parallel up to the repository's limit in `delegate` (default 3), each under these per-task caps.
 - Commits follow `commit-messages`, and so does every branch: creating, syncing, merging and deleting it (`commit-messages` "Branches"). The main checkout stays on the default branch; each branch gets its own worktree (advisory). Versions, tags and changelogs follow `versioning`.
-- Long sessions, handovers and titles follow `session-hygiene`.
+- Long sessions, handovers and titles follow `tidy`.
 
 ## Proportion
 

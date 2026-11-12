@@ -45,7 +45,7 @@ Package 1 reduces 20 skills to 17 folders (model-visible 15 → 12, five user-on
 | --- | --- |
 | Committee procedure into `advisor` | One skill, two procedures: one second opinion, or a committee of two contrasting families. The committee procedure moves to `references/committee.md`, loaded only for it. The description carries both triggers. |
 | Coordinator-session procedure into `delegate` | Becomes `references/coordinator-sessions.md`. The delegate description gains the case "run a spec as a coordinator with one session per task". |
-| Knowledge procedure into `session-hygiene` | Where decisions, lessons and project state go becomes `references/knowledge.md`, loaded when the user says to remember or recall something. The hygiene description gains those triggers. Handover content stays in session-hygiene as the one home; `handoff`'s save-a-handover mode points to it. `delegate`'s "Handover after an interrupted run" is about checkout state and stays. |
+| Knowledge procedure into `tidy` | Where decisions, lessons and project state go becomes `references/knowledge.md`, loaded when the user says to remember or recall something. The hygiene description gains those triggers. Handover content stays in tidy as the one home; `handoff`'s save-a-handover mode points to it. `delegate`'s "Handover after an interrupted run" is about checkout state and stays. |
 
 No alias skills are kept: an alias is another description. The changelog lists old name to new home. Updated everywhere they appear: README, `ask` map and contents, `contract-template.md`, `setup`, `check-references.py` and its test, status fixtures, trigger evals (renamed to expect the surviving skill).
 

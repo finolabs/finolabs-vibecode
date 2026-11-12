@@ -350,7 +350,7 @@ class ContextSnapshotTest(unittest.TestCase):
 
     def test_new_shared_script_copies_match(self):
         self.assertEqual((ROOT / "scripts" / "context_snapshot.py").read_bytes(),
-                         (ROOT / "skills" / "session-hygiene" / "scripts" / "context_snapshot.py").read_bytes())
+                         (ROOT / "skills" / "tidy" / "scripts" / "context_snapshot.py").read_bytes())
 
 
 if __name__ == "__main__":

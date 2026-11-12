@@ -25,7 +25,7 @@ on 2026-11-07 showed four problems:
   then call that agent directly; no agent routes for another.
 - Retire `fnl-verifier`: a script plus Jev replace it. `ledger.py finish --outcome accepted` is refused when no
   verification receipt exists for the current head, with a logged escape hatch (part E).
-- Retire `fnl-steward`: the script stays and its steps move into `session-hygiene`.
+- Retire `fnl-steward`: the script stays and its steps move into `tidy`.
 - Add fnl-navigator (hoa tieu): detects drift from the original outcome and proposes up to three ways to steer back.
   A small model builds the input, Jev judges, the navigator reports (part G).
 - An agent that cannot post its review reports why; the user sets it up (a narrow token for Codex, a remembered
@@ -158,7 +158,7 @@ check cannot stop an agent that never uses `ledger.py`; the spec says so and doe
 
 ## F. The steward folds into session hygiene
 
-`context_steward.py` is unchanged. `session-hygiene` "Context pressure" gets the procedure in prose: run
+`context_steward.py` is unchanged. `tidy` "Context pressure" gets the procedure in prose: run
 `context_steward.py check` with the counts and the threshold, ask the judge (part I) the one boundary question only
 when the script says `compact` and the boundary is not obvious, and run the script again. The agent file, its entry in the manifests
 and `agents/openai.yaml` lines are removed. `compaction-steward.md` gets a note that the agent is retired.
@@ -203,7 +203,7 @@ and records the agreement; that result is part of acceptance.
   for this removal.
 - `delegate` Accept step and Route text, `checks`, `review-gate` ("Instruments", "Who reviews", the
   rules about relay and the low-risk lane), `coding-router` (the router marker), `setup` (roles, judge and
-  posting steps), `session-hygiene`, `host-template.md`, the two reviewer agent files, `merge_check.py` with its
+  posting steps), `tidy`, `host-template.md`, the two reviewer agent files, `merge_check.py` with its
   tests and the `SessionStart` script change in the same work. Skills stay self-contained: scripts used by two skills are copied and compared in CI.
 - `CLAUDE.md` is not edited by this work. If the owner later wants the "Standing relay" paragraph reworded as
   temporary, that is a separate pull request.

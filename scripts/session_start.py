@@ -28,8 +28,8 @@ OPEN_CAP = 99
 
 
 # The skills marked `disable-model-invocation: true` (tests/test_session_start.py keeps this list equal to the folders).
-USER_ONLY = ("help", "ask", "setup", "status", "afk", "autopilot", "brb", "pause", "gtg", "update", "restore-point",
-             "verification")
+USER_ONLY = ("help", "ask", "setup", "status", "afk", "brb", "pause", "gtg", "update", "restore-point",
+             "session-hygiene", "verification")
 USER_ONLY_LINE = (
     "User-only skills (" + ", ".join(USER_ONLY) + " and every fnl- alias) are for the user to type; never call them "
     "with the Skill tool. Answer questions about this plugin by reading the help skill's references{route}; "
@@ -42,7 +42,7 @@ def user_only_line(routing):
 
 
 COMPACT_TITLE = (
-    "\nAfter compaction (advisory, agent judgment): invoke the session-hygiene skill now; compare this session's "
+    "\nAfter compaction (advisory, agent judgment): invoke the tidy skill now; compare this session's "
     "title with the current task and rename it if it is stale, then continue from the handover.\n")
 
 COMPACT_DELEGATION = (
@@ -184,7 +184,7 @@ def parallel_words():
         return "unknown"
 
 
-AWAY_LINE = 'Away mandate active: do not ask the user; follow autopilot "Decide"\n'
+AWAY_LINE = 'Away mandate active: do not ask the user; follow afk "Decide"\n'
 
 
 def away_line():

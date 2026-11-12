@@ -1,9 +1,9 @@
 ---
-name: session-hygiene
+name: tidy
 description: Name and rename agent sessions, save handovers and write back decisions. Use when a session's first task starts, right after a compaction, when the task or phase changes or the title is stale, when the user asks to rename, wrap up, save progress, hand over or resume later, when context passes about 60%, when work moves to another writer, or when the user asks to remember or recall decisions, lessons or project state.
 ---
 
-# Session hygiene
+# Tidy: session hygiene
 
 ## Context pressure
 

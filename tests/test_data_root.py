@@ -388,7 +388,7 @@ COPIES = ["scripts/data_root.py",
           "skills/review-gate/scripts/data_root.py",
           "skills/setup/scripts/data_root.py",
           "skills/status/scripts/data_root.py",
-          "skills/session-hygiene/scripts/data_root.py",
+          "skills/tidy/scripts/data_root.py",
           "skills/checks/scripts/data_root.py",
           "skills/restore-point/scripts/data_root.py", "skills/update/scripts/data_root.py"]
 

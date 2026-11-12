@@ -20,7 +20,7 @@ After yes: `data_location.py apply --to <path> --yes --digest <full 64-hex diges
 Then run `python3 -I <update skill folder>/scripts/update_check.py onboard first` (fresh root only).
 2. **Scan.** `references/scan.md`.
 3. **Mode/Routing.** `references/mode.md`.
-4. **Knowledge base.** Save judge/date, coordinators/limit/host path through the access those instructions approve; follow `session-hygiene` "Remember or recall". It asks nothing new; no consent row; report any write that failed.
+4. **Knowledge base.** Save judge/date, coordinators/limit/host path through the access those instructions approve; follow `tidy` "Remember or recall". It asks nothing new; no consent row; report any write that failed.
 5. **Read-back.** Quick confirms inert defaults once; Advanced asks each inert item. Nothing that grants something is in it. Both scopes ask:
 "Save only the notes shown about this setup?"
 Yes: Save shown inert notes at listed local targets; saving sends nothing.

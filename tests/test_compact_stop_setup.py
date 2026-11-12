@@ -393,7 +393,7 @@ class CompactStopSetupTest(unittest.TestCase):
         for text in ('agy -p', 'status: ERROR', 'context limit', 'not a model failure',
                      'The conversation is large. Run /compact, or start a fresh session with a short handover, then continue.'):
             self.assertIn(text, delegate)
-        for name, token in (('skills/session-hygiene/references/context-settings.md', 'Antigravity compaction stop'),
+        for name, token in (('skills/tidy/references/context-settings.md', 'Antigravity compaction stop'),
                             ('PRIVACY.md', 'state/compact-stop/'), ('README.md', 'compaction-stop.md'),
                             ('CHANGELOG.md', 'opt-in Antigravity pre-invocation compaction stop'),
                             ('docs/specs/index.md', '(compaction-stop.md)')):

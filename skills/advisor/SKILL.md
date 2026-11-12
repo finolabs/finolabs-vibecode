@@ -9,7 +9,7 @@ argument-hint: "[--agent claude|codex|antigravity|zcode] <question>"
 
 For a committee of two contrasting families, load [references/committee.md](references/committee.md) and follow that procedure instead. Load it only for a committee: stuck or looping work, or a very hard planning or design problem. The procedure below is for one second opinion.
 
-For a choice among given options while an away lease is live (`autopilot` "Decide"), load [references/choose.md](references/choose.md) and follow that choose mode instead: it returns exactly one option with its reason, or `none`, and there the advisor decides, not you.
+For a choice among given options while an away lease is live (`afk` "Decide"), load [references/choose.md](references/choose.md) and follow that choose mode instead: it returns exactly one option with its reason, or `none`, and there the advisor decides, not you.
 
 The procedure below is the open mode. One agent reads the situation and gives a judgement. You stay the decider; the advisor does not drive the work.
 

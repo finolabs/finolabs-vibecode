@@ -189,7 +189,7 @@ class RunHygieneTest(unittest.TestCase):
             self.assertIn(expected, text)
 
     def test_lesson_report_and_every_dispatch_family(self):
-        lesson = (ROOT / 'skills/session-hygiene/SKILL.md').read_text()
+        lesson = (ROOT / 'skills/tidy/SKILL.md').read_text()
         self.assertIn('Corrected-lesson example: on 2026-11-07 a delegated test assertion dumped the process environment', lesson)
         agents = (ROOT / 'skills/delegate/references/agents.md').read_text()
         for family in ('claude', 'codex', 'antigravity'):
@@ -211,7 +211,7 @@ class RunHygieneTest(unittest.TestCase):
 
     def test_touched_skill_documents_respect_setup_size_limits(self):
         # Apply the spec's limits to touched skill bodies, feature docs and new reference text.
-        for relative in ('setup/SKILL.md', 'delegate/SKILL.md', 'handoff/SKILL.md', 'session-hygiene/SKILL.md', 'checks/SKILL.md', 'setup/references/features/delegation.md',
+        for relative in ('setup/SKILL.md', 'delegate/SKILL.md', 'handoff/SKILL.md', 'tidy/SKILL.md', 'checks/SKILL.md', 'setup/references/features/delegation.md',
                          'plugin-packaging/SKILL.md', 'plugin-packaging/references/directories.md',
                          'plugin-packaging/references/directory-anthropic.md', 'open-source-review/SKILL.md',
                          'open-source-review/references/repository-settings.md',

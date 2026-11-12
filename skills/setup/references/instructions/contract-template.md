@@ -46,7 +46,7 @@ Each rule line says who enforces it: a host setting, a hook, the review gate, or
 
 - Where durable notes live (a knowledge base such as Orrery, an Obsidian vault, a docs repository) and the only approved way to access them.
 - Which single knowledge base agents use (Orrery where available, or an Obsidian vault), and that any other store is retired from agent use.
-- What gets written back, and where decisions and lessons go. `session-hygiene` "Remember or recall" covers the practice; the contract holds only the user's stores and access rules.
+- What gets written back, and where decisions and lessons go. `tidy` "Remember or recall" covers the practice; the contract holds only the user's stores and access rules.
 
 ## 7. Evaluators and external services (optional)
 
@@ -60,5 +60,5 @@ Each rule line says who enforces it: a host setting, a hook, the review gate, or
 ## 9. Host section (one per host)
 
 - Session titles: when and how to name or rename the session.
-- Context pressure: when to compact or start fresh (`session-hygiene` "Context pressure"); the host owns the compaction threshold; about 60% is advisory (agent judgment), not a prescribed host setting. Enforcement belongs to host settings or hooks written by `setup`; a contract line alone is advisory, and no enforcement is claimed until verified.
+- Context pressure: when to compact or start fresh (`tidy` "Context pressure"); the host owns the compaction threshold; about 60% is advisory (agent judgment), not a prescribed host setting. Enforcement belongs to host settings or hooks written by `setup`; a contract line alone is advisory, and no enforcement is claimed until verified.
 - Host quirks: model selection, review commands, tools that need care.

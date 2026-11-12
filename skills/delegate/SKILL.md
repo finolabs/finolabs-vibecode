@@ -15,7 +15,7 @@ Offer neutral Yes and No choices with none preselected or marked recommended; a 
 
 ## The loop
 
-Read [references/loop.md](references/loop.md): grade, route, brief, dispatch, watch, accept, record; name runs as `session-hygiene` "Titles" says.
+Read [references/loop.md](references/loop.md): grade, route, brief, dispatch, watch, accept, record; name runs as `tidy` "Titles" says.
 Accept starts with `log_scan.py scan <log>` and `log_scan.py show <log>`; finish uses `ledger.py finish --log-path <log>`.
 Report a leak by name, never chase it; the reference owns redaction and the environment-only residual-risk report.
 

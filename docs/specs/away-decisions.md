@@ -2,6 +2,8 @@
 
 Status: implemented; in release 0.2.3.
 
+> Since 0.2.5 the `autopilot` skill is `afk`, its script `afk.py` and its host config section `## afk`; see the note at the top of [autopilot.md](autopilot.md). This document keeps the names of its time.
+
 ## Why
 
 While the user is away, a host agent still meets decisions it would normally ask the user. `autopilot.md` already says that
@@ -102,7 +104,7 @@ An advisor with only the code in front of it would give its own opinion, not the
 
 - **The host builds a precedent packet; the advisor does not search.** Another family's program may have no access to the user's knowledge
   base or to the host's native memory, and giving it that access would hand a whole private store to a provider for one question. The host,
-  which already reads them, queries the knowledge source the user's instructions name (`session-hygiene` "Remember or recall") and its
+  which already reads them, queries the knowledge source the user's instructions name (`tidy` "Remember or recall") and its
   native memory for this question, and passes only the matching excerpts: the decision, its date and a source reference for each, at most eight
   excerpts and 8 KB. Selecting by relevance is agent judgment, advisory; when a judge is configured it may rank the candidates, under the same consent and screening as any other excerpt that leaves the machine.
 - **The goal decides, a missing precedent does not stop the work.** Every rung chooses the option that best serves the current spec or the project's

@@ -1,5 +1,5 @@
 ---
-name: trigger-session-hygiene-title
+name: trigger-tidy-title
 tags: [trigger]
 runs: 3
 max_turns: 5

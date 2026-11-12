@@ -6,8 +6,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFESTS = [ROOT / d / "plugin.json" for d in (".claude-plugin", ".codex-plugin", ".antigravity-plugin")]
-# Skills added after the 0.2.5 rename never had an fnl- name, so they have no alias folder.
-NO_OLDER_NAME = {"shape"}
+# Skills added after the 0.2.5 rename never had an fnl- name, so they have no alias folder; tidy took
+# session-hygiene's place, whose fnl- alias loads tidy.
+NO_OLDER_NAME = {"shape", "tidy"}
 
 
 def user_only(name):
@@ -84,7 +85,7 @@ class ManifestTest(unittest.TestCase):
     def test_aliases_load_their_final_target_and_never_call_a_user_only_one_through_the_skill_tool(self):
         # The Skill tool refuses a skill with disable-model-invocation, so an alias of one tells the agent to read it.
         aliases = [p.parent.name for p in (ROOT / "skills").glob("*/SKILL.md") if alias_target(p.parent.name)]
-        self.assertTrue({"fnl-help", "ask", "afk", "brb", "gtg", "verification"} <= set(aliases))
+        self.assertTrue({"fnl-help", "ask", "brb", "gtg", "verification", "session-hygiene"} <= set(aliases))
         for name in aliases:
             target = alias_target(name)
             body = (ROOT / "skills" / name / "SKILL.md").read_text().split("---", 2)[2]
@@ -112,15 +113,31 @@ class ManifestTest(unittest.TestCase):
             for public_text in (readme, ask, display, *(doc["description"] for doc in self.docs)):
                 self.assertIn(agent, public_text)
 
-    def test_afk_is_a_user_only_thin_alias(self):
+    def test_afk_is_the_user_only_away_skill_and_autopilot_is_gone(self):
         path = ROOT / "skills/afk/SKILL.md"
         _, frontmatter, body = path.read_text().split("---", 2)
         fields = dict(line.split(": ", 1) for line in frontmatter.strip().splitlines())
         self.assertEqual(fields["name"], path.parent.name)
         self.assertEqual(fields["disable-model-invocation"], "true")
         self.assertEqual(fields["argument-hint"], '"[start|stop]"')
-        brb_body = (ROOT / "skills/brb/SKILL.md").read_text().split("---", 2)[2]
-        self.assertEqual(body.replace("# Away from keyboard", "# Be right back"), brb_body)
+        self.assertIsNone(alias_target("afk"))
+        self.assertIn("scripts/afk.py", body)
+        # The old name is dropped, with no alias; brb, fnl-afk and fnl-brb load afk.
+        for gone in ("autopilot", "fnl-autopilot"):
+            self.assertFalse((ROOT / "skills" / gone / "SKILL.md").exists(), gone)
+        for alias in ("brb", "fnl-afk", "fnl-brb"):
+            self.assertEqual(alias_target(alias), "afk", alias)
+
+    def test_session_hygiene_is_a_user_only_thin_alias_of_tidy(self):
+        main = (ROOT / "skills/tidy/SKILL.md").read_text().split("---", 2)[1]
+        self.assertIn("\nname: tidy\n", main)
+        self.assertNotIn("disable-model-invocation", main)
+        for alias in ("session-hygiene", "fnl-session-hygiene"):
+            with self.subTest(alias=alias):
+                self.assertTrue(user_only(alias))
+                self.assertEqual(alias_target(alias), "tidy")
+                body = (ROOT / "skills" / alias / "SKILL.md").read_text().split("---", 2)[2]
+                self.assertIn("Dependency: `tidy`. Load and follow it with the same arguments", body)
 
     def test_gtg_is_a_user_only_thin_alias_of_pause(self):
         main = ROOT / "skills/pause/SKILL.md"

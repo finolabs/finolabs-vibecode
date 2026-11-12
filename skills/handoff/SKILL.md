@@ -36,7 +36,7 @@ Read [references/brief-template.md](references/brief-template.md) in full before
 
 **Preserve task semantics.** Investigate-only → "Do not edit files." Fix → "implement the fix." Refactor → "refactor, not rewrite." Carry the user's exact intent and scope.
 
-**Findings sent back.** While the run is still light, send the findings as a follow-up to the same run, one defect per item. Open a new run with a new brief, carrying what was tried, when the run has used about 60% of its context or two rework rounds have not cleared the defects (`session-hygiene` "Context pressure").
+**Findings sent back.** While the run is still light, send the findings as a follow-up to the same run, one defect per item. Open a new run with a new brief, carrying what was tried, when the run has used about 60% of its context or two rework rounds have not cleared the defects (`tidy` "Context pressure").
 
 **Prose output.** Write the brief in English and name the output language and tone in the Task. When the result is social content or a document for readers, and the user's instructions give an editing pass for that language, the coordinator runs the pass at acceptance; the agent does not. A plain reply to a user needs no pass.
 
@@ -44,13 +44,13 @@ For Antigravity, write an edit-only brief when its commands fall outside both it
 
 ## Dispatch
 
-1. Save the brief where `delegate` "Where files go" puts it, as `<slug>.md` (`session-hygiene` titles): a local handoff brief in `.finolabs/briefs/`, a brief worth keeping as project documentation in the project's documentation folder.
+1. Save the brief where `delegate` "Where files go" puts it, as `<slug>.md` (`tidy` titles): a local handoff brief in `.finolabs/briefs/`, a brief worth keeping as project documentation in the project's documentation folder.
 2. Record the dispatch: `ledger.py start ...` (see `delegate`), keeping the id.
 3. Launch the agent with the host config's command, under the hard cap, in the host's background mode (never `( … ) &` or `nohup`), with its log and final output in `.finolabs/logs/`.
-4. Tell the user in one line: the run's name (`<runner>: <project> <scope> <activity>`, `session-hygiene` "Titles"), agent, model, worktree, budget, check deadline, ledger id.
+4. Tell the user in one line: the run's name (`<runner>: <project> <scope> <activity>`, `tidy` "Titles"), agent, model, worktree, budget, check deadline, ledger id.
 
 The completion notice brings you back. At the check deadline, judge liveness from artifacts as `delegate` describes, then accept and record the outcome there.
 
 ## Resume
 
-Load `session-hygiene` "Handover content" and follow its save-and-continue procedure. It is the one home for handover content, storage, read-back and continuation. This mode launches nothing. Requires `session-hygiene`; when it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill session-hygiene`, or install the whole plugin) and stop.
+Load `tidy` "Handover content" and follow its save-and-continue procedure. It is the one home for handover content, storage, read-back and continuation. This mode launches nothing. Requires `tidy`; when it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill tidy`, or install the whole plugin) and stop.

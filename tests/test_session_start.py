@@ -94,7 +94,7 @@ class SessionStartTest(SyntheticStateTest):
         raw = json.dumps({"source": "compact", "session_id": "synthetic"}).encode()
         for mode in ("manual", "suggest", "auto", None):
             out, _ = self.run_hook(raw, delegation=mode)
-            self.assertIn(b"invoke the session-hygiene skill", out)
+            self.assertIn(b"invoke the tidy skill", out)
             self.assertIn(b"rename it", out)
         for source in ("startup", "resume", "clear"):
             startup = json.dumps({"source": source, "session_id": "synthetic"}).encode()
@@ -123,6 +123,10 @@ class SessionStartTest(SyntheticStateTest):
                            if not p.parent.name.startswith("fnl-")
                            and "\ndisable-model-invocation: true\n" in p.read_text().split("---", 2)[1])
         self.assertEqual(sorted(hook.USER_ONLY), user_only)
+        # The session-hygiene alias of tidy is user-only; autopilot is gone, afk holds the away skill.
+        self.assertIn("session-hygiene", hook.USER_ONLY)
+        self.assertNotIn("tidy", hook.USER_ONLY)
+        self.assertNotIn("autopilot", hook.USER_ONLY)
         for routing in ("on", "off"):
             line = hook.user_only_line(routing)
             self.assertLessEqual(len(line), 500)
@@ -458,7 +462,7 @@ class StateBlockTest(SyntheticStateTest):
             self.qp.write_json(folder, "limits.json", {"claude": stamp(current - hours(minutes=10))})
         self.assertIn("Quota (cached): claude-code limited, codex out 3%", self.state())
 
-    AWAY = 'Away mandate active: do not ask the user; follow autopilot "Decide"\n'
+    AWAY = 'Away mandate active: do not ask the user; follow afk "Decide"\n'
 
     def write_lease(self, start, expiry):
         self.write("state/autopilot/lease.json", json.dumps({

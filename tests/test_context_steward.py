@@ -75,7 +75,7 @@ class ContextStewardTest(unittest.TestCase):
     def test_retired_agent_procedure_is_self_contained(self):
         self.assertFalse((ROOT / "agents/fnl-steward.md").exists())
         self.assertFalse((ROOT / "agents/fnl-verifier.md").exists())
-        folder = ROOT / "skills/session-hygiene"
+        folder = ROOT / "skills/tidy"
         self.assertEqual((folder / "scripts/context_steward.py").read_bytes(),
                          (ROOT / "scripts/context_steward.py").read_bytes())
         hygiene = (folder / "SKILL.md").read_text().split("## Context pressure", 1)[1].split("\n## ", 1)[0]

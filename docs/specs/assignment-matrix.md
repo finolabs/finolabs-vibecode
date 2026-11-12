@@ -63,7 +63,7 @@ answer and makes deviation visible, without turning a preference into a block.
 - One parser: `assignments.py`, a shared module copied into every skill that needs it (a new copy group checked in CI,
   as for `data_root.py`), is the only code that reads the section. Today's script readers are the three copies of
   `review_config.py` (plugin-level `scripts/`, `delegate`, `review-gate`) and the four copies of `judge.py`
-  (plugin-level `scripts/`, `delegate`, `session-hygiene`, `checks`), plus `checkup.py`; after this
+  (plugin-level `scripts/`, `delegate`, `tidy`, `checks`), plus `checkup.py`; after this
   change `route_pick.py` and `matrix_setup.py` also import `assignments.py`, so there is one reading of the format. Levels
   have a setup reader today (`levels_setup.py` `parse` and `show`) but no computed routing reader, and types of work have
   no reader (`route.md` reads levels as advice); the new readers are `route_pick.py` and the ledger comparison, both

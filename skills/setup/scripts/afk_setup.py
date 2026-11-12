@@ -169,7 +169,7 @@ def apply(value, yes):
                 cs.write_target(folder, 'host.md', result, mode)
         os.unlink('preview.json', dir_fd=state)
         os.fsync(state)
-    print('Autopilot section saved; no lease started.')
+    print('afk section saved; no lease started.')
 
 
 def main(argv=None):
@@ -202,7 +202,7 @@ def main(argv=None):
             apply(args.digest, args.yes)
         return 0
     except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
-        print('Autopilot setup refused: invalid arguments, unsafe or changed file, or stale preview; preview again.', file=sys.stderr)
+        print('afk setup refused:invalid arguments, unsafe or changed file, or stale preview; preview again.', file=sys.stderr)
         return 1
 
 

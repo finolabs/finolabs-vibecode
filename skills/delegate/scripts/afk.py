@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local autopilot lease, action classification and private action log; no execution.
+"""Local afk lease, action classification and private action log; no execution.
 
 Rule table (each row names its enforcer; unknown input always fails closed):
 
@@ -110,7 +110,7 @@ OFF = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', '
 CONTEXT = 'Repository context'  # the applied-settings entry holding the check's Context
 EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yaml', '.yml'}
 MAX_LOG = 8 * 1024 * 1024
-ENFORCERS = {'autopilot.py', 'data_root.py', 'parallel_slots.py', 'secret_patterns.py', 'merge_check.py',
+ENFORCERS = {'afk.py','data_root.py', 'parallel_slots.py', 'secret_patterns.py', 'merge_check.py',
              'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
              'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py', 'heavy_run.py', 'delegate_env.py',
              'auto_gate.py', 'mode.py', 'judge.py', 'log_scan.py', 'route_task.py', 'brief_check.py', 'assignments.py',
@@ -126,14 +126,14 @@ def settings():
     text = dr.read_data('host.md', slots.HOST_LIMIT).decode('utf-8')
     start, body, end = slots.host_section(text, 'Autopilot')
     if start == body == end:
-        raise ValueError('Autopilot setup is missing')
+        raise ValueError('afksetup is missing')
     result, seen = {**DEFAULTS, **{c: 'stop' for c in CATEGORIES}, CONSENT: 'no', TARGETS: []}, set()
     for line in text[body:end].splitlines():
         if not line.strip():
             continue
         match = re.fullmatch(r'- ([A-Za-z -]+): (.+)', line)
         if not match or match[1] not in {*DEFAULTS, 'Merge', *CATEGORIES, CONSENT, TARGETS} or match[1] in seen:
-            raise ValueError('Autopilot setup is invalid')
+            raise ValueError('afksetup is invalid')
         key, value = match.groups()
         seen.add(key)
         if key in CATEGORIES:
@@ -147,18 +147,18 @@ def settings():
         elif key in NUMBERS:
             lower, upper = NUMBERS[key]
             if not re.fullmatch(r'[0-9]{1,5}', value) or not lower <= int(value) <= upper:
-                raise ValueError('Autopilot setup has an invalid limit')
+                raise ValueError('afksetup has an invalid limit')
             value = int(value)
         elif key == 'Hosts':
             hosts = value.split(', ')
             if len(hosts) != len(set(hosts)) or not set(hosts) <= {'Claude Code', 'Codex', 'Antigravity'}:
-                raise ValueError('Autopilot setup has invalid hosts')
+                raise ValueError('afksetup has invalid hosts')
         elif value not in {'Task choice': {'choose', 'listed'}, 'Push and pull requests': {'yes', 'no'},
                             'Merge': {'yes', 'no'}, 'Trusted authors': {'own'}}[key]:
-            raise ValueError('Autopilot setup has an invalid choice')
+            raise ValueError('afksetup has an invalid choice')
         result[key] = value
     if 'Merge' not in seen:
-        raise ValueError('Autopilot setup needs an explicit Merge answer')
+        raise ValueError('afksetup needs an explicit Merge answer')
     return result
 
 
@@ -180,7 +180,7 @@ def write_private(folder, name, raw):
 def private_folder():
     root = dr.consent_root()
     if root is None:
-        raise ValueError('Autopilot data root is invalid')
+        raise ValueError('afkdata root is invalid')
     # The default anchor also must not be inside a repository.
     with dr.root_folder(create=True):
         pass
@@ -216,7 +216,7 @@ def start(folder, args):
         # One lease covers the machine: a second session joins it instead of starting, extending or failing.
         from datetime import datetime, timezone
         until = datetime.fromtimestamp(previous['expiry'], timezone.utc).isoformat(timespec='minutes')
-        print(f'Autopilot already live until {until}; this lease covers every session on this machine. '
+        print(f'afk already live until {until}; this lease covers every session on this machine. '
               'Nothing was changed: work under it (check before each action, Decide for every question).')
         return
     lease = dict(id=uuid.uuid4().hex, start=current, expiry=current + hours * 3600,
@@ -227,7 +227,7 @@ def start(folder, args):
     except FileNotFoundError:
         pass
     summary = {**applied, 'Lease hours': hours, TARGETS: '; '.join(applied[TARGETS]) or 'none'}
-    print('Autopilot started\n' + '\n'.join(f'- {key}: {value}' for key, value in summary.items()))
+    print('afk started\n' + '\n'.join(f'- {key}: {value}' for key, value in summary.items()))
 
 
 def stop(folder):
@@ -237,7 +237,7 @@ def stop(folder):
     if removed:
         os.unlink('lease.json', dir_fd=folder)
         os.fsync(folder)
-    print('Autopilot stopped: stop marker written; lease ' + ('removed' if removed else 'already absent'))
+    print('afk stopped:stop marker written; lease ' + ('removed' if removed else 'already absent'))
 
 
 def lease_guard(folder, current):
@@ -1025,7 +1025,7 @@ def show_effective(folder):
 
 def safe_note(note):
     if len(note) > 8192:
-        raise ValueError('Autopilot note is too large')
+        raise ValueError('afknote is too large')
     note = ''.join(c for c in note if not unicodedata.category(c).startswith('C'))
     note = secret_patterns.redacted(note, secret_patterns.findings(note)).replace('\\', '/')
     # All assignments, even short values, may contain environment values.
@@ -1038,7 +1038,7 @@ def safe_note(note):
 
 def label(value):
     if not isinstance(value, str) or not LABEL.fullmatch(value) or secret_patterns.findings(value):
-        raise ValueError('Autopilot label is invalid')
+        raise ValueError('afklabel is invalid')
     return value
 
 
@@ -1058,46 +1058,46 @@ def attempt(args):
     """Validate one attempt against the closed schema; return the fields stored in the ledger."""
     rung, settled = args.rung, args.settled
     if rung is None or settled is None or args.project is None or args.topic is None or args.precedents is None:
-        raise ValueError('Autopilot decision needs rung, settled, project, topic and precedents')
+        raise ValueError('afkdecision needs rung, settled, project, topic and precedents')
     given = {f for f in FIELDS if getattr(args, f) is not None}
     if (rung, settled) == ('advisor', 'unavailable'):
         required, optional = ({'by'}, {'dispatch'}) if 'by' in given else (set(), set())
     elif (rung, settled) in ATTEMPTS:
         required, optional = ATTEMPTS[rung, settled]
     else:
-        raise ValueError('Autopilot decision rung and result do not match')
+        raise ValueError('afkdecision rung and result do not match')
     if not required <= given <= required | optional:
-        raise ValueError('Autopilot decision fields do not match the schema')
+        raise ValueError('afkdecision fields do not match the schema')
     if not re.fullmatch(r'[0-8]', args.precedents):
-        raise ValueError('Autopilot precedents count is invalid')
+        raise ValueError('afkprecedents count is invalid')
     fields = dict(rung=rung, settled=settled, precedents=int(args.precedents), topic=label(args.topic))
     if 'by' in given:
         valid = {'rule': args.by == 'rule', 'jev': args.by == 'jev', 'advisor': bool(ADVISOR.fullmatch(args.by)),
                  'host': args.by in PROGRAMS, 'park': args.by in PROGRAMS}[rung]
         if not valid:
-            raise ValueError('Autopilot decider is invalid')
+            raise ValueError('afkdecider is invalid')
         fields['by'] = args.by
     if 'of' in given:
         if not re.fullmatch(r'[2-6]', args.of) or not re.fullmatch(r'[1-6]', args.option) or int(args.option) > int(args.of):
-            raise ValueError('Autopilot option is invalid')
+            raise ValueError('afkoption is invalid')
         fields.update(option=int(args.option), of=int(args.of))
     if 'probability' in given:
         # A bounded plain decimal, so the value judge.ask_choice returns (up to 17 significant digits) round-trips.
         if not re.fullmatch(r'[01](?:\.[0-9]{1,20})?', args.probability):
-            raise ValueError('Autopilot probability is invalid')
+            raise ValueError('afkprobability is invalid')
         probability = float(args.probability)
         if not math.isfinite(probability) or not 0 <= probability <= 1:
-            raise ValueError('Autopilot probability is invalid')
+            raise ValueError('afkprobability is invalid')
         if (settled == 'yes') != (probability >= SETTLE):
-            raise ValueError('Autopilot probability does not match the result')
+            raise ValueError('afkprobability does not match the result')
         fields['probability'] = probability
     if 'dispatch' in given:
         if not DISPATCH_ID.fullmatch(args.dispatch):
-            raise ValueError('Autopilot dispatch id is invalid')
+            raise ValueError('afkdispatch id is invalid')
         fields['dispatch'] = args.dispatch
     if 'model' in given:
         if not MODEL.fullmatch(args.model):
-            raise ValueError('Autopilot model is invalid')
+            raise ValueError('afkmodel is invalid')
         fields['model'] = args.model
     return fields
 
@@ -1108,13 +1108,13 @@ def decide(folder, args, current):
     project = label(args.project)
     lease = None if read_private(folder, 'stop') is not None else read_lease(folder)
     if lease is None or not lease['start'] <= current < lease['expiry']:
-        raise ValueError('Autopilot decision needs a live lease')
+        raise ValueError('afkdecision needs a live lease')
     if args.decision is None:
         identifier = time.strftime('q%Y%m%d-%H%M%S-', time.localtime(current)) + os.urandom(2).hex()
     elif recorded_decision(args.decision):
         identifier = args.decision
     else:
-        raise ValueError('Autopilot decision id is unknown')
+        raise ValueError('afkdecision id is unknown')
     import away_lease
     away_lease.append_ledger(dict(event='decision', id=identifier, ts=iso(current), project=project,
                                   lease_start=lease['start'], **fields))
@@ -1123,7 +1123,7 @@ def decide(folder, args, current):
 
 def review(folder, args):
     if not recorded_decision(args.decision):
-        raise ValueError('Autopilot decision id is unknown')
+        raise ValueError('afkdecision id is unknown')
     import away_lease
     away_lease.append_ledger(dict(event='decision_review', id=args.decision, ts=iso(now()), verdict=args.verdict))
     print('Decision review recorded')
@@ -1180,11 +1180,11 @@ def log(folder, args):
         value = getattr(args, key)
         if value is not None:
             if not ID.fullmatch(value) or secret_patterns.findings(value):
-                raise ValueError('Autopilot id is invalid')
+                raise ValueError('afkid is invalid')
             fields[key] = value
     if args.pr is not None:
         if not re.fullmatch(r'[1-9][0-9]{0,9}', args.pr):
-            raise ValueError('Autopilot pull request id is invalid')
+            raise ValueError('afkpull request id is invalid')
         fields['pr'] = int(args.pr)
     note = safe_note(args.note or '')
     raw = read_private(folder, 'log.jsonl', MAX_LOG)
@@ -1192,7 +1192,7 @@ def log(folder, args):
     for line in (raw or b'').splitlines():
         old = json.loads(line)
         if not isinstance(old, dict) or not finite(old.get('time')):
-            raise ValueError('Autopilot log is invalid')
+            raise ValueError('afklog is invalid')
         if current - 30 * 86400 <= old['time'] <= current:
             retained.append(line)
     # Every other check passes before the decision line reaches the ledger.
@@ -1203,9 +1203,9 @@ def log(folder, args):
     retained.append(json.dumps(record, separators=(',', ':')).encode())
     payload = b'\n'.join(retained) + b'\n'
     if len(payload) > MAX_LOG:
-        raise ValueError('Autopilot log is full')
+        raise ValueError('afklog is full')
     write_private(folder, 'log.jsonl', payload)
-    print(identifier if identifier else 'Autopilot action logged')
+    print(identifier if identifier else 'afk action logged')
 
 
 def main(argv=None):
@@ -1251,7 +1251,7 @@ def main(argv=None):
         if args.command == 'check':
             print(json.dumps({'tier': 3, 'code': 'unsafe'}, separators=(',', ':')))
             return 0
-        print('Autopilot refused: setup or private state is missing, invalid, unsafe or already active')
+        print('afk refused:setup or private state is missing, invalid, unsafe or already active')
         return 3
 
 
