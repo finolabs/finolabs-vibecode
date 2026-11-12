@@ -9,7 +9,7 @@ One repository, one `skills/` folder, one manifest per host. This skill holds th
 
 | Host | Manifest | Catalog | Authority for fields and checks |
 | --- | --- | --- | --- |
-| Claude Code | `.claude-plugin/plugin.json` | `.claude-plugin/marketplace.json` | [plugin manifest reference](https://code.claude.com/docs/en/plugins/manifest-reference.md), [marketplace reference](https://code.claude.com/docs/en/plugins/marketplace-reference.md), `claude plugin validate . --profile directory`; the `plugin-dev` and `skill-creator` skills for authoring |
+| Claude Code | `.claude-plugin/plugin.json` | `.claude-plugin/marketplace.json` | [plugin manifest reference](https://code.claude.com/docs/en/plugins/manifest-reference.md), [marketplace reference](https://code.claude.com/docs/en/plugins/marketplace-reference.md), `claude plugin validate . --profile directory --strict` (well-formedness only: the directory portal's **Validate** runs more checks); the `plugin-dev` and `skill-creator` skills for authoring |
 | Codex | `.codex-plugin/plugin.json` | `.agents/plugins/marketplace.json` | [build plugins](https://developers.openai.com/codex/plugins/build), [submission fields](https://developers.openai.com/plugins/deploy/submission); no local validator, the portal validates the upload |
 | Antigravity | `.antigravity-plugin/plugin.json` | none; install from the repository URL | [build plugins](https://antigravity.google/docs/build-plugins), `agy plugin validate . --strict`; the built-in `plugin` and `agy-customizations` skills |
 
@@ -52,6 +52,15 @@ Apply this section only when preparing a submission to a directory that asks for
 - Offer single-skill installs beside the plugin: skills.sh (`npx skills add owner/repo --skill <name>`) finds `skills/<name>/SKILL.md` on its own. Tell users to pick one path per agent, since both list every skill twice.
 - Write the install commands for every host in the README, verified against each host's `--help`.
 
+### Directory editions
+
+Read [references/directories.md](references/directories.md) before preparing a submission to Anthropic's or OpenAI's plugin directory: who submits, the fields, the holds each portal raises that no local validator shows, and what the owner must answer.
+
+- When a directory refuses a component the plugin ships (Anthropic's policy excludes AI image generation; OpenAI refuses lifecycle hooks), submit a generated **edition** instead of trimming the plugin itself. One build script per directory derives the edition from the same sources: it copies the files the edition keeps, removes regions between marker comments, applies exact text edits that fail the build when the source no longer contains them, and overlays the edition's own files (a README, a setup skill without the refused feature).
+- An edition Anthropic's directory follows is committed in its own folder, which becomes the submitted plugin path, and a test fails while it differs from what the build script produces. An edition uploaded as a ZIP (Codex) is built from the release tag and never committed.
+- Runtime code reads which files the edition ships and turns off the features whose files are missing, so no command offers what the edition left out.
+- Leave out of an edition everything a directory holds without need: hooks, URLs in scripts that hand the environment on, `package.json` and lockfiles, binaries, files over 256 KiB.
+
 ## 6. Checks before a release
 
 Run and read each one:
@@ -60,10 +69,11 @@ Run and read each one:
 - the trigger suite: one `claude plugin eval` case per model-invoked skill that must fire it, plus negative cases that must fire nothing (`--ablation none` keeps `Skill` graders scored). Run only the cases of skills whose `description` changed since the last release (`--case`), and the whole suite before a MINOR release; a patch release with no `description` change needs none;
 - after installing on Claude Code, `/skill-doctor` for each skill's listing cost, and from the second release on, whether it is ever used (an interactive check: where it cannot run, say so);
 - `open-source-review` for license, payload, leaks and community files;
+- before a directory submission, rebuild each edition, run the local validator on it, then the directory portal's own validation, and read every finding marked blocking or held;
 - when the plugin is listed in a shared catalog, run the catalog check and, if the catalog pins SHAs, update it after the tag.
 
 A validator pass shows the package loads; only the trigger suite and real use show the skills help.
 
 ## Authority
 
-Creating a marketplace repository, submitting to a directory, tagging and publishing need the owner's explicit approval. Preparing manifests, icons and checks for review needs none.
+Creating a marketplace repository, submitting to a directory, tagging and publishing need the owner's explicit approval. Preparing manifests, icons, editions and checks for review needs none. A directory form's data-handling answers, policy attestations and compliance acknowledgements are the owner's to give; when one conflicts with what the plugin does, show the owner the conflict instead of choosing.
