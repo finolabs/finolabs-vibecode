@@ -14,7 +14,7 @@ The skill folders and their purposes match the README.
 | `versioning` | Bumping a version, tagging a release, or writing the changelog and release notes: SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog. |
 | `commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports). |
 | `restore-point` | Saving the working tree to a private git ref before the agent edits, listing restore points and restoring one after a preview and a yes. User-invoked, git repositories only. |
-| `autopilot` | Starting a time-boxed standing mandate while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/setup add afk`; the live loop, dashboard tab, scheduler and hooks are deferred. |
+| `autopilot` | Starting a time-boxed standing mandate while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/setup add afk`, which can also save a repository's own task choice, push, merge, trusted authors and code folders in its settings file; the live loop, dashboard tab, scheduler and hooks are deferred. |
 | `afk` | Main short name for `autopilot` (away from keyboard); starts the away mandate so your agents keep working while you are away, or stops it on return. |
 | `brb` | Older short name (be right back), kept as an alias of `afk` through `autopilot`; follows the same procedure and arguments. |
 | `pause` | Before you restart or shut the machine down: stops new work, lets running work finish, writes handovers and reports what recorded work remains, with an optional `--in <minutes>` deadline; `heavy_run.py` refuses new commands while it is active. User-invoked; never stops a process or declares the machine safe. |
@@ -120,6 +120,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/instructions_write.py` | Previews and writes one approved instruction file/block with digest and backups. |
 | `scripts/judge.py` | Screens bounded questions, validates supplied host answers or calls optional Jev, and discloses fallback; neither judge accepts work. |
 | `scripts/log_scan.py` | Scans logs, shows redacted views and applies digest-bound local redaction; never reads a raw log into a receipt. |
+| `scripts/merge_notice_hook.py` | Claude Code reminder after a successful `gh pr merge` that ends the command line: one fixed line pointing to `worktree_sweep.py list` and the git commands it prints; quoted excluded flags print nothing; stores nothing, always exits 0. |
 | `scripts/metrics_hook.py` | Records consented usage metadata and triggers local dashboard refreshes. |
 | `scripts/mode.py` | Shows effective settings/sources and writes previewed confirmed changes for `/setup mode`. |
 | `scripts/nav_state.py` | Collects bounded current anchors/metadata, screens payloads and checks report references; it does not prove drift. |
@@ -146,8 +147,9 @@ Paths below are relative to the full plugin root. There are three agent definiti
 
 | Path | Purpose |
 | --- | --- |
+| `skills/commit-messages/scripts/worktree_sweep.py` | Read-only list of linked worktrees (path as git lists it, branch, size, clean or dirty, unpushed, merged, candidate); under each candidate prints `git worktree remove <path>` and `git branch -d <branch>` for the agent to run, so git does the removal. Deletes nothing. Copy in `review-gate`. |
 | `skills/checks/scripts/checks.py` | Runs or shows the repository's approved stored checks (a changed or unapproved check file runs nothing) in order through `heavy_run.py`, stops at the first failure, narrows Python test modules with `--changed`, and writes a local receipt only for a whole passing run on a clean, unmoved head when that mode is on; `run --dispatch <id>` writes, on the same conditions and whatever that mode, the verification receipt `ledger.py finish --outcome accepted` needs. `usage --from <file>` summarises hosted CI runs, minutes, the document-only share and days left from a run list the agent produced; no network call and no process. |
-| `skills/delegate/scripts/autopilot.py` | Autopilot lease, closed action classification (Tier 1 or Tier 3) and private action log; executes nothing. |
+| `skills/delegate/scripts/autopilot.py` | Autopilot lease, closed action classification (Tier 1 or Tier 3) against one repository identity and target, a read-only view of the values it applies, and private action log; executes nothing. |
 | `skills/delegate/scripts/heavy_run.py` | Runs one heavy command at a time per machine under a kernel lock, with load and memory gates, a wait cap and a maximum run time. |
 | `skills/delegate/scripts/ledger.py` | Records runs; accepted finishes need a current-head receipt or explicit reason-digested exception. `stale [--older-than-hours <n>]` previews open records past twice their budget and 24 hours (id, age, label); `stale --close --digest <digest>` appends one closing `finish` line per previewed record, never `accepted`. |
 | `skills/delegate/scripts/pause.py` | `pause` marker: start, status (open dispatches, heavy jobs, checkpoints) and resume; stops no process and runs nothing. |

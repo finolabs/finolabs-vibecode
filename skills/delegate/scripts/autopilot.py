@@ -17,7 +17,14 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Credentials/env names, .github, hooks, agent instructions, settings, host/setup/lease files are Tier 3 anywhere in argv or paths | protected |
 | Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3 | classify_paths |
 | Read-only Git/gh queries use closed verbs and option sets; command/config overrides and unknown options deny | classify_argv, options |
-| Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and merge origin/main are Tier 1 | classify_argv, branch_context |
+| Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and whose effective destination (origin's single pushurl, else its url) is the verified target, and merge origin/main into a work branch of a found repository (the synchronization exemption) are Tier 1 | classify_argv, branch_context |
+| A local branch merge ([--no-ff] [--no-edit], refs/heads/<b> or an unambiguous bare name that exists only as a branch) is Tier 1 only into a named non-default branch with effective Merge=yes | local_merge, local_branch |
+| One identity per check (found, absent or unknown; a rejected linked worktree is unknown) feeds settings, branch and remote reads | project_store.identity, effective, Context |
+| The five project values start strict; a positively absent approval gives user values; an approved valid `autopilot` object whose record carries this checkout's full identity digest and whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding, project_store.bound |
+| PR merge/create/edit need exactly one `--repo github.com/OWNER/NAME` equal to the verified target; create needs one validated `--head`; implicit targets are Tier 3 | target_check, head_check, project_store.origin_target |
+| `effective` prints the same context read-only for the advisory Task choice and Trusted authors | show_effective |
+| The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
+| Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths; every path rule (roots, documents, protected names, links) applies to the operand's path relative to the checkout root of the check's validated identity, read from cwd, and with no identity no path is known | classify_paths, repository_path |
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
 | Only this install's ledger/record/heavy_run/merge_check script paths, with isolated Python, are allowed wrappers; nested heavy commands are classified too | script_command |
 | Each Tier 1 check reserves one action; ledger start also reserves a run, even if the caller never executes | check |
@@ -30,7 +37,9 @@ checks out/tests a PR. It never executes argv, reads credentials, reads the
 process environment, or persists argv/paths/settings contents. The live tick,
 quota probe, scheduler, notices and host backstop are outside this first part.
 Counters are reservations, not evidence that a command ran. Setup changes need
-a new lease. There is no status command or long-lived process.
+a new lease. There is no long-lived process. `check` classifies; it cannot
+guarantee that a later command runs with the same working directory, metadata or
+environment.
 """
 import argparse
 from contextlib import contextmanager
@@ -47,6 +56,7 @@ import re
 import stat
 import sys
 import time
+from typing import NamedTuple
 import unicodedata
 import uuid
 
@@ -54,6 +64,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
 import data_root as dr
 import parallel_slots as slots
+import project_store as store
 import secret_patterns
 from away_lease import finite, private_info, read_lease, read_private  # the one safe lease reader
 
@@ -91,13 +102,19 @@ ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,39}')
 SHA = re.compile(r'[0-9a-f]{40}')
 BRANCH = re.compile(r'(?:refs/heads/)?[A-Za-z0-9][A-Za-z0-9._/-]{0,160}')
 ROOTS = {'src', 'lib', 'app', 'tests', 'docs', 'scripts', 'skills'}
+DOCUMENTS = {'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md'}  # top-level documentation files that are known paths
+# The project-scoped keys of settings.json `autopilot` and their host.md names; broken project settings turn them off.
+PROJECT_KEYS = {'task-choice': 'Task choice', 'push-and-pull-requests': 'Push and pull requests', 'merge': 'Merge',
+                'trusted-authors': 'Trusted authors'}
+OFF = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', 'Trusted authors': 'own', 'Roots': []}
+CONTEXT = 'Repository context'  # the applied-settings entry holding the check's Context
 EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yaml', '.yml'}
 MAX_LOG = 8 * 1024 * 1024
 ENFORCERS = {'autopilot.py', 'data_root.py', 'parallel_slots.py', 'secret_patterns.py', 'merge_check.py',
              'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
              'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py', 'heavy_run.py', 'delegate_env.py',
              'auto_gate.py', 'mode.py', 'judge.py', 'log_scan.py', 'route_task.py', 'brief_check.py', 'assignments.py',
-             'away_lease.py', 'away_gate_hook.py'}
+             'away_lease.py', 'away_gate_hook.py', 'project_store.py', 'project_progress.py'}
 ENFORCERS = {name.casefold() for name in ENFORCERS}  # case-insensitive filesystems name one file many ways
 
 
@@ -281,7 +298,89 @@ def plugin_code(name):
         return True
 
 
-def classify_paths(paths):
+class Context(NamedTuple):
+    """The policy context of one check: how the repository resolved, its validated identity, which values apply and
+    the GitHub repository a mutation may name (None: no GitHub mutation or push qualifies)."""
+    repository: str  # found, absent or unknown
+    ident: object  # project_store.Identity when found, else None
+    state: str  # user, project, strict or no-repository
+    target: object  # 'github.com/<owner>/<name>' or None
+
+
+UNKNOWN = Context('unknown', None, 'strict', None)
+
+
+def context_of(applied):
+    found = applied.get(CONTEXT)
+    return found if isinstance(found, Context) else UNKNOWN
+
+
+def effective(applied, cwd):
+    """The five project-scoped values and the repository context of one check (docs/specs/autopilot.md "Project scope").
+
+    Starts from the strict vector and leaves it only once each prerequisite holds: a validated identity
+    (`project_store.identity`), then either a positively absent approval (user values, no extra roots) or approved
+    settings whose `autopilot` object is valid, whose approval record carries this identity's full main checkout
+    digest (`project_store.bound`; the short code only names the file) and whose recorded origin binding equals the
+    origin read now (explicit project values replace user values, omitted keys inherit). Unknown identity, an
+    unreadable or unbound approval, a digest mismatch, invalid settings, a changed origin or any error keeps the whole
+    strict vector. Positively no repository
+    keeps the user values with no context to act on, so no repository mutation qualifies. Read on every check, never
+    stored in the lease.
+    """
+    strict = {**applied, **OFF, CONTEXT: UNKNOWN}
+    try:
+        found, ident = store.identity(cwd)
+        if found == 'absent':
+            return {**applied, 'Roots': [], CONTEXT: Context('absent', None, 'no-repository', None)}
+        if found != 'found':
+            return strict
+        state, values, _, record = store.autopilot_binding(ident)
+        target = store.origin_target(ident)
+        if state == 'unset' or state == 'approved' and 'autopilot' not in values:
+            return {**applied, 'Roots': [], CONTEXT: Context('found', ident, 'user', target)}
+        project = values.get('autopilot') if state == 'approved' else None
+        if (not store.valid_autopilot(project) or 'target' not in record or record['target'] != target
+                or not store.bound(record, ident)):
+            return {**strict, CONTEXT: Context('found', ident, 'strict', None)}
+        result = dict(applied)
+        for key, name in PROJECT_KEYS.items():
+            if key in project:
+                result[name] = project[key]
+        result['Roots'] = [r for r in project.get('roots', []) if not protected(r)]
+        result[CONTEXT] = Context('found', ident, 'project', target)
+        return result
+    except (OSError, ValueError, TypeError, UnicodeError, KeyError, RecursionError):
+        return strict
+
+
+def repository_path(name, context):
+    """A plain relative operand read from cwd, as a path relative to the checkout root of the check's validated
+    identity; None when the check has no identity, the operand is not plain or it lies outside that checkout."""
+    if (context.ident is None or not re.fullmatch(r'[A-Za-z0-9_./-]{1,240}', name) or Path(name).is_absolute()
+            or any(p in {'', '.', '..'} for p in name.split('/'))):
+        return None
+    try:
+        return Path(os.path.abspath(os.path.join(os.getcwd(), name))).relative_to(context.ident.checkout)
+    except ValueError:
+        return None
+
+
+def no_links(path, context):
+    """True when no component from the checkout root down to the path is a link (link metadata only, never a
+    target or any file contents)."""
+    candidate = context.ident.checkout
+    for part in path.parts:
+        candidate /= part
+        if candidate.is_symlink():
+            return False
+    return True
+
+
+def classify_paths(paths, roots=(), context=UNKNOWN):
+    """Known single-file paths only. Each operand is read from cwd, then the protected, enforcer, root, document and
+    link rules apply to its path relative to the checkout root of the check's validated identity, never to the
+    operand alone, so a descendant cwd neither widens a root nor hides a protected ancestor. No identity: unknown."""
     if not paths:
         return 'unknown'
     for name in paths:
@@ -291,15 +390,21 @@ def classify_paths(paths):
         if path.name.casefold() in ENFORCERS or path.name.upper() in slots.INSTRUCTION_FILES or plugin_code(name):
             return 'protected'
         if (not re.fullmatch(r'[A-Za-z0-9_./-]{1,240}', name) or path.is_absolute()
-                or any(p in {'', '.', '..'} for p in name.split('/'))
-                or len(path.parts) < 2 or path.parts[0] not in ROOTS or path.suffix not in EXTENSIONS):
+                or any(p in {'', '.', '..'} for p in name.split('/'))):
             return 'unknown'
-        # Inspect link metadata only, never the target or any file contents.
-        candidate = Path(os.getcwd())
-        for part in path.parts:
-            candidate /= part
-            if candidate.is_symlink():
-                return 'protected'
+        path = repository_path(name, context)
+        if path is None:
+            return 'unknown'
+        if protected(path.as_posix()):
+            return 'protected'
+        if len(path.parts) < 2:
+            if path.as_posix() not in DOCUMENTS:
+                return 'unknown'
+        elif path.parts[0] not in ROOTS and path.parts[0] not in roots or path.suffix not in EXTENSIONS:
+            return 'unknown'
+        if not no_links(path, context):
+            return 'protected'
+        candidate = context.ident.checkout / path
         # A directory operand would stage everything below it, so only single files are a known path.
         if candidate.is_dir():
             return 'unknown'
@@ -334,33 +439,146 @@ def options(tokens, flags=(), valued=(), *, positional=True):
     return operands
 
 
-def branch_context():
-    """Only local metadata, no Git process, config execution or credential helper."""
-    root = slots.find_root(os.getcwd())
-    if root is None:
-        return None, None
-    with slots.open_dir(root) as fd:
-        info = os.stat('.git', dir_fd=fd, follow_symlinks=False)
-        if stat.S_ISREG(info.st_mode):
-            link = slots.read_metadata(fd, '.git').strip()
-            if not link.startswith('gitdir: '):
-                return None, None
-            git = Path(os.path.abspath(root / link[8:]))
-        elif stat.S_ISDIR(info.st_mode):
-            git = root / '.git'
-        else:
-            return None, None
+def git_dirs(context):
+    """(git folder, common folder) of the check's validated identity; ValueError without one."""
+    if context.ident is None:
+        raise ValueError('no validated repository')
+    return context.ident.git, context.ident.common
+
+
+def branch_context(context):
+    """Only local metadata of the context's identity, no Git process, config execution or credential helper."""
+    git, common = git_dirs(context)
     with slots.open_dir(git) as fd:
         head = slots.read_metadata(fd, 'HEAD').strip()
-        try:
-            common = Path(os.path.abspath(git / slots.read_metadata(fd, 'commondir').strip()))
-        except FileNotFoundError:
-            common = git
     with slots.open_dir(common / 'refs/remotes/origin') as fd:
         default = slots.read_metadata(fd, 'HEAD').strip()
-    current = head.removeprefix('ref: refs/heads/') if head.startswith('ref: refs/heads/') else None
     default = default.removeprefix('ref: refs/remotes/origin/') if default.startswith('ref: refs/remotes/origin/') else None
-    return current, default
+    # Follow the branch symref chain to the branch a merge or push of HEAD would really update. Any name on the way
+    # that is a default-branch name makes it that branch; a ref outside refs/heads, a cycle or a long chain is a
+    # detached head (None), which every caller refuses.
+    chain = []
+    while head.startswith('ref: refs/heads/'):
+        name = head.removeprefix('ref: refs/heads/')
+        if name in chain or len(chain) >= 5 or not BRANCH.fullmatch(name) or '..' in name:
+            return None, default
+        chain.append(name)
+        try:
+            with slots.open_dir(common / 'refs/heads' / Path(name).parent) as fd:
+                head = slots.read_metadata(fd, Path(name).name).strip()
+        except FileNotFoundError:
+            break  # packed (never symbolic) or unborn: the chain ends at this branch
+    else:
+        if chain and not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', head):
+            return None, default
+    if not chain:
+        return None, default
+    # Casefolded: on a case-insensitive filesystem refs/heads/MAIN is the same loose file as refs/heads/main.
+    for name in chain:
+        for kept in ('main', 'master', 'trunk', default):
+            if kept and name.casefold() == kept.casefold():
+                return kept, default
+    return chain[-1], default
+
+
+def flag_operands(tail, flag):
+    """Every value given to a long `flag`, in the separate and the `=` forms."""
+    return ([tail[i + 1] if i + 1 < len(tail) else '' for i, t in enumerate(tail) if t == flag]
+            + [t[len(flag) + 1:] for t in tail if t.startswith(flag + '=')])
+
+
+def target_check(tail, context):
+    """'allowed' only for exactly one explicit `--repo github.com/OWNER/NAME` equal to the context's verified target,
+    'forbidden' for another GitHub repository, else 'unknown'. gh's implicit choice (remotes, gh-resolved, GH_REPO) is
+    never predicted: an explicit --repo takes precedence over all of them, so any form without one is Tier 3, and so
+    are the short -R spellings, other hosts, URL forms, `.git` names and a repeated --repo."""
+    if any(t.startswith('-R') for t in tail):
+        return 'unknown'
+    named = flag_operands(tail, '--repo')
+    if len(named) != 1 or context.target is None:
+        return 'unknown'
+    match = re.fullmatch(r'([^/]+)/([^/]+)/([^/]+)', named[0])
+    if not match or named[0].endswith('.git'):
+        return 'unknown'
+    target = store.repository_target(*match.groups())
+    if target is None:
+        return 'unknown'
+    return 'allowed' if target == context.target else 'forbidden'
+
+
+def head_check(tail, context):
+    """`gh pr create` names its head explicitly (`--head <branch>`, once), so gh pushes nothing itself; the branch is a
+    plain name that is not the default branch, `main`, `master` or `trunk`."""
+    if any(t.startswith('-H') for t in tail):
+        return 'unknown'
+    heads = flag_operands(tail, '--head')
+    if len(heads) != 1:
+        return 'unknown'
+    name = heads[0]
+    if (not BRANCH.fullmatch(name) or name.startswith('refs/') or '..' in name or '//' in name or '/.' in name
+            or name.endswith(('/', '.', '.lock', 'HEAD'))):
+        return 'unknown'
+    try:
+        _, default = branch_context(context)
+    except (OSError, ValueError, UnicodeError):
+        return 'unknown'
+    if any(kept and name.casefold() == kept.casefold() for kept in ('main', 'master', 'trunk', default)):
+        return 'forbidden'
+    return 'allowed' if default else 'unknown'
+
+
+def local_branch(name, bare, context):
+    """True when refs/heads/<name> exists (loose or packed) and, for a bare name, no ref git would pick first does."""
+    _, common = git_dirs(context)
+
+    def loose(ref):
+        try:
+            with slots.open_dir(common / Path(ref).parent) as fd:
+                slots.read_metadata(fd, Path(ref).name)  # a folder, link or foreign file raises: deny on doubt
+            return True
+        except (FileNotFoundError, NotADirectoryError):
+            return False
+    try:
+        with slots.open_dir(common) as fd:
+            packed = slots.read_metadata(fd, 'packed-refs')
+    except FileNotFoundError:
+        packed = ''
+    names = {line.split(' ', 1)[1].strip() for line in packed.splitlines() if ' ' in line and line[:1] not in '#^'}
+
+    def has(ref):
+        return ref in names or loose(ref)
+    if not has('refs/heads/' + name):
+        return False
+    # git resolves a bare name as <git dir>/<name>, refs/<name> and refs/tags/<name> before refs/heads/<name>.
+    return not bare or not any(has(ref) for ref in (name, 'refs/' + name, 'refs/tags/' + name))
+
+
+def local_merge(tail, applied):
+    """`git merge [--no-ff] [--no-edit] refs/heads/<branch>|<branch>` of a local branch into a work branch."""
+    flags, operands = [t for t in tail if t.startswith('-')], [t for t in tail if not t.startswith('-')]
+    if len(operands) != 1 or len(set(flags)) != len(flags) or not set(flags) <= {'--no-ff', '--no-edit'}:
+        return 'unknown'
+    explicit = operands[0].startswith('refs/heads/')
+    name = operands[0].removeprefix('refs/heads/')
+    if (not BRANCH.fullmatch(name) or name.startswith('refs/') or '..' in name or '//' in name
+            or name.endswith(('/', '.', '.lock')) or '/.' in name):
+        return 'unknown'
+    # Git reads hexadecimal in any case as an object id (SHA-1 or SHA-256, abbreviated from 4 digits) before a branch.
+    if not explicit and (re.fullmatch(r'[0-9a-fA-F]{4,64}', name) or name.endswith('HEAD')
+                         or name.split('/')[0] in {'origin', 'tags', 'heads', 'remotes'}):
+        return 'unknown'  # a bare name that could read as a commit id or another ref
+    if applied['Merge'] != 'yes':
+        return 'merge-disabled'
+    context = context_of(applied)
+    try:
+        current, default = branch_context(context)
+        if current in {None, default, 'main', 'master', 'trunk'}:
+            return 'forbidden'  # never into the default branch or a detached head
+        if not default or name == current or not local_branch(name, not explicit, context):
+            return 'unknown'
+    except (OSError, ValueError, UnicodeError):
+        return 'unknown'
+    return 'allowed'
 
 
 def script_command(argv, applied):
@@ -427,22 +645,19 @@ def flag_values(tokens, single, repeated=()):
     return values
 
 
-def evidence_path(name):
+def evidence_path(name, context):
+    """A known path, or a brief under the repository's own `.finolabs/briefs/`, both judged from the checkout root."""
     if not plain(name) or protected(name):
         return False
-    if classify_paths([name]) == 'allowed':
+    if classify_paths([name], (), context) == 'allowed':
         return True
-    if not re.fullmatch(r'\.finolabs/briefs/[A-Za-z0-9_.-]{1,80}\.(?:md|json|txt)', name):
+    path = repository_path(name, context)
+    if path is None or not re.fullmatch(r'\.finolabs/briefs/[A-Za-z0-9_.-]{1,80}\.(?:md|json|txt)', path.as_posix()):
         return False
-    candidate = Path(os.getcwd())
-    for part in Path(name).parts:
-        candidate /= part
-        if candidate.is_symlink():
-            return False
-    return not candidate.is_dir()
+    return no_links(path, context) and not (context.ident.checkout / path).is_dir()
 
 
-def judge_command(tail):
+def judge_command(tail, applied):
     """`judge.py ask --site away-decision --question Q --option O (2 to 6) --evidence-file F [--judge jev]` only."""
     if tail[:1] != ['ask']:
         return 'unknown'
@@ -451,7 +666,8 @@ def judge_command(tail):
             or not {'--question', '--evidence-file', '--option'} <= set(values)):
         return 'unknown'
     question, options = values['--question'], values['--option']
-    if not all(plain(t) for t in (question, *options)) or not evidence_path(values['--evidence-file']):
+    if (not all(plain(t) for t in (question, *options))
+            or not evidence_path(values['--evidence-file'], context_of(applied))):
         return 'unknown'
     try:
         import judge
@@ -550,7 +766,7 @@ def ladder_command(argv, applied, coordinator):
     name, tail = own_script(argv, ('judge.py', 'delegate_env.py'))
     if name is None:
         return None
-    return judge_command(tail) if name == 'judge.py' else advisor_command(tail, applied, coordinator)
+    return judge_command(tail, applied) if name == 'judge.py' else advisor_command(tail, applied, coordinator)
 
 
 TAG = re.compile(r'v?[0-9A-Za-z][0-9A-Za-z._-]{0,63}')
@@ -648,9 +864,10 @@ def classify_argv(argv, applied, coordinator=None):
             if any(b.startswith('refs/') and not b.startswith('refs/heads/')
                    or b.split('/')[0] in {'tags', 'remotes', 'notes', 'replace', 'stash', 'changes'} for b in refspec):
                 return 'forbidden'
+            context = context_of(applied)
             try:
-                current, default = branch_context()
-            except (OSError, ValueError):
+                current, default = branch_context(context)
+            except (OSError, ValueError, UnicodeError):
                 return 'unknown'
             destination = refspec[-1]
             target = destination.removeprefix('refs/heads/')
@@ -662,17 +879,24 @@ def classify_argv(argv, applied, coordinator=None):
             # A bare or abbreviated destination can resolve to a tag, so only an explicit branch ref is a known push.
             if len(refspec) != 2 or not destination.startswith('refs/heads/'):
                 return 'unknown'
-            return 'allowed' if applied['Push and pull requests'] == 'yes' else 'push-disabled'
+            if applied['Push and pull requests'] != 'yes':
+                return 'push-disabled'
+            # Git pushes to origin's pushurl when one is set, else its url: that one destination must be the target.
+            if context.target is None or store.push_target(context.ident) != context.target:
+                return 'unknown'
+            return 'allowed'
         if verb == 'merge':
             if tail not in (['origin/main'], ['--no-edit', 'origin/main']):
-                return 'unknown'
+                return local_merge(tail, applied)
+            # The synchronization exemption: a local merge of origin/main into a work branch needs no Merge setting.
             try:
-                current, default = branch_context()
-            except (OSError, ValueError):
+                current, default = branch_context(context_of(applied))
+            except (OSError, ValueError, UnicodeError):
                 return 'unknown'
             return 'allowed' if current and default and current not in {default, 'main', 'master', 'trunk'} else 'forbidden'
         if verb == 'add':
-            return classify_paths(tail[1:] if tail[:1] == ['--'] else tail)
+            return classify_paths(tail[1:] if tail[:1] == ['--'] else tail, applied.get('Roots', ()),
+                                  context_of(applied))
         if verb == 'commit':
             return 'allowed' if tail and options(tail, {'--amend', '--no-edit'}, {'-m', '--message'}, positional=False) == [] else 'unknown'
         query = {
@@ -696,7 +920,7 @@ def classify_argv(argv, applied, coordinator=None):
                     revision = r'(?:HEAD(?:[~^][0-9]*)?|[0-9a-f]{7,40}|origin/[A-Za-z0-9_./-]+)'
                     if re.fullmatch(revision + r'(?:\.\.\.?' + revision + r')?', operand):
                         continue
-                    if classify_paths([operand]) != 'allowed':
+                    if classify_paths([operand], applied.get('Roots', ()), context_of(applied)) != 'allowed':
                         return 'unknown'
                 return 'allowed'
         return 'unknown'
@@ -713,12 +937,23 @@ def classify_argv(argv, applied, coordinator=None):
             if '--delete-branch' in tail and not permits({'Recoverable deletion'}, applied):
                 return 'forbidden'  # row 3: the deletion is its own category beside Merge
             operands = options(tail, {'--squash', '--merge', '--rebase', '--delete-branch'}, {'--match-head-commit', '--repo', '-R'})
-            return 'allowed' if operands is not None and len(operands) == 1 and operands[0].isdigit() else 'unknown'
+            if operands is None or len(operands) != 1 or not operands[0].isdigit():
+                return 'unknown'
+            return target_check(tail, context_of(applied))  # the permission is this context's target, never another
         if group == 'pr' and verb in {'create', 'edit'}:
             if applied['Push and pull requests'] != 'yes':
                 return 'push-disabled'
             operands = options(tail, {'--draft', '--fill'}, {'--title', '-t', '--body', '-b', '--base', '-B', '--head', '-H', '--repo', '-R', '--add-label', '--remove-label'})
-            return 'allowed' if operands is not None and (not operands or len(operands) == 1 and operands[0].isdigit()) else 'unknown'
+            # Create takes no operand; edit names one pull request by number (never the current branch's).
+            expected = 0 if verb == 'create' else 1
+            if operands is None or len(operands) != expected or not all(o.isdigit() for o in operands):
+                return 'unknown'
+            context = context_of(applied)
+            if verb == 'create':
+                head = head_check(tail, context)
+                if head != 'allowed':
+                    return head
+            return target_check(tail, context)
         queries = {'pr': {'view', 'checks', 'list', 'status', 'diff'}, 'issue': {'view', 'list', 'status'},
                    'repo': {'view'}, 'run': {'view', 'list'}}
         if verb in queries.get(group, set()):
@@ -732,6 +967,8 @@ def check(folder, args):
     current = now()
     code, lease, applied = lease_guard(folder, current)
     if code is None:
+        # The lease hash covers the user section only; the repository's project values are read on every check.
+        applied = effective(applied, os.getcwd())
         if args.argv_json is not None:
             try:
                 argv = json.loads(args.argv_json)
@@ -740,7 +977,7 @@ def check(folder, args):
             code = classify_argv(argv, applied, args.coordinator)
         else:
             argv = None
-            code = classify_paths(args.paths)
+            code = classify_paths(args.paths, applied['Roots'], context_of(applied))
         if code == 'allowed':
             counters = lease['counters']
             counters['actions'] += 1
@@ -749,6 +986,17 @@ def check(folder, args):
                 counters['runs'] += 1
             save_lease(folder, lease)
     print(json.dumps({'tier': 1 if code == 'allowed' else 3, 'code': code}, separators=(',', ':')))
+
+
+def show_effective(folder):
+    """Read-only: the five values `check` would apply in this working directory now, for advisory consumers (Task
+    choice, Trusted authors). Reserves nothing and changes no counter; prints no path."""
+    code, _, applied = lease_guard(folder, now())
+    result = effective(applied if applied is not None else settings(), os.getcwd())
+    context = result[CONTEXT]
+    print(json.dumps({'lease': code or 'live', 'repository': context.repository, 'state': context.state,
+                      'target': context.target, 'values': {name: result[name] for name in OFF}},
+                     separators=(',', ':')))
 
 
 def safe_note(note):
@@ -942,6 +1190,7 @@ def main(argv=None):
     begin = sub.add_parser('start', allow_abbrev=False)
     begin.add_argument('--hours')
     sub.add_parser('stop', allow_abbrev=False)
+    sub.add_parser('effective', allow_abbrev=False)
     inspect = sub.add_parser('check', allow_abbrev=False)
     group = inspect.add_mutually_exclusive_group(required=True)
     group.add_argument('--argv-json')
@@ -965,6 +1214,8 @@ def main(argv=None):
                 stop(folder)
             elif args.command == 'check':
                 check(folder, args)
+            elif args.command == 'effective':
+                show_effective(folder)
             elif args.command == 'review':
                 review(folder, args)
             elif args.command == 'packet-check':
