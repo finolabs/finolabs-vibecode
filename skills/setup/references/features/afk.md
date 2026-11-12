@@ -72,9 +72,10 @@ Ask: "In this repository, may the agents push their branches and open pull reque
 Ask: "In this repository, whose pull requests may the agents check out and test?" Use my user setting / Your own account and autopilot's branches (`trusted-authors`: own).
 Ask: "Which other top-level folders hold this repository's code?" Use my user setting (none) or names such as packages (`roots`, at most 16, no leading dot); same path rules as src, protected paths stay protected.
 Ask: "In this repository, may the agents merge pull requests and local branches while a lease is live?" Use my user setting / Yes / No (`merge`); ask it last; yes is your own decision.
-If every answer is Use my user setting, write nothing. Else preview: `python3 -I <this skill folder>/scripts/project_progress.py settings --set 'autopilot=<JSON of the answered keys>' --dry-run`; show the object, then ask:
+The answers become one object; a "Use my user setting" answer leaves its key out. Preview it (script-enforced: apply needs the preview's token): when at least one answer sets a value, `python3 -I <this skill folder>/scripts/project_progress.py settings --set 'autopilot=<JSON of the answered keys>' --dry-run`, which replaces the whole earlier object; when every answer is Use my user setting, `python3 -I <this skill folder>/scripts/project_progress.py settings --clear autopilot --dry-run`, which removes an earlier object and keeps every other project setting. A preview that refuses (no validated repository, or settings that need setup again) changes nothing; report it. When the preview's action is `none`, say nothing changes and stop. Otherwise show the repository (main checkout, worktree, code), the GitHub repository its approval binds (`target`), the action (`replace` or `remove`), the object and the effective value of each key, then ask:
 "Save these away settings for this repository?"
-Yes: Run the same command without --dry-run; it writes the `autopilot` object to the repository's settings file and approves its digest.
-No: Leave the repository's settings unchanged.
-Undo: Run `project_progress.py settings --clear autopilot` here to return to your user settings.
-Choices: "Yes, save them for this repository" / "No, keep my user settings here".
+Yes: Run the same command with `--expect <token>` from the preview instead of `--dry-run`; it replaces or removes the `autopilot` object in the repository's settings file and approves the new digest and origin. If it refuses because the repository, its settings or its origin changed since the preview, preview again and ask again.
+No: Keep this repository's current away settings, whatever they are.
+Undo: Repeat `/setup add afk` here and choose Use my user setting for every key to return to your user settings.
+Choices: "Yes, save them for this repository" / "No, keep the current settings".
+Pull request commands then name the repository explicitly (`--repo github.com/OWNER/NAME`, and `--head <branch>` to create one); a changed origin turns this repository's away permissions off until you save them again.
