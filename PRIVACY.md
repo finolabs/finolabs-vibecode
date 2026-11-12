@@ -55,7 +55,8 @@ per repository for every agent to read.
 
 `project_progress.py settings --set <key>=<value>`, `settings --clear <key>` and `label --set <label>`,
 run inside a repository, write that file (folders 0700, file 0600, atomic, under a file lock) and record
-its SHA-256 and the time in `<data root>/state/settings-approved/<repository code>.json`; when the file
+its SHA-256, the time and the SHA-256 of the main checkout path (never the path itself) in
+`<data root>/state/settings-approved/<repository code>.json`; when the file
 holds an `autopilot` object, that record also keeps the GitHub repository name of the checkout's origin
 (`github.com/<owner>/<name>`, or null) the object was approved for, read from the repository's own Git
 config. `ledger` and `tasks` require recorded metrics consent. The script splits `--set` on the first `=`

@@ -11,7 +11,9 @@ approved in the private state folder, so a branch cannot raise `parallel` or red
 approval record reads as unset; an approved file that is now missing, invalid, unsafe or changed is broken, which
 capacity and ledger readers report as unknown (`settings_state`) and writers refuse to change. The approval of an
 `autopilot` object also records the GitHub repository origin named when it was approved (`target`); a reader treats
-a different origin as broken. Nothing is repaired on read; `reset_settings` discards every setting to recover. Makes
+a different origin as broken. Every approval record also carries the full SHA-256 of its main checkout root
+(`identity`): the eight-character code only names the record's file, so a record bound to another checkout reads as
+broken, and an `autopilot` object whose record carries no binding grants nothing (`bound`). Nothing is repaired on read; `reset_settings` discards every setting to recover. Makes
 no network call and runs nothing.
 """
 from contextlib import contextmanager
@@ -262,8 +264,14 @@ def layout(root):
         return own
 
 
+def identity_digest(main):
+    """The full SHA-256 of a main checkout root: what an approval record is bound to and checked against on read."""
+    return hashlib.sha256(str(main).encode('utf-8')).hexdigest()
+
+
 def code_of(main):
-    return hashlib.sha256(str(main).encode('utf-8')).hexdigest()[:8]
+    """The eight-character display and file-name code of a main checkout root; it indexes, never authorizes."""
+    return identity_digest(main)[:8]
 
 
 def repository_code(root):
@@ -402,15 +410,18 @@ def render_settings(values):
 
 
 def read_record(code):
-    """This repository's approval record `{sha256, approved[, target]}`; FileNotFoundError when none, ValueError when
-    invalid. `target` is the GitHub repository (`github.com/<owner>/<name>`, or null) its `autopilot` object is bound
-    to."""
+    """The approval record filed under a code, `{sha256, approved[, target][, identity]}`; FileNotFoundError when
+    none, ValueError when invalid. `target` is the GitHub repository (`github.com/<owner>/<name>`, or null) its
+    `autopilot` object is bound to; `identity` is the `identity_digest` of the main checkout it was approved for,
+    absent only in a record written before that binding."""
     if not isinstance(code, str) or not CODE.fullmatch(code):
         raise ValueError('invalid code')
     with dr.data_folder(SETTINGS_APPROVED, private=True) as folder:
         record = json.loads(dr.read_file(folder, code + '.json', 4096), object_pairs_hook=_object)
-    if (not isinstance(record, dict) or set(record) - {'target'} != {'sha256', 'approved'}
+    if (not isinstance(record, dict) or set(record) - {'target', 'identity'} != {'sha256', 'approved'}
             or not isinstance(record['sha256'], str) or not DIGEST.fullmatch(record['sha256'])
+            or 'identity' in record and not (isinstance(record['identity'], str)
+                                             and DIGEST.fullmatch(record['identity']))
             or type(record['approved']) is not int or record['approved'] < 0
             or record.get('target') is not None and not (isinstance(record['target'], str)
                                                          and TARGET.fullmatch(record['target']))):
@@ -435,6 +446,8 @@ def _read_state(main):
         return 'unset', {}, None, None
     except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
         return 'broken', {}, None, None
+    if record.get('identity', identity_digest(main)) != identity_digest(main):
+        return 'broken', {}, None, None  # another checkout's record filed under a colliding code
     try:
         with project_folder(main) as folder:
             raw = read_project_file(folder, SETTINGS_FILE, SETTINGS_LIMIT)
@@ -466,6 +479,12 @@ def settings_state(root):
 def autopilot_binding(ident):
     """(state, values, approved digest, approval record) of a validated identity's settings, for authorization."""
     return _read_state(ident.main)
+
+
+def bound(record, ident):
+    """True when an approval record carries this validated identity's full main checkout digest; an `autopilot`
+    object grants nothing without it."""
+    return isinstance(record, dict) and record.get('identity') == identity_digest(ident.main)
 
 
 def preview_token(ident, state, prior, target, value):
@@ -523,10 +542,11 @@ def write_setting(root, key, value, ident=None, expect=None):
             if expect is not None and expect != preview_token(ident, state, prior, target, value):
                 raise ValueError('the shown preview is stale')
             binding = {'target': target}
-            same = (record or {}).get('target', ...) == target or 'autopilot' not in values
+            same = (record or {}).get('target', ...) == target and bound(record, ident) or 'autopilot' not in values
         else:
             binding = {'target': record['target']} if record and 'target' in record else {}
             same = True
+        binding['identity'] = identity_digest(main)
         values = dict(values)
         if values.get(key) == value and same:
             return False

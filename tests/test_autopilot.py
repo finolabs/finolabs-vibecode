@@ -1762,6 +1762,81 @@ class PolicyContextTest(AutopilotBase):
                 self.assertEqual(self.effective()['values'], STRICT)
                 self.assertEqual(self.check_code(MERGE), 'merge-disabled')
 
+    # Part 5: one identity and one base for every grant
+
+    def local_repo(self, path):
+        """A checkout with local Git metadata, a work branch, a feature branch and no origin."""
+        (path / '.git/refs/heads').mkdir(parents=True)
+        (path / '.git/refs/remotes/origin').mkdir(parents=True)
+        (path / '.git/HEAD').write_text('ref: refs/heads/topic\n')
+        (path / '.git/refs/heads/feature').write_text('a' * 40 + '\n')
+        (path / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/main\n')
+        (path / '.git/config').write_text('[core]\n\trepositoryformatversion = 0\n\tbare = false\n')
+        return path
+
+    def colliding_pair(self):
+        """Two distinct synthetic checkout paths whose eight-character repository codes are equal."""
+        seen = {}
+        for index in range(1 << 22):
+            path = str(self.home / ('collision-%d' % index))
+            code = self.store.code_of(path)
+            if code in seen:
+                return Path(seen[code]), Path(path)
+            seen[code] = path
+        self.fail('no colliding pair')
+
+    def test_a_colliding_repository_code_never_borrows_another_checkouts_approval(self):
+        self.start(NO + MANY)
+        first, second = map(self.local_repo, self.colliding_pair())
+        self.assertNotEqual(first, second)
+        self.assertEqual(self.store.code_of(first), self.store.code_of(second))
+        local = ['git', 'merge', 'refs/heads/feature']
+        self.cwd = second
+        self.assertEqual(self.check_code(local), 'merge-disabled')
+        self.project({'merge': 'yes', 'roots': ['packages']}, root=first)
+        self.cwd = first
+        self.assertEqual(self.effective()['state'], 'project')
+        self.assertEqual(self.check_code(local), 'allowed')
+        # Only the settings bytes are copied: no approval was issued for the second checkout.
+        copied = self.settings_file(second)
+        copied.parent.mkdir(parents=True, mode=0o700)
+        copied.write_bytes(self.settings_file(first).read_bytes())
+        copied.chmod(0o600)
+        (second / 'packages').mkdir()
+        self.cwd = second
+        view = self.effective()
+        self.assertNotEqual(view['state'], 'project')
+        self.assertEqual((view['values']['Merge'], view['values']['Roots']), ('no', []))
+        self.assertEqual(self.check_code(local), 'merge-disabled')
+        self.check(paths=['packages/app.py'], tier=3, code='unknown')
+
+    def test_an_approval_without_this_checkouts_full_identity_grants_nothing(self):
+        self.start(NO + MANY)
+        wide = {'merge': 'yes', 'push-and-pull-requests': 'yes'}
+        self.project(wide)
+        self.assertEqual(json.loads(self.approval().read_text())['identity'],
+                         hashlib.sha256(str(self.repo).encode()).hexdigest())
+        for name, change in (('missing', lambda record: record.pop('identity')),
+                             ('another checkout', lambda record: record.update(identity='0' * 64))):
+            with self.subTest(binding=name):
+                self.store.reset_settings(self.repo)
+                self.project(wide)
+                self.assertEqual(set(self.codes().values()), {'allowed'})
+                record = json.loads(self.approval().read_text())
+                change(record)
+                self.approval().write_text(json.dumps(record))
+                self.assertEqual(self.effective()['values'], STRICT)
+                self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'push-disabled',
+                                                'edit': 'push-disabled', 'push': 'push-disabled'})
+        # Approving again binds the record to this checkout, even when the value is unchanged.
+        self.store.reset_settings(self.repo)
+        self.project(wide)
+        record = json.loads(self.approval().read_text())
+        record.pop('identity')
+        self.approval().write_text(json.dumps(record))
+        self.project(wide)
+        self.assertEqual(set(self.codes().values()), {'allowed'})
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -134,7 +134,8 @@ def autopilot_preview(cwd, value):
     if state == 'broken':
         raise store.SettingsNeedSetup('project settings need setup again')
     current, target = values.get('autopilot'), store.origin_target(ident)
-    if desired == current and (current is None or (record or {}).get('target', ...) == target):
+    if desired == current and (current is None or (record or {}).get('target', ...) == target
+                               and store.bound(record, ident)):
         action = 'none'
     else:
         action = 'remove' if desired is None else 'replace'

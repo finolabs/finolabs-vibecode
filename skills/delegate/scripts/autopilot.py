@@ -20,7 +20,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and whose effective destination (origin's single pushurl, else its url) is the verified target, and merge origin/main into a work branch of a found repository (the synchronization exemption) are Tier 1 | classify_argv, branch_context |
 | A local branch merge ([--no-ff] [--no-edit], refs/heads/<b> or an unambiguous bare name that exists only as a branch) is Tier 1 only into a named non-default branch with effective Merge=yes | local_merge, local_branch |
 | One identity per check (found, absent or unknown; a rejected linked worktree is unknown) feeds settings, branch and remote reads | project_store.identity, effective, Context |
-| The five project values start strict; a positively absent approval gives user values; an approved valid `autopilot` object whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding |
+| The five project values start strict; a positively absent approval gives user values; an approved valid `autopilot` object whose record carries this checkout's full identity digest and whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding, project_store.bound |
 | PR merge/create/edit need exactly one `--repo github.com/OWNER/NAME` equal to the verified target; create needs one validated `--head`; implicit targets are Tier 3 | target_check, head_check, project_store.origin_target |
 | `effective` prints the same context read-only for the advisory Task choice and Trusted authors | show_effective |
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
@@ -320,9 +320,11 @@ def effective(applied, cwd):
 
     Starts from the strict vector and leaves it only once each prerequisite holds: a validated identity
     (`project_store.identity`), then either a positively absent approval (user values, no extra roots) or approved
-    settings whose `autopilot` object is valid and whose recorded origin binding equals the origin read now (explicit
-    project values replace user values, omitted keys inherit). Unknown identity, an unreadable approval, a digest
-    mismatch, invalid settings, a changed origin or any error keeps the whole strict vector. Positively no repository
+    settings whose `autopilot` object is valid, whose approval record carries this identity's full main checkout
+    digest (`project_store.bound`; the short code only names the file) and whose recorded origin binding equals the
+    origin read now (explicit project values replace user values, omitted keys inherit). Unknown identity, an
+    unreadable or unbound approval, a digest mismatch, invalid settings, a changed origin or any error keeps the whole
+    strict vector. Positively no repository
     keeps the user values with no context to act on, so no repository mutation qualifies. Read on every check, never
     stored in the lease.
     """
@@ -338,7 +340,8 @@ def effective(applied, cwd):
         if state == 'unset' or state == 'approved' and 'autopilot' not in values:
             return {**applied, 'Roots': [], CONTEXT: Context('found', ident, 'user', target)}
         project = values.get('autopilot') if state == 'approved' else None
-        if not store.valid_autopilot(project) or 'target' not in record or record['target'] != target:
+        if (not store.valid_autopilot(project) or 'target' not in record or record['target'] != target
+                or not store.bound(record, ident)):
             return {**strict, CONTEXT: Context('found', ident, 'strict', None)}
         result = dict(applied)
         for key, name in PROJECT_KEYS.items():

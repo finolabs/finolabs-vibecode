@@ -78,7 +78,10 @@ floor and the stop/decide categories stay user scope only, because one lease cov
   digest of `project_store.py` like every project setting: the writer, lock and approval are the same; it needs no
   metrics consent because it records no usage data. Its approval record also holds `target`, the GitHub repository
   (`github.com/<owner>/<name>`, or null) of origin when it was approved; writing any other key carries that binding
-  forward unchanged.
+  forward unchanged. Every approval record also holds `identity`, the full SHA-256 of the main checkout root it was
+  approved for, and a reader compares it with the identity it resolved: the eight-character repository code only
+  names the record's file, so two checkouts whose codes collide never share an approval (the other checkout's record
+  reads as broken). A record without `identity` grants no `autopilot` object; approving the object again binds it.
 - Identity: one resolver, `project_store.identity`, gives every authorization reader the same answer: found (checkout
   root, main checkout root, worktree Git folder, common Git folder), positively absent, or unknown. It uses the
   reciprocal-worktree rules of `git_metadata.checkout_dirs`: the working directory and every parent are checked with
@@ -96,8 +99,8 @@ floor and the stop/decide categories stay user scope only, because one lease cov
   | State | Five project-scoped values | Verified target |
   | --- | --- | --- |
   | Found; approval positively absent, or approved settings without an `autopilot` object | User values, no extra roots | origin now |
-  | Found; approved, valid `autopilot` object whose recorded `target` equals origin now | Explicit project values replace user values; omitted keys inherit | origin now |
-  | Found; unreadable approval, digest mismatch, missing or unsafe file, invalid settings, no recorded `target`, or origin changed since approval | Strict vector | none |
+  | Found; approved, valid `autopilot` object whose record holds this identity and whose recorded `target` equals origin now | Explicit project values replace user values; omitted keys inherit | origin now |
+  | Found; unreadable approval, a record bound to another identity or to none, digest mismatch, missing or unsafe file, invalid settings, no recorded `target`, or origin changed since approval | Strict vector | none |
   | Unknown identity, or any error while building the context | Strict vector | none |
   | Positively no repository | User values, no extra roots | none: no repository mutation qualifies |
 
