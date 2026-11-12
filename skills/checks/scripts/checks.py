@@ -3,6 +3,7 @@
 
 Usage, from inside the repository:
   checks.py run [--changed] [--base <ref>]   run the stored list in order, stop at the first failure
+  checks.py run --dispatch <ledger id>       the same whole run; a pass writes that dispatch's verification receipt
   checks.py show                             print the stored list and the local-receipt mode
   checks.py usage --from <runs.json> [--files-from <paths.json>] [--limit-minutes N]
                                              summarise CI runs and minutes from files; no network, no process
@@ -18,6 +19,9 @@ the repository's local-receipt mode is on, a passing run of the whole list on a 
 move writes a receipt (repository code, head, list digest) in the private state folder. One whole-list run per
 repository at a time: it holds a private lock file beside the receipt from before the removal until the receipt is
 written or declined, and a second one refuses. `--changed` neither writes nor removes a receipt and takes no lock.
+`--dispatch <id>` (never with `--changed`, whatever the local-receipt mode) first removes that dispatch's earlier
+verification receipt, then, when the whole list passed on a clean tree whose head and list did not move, writes the
+record.py verification receipt for this checkout and head that `ledger.py finish --outcome accepted` requires.
 It edits no file of the
 repository and makes no network call. Exits: 0 passed, 1 a check failed, 2 refused or unknown, 3 invalid list or malformed
 usage input.
@@ -40,6 +44,8 @@ import select_tests
 HEAVY = Path(__file__).resolve().parent / 'heavy_run.py'
 MODULE = re.compile(r'tests\.test_[A-Za-z0-9_]{1,100}')
 DEFAULT_BASE = 'origin/main'
+DISPATCH = re.compile(r'd[0-9]{8}-[0-9]{6}-[0-9a-f]{4}')  # the ids `ledger.py start` prints
+VERIFICATION = 'state/verification'  # where record.py keeps the receipts `ledger.py finish` reads
 
 
 class Refused(Exception):
@@ -194,8 +200,30 @@ def narrow(checks, base, root):
     return plan, skipped
 
 
-def run(changed, base):
+def remove_verification(dispatch):
+    """Remove the dispatch's verification receipt, if any, in one unlink; a missing receipt is fine."""
+    import data_root as dr
+    with dr.data_folder(VERIFICATION, create=True, private=True) as folder:
+        try:
+            os.unlink(dispatch + '.json', dir_fd=folder)
+        except FileNotFoundError:
+            pass
+
+
+def write_verification(dispatch, start_head, root):
+    """The receipt `ledger.py finish --outcome accepted` reads: this checkout, this head, the whole list passed."""
+    import record
+    record.write_verification(dispatch, start_head, 'passed', 'passed', [], root)
+
+
+def run(changed, base, dispatch=None):
     root, code = repository()
+    if dispatch and not changed:
+        # Drop the dispatch's earlier receipt before any early return, so a changed or missing list leaves none.
+        try:
+            remove_verification(dispatch)
+        except (OSError, ValueError):
+            raise Refused('the earlier verification receipt could not be removed; nothing was run') from None
     checks, reason = cl.checks_for(code, root=root)
     if reason == cl.CHANGED:
         print(f'Repository {code}: no checks (the check file {reason}); nothing was run. To use it, {cl.AGAIN}.',
@@ -211,15 +239,15 @@ def run(changed, base):
     # old receipt is removed and the first heavy_run launch, released after the new receipt is written or declined.
     lock = full_run_lock(code)
     try:
-        return run_list(root, code, checks, changed, base)
+        return run_list(root, code, checks, changed, base, dispatch)
     finally:
         os.close(lock)
 
 
-def run_list(root, code, checks, changed, base):
+def run_list(root, code, checks, changed, base, dispatch=None):
     digest = cl.list_digest(checks)
     mode = cl.receipt_mode(code, root=root)
-    start_head, start_clean = (head(root), clean(root)) if mode and not changed else (None, False)
+    start_head, start_clean = (head(root), clean(root)) if (mode or dispatch) and not changed else (None, False)
     if changed:
         plan, skipped = narrow(checks, base, root)
     else:
@@ -229,6 +257,11 @@ def run_list(root, code, checks, changed, base):
             cl.remove_receipt(code)
         except (OSError, ValueError):
             raise Refused('the earlier local receipt could not be removed; nothing was run') from None
+        if dispatch:
+            try:
+                remove_verification(dispatch)
+            except (OSError, ValueError):
+                raise Refused('the earlier verification receipt could not be removed; nothing was run') from None
     for name, why in skipped:
         print(f'skipped {name}: {why}')
     for name, argv in plan:
@@ -238,9 +271,11 @@ def run_list(root, code, checks, changed, base):
             print(f'check {name} failed with exit code {result}; later checks were not run.', flush=True)
             if mode:
                 print('no local receipt: a check failed')
+            if dispatch:
+                print('no verification receipt: a check failed')
             return 1
     print(f'{len(plan)} checks passed' + (f', {len(skipped)} skipped' if skipped else '') + '.')
-    if not mode:
+    if not mode and not dispatch:
         return 0
     if changed:
         print('no local receipt: a --changed run covers only part of the list')
@@ -251,9 +286,25 @@ def run_list(root, code, checks, changed, base):
         why = 'the working tree is not clean'
     elif start_head is None or end_head != start_head:
         why = 'the head moved during the run'
-    elif reason or cl.list_digest(current) != digest or not cl.receipt_mode(code, root=root):
+    elif reason or cl.list_digest(current) != digest:
         why = 'the check list or its mode changed during the run'
     else:
+        why = None
+    if dispatch:
+        if why:
+            print('no verification receipt: ' + why)
+        else:
+            try:
+                write_verification(dispatch, start_head, root)
+                print(f'verification receipt written for {dispatch} at {start_head[:12]}: the whole approved list '
+                      'passed in this checkout.')
+            except (ImportError, OSError, ValueError, TypeError, subprocess.SubprocessError):
+                print('no verification receipt: the receipt could not be written for this checkout and head')
+    if not mode:
+        return 0
+    if why is None and not cl.receipt_mode(code, root=root):
+        why = 'the check list or its mode changed during the run'
+    if why is None:
         try:
             cl.write_receipt(code, start_head, digest)
         except (OSError, ValueError):
@@ -421,6 +472,7 @@ def main(argv=None):
     runner = commands.add_parser('run')
     runner.add_argument('--changed', action='store_true')
     runner.add_argument('--base', default=DEFAULT_BASE)
+    runner.add_argument('--dispatch', help='ledger dispatch id: a passing whole run writes its verification receipt')
     commands.add_parser('show')
     counter = commands.add_parser('usage')
     counter.add_argument('--from', dest='source', required=True)
@@ -440,7 +492,12 @@ def main(argv=None):
             return show()
         if args.base != DEFAULT_BASE and not args.changed:
             raise Refused('--base needs --changed')
-        return run(args.changed, args.base)
+        if args.dispatch is not None:
+            if args.changed:
+                raise Refused('--dispatch needs a run of the whole list, not --changed')
+            if not DISPATCH.fullmatch(args.dispatch):
+                raise Refused('invalid dispatch id')
+        return run(args.changed, args.base, args.dispatch)
     except Refused as error:
         print(f'checks: refused: {error}', file=sys.stderr)
         return 2

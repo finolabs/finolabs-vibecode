@@ -264,9 +264,12 @@ def finish_locked(args, status):
                      "reason_id": hashlib.sha256(args.reason.encode()).hexdigest()}
         else:
             try:
-                from record import checkout_identity, current_head, read_verification
+                from record import checkout_identity, current_head, git, read_verification
                 receipt = read_verification(args.id)
                 identity = checkout_identity(args.checkout)
+                # The tracked tree must still be what passed: an edit after the run changes nothing in HEAD.
+                if git(args.checkout, "status", "--porcelain", "--untracked-files=no"):
+                    raise ValueError("checkout changed since the receipt")
                 if (starts[args.id].get("checkout_id") != identity or receipt["checkout_id"] != identity
                         or receipt["head"] != current_head(args.checkout)
                         or (args.head is not None and receipt["head"] != args.head)
@@ -312,16 +315,34 @@ SAFE_ID = re.compile(r"[A-Za-z0-9-]{1,40}")  # the ids `start` writes; anything 
 EXIT_LINE = re.compile(rb"exit=(-?[0-9]{1,3})")
 
 
-def past_budget(start, current):
-    """Age in minutes when the record is past a positive budget, else None (inside it, or no usable budget)."""
+STALE_FLOOR = 24 * 60  # minutes: by default nothing younger than a day is stale
+MAX_HOURS = 8760
+
+
+def stale_hours(value):
+    """A whole number of hours from 1 to 8760 for --older-than-hours."""
+    if not re.fullmatch(r"[0-9]{1,4}", value) or not 1 <= int(value) <= MAX_HOURS:
+        raise argparse.ArgumentTypeError("a whole number of hours from 1 to 8760")
+    return int(value)
+
+
+def past_threshold(start, current, hours=None):
+    """Age in minutes when the record is stale, else None.
+
+    By default stale means past twice a positive budget and at least 24 hours (24 hours without a usable budget);
+    `hours` replaces that threshold, but a record still inside a positive budget is never stale."""
     budget = start.get("budget_min")
     if type(budget) is not int or budget <= 0:
-        return None
+        budget = None
+    if hours is None:
+        limit = max(2 * budget, STALE_FLOOR) if budget else STALE_FLOOR
+    else:
+        limit = max(hours * 60, budget or 0)
     try:
         age = (current - datetime.fromisoformat(start["ts"])).total_seconds() / 60
     except (TypeError, ValueError):
         return None
-    return age if age > budget else None
+    return age if age > limit else None
 
 
 def log_facts(ident, current):
@@ -358,8 +379,14 @@ def log_facts(ident, current):
     return (max(0.0, current.timestamp() - info.st_mtime) / 60, int(codes[-1][1]) if codes else None)
 
 
-def stale_rows():
-    """Open records past their budget: (id, age, budget, log description, outcome or None, note)."""
+def stale_label(start):
+    """The record's short `<project>: <task>` label, on one line and capped; the ledger holds labels only."""
+    text = " ".join(f"{start.get('project')}: {start.get('task')}".split())
+    return text if len(text) <= 80 else text[:77] + "..."
+
+
+def stale_rows(hours=None):
+    """Stale open records: (id, age, budget, label, log description, outcome or None, note)."""
     import log_scan
     starts, finishes = load()
     current = datetime.now(timezone.utc)
@@ -367,18 +394,19 @@ def stale_rows():
     for ident, start in starts.items():
         if ident in finishes:
             continue
-        age = past_budget(start, current)
+        age = past_threshold(start, current, hours)
         if age is None:
             continue
+        budget, label = start.get("budget_min"), stale_label(start)
         if not isinstance(ident, str) or not SAFE_ID.fullmatch(ident):
-            rows.append(("(invalid id)", age, start["budget_min"], "unchecked", None, ""))
+            rows.append(("(invalid id)", age, budget, label, "unchecked", None, ""))
             continue
         try:
             facts = log_facts(ident, current)
         except log_scan.FolderRefused:
             raise
         except (OSError, ValueError):
-            rows.append((ident, age, start["budget_min"], "refused", None, ""))
+            rows.append((ident, age, budget, label, "refused", None, ""))
             continue
         if facts is None:
             described, outcome, reason = "none", "cancelled", "no log"
@@ -388,8 +416,8 @@ def stale_rows():
             described = f"age {log_age:.0f} min, {exit_text}"
             outcome = "error" if code not in (None, 0) else "stalled"
             reason = "log " + exit_text
-        rows.append((ident, age, start["budget_min"], described, outcome,
-                     f"closed late by ledger stale: past budget, {reason}"))
+        rows.append((ident, age, budget, label, described, outcome,
+                     f"closed late by ledger stale: past the stale threshold, {reason}"))
     return rows
 
 
@@ -397,21 +425,22 @@ def plan_digest(plan):
     return hashlib.sha256(json.dumps(plan, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
 
-def stale_preview():
-    rows = stale_rows()
+def stale_preview(hours=None):
+    rows = stale_rows(hours)
     if not rows:
-        print("ledger: no open records past their budget")
+        print("ledger: no open records past the stale threshold")
         return
     root = dr.consent_root()
     if root is None:
         raise ValueError("invalid data root")
-    for ident, age, budget, described, outcome, _ in rows:
-        print(f"{ident}  age {age:.0f}/{budget} min  log: {described}  -> {outcome or 'left open'}")
-    records = [{"id": ident, "outcome": outcome, "note": note} for ident, _, _, _, outcome, note in rows if outcome]
+    for ident, age, budget, label, described, outcome, _ in rows:
+        shown = budget if type(budget) is int and budget > 0 else "?"
+        print(f"{ident}  age {age:.0f}/{shown} min  {label}  log: {described}  -> {outcome or 'left open'}")
+    records = [{"id": row[0], "outcome": row[5], "note": row[6]} for row in rows if row[5]]
     if not records:
         print("ledger: nothing to close; ledger unchanged")
         return
-    plan = {"root": str(root), "created": time.time(), "records": records}
+    plan = {"root": str(root), "created": time.time(), "older_than_hours": hours, "records": records}
     value = plan_digest(plan)
     with dr.data_folder(STALE_STATE, create=True, private=True) as state:
         fcntl.flock(state, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -423,9 +452,12 @@ def stale_preview():
 
 
 def valid_plan(plan):
-    if not isinstance(plan, dict) or set(plan) != {"root", "created", "records"}:
+    if not isinstance(plan, dict) or set(plan) != {"root", "created", "older_than_hours", "records"}:
         return False
     if type(plan["created"]) not in (int, float) or not isinstance(plan["records"], list):
+        return False
+    hours = plan["older_than_hours"]
+    if hours is not None and (type(hours) is not int or not 1 <= hours <= MAX_HOURS):
         return False
     return all(isinstance(r, dict) and set(r) == {"id", "outcome", "note"} and isinstance(r["id"], str)
                and SAFE_ID.fullmatch(r["id"]) and r["outcome"] in STALE_OUTCOMES
@@ -461,8 +493,9 @@ def stale_close(value):
             closed = 0
             for item in plan["records"]:
                 start = starts.get(item["id"])
-                if start is None or item["id"] in finishes or past_budget(start, current) is None:
-                    continue  # finished since the preview, or never past its budget: never closed here
+                if (start is None or item["id"] in finishes
+                        or past_threshold(start, current, plan["older_than_hours"]) is None):
+                    continue  # finished since the preview, or not past the preview's threshold: never closed here
                 append({"event": "finish", "id": item["id"], "ts": now(), "outcome": item["outcome"],
                         "rework_rounds": 0, "tests": "not-run", "note": item["note"], "log_scan": "not_scanned"})
                 closed += 1
@@ -477,11 +510,13 @@ def cmd_stale(args):
         sys.exit("ledger: --close needs --digest from the preview")
     if args.digest is not None and not args.close:
         sys.exit("ledger: --digest only goes with --close")
+    if args.close and args.older_than_hours is not None:
+        sys.exit("ledger: --older-than-hours goes with the preview; --close uses the preview's threshold")
     try:
         if args.close:
             stale_close(args.digest)
         else:
-            stale_preview()
+            stale_preview(args.older_than_hours)
     except log_scan.FolderRefused as error:
         sys.exit("ledger: " + str(error))
     except FileNotFoundError:
@@ -686,7 +721,10 @@ def build_parser():
     o.add_argument("--project", help="only dispatches of this exact project name")
     o.set_defaults(func=cmd_open)
 
-    st = sub.add_parser("stale", help="preview open records past their budget; close them with --close --digest")
+    st = sub.add_parser("stale", help="preview open records past twice their budget and 24 hours; close them "
+                                      "with --close --digest")
+    st.add_argument("--older-than-hours", type=stale_hours,
+                    help="preview threshold in hours (1 to 8760); a record inside its budget is never stale")
     st.add_argument("--close", action="store_true", help="close the records the preview listed")
     st.add_argument("--digest", help="at least 12 hex digits of the preview digest")
     st.set_defaults(func=cmd_stale)
