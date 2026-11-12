@@ -23,6 +23,8 @@ BREAKS = [
      "older name `fnl-handoff`; use `handoff`"),
     ("skills/fnl-pause/SKILL.md", "Dependency: `pause`.", "Dependency: `gtg`.",
      "skills/fnl-pause: alias does not load `pause`"),
+    ("skills/fnl-ask/SKILL.md", "Dependency: `help`.", "Dependency: `ask`.",
+     "skills/fnl-ask: alias does not load `help`"),
     ("skills/delegate/references/host-template.md", '"When an agent coordinates"', '"When coordinating"',
      '`agents.md` has no section "When coordinating"'),
     ("skills/session-hygiene/SKILL.md", "(references/titles.md)", "(references/title.md)",

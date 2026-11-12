@@ -6,5 +6,5 @@ disable-model-invocation: true
 
 # fnl-verification
 
-Dependency: `verification`. Load and follow it with the same arguments (advisory (agent judgment)).
+Dependency: `checks`. Load and follow it with the same arguments (advisory (agent judgment)).
 This alias holds no rules of its own.

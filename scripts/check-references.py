@@ -277,6 +277,14 @@ def check_mode_copies(root, problems):
             problems.append(f"{relative}: mode.py copies differ or are missing")
 
 
+def alias_target(root, name):
+    """The skill a thin alias named `name` loads, or None when `name` is not an alias."""
+    path = root / "skills" / name / "SKILL.md"
+    text = path.read_text() if path.is_file() else ""
+    found = re.search(r"Dependency: `([a-z][a-z-]*)`\.", text)
+    return found.group(1) if found and "This alias holds no rules of its own." in text else None
+
+
 def check_skill_inventory(root, problems):
     every = {p.name for p in (root / "skills").iterdir() if p.is_dir()}
     # An fnl- folder is the older name of a renamed skill: a thin alias, not listed in the tables.
@@ -286,10 +294,12 @@ def check_skill_inventory(root, problems):
         target = name[len("fnl-"):]
         if target not in folders:
             problems.append(f"skills/{name}: alias of missing skill {target}")
+        # An alias of a short name (`fnl-ask` of `ask`) loads that name's own final target directly.
+        final = alias_target(root, target) or target
         if sorted(p.name for p in alias.iterdir()) != ["SKILL.md"]:
             problems.append(f"skills/{name}: an alias folder holds only SKILL.md")
-        elif f"Dependency: `{target}`." not in (alias / "SKILL.md").read_text():
-            problems.append(f"skills/{name}: alias does not load `{target}`")
+        elif f"Dependency: `{final}`." not in (alias / "SKILL.md").read_text():
+            problems.append(f"skills/{name}: alias does not load `{final}`")
     for relative in ("README.md", "skills/help/references/map.md"):
         path = root / relative
         # The canonical skill table lives under Skills, before the next heading.
