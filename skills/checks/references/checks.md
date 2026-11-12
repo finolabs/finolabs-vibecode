@@ -11,6 +11,7 @@ Run from inside the repository:
 - `python3 -I <this skill folder>/scripts/checks.py run` runs every check in the stored order and stops at the first failure, printing the failed check's name and exit code. The checks' own output streams through.
 - `checks.py run --changed [--base <ref>]` (default base `origin/main`) keeps only the checks the change since the base touches. Only `python -m unittest discover -s tests` (optionally with `-p test_*.py`, which the stored-list guard cannot hold today) is narrowed, and only while the `tests` folder is flat: no sub-folder holds a Python file, and no top-level file matches discovery's default `test*.py` without matching `test_*.py`. A bare `python -m unittest` or `discover` starts at the repository root and recurses into packages, so it runs whole.
   Such a check keeps its discovery and only changes the pattern: one `discover -s tests --pattern <file>` command per test module `select_tests.py` names, so imports behave as in the whole run. It is skipped when no module names a changed file. Every other unittest form (another directory or pattern, an explicit module list, any other option) and every other check (pytest, npm, make and the rest) runs whole. With no changed file every check is skipped. Each skipped check is printed with its reason. An unknown base refuses.
+- `checks.py run --dispatch <ledger dispatch id>` runs the whole list as `run` does and writes the receipt that `delegate`'s `ledger.py finish --outcome accepted` requires; see "The dispatch receipt". It refuses with `--changed` or an id that is not of the form `ledger.py start` prints.
 - `checks.py show` prints the stored list and whether the local-receipt mode is on.
 - `checks.py usage --from <file>` summarises hosted CI runs and minutes from a file; see [ci.md](ci.md).
 
@@ -40,8 +41,19 @@ While any hosted check is queued or running it never consults the receipt and sa
 It accepts the receipt only when the repository code, the pull request head and the current list digest all match, and then reports `checks: local receipt (<head>)`. In every other case it blocks as before.
 The receipt is self-reported. It proves only that this machine ran the list at that head and gives a reviewer nothing they can check, so the mode is meant for a repository one person works on.
 
+## The dispatch receipt
+
+Accepting a delegated run in the ledger needs a verification receipt for the dispatch, its checkout and that checkout's current head. Run `checks.py run --dispatch <id>` in the task checkout (a linked worktree uses the main checkout's list and gets a receipt for the worktree itself). Before the first check it removes any earlier verification receipt of that dispatch (refusing, with nothing run, when it cannot), so the latest run decides. It writes the receipt through this skill's `record.py`, independent of the local-receipt mode, only when all of these hold (script-enforced):
+
+- every check of the whole stored list passed;
+- the working tree was clean before and after the run;
+- the head was the same before and after, and is the head the receipt names;
+- the stored list did not change during the run.
+
+The receipt holds the dispatch id, the head, a hash of the checkout path, `tests: passed`, `mechanical: passed` and no criteria; no command, path or output. In every other case the output says `no verification receipt:` and why. The receipt proves only that this machine ran the approved list at that head in that checkout; it checks neither the brief's scope nor its acceptance criteria, which stay with `verify_claim.py` or the coordinator.
+
 ## The pre-push hook
 
 `checks_setup.py hook install` installs a git `pre-push` hook that runs `checks.py run --changed` before every push. Like every setup step, it previews first, then needs a digest and a yes. It is the user's own git hook, not a plugin hook, and `git push --no-verify` skips it. See `setup`'s checks feature for the preview, the backup, the refusal when `core.hooksPath` is set, and the removal.
 
-Enforcers: `checks.py` for the order, the stop on failure, `--changed` and the receipt conditions; `heavy_run.py` for serialising; `merge_check.py` for matching the receipt; the user's git hook for running before a push. Running `checks.py run` before a push when no hook is installed is agent judgment (advisory).
+Enforcers: `checks.py` for the order, the stop on failure, `--changed` and the conditions of both receipts; `heavy_run.py` for serialising; `merge_check.py` for matching the receipt; the user's git hook for running before a push. Running `checks.py run` before a push when no hook is installed is agent judgment (advisory).
