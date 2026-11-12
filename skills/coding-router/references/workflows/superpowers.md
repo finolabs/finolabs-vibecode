@@ -10,7 +10,7 @@ The pack's skills are installed for this repository, or the repository's or the 
 
 | Step in none.md | Carried by |
 | --- | --- |
-| 1. Clarify | `brainstorming` when the intent or design is open. Stop when the criteria are checkable. Run that skill's interview, but put its questions through the host's native question tool (advisory, agent judgment). |
+| 1. Clarify | `brainstorming` when the intent or design is open; `shape` when `brainstorming` is missing. Stop when the criteria are checkable. Run that skill's interview, but put its questions through the host's native question tool (advisory, agent judgment). |
 | 2. Plan | `writing-plans`, then `executing-plans`; `subagent-driven-development` only within the router's child budget and `delegate`. |
 | 3–4. Red, smallest change | `test-driven-development`; `systematic-debugging` for a bug, failing CI or unexplained behavior. |
 | 5. Prove | `checks`; `verification-before-completion` supplies the habit, not the acceptance. |
