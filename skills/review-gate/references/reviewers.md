@@ -15,7 +15,7 @@ Call the selected family directly (advisory, agent judgment); no reviewer routes
 - **Antigravity**: a headless `agy` run that reads the diff; `/diff` and the review pane are human tools, not AI review engines.
 - **Companions**: `code-review` from [mattpocock/skills](https://github.com/mattpocock/skills) for standards and spec; `security-audit` from [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) when `security-review-gate` triggers. Name that requirement in the brief. A cloud multi-agent review needs the owner's approval before code leaves the checkout.
 
-Delegated runs follow `delegate` for ledger, brief and hard cap (advisory, agent judgment). A missing engine is disclosed; apply the packet and findings rules directly and tell the caller that `setup` guides installing it. Re-review resumes the same review run (advisory, agent judgment).
+Delegated runs follow `delegate` for ledger, brief and hard cap (advisory, agent judgment). Close a review dispatch once its marker is posted: `ledger.py finish <id> --outcome accepted --head <reviewed head> --review-url <comment URL>`, which needs no verify receipt (script-enforced); a review that did not post gets another outcome. A missing engine is disclosed; apply the packet and findings rules directly and tell the caller that `setup` guides installing it. Re-review resumes the same review run (advisory, agent judgment).
 
 ## Who reviews
 
