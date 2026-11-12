@@ -81,15 +81,32 @@ floor and the stop/decide categories stay user scope only, because one lease cov
   and re-reads its values on every call. Unset (no approval record, so an unapproved or branch-supplied file) gives no
   project values; broken (an approved file now changed, missing, unsafe or invalid, or any error while reading it)
   turns the five keys off: Task choice listed, push and merge no, no extra roots, which is never wider than user scope.
+  The repository is found by checking the working directory and every parent, with no depth bound; a search that
+  fails (an unreadable or unsafe folder on the way, a `.git` that is neither a file nor a folder, or more than 512
+  levels) is the same strict state, never unset, so a deep or unreadable folder cannot restore the user values. Only
+  a search that checked every parent and found no `.git` is "no repository", which gives the user values.
+- Target repository: `gh pr merge`, `gh pr create` and `gh pr edit` are Tier 1 only when they act on the checkout's
+  own `origin`, read from the checkout's Git config as local metadata. With `--repo`/`-R` (separate or `=` form, once)
+  the named `[github.com/]OWNER/NAME` must equal origin's, compared case-insensitively; another repository is Tier 3
+  (`forbidden`), so a project or user grant never reaches another repository through argv. Without it, origin must
+  be the only remote, because gh then picks among the remotes itself. Origin must be a plain github.com URL (https,
+  `ssh://git@` or `git@host:`); no config, a per-worktree config, an include, a URL rewrite (`insteadOf`), a line the
+  small reader does not recognize, or a second origin URL is Tier 3 (`unknown`). Advisory limit: global and system
+  Git config and gh's own environment overrides (such as a default repository or host set outside the checkout) are
+  not read; this check binds argv and the checkout's own config only.
 - The lease hash covers the user section only, so a project change does not end a live lease.
 - Roots: a path under a listed root is a known path with the same rules as the built-in roots (extension list, no
   `..`, no absolute path, no symlink on the way, a single file) and never one the protected rules match. A top-level
   `README.md`, `CHANGELOG.md` or `CONTRIBUTING.md` is a known path in every repository.
 - Local merges: `git merge [--no-ff] [--no-edit] refs/heads/<branch>` or `git merge [--no-ff] [--no-edit] <branch>` of
   an existing local branch is Tier 1 only when the effective Merge is yes and the current branch is a named branch other
-  than the default branch (and not `main`, `master` or `trunk`); into the default branch it is Tier 3. A bare name that
-  also names a tag or another ref, or reads like a commit id, is ambiguous and Tier 3. `git merge origin/main` is
-  unchanged.
+  than the default branch (and not `main`, `master` or `trunk`); into the default branch it is Tier 3. The current
+  branch is resolved through its symbolic refs (at most five, no cycle) to the branch Git would update: if any name on
+  the way is the default branch, `main`, `master` or `trunk` (compared case-insensitively), it is that branch; a chain
+  that leaves `refs/heads`, loops or runs long is a detached head and Tier 3. The same resolution applies to
+  `git merge origin/main` and a push of `HEAD`. A bare name that also names a tag or another ref, or reads like a
+  commit id (4 to 64 hexadecimal digits in any case), is ambiguous and Tier 3; `refs/heads/<name>` stays available.
+  `git merge origin/main` is otherwise unchanged.
 - Delegated runs: a `claude -p` or `codex exec` run outside the `delegate_env.py` form, a shell function such as a
   declared `claude<suffix>` command, and a write-capable run inside that form stay Tier 3; only the read-only advisor
   form of `away-decisions.md` is Tier 1. A write-capable delegated run needs a hard-cap wrapper and a tool grant the
