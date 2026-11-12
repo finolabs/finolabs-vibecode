@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Run one heavy command at a time on this machine.
 
-`run [--label L] [--pass-env NAME]... -- <command...>` waits for the machine-wide lock and for load and free
-memory to allow a start, then runs the command and returns its exit status. `status` reports whether the lock is
+`run [--label L] [--pass-env NAME]... -- <command...>` waits for the machine-wide lock and for load and memory to
+allow a start, then runs the command and returns its exit status. On macOS memory must also have been healthy for the
+whole window before the start: the kernel's pressure state normal at every poll, and swap-outs averaging at most the
+limit; an unreadable pressure or swap-out reading waits (it never counts as a pass). Nothing is checked after the
+start: a running job is never stopped for crossing a limit. `status` reports whether the lock is
 held. Exit 64: detached work refused; 75: the wait cap ended; 77: a pause is active (`pause.py`, checked at entry and
 again with the lock held; a missing, invalid or expired marker or any error means not paused); 78: the lock location
 is unsafe; 124: stopped after the maximum run time; 2: bad usage.
@@ -46,9 +49,14 @@ PID_LIMIT = 2 ** 31
 PS_LIMIT = 256 * 1024
 PGREP_PIDS = 200
 EXE = re.compile(r'[A-Za-z0-9._+-]{1,40}')
-DEFAULTS = {'load': 12.0, 'memory_gb': 3.0, 'wait_minutes': 40.0, 'max_minutes': 90.0}
-BOUNDS = {'load': (1.0, 256.0), 'memory_gb': (0.0, 64.0), 'wait_minutes': (1.0, 720.0), 'max_minutes': (1.0, 720.0)}
-KEYS = {'Load limit': 'load', 'Memory minimum GB': 'memory_gb', 'Wait cap minutes': 'wait_minutes', 'Max job minutes': 'max_minutes'}
+DEFAULTS = {'load': 12.0, 'memory_gb': 4.0, 'wait_minutes': 40.0, 'max_minutes': 90.0, 'memory_window_seconds': 60.0,
+            'swapout_mb_per_second': 5.0}
+BOUNDS = {'load': (1.0, 256.0), 'memory_gb': (0.0, 64.0), 'wait_minutes': (1.0, 720.0), 'max_minutes': (1.0, 720.0),
+          'memory_window_seconds': (1.0, 900.0), 'swapout_mb_per_second': (0.0, 10000.0)}
+KEYS = {'Load limit': 'load', 'Memory minimum GB': 'memory_gb', 'Wait cap minutes': 'wait_minutes', 'Max job minutes': 'max_minutes',
+        'Memory window seconds': 'memory_window_seconds', 'Swap-out limit MB per second': 'swapout_mb_per_second'}
+KEY_LINE = re.compile(r'(?:- )?(%s): (\d{1,6}(?:\.\d{1,3})?)' % '|'.join(re.escape(key) for key in KEYS))
+PRESSURE_LEVELS = {1: 'normal', 2: 'warning', 4: 'critical'}
 TOOLS = {'vm_stat': '/usr/bin/vm_stat', 'ps': '/bin/ps', 'memory_pressure': '/usr/bin/memory_pressure',
          'sysctl': '/usr/sbin/sysctl', 'pgrep': '/usr/bin/pgrep'}
 
@@ -69,7 +77,7 @@ def limits():
         if line.startswith('## '):
             in_section = line.strip() == '## Heavy jobs'
             continue
-        match = re.fullmatch(r'(?:- )?(Load limit|Memory minimum GB|Wait cap minutes|Max job minutes): (\d{1,6}(?:\.\d{1,3})?)', line.strip())
+        match = KEY_LINE.fullmatch(line.strip())
         if in_section and match:
             key, value = KEYS[match[1]], float(match[2])
             if BOUNDS[key][0] <= value <= BOUNDS[key][1]:
@@ -130,6 +138,80 @@ def vm_stat_free_gb():
         total = pages('Pages free') + max(pages('Pages inactive') + pages('Pages speculative'), pages('File-backed pages', False))
         return total * page / 2 ** 30
     except (OSError, subprocess.SubprocessError, TypeError, ValueError, IndexError):
+        return None
+
+
+def memory_gates_available():
+    """True where the kernel readings the pressure and swap-out gates use exist (macOS)."""
+    return sys.platform == 'darwin'
+
+
+def read_pressure():
+    """'normal', 'warning' or 'critical' from `kern.memorystatus_vm_pressure_level`; None when unreadable."""
+    try:
+        done = subprocess.run([TOOLS['sysctl'], '-n', 'kern.memorystatus_vm_pressure_level'], env=run_env.environment(),
+                              capture_output=True, timeout=5, text=True)
+        if done.returncode != 0:
+            return None
+        return PRESSURE_LEVELS.get(int(done.stdout.strip()))
+    except (OSError, subprocess.SubprocessError, TypeError, ValueError):
+        return None
+
+
+def read_swapout_bytes():
+    """Bytes swapped out since boot, from the `vm_stat` Swapouts count and page size; None when unreadable."""
+    try:
+        done = subprocess.run([TOOLS['vm_stat']], env=run_env.environment(), capture_output=True, timeout=5, text=True)
+        if done.returncode != 0:
+            return None
+        page = int(re.search(r'page size of (\d+) bytes', done.stdout)[1])
+        return int(re.search(r'^Swapouts:\s+(\d+)', done.stdout, re.MULTILINE)[1]) * page
+    except (OSError, subprocess.SubprocessError, TypeError, ValueError):
+        return None
+
+
+class MemoryWatch:
+    """Pressure and swap-out readings across the polls of one wait.
+
+    A start is allowed only when the pressure has read normal at every poll for the whole window and swap-outs since
+    the newest earlier sample at least a window old average at most the limit. Each poll is stamped when both readings
+    have completed. Any unreadable reading, or a swap-out count lower than the last one, waits and ends the run of
+    normal readings, so the window starts again; one sample alone is never a rate."""
+
+    def __init__(self):
+        self.normal_since = None
+        self.samples = []
+
+    def reason(self, config, now=None):
+        if not memory_gates_available():
+            return None
+        window, limit = config['memory_window_seconds'], config['swapout_mb_per_second']
+        level, swapped = read_pressure(), read_swapout_bytes()
+        now = time.monotonic() if now is None else now
+        if swapped is not None and self.samples and swapped < self.samples[-1][1]:
+            self.samples, self.normal_since = [], None
+        if level != 'normal' or swapped is None:
+            self.normal_since = None
+        elif self.normal_since is None:
+            self.normal_since = now
+        if swapped is not None:
+            self.samples.append((now, swapped))
+        if level is None:
+            return 'memory pressure is unreadable'
+        if level != 'normal':
+            return 'memory pressure is %s' % level
+        if swapped is None:
+            return 'the swap-out count is unreadable'
+        if now - self.normal_since < window:
+            return 'memory pressure has been normal for %d of %d s' % (now - self.normal_since, window)
+        old = [sample for sample in self.samples if now - sample[0] >= window and sample[0] < now]
+        if not old:
+            return 'the swap-out rate needs %d s of readings' % window
+        since, base = old[-1]
+        self.samples = self.samples[self.samples.index(old[-1]):]
+        rate = (swapped - base) / (now - since) / 2 ** 20
+        if rate > limit:
+            return 'swap-out %.1f MB/s over %d s is above %.1f MB/s' % (rate, now - since, limit)
         return None
 
 
@@ -380,15 +462,16 @@ def record(fd, data):
         os.pwrite(fd, raw, 0)
 
 
-def resource_wait(config):
-    """None when a start is allowed, else the reason to keep waiting."""
+def resource_wait(config, watch=None):
+    """None when a start is allowed, else the reason to keep waiting. The memory watch is read at every call."""
+    memory = watch.reason(config) if watch is not None else None
     load = read_load()
     if load is not None and load >= config['load']:
         return 'load %.1f is at or above %.1f' % (load, config['load'])
     free = read_free_gb()
     if free is not None and free < config['memory_gb']:
         return 'free memory %.1f GB is below %.1f GB' % (free, config['memory_gb'])
-    return None
+    return memory
 
 
 # Option arities of the supported CLIs: (long options taking a value, short letters taking a value, boolean options).
@@ -550,8 +633,9 @@ def run(args):
         return 78
     deadline = time.monotonic() + wait
     reason = None
+    watch = MemoryWatch()
     while True:
-        reason = resource_wait(config)
+        reason = resource_wait(config, watch)
         if reason is None:
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -663,6 +747,8 @@ def status():
     load, free = read_load(), read_free_gb()
     print('load: %s' % ('unknown' if load is None else '%.1f' % load))
     print('memory: %s' % ('unknown' if free is None else '%.1f GB free' % free))
+    if memory_gates_available():
+        print('pressure: %s' % (read_pressure() or 'unknown'))
     return 0
 
 
