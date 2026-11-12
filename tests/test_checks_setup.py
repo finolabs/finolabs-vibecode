@@ -15,7 +15,7 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / 'skills/fnl-setup/scripts'
+SCRIPTS = ROOT / 'skills/setup/scripts'
 SCRIPT = SCRIPTS / 'checks_setup.py'
 PREFIX = b'# Host\n\n## Other\nkeep \xc3\xa9\n'
 
@@ -375,25 +375,21 @@ class ChecksSetupTest(unittest.TestCase):
 
     # Project settings beside the section
 
-    def test_project_settings_read_and_write_unchanged_beside_checks(self):
+    def test_project_settings_live_beside_the_check_file_and_never_in_host(self):
         code_ = self.code()
-        settings = '## Project settings\n\n- %s parallel: 4\n\n' % code_
-        self.host.write_text(PREFIX.decode() + '\n' + settings + '## Checks\n\n- %s: test = ["make","test"]\n' % code_)
-        text = self.host.read_text()
-        self.assertIn(settings, text)
-        for path in (SCRIPTS / 'project_progress.py', ROOT / 'scripts/project_progress.py',
-                     ROOT / 'skills/fnl-status/scripts/project_progress.py',
-                     ROOT / 'skills/fnl-delegate/scripts/parallel_slots.py', ROOT / 'scripts/parallel_slots.py',
-                     ROOT / 'skills/fnl-status/scripts/parallel_slots.py'):
-            with self.subTest(path=str(path.relative_to(ROOT))):
-                reader = load('settings_reader_' + path.parent.parent.name + path.stem, path)
-                self.assertEqual(reader.project_settings(text), {(code_, 'parallel'): '4'})
+        self.host.write_text(PREFIX.decode() + '\n## Checks\n\n- %s: test = ["make","test"]\n' % code_)
+        before = self.host.read_bytes()
         writer = load('project_progress_writer', SCRIPTS / 'project_progress.py')
         self.assertTrue(writer.set_setting(self.repo, 'parallel', '5'))
-        after = self.host.read_text()
-        self.assertIn('## Project settings\n\n- %s parallel: 5\n' % code_, after)
+        self.assertEqual(self.host.read_bytes(), before)
+        self.assertEqual(json.loads((self.repo / '.finolabs/vibecode/settings.json').read_text()),
+                         {'version': 1, 'parallel': '5'})
         self.assertEqual(self.module().checks_for(code_, root=self.repo), ([], 'no entry'))
-        self.assertEqual(writer.project_settings(after), {(code_, 'parallel'): '5'})
+        for path in (ROOT / 'skills/delegate/scripts/parallel_slots.py', ROOT / 'scripts/parallel_slots.py',
+                     ROOT / 'skills/status/scripts/parallel_slots.py'):
+            with self.subTest(path=str(path.relative_to(ROOT))):
+                reader = load('settings_reader_' + path.parent.parent.name + path.stem, path)
+                self.assertEqual(reader.parse_config('', self.repo)['limit'], 5)
 
     def test_no_command_but_fixed_git_queries_and_no_network(self):
         source = SCRIPT.read_text()
@@ -568,6 +564,32 @@ class ProjectFileTest(unittest.TestCase):
         self.assertEqual(reader.checks_for(self.code(linked), root=linked), ([('test', ['make', 'test'])], None))
         self.assertEqual(reader.checks_for(self.code(), root=self.repo), ([('test', ['make', 'test'])], None))
         self.assertIn('.finolabs/', (self.repo / '.git/info/exclude').read_text())
+
+    def test_a_checkout_with_borrowed_metadata_cannot_read_another_repositorys_list(self):
+        self.save('test=["make","test"]')
+        reader = self.reader()
+        real = self.linked_worktree()
+        intruders = []
+        # A back-pointer that names another checkout.
+        mismatched = self.repo.parent / 'mismatched'
+        mismatched.mkdir()
+        (mismatched / '.git').write_text('gitdir: %s\n' % (self.repo / '.git/worktrees/side'))
+        intruders.append(mismatched)
+        # A metadata folder of its own whose commondir names this repository.
+        fake = self.repo.parent / 'fake'
+        gitdir = fake / 'meta/worktrees/x'
+        gitdir.mkdir(parents=True)
+        (gitdir / 'commondir').write_text(str(self.repo / '.git') + '\n')
+        (gitdir / 'gitdir').write_text(str(fake / '.git') + '\n')
+        (fake / '.git').write_text('gitdir: %s\n' % gitdir)
+        intruders.append(fake)
+        self.assertEqual(reader.checks_for(self.code(real), root=real), ([('test', ['make', 'test'])], None))
+        for intruder in intruders:
+            with self.subTest(intruder=intruder.name):
+                self.assertNotEqual(self.code(intruder), self.code())
+                self.assertEqual(reader.layout(intruder)[0], intruder)
+                self.assertEqual(reader.checks_for(self.code(intruder), root=intruder), ([], 'no entry'))
+                self.assertEqual(reader.checks_for(self.code(), root=intruder), ([], 'invalid code'))
 
     def test_the_file_wins_over_a_legacy_entry(self):
         code_ = self.code()
@@ -760,7 +782,7 @@ class ProjectFileTest(unittest.TestCase):
                 self.assertIsNone(reader.receipt_status(code_, 'a' * 40, root=self.repo))
                 code, out, _ = self.cli('show', '--root', str(self.repo))
                 self.assertIn(CHANGED, out)
-                self.assertIn('/fnl-setup add checks', out)
+                self.assertIn('/setup add checks', out)
 
     def test_receipt_mode_lives_in_the_file(self):
         self.save('test=["make","test"]')
@@ -825,7 +847,7 @@ class HookTest(unittest.TestCase):
         self.git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-qm', 'Start')
         self.hooks = Path(self.git('rev-parse', '--absolute-git-dir')).resolve() / 'hooks'
         self.hooks.mkdir(exist_ok=True)
-        self.script = base / 'plugin/skills/fnl-checks/scripts/checks.py'
+        self.script = base / 'plugin/skills/checks/scripts/checks.py'
         self.script.parent.mkdir(parents=True)
         self.script.write_text('# synthetic\n')
 

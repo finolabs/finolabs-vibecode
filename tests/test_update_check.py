@@ -84,7 +84,7 @@ class UpdateTest(unittest.TestCase):
                 self.assertEqual(bool(result), output)
                 self.assertLessEqual(len(result.splitlines()), 1)
                 if output:
-                    self.assertEqual(result, 'A newer finolabs-vibecode (%s) is available. Let the user know they can type /fnl-update (on Codex $fnl-update); do not update on your own.\n' % tag.removeprefix('v'))
+                    self.assertEqual(result, 'A newer finolabs-vibecode (%s) is available. Let the user know they can type /update (on Codex $update); do not update on your own.\n' % tag.removeprefix('v'))
         with mock.patch.object(u, 'installed_version', return_value='0.1.7'):
             self.cache('v0.1.7')
             self.assertEqual(self.call(), '')  # bootstrap release equals installed
@@ -273,8 +273,8 @@ class UpdateTest(unittest.TestCase):
 
     def test_standalone_skill_works_without_a_plugin_manifest(self):
         import shutil
-        scripts = self.folder / 'fnl-update/scripts'
-        shutil.copytree(ROOT / 'skills/fnl-update/scripts', scripts)
+        scripts = self.folder / 'update/scripts'
+        shutil.copytree(ROOT / 'skills/update/scripts', scripts)
         with mock.patch.object(subprocess, 'Popen', REAL_POPEN):
             result = subprocess.run([sys.executable, '-I', str(scripts / 'update_check.py'), 'status'],
                                     capture_output=True, timeout=3)
@@ -320,8 +320,8 @@ class UpdateTest(unittest.TestCase):
         self.assertIsNone(json.loads(result.stdout)['available'])
 
 
-ONBOARD_LINE = ('finolabs-vibecode %s has upgrade notes. Let the user know they can type /fnl-update '
-                '(on Codex $fnl-update) to see what is new and finish its setup; do not run it on your own.\n')
+ONBOARD_LINE = ('finolabs-vibecode %s has upgrade notes. Let the user know they can type /update '
+                '(on Codex $update) to see what is new and finish its setup; do not run it on your own.\n')
 EVIDENCE_URL = 'https://github.com/finolabs/finolabs-vibecode/releases/tag/'
 
 
@@ -354,7 +354,7 @@ class OnboardTest(unittest.TestCase):
                 if slug in ('done', 'open', 'na', 'odd', 'slow'):
                     item['check'] = [f'scripts/check_{slug}.py']
                 if slug == 'open':
-                    item['setup'] = '/fnl-setup add thing'
+                    item['setup'] = '/setup add thing'
                 items.append(item)
             versions.append({'version': release, 'items': items})
         self.notes_file.write_text(json.dumps({'versions': versions}))
@@ -382,7 +382,7 @@ class OnboardTest(unittest.TestCase):
             '- [unknown] 0.1.6/old: Synthetic item old.',
             '0.1.7',
             '- [done] 0.1.7/done: Synthetic item done.',
-            '- [open] 0.1.7/open: Synthetic item open. (setup: /fnl-setup add thing)',
+            '- [open] 0.1.7/open: Synthetic item open. (setup: /setup add thing)',
             '- [not applicable] 0.1.7/na: Synthetic item na.',
             '- [unknown] 0.1.7/odd: Synthetic item odd.',
             '- [unknown] 0.1.7/none: Synthetic item none.', '']))
@@ -567,12 +567,12 @@ class OnboardTest(unittest.TestCase):
         self.assertEqual(list(self.folder.iterdir()), [])
 
     def test_shipped_notes_resolve_from_both_copies(self):
-        for script in ['scripts/update_check.py', 'skills/fnl-update/scripts/update_check.py']:
+        for script in ['scripts/update_check.py', 'skills/update/scripts/update_check.py']:
             with self.subTest(script=script):
                 module_spec = importlib.util.spec_from_file_location('copy_' + script.replace('/', '_'), ROOT / script)
                 module = importlib.util.module_from_spec(module_spec)
                 module_spec.loader.exec_module(module)
-                self.assertEqual(module.notes_path(), ROOT / 'skills/fnl-update/references/upgrades.json')
+                self.assertEqual(module.notes_path(), ROOT / 'skills/update/references/upgrades.json')
                 self.assertEqual(module.plugin_root(), ROOT)
 
 

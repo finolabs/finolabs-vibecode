@@ -18,7 +18,7 @@ from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = ROOT / "skills/fnl-setup/scripts/checkup.py"
+SCRIPT = ROOT / "skills/setup/scripts/checkup.py"
 spec = importlib.util.spec_from_file_location("checkup", SCRIPT)
 checkup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checkup)
@@ -190,7 +190,7 @@ class CheckupTest(unittest.TestCase):
 
     def test_claude_config_dir_also_selects_the_instruction_file(self):
         other = self.home / ".claude-elsewhere"
-        self.write(other / "CLAUDE.md", "Use fnl-coding-router first.\n")
+        self.write(other / "CLAUDE.md", "Use coding-router first.\n")
         self.env["CLAUDE_CONFIG_DIR"] = str(other)
         row = next(r for r in self.data()["hosts"]["claude"] if r["check"] == "instructions")
         self.assertEqual(row["status"], "ok")
@@ -255,44 +255,63 @@ class CheckupTest(unittest.TestCase):
             f"| {name} | yes | fake | unverified | {date} |"
             for name in ("Claude Code", "Codex", "Antigravity")) + "\n"
 
-    def test_project_settings_invalid_deprecated_and_ledger_mismatch_never_show_values(self):
+    def ledger_entry(self, name):
+        """Set this repository's ledger name in its own approved settings file, as the setter does."""
+        import project_store as store
+        store.write_setting(self.repo, 'ledger', name)
+
+    def test_host_settings_are_never_read_and_ledger_mismatch_never_shows_values(self):
         host = self.home / '.finolabs/vibecode/host.md'
-        self.write(host, '## Project progress\n- Ledger project: PRIVATE alias\n- Task file: PRIVATE.md\n'
-                        '## Project settings\n- aaaaaaaa unknown: PRIVATE\n')
+        import project_progress as pp
+        code = pp.repository_code(self.repo)
+        self.write(host, '## Project progress\n- Ledger project: PRIVATE repo other\n- Task file: PRIVATE.md\n'
+                        '## Project settings\n- %s ledger: PRIVATE repo other\n- aaaaaaaa unknown: PRIVATE\n' % code)
         self.write(host.with_name('ledger.jsonl'), json.dumps(dict(event='start', project='PRIVATE repo other')) + '\n')
         output = self.run_check('--json')
         self.assertNotIn('PRIVATE', output)
         rows = json.loads(output)['setup']
-        self.assertTrue(any(r['check'] == 'project settings' and 'invalid' in r['reason'] for r in rows))
+        self.assertFalse(any(r['check'] in ('project settings', 'deprecated ledger', 'deprecated tasks') for r in rows))
         self.assertTrue(any(r['check'] == 'ledger-project mismatch' for r in rows))
-        for key in ('ledger', 'tasks'):
-            self.assertTrue(any('settings --set ' + key + '=<value>' in r['reason'] for r in rows))
-        import project_progress as pp
-        host.write_text('## Project progress\n- Ledger project: PRIVATE alias\n## Project settings\n- ' +
-                        pp.repository_code(self.repo) + ' ledger: PRIVATE repo other\n')
+        before = host.read_bytes()
+        self.ledger_entry('PRIVATE repo other')
+        self.assertEqual(host.read_bytes(), before)
         self.assertFalse(any(r['check'] == 'ledger-project mismatch' for r in self.data()['setup']))
 
     def test_ledger_mismatch_requires_similar_project_and_no_entry(self):
         host = self.home / '.finolabs/vibecode/host.md'
-        import project_progress as pp
-        code = pp.repository_code(self.repo)
+        import project_store as store
         for names, entry, expected in [
                 ([], None, False), (['unrelated'], None, False),
                 (['PRIVATE-REPO'], None, True), (['REPO'], None, True),
                 (['rep'], None, False), (['repo', 'PRIVATE-REPO'], None, False),
                 (['PRIVATE-REPO'], 'missing-alias', False)]:
             with self.subTest(names=names, entry=entry):
-                self.write(host, '## Project settings\n' +
-                           (f'- {code} ledger: {entry}\n' if entry else ''))
+                store.write_setting(self.repo, 'ledger', entry)
                 self.write(host.with_name('ledger.jsonl'), ''.join(
                     json.dumps(dict(event='start', project=name)) + '\n' for name in names))
                 rows = self.data()['setup']
                 self.assertEqual(any(r['check'] == 'ledger-project mismatch' for r in rows), expected)
         # Substring in the other direction also qualifies, with a four-character minimum.
+        store.write_setting(self.repo, 'ledger', None)
         self.repo = self.repo.rename(self.repo.with_name('private-repo-worktree'))
-        self.write(host, '## Project settings\n')
         self.write(host.with_name('ledger.jsonl'), json.dumps(dict(event='start', project='PRIVATE-REPO')) + '\n')
         self.assertTrue(any(r['check'] == 'ledger-project mismatch' for r in self.data()['setup']))
+
+    def test_broken_settings_report_setup_again_and_skip_the_folder_heuristic(self):
+        host = self.home / '.finolabs/vibecode/host.md'
+        import project_store as store
+        store.write_setting(self.repo, 'ledger', 'PRIVATE alias')
+        self.write(host.with_name('ledger.jsonl'), json.dumps(dict(event='start', project='PRIVATE-REPO')) + '\n')
+        self.assertFalse(any(r['check'] in ('ledger-project mismatch', 'project settings')
+                             for r in self.data()['setup']))
+        settings = self.repo / '.finolabs/vibecode/settings.json'
+        settings.write_bytes(settings.read_bytes() + b' ')
+        output = self.run_check('--json')
+        self.assertNotIn('PRIVATE', output)
+        rows = json.loads(output)['setup']
+        self.assertFalse(any(r['check'] == 'ledger-project mismatch' for r in rows))
+        found = [r for r in rows if r['check'] == 'project settings']
+        self.assertEqual(found, [checkup.item('project settings', 'unverified', 'project settings need setup again')])
 
     def test_invalid_progress_section_preserves_checkup_report(self):
         for text in ('## Project progress\n## Project progress\n',
@@ -364,8 +383,8 @@ class CheckupTest(unittest.TestCase):
         self.assertIn("Delegate environment", row["reason"])
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)))
         self.assertEqual(self.setup_item("host config")["status"], "ok")
-        template = (ROOT / "skills/fnl-delegate/references/host-template.md").read_text()
-        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Project labels", "Heavy jobs"})
+        template = (ROOT / "skills/delegate/references/host-template.md").read_text()
+        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Heavy jobs"})
         for heading in ("Agent roles", "Review posting", "Delegate environment"):
             with self.subTest(heading=heading):
                 config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS - {heading})))
@@ -404,10 +423,10 @@ class CheckupTest(unittest.TestCase):
         self.assertIn("assignments: matrix without consent; roles and judge unset", row["reason"])
 
     def test_template_structure_and_instruction_consent(self):
-        template = (ROOT / "skills/fnl-delegate/references/host-template.md").read_text()
+        template = (ROOT / "skills/delegate/references/host-template.md").read_text()
         headings = re.findall(r"^## (.+)$", template, re.M)
         expected = ['Delegation mode', 'Routing', 'Agents on this machine', 'Delegate environment',
-                    'Agent roles', 'Review posting', 'Quota probe', 'Project labels', 'Limits', 'Heavy jobs',
+                    'Agent roles', 'Review posting', 'Quota probe', 'Limits', 'Heavy jobs',
                     'Effort preference', 'Briefs folder', 'Coordinators and reach', 'Route judgment',
                     'Dispatch marker', 'Claude Code', 'Codex', 'Antigravity']
         self.assertEqual(headings, expected)
@@ -431,7 +450,7 @@ class CheckupTest(unittest.TestCase):
 
     def test_unverified_runtime_never_becomes_ok(self):
         self.install_claude()
-        self.write(self.home / ".claude/CLAUDE.md", "Start coding with fnl-coding-router.\n")
+        self.write(self.home / ".claude/CLAUDE.md", "Start coding with coding-router.\n")
         data = self.data()
         for rows in data["hosts"].values():
             for row in rows:
@@ -535,19 +554,19 @@ class CheckupTest(unittest.TestCase):
         legacy.unlink()
 
     def test_review_adoption_inside_the_generated_paragraph(self):
-        skill = (ROOT / "skills/fnl-setup/references/core.md").read_text()
+        skill = (ROOT / "skills/setup/references/core.md").read_text()
         paragraph = next(line for line in skill.splitlines() if line.startswith("This repository uses the finolabs-vibecode skills."))
         self.write(self.repo / "AGENTS.md", "## Agent skills\n\n" + paragraph + "\n")
         self.assertEqual(self.setup_item("review adoption")["status"], "ok")
 
     def test_repo_adoption_and_user_instruction_pointers(self):
         self.write(self.repo / "CLAUDE.md", "## Agent skills\n\n"
-                   "Pull requests follow `fnl-review-gate` \"Pull requests\".\n")
+                   "Pull requests follow `review-gate` \"Pull requests\".\n")
         self.assertEqual(self.setup_item("agent skills")["status"], "ok")
         self.assertEqual(self.setup_item("review adoption")["status"], "ok")
         custom = self.base / "custom-codex"
         self.env["CODEX_HOME"] = str(custom)
-        self.write(custom / "AGENTS.md", "Start coding work with fnl-coding-router.\n")
+        self.write(custom / "AGENTS.md", "Start coding work with coding-router.\n")
         self.assertEqual(self.data()["hosts"]["codex"][3]["status"], "ok")
 
     def test_symlinked_path_folder_is_unverified(self):
@@ -998,7 +1017,7 @@ class CheckupTest(unittest.TestCase):
         self.assertTrue(all(len(line) <= 300 for line in payload.splitlines()))
 
     def test_review_check_steps_are_sequential(self):
-        text = (ROOT / "skills/fnl-setup/references/check.md").read_text().split("## Settings")[0]
+        text = (ROOT / "skills/setup/references/check.md").read_text().split("## Settings")[0]
         self.assertEqual(re.findall(r"^(\d+)\. ", text, re.M), ["1", "2", "3", "4", "5"])
 
     def test_low_long_identifier_secret_is_filtered(self):

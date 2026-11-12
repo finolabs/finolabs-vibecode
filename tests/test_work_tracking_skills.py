@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def read(file='SKILL.md', skill='fnl-setup'):
+def read(file='SKILL.md', skill='setup'):
     return (ROOT / 'skills' / skill / file).read_text()
 
 
@@ -20,7 +20,7 @@ class WorkTrackingSkillsTests(unittest.TestCase):
 
     def test_every_feature_has_exactly_one_scope(self):
         text = read('references/menu.md')
-        expected = {'delegation': 'user', 'roles': 'user', 'quota': 'user', 'autopilot': 'user', 'metrics': 'user',
+        expected = {'delegation': 'user', 'roles': 'user', 'quota': 'user', 'afk': 'user', 'metrics': 'user',
                     'compaction': 'user', 'companions': 'user', 'project': 'project'}
         for name, scope in expected.items():
             row = next(line for line in text.splitlines() if line.startswith('| `%s` |' % name))
@@ -52,7 +52,7 @@ class WorkTrackingSkillsTests(unittest.TestCase):
         for phrase in ('metrics consent', 'project progress are on', 'separate question',
                        'neutral Yes and No', 'none preselected or marked recommended',
                        'only after its explicit yes', 'one argument', 'verbatim',
-                       'script validates', '- <code> ledger: <name>', '- <code> tasks: <relative path>',
+                       'script validates', '"ledger": "<name>"', '"tasks": "<relative path>"',
                        'project_progress.py settings --set ledger=<name>',
                        'project_progress.py settings --set tasks=<relative path>',
                        'separate checkbox file', 'work record', 'wins', 'Task file:', 'Ledger project:'):

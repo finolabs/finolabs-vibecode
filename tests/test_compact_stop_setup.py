@@ -17,7 +17,7 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / 'skills/fnl-setup/scripts/compact_stop_setup.py'
+SCRIPT = ROOT / 'skills/setup/scripts/compact_stop_setup.py'
 spec = importlib.util.spec_from_file_location('compact_stop_setup', SCRIPT)
 cs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cs)
@@ -59,7 +59,7 @@ class CompactStopSetupTest(unittest.TestCase):
         (self.plugin / 'scripts').mkdir()
         for name in ('metrics_hook.py', 'compact_stop_hook.py', 'data_root.py'):
             (self.plugin / 'scripts' / name).write_bytes((ROOT / 'scripts' / name).read_bytes())
-        patch = mock.patch.object(cs, '__file__', str(self.plugin / 'skills/fnl-setup/scripts/compact_stop_setup.py'))
+        patch = mock.patch.object(cs, '__file__', str(self.plugin / 'skills/setup/scripts/compact_stop_setup.py'))
         patch.start()
         self.addCleanup(patch.stop)
         self.plan = self.root / 'state/compact-stop-setup/preview.json'
@@ -74,7 +74,7 @@ class CompactStopSetupTest(unittest.TestCase):
         if git:
             (installed / '.git').mkdir()
         installed.chmod(mode)
-        patch = mock.patch.object(cs, '__file__', str(installed / 'skills/fnl-setup/scripts/compact_stop_setup.py'))
+        patch = mock.patch.object(cs, '__file__', str(installed / 'skills/setup/scripts/compact_stop_setup.py'))
         patch.start()
         self.addCleanup(patch.stop)
         return installed
@@ -102,7 +102,7 @@ class CompactStopSetupTest(unittest.TestCase):
         installed.parent.mkdir(parents=True)
         (self.plugin / '.git').mkdir()
         installed.symlink_to(self.plugin)
-        patch = mock.patch.object(cs, '__file__', str(installed / 'skills/fnl-setup/scripts/compact_stop_setup.py'))
+        patch = mock.patch.object(cs, '__file__', str(installed / 'skills/setup/scripts/compact_stop_setup.py'))
         patch.start()
         self.addCleanup(patch.stop)
         code, out, err = self.run_cli('preview', '--host', 'antigravity', '--limit', '50000')
@@ -345,13 +345,13 @@ class CompactStopSetupTest(unittest.TestCase):
         self.refuse('preview', '--remove')
 
     def test_plugin_root_check_and_quoted_command(self):
-        with mock.patch.object(cs, '__file__', str(self.home / 'skills/fnl-setup/scripts/compact_stop_setup.py')):
+        with mock.patch.object(cs, '__file__', str(self.home / 'skills/setup/scripts/compact_stop_setup.py')):
             self.refuse('preview', '--limit', '50000')
         self.assertEqual(shlex.split(cs.hook_command())[2],
                          str(self.plugin / 'scripts/compact_stop_hook.py'))
 
     def test_acceptance_3_installers_coexist_in_both_orders(self):
-        refresh = ROOT / 'skills/fnl-status/scripts/refresh.py'
+        refresh = ROOT / 'skills/status/scripts/refresh.py'
         def metrics(remove=False):
             result = subprocess.run([sys.executable, '-I', str(refresh), 'antigravity-hook', '--config', str(self.config), '--yes', *(['--remove'] if remove else [])], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -373,9 +373,9 @@ class CompactStopSetupTest(unittest.TestCase):
                 self.assertEqual(json.loads(self.config.read_text())[cs.GROUP], stop)
 
     def test_acceptance_4_docs_and_bundled_hooks_unchanged(self):
-        setup = (ROOT / 'skills/fnl-setup/SKILL.md').read_text()
-        interview = (ROOT / 'skills/fnl-setup/references/interview.md').read_text()
-        feature = (ROOT / 'skills/fnl-setup/references/features/compaction.md').read_text()
+        setup = (ROOT / 'skills/setup/SKILL.md').read_text()
+        interview = (ROOT / 'skills/setup/references/interview.md').read_text()
+        feature = (ROOT / 'skills/setup/references/features/compaction.md').read_text()
         self.assertIn('`compaction`', setup)
         self.assertIn('references/features/<feature>.md', setup)
         self.assertLess(feature.index('## Native threshold'), feature.index('## Antigravity stop'))
@@ -389,11 +389,11 @@ class CompactStopSetupTest(unittest.TestCase):
         self.assertIn('neutral Yes and No', interview)
         self.assertIn('set up', stop)
         self.assertNotIn('--config', feature)
-        delegate = (ROOT / 'skills/fnl-delegate/references/loop.md').read_text()
+        delegate = (ROOT / 'skills/delegate/references/loop.md').read_text()
         for text in ('agy -p', 'status: ERROR', 'context limit', 'not a model failure',
                      'The conversation is large. Run /compact, or start a fresh session with a short handover, then continue.'):
             self.assertIn(text, delegate)
-        for name, token in (('skills/fnl-session-hygiene/references/context-settings.md', 'Antigravity compaction stop'),
+        for name, token in (('skills/session-hygiene/references/context-settings.md', 'Antigravity compaction stop'),
                             ('PRIVACY.md', 'state/compact-stop/'), ('README.md', 'compaction-stop.md'),
                             ('CHANGELOG.md', 'opt-in Antigravity pre-invocation compaction stop'),
                             ('docs/specs/index.md', '(compaction-stop.md)')):

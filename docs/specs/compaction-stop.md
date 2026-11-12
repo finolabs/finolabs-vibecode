@@ -4,8 +4,8 @@ Status: implemented; local size-only hook and previewed installer; live user-lev
 
 Decision: 2026-11-06, owner: a second blocking hook, scoped by the second
 exception in `CLAUDE.md` (merged). This spec comes before any code and carries the
-`PRIVACY.md`, README and `fnl-setup` changes. Claude Code and Codex use host
-thresholds written by `fnl-setup` (`compaction-threshold.md`); no Antigravity threshold is documented through 1.5.3.
+`PRIVACY.md`, README and `setup` changes. Claude Code and Codex use host
+thresholds written by `setup` (`compaction-threshold.md`); no Antigravity threshold is documented through 1.5.3.
 
 ## Vendor contracts researched 07/11/2026 (Antigravity 1.5.3)
 
@@ -68,7 +68,7 @@ The hook never denies a tool call, a prompt, a session start or the user's own s
 never opens the transcript, and sends nothing anywhere. At most 200 mark files are
 kept (oldest by mtime removed on write, excluding the current conversation's mark, matching only names `^[0-9a-f]{16}\.json$` and checked with `lstat`).
 
-### 2. Installer `skills/fnl-setup/scripts/compact_stop_setup.py` (stdlib)
+### 2. Installer `skills/setup/scripts/compact_stop_setup.py` (stdlib)
 
 Pattern: `quota_setup.py` and `compact_setup.py` (stored private preview, digest,
 expiry 60 minutes, owner and mode checks, refusal of symlinks and git work trees for
@@ -97,18 +97,18 @@ the data root).
 
 ### 3. Skill and doc text
 
-`fnl-setup` gains one optional step after the compaction threshold step, only when
+`setup` gains one optional step after the compaction threshold step, only when
 Antigravity is present: a separate consent question (neutral Yes and No, none
 preselected, through the host's native question tool), the preview, then apply.
 Advisory (agent judgment) that the question is asked and the preview shown; the
-installer enforces digest, expiry and file safety. `fnl-session-hygiene` "Context
+installer enforces digest, expiry and file safety. `session-hygiene` "Context
 pressure" names the stop and its limits. `PRIVACY.md`: the section in `host.md`, the
 mark files (an integer per conversation, hashed key, local), nothing sent. README row.
 CHANGELOG `Unreleased`.
 
 ## Side effects to document
 
-A stop ends a delegated headless `agy -p` run with `status: ERROR` and the fixed message. `fnl-delegate`
+A stop ends a delegated headless `agy -p` run with `status: ERROR` and the fixed message. `delegate`
 says so, and a coordinator treats it as "context limit", not a model failure.
 
 ## Not in scope

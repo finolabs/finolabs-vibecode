@@ -1,4 +1,4 @@
-"""Tests for skills/fnl-status/scripts/refresh.py: the six metrics from a fixture store and ledger, and the files it writes."""
+"""Tests for skills/status/scripts/refresh.py: the six metrics from a fixture store and ledger, and the files it writes."""
 
 import importlib.util
 import json
@@ -16,9 +16,9 @@ from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
-REFRESH = ROOT / "skills/fnl-status/scripts/refresh.py"
-LEDGER = ROOT / "skills/fnl-delegate/scripts/ledger.py"
-PAGE = ROOT / "skills/fnl-status/assets/dashboard.html"
+REFRESH = ROOT / "skills/status/scripts/refresh.py"
+LEDGER = ROOT / "skills/delegate/scripts/ledger.py"
+PAGE = ROOT / "skills/status/assets/dashboard.html"
 X, Y = "aaaaaaaa", "bbbbbbbb"
 
 
@@ -33,6 +33,14 @@ class RefreshTest(unittest.TestCase):
         self.env = {"PATH": os.defpath, "HOME": str(self.home), "FNL_STATE_DIR": str(self.dir), "ORCHESTRATION_LEDGER": str(self.ledger)}
         self.env.pop("FNL_METRICS", None)
         self.at = datetime.now(timezone.utc)
+
+    def project_setting(self, repo, key, value):
+        """Write a repository's own settings file and its approval, as project_progress.py's setters do."""
+        spec = importlib.util.spec_from_file_location('project_store_refresh', ROOT / 'scripts/project_store.py')
+        store = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(store)
+        store.write_setting(repo, key, value)
+        return store
 
     def refresh(self, *args, check=True, cwd=None):
         result = subprocess.run([sys.executable, "-I", str(REFRESH), *args], capture_output=True, text=True, env=self.env,
@@ -79,9 +87,10 @@ class RefreshTest(unittest.TestCase):
 
     def test_pipeline_data_js_privacy_and_retained_metadata_from_real_shaped_documents(self):
         self.consent()
-        self.ledger.parent.joinpath('host.md').write_text('## Project progress\n- Ledger project: synthetic-alias\n')
+        self.ledger.parent.joinpath('host.md').write_text('# Host\n')
         repo = Path(self.tmp.name).resolve() / 'synthetic-folder'
         (repo / '.git').mkdir(parents=True)
+        self.project_setting(repo, 'ledger', 'synthetic-alias')
         docs = repo / 'docs/specs'
         docs.mkdir(parents=True)
         (docs / 'index.md').write_text('| Spec | Status |\n| --- | --- |\n'
@@ -146,8 +155,9 @@ class RefreshTest(unittest.TestCase):
             '## Goal and acceptance\n- [x] AC1 PRIVATE\n## Plan\nPRIVATE\n'
             '## Tasks\n- [x] T1 PRIVATE\n## Evidence\nPRIVATE command\n')
         code = __import__('hashlib').sha256(str(repo).encode()).hexdigest()[:8]
-        self.ledger.parent.joinpath('host.md').write_text('## Project settings\n- ' + code + ' ledger: PRIVATE alias\n'
-                                                       '- ' + code + ' tasks: PRIVATE.md\n')
+        self.ledger.parent.joinpath('host.md').write_text('# Host\n')
+        self.project_setting(repo, 'ledger', 'PRIVATE alias')
+        self.project_setting(repo, 'tasks', 'PRIVATE.md')
         self.write_events([self.event(0, 's', X, 'session_start', host='codex')])
         events_before = {path: path.read_bytes() for path in self.dir.glob('events-*.jsonl')}
         self.refresh('run', '--cwd', str(repo))
@@ -195,8 +205,8 @@ class RefreshTest(unittest.TestCase):
                 self.assertNotIn(os.fsdecode(path).split('/')[-1], ('CLAUDE.md', 'AGENTS.md'))
             return original(path, *args, **kwargs)
         with mock.patch('os.open', side_effect=guarded):
-            for path in (ROOT / 'scripts/project_progress.py', ROOT / 'skills/fnl-status/scripts/project_progress.py',
-                         ROOT / 'skills/fnl-setup/scripts/project_progress.py'):
+            for path in (ROOT / 'scripts/project_progress.py', ROOT / 'skills/status/scripts/project_progress.py',
+                         ROOT / 'skills/setup/scripts/project_progress.py'):
                 spec = importlib.util.spec_from_file_location('progress_guard', path)
                 pp = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(pp)
@@ -276,9 +286,9 @@ class RefreshTest(unittest.TestCase):
         self.ledger.parent.joinpath('host.md').write_text('# Host\n')
         self.refresh('run', '--cwd', str(repo))
         code = self.data()['progress']['current']
-        self.ledger.parent.joinpath('host.md').write_text('# Host\n\n## Project labels\n- ' + code + ': My project\n')
+        self.project_setting(repo, 'label', 'My project')
         self.write_events([self.event(12, 'session1', code, 'session_start', host='codex', dispatch=None, source='startup'),
-                           self.event(11, 'session1', code, 'skill', name='fnl-status'),
+                           self.event(11, 'session1', code, 'skill', name='status'),
                            self.event(30, 'session2', X, 'session_start', host='claude', dispatch=None, source='startup')])
         self.refresh('run', '--cwd', str(repo))
         progress = self.data()['progress']
@@ -292,7 +302,13 @@ class RefreshTest(unittest.TestCase):
         tampered = self.data()
         tampered['progress']['active'] = [{'repo': 'ffffffff', 'label': '<script>private', 'path': 'private'}]
         (self.dir / 'data.js').write_text('window.FNL_DATA = ' + json.dumps(tampered) + ';\n')
+        # Outside the repository its own label is unreachable and it was never registered: not shown.
         self.refresh('run', '--cwd', str(Path(self.tmp.name).resolve()))
+        self.assertEqual(self.data()['progress']['active'], [])
+        tampered = self.data()
+        tampered['progress']['active'] = [{'repo': 'ffffffff', 'label': '<script>private', 'path': 'private'}]
+        (self.dir / 'data.js').write_text('window.FNL_DATA = ' + json.dumps(tampered) + ';\n')
+        self.refresh('run', '--cwd', str(repo))
         rebuilt = self.data()['progress']
         self.assertEqual(rebuilt['active'], active)
         self.assertIn(code, rebuilt['repositories'])
@@ -331,13 +347,16 @@ class RefreshTest(unittest.TestCase):
         self.write_events([self.event(1, 's', code, 'session_start', host='codex', dispatch=None, source='startup')])
         self.status_here(nested)
         self.assertEqual(self.data()['progress']['active'][0]['label'], name)
-        self.ledger.parent.joinpath('host.md').write_text('## Project labels\n- ' + code + ': Owner label\n')
+        self.ledger.parent.joinpath('host.md').write_text('## Project labels\n- ' + code + ': Host label\n')
+        self.status_here(nested)
+        self.assertEqual(self.data()['progress']['active'][0]['label'], name)
+        self.project_setting(repo, 'label', 'Owner label')
         self.status_here(nested)
         self.assertEqual(self.data()['progress']['active'][0]['label'], 'Owner label')
         self.assertEqual(self.data()['progress']['repositories'][code]['label'], 'Owner label')
         self.refresh('purge', '--yes')
         self.assertFalse(projects.exists())
-        self.assertIn('Owner label', self.ledger.parent.joinpath('host.md').read_text())
+        self.assertIn('Host label', self.ledger.parent.joinpath('host.md').read_text())
 
     def test_hook_refresh_never_registers_even_with_flag_and_non_repo_is_skipped(self):
         self.consent()
@@ -385,12 +404,19 @@ class RefreshTest(unittest.TestCase):
 
     def test_reviews_use_canonical_labels_even_when_progress_is_off(self):
         self.consent()
-        self.ledger.parent.joinpath('host.md').write_text('## Project progress\n- Project progress: off\n\n## Project labels\n- aaaaaaaa: My tools\n')
-        self.write_events([self.event(0, 's', X, 'review', pr=31, verdict='APPROVE', kind='code')])
-        self.refresh('run')
+        repo = Path(self.tmp.name).resolve() / 'tools'
+        (repo / '.git').mkdir(parents=True)
+        code = self.project_setting(repo, 'label', 'My tools').repository_code(repo)
+        self.ledger.parent.joinpath('host.md').write_text('## Project progress\n- Project progress: off\n\n'
+                                                       '## Project labels\n- %s: Host tools\n' % code)
+        self.write_events([self.event(0, 's', code, 'review', pr=31, verdict='APPROVE', kind='code')])
+        self.refresh('run', cwd=repo)
         data = self.data()
         self.assertIsNone(data['progress'])
         self.assertEqual(data['reviews'][0].get('label'), 'My tools')
+        # Outside the repository its label is not reachable, and the host.md section is never read.
+        self.refresh('run', cwd=repo.parent)
+        self.assertEqual(self.data()['reviews'][0].get('label'), 'repo ' + code[:4])
 
     # Acceptance 1: ledger writes bypass only the age throttle.
     def test_freshness_newer_ledger_bypasses_throttle_older_or_absent_does_not(self):
@@ -492,7 +518,9 @@ class RefreshTest(unittest.TestCase):
         code = module.ps.repository_code(repo)
         host = self.ledger.parent / 'host.md'
         host.write_text('## Limits\n- Parallel dispatches: at most 12 at one time.\n'
-                        '## Project settings\n- %s parallel: 6\n- %s parallel-caps: codex=3, claude=4\n' % (code, code))
+                        '## Project settings\n- %s parallel: 9\n' % code)
+        self.project_setting(repo, 'parallel', '6')
+        self.project_setting(repo, 'parallel-caps', 'codex=3, claude=4')
         rows = [dict(event='start', id=str(n), ts=self.at.isoformat(), project=name, task='t',
                      kind='implement', grade='hard', model='m', reason='routing', agent=agent)
                 for n, (name, agent) in enumerate((('demo', 'claude-session'), ('demo', 'subagent'),
@@ -507,11 +535,21 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(block['family_slots'], dict(claude=dict(open=2, cap=4), codex=dict(open=3, cap=3),
                                                    antigravity=dict(open=0, cap=None)))
         self.assertEqual(original, self.ledger.read_bytes())
-        host.write_text('## Project settings\n- %s parallel: invalid\n' % code)
+        # An approved file that was edited or deleted is unknown and says settings need setup, never the default.
+        settings = repo / '.finolabs/vibecode/settings.json'
+        settings.write_text(json.dumps({'version': 1, 'parallel': '32'}))
         self.refresh('run', cwd=repo)
         block = self.data()['running']
         self.assertEqual((block['parallel_limit'], block['family_slots'], block['parallel_source']),
-                         (None, None, 'unknown'))
+                         (None, None, 'settings need setup'))
+        settings.unlink()
+        self.refresh('run', cwd=repo)
+        self.assertEqual(self.data()['running']['parallel_source'], 'settings need setup')
+        # With no approval record either, the repository was never configured: the default.
+        (self.ledger.parent / 'state/settings-approved' / (code + '.json')).unlink()
+        self.refresh('run', cwd=repo)
+        block = self.data()['running']
+        self.assertEqual((block['parallel_limit'], block['parallel_source']), (3, 'default'))
         host.write_text('## Limits\n- Parallel dispatches: at most 12 at one time.\n')
         self.refresh('run', cwd=repo)
         block = self.data()['running']
@@ -531,7 +569,9 @@ class RefreshTest(unittest.TestCase):
         module = self.running_module()
         code = module.ps.repository_code(repo)
         host = self.ledger.parent / 'host.md'
-        host.write_text('## Project settings\n- %s parallel: 3\n- %s ledger: PrivateAlias\n' % (code, code))
+        host.write_text('# Host\n')
+        self.project_setting(repo, 'parallel', '3')
+        self.project_setting(repo, 'ledger', 'PrivateAlias')
         self.ledger.write_text(json.dumps(dict(event='start', id='1', ts=self.at.isoformat(), project='PrivateAlias',
                                                task='t', kind='implement', grade='hard', model='m',
                                                reason='routing', agent='codex')))
@@ -540,7 +580,7 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual((block['parallel_limit'], block['family_slots']['codex']['open']), (3, 1))
         self.assertIsNone(block['parallel_project'])
         self.assertNotIn('PrivateAlias', json.dumps(block['family_slots']) + str(block['parallel_project']))
-        host.write_text(host.read_text() + '## Project labels\n- %s: Demo label\n' % code)
+        self.project_setting(repo, 'label', 'Demo label')
         self.refresh('run', '--cwd', str(repo), cwd=neutral)
         self.assertEqual(self.data()['running']['parallel_project'], 'Demo label')
         self.refresh('run', '--cwd', str(neutral), cwd=neutral)
@@ -592,7 +632,7 @@ class RefreshTest(unittest.TestCase):
     def test_live_sessions_are_built_from_existing_events_with_snapshot_off(self):
         self.consent()
         rows = [self.event(85 * 24 * 60, 'parent', X, 'session_start', host='claude', dispatch=None, source='startup'),
-                self.event(1, 'parent', X, 'skill', name='fnl-status'),
+                self.event(1, 'parent', X, 'skill', name='status'),
                 self.event(2, 'child', X, 'session_start', host='codex', dispatch=None, source='startup')]
         self.write_events(rows)
         before = {p: p.read_bytes() for p in self.dir.glob('events-*.jsonl')}
@@ -725,7 +765,7 @@ class RefreshTest(unittest.TestCase):
     def fixture_store(self):
         start = {"host": "claude", "dispatch": None, "source": "startup"}
         self.write_events([
-            self.event(120, "a", X, "session_start", **start), self.event(119, "a", X, "skill", name="fnl-coding-router"),
+            self.event(120, "a", X, "session_start", **start), self.event(119, "a", X, "skill", name="coding-router"),
             self.event(118, "a", X, "router", depth="DEEP", trigger="security"), self.event(110, "a", X, "first_edit"),
             self.event(100, "b", X, "session_start", **start), self.event(90, "b", X, "first_edit"),
             self.event(80, "c", X, "session_start", host="claude", dispatch="d20261103-1", source="startup"),
@@ -853,7 +893,7 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(d["router"], {"covered": 2, "missed": 1, "excluded": 1, "unclassified": 1, "eligible": 3})
         self.assertAlmostEqual(d["kpi"]["router_coverage"], 2 / 3)
         self.assertEqual({(u["kind"], u["name"], u["count"]) for u in d["use"]},
-                         {("skill", "fnl-coding-router", 1), ("agent", "fnl-reviewer", 2)})
+                         {("skill", "coding-router", 1), ("agent", "fnl-reviewer", 2)})
         self.assertEqual(d["kpi"]["calls"], 3)
         self.assertEqual({r["depth"]: (r["receipts"], r["reworked"]) for r in d["depth"]}, {"MIN": (1, 0), "DEEP": (1, 1)})
         self.assertEqual({(r["repo"], r["pr"]): r["verdicts"] for r in d["reviews"]},
@@ -861,8 +901,8 @@ class RefreshTest(unittest.TestCase):
         [row] = d["delegation"]
         self.assertEqual((row["agent"], row["runs"], row["first_pass"], row["quota"], row["error"]), ("codex", 2, 0.5, 1, 0))
         self.assertAlmostEqual(d["kpi"]["first_pass"], 0.5)
-        size = (ROOT / "skills/fnl-coding-router/SKILL.md").stat().st_size // 4
-        self.assertEqual(d["load"]["top"], [{"name": "fnl-coding-router", "tokens": size, "loads": 1}])
+        size = (ROOT / "skills/coding-router/SKILL.md").stat().st_size // 4
+        self.assertEqual(d["load"]["top"], [{"name": "coding-router", "tokens": size, "loads": 1}])
         self.assertEqual(len(d["activity"]), 84)
         self.assertEqual(sum(a["count"] for a in d["activity"]), 17)
         self.assertEqual(d["errors"], 0)
@@ -935,7 +975,7 @@ class RefreshTest(unittest.TestCase):
         self.consent()
         self.write_events([self.event(10, "a", X, "first_edit")])
         self.refresh("run")
-        self.assertEqual(self.data()["missing"]["use"], "no fnl- skill or agent used in this period")
+        self.assertEqual(self.data()["missing"]["use"], "no skill or agent of this plugin used in this period")
 
     def test_kept_work_is_counted_beside_the_implementation_runs_handed_off(self):
         self.consent()
@@ -1121,7 +1161,7 @@ class RefreshTest(unittest.TestCase):
     def test_a_commit_counts_as_a_change_when_files_were_written_through_the_shell(self):
         start = {"host": "claude", "dispatch": None, "source": "startup"}
         self.consent()
-        self.write_events([self.event(30, "s", X, "session_start", **start), self.event(29, "s", X, "skill", name="fnl-coding-router"),
+        self.write_events([self.event(30, "s", X, "session_start", **start), self.event(29, "s", X, "skill", name="coding-router"),
                            self.event(20, "s", X, "commit")])
         self.refresh("run")
         self.assertEqual(self.data()["router"]["eligible"], 1)
@@ -1129,12 +1169,12 @@ class RefreshTest(unittest.TestCase):
 
     def test_the_antigravity_hook_is_refused_for_a_skill_outside_the_plugin(self):
         tree = Path(self.tmp.name) / "repo" / ".claude"
-        shutil.copytree(ROOT / "skills/fnl-status", tree / "skills/fnl-status")
+        shutil.copytree(ROOT / "skills/status", tree / "skills/status")
         (tree / "scripts").mkdir()
         (tree / "scripts/metrics_hook.py").write_text("print('pwned')\n")
         config = Path(self.tmp.name) / "hooks.json"
         config.write_text("{}")
-        result = subprocess.run([sys.executable, "-I", str(tree / "skills/fnl-status/scripts/refresh.py"), "antigravity-hook",
+        result = subprocess.run([sys.executable, "-I", str(tree / "skills/status/scripts/refresh.py"), "antigravity-hook",
                                  "--config", str(config), "--yes"], capture_output=True, text=True, env=self.env)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not inside the finolabs-vibecode plugin", result.stderr)

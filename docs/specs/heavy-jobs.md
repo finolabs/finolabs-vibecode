@@ -11,7 +11,7 @@ and dozens of child processes) while delegated Codex reviews were running in oth
 
 Two gaps caused it:
 
-- The only machine-wide guard is an `mkdir` lock recipe in the `fnl-delegate` dispatch reference. A command that does not
+- The only machine-wide guard is an `mkdir` lock recipe in the `delegate` dispatch reference. A command that does not
   use it is not stopped, and the recipe checks neither load nor free memory.
 - Nothing tells an agent to run only the tests that cover its change, so a one-constant change ran suites that never
   touched the changed code.
@@ -42,7 +42,7 @@ Two gaps caused it:
 
 ## A. The script (contract; mechanism is decided when the code is written)
 
-`skills/fnl-delegate/scripts/heavy_run.py` runs one command while holding the machine-wide lock. This part states what
+`skills/delegate/scripts/heavy_run.py` runs one command while holding the machine-wide lock. This part states what
 must hold. How the lock is kept is an implementation choice, settled in the code pull request and reviewed there.
 
 - Accountability: the holder records, in the lock file, its label, repository code and folder name, dispatch id, the program name
@@ -96,21 +96,21 @@ matched after splitting the command with `shlex` and skipping leading `NAME=valu
 
 Default denial fixture: `docker compose up`. Categories a command string cannot show (a real PostgreSQL, large
 builds, a repository's whole-package suite) are left to patterns the owner configures, and otherwise to the advisory
-rule in part C. `fnl-setup add delegation` asks for the values, each write after a yes.
+rule in part C. `setup add delegation` asks for the values, each write after a yes.
 
 ## C. Rules for agents (advisory, agent judgment)
 
-- `fnl-delegate` replaces the recipe with this script and keeps one Codex or Antigravity run at a
+- `delegate` replaces the recipe with this script and keeps one Codex or Antigravity run at a
   time per coordinator.
-- `fnl-checks` gains the test-scope rule above and names `heavy_run.py` for any command the host config marks heavy.
-- `fnl-coding-router` "Proportion" points to both.
+- `checks` gains the test-scope rule above and names `heavy_run.py` for any command the host config marks heavy.
+- `coding-router` "Proportion" points to both.
 - A repository's own lock script may stay; it should call `heavy_run.py` so two locks cannot allow two heavy jobs.
 
 ## D. The gate (opt-in, Claude Code only)
 
 A `PreToolUse` hook on the `Bash` tool, in its own group in the user's Claude Code hook configuration, installed and removed by a script with a dry run and a backup.
 
-- Off unless `Heavy-job gate: on` is recorded under `## Heavy jobs` in the canonical host config after a consent question of its own and a shown preview in `fnl-setup add delegation`. Unresolvable config means off. `FNL_HEAVY_GATE=off` disables it.
+- Off unless `Heavy-job gate: on` is recorded under `## Heavy jobs` in the canonical host config after a consent question of its own and a shown preview in `setup add delegation`. Unresolvable config means off. `FNL_HEAVY_GATE=off` disables it.
 - Canonical launch form: `python3 -I <path>/heavy_run.py run [--label <text>] [--pass-env NAME]... -- <command...>`, or
   the same script run directly as an executable. The path may be absolute or relative. The script applies the
   allowlisted environment itself, so no outer `run_env.py` is required; an outer `python3 -I <path>/run_env.py --`
@@ -124,7 +124,7 @@ A `PreToolUse` hook on the `Bash` tool, in its own group in the user's Claude Co
 - It never denies another tool, a prompt, a session start or the user's own stop, and never edits or runs the command.
 - Limits: it cannot see work started by a tool other than Bash, by a script a command calls, or by Codex or Antigravity; those rely on the rules in part C.
 - Acceptance (synthetic payloads, in-process, no real heavy work): denied when on: `docker compose up`. Allowed:
-  `python3 -I /abs/skills/fnl-delegate/scripts/heavy_run.py run --label t -- docker compose up --abort-on-container-exit`, the same with
+  `python3 -I /abs/skills/delegate/scripts/heavy_run.py run --label t -- docker compose up --abort-on-container-exit`, the same with
   `run_env.py --` in front, the direct-executable form, a non-heavy command, gate off, config unreadable and malformed
   input. The hook script writes no file and prints nothing else.
 
@@ -153,5 +153,5 @@ Resource limits on a command (ulimit, cgroups), killing a running heavy job, sch
 
 ## Consumers to trace
 
-`fnl-delegate` SKILL and `references/dispatch.md`, `references/host-template.md`, `fnl-checks`,
-`fnl-coding-router` "Proportion", `fnl-setup` delegation feature, data-root relocation (`data_location.py`) and the data-root resolver, the shared-copy check, `README.md` and the changelog.
+`delegate` SKILL and `references/dispatch.md`, `references/host-template.md`, `checks`,
+`coding-router` "Proportion", `setup` delegation feature, data-root relocation (`data_location.py`) and the data-root resolver, the shared-copy check, `README.md` and the changelog.

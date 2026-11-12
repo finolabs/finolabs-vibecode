@@ -17,7 +17,7 @@ svg{width:100%;min-width:900px;display:block}
 <p class="sub">During an away lease the question gate denies the question tool. The host climbs the ladder (a recorded rule, Jev at 0.8, an advisor of another family, its own choice), checks twice against what must stop, records every attempt, and on your return asks you to keep or reverse each decision.</p>
 <svg viewBox="0 0 1280 1100" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="away-decision-sequence-dark-title away-decision-sequence-dark-desc">
 <title id="away-decision-sequence-dark-title">A decision while you are away</title>
-<desc id="away-decision-sequence-dark-desc">Sequence diagram across six lanes: the host agent following fnl-autopilot Decide under a live lease, the question gate (away_gate_hook.py, Claude Code only), autopilot.py and the ledger, Jev through judge.py, the advisor in the fnl-advisor choose mode of another family, and you. The gate denies AskUserQuestion during the lease and appends a question_denied line. The host frames two to six closed options and a goal anchor, runs the first check with autopilot.py check against Where it must stop, and parks on a match. It then climbs the ladder and stops at the first rung that settles: a recorded rule; Jev through judge.py at the away-decision site, settling when the top option reaches probability 0.8, after autopilot.py packet-check screens the precedent packet; one read-only advisor run that returns one option or none; and finally the host's own choice for the goal anchor. A second check runs on the chosen action, which parks on a match and acts only on Tier 1, and every attempt is recorded with autopilot.py log. On return the host lists the lease's decisions, you mark each kept or reversed, recorded with autopilot.py review, and a reversal goes to the knowledge base for the next packet.</desc>
+<desc id="away-decision-sequence-dark-desc">Sequence diagram across six lanes: the host agent following autopilot Decide under a live lease, the question gate (away_gate_hook.py, Claude Code only), autopilot.py and the ledger, Jev through judge.py, the advisor in the advisor choose mode of another family, and you. The gate denies AskUserQuestion during the lease and appends a question_denied line. The host frames two to six closed options and a goal anchor, runs the first check with autopilot.py check against Where it must stop, and parks on a match. It then climbs the ladder and stops at the first rung that settles: a recorded rule; Jev through judge.py at the away-decision site, settling when the top option reaches probability 0.8, after autopilot.py packet-check screens the precedent packet; one read-only advisor run that returns one option or none; and finally the host's own choice for the goal anchor. A second check runs on the chosen action, which parks on a match and acts only on Tier 1, and every attempt is recorded with autopilot.py log. On return the host lists the lease's decisions, you mark each kept or reversed, recorded with autopilot.py review, and a reversal goes to the knowledge base for the next packet.</desc>
 <defs>
 <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#BCBCD0"/></marker>
 <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#E5D2F4"/></marker>
@@ -34,7 +34,7 @@ svg{width:100%;min-width:900px;display:block}
 <rect x="60" y="46" width="38" height="12" rx="2" fill="none" stroke="#E5D2F4" stroke-opacity="0.5" stroke-width="0.8"/>
 <text x="79" y="55" fill="#E5D2F4" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">COORD</text>
 <text x="140" y="72" fill="#FFFFFF" font-size="13" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Host agent</text>
-<text x="140" y="86" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">fnl-autopilot "Decide"</text>
+<text x="140" y="86" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">autopilot "Decide"</text>
 <text x="140" y="98" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">under a live lease</text>
 <rect x="252" y="40" width="176" height="64" rx="8" fill="#050510"/>
 <rect x="252" y="40" width="176" height="64" rx="8" fill="#16162A" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
@@ -60,7 +60,7 @@ svg{width:100%;min-width:900px;display:block}
 <rect x="860" y="46" width="38" height="12" rx="2" fill="none" stroke="#BCBCD0" stroke-opacity="0.5" stroke-width="0.8"/>
 <text x="879" y="55" fill="#BCBCD0" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">AGENT</text>
 <text x="940" y="72" fill="#FFFFFF" font-size="13" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Advisor</text>
-<text x="940" y="86" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">fnl-advisor choose mode</text>
+<text x="940" y="86" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">advisor choose mode</text>
 <text x="940" y="98" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">another family</text>
 <rect x="1052" y="40" width="176" height="64" rx="8" fill="#050510"/>
 <rect x="1052" y="40" width="176" height="64" rx="8" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
@@ -75,7 +75,7 @@ svg{width:100%;min-width:900px;display:block}
 <text x="240" y="151" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">1 AskUserQuestion</text>
 <path d="M340,198 L146,198" fill="none" stroke="#E5D2F4" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow-accent)"/>
 <rect x="145.5" y="182" width="189" height="12" fill="#050510"/>
-<text x="240" y="191" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">denied: follow fnl-autopilot "Decide"</text>
+<text x="240" y="191" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">denied: follow autopilot "Decide"</text>
 <path d="M340,238 L534,238" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="359.9" y="222" width="160.2" height="12" fill="#050510"/>
 <text x="440" y="231" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">question_denied line, time only</text>

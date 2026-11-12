@@ -63,7 +63,7 @@ class AutoGateHookTest(unittest.TestCase):
         self.assertEqual(len(output.splitlines()), 1)
         self.assertEqual(json.loads(output), {"hookSpecificOutput": {
             "hookEventName": "PreToolUse", "permissionDecision": "deny",
-            "permissionDecisionReason": "Run the keep-or-hand-off step of fnl-delegate, then retry."}})
+            "permissionDecisionReason": "Run the keep-or-hand-off step of delegate, then retry."}})
 
     def test_first_write_denies_once_for_each_write_tool(self):
         for tool in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
@@ -331,7 +331,7 @@ auto_gate.fcntl.flock = contend
             proc.stderr.close()
 
     def run_writer(self, kind="keep", setup="", rejected=False):
-        folder = ROOT / "skills/fnl-delegate/scripts"
+        folder = ROOT / "skills/delegate/scripts"
         if kind == "keep":
             script = folder / "record.py"
             args = ["keep", "--tasks", "1", "--reason", "needs-context"]

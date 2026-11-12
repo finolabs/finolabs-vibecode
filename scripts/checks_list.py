@@ -7,20 +7,18 @@ Shared, read-mostly: `checks_setup.py` writes the file and its approval, `checks
 `merge_check.py` reads both. A check is a short name and a JSON argument array, never a shell string. An invalid file
 counts as unset and is never repaired here. Runs no command and makes no network call.
 """
-from contextlib import contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
-import stat
 import sys
 import time
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
-import project_progress as pp
+import project_store as store
 
 NAME =re.compile(r'[a-z0-9][a-z0-9-]{0,31}')
 CODE = re.compile(r'[0-9a-f]{8}')
@@ -38,14 +36,14 @@ SHELL_FLAG = re.compile(r'-c.*|--call(?:=.*)?|--shell-mode')
 RECEIPTS = 'state/checks-receipts'
 RECEIPT_KEYS = {'kind', 'code', 'head', 'digest', 'created'}
 RECEIPT_LIMIT = 4096
-PROJECT_FOLDERS = ('.finolabs', 'vibecode')
+PROJECT_FOLDERS = store.PROJECT_FOLDERS
 PROJECT_FILE = 'checks.json'
 PROJECT_LIMIT = 65536
 PROJECT_KEYS = {'version', 'checks', 'local_receipt'}
 APPROVED = 'state/checks-approved'
 APPROVED_KEYS = {'sha256', 'approved'}
 CHANGED = 'changed since it was approved'
-AGAIN = 'run /fnl-setup add checks again'
+AGAIN = 'run /setup add checks again'
 
 
 # The stored argument form
@@ -130,69 +128,23 @@ def document_only(paths):
 # The project file: checks.json in the main checkout's project data folder, bound to an approved digest in user scope
 
 def layout(root):
-    """(main checkout root, git common folder) of a repository root, resolved the way
-    `project_progress.repository_code` resolves identity, without running git."""
-    root = Path(os.path.abspath(root))
-    main, common = root, root / '.git'
-    try:
-        with pp.open_dir(root) as fd:
-            link = pp.read_task(fd, '.git').strip()
-        if len(link) <= 4096 and link.startswith('gitdir:'):
-            gitdir = Path(os.path.abspath(root / link[len('gitdir:'):].strip()))
-            common = gitdir
-            with pp.open_dir(gitdir) as fd:
-                shared = pp.read_task(fd, 'commondir').strip()
-            if len(shared) <= 4096 and shared:
-                shared = Path(os.path.abspath(gitdir / shared))
-                with pp.open_dir(shared):
-                    main, common = (shared.parent if shared.name == '.git' else shared), shared
-    except (OSError, ValueError):
-        pass
-    return main, common
+    """(main checkout root, git common folder) of a repository root, resolved and validated the way
+    `project_progress.repository_code` resolves identity (`project_store.layout`), without running git."""
+    return store.layout(root)
 
 
 def code_of(main):
-    return hashlib.sha256(str(main).encode('utf-8')).hexdigest()[:8]
+    return store.code_of(main)
 
 
-@contextmanager
 def project_folder(main, create=False):
-    """An fd of the project data folder under <main> opened with no-follow descent from the filesystem root; each folder owned by
-    this account and not writable by others. Created folders are 0700. A link anywhere on the path is refused."""
-    with pp.open_dir(main) as top:
-        fd = os.dup(top)
-        try:
-            for part in PROJECT_FOLDERS:
-                if create:
-                    try:
-                        os.mkdir(part, 0o700, dir_fd=fd)
-                    except FileExistsError:
-                        pass
-                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
-                os.close(fd)
-                fd = child
-                info = os.fstat(fd)
-                if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022:
-                    raise ValueError('unsafe project folder')
-            yield fd
-        finally:
-            os.close(fd)
+    """The project data folder under <main> (`project_store.project_folder`): no-follow descent, owner-checked, 0700."""
+    return store.project_folder(main, create=create)
 
 
 def read_project_file(folder):
     """The project file's bytes; FileNotFoundError when absent, ValueError when linked, unsafe or too large."""
-    fd = os.open(PROJECT_FILE, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=folder)
-    try:
-        info = os.fstat(fd)
-        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022
-                or info.st_size > PROJECT_LIMIT):
-            raise ValueError('unsafe project file')
-        data = os.read(fd, PROJECT_LIMIT + 1)
-        if len(data) > PROJECT_LIMIT:
-            raise ValueError('project file too large')
-        return data
-    finally:
-        os.close(fd)
+    return store.read_project_file(folder, PROJECT_FILE, PROJECT_LIMIT)
 
 
 def read_project_bytes(main):

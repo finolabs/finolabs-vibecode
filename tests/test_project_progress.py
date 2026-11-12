@@ -52,23 +52,41 @@ class ProgressTest(unittest.TestCase):
         state.mkdir(exist_ok=True)
         (state / 'consent.json').write_text(json.dumps(dict(date='2026-11-06', retention_days=30)))
 
-    def test_settings_strict_section_fail_closed(self):
-        good = '- aaaaaaaa ledger: Alias\n- aaaaaaaa tasks: docs/tasks.md\n'
-        self.assertEqual(self.pp.project_settings('## Project settings\n' + good)[('aaaaaaaa', 'ledger')], 'Alias')
+    def settings_file(self):
+        return self.repo / '.finolabs/vibecode/settings.json'
+
+    def stored(self):
+        return json.loads(self.settings_file().read_text()) if self.settings_file().exists() else {}
+
+    def test_invalid_values_are_refused_and_an_invalid_file_changes_nothing(self):
+        import hashlib
+        self.consent()
         bad_values = [('ledger', v) for v in ('', ' ', 'x' * 41, 'a;', 'a=b', 'a\nb', 'a\x00b', 'a\\b', 'é')]
         bad_values += [('tasks', v) for v in ('', '/a.md', '../a.md', 'a/../b.md', './a.md', 'a//b.md',
                        'specs/archive/a.md', 'a.txt', 'a b.md', 'a\\b.md', 'a;.md', 'a=.md', 'a\x00.md', 'x' * 118 + '.md')]
-        bad_lines = [f'- aaaaaaaa {key}: {value}\n' for key, value in bad_values]
-        bad_lines += [good, '- AAAAAAAA ledger: x\n', '- aaaaaaaa unknown: x\n', 'comment\n',
-                      ''.join(f'- {i:08x} ledger: x\n' for i in range(101))]
         self.document('one.md', 'Status: implemented\n')
         before = self.collect()
-        for bad in bad_lines:
-            with self.subTest(bad=repr(bad)):
-                self.host.write_text('## Project settings\n' + good + bad)
+        for key, value in bad_values:
+            with self.subTest(key=key, value=repr(value)):
                 with self.assertRaises(ValueError):
-                    self.pp.project_settings(self.host.read_text())
-                self.assertEqual(self.collect(), before)
+                    self.pp.set_setting(self.repo, key, value)
+                self.assertFalse(self.settings_file().exists())
+                raw = json.dumps({'version': 1, key: value}).encode()
+                self.settings_file().parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                self.settings_file().write_bytes(raw)
+                os.chmod(self.settings_file(), 0o600)
+                approvals = self.data / 'state/settings-approved'
+                approvals.mkdir(parents=True, exist_ok=True, mode=0o700)
+                (approvals / (self.pp.repository_code(self.repo) + '.json')).write_text(
+                    json.dumps({'sha256': hashlib.sha256(raw).hexdigest(), 'approved': 1}))
+                self.assertEqual(self.pp.repository_settings({}, self.repo), {})
+                # Approved but invalid: nothing is read from it, and the ledger join says unknown rather than guessing.
+                got = self.collect()
+                self.assertEqual(got['ledger_join'], 'unknown')
+                self.assertEqual(got['skipped'], before['skipped'] + ['settings need setup'])
+                self.assertEqual({k: v for k, v in got.items() if k not in ('ledger_join', 'skipped')},
+                                 {k: v for k, v in before.items() if k not in ('ledger_join', 'skipped')})
+                self.settings_file().unlink()
 
     def test_settings_consent_atomic_private_and_cli_output(self):
         import io
@@ -78,11 +96,11 @@ class ProgressTest(unittest.TestCase):
                 self.pp.set_setting(self.repo, 'ledger', value)
         self.assertEqual(self.host.read_bytes(), before)
         self.consent()
-        with mock.patch.object(self.pp, 'repository_code', return_value='aaaaaaaa'):
-            with mock.patch.object(self.pp.dr, 'atomic_write', wraps=self.pp.dr.atomic_write) as write:
-                self.assertTrue(self.pp.set_setting(self.repo, 'ledger', 'PRIVATE'))
-                self.assertEqual(write.call_count, 1)
-            self.assertFalse(self.pp.set_setting(self.repo, 'ledger', 'PRIVATE'))
+        with mock.patch.object(self.pp.store, 'write_setting', wraps=self.pp.store.write_setting) as write:
+            self.assertTrue(self.pp.set_setting(self.repo, 'ledger', 'PRIVATE'))
+            self.assertEqual(write.call_count, 1)
+        self.assertFalse(self.pp.set_setting(self.repo, 'ledger', 'PRIVATE'))
+        if True:
             with mock.patch('os.getcwd', return_value=str(self.repo)), mock.patch('sys.stdout', new_callable=io.StringIO) as out:
                 self.assertEqual(self.pp.main(['settings', '--set', 'tasks=docs/private.md']), 0)
                 self.assertIn('tasks changed', out.getvalue())
@@ -94,16 +112,17 @@ class ProgressTest(unittest.TestCase):
                 write.assert_called_once_with(str(self.repo), 'ledger', 'first=second')
                 self.assertEqual(out.getvalue(), 'ledger changed\n')
             with mock.patch.object(self.pp.dr, 'atomic_write', side_effect=OSError('interrupted')):
-                saved = self.host.read_bytes()
+                saved = self.settings_file().read_bytes()
                 with self.assertRaises(OSError):
                     self.pp.set_setting(self.repo, 'ledger', 'other')
-                self.assertEqual(saved, self.host.read_bytes())
+                self.assertEqual(saved, self.settings_file().read_bytes())
             self.assertTrue(self.pp.set_setting(self.repo, 'tasks', None))
             self.assertFalse(self.pp.set_setting(self.repo, 'tasks', None))
-        self.assertEqual(stat.S_IMODE(self.host.stat().st_mode), 0o600)
-        self.assertFalse(list(self.data.glob('.write-*')))
+        self.assertEqual(self.host.read_bytes(), before)
+        self.assertEqual(stat.S_IMODE(self.settings_file().stat().st_mode), 0o600)
+        self.assertFalse(list(self.settings_file().parent.glob('.write-*')))
 
-    def test_parallel_settings_validation_and_section_bounds(self):
+    def test_parallel_settings_validation(self):
         for value in ('1', '5', '32'):
             self.assertTrue(self.pp.valid_setting('parallel', value))
         for value in ('0', '33', '-1', '1.0', 'true', '', ' 2', '2 ', 2, None):
@@ -112,41 +131,34 @@ class ProgressTest(unittest.TestCase):
             self.assertTrue(self.pp.valid_setting('parallel-caps', value))
         for value in ('', 'codex=0', 'codex=33', 'codex=1,codex=2', 'other=1', 'codex=1,', 'codex=true', None):
             self.assertFalse(self.pp.valid_setting('parallel-caps', value))
-            with self.assertRaises(ValueError):
-                self.pp.project_settings('## Project settings\n- aaaaaaaa ledger: Alias\n- aaaaaaaa parallel-caps: %s\n' % value)
-        good = '## Project settings\n- aaaaaaaa parallel: 2\n- aaaaaaaa parallel-caps: codex=3\n'
-        self.assertEqual(self.pp.project_settings(good)[('aaaaaaaa', 'parallel-caps')], 'codex=3')
-        for count in (100, 101):
-            text = '## Project settings\n' + ''.join('- %08x parallel: 2\n' % n for n in range(count))
-            if count == 100:
-                self.assertEqual(len(self.pp.project_settings(text)), 100)
-            else:
+            if value is not None:
                 with self.assertRaises(ValueError):
-                    self.pp.project_settings(text)
+                    self.pp.set_setting(self.repo, 'parallel-caps', value)
+        self.assertFalse(self.settings_file().exists())
 
     def test_parallel_settings_need_no_metrics_consent_but_ledger_and_tasks_do(self):
-        code = self.pp.repository_code(self.repo)
         self.assertTrue(self.pp.set_setting(self.repo, 'parallel', '4'))
-        self.assertEqual(self.pp.project_settings(self.host.read_text())[(code, 'parallel')], '4')
+        self.assertEqual(self.stored()['parallel'], '4')
         self.assertTrue(self.pp.set_setting(self.repo, 'parallel-caps', 'codex=2'))
         for key, value in (('ledger', 'Alias'), ('tasks', 'docs/t.md')):
             with self.assertRaises(ValueError):
                 self.pp.set_setting(self.repo, key, value)
-        self.assertEqual(sorted(k for _, k in self.pp.project_settings(self.host.read_text())), ['parallel', 'parallel-caps'])
+        self.assertEqual(sorted(self.stored()), ['parallel', 'parallel-caps', 'version'])
 
     def test_parallel_settings_cli_set_clear_preserves_other_entries(self):
         import io
         self.consent()
-        code = self.pp.repository_code(self.repo)
+        before = self.host.read_bytes()
         self.assertTrue(self.pp.set_setting(self.repo, 'ledger', 'Alias'))
         with mock.patch('os.getcwd', return_value=str(self.repo)), mock.patch('sys.stdout', new_callable=io.StringIO) as out:
             for key, value in (('parallel', '2'), ('parallel-caps', 'codex=1, claude=2')):
                 self.assertEqual(self.pp.main(['settings', '--set', key + '=' + value]), 0)
-                self.assertEqual(self.pp.project_settings(self.host.read_text())[(code, key)], value)
+                self.assertEqual(self.stored()[key], value)
                 self.assertEqual(self.pp.main(['settings', '--clear', key]), 0)
-                self.assertNotIn((code, key), self.pp.project_settings(self.host.read_text()))
+                self.assertNotIn(key, self.stored())
             self.assertNotIn('Alias', out.getvalue())
-        self.assertEqual(self.pp.project_settings(self.host.read_text())[(code, 'ledger')], 'Alias')
+        self.assertEqual(self.stored()['ledger'], 'Alias')
+        self.assertEqual(self.host.read_bytes(), before)
 
     def test_budget_restores_alarm_after_timeout_during_cancel(self):
         signal = self.pp.signal
@@ -199,11 +211,11 @@ class ProgressTest(unittest.TestCase):
         for name in names:
             self.assertIn('`' + name + '`', spec)
 
-    def test_settings_missing_host_refuses_without_echoing_value(self):
+    def test_settings_outside_a_repository_refuse_without_echoing_value(self):
         import io
         self.consent()
         self.host.unlink()
-        with mock.patch('os.getcwd', return_value=str(self.repo)), \
+        with mock.patch('os.getcwd', return_value=str(self.repo.parent)), \
                 mock.patch('sys.stdout', new_callable=io.StringIO) as out, \
                 mock.patch('sys.stderr', new_callable=io.StringIO) as err:
             self.assertEqual(self.pp.main(['settings', '--set', 'ledger=PRIVATE']), 1)
@@ -230,14 +242,15 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(two['work'], {'active': 1})
         self.assertNotIn('PRIVATE', json.dumps([one, two]))
         self.pp.set_setting(self.repo, 'ledger', None)
-        self.assertEqual(self.pp.repository_settings(self.pp.config(), self.repo)['Ledger project'], 'old')
+        # The deprecated global line is never read: unset falls back to the folder name.
+        self.assertNotIn('Ledger project', self.pp.repository_settings(self.pp.config(), self.repo))
 
     def test_work_record_template_parses_with_status_reader(self):
         import re
-        template = ROOT / 'skills/fnl-coding-router/references/work-record.md'
+        template = ROOT / 'skills/coding-router/references/work-record.md'
         block = re.search(r'```markdown\n(.*?)\n```', template.read_text(), re.S)
         self.assertIsNotNone(block, 'keep one literal parseable template block')
-        pp = module('template_status_reader', ROOT / 'skills/fnl-status/scripts/project_progress.py')
+        pp = module('template_status_reader', ROOT / 'skills/status/scripts/project_progress.py')
         item = pp.work_record(block[1], 1)
         self.assertIsNotNone(item)
         self.assertEqual(item['state'], 'todo')
@@ -254,7 +267,7 @@ class ProgressTest(unittest.TestCase):
 
     def test_filled_work_record_template_counts(self):
         import re
-        template = (ROOT / 'skills/fnl-coding-router/references/work-record.md').read_text()
+        template = (ROOT / 'skills/coding-router/references/work-record.md').read_text()
         text = re.search(r'```markdown\n(.*?)\n```', template, re.S)[1]
         text = re.sub(r'<[^>]*>', 'Filled content', text).replace('- [ ]', '- [x]')
         item = self.pp.work_record(text, 1)
@@ -400,9 +413,10 @@ class ProgressTest(unittest.TestCase):
         for bad in ('', 'x' * 41, '<img>', 'a/b', 'a\nlabel', 'x\x01'):
             with self.subTest(label=bad), self.assertRaises(ValueError):
                 self.pp.set_label(self.repo, bad)
-        with mock.patch.object(self.pp, 'repository_code', return_value='aaaaaaaa'):
-            self.pp.set_label(self.repo, 'Fino tools-2.0')
-        self.assertIn('## Project labels', self.host.read_text())
+        before = self.host.read_bytes()
+        self.pp.set_label(self.repo, 'Fino tools-2.0')
+        self.assertEqual(self.host.read_bytes(), before)
+        self.assertEqual(self.stored()['label'], 'Fino tools-2.0')
         self.assertEqual(self.collect()['label'], 'Fino tools-2.0')
         self.assertIn('- Project progress: on', self.host.read_text())
         # Duplicate metadata is ambiguous, not last-heading-wins.
@@ -576,7 +590,10 @@ class ProgressTest(unittest.TestCase):
                     '4': dict(outcome='cancelled'), '5': dict(outcome='quota')}
         self.assertEqual(self.collect(starts=starts, finishes=finishes)['source'], 'none')
         self.host.write_text('## Project progress\n- Ledger project: alias\n')
-        got = self.collect(starts=starts, finishes=finishes)
+        self.assertEqual(self.collect(starts=starts, finishes=finishes)['source'], 'none')
+        self.consent()
+        self.pp.set_setting(self.repo, 'ledger', 'alias')
+        got =self.collect(starts=starts, finishes=finishes)
         self.assertEqual(got['source'], 'ledger')
         self.assertEqual([f['ordinal'] for f in got['features']], [1, 2, 3, 4, 5])
         self.assertEqual(got['work'], dict(done=1, active=1, **{'needs-attention': 2}, deferred=1))
@@ -707,21 +724,25 @@ class ProgressTest(unittest.TestCase):
         linked = main.with_name('linked')
         linked.mkdir()
         (linked / '.git').write_text('gitdir: ' + str(metadata) + '\n')
+        (metadata / 'gitdir').write_text(str(linked / '.git') + '\n')
         expected = hashlib.sha256(str(main).encode()).hexdigest()[:8]
         self.assertEqual(self.pp.repository_code(linked), expected)
         self.pp.set_label(linked, 'Shared project')
-        self.assertIn('- ' + expected + ': Shared project', self.host.read_text())
+        self.assertEqual(self.stored()['label'], 'Shared project')
+        self.assertFalse((linked / '.finolabs').exists())
+        self.assertEqual(self.pp.project_label(linked), 'Shared project')
+        self.assertNotIn('Shared project', self.host.read_text())
 
     def test_documented_infographics_metadata_and_setup(self):
         privacy = (ROOT / 'PRIVACY.md').read_text()
-        for word in ('P1', 'P9', 'spec.md', 'specs/archive', 'Project labels', 'priority number'):
+        for word in ('P1', 'P9', 'spec.md', 'specs/archive', 'settings.json', 'priority number'):
             self.assertIn(word, privacy)
-        setup = (ROOT / 'skills/fnl-setup/references/features/project.md').read_text()
+        setup = (ROOT / 'skills/setup/references/features/project.md').read_text()
         self.assertIn('project_progress.py label --set', setup)
-        self.assertIn('## Project labels', setup)
-        self.assertIn('## Project labels', (ROOT / 'skills/fnl-delegate/references/host-template.md').read_text())
+        self.assertIn('settings.json', setup)
+        self.assertNotIn('## Project labels', (ROOT / 'skills/delegate/references/host-template.md').read_text())
         self.assertIn('[Dashboard infographics]', (ROOT / 'docs/specs/index.md').read_text())
-        for doc in ('README.md', 'CHANGELOG.md', 'skills/fnl-status/SKILL.md'):
+        for doc in ('README.md', 'CHANGELOG.md', 'skills/status/SKILL.md'):
             for word in ('quota', 'overview', 'now'):
                 self.assertIn(word, (ROOT / doc).read_text())
 
@@ -765,9 +786,13 @@ class ProgressTest(unittest.TestCase):
     def test_reader_refuses_symlinks_fifo_size_owner_and_unsafe_paths(self):
         path = self.taskfile()
         self.assertEqual(self.collect()['features'][0]['total'], 1)
+        self.consent()
         for configured in ('/etc/passwd', '../private', 'specs/../tasks.md'):
+            # Neither the setter nor a host.md line can configure an unsafe path.
+            with self.assertRaises(ValueError):
+                self.pp.set_setting(self.repo, 'tasks', configured)
             self.host.write_text('## Project progress\n- Task file: ' + configured + '\n')
-            self.assertIn('unsafe task path', self.collect()['skipped'])
+            self.assertNotIn('unsafe task path', self.collect()['skipped'])
         self.host.write_text('## Project progress\n- Project progress: on\n')
         path.unlink()
         os.mkfifo(path)
@@ -815,7 +840,11 @@ class ProgressTest(unittest.TestCase):
         (self.repo / 'custom.md').write_text('- [ ] T99')
         self.assertEqual(self.collect()['features'], [])
         self.host.write_text('## Project progress\n- Task file: custom.md\n')
+        self.assertEqual(self.collect()['features'], [])
+        self.consent()
+        self.pp.set_setting(self.repo, 'tasks', 'custom.md')
         self.assertEqual(self.collect()['features'][0]['feature'], 1)
+        self.pp.set_setting(self.repo, 'tasks', None)
         self.host.write_text('## Project progress\n- Project progress: on\n')
         for n in range(21):
             self.taskfile('%03d-private' % n)
@@ -869,8 +898,10 @@ class ProgressTest(unittest.TestCase):
         path = self.repo / 'custom/007-private/tasks.md'
         path.parent.mkdir(parents=True)
         path.write_text('- [ ] T012 US1 private\n')
-        self.host.write_text('## Project progress\n- Task file: custom/007-private/tasks.md\n- Ledger project: alias\n')
-        run = dict(project='alias', task='007 T12', agent='codex', model='m', ts='2026-11-06T09:00:00Z')
+        self.consent()
+        self.pp.set_setting(self.repo, 'tasks', 'custom/007-private/tasks.md')
+        self.pp.set_setting(self.repo, 'ledger', 'alias')
+        run =dict(project='alias', task='007 T12', agent='codex', model='m', ts='2026-11-06T09:00:00Z')
         result = self.collect(starts={'d1': run})
         self.assertEqual(result['features'][0]['feature'], 7)
         self.assertEqual(result['features'][0]['tasks'][0]['runs'][0]['id'], 'd1')
@@ -908,19 +939,19 @@ class ProgressTest(unittest.TestCase):
 
     def test_shared_copies_and_documented_consent_limits_and_ledger_labels(self):
         raw = (ROOT / 'scripts/project_progress.py').read_bytes()
-        for relative in ('skills/fnl-status/scripts/project_progress.py', 'skills/fnl-setup/scripts/project_progress.py'):
+        for relative in ('skills/status/scripts/project_progress.py', 'skills/setup/scripts/project_progress.py'):
             self.assertEqual(raw, (ROOT / relative).read_bytes())
-        metrics = (ROOT / 'skills/fnl-setup/references/features/metrics.md').read_text()
+        metrics = (ROOT / 'skills/setup/references/features/metrics.md').read_text()
         for value in ('project progress', 'FNL_PROGRESS=off', '... off --yes', 'if the root cannot be resolved it is off'):
             self.assertIn(value, metrics)
-        project = (ROOT / 'skills/fnl-setup/references/features/project.md').read_text()
+        project = (ROOT / 'skills/setup/references/features/project.md').read_text()
         self.assertIn('project-settings.md', project)
-        settings = (ROOT / 'skills/fnl-setup/references/project-settings.md').read_text()
-        for value in ('Task file:', 'Ledger project:'):
+        settings = (ROOT / 'skills/setup/references/project-settings.md').read_text()
+        for value in ('Task file:', 'Ledger project:', 'no longer read', 'settings.json'):
             self.assertIn(value, settings)
-        for name in ('PRIVACY.md', 'README.md', 'CHANGELOG.md', 'skills/fnl-status/SKILL.md'):
+        for name in ('PRIVACY.md', 'README.md', 'CHANGELOG.md', 'skills/status/SKILL.md'):
             self.assertIn('FNL_PROGRESS=off', (ROOT / name).read_text())
-        self.assertIn('<feature> T<id>', (ROOT / 'skills/fnl-delegate/references/ledger.md').read_text())
+        self.assertIn('<feature> T<id>', (ROOT / 'skills/delegate/references/ledger.md').read_text())
         self.assertIn('implemented', (ROOT / 'docs/specs/index.md').read_text().split('[Project progress]')[1].split('\n')[0])
 
     def test_notice_channels_once_version_fixed_content_and_no_events(self):
@@ -930,6 +961,504 @@ class ProgressTest(unittest.TestCase):
             self.assertEqual(self.pp.notice(channel, '0.1.11-dev'), channel == 'session')
         self.assertTrue((self.data / 'state/notices.json').is_file())
         self.assertEqual(list((self.data / 'state').glob('events*')), [])
+
+
+class SettingsFileTest(unittest.TestCase):
+    """Project settings live in <main checkout>/.finolabs/vibecode/settings.json, bound to an approved digest."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        base = Path(self.tmp.name).resolve()
+        self.home = account(self, base / 'home')
+        self.data = self.home / '.finolabs/vibecode'
+        self.data.mkdir(parents=True)
+        self.host = self.data / 'host.md'
+        self.host.write_text('# Host\n\n## Project progress\n\n- Project progress: on\n')
+        self.addCleanup(mock.patch.stopall)
+        mock.patch.dict(os.environ, {'FNL_PROGRESS': '', 'FNL_METRICS': ''}).start()
+        self.pp = module('project_progress_file', ROOT / 'scripts/project_progress.py')
+        self.slots = module('parallel_slots_file', ROOT / 'scripts/parallel_slots.py')
+        self.repo = base / 'one'
+        self.other = base / 'two'
+        for repo in (self.repo, self.other):
+            (repo / '.git/info').mkdir(parents=True)
+        state = self.data / 'state'
+        state.mkdir()
+        (state / 'consent.json').write_text(json.dumps(dict(date='2026-11-06', retention_days=30)))
+
+    def file(self, root=None):
+        return (root or self.repo) / '.finolabs/vibecode/settings.json'
+
+    def approval(self, root=None):
+        return self.data / 'state/settings-approved' / (self.pp.repository_code(root or self.repo) + '.json')
+
+    def settings(self, root=None):
+        return self.pp.repository_settings({}, root or self.repo)
+
+    def test_setters_write_the_project_file_and_its_approval_and_leave_host_identical(self):
+        before = self.host.read_bytes()
+        self.assertTrue(self.pp.set_setting(self.repo, 'ledger', 'Alias'))
+        self.assertTrue(self.pp.set_setting(self.repo, 'tasks', 'docs/tasks.md'))
+        self.assertTrue(self.pp.set_setting(self.repo, 'parallel', '5'))
+        self.assertTrue(self.pp.set_setting(self.repo, 'parallel-caps', 'codex=2'))
+        self.pp.set_label(self.repo, 'Synthetic label')
+        self.assertEqual(self.host.read_bytes(), before)
+        data = json.loads(self.file().read_text())
+        self.assertEqual(data, {'version': 1, 'ledger': 'Alias', 'tasks': 'docs/tasks.md', 'parallel': '5',
+                                'parallel-caps': 'codex=2', 'label': 'Synthetic label'})
+        self.assertEqual(stat.S_IMODE(self.file().stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(self.file().parent.stat().st_mode), 0o700)
+        self.assertTrue(self.approval().is_file())
+        self.assertEqual(self.settings(), {'Ledger project': 'Alias', 'Task file': 'docs/tasks.md'})
+        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 5)
+        self.assertEqual(self.slots.parse_config('', self.repo)['caps']['codex'], 2)
+        self.assertEqual(self.slots.parse_config('', self.repo)['scope']['project'], 'Alias')
+        for key in ('ledger', 'tasks', 'parallel', 'parallel-caps'):
+            self.assertTrue(self.pp.set_setting(self.repo, key, None))
+            self.assertEqual(self.host.read_bytes(), before)
+        self.assertEqual(json.loads(self.file().read_text()), {'version': 1, 'label': 'Synthetic label'})
+        self.assertEqual(self.host.read_bytes(), before)
+        self.assertEqual((self.repo / '.git/info/exclude').read_text().count('.finolabs/'), 1)
+        self.assertFalse((self.repo / '.gitignore').exists())
+
+    def test_the_cli_writes_the_file_and_never_echoes_values(self):
+        import io
+        before = self.host.read_bytes()
+        with mock.patch('os.getcwd', return_value=str(self.repo)), \
+                mock.patch('sys.stdout', new_callable=io.StringIO) as out:
+            self.assertEqual(self.pp.main(['settings', '--set', 'parallel=4']), 0)
+            self.assertEqual(self.pp.main(['label', '--set', 'PRIVATE label']), 0)
+        self.assertNotIn('PRIVATE', out.getvalue())
+        self.assertEqual(json.loads(self.file().read_text())['parallel'], '4')
+        self.assertEqual(self.host.read_bytes(), before)
+
+    def test_ledger_and_tasks_still_need_metrics_consent(self):
+        (self.data / 'state/consent.json').unlink()
+        for key, value in (('ledger', 'Alias'), ('tasks', 'docs/t.md')):
+            with self.assertRaises(ValueError):
+                self.pp.set_setting(self.repo, key, value)
+        self.assertFalse(self.file().exists())
+        self.assertTrue(self.pp.set_setting(self.repo, 'parallel', '2'))
+
+    def test_two_repositories_keep_separate_files(self):
+        self.pp.set_setting(self.repo, 'parallel', '6')
+        self.pp.set_setting(self.other, 'ledger', 'Other')
+        self.assertEqual(json.loads(self.file().read_text()), {'version': 1, 'parallel': '6'})
+        self.assertEqual(json.loads(self.file(self.other).read_text()), {'version': 1, 'ledger': 'Other'})
+        self.assertEqual(self.slots.parse_config('', self.other)['limit'], 3)
+        self.assertEqual(self.settings(self.repo), {})
+        self.assertNotEqual(self.approval(), self.approval(self.other))
+
+    def test_a_linked_worktree_uses_the_main_checkouts_file(self):
+        gitdir = self.repo / '.git/worktrees/side'
+        gitdir.mkdir(parents=True)
+        (gitdir / 'commondir').write_text('../..\n')
+        linked = self.repo.parent / 'linked'
+        linked.mkdir()
+        (linked / '.git').write_text('gitdir: %s\n' % gitdir)
+        (gitdir / 'gitdir').write_text(str(linked / '.git') + '\n')
+        self.pp.set_setting(linked, 'parallel', '7')
+        self.assertTrue(self.file().is_file())
+        self.assertFalse((linked / '.finolabs').exists())
+        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 7)
+        self.assertEqual(self.slots.parse_config('', linked)['limit'], 7)
+
+    def test_host_sections_are_never_read(self):
+        code = self.pp.repository_code(self.repo)
+        self.host.write_text('# Host\n\n## Project progress\n\n- Project progress: on\n- Ledger project: Old\n'
+                             '- Task file: old.md\n\n## Project settings\n\n- %s parallel: 9\n- %s ledger: Host\n'
+                             '- %s tasks: host.md\n\n## Project labels\n\n- %s: Host label\n' % (code, code, code, code))
+        self.assertEqual(self.settings(), {})
+        config = self.slots.parse_config(self.host.read_text(), self.repo)
+        self.assertEqual((config['limit'], config['source'], config['scope']['project']), (3, 'default', 'one'))
+        self.assertIsNotNone(self.pp.config())
+        self.assertNotIn('Ledger project', self.pp.config())
+        self.assertFalse(hasattr(self.pp, 'project_settings'))
+        self.assertFalse(hasattr(self.pp, 'project_labels'))
+        result = self.pp.collect(self.repo, code)
+        self.assertEqual(result['label'], '')
+        self.assertEqual(result['ledger_join'], 'none')
+
+    def test_an_unapproved_or_edited_file_cannot_raise_parallel_or_redirect_tasks(self):
+        self.pp.set_setting(self.repo, 'parallel', '2')
+        (self.repo / 'docs').mkdir()
+        (self.repo / 'docs/evil.md').write_text('- [ ] T1 private\n')
+        edited = json.dumps({'version': 1, 'parallel': '32', 'tasks': 'docs/evil.md'}).encode()
+        for case in ('edited', 'no approval', 'branch'):
+            with self.subTest(case=case):
+                self.file().write_bytes(edited)
+                if case == 'no approval':
+                    self.approval().unlink(missing_ok=True)
+                if case == 'edited':
+                    # The approval record still exists: an approved file that changed is unknown, never the default.
+                    with self.assertRaises(ValueError):
+                        self.slots.parse_config('', self.repo)
+                else:
+                    self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 3)
+                self.assertEqual(self.settings(), {})
+                self.assertNotEqual(self.pp.collect(self.repo, 'aaaaaaaa').get('source'), 'checkbox')
+        # A setter starts from what readers see, so the edited values are not carried forward.
+        self.pp.set_setting(self.repo, 'parallel', '4')
+        self.assertEqual(json.loads(self.file().read_text()), {'version': 1, 'parallel': '4'})
+
+    def test_unsafe_or_invalid_approved_files_are_unknown(self):
+        self.pp.set_setting(self.repo, 'parallel', '4')
+        os.chmod(self.file(), 0o620)
+        with self.assertRaises(ValueError):
+            self.slots.parse_config('', self.repo)
+        self.assertEqual(self.settings(), {})
+        os.chmod(self.file(), 0o600)
+        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 4)
+        import hashlib
+        for raw in (b'{"version": 1, "parallel": "33"}', b'{"version": 2}', b'{"version": 1, "other": "x"}',
+                    b'{"version": 1, "parallel": 4}', b'{"version": 1, "parallel": "4", "parallel": "5"}', b'[]'):
+            with self.subTest(raw=raw):
+                self.file().write_bytes(raw)
+                self.approval().write_text(json.dumps({'sha256': hashlib.sha256(raw).hexdigest(), 'approved': 1}))
+                with self.assertRaises(ValueError):
+                    self.slots.parse_config('', self.repo)
+                self.assertEqual(self.settings(), {})
+
+    def broken_cases(self):
+        """Each case breaks an approved file; yields its name after breaking and restores the approved bytes after."""
+        good = self.file().read_bytes()
+        for case in ('appended byte', 'deleted', 'unreadable', 'unsafe mode', 'approved but malformed'):
+            if case == 'appended byte':
+                self.file().write_bytes(good + b' ')
+            elif case == 'deleted':
+                self.file().unlink()
+            elif case == 'unreadable':
+                os.chmod(self.file(), 0)
+            elif case == 'unsafe mode':
+                os.chmod(self.file(), 0o620)
+            else:
+                import hashlib
+                raw = b'{"version": 1, "parallel": "33"}'
+                self.file().write_bytes(raw)
+                approved = json.loads(self.approval().read_text())
+                self.approval().write_text(json.dumps({'sha256': hashlib.sha256(raw).hexdigest(), 'approved': 1}))
+            try:
+                yield case
+            finally:
+                if self.file().exists():
+                    os.chmod(self.file(), 0o600)
+                self.file().write_bytes(good)
+                if case == 'approved but malformed':
+                    self.approval().write_text(json.dumps(approved))
+
+    def test_an_approved_file_that_breaks_never_relaxes_limits(self):
+        import io
+        self.pp.set_setting(self.repo, 'parallel', '1')
+        self.pp.set_setting(self.repo, 'parallel-caps', 'codex=1')
+        self.pp.set_label(self.repo, 'Synthetic label')
+        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 1)
+        for case in self.broken_cases():
+            with self.subTest(case=case):
+                with self.assertRaises(ValueError):
+                    self.slots.parse_config('', self.repo)
+                for argv in (['check', '--family', 'codex', '--repo', str(self.repo)],
+                             ['check', '--family', 'claude', '--repo', str(self.repo)],
+                             ['check-config', '--repo', str(self.repo)]):
+                    with mock.patch('sys.stdout', new_callable=io.StringIO) as out:
+                        self.assertEqual(self.slots.main(argv), 3)
+                    self.assertNotIn('available', out.getvalue())
+                    self.assertIn('unknown', out.getvalue())
+                with mock.patch('os.getcwd', return_value=str(self.repo)):
+                    words = self.slots.summary()
+                self.assertTrue(words.startswith('unknown'), words)
+                self.assertIn('settings need setup again', words)
+                self.assertEqual(self.settings(), {})
+                self.assertIsNone(self.pp.project_label(self.repo))
+        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 1)
+
+    def test_an_approved_ledger_alias_that_breaks_never_joins_under_the_folder_name(self):
+        self.pp.set_setting(self.repo, 'ledger', 'Alias')
+        starts = {'folder': dict(project=self.repo.name, task='T1 folder', ts='2026-11-06T09:00:00Z'),
+                  'alias': dict(project='Alias', task='T2 alias', ts='2026-11-06T09:00:00Z')}
+        code = self.pp.repository_code(self.repo)
+        self.assertEqual(self.pp.collect(self.repo, code, starts=starts)['ledger_join'], 'configured')
+        for case in self.broken_cases():
+            with self.subTest(case=case):
+                result = self.pp.collect(self.repo, code, starts=dict(starts))
+                self.assertEqual(result['ledger_join'], 'unknown')
+                self.assertEqual(result['work'], {})
+                self.assertNotEqual(result['source'], 'ledger')
+                self.assertIn('settings need setup', result['skipped'])
+                with self.assertRaises(ValueError):
+                    self.slots.parse_config('', self.repo)
+
+    def configure_everything(self):
+        self.pp.set_setting(self.repo, 'parallel', '1')
+        self.pp.set_setting(self.repo, 'parallel-caps', 'codex=1')
+        self.pp.set_setting(self.repo, 'ledger', 'Alias')
+        self.pp.set_label(self.repo, 'Synthetic label')
+
+    def run_cli(self, argv):
+        import io
+        with mock.patch('os.getcwd', return_value=str(self.repo)), \
+                mock.patch('sys.stdout', new_callable=io.StringIO) as out, \
+                mock.patch('sys.stderr', new_callable=io.StringIO) as err:
+            code = self.pp.main(argv)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_writers_refuse_a_partial_update_while_approved_settings_are_broken(self):
+        self.configure_everything()
+        good, record = self.file().read_bytes(), self.approval().read_bytes()
+        for case in ('modified', 'missing'):
+            if case == 'modified':
+                self.file().write_bytes(good + b' ')
+            else:
+                self.file().unlink()
+            broken = self.file().read_bytes() if self.file().exists() else None
+            for argv in (['label', '--set', 'Other label'], ['settings', '--set', 'tasks=docs/tasks.md'],
+                         ['settings', '--set', 'parallel=5'], ['settings', '--clear', 'parallel']):
+                with self.subTest(case=case, argv=argv):
+                    code, out, err = self.run_cli(argv)
+                    self.assertEqual(code, 1)
+                    self.assertEqual(out, '')
+                    self.assertIn('settings --reset', err)
+                    self.assertNotIn('Other label', err + out)
+                    self.assertEqual(self.file().read_bytes() if self.file().exists() else None, broken)
+                    self.assertEqual(self.approval().read_bytes(), record)
+                    with self.assertRaises(ValueError):
+                        self.slots.parse_config('', self.repo)
+                    with mock.patch('os.getcwd', return_value=str(self.repo)):
+                        self.assertTrue(self.slots.summary().startswith('unknown'))
+            with self.assertRaises(self.pp.store.SettingsNeedSetup):
+                self.pp.store.write_setting(self.repo, 'parallel', '5')
+            self.file().write_bytes(good)
+            os.chmod(self.file(), 0o600)
+        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 1)
+
+    def test_reset_discards_every_setting_and_returns_to_never_configured(self):
+        self.configure_everything()
+        self.file().write_bytes(self.file().read_bytes() + b' ')
+        code, out, err = self.run_cli(['settings', '--reset'])
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(out, 'Project settings reset.\n')
+        self.assertFalse(self.file().exists())
+        self.assertFalse(self.approval().exists())
+        self.assertEqual(self.pp.store.settings_state(self.repo), ('unset', {}))
+        config = self.slots.parse_config('', self.repo)
+        self.assertEqual((config['limit'], config['source'], config['scope']['project']), (3, 'default', 'one'))
+        self.assertEqual(self.run_cli(['settings', '--set', 'parallel=5'])[0], 0)
+        self.assertEqual(json.loads(self.file().read_text()), {'version': 1, 'parallel': '5'})
+        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 5)
+        # Reset on a never configured repository, or while the file is missing, also ends unset.
+        self.assertEqual(self.run_cli(['settings', '--reset'])[:2], (0, 'Project settings reset.\n'))
+        self.assertEqual(self.run_cli(['settings', '--reset'])[:2], (0, 'Project settings reset.\n'))
+        self.pp.set_setting(self.repo, 'parallel', '2')
+        self.file().unlink()
+        self.assertEqual(self.run_cli(['settings', '--reset'])[0], 0)
+        self.assertFalse(self.approval().exists())
+        self.assertEqual(self.pp.store.settings_state(self.repo), ('unset', {}))
+
+    def test_reset_takes_the_setters_lock_and_combines_with_nothing(self):
+        import fcntl
+        self.pp.set_setting(self.repo, 'parallel', '2')
+        for argv in (['settings', '--reset', '--set', 'parallel=4'], ['settings', '--reset', '--clear', 'parallel'],
+                     ['label', '--reset'], ['settings', '--reset', '--dry-run'], ['settings', '--reset', '--yes']):
+            with self.subTest(argv=argv):
+                before = (self.file().read_bytes(), self.approval().read_bytes())
+                self.assertEqual(self.run_cli(argv)[0], 1)
+                self.assertEqual((self.file().read_bytes(), self.approval().read_bytes()), before)
+        fd = os.open(self.approval().parent, os.O_RDONLY)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.assertEqual(self.run_cli(['settings', '--reset'])[0], 1)
+        finally:
+            os.close(fd)
+        self.assertTrue(self.file().exists())
+        self.assertTrue(self.approval().exists())
+        self.assertEqual(self.slots.parse_config('', self.repo)['limit'], 2)
+
+    def test_collect_reads_the_settings_once(self):
+        self.pp.set_setting(self.repo, 'ledger', 'Alias')
+        self.pp.set_label(self.repo, 'Synthetic label')
+        good = self.file().read_bytes()
+        starts = {'folder': dict(project=self.repo.name, task='T1 folder', ts='2026-11-06T09:00:00Z'),
+                  'alias': dict(project='Alias', task='T2 alias', ts='2026-11-06T09:00:00Z')}
+        code = self.pp.repository_code(self.repo)
+        real = self.pp.store.settings_state
+        calls = []
+
+        def restoring(root):
+            # The first read sees the broken file; the approved bytes come back before any later read.
+            value = real(root)
+            calls.append(value[0])
+            self.file().write_bytes(good)
+            return value
+
+        self.file().write_bytes(good + b' ')
+        with mock.patch.object(self.pp.store, 'settings_state', side_effect=restoring):
+            result = self.pp.collect(self.repo, code, starts=dict(starts))
+        self.assertEqual(calls, ['broken'])
+        self.assertEqual(result['ledger_join'], 'unknown')
+        self.assertEqual(result['work'], {})
+        self.assertIn('settings need setup', result['skipped'])
+        self.assertNotEqual(result['label'], 'Synthetic label')
+        # Approved on the first read: alias and label come from that one read.
+        with mock.patch.object(self.pp.store, 'settings_state', side_effect=lambda root: calls.append(1) or real(root)):
+            result = self.pp.collect(self.repo, code, starts=dict(starts))
+        self.assertEqual(calls, ['broken', 1])
+        self.assertEqual((result['ledger_join'], result['label']), ('configured', 'Synthetic label'))
+
+    def test_never_configured_and_unapproved_files_keep_the_defaults(self):
+        self.assertEqual(self.pp.store.settings_state(self.repo), ('unset', {}))
+        self.file().parent.mkdir(parents=True, mode=0o700)
+        self.file().write_bytes(json.dumps({'version': 1, 'parallel': '32', 'ledger': 'Branch'}).encode())
+        os.chmod(self.file(), 0o600)
+        self.assertEqual(self.pp.store.settings_state(self.repo), ('unset', {}))
+        config = self.slots.parse_config('', self.repo)
+        self.assertEqual((config['limit'], config['source'], config['scope']['project']), (3, 'default', 'one'))
+
+    def test_defaults_when_nothing_is_set(self):
+        config = self.slots.parse_config('', self.repo)
+        self.assertEqual((config['limit'], config['source'], config['scope']['project']), (3, 'default', 'one'))
+        self.assertEqual(config['caps'], {'claude': None, 'codex': None, 'antigravity': None})
+        self.assertEqual(self.settings(), {})
+        self.assertEqual(self.slots.parse_config('', None)['limit'], 3)
+        with mock.patch('os.getcwd', return_value=str(self.home)):
+            self.assertTrue(self.slots.summary().startswith('3 free of 3'))
+        self.assertEqual(self.pp.collect(self.home, None)['reason'], 'no repository')
+
+
+class IdentityTest(unittest.TestCase):
+    """Validated repository identity: only a reciprocal linked worktree borrows the main checkout's code."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name).resolve()
+        self.main = self.base / 'main'
+        (self.main / '.git').mkdir(parents=True)
+        self.pp = module('project_progress_identity', ROOT / 'scripts/project_progress.py')
+        self.slots = module('parallel_slots_identity', ROOT / 'scripts/parallel_slots.py')
+        self.checks = module('checks_list_identity', ROOT / 'scripts/checks_list.py')
+
+    def own(self, root):
+        import hashlib
+        return hashlib.sha256(str(root).encode('utf-8')).hexdigest()[:8]
+
+    def codes(self, root):
+        return {self.pp.repository_code(root), self.slots.repository_code(root),
+                self.checks.code_of(self.checks.layout(root)[0])}
+
+    def link(self, name, gitdir, commondir='../..', back=None):
+        linked = self.base / name
+        linked.mkdir(exist_ok=True)
+        (linked / '.git').write_text('gitdir: %s\n' % gitdir)
+        gitdir.mkdir(parents=True, exist_ok=True)
+        (gitdir / 'commondir').write_text(commondir + '\n')
+        (gitdir / 'gitdir').write_text(str(back or linked / '.git') + '\n')
+        return linked
+
+    def test_a_real_git_worktree_keeps_the_main_checkouts_code(self):
+        import subprocess
+        shutil.rmtree(self.main / '.git')
+        env = {'HOME': str(self.base), 'PATH': os.defpath + ':/usr/local/bin:/opt/homebrew/bin',
+               'GIT_CONFIG_NOSYSTEM': '1'}
+
+        def git(*argv):
+            subprocess.run(['git', *argv], cwd=self.main, env=env, capture_output=True, check=True)
+        git('init', '-q', '-b', 'main')
+        git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-q',
+            '--allow-empty', '-m', 'Start')
+        git('worktree', 'add', '-q', str(self.base / 'linked'), '-b', 'side')
+        self.assertEqual(self.codes(self.main), {self.own(self.main)})
+        self.assertEqual(self.codes(self.base / 'linked'), {self.own(self.main)})
+        self.assertEqual(self.checks.layout(self.base / 'linked'), (self.main, self.main / '.git'))
+
+    def test_a_reciprocal_layout_without_git_keeps_the_main_code(self):
+        linked = self.link('linked', self.main / '.git/worktrees/linked')
+        self.assertEqual(self.codes(linked), {self.own(self.main)})
+
+    def test_a_mismatched_back_pointer_falls_back_to_the_own_root(self):
+        real = self.link('real', self.main / '.git/worktrees/real')
+        intruder = self.base / 'intruder'
+        intruder.mkdir()
+        (intruder / '.git').write_text('gitdir: %s\n' % (self.main / '.git/worktrees/real'))
+        self.assertEqual(self.codes(real), {self.own(self.main)})
+        self.assertEqual(self.codes(intruder), {self.own(intruder)})
+        self.assertEqual(self.checks.layout(intruder)[0], intruder)
+
+    def test_a_fake_metadata_folder_cannot_borrow_another_repositorys_code(self):
+        for name, gitdir, commondir in (
+                ('borrow', self.base / 'borrow/meta/.git/worktrees/x', str(self.main / '.git')),
+                ('inside', self.base / 'inside/meta/.git/worktrees/x', '../..'),
+                ('flat', self.base / 'flat-meta/worktrees/x', str(self.main / '.git')),
+                ('named', self.base / 'named-meta/x', '..')):
+            with self.subTest(name=name):
+                linked = self.link(name, gitdir, commondir, back=self.base / name / '.git')
+                self.assertEqual(self.codes(linked), {self.own(linked)})
+                self.assertEqual(self.checks.layout(linked)[0], linked)
+
+    def test_unsafe_metadata_modes_fall_back_to_the_own_root(self):
+        linked = self.link('linked', self.main / '.git/worktrees/linked')
+        self.assertEqual(self.codes(linked), {self.own(self.main)})
+        for path, mode in ((linked / '.git', 0o666), (self.main / '.git/worktrees/linked/commondir', 0o666),
+                           (self.main / '.git/worktrees/linked/gitdir', 0o646),
+                           (self.main / '.git/worktrees/linked', 0o777), (self.main / '.git/worktrees', 0o775)):
+            with self.subTest(path=path.name, mode=oct(mode)):
+                before = stat.S_IMODE(path.stat().st_mode)
+                os.chmod(path, mode)
+                try:
+                    self.assertEqual(self.codes(linked), {self.own(linked)})
+                    self.assertEqual(self.checks.layout(linked), (linked, linked / '.git'))
+                finally:
+                    os.chmod(path, before)
+        self.assertEqual(self.codes(linked), {self.own(self.main)})
+
+
+class ForeignCommonTest(unittest.TestCase):
+    """A reciprocal pair under a common folder that is not named .git borrows nothing (security finding 1)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        base = Path(self.tmp.name).resolve()
+        self.home = account(self, base / 'home')
+        self.data = self.home / '.finolabs/vibecode'
+        self.data.mkdir(parents=True)
+        (self.data / 'host.md').write_text('# Host\n\n## Project progress\n\n- Project progress: on\n')
+        self.addCleanup(mock.patch.stopall)
+        mock.patch.dict(os.environ, {'FNL_PROGRESS': '', 'FNL_METRICS': ''}).start()
+        self.pp = module('project_progress_foreign', ROOT / 'scripts/project_progress.py')
+        self.slots = module('parallel_slots_foreign', ROOT / 'scripts/parallel_slots.py')
+        self.checks = module('checks_list_foreign', ROOT / 'scripts/checks_list.py')
+        self.a, self.b = base / 'A', base / 'B'
+        meta = self.a / 'worktrees/x'
+        meta.mkdir(parents=True)
+        self.b.mkdir()
+        (meta / 'commondir').write_text('../..\n')
+        (meta / 'gitdir').write_text(str(self.b / '.git') + '\n')
+        (self.b / '.git').write_text('gitdir: %s\n' % meta)
+
+    def test_b_keeps_its_own_code_settings_checks_and_exclude(self):
+        import hashlib
+        store = self.pp.store
+        store.write_setting(self.a, 'parallel', '1')
+        store.write_setting(self.a, 'label', 'Owner label')
+        code_a = store.code_of(self.a)
+        raw = self.checks.render_project([['unit', ['make', 'unit']]], True)
+        with store.project_folder(self.a) as folder:
+            self.checks.dr.atomic_write(folder, 'checks.json', raw)
+        self.checks.write_approved(code_a, hashlib.sha256(raw).hexdigest())
+        self.assertEqual(self.checks.checks_for(code_a, self.a)[1], None)
+        code_b = hashlib.sha256(str(self.b).encode('utf-8')).hexdigest()[:8]
+        self.assertEqual({self.pp.repository_code(self.b), self.slots.repository_code(self.b),
+                          self.checks.code_of(self.checks.layout(self.b)[0])}, {code_b})
+        self.assertEqual(store.read_settings(self.b), {})
+        self.assertIsNone(self.pp.project_label(self.b))
+        self.assertEqual(self.slots.parse_config('', self.b)['limit'], 3)
+        self.assertEqual(self.checks.checks_for(code_b, self.b), ([], 'no entry'))
+        self.assertEqual(self.checks.checks_for(code_a, self.b), ([], 'invalid code'))
+        self.assertFalse(self.checks.receipt_mode(code_b, self.b))
+        self.assertFalse(self.checks.receipt_mode(code_a, self.b))
+        self.assertFalse(store.ensure_excluded(self.b))
+        self.assertFalse((self.a / 'info').exists())
+        self.assertFalse((self.b / '.finolabs').exists())
 
 
 if __name__ == '__main__':

@@ -46,7 +46,7 @@ def check_antigravity_plugin(root):
 def recorder_path(host="claude"):
     scripts = Path(os.path.abspath(__file__)).parent
     candidate = scripts / "context_snapshot.py"
-    if not candidate.is_file() and scripts.parent.name == "fnl-setup":
+    if not candidate.is_file() and scripts.parent.name == "setup":
         candidate = scripts.parents[2] / "scripts" / "context_snapshot.py"
     if not candidate.is_file() or candidate.is_symlink():
         raise Refusal("whole plugin required; use the manual procedure for standalone installs")

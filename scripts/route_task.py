@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Print the route for one task from the decision matrix of `fnl-delegate`.
+"""Print the route for one task from the decision matrix of `delegate`.
 
 Takes the task's kind and grade and prints one line: the tier, effort, budget
 and how it runs, plus the agent order to pick from. Grading the task is the one
@@ -21,7 +21,7 @@ KINDS = ("implement", "review", "advise", "committee")
 GRADES = ("easy", "medium", "hard", "very-hard", "ultra-hard")
 TIERS = ("fast", "strong", "frontier")
 
-# `fnl-delegate` "Decision matrix": grade -> (tier, effort, budget, runs as).
+# `delegate` "Decision matrix": grade -> (tier, effort, budget, runs as).
 MATRIX = {
     "easy": ("fast", "medium", "20", "headless"),
     "medium": ("strong", "medium", "30-45", "headless"),
@@ -31,9 +31,9 @@ MATRIX = {
 }
 # "A run that fell short at its level is retried one level up"; only ultra hard names it.
 RETRY_EFFORT = {"ultra-hard": "max"}
-# `fnl-delegate` "Budget and liveness" for the other kinds.
+# `delegate` "Budget and liveness" for the other kinds.
 BUDGET = {"review": "30", "advise": "15-30", "committee": "30-45"}
-# `fnl-delegate` "Route", step 3: the capability order for code.
+# `delegate` "Route", step 3: the capability order for code.
 CODE_ORDER = "claude-code>codex>antigravity"
 
 

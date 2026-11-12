@@ -206,7 +206,7 @@ class StatuslineSetupTest(unittest.TestCase):
     def test_new_shared_copies_match(self):
         for name in ("statusline_setup.py", "compact_setup.py"):
             self.assertEqual((ROOT / "scripts" / name).read_bytes(),
-                             (ROOT / "skills" / "fnl-setup" / "scripts" / name).read_bytes())
+                             (ROOT / "skills" / "setup" / "scripts" / name).read_bytes())
 
 
 class AntigravityStatuslineTest(unittest.TestCase):
@@ -293,7 +293,7 @@ class AntigravityStatuslineTest(unittest.TestCase):
         self.assertFalse((self.home / ".claude" / "settings.json").exists())
 
     def test_self_contained_setup_copy_finds_whole_plugin_recorder(self):
-        with mock.patch.object(sl, "__file__", str(self.plugin / "skills" / "fnl-setup" / "scripts" / "statusline_setup.py")):
+        with mock.patch.object(sl, "__file__", str(self.plugin / "skills" / "setup" / "scripts" / "statusline_setup.py")):
             self.apply(self.preview())
         self.assertEqual(shlex.split(json.loads(self.target.read_bytes())["statusLine"]["command"])[2],
                          str(self.plugin / "scripts" / "context_snapshot.py"))

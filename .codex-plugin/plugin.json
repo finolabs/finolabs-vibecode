@@ -25,14 +25,14 @@
     "displayName": "Finolabs Vibecode",
     "shortDescription": "Engineering rules for agents",
     "developerName": "FINOLABS",
-    "longDescription": "Skills and three read-only agents: fnl-reviewer, fnl-security-reviewer and fnl-navigator. Route coding work, assign review families, post guarded reviews and verify delegated work with current-head receipts before ledger acceptance. A small host judge is the default; optional Jev uses the scoped network exception and disclosed fallback. Use $fnl-setup for Quick defaults or Advanced interviews, add <feature>, instructions, check, scan and mode. Keep headless runs allowlisted, lint briefs and scan logs locally. Read quota on demand and track project progress per repository; retain handovers through fnl-session-hygiene.",
+    "longDescription": "Skills and three read-only agents: fnl-reviewer, fnl-security-reviewer and fnl-navigator. Route coding work, assign review families, post guarded reviews and verify delegated work with current-head receipts before ledger acceptance. A small host judge is the default; optional Jev uses the scoped network exception and disclosed fallback. Use $setup for Quick defaults or Advanced interviews, add <feature>, instructions, check, scan and mode. Keep headless runs allowlisted, lint briefs and scan logs locally. Read quota on demand and track project progress per repository; retain handovers through session-hygiene.",
     "category": "Coding",
     "capabilities": [],
     "defaultPrompt": [
       "Route this change through the coding router and tell me the depth you chose.",
-      "Use fnl-delegate to coordinate this spec with one session per task.",
-      "Use $fnl-setup to choose Quick or Advanced, then show add <feature>, instructions and check.",
-      "Use $fnl-setup scan to refresh my local agent inventory, then $fnl-setup mode to show effective settings."
+      "Use delegate to coordinate this spec with one session per task.",
+      "Use $setup to choose Quick or Advanced, then show add <feature>, instructions and check.",
+      "Use $setup scan to refresh my local agent inventory, then $setup mode to show effective settings."
     ],
     "websiteURL": "https://github.com/finolabs/finolabs-vibecode",
     "supportURL": "https://github.com/finolabs/finolabs-vibecode/issues",

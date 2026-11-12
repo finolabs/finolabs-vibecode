@@ -30,7 +30,7 @@ class SharedCopiesTest(unittest.TestCase):
 
     def test_ci_lists_every_surviving_copy_of_shared_scripts(self):
         groups = ci_copy_groups()
-        self.assertIn(["scripts/instructions_write.py", "skills/fnl-setup/scripts/instructions_write.py"], groups)
+        self.assertIn(["scripts/instructions_write.py", "skills/setup/scripts/instructions_write.py"], groups)
         for group in groups:
             source = ROOT / group[0]
             if source.parent != ROOT / "scripts":

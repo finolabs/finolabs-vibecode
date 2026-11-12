@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Read advisory parallel capacity from canonical local config and ledger only."""
+"""Read advisory parallel capacity from the repository's approved project settings and the ledger only."""
 
 import argparse
 from contextlib import contextmanager
-import hashlib
 import os
 import stat
 from datetime import datetime, timezone
@@ -15,6 +14,7 @@ import sys
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
 import data_root as dr
+import project_store as store
 
 FAMILIES = ('claude', 'codex', 'antigravity')
 AGENTS = {'claude': 'claude', 'claude-session': 'claude', 'subagent': 'claude',
@@ -27,7 +27,7 @@ DEFAULT_LIMIT = 3
 INSTRUCTION_FILES = ('CLAUDE.MD', 'CLAUDE.LOCAL.MD', 'AGENTS.MD', 'AGENTS.OVERRIDE.MD', 'GEMINI.MD',
                      'COPILOT-INSTRUCTIONS.MD', 'CONVENTIONS.MD', '.CURSORRULES', '.WINDSURFRULES', '.CLINERULES')
 
-# Keep repository identity and strict settings in parity with project_progress.
+# Kept for heavy_run and autopilot, which read these names from this module.
 def host_section(text, title="Project progress"):
     """Return authoritative section bounds, ignoring fenced examples; ambiguity fails closed."""
     headings, fence, offset = [], None, 0
@@ -56,62 +56,13 @@ def host_section(text, title="Project progress"):
 LABEL = re.compile(r'[A-Za-z0-9 ._-]{1,40}')
 
 
+# Repository identity and the settings file are project_store's, shared with project_progress.
 def repository_code(root):
-    """Use the metrics identity for linked worktrees, without running git."""
-    identity = root
-    try:
-        with open_dir(root) as fd:
-            link = read_metadata(fd, '.git').strip()
-        if len(link) <= 4096 and link.startswith('gitdir:'):
-            gitdir = Path(os.path.abspath(root / link[len('gitdir:'):].strip()))
-            with open_dir(gitdir) as fd:
-                common = read_metadata(fd, 'commondir').strip()
-            if len(common) <= 4096 and common:
-                shared = Path(os.path.abspath(gitdir / common))
-                # Refuse symlinked metadata ancestors just like the project reader.
-                with open_dir(shared):
-                    identity = shared.parent if shared.name == '.git' else shared
-    except (OSError, ValueError):
-        pass
-    return hashlib.sha256(str(identity).encode('utf-8')).hexdigest()[:8]
+    """The validated identity of `project_store`, the same as project_progress's."""
+    return store.repository_code(root)
 
 
-def valid_setting(key, value):
-    if not isinstance(value, str):
-        return False
-    if key == 'parallel':
-        return bool(re.fullmatch(r'[0-9]{1,2}', value) and 1 <= int(value) <= 32)
-    if key == 'parallel-caps':
-        seen = set()
-        for item in value.split(','):
-            match = re.fullmatch(r'(claude|codex|antigravity)=([0-9]{1,2})', item.strip())
-            if not match or not 1 <= int(match[2]) <= 32 or match[1] in seen:
-                return False
-            seen.add(match[1])
-        return True
-    if key == 'ledger':
-        return bool(LABEL.fullmatch(value) and value.strip())
-    if key == 'tasks':
-        return bool(re.fullmatch(r'[A-Za-z0-9._/-]{1,120}', value) and value.endswith('.md')
-                    and all(part not in ('', '.', '..') for part in value.split('/'))
-                    and value.split('/')[:2] != ['specs', 'archive']
-                    and value.split('/')[-1].upper() not in INSTRUCTION_FILES)
-    return False
-
-
-def project_settings(text):
-    """One malformed entry invalidates the entire section, never just that key."""
-    _, body, end = host_section(text, 'Project settings')
-    entries = {}
-    lines = [line for line in text[body:end].splitlines() if line.strip()]
-    if len(lines) > 100:
-        raise ValueError('invalid project settings')
-    for line in lines:
-        match = re.fullmatch(r'- ([0-9a-f]{8}) (ledger|tasks|parallel|parallel-caps): (.*)', line)
-        if not match or not valid_setting(match[2], match[3]) or (match[1], match[2]) in entries:
-            raise ValueError('invalid project settings')
-        entries[(match[1], match[2])] = match[3]
-    return entries
+valid_setting = store.valid_setting
 
 
 @contextmanager
@@ -183,27 +134,20 @@ def legacy_limits(text):
     return False
 
 
-def legacy_ledger_alias(text):
-    """The deprecated global `Ledger project:` line that project progress still honors; any doubt means none."""
-    try:
-        _, body, end = host_section(text)
-    except ValueError:
-        return None
-    values = [m[1] for m in (re.fullmatch(r'(?:- )?Ledger project: (.+)', line)
-                             for line in text[body:end].splitlines()) if m]
-    if len(values) != 1 or not values[0].strip():
-        return None
-    return values[0]
-
-
 def parse_config(text, root=None):
-    """Project settings are strict; absent settings use the default of three with no caps."""
-    entries = project_settings(text)
+    """Settings come only from the repository's approved project file (`project_store.settings_state`). Never
+    configured (no approval record) means the default of three with no caps and the folder name as the ledger key;
+    an approved file that is now missing, invalid, unsafe or changed raises `SettingsNeedSetup`, so capacity and the
+    ledger scope are unknown rather than relaxed. `text` (host.md) only reports the retired `## Limits` section; its
+    project settings and global ledger line are never read."""
+    state, settings = store.settings_state(root)
+    if state == 'broken':
+        raise store.SettingsNeedSetup('project settings need setup again')
     code = repository_code(root) if root is not None else None
-    total = entries.get((code, 'parallel'))
+    total = settings.get('parallel')
     limit = int(total) if total is not None else DEFAULT_LIMIT
     caps = {family: None for family in FAMILIES}
-    value = entries.get((code, 'parallel-caps'))
+    value = settings.get('parallel-caps')
     if value is not None:
         for item in value.split(','):
             family, count = item.strip().split('=')
@@ -211,7 +155,7 @@ def parse_config(text, root=None):
                 raise ValueError('invalid cap')
             caps[family] = int(count)
     scope = None if root is None else dict(
-        code=code, project=entries.get((code, 'ledger')) or legacy_ledger_alias(text) or root.name)
+        code=code, project=settings.get('ledger') or root.name)
     return dict(limit=limit, caps=caps, source='project settings' if total is not None else 'default',
                 scope=scope, legacy_limits=legacy_limits(text))
 
@@ -304,6 +248,11 @@ def summary(repo=None):
     """Fixed words and integers only, including the default source in hook output."""
     try:
         state = status(repo)
+    except store.SettingsNeedSetup:
+        return 'unknown (project settings need setup again: run /setup add delegation)'
+    except (OSError, ValueError, TypeError, KeyError, RecursionError):
+        return 'unknown'
+    try:
         parts = []
         for family in FAMILIES:
             row = state['families'][family]

@@ -1,4 +1,4 @@
-"""Tests for skills/fnl-restore-point/scripts/restore_point.py on synthetic git repositories."""
+"""Tests for skills/restore-point/scripts/restore_point.py on synthetic git repositories."""
 
 import importlib.util
 import io
@@ -14,7 +14,7 @@ from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = ROOT / "skills/fnl-restore-point/scripts/restore_point.py"
+SCRIPT = ROOT / "skills/restore-point/scripts/restore_point.py"
 spec = importlib.util.spec_from_file_location("restore_point", SCRIPT)
 restore_point = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(restore_point)
@@ -608,7 +608,7 @@ class RestorePointTest(unittest.TestCase):
         self.assertEqual(self.git("for-each-ref"), refs_before)
 
     def test_skill_documents_config_and_local_secret_capture(self):
-        text = (ROOT / "skills/fnl-restore-point/SKILL.md").read_text()
+        text = (ROOT / "skills/restore-point/SKILL.md").read_text()
         self.assertIn("makes no network call itself", text)
         self.assertIn("configuration can still make git run its filters", text)
         self.assertIn(".env", text)
@@ -623,13 +623,13 @@ class RestorePointTest(unittest.TestCase):
         self.assertNotIn("socket", source)
 
     def test_skill_frontmatter_and_try_it_now_demo_step(self):
-        skill_text = (ROOT / "skills/fnl-restore-point/SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("name: fnl-restore-point", skill_text)
+        skill_text = (ROOT / "skills/restore-point/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("name: restore-point", skill_text)
         self.assertIn("disable-model-invocation: true", skill_text)
         self.assertIn('argument-hint: "[list|create|restore <name>]"', skill_text)
         self.assertIn("Run only when the user asks.", skill_text)
 
-        start_text = (ROOT / "skills/fnl-help/references/start.md").read_text(encoding="utf-8")
+        start_text = (ROOT / "skills/help/references/start.md").read_text(encoding="utf-8")
         demo_lines = [line for line in start_text.splitlines() if line.startswith("4. **Try it now**")]
         self.assertEqual(len(demo_lines), 1)
         demo = demo_lines[0].lower()

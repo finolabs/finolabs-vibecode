@@ -8,22 +8,22 @@ While the user is away, a host agent still meets decisions it would normally ask
 Tier 2 decisions go to an advisor acting as the user's avatar, but four gaps keep that from working:
 
 1. Nothing stops the agent from asking anyway. The session-start text tells it to use the host's question tool, and the
-   `fnl-autopilot` skill does not say what replaces it, so a question waits until the user returns.
-2. The user cannot name who decides: `/fnl-setup add autopilot` has no such question, so each host picks for itself.
-3. `fnl-advisor` only gives an open opinion and ends with "you stay the decider". An away decision needs one choice among
+   `autopilot` skill does not say what replaces it, so a question waits until the user returns.
+2. The user cannot name who decides: `/setup add afk` has no such question, so each host picks for itself.
+3. `advisor` only gives an open opinion and ends with "you stay the decider". An away decision needs one choice among
    known options, cheaply, and on the record.
-4. Two names are confused. `fnl-ask` answers questions about the plugin; `fnl-advisor` gets an opinion. The verb in the
+4. Two names are confused. `ask` answers questions about the plugin; `advisor` gets an opinion. The verb in the
    first suggests the second.
 
 ## Owner decisions (2026-11-09)
 
 - Both changes go into 0.2.3: the decision procedure with a named advisor, and the rename below.
-- No separate decider. Asking another agent is one concept: `fnl-advisor` gains a mode that must choose among given
+- No separate decider. Asking another agent is one concept: `advisor` gains a mode that must choose among given
   options, and the matrix role is `advisor`, so the same named agent serves the user's presence and absence.
-- The help skill's main name becomes fnl-help, and `fnl-ask` stays as a thin alias, as `fnl-brb` does for the away skill.
-  `fnl-advisor` keeps its open opinion and its committee.
+- The help skill's main name becomes help, and `ask` stays as a thin alias, as `brb` does for the away skill.
+  `advisor` keeps its open opinion and its committee.
 - Inside a lease the advisor is always another model family, reached through its own command-line program, and has to be
-  capable enough for the role: the frontier tier of that family in `fnl-delegate` `models.md` first, then its strong tier.
+  capable enough for the role: the frontier tier of that family in `delegate` `models.md` first, then its strong tier.
   Nothing below strong, and no advisor run of the host's own family (a Claude model served through another host counts as
   Claude): with no eligible advisor the host itself chooses, as "Outcomes when a rung cannot answer" says.
 - The question gate below is built now rather than after a trial. The owner's practice is to apply the design predicted to
@@ -39,8 +39,8 @@ rung that settles it. Each rung is cheaper than the next.
 2. **Jev**, when the choice is among closed options and `judge: jev` is set: one call of a new `judge.py` site,
    `away-decision`, with the question, two to six options and the evidence the question needs. It settles the choice when the top option's
    probability is at least 0.8, a starting threshold that the first real uses must validate; below that, the next rung.
-3. **The advisor**: `fnl-advisor` in its choose mode, run by the agent the matrix names in the optional role `advisor` or,
-   with none named, by the family `fnl-advisor` already picks (one other than the host's), among the lease's recorded Hosts: one read-only
+3. **The advisor**: `advisor` in its choose mode, run by the agent the matrix names in the optional role `advisor` or,
+   with none named, by the family `advisor` already picks (one other than the host's), among the lease's recorded Hosts: one read-only
    run that must return exactly one of the options with its reason, or `none`. It is an ordinary dispatch (ledger kind
    `advise`) and counts against the lease's run limit.
 4. **The host's own choice**, when no rung above answered: it picks the option that best serves the spec or the project's stated goal and records itself as the decider (rung `host`).
@@ -48,7 +48,7 @@ rung that settles it. Each rung is cheaper than the next.
 **Parking is not a rung.** Before a question enters the ladder and again before the chosen action runs, the host checks it against "Where it must stop" (advisory, agent judgment, except for the command forms `autopilot.py check` classifies). What stops there is logged as rung `park`, the user is told once, and the host goes on with other work.
 
 Inside a lease the answer of a rung is the decision, not advice: the host applies the option it returned and does not
-re-ask, overrule or shop it to another rung (advisory, agent judgment; the `log --by` record shows who decided). `fnl-advisor`'s line "you stay the
+re-ask, overrule or shop it to another rung (advisory, agent judgment; the `log --by` record shows who decided). `advisor`'s line "you stay the
 decider" stays true for its open mode, with the user present; the choose mode states the opposite for a lease.
 
 ### Outcomes when a rung cannot answer
@@ -72,7 +72,7 @@ Each case has one outcome. A decision is never permission: the action it selects
 The skill requires a Tier 1 check before every action, so rungs 2 and 3 need command forms `autopilot.py` knows. Package 5 adds exactly two to `classify_argv`, and the script stays execution-free:
 
 - `judge.py` of this install, with isolated Python, and only the site `away-decision` and its validated options. No other site, no base-URL flag.
-- The advisor's run: this install's `delegate_env.py` wrapper followed by one closed read-only argv shape per family, taken from `fnl-advisor`'s own dispatch commands, the family being one of the lease's Hosts and other than the coordinator's. The program is the family's owner-approved executable: the absolute path recorded in the canonical host config for the quota probe (`Executable`, `Resolved` and its confirmed digest), passing that probe's owner, mode, repository and target checks at check time; no record means the form is denied, and a bare name, a PATH lookup, another path with the same name and a time-cap wrapper such as `perl`, which has no such record, deny. The brief is passed only by the mechanism those commands already use, behind an unambiguous boundary: Codex and Claude end their options with a literal `--` immediately before the brief, Antigravity takes it as the value of `-p`, and in every form a brief that starts with `-` (an option, or `-` for unvalidated standard input) denies. Any write-enabling flag, unknown option or other program denies.
+- The advisor's run: this install's `delegate_env.py` wrapper followed by one closed read-only argv shape per family, taken from `advisor`'s own dispatch commands, the family being one of the lease's Hosts and other than the coordinator's. The program is the family's owner-approved executable: the absolute path recorded in the canonical host config for the quota probe (`Executable`, `Resolved` and its confirmed digest), passing that probe's owner, mode, repository and target checks at check time; no record means the form is denied, and a bare name, a PATH lookup, another path with the same name and a time-cap wrapper such as `perl`, which has no such record, deny. The brief is passed only by the mechanism those commands already use, behind an unambiguous boundary: Codex and Claude end their options with a literal `--` immediately before the brief, Antigravity takes it as the value of `-p`, and in every form a brief that starts with `-` (an option, or `-` for unvalidated standard input) denies. Any write-enabling flag, unknown option or other program denies.
 
 Each check reserves an action, and the advisor's ledger start also reserves a run, as today. Acceptance cases show both calls returning Tier 1 under a live lease, and a changed site, a write flag, a family outside Hosts and an unknown program being denied.
 
@@ -82,17 +82,17 @@ grants no authority: an option the check denies is parked. The rungs choose amon
 ## What enforces what
 
 - `autopilot.py` stays a script with no execution and no network call, so it cannot run the ladder itself: a single command
-  that called Jev or started an agent would break its contract. The ladder is a procedure in `fnl-autopilot`
+  that called Jev or started an agent would break its contract. The ladder is a procedure in `autopilot`
   (`references/decide.md`), advisory (agent judgment).
 - The record is script-enforced; see "Record for analysis".
 - `judge.py` enforces the new site's closed schema and byte caps, as for the other sites. The new site changes the closed
   list in the fourth scoped exception of `CLAUDE.md` and the Judge text of `PRIVACY.md`; those amendments merge before its code.
 - `assignments.py` adds `advisor` to its roles, one agent at most. The role is optional, so the away mandate works with no
-  extra setup: without it the advisor is picked by contrast as `fnl-advisor` does today, limited to the lease's Hosts. A name
+  extra setup: without it the advisor is picked by contrast as `advisor` does today, limited to the lease's Hosts. A name
   the user gives by hand wins over the role, and the role wins over the contrast rule.
 - The question gate below enforces that the user is not asked during a lease, on Claude Code.
 - While a lease is active, `session_start.py` prints one fixed line, after a compaction or resume as well: `Away mandate active:
-  do not ask the user; follow fnl-autopilot "Decide"`. It reads only whether a live lease exists and prints no content.
+  do not ask the user; follow autopilot "Decide"`. It reads only whether a live lease exists and prints no content.
   The skill says the same when the lease starts.
 
 ## Grounded in the user's memory
@@ -102,7 +102,7 @@ An advisor with only the code in front of it would give its own opinion, not the
 
 - **The host builds a precedent packet; the advisor does not search.** Another family's program may have no access to the user's knowledge
   base or to the host's native memory, and giving it that access would hand a whole private store to a provider for one question. The host,
-  which already reads them, queries the knowledge source the user's instructions name (`fnl-session-hygiene` "Remember or recall") and its
+  which already reads them, queries the knowledge source the user's instructions name (`session-hygiene` "Remember or recall") and its
   native memory for this question, and passes only the matching excerpts: the decision, its date and a source reference for each, at most eight
   excerpts and 8 KB. Selecting by relevance is agent judgment, advisory; when a judge is configured it may rank the candidates, under the same consent and screening as any other excerpt that leaves the machine.
 - **The goal decides, a missing precedent does not stop the work.** Every rung chooses the option that best serves the current spec or the project's
@@ -112,7 +112,7 @@ An advisor with only the code in front of it would give its own opinion, not the
 - **What stops is the blast radius, not the novelty** (owner, 2026-11-09). Work that can be rolled back goes on: the local machine, a development environment, a UAT
   run. Reaching production, a live environment or real users always stops for a person, and no setting opens it. See "Where it must stop".
 - **Excerpts are data.** The brief says so, instructions inside them are ignored, and a precedent can narrow a choice but grants no authority.
-- **Leaving the machine needs its own consent.** Excerpts sent to a judge or to another family's provider are the user's private history. `/fnl-setup add
+- **Leaving the machine needs its own consent.** Excerpts sent to a judge or to another family's provider are the user's private history. `/setup add
   autopilot` asks one separate neutral question for it, recorded in `## Autopilot`; without a yes no excerpt leaves the machine, so rungs 2 and 3 have
   nothing to cite, so they answer on the goal alone. Each excerpt passes the secret and machine-path patterns first; a hit drops that excerpt. This is agent
   judgment for selection and a script check (`brief_check`-style lint of the packet) for the caps and patterns.
@@ -124,7 +124,7 @@ An advisor with only the code in front of it would give its own opinion, not the
 
 `autopilot.md` makes every deploy Tier 3. That is too broad: it also stops a deploy to a development environment or a UAT run, which can be rolled back. The rule becomes:
 
-The user chooses (owner, 2026-11-09). `/fnl-setup add autopilot` shows one table of closed categories with the starting choice beside each, and the user changes any row not marked fixed. Each category is `stop` (wait for a person) or `decide`
+The user chooses (owner, 2026-11-09). `/setup add afk` shows one table of closed categories with the starting choice beside each, and the user changes any row not marked fixed. Each category is `stop` (wait for a person) or `decide`
 (the ladder decides). The choices are stored in `## Autopilot`; a missing or unknown value is `stop`.
 
 | Category | Starting choice |
@@ -166,7 +166,7 @@ What the script can enforce: tags, releases, publishing, deploys and forced push
 ## The question gate (Claude Code)
 
 One `PreToolUse` hook for the `AskUserQuestion` tool, in its own group, under the sixth scoped exception in `CLAUDE.md`. While a live
-lease exists it denies that one call with one fixed message: the user is away, follow fnl-autopilot "Decide". It reads only whether
+lease exists it denies that one call with one fixed message: the user is away, follow autopilot "Decide". It reads only whether
 a valid, unexpired lease exists, through the same safe reader as `autopilot.py`; no lease, an expired, stopped or unreadable one, or any
 error allows. It never reads the question, never denies another tool, a prompt, a session start or the user's own stop.
 Starting the lease is the user's opt-in; `FNL_AWAY_GATE=off` disables it. It appends one ledger line (below) and sends nothing.
@@ -175,7 +175,7 @@ that tool; if it does not, the gate is dropped and the report says so.
 
 ## Record for analysis
 
-The owner reviews real use from the ledger, so one record covers every decision and `fnl-status` reads it.
+The owner reviews real use from the ledger, so one record covers every decision and `status` reads it.
 
 - `autopilot.py log --kind decision` records one attempt. All attempts on one question share `--decision <id>`, an id the first attempt's call generates and prints (`q<date>-<time>-<4 hex>`) and later calls must pass. Common fields: `--rung rule|jev|advisor|host|park`, `--settled yes|no|unavailable`, `--precedents <count>`, `--topic` (a short label under the ledger's task-label rule). The closed schema, refused otherwise:
 
@@ -197,7 +197,7 @@ The owner reviews real use from the ledger, so one record covers every decision 
 - The gate appends a `question_denied` line with the time and the lease's start time only.
 - On return, `autopilot.py review --decision <id> kept|reversed` appends a `decision_review` line with no reason text. The id must exist in the ledger; a later review of the same id replaces the earlier one when read.
 - `ledger.load()` keeps returning its two maps of `start` and `finish` records, which `pause.py`, the status refresh and `project_progress` consume. It skips the three new event types silently, without the malformed-line message; a separate reader returns them. A test runs mixed history through `load`, the new reader and `summary` and shows the dispatch numbers unchanged.
-- An away view of the ledger summary and the `fnl-status` tables show, per lease: decisions by rung, by advisor and model, the Jev probability
+- An away view of the ledger summary and the `status` tables show, per lease: decisions by rung, by advisor and model, the Jev probability
   spread, parked and denied questions, and the share reversed by the user. No question or option text is ever in the ledger; the topic label is the only words.
 
 ## Limits
@@ -211,16 +211,16 @@ The owner reviews real use from the ledger, so one record covers every decision 
 
 ## The rename
 
-fnl-help is a new user-facing skill folder holding the content of `fnl-ask`; `fnl-ask` becomes a thin alias naming fnl-help as its
+help is a new user-facing skill folder holding the content of `ask`; `ask` becomes a thin alias naming help as its
 dependency. The description states in plain words that it answers questions about this plugin, not that it asks anyone. Counts, the map,
-README and tests follow, as for `fnl-afk`.
+README and tests follow, as for `afk`.
 
 ## Open decisions
 
 | Decision | Owner | What unblocks it |
 | --- | --- | --- |
 | Whether 0.8 is the right threshold for rung 2 | owner | the first real decisions in the log |
-| Whether `fnl-advisor`'s committee is ever a rung for design decisions | owner | a preference |
+| Whether `advisor`'s committee is ever a rung for design decisions | owner | a preference |
 
 ## Evidence
 

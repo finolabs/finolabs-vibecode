@@ -6,8 +6,8 @@ says which agent sent it (default claude); Antigravity payloads carry no event n
 session_start|post_tool_use` says which hook fired. It prints nothing (Antigravity wants `{}`), except one
 fixed router reminder on Claude Code at a session's first edit with no router receipt, and always
 exits 0, so it can never fail or block the session. It reads command text only to test for a
-trigger and discards it, and reads a submitted prompt only for a leading `/fnl-` skill name and
-discards it; the only file it opens is a review body named in a `gh pr comment` command, and only
+trigger and discards it, and reads a submitted prompt only for a leading slash name of one of the
+plugin's skills (or its older `fnl-` name) and discards it; the only file it opens is a review body named in a `gh pr comment` command, and only
 the first line of that file is read.
 """
 
@@ -40,7 +40,7 @@ TASKS = re.compile(r"--tasks[\s=]+(\d{1,3})(?!\S)")
 REASON = re.compile(r"--reason[\s=]+([a-z-]+)(?!\S)")
 ROUTED = re.compile(r"--route-by[\s=]+(\S+)")
 VALUE_FLAGS = {"--repo", "-R", "--body", "-b", "--body-file", "-F"}
-REFRESH = Path(__file__).resolve().parent.parent / "skills/fnl-status/scripts/refresh.py"
+REFRESH = Path(__file__).resolve().parent.parent / "skills/status/scripts/refresh.py"
 REFRESH_EVERY = 10  # seconds between rebuilds while tools run, so an open dashboard stays current
 REFRESH_SECONDS = 8
 REFRESH_AFTER_TOOL_SECONDS = 4  # under the PostToolUse hook's own timeout
@@ -49,10 +49,13 @@ AGY_SHELL = {"run_command"}
 AGY_EDIT = {"write_file", "write_to_file", "replace_file_content", "multi_replace_file_content"}
 HEAD_BYTES = 4096
 MAX_COMMAND = 8192  # longer command text is not tested at all: a trigger is never that long
-ROUTER_SKILL = "fnl-coding-router"
+ROUTER_SKILL = "coding-router"
 # A typed skill or slash command: "/name" or "/plugin:name" at the very start of the prompt, then whitespace or the end.
-TYPED = re.compile(r"/(?:[A-Za-z0-9_.-]{1,64}:)?(fnl-[a-z][a-z-]{0,39})(?:[ \t\r\n]|\Z)")
-REMINDER = ("fnl: this session edited a file before any fnl-coding-router receipt; invoke the fnl-coding-router skill "
+TYPED = re.compile(r"/(?:([A-Za-z0-9_.-]{1,64}):)?([a-z][a-z-]{0,43})(?:[ \t\r\n]|\Z)")
+PLUGIN = "finolabs-vibecode"
+# Host commands that share a skill's short name: typed bare, they run the host's command, not the skill.
+HOST_COMMANDS = {"help", "status"}
+REMINDER = ("fnl: this session edited a file before any coding-router receipt; invoke the coding-router skill "
             "before further coding work (advisory reminder, shown once per session).")
 
 
@@ -75,15 +78,36 @@ def record_skill(sid, cwd, name):
 
 
 def typed_skill(prompt):
-    """The `fnl-` name of a skill typed as a slash command at the start of the prompt, else None. The text is discarded."""
+    """The current name of a plugin skill typed as a slash command at the start of the prompt, else None.
+
+    "/name" counts unless a host command has that name; "/finolabs-vibecode:name" always counts; an older
+    "/fnl-name" counts behind any plugin prefix. The text is discarded."""
     if not isinstance(prompt, str):
         return None
     found = TYPED.match(prompt[:200])
-    return found.group(1) if found else None
+    if not found:
+        return None
+    plugin, typed = found.groups()
+    name = fm.skill_name(typed)
+    if name is None or (plugin is not None and plugin != PLUGIN and not typed.startswith("fnl-")):
+        return None
+    if plugin is None and typed in HOST_COMMANDS:
+        return None
+    return name
 
 
-def fnl_name(value):
-    """The `fnl-` name inside "plugin:fnl-name" or "fnl-name", else None."""
+def skill_name(value):
+    """The current skill name inside "finolabs-vibecode:name", "name" or an older "plugin:fnl-name", else None."""
+    if not isinstance(value, str):
+        return None
+    plugin, _, typed = value.rpartition(":")
+    if plugin and plugin != PLUGIN and not typed.startswith("fnl-"):
+        return None
+    return fm.skill_name(typed)
+
+
+def agent_name(value):
+    """The `fnl-` agent name inside "plugin:fnl-name" or "fnl-name", else None."""
     if not isinstance(value, str):
         return None
     name = value.rsplit(":", 1)[-1]
@@ -266,11 +290,11 @@ def session_start(sid, cwd, source, host):
 
 def post_tool_use(sid, cwd, tool, data, host="claude"):
     if tool == "Skill":
-        name = fnl_name(data.get("skill"))
+        name = skill_name(data.get("skill"))
         if name:
             record_skill(sid, cwd, name)
     elif tool == "Agent":
-        name = fnl_name(data.get("subagent_type"))
+        name = agent_name(data.get("subagent_type"))
         if name:
             fm.record("agent", sid, cwd, name=name)
     elif tool in EDIT_TOOLS:

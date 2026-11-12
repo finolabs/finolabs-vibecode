@@ -1144,7 +1144,7 @@
   },
   "use": [
     {
-      "name": "fnl-coding-router",
+      "name": "coding-router",
       "kind": "skill",
       "count": 49
     },
@@ -1159,27 +1159,27 @@
       "count": 29
     },
     {
-      "name": "fnl-review-gate",
+      "name": "review-gate",
       "kind": "skill",
       "count": 7
     },
     {
-      "name": "fnl-delegate",
+      "name": "delegate",
       "kind": "skill",
       "count": 7
     },
     {
-      "name": "fnl-open-source-review",
+      "name": "open-source-review",
       "kind": "skill",
       "count": 7
     },
     {
-      "name": "fnl-commit-messages",
+      "name": "commit-messages",
       "kind": "skill",
       "count": 2
     },
     {
-      "name": "fnl-versioning",
+      "name": "versioning",
       "kind": "skill",
       "count": 2
     }
@@ -1189,22 +1189,22 @@
     "estimate": true,
     "top": [
       {
-        "name": "fnl-delegate",
+        "name": "delegate",
         "tokens": 3400,
         "loads": 6
       },
       {
-        "name": "fnl-coding-router",
+        "name": "coding-router",
         "tokens": 2800,
         "loads": 49
       },
       {
-        "name": "fnl-review-gate",
+        "name": "review-gate",
         "tokens": 3600,
         "loads": 7
       },
       {
-        "name": "fnl-setup",
+        "name": "setup",
         "tokens": 2900,
         "loads": 3
       }

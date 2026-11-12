@@ -1,4 +1,4 @@
-"""Tests for scripts/route_task.py and its copy in fnl-delegate."""
+"""Tests for scripts/route_task.py and its copy in delegate."""
 
 import ast
 import subprocess
@@ -8,10 +8,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/route_task.py"
-COPY = ROOT / "skills/fnl-delegate/scripts/route_task.py"
+COPY = ROOT / "skills/delegate/scripts/route_task.py"
 CODE_ORDER = "agents=claude-code>codex>antigravity"
 
-# Written out from `fnl-delegate` "Decision matrix" and "Budget and liveness",
+# Written out from `delegate` "Decision matrix" and "Budget and liveness",
 # independently of the script's tables.
 EXPECTED = {
     ("implement", "easy"): "tier=fast effort=medium budget-min=20 runs-as=headless agents=most-quota-left",

@@ -29,8 +29,15 @@ STATE_BASELINE = ("\nPlugin state (local files; fixed words and counts only)\n"
 
 
 class SyntheticStateTest(unittest.TestCase):
+    # Keep other tests independent of the checkout they run in; CheckoutLineTest reads synthetic repositories.
+    real_checkout = False
+
     def setUp(self):
         self.root = setup_store(self)
+        if not self.real_checkout and hasattr(hook, "checkout_line"):
+            patch = mock.patch.object(hook, "checkout_line", return_value="")
+            patch.start()
+            self.addCleanup(patch.stop)
         environment = mock.patch.dict(os.environ, {}, clear=True)
         environment.start()
         self.addCleanup(environment.stop)
@@ -68,13 +75,13 @@ class SessionStartTest(SyntheticStateTest):
         return out.getvalue().encode(), handover.read
 
     def after_compact(self):
-        return self.baseline("on") + hook.COMPACT_DELEGATION.encode()
+        return self.baseline("on") + hook.COMPACT_TITLE.encode() + hook.COMPACT_DELEGATION.encode()
 
     def test_compact_reminds_about_delegation_unless_mode_is_manual_and_startup_never_does(self):
         raw = json.dumps({"source": "compact", "session_id": "synthetic"}).encode()
         for mode in ("suggest", "auto", None):
             out, _ = self.run_hook(raw, delegation=mode)
-            self.assertIn(b'apply fnl-delegate "Keep or hand off"', out)
+            self.assertIn(b'apply the delegate skill\'s "Keep or hand off"', out)
             self.assertIn(b"another agent family", out)
         out, _ = self.run_hook(raw, delegation="manual")
         self.assertNotIn(b"Keep or hand off", out)
@@ -83,16 +90,32 @@ class SessionStartTest(SyntheticStateTest):
             out, _ = self.run_hook(startup, delegation="auto")
             self.assertNotIn(b"Keep or hand off", out)
 
+    def test_compact_reminds_to_check_the_title_in_every_mode_and_startup_never_does(self):
+        raw = json.dumps({"source": "compact", "session_id": "synthetic"}).encode()
+        for mode in ("manual", "suggest", "auto", None):
+            out, _ = self.run_hook(raw, delegation=mode)
+            self.assertIn(b"invoke the session-hygiene skill", out)
+            self.assertIn(b"rename it", out)
+        for source in ("startup", "resume", "clear"):
+            startup = json.dumps({"source": source, "session_id": "synthetic"}).encode()
+            out, _ = self.run_hook(startup, delegation="auto")
+            self.assertNotIn(b"After compaction", out)
+
+    def test_compact_title_reminder_is_fixed_text_without_data(self):
+        text = hook.COMPACT_TITLE
+        self.assertLessEqual(len(text), 300)
+        self.assertNotIn("/", text)
+
     def test_compact_reminder_is_fixed_text_without_data(self):
         text = hook.COMPACT_DELEGATION
         self.assertLessEqual(len(text), 500)
         self.assertIn("in the host's background mode, never `( … ) &` or nohup;", text)
-        self.assertNotIn("/", text.replace("fnl-delegate", ""))
+        self.assertNotIn("/", text.replace("delegate", ""))
 
     def baseline(self, routing):
         text = (ROOT / "rules/AGENTS.md").read_text(encoding="utf-8")
         if routing == "off":
-            text = "\n".join(line for line in text.splitlines() if "fnl-coding-router" not in line) + "\n"
+            text = "\n".join(line for line in text.splitlines() if "coding-router" not in line) + "\n"
         return (text + STATE_BASELINE).encode()
 
     def test_idle_stdin_does_not_hold_the_start(self):
@@ -195,6 +218,26 @@ class SessionStartTest(SyntheticStateTest):
             out, _ = self.run_hook(raw)
             self.assertEqual(out, self.baseline("on"))
 
+    def test_a_valid_session_id_is_printed_once_on_every_source(self):
+        session = "00000000-0000-4000-8000-0000000000a1"
+        line = f"Session id: {session}\n".encode()
+        for source in ("startup", "resume", "clear", "other", None):
+            with self.subTest(source=source):
+                out, _ = self.run_hook(json.dumps({"source": source, "session_id": session}).encode())
+                self.assertEqual(out, self.baseline("on") + line)
+        out, _ = self.run_hook(json.dumps({"source": "compact", "session_id": session}).encode(),
+                               reader=mock.Mock(return_value=""))
+        self.assertEqual(out, self.baseline("on") + line + hook.COMPACT_TITLE.encode() + hook.COMPACT_DELEGATION.encode())
+
+    def test_an_invalid_session_id_prints_nothing(self):
+        for session in ("synthetic", "00000000-0000-4000-8000-0000000000A1", "00000000-0000-4000-8000-0000000000a1\n",
+                        "00000000-0000-4000-8000-0000000000a1 ", "00000000-0000-4000-8000-0000000000a12",
+                        "../00000000-0000-4000-8000-0000000000a1", "0" * 36, None, 1, ["x"]):
+            with self.subTest(session=session):
+                out, _ = self.run_hook(json.dumps({"source": "startup", "session_id": session}).encode())
+                self.assertNotIn(b"Session id", out)
+                self.assertEqual(out, self.baseline("on"))
+
     def test_existing_hook_declarations_retain_pre_steward_bytes(self):
         # Baseline main 421b2d0; changing Codex declarations requires renewed trust.
         expected = {"claude": "72844c7d76488bf4b60a78ef28826a86269772c79423c6835197c1562086dc9b",
@@ -259,7 +302,9 @@ class StateBlockTest(SyntheticStateTest):
         nested.mkdir()
         code = parallel_slots.repository_code(repo)
         self.write("host.md", "## Limits\n- Parallel dispatches: at most 32 at one time.\n"
-                   "## Project settings\n- %s parallel: 6\n- %s parallel-caps: codex=3\n" % (code, code))
+                   "## Project settings\n- %s parallel: 9\n" % code)
+        parallel_slots.store.write_setting(repo, 'parallel', '6')
+        parallel_slots.store.write_setting(repo, 'parallel-caps', 'codex=3')
         records = [dict(event="start", id=str(n), agent=agent, project=repo.name)
                    for n, agent in enumerate(("claude-session", "codex", "codex", "codex"))]
         records.append(dict(event='start', id='other', agent='codex', project='other'))
@@ -269,6 +314,12 @@ class StateBlockTest(SyntheticStateTest):
                           "antigravity 0 open; project settings)\n", self.state())
         with mock.patch('os.getcwd', return_value=str(self.root)):
             self.assertIn(SLOTS_DEFAULT, self.state())
+        # An approved file that changed: the line still prints and says settings need setup, never the default.
+        settings = repo / '.finolabs/vibecode/settings.json'
+        settings.write_bytes(settings.read_bytes() + b' ')
+        with mock.patch('os.getcwd', return_value=str(nested)):
+            self.assertIn("Parallel slots: unknown (project settings need setup again: run /setup add delegation)\n",
+                          self.state())
 
     def test_no_metrics_consent_still_reads_recorded_roles(self):
         self.write("host.md", "## Agents on this machine\n| Codex | yes | x | x | x |\n"
@@ -385,7 +436,7 @@ class StateBlockTest(SyntheticStateTest):
             self.qp.write_json(folder, "limits.json", {"claude": stamp(current - hours(minutes=10))})
         self.assertIn("Quota (cached): claude-code limited, codex out 3%", self.state())
 
-    AWAY = 'Away mandate active: do not ask the user; follow fnl-autopilot "Decide"\n'
+    AWAY = 'Away mandate active: do not ask the user; follow autopilot "Decide"\n'
 
     def write_lease(self, start, expiry):
         self.write("state/autopilot/lease.json", json.dumps({
@@ -438,3 +489,101 @@ class StateBlockTest(SyntheticStateTest):
         popen.assert_not_called()
         fork.assert_not_called()
         spawn.assert_not_called()
+
+
+class CheckoutLineTest(SyntheticStateTest):
+    """The main checkout off its default branch adds one fixed line; every other state prints nothing."""
+    real_checkout = True
+    LINE = ('The main checkout is not on its default branch: keep it on the default branch and work in a worktree '
+            '(commit-messages "Branches").\n')
+
+    def repository(self, head="ref: refs/heads/main", default="ref: refs/remotes/origin/main"):
+        main = self.root / "repos" / "synthetic-app"
+        git = main / ".git"
+        (git / "refs" / "remotes" / "origin").mkdir(parents=True)
+        (git / "HEAD").write_text(head + "\n")
+        if default is not None:
+            (git / "refs" / "remotes" / "origin" / "HEAD").write_text(default + "\n")
+        return main
+
+    def worktree(self, main, branch):
+        tree = self.root / "repos" / "synthetic-tree"
+        tree.mkdir(parents=True)
+        meta = main / ".git" / "worktrees" / "synthetic-tree"
+        meta.mkdir(parents=True)
+        (meta / "HEAD").write_text("ref: refs/heads/%s\n" % branch)
+        (meta / "commondir").write_text("../..\n")
+        (meta / "gitdir").write_text(str(tree / ".git") + "\n")
+        (tree / ".git").write_text("gitdir: %s\n" % meta)
+        return tree
+
+    def line_in(self, folder):
+        with mock.patch("os.getcwd", return_value=str(folder)):
+            return hook.checkout_line()
+
+    def test_on_default_is_silent(self):
+        main = self.repository()
+        self.assertEqual(self.line_in(main), "")
+        nested = main / "src"
+        nested.mkdir()
+        self.assertEqual(self.line_in(nested), "")
+
+    def test_off_default_prints_the_fixed_line(self):
+        main = self.repository(head="ref: refs/heads/feat/synthetic-change")
+        self.assertEqual(self.line_in(main), self.LINE)
+
+    def test_detached_head_prints_the_fixed_line(self):
+        main = self.repository(head="0123456789abcdef0123456789abcdef01234567")
+        self.assertEqual(self.line_in(main), self.LINE)
+
+    def test_linked_worktree_on_another_branch_with_main_on_default_is_silent(self):
+        main = self.repository()
+        tree = self.worktree(main, "fix/synthetic-bug")
+        self.assertEqual(self.line_in(tree), "")
+
+    def test_linked_worktree_while_main_is_off_default_prints_the_line(self):
+        main = self.repository(head="ref: refs/heads/fix/synthetic-bug")
+        tree = self.worktree(main, "fix/other")
+        self.assertEqual(self.line_in(tree), self.LINE)
+
+    def test_unknown_default_is_silent(self):
+        import shutil
+        for default in (None, "", "0123456789abcdef0123456789abcdef01234567", "ref: refs/remotes/origin/"):
+            with self.subTest(default=default):
+                main = self.repository(head="ref: refs/heads/feat/synthetic-change", default=default)
+                self.assertEqual(self.line_in(main), "")
+                shutil.rmtree(self.root / "repos")
+
+    def test_unreadable_or_unsafe_metadata_is_silent(self):
+        main = self.repository(head="ref: refs/heads/feat/synthetic-change")
+        head = main / ".git" / "HEAD"
+        head.chmod(0)
+        self.addCleanup(head.chmod, 0o600)
+        self.assertEqual(self.line_in(main), "")
+        head.chmod(0o600)
+        target = main / ".git" / "HEAD.real"
+        head.rename(target)
+        head.symlink_to(target)
+        self.assertEqual(self.line_in(main), "")
+        head.unlink()
+        target.rename(head)
+        (main / ".git" / "refs" / "remotes" / "origin" / "HEAD").write_bytes(b"\xff" * 8)
+        self.assertEqual(self.line_in(main), "")
+
+    def test_outside_a_repository_is_silent(self):
+        outside = self.root / "plain"
+        outside.mkdir(parents=True)
+        self.assertEqual(self.line_in(outside), "")
+
+    def test_the_line_is_fixed_words_and_ends_the_state_block(self):
+        self.assertNotIn("/", self.LINE)
+        main = self.repository(head="ref: refs/heads/feat/synthetic-change")
+        out = io.StringIO()
+        with mock.patch("os.getcwd", return_value=str(main)), \
+                mock.patch.object(sys, "stdin", io.TextIOWrapper(io.BytesIO(b""), encoding="utf-8")), \
+                contextlib.redirect_stdout(out):
+            self.assertEqual(hook.main(), 0)
+        text = out.getvalue()
+        self.assertTrue(text.endswith(self.LINE), text[-300:])
+        self.assertNotIn("synthetic", text)
+        self.assertNotIn(str(self.root), text)

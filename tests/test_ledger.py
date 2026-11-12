@@ -1,4 +1,4 @@
-"""Tests for skills/fnl-delegate/scripts/ledger.py, run through its CLI."""
+"""Tests for skills/delegate/scripts/ledger.py, run through its CLI."""
 
 import importlib.util
 import contextlib
@@ -15,7 +15,7 @@ from pathlib import Path
 from tests.data_root_fixture import account
 from unittest import mock
 
-LEDGER = Path(__file__).resolve().parent.parent / "skills/fnl-delegate/scripts/ledger.py"
+LEDGER = Path(__file__).resolve().parent.parent / "skills/delegate/scripts/ledger.py"
 START = ["start", "--project", "demo", "--task", "add parser", "--kind", "implement",
          "--grade", "medium", "--agent", "codex", "--model", "m1", "--budget", "40"]
 
@@ -831,7 +831,7 @@ class StaleLedgerTest(unittest.TestCase):
     def test_inside_budget_and_finished_records_are_never_listed_or_closed(self):
         done = {"event": "finish", "id": "d20261101-000000-dddd", "ts": "2026-11-01T01:00:00+00:00",
                 "outcome": "rejected", "rework_rounds": 0}
-        self.write([self.start("d20261101-000000-aaaa", 120, 30), self.start("d20261101-000000-bbbb", 10, 30),
+        self.write([self.start("d20261101-000000-aaaa", 1500, 30), self.start("d20261101-000000-bbbb", 10, 30),
                     self.start("d20261101-000000-cccc", 500, None), self.start("d20261101-000000-dddd", 900, 30),
                     done])
         out, digest = self.preview_digest()
@@ -847,11 +847,73 @@ class StaleLedgerTest(unittest.TestCase):
         self.write([self.start("d20261101-000000-bbbb", 10, 30)])
         code, out, _ = self.stale()
         self.assertEqual(code, 0)
-        self.assertIn("no open records past their budget", out)
+        self.assertIn("no open records past the stale threshold", out)
         self.assertNotIn("Digest:", out)
 
+    def test_by_default_a_record_is_stale_past_twice_its_budget_and_at_least_24_hours(self):
+        ids = {name: "d20261101-000000-" + name for name in ("a001", "a002", "a003", "a004", "a005", "a006")}
+        self.write([self.start(ids["a001"], 120, 30),     # past its budget, under 24 hours: open
+                    self.start(ids["a002"], 1500, 30),    # past 24 hours and twice its budget: stale
+                    self.start(ids["a003"], 1500, 800),   # past 24 hours, under twice its budget: open
+                    self.start(ids["a004"], 1700, 800),   # past both: stale
+                    self.start(ids["a005"], 1500, None),  # no usable budget, past 24 hours: stale
+                    self.start(ids["a006"], 1000, None)])  # no usable budget, under 24 hours: open
+        out, digest = self.preview_digest()
+        listed = {ident for ident in ids.values() if ident in out}
+        self.assertEqual(listed, {ids["a002"], ids["a004"], ids["a005"]})
+        self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
+        self.assertEqual(set(self.finishes()), {ids["a002"], ids["a004"], ids["a005"]})
+
+    def test_older_than_hours_sets_the_threshold_but_never_reaches_inside_a_budget(self):
+        ids = {name: "d20261101-000000-" + name for name in ("b001", "b002", "b003", "b004")}
+        self.write([self.start(ids["b001"], 120, 30),     # past one hour and its budget: stale
+                    self.start(ids["b002"], 50, 30),      # under one hour: open
+                    self.start(ids["b003"], 90, 100),     # past one hour, inside its budget: open
+                    self.start(ids["b004"], 90, None)])   # no usable budget, past one hour: stale
+        code, out, err = self.stale("--older-than-hours", "1")
+        self.assertEqual(code, 0, err)
+        listed = {ident for ident in ids.values() if ident in out}
+        self.assertEqual(listed, {ids["b001"], ids["b004"]})
+        digest = [line.split(": ", 1)[1] for line in out.splitlines() if line.startswith("Digest: ")][0]
+        # The close rechecks each record against the threshold the preview used, not the default.
+        self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
+        self.assertEqual(set(self.finishes()), {ids["b001"], ids["b004"]})
+
+    def test_older_than_hours_is_bounded_and_belongs_to_the_preview(self):
+        self.write([self.start("d20261101-000000-aaaa", 1500, 30)])
+        for value in ("0", "-1", "8761", "x"):
+            with self.subTest(value=value), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    self.ledger.build_parser().parse_args(["stale", "--older-than-hours", value])
+        _, digest = self.preview_digest()
+        before = self.path.read_bytes()
+        code, _, _ = self.stale("--close", "--digest", digest, "--older-than-hours", "1")
+        self.assertNotEqual(code, 0)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_the_preview_lists_id_age_and_label_only(self):
+        start = self.start("d20261101-000000-aaaa", 1500, 30)
+        start.update(project="demo-app", task="003 T101", model="synthetic-model")
+        self.write([start])
+        out, _ = self.preview_digest()
+        [line] = [line for line in out.splitlines() if line.startswith("d20261101-000000-aaaa")]
+        self.assertIn("demo-app: 003 T101", line)
+        self.assertNotIn("synthetic-model", out)
+
+    def test_session_start_counts_stale_closed_records_as_closed(self):
+        self.write([self.start("d20261101-000000-aaaa", 1500, 30), self.start("d20261101-000000-bbbb", 10, 30)])
+        _, digest = self.preview_digest()
+        self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
+        sys.path.insert(0, str(LEDGER.parents[3] / "scripts"))
+        import session_start
+        self.assertEqual(session_start.open_dispatches(), "1")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.ledger.cmd_open(self.ledger.build_parser().parse_args(["open"]))
+        self.assertEqual([line.split()[0] for line in out.getvalue().splitlines()], ["d20261101-000000-bbbb"])
+
     def test_digest_mismatch_writes_nothing(self):
-        self.write([self.start("d20261101-000000-aaaa", 120, 30)])
+        self.write([self.start("d20261101-000000-aaaa", 1500, 30)])
         _, digest = self.preview_digest()
         wrong = ("0" if digest[0] != "0" else "1") + digest[1:12]
         before = self.path.read_bytes()
@@ -863,7 +925,7 @@ class StaleLedgerTest(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), before)
 
     def test_close_without_a_preview_writes_nothing(self):
-        self.write([self.start("d20261101-000000-aaaa", 120, 30)])
+        self.write([self.start("d20261101-000000-aaaa", 1500, 30)])
         before = self.path.read_bytes()
         code, _, _ = self.stale("--close", "--digest", "a" * 12)
         self.assertNotEqual(code, 0)
@@ -871,7 +933,7 @@ class StaleLedgerTest(unittest.TestCase):
 
     def test_expired_preview_writes_nothing(self):
         import time as clock
-        self.write([self.start("d20261101-000000-aaaa", 120, 30)])
+        self.write([self.start("d20261101-000000-aaaa", 1500, 30)])
         _, digest = self.preview_digest()
         before = self.path.read_bytes()
         later = clock.time() + 3601
@@ -882,14 +944,14 @@ class StaleLedgerTest(unittest.TestCase):
 
     def test_a_log_named_with_the_documented_slug_is_found(self):
         ident = "d20261101-000000-e002"
-        self.write([self.start(ident, 300, 45)])
+        self.write([self.start(ident, 1500, 45)])
         self.log(ident + "-add-parser", "output\nexit=1\n")
         out, _ = self.preview_digest()
         self.assertIn("exit=1  -> error", out)
 
     def test_a_held_finish_lock_ends_in_a_bounded_refusal(self):
         import fcntl, time
-        self.write([self.start("d20261101-000000-e004", 300, 45)])
+        self.write([self.start("d20261101-000000-e004", 1500, 45)])
         with self.ledger.dr.data_folder(self.ledger.FINISH_LOCK, create=True, private=True) as folder:
             other = os.open(".", os.O_RDONLY, dir_fd=folder)
             try:
@@ -906,7 +968,7 @@ class StaleLedgerTest(unittest.TestCase):
 
     def test_close_reads_open_state_under_the_finish_lock(self):
         ident = "d20261101-000000-e003"
-        self.write([self.start(ident, 300, 45)])
+        self.write([self.start(ident, 1500, 45)])
         _, digest = self.preview_digest()
         held, real_lock, real_load = [], self.ledger.finish_lock, self.ledger.load
 
@@ -927,7 +989,7 @@ class StaleLedgerTest(unittest.TestCase):
 
     def test_each_outcome_follows_the_log_and_none_is_accepted(self):
         ids = {name: "d20261101-000000-" + name for name in ("e001", "e000", "eeee", "ffff")}
-        self.write([self.start(ident, 300, 45) for ident in ids.values()])
+        self.write([self.start(ident, 1500, 45) for ident in ids.values()])
         self.log(ids["e001"], "lots of output\nexit=1\n")
         self.log(ids["e000"], "x" * 500 + "\nexit=0\n")
         self.log(ids["eeee"], "still running, no exit line\n")
@@ -952,7 +1014,7 @@ class StaleLedgerTest(unittest.TestCase):
 
     def test_the_exit_line_is_read_only_from_the_last_64_bytes(self):
         ident = "d20261101-000000-e002"
-        self.write([self.start(ident, 300, 45)])
+        self.write([self.start(ident, 1500, 45)])
         self.log(ident, "exit=1\n" + "y" * 100 + "\n")
         _, digest = self.preview_digest()
         self.stale("--close", "--digest", digest)
@@ -960,7 +1022,7 @@ class StaleLedgerTest(unittest.TestCase):
 
     def test_a_symlinked_log_is_refused_and_its_record_left_open(self):
         ident = "d20261101-000000-e003"
-        self.write([self.start(ident, 300, 45), self.start("d20261101-000000-aaaa", 300, 45)])
+        self.write([self.start(ident, 1500, 45), self.start("d20261101-000000-aaaa", 1500, 45)])
         self.log("other", "exit=1\n")
         (self.logs / (ident + ".log")).symlink_to(self.logs / "other.log")
         out, digest = self.preview_digest()
@@ -969,7 +1031,7 @@ class StaleLedgerTest(unittest.TestCase):
         self.assertEqual(set(self.finishes()), {"d20261101-000000-aaaa"})
 
     def test_a_second_close_with_the_same_digest_writes_nothing(self):
-        self.write([self.start("d20261101-000000-aaaa", 120, 30)])
+        self.write([self.start("d20261101-000000-aaaa", 1500, 30)])
         _, digest = self.preview_digest()
         self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
         before = self.path.read_bytes()
@@ -978,7 +1040,7 @@ class StaleLedgerTest(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), before)
 
     def test_a_record_finished_after_the_preview_is_not_closed_twice(self):
-        self.write([self.start("d20261101-000000-aaaa", 120, 30), self.start("d20261101-000000-bbbb", 120, 30)])
+        self.write([self.start("d20261101-000000-aaaa", 1500, 30), self.start("d20261101-000000-bbbb", 1500, 30)])
         _, digest = self.preview_digest()
         with self.path.open("a") as stream:
             stream.write(json.dumps({"event": "finish", "id": "d20261101-000000-aaaa", "ts": "2026-11-10T00:00:00+00:00",
@@ -989,7 +1051,7 @@ class StaleLedgerTest(unittest.TestCase):
                          ["d20261101-000000-aaaa", "d20261101-000000-bbbb"])
 
     def test_load_and_pause_status_see_closed_records_as_closed(self):
-        self.write([self.start("d20261101-000000-aaaa", 120, 30), self.start("d20261101-000000-bbbb", 10, 30)])
+        self.write([self.start("d20261101-000000-aaaa", 1500, 30), self.start("d20261101-000000-bbbb", 10, 30)])
         _, digest = self.preview_digest()
         self.stale("--close", "--digest", digest)
         err = io.StringIO()

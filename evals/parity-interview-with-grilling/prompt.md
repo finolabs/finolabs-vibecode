@@ -8,4 +8,4 @@ plugins: ["plugins/with-grilling"]
 allowed_tools: [Skill, Read, Glob, Grep, Agent]
 ---
 
-/finolabs-vibecode:fnl-setup instructions I want my agents to be careful and follow best practices. Keep it simple.
+/finolabs-vibecode:setup instructions I want my agents to be careful and follow best practices. Keep it simple.

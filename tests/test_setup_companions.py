@@ -5,7 +5,7 @@ import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SETUP = ROOT / 'skills/fnl-setup'
+SETUP = ROOT / 'skills/setup'
 REFS = SETUP / 'references'
 COMPANIONS = {'agybird', 'vietnamizer', 'typesafe-ai', 'diagram-design', 'markmap'}
 INSTRUMENTS = {'security-audit'}
