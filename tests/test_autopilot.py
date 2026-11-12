@@ -18,6 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'skills/delegate/scripts/autopilot.py'
 SETUP = ('## Autopilot\n- Hosts: Claude Code\n- Task choice: choose\n'
          '- Push and pull requests: yes\n- Merge: yes\n- Trusted authors: own\n')
+ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
+                 '[remote "origin"]\n\turl = https://github.com/example/demo.git\n'
+                 '\tfetch = +refs/heads/*:refs/remotes/origin/*\n')
 
 
 class AutopilotBase(unittest.TestCase):
@@ -31,6 +34,8 @@ class AutopilotBase(unittest.TestCase):
         (self.repo / '.git/refs/remotes/origin').mkdir(parents=True)
         (self.repo / '.git/HEAD').write_text('ref: refs/heads/topic\n')
         (self.repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/main\n')
+        (self.repo / '.git/config').write_text(ORIGIN_CONFIG)
+        self.cwd = self.repo
         self.clock = 1800000000
 
     def load(self):
@@ -46,7 +51,7 @@ class AutopilotBase(unittest.TestCase):
 
     def invoke(self, *argv):
         ap = self.load()
-        with patch.object(ap, 'now', return_value=self.clock), patch('os.getcwd', return_value=str(self.repo)):
+        with patch.object(ap, 'now', return_value=self.clock), patch('os.getcwd', return_value=str(self.cwd)):
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 status = ap.main(list(argv))
@@ -277,7 +282,7 @@ class AutopilotTest(AutopilotBase):
 
     def test_review_findings_security_one(self):
         self.start()
-        self.repo = ROOT  # the checkout whose scripts are the installed wrappers
+        self.repo = self.cwd = ROOT  # the checkout whose scripts are the installed wrappers
         # New modules next to the trusted wrappers could shadow an import in them, so the folders are protected.
         for folder in ('review-gate', 'delegate', 'setup'):
             for name in ('struct.py', 'zlib.py', 'helper.py', 'pkg/__init__.py'):
@@ -823,7 +828,7 @@ class AwayDecisionTest(AutopilotBase):
         (tools / 'codex').write_bytes(b'\x7fsynthetic\n')
         (tools / 'codex').chmod(0o700)
         (self.repo / 'src').mkdir()
-        self.repo = self.repo / 'src'
+        self.repo = self.cwd = self.repo / 'src'
         self.check_as(at(tools / 'codex'), tier=3, code='unknown', real=False)
         # A symlink outside the repository that leads to repository code.
         links = self.home / 'links'
@@ -1185,6 +1190,202 @@ class ProjectScopeTest(AutopilotBase):
             with self.subTest(argv=argv[:6]):
                 self.check(argv, tier=3, code='unknown')
         self.assertEqual(self.lease()['counters']['actions'], 0)
+
+
+class SecurityRoundOneTest(AutopilotBase):
+    """Repository identity, merge target binding, symbolic branches and hexadecimal names fail closed."""
+
+    def setUp(self):
+        super().setUp()
+        spec = importlib.util.spec_from_file_location('project_store_tested', SCRIPT.parent / 'project_store.py')
+        self.store = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.store)
+
+    def project(self, value, repo=None):
+        self.store.write_setting(repo or self.repo, 'autopilot', value)
+
+    def test_a_deep_descendant_keeps_the_project_values(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.project({'merge': 'no', 'push-and-pull-requests': 'no'})
+        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+        deep = self.repo.joinpath(*['level'] * 25)
+        deep.mkdir(parents=True)
+        self.cwd = deep
+        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+        self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
+        self.check(['gh', 'pr', 'create'], tier=3, code='push-disabled')
+
+    def test_a_discovery_error_is_the_strict_state_not_the_user_values(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        locked = self.repo / 'locked'
+        (locked / 'inner').mkdir(parents=True)
+        locked.chmod(0o311)  # searchable, not listable: an ancestor that cannot be opened
+        self.addCleanup(locked.chmod, 0o755)
+        self.cwd = locked / 'inner'
+        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+        self.check(['gh', 'pr', 'create'], tier=3, code='push-disabled')
+        ap = self.load()
+        for state in (('unknown', None),):
+            with patch.object(ap, 'discover_root', return_value=state):
+                result = ap.effective(dict(ap.DEFAULTS, Merge='yes', Roots=['x']), str(self.repo))
+            self.assertEqual({k: result[k] for k in ap.OFF}, ap.OFF)
+
+    def test_a_dot_git_link_is_not_skipped_for_a_parent_repository(self):
+        self.start(NO)
+        self.project({'merge': 'yes', 'push-and-pull-requests': 'yes'})
+        nested = self.repo / 'nested'
+        nested.mkdir()
+        (nested / '.git').symlink_to(self.home / 'elsewhere')
+        self.cwd = nested
+        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+
+    def test_a_merge_or_pull_request_on_another_repository_is_tier_three(self):
+        self.start(NO.replace('- Merge: no', '- Merge: yes').replace('requests: no', 'requests: yes')
+                   + '- Max actions per hour: 1000\n')
+        for flag in (['--repo', 'other/restricted'], ['--repo=other/restricted'], ['-R', 'other/restricted'],
+                     ['-R=other/restricted'], ['-Rother/restricted'], ['--repo', 'other.example/example/demo'],
+                     ['--repo', 'https://github.com/example/demo'], ['--repo', 'example/demo/extra'],
+                     ['--repo', 'example/demo', '--repo', 'other/restricted']):
+            for argv in (['gh', 'pr', 'merge', '7'] + PIN, ['gh', 'pr', 'create'], ['gh', 'pr', 'edit', '7']):
+                with self.subTest(flag=flag, argv=argv[:3]):
+                    status, output = self.invoke('check', '--argv-json', json.dumps(argv + flag))
+                    self.assertEqual(json.loads(output)['tier'], 3, output)
+        for flag in ([], ['--repo', 'example/demo'], ['-R', 'EXAMPLE/Demo'], ['--repo=github.com/example/demo']):
+            with self.subTest(flag=flag):
+                self.check(['gh', 'pr', 'merge', '7'] + PIN + flag)
+                self.check(['gh', 'pr', 'create'] + flag)
+                self.check(['gh', 'pr', 'edit', '7'] + flag)
+
+    def test_project_merge_never_authorizes_another_repository(self):
+        self.start(NO + '- Max actions per hour: 1000\n')
+        self.project({'merge': 'yes', 'push-and-pull-requests': 'yes'})
+        self.check(['gh', 'pr', 'merge', '7'] + PIN)
+        self.check(['gh', 'pr', 'merge', '7', '--repo', 'other/restricted'] + PIN, tier=3, code='forbidden')
+        self.check(['gh', 'pr', 'create', '-R', 'other/restricted'], tier=3, code='forbidden')
+
+    def test_the_target_repository_must_be_read_safely_from_the_checkout(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        merge = ['gh', 'pr', 'merge', '7'] + PIN
+        config = self.repo / '.git/config'
+        for text in ('', ORIGIN_CONFIG + '[remote "upstream"]\n\turl = https://github.com/other/restricted.git\n',
+                     ORIGIN_CONFIG + '[include]\n\tpath = extra\n',
+                     ORIGIN_CONFIG + '[includeIf "gitdir:x"]\n\tpath = extra\n',
+                     ORIGIN_CONFIG + '[url "https://github.com/other/"]\n\tinsteadOf = https://github.com/example/\n',
+                     ORIGIN_CONFIG + '\turl = https://github.com/other/restricted.git\n',
+                     '[remote "origin"]\n\turl = https://gitlab.example/example/demo.git\n',
+                     '[remote "origin"]\n\turl = /srv/example/demo.git\n',
+                     '[remote "origin"\n\turl = https://github.com/example/demo.git\n'):
+            with self.subTest(text=text):
+                config.write_text(text)
+                self.check(merge, tier=3, code='unknown')
+                self.check(['gh', 'pr', 'create'], tier=3, code='unknown')
+        # An explicit --repo equal to origin binds the target even beside another remote.
+        config.write_text(ORIGIN_CONFIG + '[remote "upstream"]\n\turl = https://github.com/other/restricted.git\n')
+        self.check(merge + ['--repo', 'example/demo'])
+        config.unlink()
+        self.check(merge, tier=3, code='unknown')
+        for url in ('git@github.com:example/demo.git', 'ssh://git@github.com/example/demo', 'https://github.com/example/demo'):
+            with self.subTest(url=url):
+                config.write_text('[remote "origin"]\n\turl = ' + url + '\n')
+                self.check(merge)
+                self.check(merge + ['--repo', 'example/demo'])
+        (self.repo / '.git/config.worktree').write_text('[remote "origin"]\n\turl = https://github.com/other/restricted\n')
+        self.check(merge, tier=3, code='unknown')
+
+    def test_a_symbolic_current_branch_to_the_default_branch_is_forbidden(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        heads = self.repo / '.git/refs/heads'
+        heads.mkdir(parents=True)
+        (heads / 'feature').write_text('a' * 40 + '\n')
+        (heads / 'work').write_text('b' * 40 + '\n')
+        merge = ['git', 'merge', 'refs/heads/feature']
+        (heads / 'topic').write_text('ref: refs/heads/work\n')
+        self.check(merge)  # a link to an ordinary work branch stays a work branch
+        for target, code in (('refs/heads/main', 'forbidden'), ('refs/heads/stable', 'forbidden'),
+                             ('refs/heads/trunk', 'forbidden'), ('refs/heads/loop', 'unknown'),
+                             ('refs/tags/v1', 'unknown'), ('refs/remotes/origin/main', 'unknown')):
+            with self.subTest(target=target):
+                (self.repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/stable\n')
+                (heads / 'topic').write_text('ref: ' + target + '\n')
+                (heads / 'loop').write_text('ref: refs/heads/topic\n')
+                self.assertIn(self.check_code(merge), {code, 'forbidden'})
+                self.assertEqual(self.check_code(['git', 'merge', 'origin/main']), 'forbidden')
+        (heads / 'loop').unlink()
+        (heads / 'topic').write_text('ref: refs/heads/main\n')
+        self.check(['git', 'push', 'origin', 'HEAD:HEAD'], tier=3, code='forbidden')
+
+    def check_code(self, argv):
+        status, output = self.invoke('check', '--argv-json', json.dumps(argv))
+        result = json.loads(output)
+        self.assertEqual(result['tier'] == 1, result['code'] == 'allowed', output)
+        return result['code']
+
+    def git_repo(self, name):
+        import shutil
+        import subprocess
+        if not shutil.which('git', path=os.defpath + ':/usr/local/bin:/opt/homebrew/bin'):
+            self.skipTest('git is not installed')
+        repo = self.home / name
+        repo.mkdir()
+        env = {'HOME': str(self.home), 'PATH': os.defpath + ':/usr/local/bin:/opt/homebrew/bin',
+               'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull}
+
+        def git(*argv, cwd=repo):
+            return subprocess.run(['git', *argv], cwd=cwd, env=env, capture_output=True, check=True,
+                                  text=True).stdout.strip()
+        git('init', '-q', '-b', 'main')
+        git('remote', 'add', 'origin', 'https://github.com/example/demo.git')
+        for message in ('First', 'Second'):
+            git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-q',
+                '--allow-empty', '-m', message)
+        git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+        git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+        git('branch', 'feature')
+        return repo, git
+
+    def test_real_git_symbolic_head_to_main_in_ordinary_and_linked_worktrees(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        repo, git = self.git_repo('real')
+        git('branch', 'work')
+        git('symbolic-ref', 'refs/heads/topic', 'refs/heads/work')
+        git('symbolic-ref', 'HEAD', 'refs/heads/topic')
+        self.cwd = repo
+        self.assertEqual(self.check_code(['git', 'merge', 'refs/heads/feature']), 'allowed')
+        git('symbolic-ref', 'refs/heads/topic', 'refs/heads/main')
+        self.assertEqual((repo / '.git/HEAD').read_text(), 'ref: refs/heads/topic\n')
+        self.assertEqual(git('rev-parse', '--symbolic-full-name', 'HEAD'), 'refs/heads/main')
+        self.check(['git', 'merge', 'refs/heads/feature'], tier=3, code='forbidden')
+        self.check(['git', 'merge', 'origin/main'], tier=3, code='forbidden')
+        self.check(['git', 'push', 'origin', 'HEAD:HEAD'], tier=3, code='forbidden')
+        linked = self.home / 'linked'
+        git('worktree', 'add', '-q', str(linked), '-b', 'side')
+        git('symbolic-ref', 'refs/heads/alias', 'refs/heads/main')
+        git('symbolic-ref', 'HEAD', 'refs/heads/alias', cwd=linked)
+        self.cwd = linked
+        self.check(['git', 'merge', 'refs/heads/feature'], tier=3, code='forbidden')
+        git('symbolic-ref', 'HEAD', 'refs/heads/side', cwd=linked)
+        self.check(['git', 'merge', 'refs/heads/feature'])
+
+    def test_real_git_hexadecimal_branch_names_in_any_case_are_ambiguous(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        repo, git = self.git_repo('hex')
+        git('checkout', '-q', '-b', 'topic')
+        first, second = git('rev-parse', 'HEAD~1'), git('rev-parse', 'HEAD')
+        self.cwd = repo
+        for name in (first.upper(), first[:7].upper(), 'AbCdEf1', 'ABCD', 'f' * 64, 'deadBEEF' * 8):
+            with self.subTest(name=name):
+                git('branch', name, second)
+                if name == first.upper():
+                    # Git itself reads the bare name as the first commit, not the branch the classifier validated.
+                    self.assertEqual(git('rev-parse', name), first)
+                    self.assertEqual(git('rev-parse', 'refs/heads/' + name), second)
+                self.check(['git', 'merge', name], tier=3, code='unknown')
+                self.check(['git', 'merge', 'refs/heads/' + name])
+                git('branch', '-q', '-D', name)
+        git('branch', 'shared')
+        git('tag', 'shared')
+        self.check(['git', 'merge', 'shared'], tier=3, code='unknown')
+        self.check(['git', 'merge', 'feature'])
 
 
 if __name__ == '__main__':

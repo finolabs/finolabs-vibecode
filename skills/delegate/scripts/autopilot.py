@@ -20,6 +20,9 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and merge origin/main are Tier 1 | classify_argv, branch_context |
 | A local branch merge ([--no-ff] [--no-edit], refs/heads/<b> or an unambiguous bare name that exists only as a branch) is Tier 1 only into a named non-default branch with effective Merge=yes | local_merge, local_branch |
 | A repository's approved settings.json `autopilot` object wins for Task choice, push, Merge, Trusted authors and Roots, read on every check; unset gives user values, broken or unreadable turns them off; the lease hash covers host.md only | effective, project_store.settings_state |
+| A repository that cannot be discovered (search error, unusual .git, over 512 levels) is the strict state, never unset | discover_root, effective |
+| PR merge/create/edit act only on the checkout's own origin (plain github.com URL in its own config); --repo/-R must name it, without it origin is the only remote | target_check, remotes, remote_id |
+| The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
 | Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths | classify_paths |
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
 | Only this install's ledger/record/heavy_run/merge_check script paths, with isolated Python, are allowed wrappers; nested heavy commands are classified too | script_command |
@@ -290,15 +293,45 @@ def plugin_code(name):
         return True
 
 
+def discover_root(cwd):
+    """('found', root), ('absent', None) after every parent was checked, or ('unknown', None).
+
+    Unlike parallel_slots.find_root there is no depth bound: a bounded or failed search is unknown, never absent, so it
+    cannot stand in for "no repository" (which would restore the user values). A `.git` that is neither a regular file
+    nor a folder (a link Git would follow) is unknown too, never skipped for a parent repository.
+    """
+    try:
+        start = Path(os.path.abspath(cwd))
+        folders = (start, *start.parents)
+        if len(folders) > 512:
+            return 'unknown', None
+        for folder in folders:
+            with slots.open_dir(folder) as fd:
+                try:
+                    info = os.stat('.git', dir_fd=fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+            if stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode):
+                return 'found', folder
+            return 'unknown', None
+    except (OSError, ValueError, TypeError, UnicodeError):
+        return 'unknown', None
+    return 'absent', None
+
+
 def effective(applied, cwd):
     """User settings with this repository's approved project values on top (docs/specs/autopilot.md "Project scope").
 
     Unset gives the user values; an approved object wins for its five keys; broken, or any error while reading it,
-    turns those keys off, which is never wider than user scope. Read on every check, never stored in the lease.
+    turns those keys off, which is never wider than user scope. A repository that cannot be discovered (an error or an
+    unusual `.git`) is the same strict state, never unset. Read on every check, never stored in the lease.
     """
     result = {**applied, 'Roots': []}
     try:
-        state, values = store.settings_state(slots.find_root(cwd))
+        found, root = discover_root(cwd)
+        if found == 'unknown':
+            return {**result, **OFF}
+        state, values = store.settings_state(root)
         project = values.get('autopilot', {})
         if state == 'approved' and project and not store.valid_autopilot(project):
             state = 'broken'
@@ -372,8 +405,8 @@ def options(tokens, flags=(), valued=(), *, positional=True):
 
 def git_dirs():
     """(git folder, common folder) of the current checkout from local metadata only; (None, None) outside one."""
-    root = slots.find_root(os.getcwd())
-    if root is None:
+    found, root = discover_root(os.getcwd())
+    if found != 'found':
         return None, None
     with slots.open_dir(root) as fd:
         info = os.stat('.git', dir_fd=fd, follow_symlinks=False)
@@ -403,9 +436,126 @@ def branch_context():
         head = slots.read_metadata(fd, 'HEAD').strip()
     with slots.open_dir(common / 'refs/remotes/origin') as fd:
         default = slots.read_metadata(fd, 'HEAD').strip()
-    current = head.removeprefix('ref: refs/heads/') if head.startswith('ref: refs/heads/') else None
     default = default.removeprefix('ref: refs/remotes/origin/') if default.startswith('ref: refs/remotes/origin/') else None
-    return current, default
+    # Follow the branch symref chain to the branch a merge or push of HEAD would really update. Any name on the way
+    # that is a default-branch name makes it that branch; a ref outside refs/heads, a cycle or a long chain is a
+    # detached head (None), which every caller refuses.
+    chain = []
+    while head.startswith('ref: refs/heads/'):
+        name = head.removeprefix('ref: refs/heads/')
+        if name in chain or len(chain) >= 5 or not BRANCH.fullmatch(name) or '..' in name:
+            return None, default
+        chain.append(name)
+        try:
+            with slots.open_dir(common / 'refs/heads' / Path(name).parent) as fd:
+                head = slots.read_metadata(fd, Path(name).name).strip()
+        except FileNotFoundError:
+            break  # packed (never symbolic) or unborn: the chain ends at this branch
+    else:
+        if chain and not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', head):
+            return None, default
+    if not chain:
+        return None, default
+    # Casefolded: on a case-insensitive filesystem refs/heads/MAIN is the same loose file as refs/heads/main.
+    for name in chain:
+        for kept in ('main', 'master', 'trunk', default):
+            if kept and name.casefold() == kept.casefold():
+                return kept, default
+    return chain[-1], default
+
+
+GITHUB = 'github.com'
+OWNER_OR_NAME = re.compile(r'[A-Za-z0-9_.-]{1,100}')
+SECTION = re.compile(r'\s*\[\s*([A-Za-z0-9-]+)(?:\s+"((?:[^"\\\n]|\\.)*)")?\s*\]\s*(?:[#;].*)?')
+ENTRY = re.compile(r'\s*([A-Za-z][A-Za-z0-9-]*)\s*(?:=\s*(.*?))?\s*')
+
+
+def repository_id(host, owner, name):
+    """A casefolded (host, owner, name) of a GitHub repository, or None for anything else."""
+    name = name.removesuffix('.git')
+    if host.casefold() != GITHUB or not all(OWNER_OR_NAME.fullmatch(p) and p not in {'.', '..'} for p in (owner, name)):
+        return None
+    return GITHUB, owner.casefold(), name.casefold()
+
+
+def remote_id(url):
+    """The repository of a plain GitHub remote URL (https, ssh:// or scp form); None for any other form."""
+    for pattern in (r'https://([A-Za-z0-9.-]+)/([^/]+)/([^/]+)', r'ssh://git@([A-Za-z0-9.-]+)/([^/]+)/([^/]+)',
+                    r'git@([A-Za-z0-9.-]+):([^/]+)/([^/]+)'):
+        match = re.fullmatch(pattern, url)
+        if match:
+            return repository_id(*match.groups())
+    return None
+
+
+def remotes():
+    """{remote name: [url, ...]} from the checkout's own Git config, read as local metadata; None on any doubt.
+
+    Doubt: no config, a per-worktree config, an include, a URL rewrite (insteadOf), a continuation line or any line
+    this small reader does not recognize. Global and system config are not read (an advisory limit in the spec).
+    """
+    git, common = git_dirs()
+    if git is None:
+        return None
+    for folder in {git, common}:
+        with slots.open_dir(folder) as fd:
+            try:
+                os.stat('config.worktree', dir_fd=fd, follow_symlinks=False)
+                return None
+            except FileNotFoundError:
+                pass
+    with slots.open_dir(common) as fd:
+        text = slots.read_metadata(fd, 'config')
+    found, section, subsection = {}, None, None
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith(('#', ';')):
+            continue
+        if line.rstrip().endswith('\\'):
+            return None
+        header = SECTION.fullmatch(line)
+        if header:
+            section, subsection = header[1].casefold(), header[2]
+            if section in {'include', 'includeif', 'url'}:
+                return None
+            if section == 'remote':
+                if subsection is None:
+                    return None
+                found.setdefault(subsection, [])
+            continue
+        entry = ENTRY.fullmatch(line)
+        if not entry or section is None:
+            return None
+        key = entry[1].casefold()
+        if key in {'insteadof', 'pushinsteadof'}:
+            return None
+        if section == 'remote' and key == 'url':
+            if not entry[2] or not re.fullmatch(r'[^\s"\\#;]+', entry[2]):
+                return None
+            found[subsection].append(entry[2])
+    return found
+
+
+def target_check(tail):
+    """'allowed' when a gh pull request mutation targets the checkout's own origin, 'forbidden' when it names another
+    repository, else 'unknown'. Without --repo/-R gh picks among the remotes itself, so origin must be the only one."""
+    named = [t.split('=', 1)[1] if '=' in t else tail[i + 1] if i + 1 < len(tail) else ''
+             for i, t in enumerate(tail) if t in {'--repo', '-R'} or t.startswith(('--repo=', '-R='))]
+    try:
+        found = remotes()
+    except (OSError, ValueError, UnicodeError):
+        found = None
+    if len(named) > 1 or not found or len(found.get('origin', [])) != 1:
+        return 'unknown'
+    origin = remote_id(found['origin'][0])
+    if origin is None:
+        return 'unknown'
+    if not named:
+        return 'allowed' if set(found) == {'origin'} else 'unknown'
+    match = re.fullmatch(r'(?:([^/]+)/)?([^/]+)/([^/]+)', named[0])
+    if not match or named[0].endswith('.git'):
+        return 'unknown'
+    target = repository_id(match[1] or GITHUB, match[2], match[3])
+    return 'allowed' if target == origin else 'forbidden'
 
 
 def local_branch(name, bare):
@@ -446,7 +596,8 @@ def local_merge(tail, applied):
     if (not BRANCH.fullmatch(name) or name.startswith('refs/') or '..' in name or '//' in name
             or name.endswith(('/', '.', '.lock')) or '/.' in name):
         return 'unknown'
-    if not explicit and (re.fullmatch(r'[0-9a-f]{4,40}', name) or name.endswith('HEAD')
+    # Git reads hexadecimal in any case as an object id (SHA-1 or SHA-256, abbreviated from 4 digits) before a branch.
+    if not explicit and (re.fullmatch(r'[0-9a-fA-F]{4,64}', name) or name.endswith('HEAD')
                          or name.split('/')[0] in {'origin', 'tags', 'heads', 'remotes'}):
         return 'unknown'  # a bare name that could read as a commit id or another ref
     if applied['Merge'] != 'yes':
@@ -812,12 +963,16 @@ def classify_argv(argv, applied, coordinator=None):
             if '--delete-branch' in tail and not permits({'Recoverable deletion'}, applied):
                 return 'forbidden'  # row 3: the deletion is its own category beside Merge
             operands = options(tail, {'--squash', '--merge', '--rebase', '--delete-branch'}, {'--match-head-commit', '--repo', '-R'})
-            return 'allowed' if operands is not None and len(operands) == 1 and operands[0].isdigit() else 'unknown'
+            if operands is None or len(operands) != 1 or not operands[0].isdigit():
+                return 'unknown'
+            return target_check(tail)  # the permission is this checkout's: never another repository's
         if group == 'pr' and verb in {'create', 'edit'}:
             if applied['Push and pull requests'] != 'yes':
                 return 'push-disabled'
             operands = options(tail, {'--draft', '--fill'}, {'--title', '-t', '--body', '-b', '--base', '-B', '--head', '-H', '--repo', '-R', '--add-label', '--remove-label'})
-            return 'allowed' if operands is not None and (not operands or len(operands) == 1 and operands[0].isdigit()) else 'unknown'
+            if operands is None or operands and (len(operands) != 1 or not operands[0].isdigit()):
+                return 'unknown'
+            return target_check(tail)
         queries = {'pr': {'view', 'checks', 'list', 'status', 'diff'}, 'issue': {'view', 'list', 'status'},
                    'repo': {'view'}, 'run': {'view', 'list'}}
         if verb in queries.get(group, set()):
