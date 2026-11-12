@@ -36,7 +36,7 @@ On Codex, use `$` instead of `/` for every skill command below. Claude Code and 
 
 1. **Ask your AI assistant to install it.** Paste this into your assistant's chat: "Install https://github.com/finolabs/finolabs-vibecode for me, and explain each step before you do it."
 2. **Open a new chat.** Plugins load when a chat starts.
-3. **Type `/finolabs-vibecode:help`.** (Claude Code may show it as `/finolabs-vibecode:help`.) It tells you in plain words where to start, and you can ask it anything about the plugin.
+3. **Type `/finolabs-vibecode:help`** (`$help` on Codex). On Claude Code type it in full, because `/help` is the host's own command. It tells you in plain words where to start, and you can ask it anything about the plugin.
 4. **Type `/setup`, choose user scope, project scope or both, then Quick.** It asks a few plain questions and changes nothing without your yes.
 5. **Check that setup worked.** Type `/setup check`. It reads your setup, says in plain words what will run on its own and what will ask you first on your host, and lists what is missing. Anything it cannot see from files, it marks unverified.
 6. **Say what you want to build, in your own words.** For example: "I run a small shop and want a page that tracks my stock and turns red when an item runs low." The assistant plans it, builds it, checks it and tells you where to see it.
@@ -60,6 +60,17 @@ One engineering practice for AI coding agents, packaged as a single plugin with 
 
 The [0.2.0 changes](CHANGELOG.md#020---2026-11-08) include [review roles, the navigator and verification receipts](docs/specs/agent-roles.md), [setup modes and companions](docs/specs/setup-restructure.md), [run hygiene](docs/specs/run-hygiene.md), [work records](docs/specs/work-tracking.md), [quota on demand](docs/specs/quota-on-demand.md) and [parallel slots](docs/specs/parallel-instances.md). [`route_task.py`](scripts/route_task.py) prints the delegation matrix's tier, effort, budget and family order; the coordinator still selects an available allowed model.
 
+Release 0.2.5 ([release record](docs/specs/release-0.2.5.md)):
+
+- **Shorter names.** Skills drop the `fnl-` prefix (`setup`, `coding-router`, `delegate`); typed old names still work. `session-hygiene` is now `tidy`, and `autopilot` is now `afk`.
+- **Settings per repository.** A repository's check list, ledger and task settings, parallel limit, dashboard label and away choices live in its own `.finolabs/vibecode/` folder, and count only while they match what you approved. The old `host.md` sections are no longer read: run setup again in each repository.
+- **Session health.** On Claude Code a hook asks the agent to run `tidy` at 80% and 90% of the compaction threshold; a context probe reads the session's real context size on request on Claude Code and Codex.
+- **Cleaner delegation.** Runs record when they end, a hook reminds a session of its runs that have no outcome, stale ledger records are previewed per repository, and ZCode can take code and advice tasks.
+- **Away mode.** `/afk start` prints a `/goal` line and starts a `/loop` on Claude Code; `/setup add afk` inside a repository sets that repository's own choices.
+- **Smaller things.** `shape` interviews you when you brainstorm or discuss a design, `worktree_sweep.py list` shows which worktrees are safe to remove after a merge, and the main checkout stays on the default branch.
+
+[How it compares](docs/how-it-compares.md) with the hosts' own subagents, agent teams, `/loop`, `/goal` and scheduled runs.
+
 Release 0.2.4 adds [repository checks](docs/specs/checks.md) you can run locally or in a cheaper CI workflow, and an [`/update`](docs/specs/update-onboarding.md) that walks you through what each new version adds.
 
 Release 0.2.3 adds [`pause`](docs/specs/pause.md) for draining work before a restart, the [assignment matrix](docs/specs/assignment-matrix.md) that `route_pick.py` answers from, and [away decisions](docs/specs/away-decisions.md): a decision ladder, a record of who decided and a question gate during an away lease. See the [release record](docs/specs/release-0.2.3.md).
@@ -73,6 +84,17 @@ After `setup` records your chosen native threshold, `tidy` checks supplied token
 On `prepare`, the working agent writes its handover through `python3 -I <plugin root>/scripts/handover_state.py write --session <id>` (optional `--repo <code>`), with UTF-8 text on stdin. `read --session <id>` returns only safe text younger than 24 hours. The local file is private (0600 in a 0700 folder), limited to 8 KiB, and never sent by these scripts or included in metrics; at most 20 files are kept. The existing session-start hook appends it on source `compact`. Writing the handover and running the threshold script are advisory agent actions; the scripts enforce the limits and action table. Vendor docs (07/11/2026; Codex 0.167.0) document SessionStart `source: compact` delivery on both Claude Code and Codex; live delivery/order in this plugin remains unverified. Claude Code PreCompact stdout feeds summary instructions; on Codex a plain-text reminder does not reach the model. Write the handover on `prepare`, before compaction (advisory, agent judgment). The standalone `tidy` skill carries the threshold script and keeps the manual handover procedure; automatic handover re-injection requires the plugin. See the [design and acceptance criteria](docs/specs/compaction-steward.md) and [privacy details](PRIVACY.md#compaction-handover).
 
 Claude Code and Antigravity (not Codex): when you opt in through `setup`, your status line records the current context size (token counts only, no conversation content) with `scripts/context_snapshot.py record`. `read` and `check` then give the steward a fresh real reading, and, on Claude Code, session start shows it. Setup never edits an existing status line; it prints a recipe instead. See the [design](docs/specs/context-snapshot.md).
+
+Claude Code and Codex, on request: where no status line runs, `context_snapshot.py probe` reads the session's context size from Claude Code's `/context` on a forked, unsaved copy of the session, or from Codex's app-server for an idle thread. It runs only the program you confirmed in `/setup add quota`, never from a hook; `FNL_CONTEXT_PROBE=off` turns it off. See the [design](docs/specs/context-probe.md).
+
+Claude Code only, on by default: the compaction nudge, a `UserPromptSubmit` hook, reads only the token counts of the session's latest turn and the compaction settings. At 80% and again at 90% of the threshold it prints one line asking the agent to run `tidy` now: save the handover, write back decisions and lessons, note background runs and open pull requests, then offer to compact. It prints nothing when auto-compaction is off or no window is set, never blocks, and sends nothing; `FNL_COMPACT_NUDGE=off` turns it off. PreCompact output now tells the summarizer what the summary must keep. See the [design](docs/specs/compaction-nudge.md) and [privacy details](PRIVACY.md#compaction-nudge).
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/session-health-dark.png">
+    <img src="assets/session-health-light.png" alt="Loop of a long session: the agent names the session at the first task and at each phase change, reads the context size from the status line or the probe, context_steward.py answers ok, prepare from 80%, wait or compact, the agent writes a private handover on prepare, the host or you compact, and the compact hook at session start re-injects the handover. On Claude Code the compaction nudge asks for tidy at 80% and 90%." width="920">
+  </picture>
+</p>
 
 | Optional compaction control | Behavior and limits |
 | --- | --- |
@@ -96,9 +118,18 @@ Claude Code and Antigravity (not Codex): when you opt in through `setup`, your s
   </picture>
 </p>
 
+### One request, from your words to a merged pull request
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/request-to-merge-dark.png">
+    <img src="assets/request-to-merge-light.png" alt="Swimlane of one coding request: you describe it; the coding router names the session and picks depth and gates; delegate picks an agent from the assignment matrix and records the dispatch; another agent builds it; checks rerun the tests and write a receipt; reviewers of another model family post code and security markers; the merge waits for your go and merge_check.py; the agent removes the worktree and branch it created and lists the rest; the release waits for you." width="920">
+  </picture>
+</p>
+
 ### One delegated task, and a decision while you are away
 
-Two sequence diagrams follow the agents step by step. [One delegated task, dispatch to merge](docs/diagrams/delegation-sequence-light.html) ([dark](docs/diagrams/delegation-sequence-dark.html)): the coordinator records the dispatch with `ledger.py start`, which prints the run's name, the implementer runs in the background, the coordinator verifies and accepts against a receipt, reviewers of another family (when one is available) post their markers and `merge_check.py` passes before the merge. [A decision while you are away](docs/diagrams/away-decision-sequence-light.html) ([dark](docs/diagrams/away-decision-sequence-dark.html)): the question gate denies the question tool during a lease, the host climbs the ladder (a recorded rule, Jev at 0.8, an advisor of another family in choose mode, its own choice), checks twice against what must stop, parks or records the attempt with `afk.py log`, and on return you mark each decision kept or reversed.
+Two sequence diagrams follow the agents step by step. [One delegated task, dispatch to merge](docs/diagrams/delegation-sequence-light.html) ([dark](docs/diagrams/delegation-sequence-dark.html)): the coordinator records the dispatch with `ledger.py start`, which prints the run's name, the implementer runs in the background, the coordinator verifies and accepts against a receipt, reviewers of another family (when one is available) post their markers and `merge_check.py` passes before the merge. [A decision while you are away](docs/diagrams/away-decision-sequence-light.html) ([dark](docs/diagrams/away-decision-sequence-dark.html)): the question gate denies the question tool during a lease, `/afk start` prints a goal for `/goal` and may start a `/loop`, the host climbs the ladder (a recorded rule, Jev at 0.8, an advisor of another family in choose mode, its own choice), checks twice against what must stop, parks or records the attempt with `afk.py log`, and on return you mark each decision kept or reversed.
 
 <p align="center">
   <picture>
@@ -110,11 +141,11 @@ Two sequence diagrams follow the agents step by step. [One delegated task, dispa
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/away-decision-sequence-dark.png">
-    <img src="assets/away-decision-sequence-light.png" alt="Sequence diagram of a decision during an away lease: the question gate denies AskUserQuestion, the host checks what must stop, climbs the ladder of recorded rule, Jev, an advisor of another family and its own choice, checks the chosen action again, records each attempt, and the user marks each decision kept or reversed on return." width="900">
+    <img src="assets/away-decision-sequence-light.png" alt="Sequence diagram of a decision during an away lease: /afk start prints a goal for /goal and may start /loop, the question gate denies AskUserQuestion, the host checks what must stop, climbs the ladder of recorded rule, Jev, an advisor of another family and its own choice, checks the chosen action again, records each attempt, and the user marks each decision kept or reversed on return." width="900">
   </picture>
 </p>
 
-The sources of all four diagrams are in [`docs/diagrams/`](docs/diagrams/).
+The sources of all seven diagrams are in [`docs/diagrams/`](docs/diagrams/).
 
 ### Bricks, not a framework
 
@@ -152,7 +183,7 @@ Start any of them with `/setup` (on Codex, also `$setup instructions` right afte
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-It targets Claude Code, Codex and Antigravity from one `skills/` folder. Release documented here: **0.2.4** (phase 0; see `versioning` and the [release record](docs/specs/release-0.2.4.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.5-dev`.
+It targets Claude Code, Codex and Antigravity from one `skills/` folder, and can hand tasks to ZCode. Release documented here: **0.2.5** (phase 0; see `versioning` and the [release record](docs/specs/release-0.2.5.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.6-dev`.
 
 <p align="center">
   <picture>
@@ -182,7 +213,7 @@ You were given this repository's link to install it for the user. Follow these s
    | Other agents | `npx skills add finolabs/finolabs-vibecode -a <agent>` |
 
 5. **Verify** that `claude plugin list`, `codex plugin list` or `agy plugin list` shows `finolabs-vibecode`. Report the command output to the user, and report any failure as it is.
-6. **Hand over to the user.** Plugins load when a session starts. Tell the user, in one message and in this order: open a new session; type `/finolabs-vibecode:help` (`/finolabs-vibecode:help` on Claude Code, `$help` on Codex); then `/setup` and choose Quick (`$setup` on Codex). Only the user can start these, because setup interviews them before it writes host config and instructions. Tell them `/setup instructions` (choose user scope for their working contract) comes after their first result, except on Codex, where it comes right after setup.
+6. **Hand over to the user.** Plugins load when a session starts. Tell the user, in one message and in this order: open a new session; type `/finolabs-vibecode:help` (`$help` on Codex); then `/setup` and choose Quick (`$setup` on Codex). Only the user can start these, because setup interviews them before it writes host config and instructions. Tell them `/setup instructions` (choose user scope for their working contract) comes after their first result, except on Codex, where it comes right after setup.
 7. **After the first result, offer companion guidance and show install commands only when requested:** [Matt Pocock's skills](https://github.com/mattpocock/skills) and [Cloudflare's `security-audit`](https://github.com/cloudflare/security-audit-skill) (see [Works well with](#works-well-with)). Every skill works without them.
 
 Done when the plugin is listed by your host and the user knows the order: `/finolabs-vibecode:help`, `/setup` (Quick), a first real task, `/setup instructions` (immediately after setup on Codex), then `/finolabs-vibecode:status` later.
@@ -196,22 +227,22 @@ Done when the plugin is listed by your host and the user knows the order: `/fino
 
 ## Skills
 
-The plugin has **25 skill folders**: 12 model-invoked skills and 13 marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Skill names carry no prefix since 0.2.5. Each skill that existed before 0.2.5 also answers to its older `fnl-` name through 23 alias folders: thin, user-only aliases that load the skill with the same arguments and that the model does not see, so typed old names and files that name them keep working; `shape` is newer and has none. `session-hygiene` is now `tidy`, and both of its older names load `tidy`; `autopilot` is now `afk`, and its old names are gone.
+The plugin has **25 skill folders**: 13 model-invoked skills and 12 marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Skill names carry no prefix since 0.2.5. Each skill that existed before 0.2.5 also answers to its older `fnl-` name through 23 alias folders: thin, user-only aliases that load the skill with the same arguments and that the model does not see, so typed old names and files that name them keep working; `shape` is newer and has none. `session-hygiene` is now `tidy`, and both of its older names load `tidy`; `autopilot` is now `afk`, and its old names are gone.
 On Claude Code, `/finolabs-vibecode:<name>` names a skill exactly; type `/finolabs-vibecode:help` and `/finolabs-vibecode:status` in full, because the host has its own `/help` and `/status`. The user types the user-only ones, `afk`, `brb`, `pause`, `gtg`, `restore-point`, `setup`, `status`, `update`, `help` and its older name `ask`, `verification`, the older name of `checks`, and `session-hygiene`, the older name of `tidy` (`/setup` on Claude Code and Antigravity, `$setup` on Codex); `handoff` and `advisor` can be typed too.
 The agent loads `handoff` directly through `delegate`, proposes `advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
 
 | Skill | Use it when |
 | --- | --- |
 | `coding-router` | Starting or resuming any coding work, in any repository: depth (MIN, NORMAL, DEEP), review and security gates, proof, the stop-before-a-third-fix checkpoint, and a workflow path for Spec Kit (with its depth gate), mattpocock/skills, obra/superpowers, or none. |
-| `tidy` | Keeping sessions healthy: context pressure, phase changes, stale titles, handovers, and remembering or recalling decisions, lessons and project state in one shared knowledge base (Orrery or an Obsidian vault); code facts stay in the repository. Opt-in Claude Code/Antigravity context snapshots feed the compaction steward; Codex is not covered by the recorder. |
-| `delegate` | Handing work to other agents (Claude Code, Codex, Antigravity; ZCode for code and advice, see below) and running it, coordinated from whichever one you run in: grading on five levels with one decision matrix (tier, effort, budget, who accepts), routing by agent and model through a dated capability map and the assignment matrix (`route_pick.py`), the configured judge, quota fallback, parallel runs up to the limit you set for each project, across any mix of agent families, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger; running a spec as a coordinator with one app session per task, standby sessions and review gates. |
-| `handoff` | Writing a self-contained brief and dispatching one task, or saving a handover through session hygiene so a later session or another agent continues the work. |
+| `tidy` | Keeping sessions healthy: naming the session, context pressure, phase changes, stale titles, handovers, and remembering or recalling decisions, lessons and project state in one shared knowledge base (Orrery or an Obsidian vault); code facts stay in the repository. Opt-in Claude Code/Antigravity context snapshots, or the on-request Claude Code/Codex context probe, feed the compaction steward; on Claude Code the compaction nudge asks for it at 80% and 90% of the threshold. |
+| `delegate` | Handing work to other agents (Claude Code, Codex, Antigravity; ZCode for code and advice, see [Supported agents](#supported-agents)) and running it, coordinated from whichever one you run in: grading on five levels with one decision matrix (tier, effort, budget, who accepts), routing by agent and model through a dated capability map and the assignment matrix (`route_pick.py`), the configured judge, quota fallback, parallel runs up to the limit you set for each project, across any mix of agent families, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger; running a spec as a coordinator with one app session per task, standby sessions and review gates. |
+| `handoff` | Writing a self-contained brief and dispatching one task, or saving a handover through `tidy` so a later session or another agent continues the work. |
 | `shape` | Brainstorming, discussing or stress-testing an idea, plan or design, or unclear requirements before building: an interview in rounds where each question waits for the decisions it depends on and comes with a recommended answer, through the host's native question tool; nothing is acted on until you confirm the result. It runs first; `grilling` (`/grill-me`) runs when `shape` is missing or you ask for it by name. |
 | `advisor` | Getting one second opinion from another model family, or convening two contrasting families for root-cause analysis and a plan when stuck or looping; both are read-only and spend quota, with approval governed by their procedure. During an away lease its choose mode returns exactly one of the given options, or `none`. |
 | `versioning` | Bumping a version, tagging a release, or writing the changelog and release notes: SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog. |
-| `commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports). |
+| `commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports): every branch in its own worktree so the main checkout stays on the default branch, and after a merge `worktree_sweep.py list` shows which worktrees are safe to remove (git does the removal). |
 | `restore-point` | Saving the working tree to a private git ref before the agent edits, listing restore points and restoring one after a preview and a yes. User-invoked, git repositories only. |
-| `afk` | Away from keyboard: starting a time-boxed standing mandate so your agents keep working while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/setup add afk`. A question it would ask you goes up the away ladder instead (a recorded rule, Jev, an advisor of another family, the host), checked twice against what must stop and recorded with who decided; on Claude Code a question gate denies the question tool during the lease. On return you mark each decision kept or reversed. The live loop, dashboard tab and scheduler are deferred. |
+| `afk` | Away from keyboard: starting a time-boxed standing mandate so your agents keep working while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/setup add afk`; inside a repository it also sets that repository's own task choice, push, merge, trusted authors and code folders. Start prints a goal for you to type in `/goal` and, on Claude Code, starts a self-paced `/loop` when work waits on CI, reviews or a delegated run. A question it would ask you goes up the away ladder instead (a recorded rule, Jev, an advisor of another family, the host), checked twice against what must stop and recorded with who decided; on Claude Code a question gate denies the question tool during the lease. On return you mark each decision kept or reversed. A plugin-run loop, dashboard tab and scheduler are deferred. |
 | `brb` | Older short name (be right back), kept as an alias of `afk`; follows the same procedure and arguments. |
 | `pause` | Before you restart or shut the machine down: stops new work, lets running work finish, writes handovers and reports what recorded work remains, with an optional `--in <minutes>` deadline; `heavy_run.py` refuses new commands while it is active. User-invoked; never stops a process or declares the machine safe. |
 | `gtg` | Short name (got to go) for `pause`; follows the same procedure and arguments. |
@@ -242,17 +273,28 @@ Headless dispatch forms use `delegate_env.py` and `run_env.py` for an environmen
 
 Configure roles through `/setup add roles`, or through the assignment matrix in `/setup add delegation`, which decides when it is valid and consented: `review_route.py` chooses the review family before the run, prefers independence and discloses same-family fallbacks; `post_review.py` is the guarded posting path, and posting is marked verified only after observing the expected author and marker. On Claude Code and Codex, SessionStart prints fixed roles, judge and posting words alongside delegation, cached quota, open dispatch counts and parallel capacity; failures never block startup. Relay receipts/counters remain unimplemented. See [roles and posting](docs/specs/agent-roles.md) and [verification receipts](skills/checks/SKILL.md#accepting-someone-elses-work).
 
-Both reviewers cover two rings, the change and its impact set, rather than the whole repository, and report what they traced. The coordinator verifies delegated work with `checks` and its self-contained `verify_claim.py`; ledger acceptance requires a passing receipt for the checkout's current head, or a logged `--accept-unverified --reason` exception. A pull request merges only after the reviewer and the security reviewer have each posted an approving review comment for its current head commit; a push after a review needs a new review. Where a repository adopts the low-risk lane, a pull request that only modifies the allowlisted root documents written for people (such as this README or the changelog) or the manifests' top-level versions takes one pass by the reviewer, which posts both comments; a script decides which pull requests qualify. `skills/review-gate/scripts/merge_check.py` runs the merge check and the lane check, and requires exactly one valid router marker when the base commit adopted the gate. A story closes only after verification and both required reviews pass.
+Both reviewers cover two rings, the change and its impact set, rather than the whole repository, and report what they traced. The coordinator verifies delegated work with `checks` and its self-contained `verify_claim.py`; ledger acceptance requires a passing receipt for the checkout's current head, or a logged `--accept-unverified --reason` exception; a review dispatch is accepted on its posted review (`--review-url`) instead. `delegate_env.py` appends an `ended` line with the child's exit code when a run ends, `ledger.py stale` previews this repository's records that ended or ran long past their budget (`--all-projects` widens the preview, with a warning), and on Claude Code a prompt hook reminds a session of its own runs that have no outcome (`FNL_DISPATCH_NUDGE=off`). A pull request merges only after the reviewer and the security reviewer have each posted an approving review comment for its current head commit; a push after a review needs a new review. Where a repository adopts the low-risk lane, a pull request that only modifies the allowlisted root documents written for people (such as this README or the changelog) or the manifests' top-level versions takes one pass by the reviewer, which posts both comments; a script decides which pull requests qualify. `skills/review-gate/scripts/merge_check.py` runs the merge check and the lane check, and requires exactly one valid router marker when the base commit adopted the gate. A story closes only after verification and both required reviews pass.
 
 ## Supported platforms
 
 macOS and Linux are supported. Native Windows is not: the plugin's scripts rely on POSIX file APIs (`pwd`, `fcntl`, `flock`, descriptor-relative opens and `O_NOFOLLOW`), so on Windows a script you run by hand stops with one clear message, while the plugin's hooks stay fail-open and never block a session. Windows users run Claude Code, Codex or Antigravity with the plugin under WSL.
 
+### Supported agents
+
+| Agent | Installs the plugin | Coordinates | Takes delegated work |
+| --- | --- | --- | --- |
+| Claude Code | Yes | Yes | Code, reviews and advice |
+| Codex | Yes | Yes | Code, reviews and advice |
+| Antigravity | Yes | Yes | Code, reviews and advice |
+| ZCode | No | No | Code tasks and advice only |
+
+ZCode, Z.ai's coding agent ([zai-org/ZCode](https://github.com/zai-org/ZCode), Apache-2.0), is a fourth delegate family (12/11/2026). It takes code tasks in its `edit` mode, where it has no shell, so the coordinator runs the tests, and advice in its `plan` mode; it is never run in `yolo`, `guarded` or `build`. Reviews are not routed to it, and the away lease refuses it. Its facts come from ZCode's own CLI documentation, and a machine's first dispatch starts with ZCode's permission check. `/setup scan` finds it, and a host config without a ZCode row stays valid. A dispatch sends the brief and the code ZCode reads to the model provider set in ZCode's configuration (Z.ai's coding plan by default). See `delegate` `references/agents.md` "ZCode".
+
 ## Install
 
 Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh). Choose one way per agent, because both together list every skill twice.
 
-Claude Code and Codex install the plugin from the [FINOLABS catalog](https://github.com/finolabs/plugins), marketplace `finolabs`, which groups the FINOLABS plugins together. This repository also remains its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. The catalog selects the installed ref; direct installs from this repository track `main`, which moves to `0.2.5-dev` after 0.2.4. Releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
+Claude Code and Codex install the plugin from the [FINOLABS catalog](https://github.com/finolabs/plugins), marketplace `finolabs`, which groups the FINOLABS plugins together. This repository also remains its own marketplace (`finolabs-vibecode@finolabs-vibecode`) for existing installs. The catalog selects the installed ref; direct installs from this repository track `main`, which moves to `0.2.6-dev` after 0.2.5. Releases are the `vX.Y.Z` tags, with notes in `CHANGELOG.md` and on GitHub.
 
 ### Claude Code
 
@@ -288,7 +330,10 @@ The following distinguishes shipped support from live delivery; local tests do n
 | Router reminder and startup summary | SessionStart hook | SessionStart hook after trust | Static router rule; no SessionStart summary |
 | Usage hooks | Bundled, opt-in | Bundled, opt-in; no skill/agent-use events | Separate previewed user hook, opt-in |
 | Context snapshot | Opt-in status-line command; desktop Code-tab delivery unverified | Not covered by this recorder | Opt-in status-line command; no startup Context line |
-| PreCompact reminder | Stdout feeds summary instructions | Plain stdout does not reach the model | No declaration |
+| Context probe (on request, never a hook) | `/context` on a forked, unsaved copy of the session; live delivery unverified | App-server read of an idle thread; live delivery unverified | Not covered |
+| Compaction nudge | `UserPromptSubmit` hook, on by default, at 80% and 90% of the threshold; live delivery unverified | No declaration | No declaration (the opt-in compaction stop instead) |
+| PreCompact summary instructions | Stdout feeds summary instructions | Plain stdout does not reach the model | No declaration |
+| Merge notice and dispatch nudge | `PostToolUse` line after `gh pr merge`; `UserPromptSubmit` line for this session's runs with no outcome | No declaration | No declaration |
 | Compaction handover re-injection | Declared on compact SessionStart; live order unverified | Declared on compact SessionStart; live order unverified | No automatic re-injection |
 | Auto gate / rate-limit marker | Opt-in auto gate and quota StopFailure marker; live delivery unverified | Neither declared | Neither declared |
 | Update check / update command | Startup check/notice verified; native `plugin update` help checked | Check/notice and update procedure unverified; recheck hook trust after updates | No automatic check hook; update procedure unverified |
@@ -314,9 +359,10 @@ The features `add` opens:
 | Feature | What it sets |
 | --- | --- |
 | `delegation` | Which helpers take work, the parallel limit per project, and the assignment matrix: levels, types of work, model and roles per agent, plus the judge, written in one pass to `## Assignment matrix` |
-| `afk` | The away mandate: hosts, limits, the quota floor, which categories stop or are decided during a lease (two always stop), optional `Non-production targets`, a separate consent for precedent excerpts, and Merge |
+| `afk` | The away mandate: hosts, limits, the quota floor, which categories stop or are decided during a lease (two always stop), optional `Non-production targets`, a separate consent for precedent excerpts, and Merge; run inside a repository, also that repository's own task choice, push, merge, trusted authors and code folders |
+| `checks` | A repository's check list, read from its scripts and CI without running them, saved in its own folder after a yes, with an optional local receipt, pre-push hook and cheaper CI workflow |
 | `roles` | Review roles, the judge and review posting in `## Agent roles`; a valid matrix with its own consent decides instead |
-| `project` | Per-repository ledger and task-file settings |
+| `project` | Per-repository ledger and task-file settings and the dashboard label, in the repository's own settings file |
 | `quota` | The opt-in quota probe |
 | `metrics` | Usage-metrics consent and retention, then project progress, the process snapshot and the Antigravity usage hook |
 | `compaction` | The native compaction threshold, context snapshots and the opt-in Antigravity compaction stop |
@@ -355,8 +401,6 @@ For reviews, the gates and the `fnl-reviewer` agent use each host's native instr
 ```bash
 npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit
 ```
-
-ZCode, Z.ai's coding agent ([zai-org/ZCode](https://github.com/zai-org/ZCode), Apache-2.0), is a fourth delegate family (12/11/2026), for code tasks in its `edit` mode and advice in its `plan` mode, never `yolo`; its facts come from ZCode's own CLI documentation, and a machine's first dispatch starts with ZCode's permission check. Reviews are not routed to ZCode yet, and the away lease refuses it. A dispatch sends the brief and the code ZCode reads to the model provider set in ZCode's configuration (Z.ai's coding plan by default). See `delegate` `references/agents.md` "ZCode".
 
 `setup` offers companion guidance in Quick or Advanced, each where it fits: [`agybird`](https://github.com/finolabs/agybird) (MIT), which runs Antigravity dispatches for `delegate` when Antigravity is a delegate of Claude Code or Codex, and [`vietnamizer`](https://github.com/finolabs/vietnamizer) (MIT), which writes and edits Vietnamese documents for people. The setup companion table uses pinned single-skill install commands; plugin installs from the `finolabs` catalog are an alternative, and users should choose one path per host. For diagrams in docs, the README or a deck, it also suggests [`diagram-design`](https://github.com/cathrynlavery/diagram-design) (MIT, by Cathryn Lavery), which draws them as self-contained HTML or SVG with PNG export; it sends nothing to its author, and a generated file loads its fonts from Google Fonts when opened. For mind maps and outlines it offers [`markmap`](https://github.com/finolabs/markmap-skills); optional [`typesafe-ai`](https://github.com/typesafe-ai/skills) supplies judgment cookbooks. Use the [checked companion table](skills/setup/references/companions.md) for install commands, dates, data costs and fallbacks.
 
@@ -402,6 +446,13 @@ A home folder that other users can write to lets them swap folders under it, so 
 
 Optional quota probing is configured in `/setup add quota`, off by default and independent of metrics. After a confirmed path preview, the coordinator runs `quota_probe.py read --family <agy|claude|codex>` before routing, then `status`. The command waits for each install's reading and enforces a minimum 15-minute age, failure backoff and one in-flight reading. Hooks start no quota reading; Claude Code alone records a family-and-time marker on StopFailure `rate_limit`, with probing on. A newer successful reading overrides this advisory marker; otherwise it expires at an eligible depleted pool's reset or after one hour, never over five hours. Claude Code asks to trust the changed hooks; Codex and Antigravity have no new hook entry. Claude Code vendor hooks docs (07/11/2026) verify the StopFailure `error: rate_limit` contract, with no token counts and ignored output/exit code; the live payload and this plugin's delivery remain unverified before release (see the [quota spec](docs/specs/quota-on-demand.md)). The programs contact their providers; the probe itself makes no network call. `FNL_QUOTA_PROBE=off` disables it. Scan and Check show per-install labels, measured times and pools; routing treats the cache as advisory, excludes nothing older than eight hours, and defers to the user. See [privacy](PRIVACY.md#quota-probe) for the stored fields, Claude configuration behavior and verification limits.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/settings-scopes-dark.png">
+    <img src="assets/settings-scopes-light.png" alt="Two scopes of settings: user scope in ~/.finolabs/vibecode/ holds host.md (roles, judge, assignment matrix, afk choices and lease limits, delegation mode) and the approved digests; project scope in the repository's .finolabs/vibecode/ holds checks.json and settings.json (ledger, tasks, parallel limit, label and optional afk choices). A project file counts only while its bytes match the digest you approved, so a branch or pull request cannot change it." width="920">
+  </picture>
+</p>
+
 Project progress uses per-repository ledger and task-file settings confirmed in `/setup add project`, while `/setup instructions` writes the project work convention and dated Outcome anchors. These settings, the parallel limit and the dashboard label live in each repository's own settings file, `.finolabs/vibecode/settings.json` in the main checkout (kept out of git through `.git/info/exclude`, and read only while it matches the digest approved in the data root). Since 0.2.5 the `## Project settings` and `## Project labels` sections and the global `Ledger project:` and `Task file:` lines of `host.md` are no longer read: set them again per repository, then delete them by hand.
 
 Parallel capacity is user-set, advisory and shared across coordinators; [slot checks](docs/specs/parallel-instances.md) do not reserve capacity.
@@ -414,10 +465,10 @@ The judge defaults to a small host model. Choose Jev through `setup` only with a
 
 ```text
 .claude-plugin/plugin.json        Claude Code manifest (the version's single source of truth)
-.claude-plugin/hooks.json         Claude Code hooks: the session reminder, the update notice, usage metrics, the compaction nudge, the PreCompact summary instructions, the opt-in auto gate, the away question gate and the advisory StopFailure hook
+.claude-plugin/hooks.json         Claude Code hooks: the session reminder, the update notice, usage metrics, the compaction nudge, the dispatch nudge, the merge notice, the PreCompact summary instructions, the opt-in auto gate, the away question gate and the advisory StopFailure hook
 .claude-plugin/marketplace.json   Claude Code marketplace listing this repository
 .codex-plugin/plugin.json         Codex manifest, version kept equal
-.codex-plugin/hooks.json          Codex hooks for the session reminder, update notices and usage metrics (named by the manifest)
+.codex-plugin/hooks.json          Codex hooks for the session reminder, update notices, usage metrics and PreCompact (named by the manifest)
 .antigravity-plugin/plugin.json   Antigravity manifest, version kept equal
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 agents/fnl-*.md                   code reviewer, security reviewer and navigator definitions (no project edits; authorized posting uses a private draft)
@@ -429,14 +480,15 @@ skills/advisor/references/choose.md          choose mode: one option or none dur
 skills/afk/references/decide.md              the away decision ladder, its two checks and the record of each attempt
 skills/delegate/references/coordinator-sessions.md  spec coordinator and task sessions
 skills/help/references/map.md                every skill, agent, script and setup feature; a test fails when a script or feature is missing
-skills/tidy/references/knowledge.md          remember/recall procedure; handovers live in SKILL.md
+skills/tidy/references/knowledge.md          remember/recall procedure; handovers live in references/handover.md
 rules/AGENTS.md                   session-start reminder: an always-on rule on Antigravity, printed by scripts/session_start.py on Claude Code and Codex
-assets/                           icons, light/dark architecture and task-lifecycle diagrams, dashboard screenshots and their NOTICE
+assets/                           icons, light/dark renderings of the diagrams, dashboard screenshots and their NOTICE
 evals/                            trigger, behavior and parity cases for `claude plugin eval`
 scripts/                          repository/shared helpers and checks: routing, reviews, receipts, judge, context, hygiene, slots, quota, metrics and setup; shared helpers have byte-identical copies in consuming skills
 skills/*/scripts/                 self-contained copies plus skill-only helpers; the full inventory is in help/references/map.md
 docs/specs/                       design specs (index.md) and one-file work records; work-tracking.md defines their contract
-docs/diagrams/                    HTML sources of the architecture, task-lifecycle, delegation sequence and away decision sequence diagrams
+docs/diagrams/                    HTML sources of the architecture, task-lifecycle, request-to-merge, delegation sequence, away decision sequence, session health and settings scopes diagrams
+docs/how-it-compares.md           how the plugin relates to the hosts' own subagents, agent teams, /loop, /goal and scheduled runs
 tests/                            unit tests for the repository scripts, the ledger, the metrics hook and the dashboard page (the page script runs in node when it is installed)
 CHANGELOG.md                      Keep a Changelog
 LICENSE                           MIT
