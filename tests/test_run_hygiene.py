@@ -22,6 +22,8 @@ MECHANICAL = {
     ('merge_check.py', 'run_gh'): ("['gh', *args]", None),
     ('merge_check.py', 'checkout_origin'): ("['git', '-c', 'core.fsmonitor=false', '-C', str(root), 'remote', 'get-url', *mode, '--all', 'origin']", 'env'),
     ('agent_scan.py', 'inventory'): ("[executable, '--version']", None),
+    ('worktree_sweep.py', 'git'): ("['git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=" + '/' + "dev/null', '-c', 'core.untrackedCache=false', '-C', str(checkout), *args]", 'child_environment()'),
+    ('worktree_sweep.py', 'run_gh'): ("['gh', *args]", None),
     ('restore_point.py', 'run_git'): ("['git', '-c', 'core.quotePath=false', '-c', 'core.hooksPath=" + '/' + "dev/null', '-c', 'core.fsmonitor=false', *args]", 'env'),
 }
 OWN_ENV = {'quota_probe.py', 'agent_processes.py'}
