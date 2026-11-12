@@ -159,8 +159,8 @@ FNL_DISPATCH_ID="<ledger id>" python3 -I <delegate skill folder>/scripts/delegat
 
 ## ZCode
 
-Placeholder. ZCode is experimental and unverified (12/11/2026): the coordinator does not dispatch ZCode for code, review or advice until the facts `agents.md` "ZCode" lists (modes, read-only form, headless form, JSON result, denial handling, outcome mapping, provenance) are confirmed from ZCode's own documentation or `zcode --help`. No dispatch command is recorded here until then.
+- Executable: <absolute path the user confirmed: the `zcode` single executable, or node plus the absolute path of `zcode.cjs`>. ZCode version and the date of the permission check in `agents.md` "ZCode": <version, date, result>.
+- Command: FNL_DISPATCH_ID=<ledger id> python3 -I <delegate skill folder>/scripts/delegate_env.py --family zcode -- <hard-cap wrapper> <executable> --prompt "$(cat "$B")" --cwd <worktree, absolute> --mode edit --disallowed-tools "AskUserQuestion EnterPlanMode ExitPlanMode" --output-format json --no-color. Use `--mode plan` for advice. Never `yolo`, `guarded` or `build`.
+- Model the user configured in ZCode for delegation, as a record only (ZCode takes no model flag): <model id>.
+- ZCode's configuration folder on this machine, if the user wants it recorded: <path>.
 
-- Executable: <absolute path the user confirmed, once verified>.
-- Model the user confirmed for delegation: <model id, once verified>.
-- Config file location on this machine, if the user wants it recorded: <path>.

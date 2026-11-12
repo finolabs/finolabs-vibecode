@@ -53,12 +53,11 @@ Recheck: `agy models`, `agy --help`, and `agy -p /usage --output-format json`.
 
 ## ZCode
 
-Experimental and unverified (12/11/2026): not dispatched until the facts `agents.md` "ZCode" lists are confirmed. Recheck: `zcode --help` and `/model` in a session; where ZCode keeps its settings on a given machine belongs in that machine's host config.
+Read from ZCode's own CLI documentation on 12/11/2026 (`agents.md` "ZCode"). Recheck: `zcode --version` and the model chosen in ZCode's settings.
 
-- Trust bar: ZCode's publisher, license, install source and network behavior are not yet confirmed. A dispatch would send the brief and the repository code it reads to ZCode's model provider, under that provider's terms; that provider is unconfirmed.
-- Models: chosen in ZCode's own settings, reportedly not through per-dispatch CLI flags (unverified); the model the user confirmed for delegation is recorded in host config `## ZCode`, and a `zcode` model in the assignment matrix is informational only. <list the confirmed model ids here>.
-- Effort: no per-dispatch effort flag is known (unverified), so the effort default above may not apply to ZCode.
-- Modes, the read-only form and the `--json` result are unverified; see `agents.md` "ZCode".
+- Trust bar: published by Z.ai ([zai-org/ZCode](https://github.com/zai-org/ZCode), Apache-2.0, actively maintained). A dispatch sends the brief and the repository code it reads to the model provider set in ZCode's configuration, under that provider's terms.
+- Models: chosen in ZCode's own settings; the CLI has no per-dispatch model flag, so a `zcode` model in the assignment matrix and in host config `## ZCode` is a record of the user's choice, not an argument. <list the confirmed model ids here>.
+- Effort: the CLI has no effort flag, so the effort default above does not apply to ZCode.
 - Quota: no probe parser exists, so treat quota as unverified.
 
 ## Strength overrides

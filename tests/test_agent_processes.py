@@ -41,7 +41,7 @@ class ProcessTest(unittest.TestCase):
         text = json.dumps(result)
         for bad in ('private', 'secret', 'evil', '</script>', 'codexd', 'claude-helper', '\\u0001'):
             self.assertNotIn(bad, text)
-        # The disclosed roots stay exactly these three; ZCode's process name is unverified and not counted.
+        # The disclosed roots stay exactly these three; ZCode runs as node or a single executable and is not counted.
         self.assertEqual(ap.ROOTS, ('claude', 'codex', 'agy'))
         self.assertEqual(ap.parse('42 1 0 00:01 zcode\n', 42, 'now')['processes'], [])
 
