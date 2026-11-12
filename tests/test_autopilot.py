@@ -1837,6 +1837,36 @@ class PolicyContextTest(AutopilotBase):
         self.project(wide)
         self.assertEqual(set(self.codes().values()), {'allowed'})
 
+    def test_paths_are_judged_from_the_repository_root_never_from_cwd(self):
+        self.start(SETUP + MANY)
+        self.project({'roots': ['packages']})
+        for folder in ('restricted/packages', '.github/packages', 'packages', 'src/inner'):
+            (self.repo / folder).mkdir(parents=True, exist_ok=True)
+        for cwd, operand, code in (('.', 'restricted/packages/app.py', 'unknown'),
+                                   ('restricted', 'packages/app.py', 'unknown'),
+                                   ('restricted', 'README.md', 'unknown'),
+                                   ('.', '.github/packages/app.py', 'protected'),
+                                   ('.github', 'packages/app.py', 'protected'),
+                                   ('.github', 'README.md', 'protected'),
+                                   ('.github', 'scripts/build.py', 'protected'),
+                                   ('packages', 'app.py', 'allowed'),
+                                   ('src', 'inner/example.py', 'allowed')):
+            with self.subTest(cwd=cwd, operand=operand):
+                self.cwd = self.repo / cwd
+                self.check(paths=[operand], tier=1 if code == 'allowed' else 3, code=code)
+                self.assertEqual(self.check_code(['git', 'add', '--', operand]), code)
+                self.assertEqual(self.check_code(['git', 'diff', '--stat', operand]) == 'allowed', code == 'allowed')
+
+    def test_an_away_evidence_file_is_judged_from_the_repository_root(self):
+        self.start(SETUP_AWAY)
+        (self.repo / '.github/.finolabs/briefs').mkdir(parents=True)
+        (self.repo / '.finolabs/briefs').mkdir(parents=True)
+        self.check(JUDGE)
+        self.cwd = self.repo / '.github'
+        self.assertEqual(self.check_code(JUDGE), 'unknown')
+        evidence = JUDGE[:-1] + ['docs/notes.md']
+        self.assertEqual(self.check_code(evidence), 'unknown')
+
 
 if __name__ == '__main__':
     unittest.main()

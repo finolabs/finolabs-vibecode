@@ -138,7 +138,11 @@ floor and the stop/decide categories stay user scope only, because one lease cov
 - The lease hash covers the user section only, so a project change does not end a live lease.
 - Roots: a path under a listed root is a known path with the same rules as the built-in roots (extension list, no
   `..`, no absolute path, no symlink on the way, a single file) and never one the protected rules match. A top-level
-  `README.md`, `CHANGELOG.md` or `CONTRIBUTING.md` is a known path in every repository.
+  `README.md`, `CHANGELOG.md` or `CONTRIBUTING.md` is a known path in every repository. An operand is read from the
+  working directory, and every path rule (roots, top-level documents, protected names, links) applies to its path
+  relative to the checkout root of the context's identity, so a descendant working directory neither turns a root
+  into the same name below it nor hides a protected folder above it; the away evidence file follows the same rule.
+  Without a found identity no path is a known path.
 - Local merges: `git merge [--no-ff] [--no-edit] refs/heads/<branch>` or `git merge [--no-ff] [--no-edit] <branch>` of
   an existing local branch is Tier 1 only when the effective Merge is yes and the current branch is a named branch other
   than the default branch (and not `main`, `master` or `trunk`); into the default branch it is Tier 3. The current

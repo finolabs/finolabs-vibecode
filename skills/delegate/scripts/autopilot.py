@@ -24,7 +24,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | PR merge/create/edit need exactly one `--repo github.com/OWNER/NAME` equal to the verified target; create needs one validated `--head`; implicit targets are Tier 3 | target_check, head_check, project_store.origin_target |
 | `effective` prints the same context read-only for the advisory Task choice and Trusted authors | show_effective |
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
-| Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths | classify_paths |
+| Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths; every path rule (roots, documents, protected names, links) applies to the operand's path relative to the checkout root of the check's validated identity, read from cwd, and with no identity no path is known | classify_paths, repository_path |
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
 | Only this install's ledger/record/heavy_run/merge_check script paths, with isolated Python, are allowed wrappers; nested heavy commands are classified too | script_command |
 | Each Tier 1 check reserves one action; ledger start also reserves a run, even if the caller never executes | check |
@@ -354,7 +354,33 @@ def effective(applied, cwd):
         return strict
 
 
-def classify_paths(paths, roots=()):
+def repository_path(name, context):
+    """A plain relative operand read from cwd, as a path relative to the checkout root of the check's validated
+    identity; None when the check has no identity, the operand is not plain or it lies outside that checkout."""
+    if (context.ident is None or not re.fullmatch(r'[A-Za-z0-9_./-]{1,240}', name) or Path(name).is_absolute()
+            or any(p in {'', '.', '..'} for p in name.split('/'))):
+        return None
+    try:
+        return Path(os.path.abspath(os.path.join(os.getcwd(), name))).relative_to(context.ident.checkout)
+    except ValueError:
+        return None
+
+
+def no_links(path, context):
+    """True when no component from the checkout root down to the path is a link (link metadata only, never a
+    target or any file contents)."""
+    candidate = context.ident.checkout
+    for part in path.parts:
+        candidate /= part
+        if candidate.is_symlink():
+            return False
+    return True
+
+
+def classify_paths(paths, roots=(), context=UNKNOWN):
+    """Known single-file paths only. Each operand is read from cwd, then the protected, enforcer, root, document and
+    link rules apply to its path relative to the checkout root of the check's validated identity, never to the
+    operand alone, so a descendant cwd neither widens a root nor hides a protected ancestor. No identity: unknown."""
     if not paths:
         return 'unknown'
     for name in paths:
@@ -366,17 +392,19 @@ def classify_paths(paths, roots=()):
         if (not re.fullmatch(r'[A-Za-z0-9_./-]{1,240}', name) or path.is_absolute()
                 or any(p in {'', '.', '..'} for p in name.split('/'))):
             return 'unknown'
+        path = repository_path(name, context)
+        if path is None:
+            return 'unknown'
+        if protected(path.as_posix()):
+            return 'protected'
         if len(path.parts) < 2:
-            if name not in DOCUMENTS:
+            if path.as_posix() not in DOCUMENTS:
                 return 'unknown'
         elif path.parts[0] not in ROOTS and path.parts[0] not in roots or path.suffix not in EXTENSIONS:
             return 'unknown'
-        # Inspect link metadata only, never the target or any file contents.
-        candidate = Path(os.getcwd())
-        for part in path.parts:
-            candidate /= part
-            if candidate.is_symlink():
-                return 'protected'
+        if not no_links(path, context):
+            return 'protected'
+        candidate = context.ident.checkout / path
         # A directory operand would stage everything below it, so only single files are a known path.
         if candidate.is_dir():
             return 'unknown'
@@ -617,22 +645,19 @@ def flag_values(tokens, single, repeated=()):
     return values
 
 
-def evidence_path(name):
+def evidence_path(name, context):
+    """A known path, or a brief under the repository's own `.finolabs/briefs/`, both judged from the checkout root."""
     if not plain(name) or protected(name):
         return False
-    if classify_paths([name]) == 'allowed':
+    if classify_paths([name], (), context) == 'allowed':
         return True
-    if not re.fullmatch(r'\.finolabs/briefs/[A-Za-z0-9_.-]{1,80}\.(?:md|json|txt)', name):
+    path = repository_path(name, context)
+    if path is None or not re.fullmatch(r'\.finolabs/briefs/[A-Za-z0-9_.-]{1,80}\.(?:md|json|txt)', path.as_posix()):
         return False
-    candidate = Path(os.getcwd())
-    for part in Path(name).parts:
-        candidate /= part
-        if candidate.is_symlink():
-            return False
-    return not candidate.is_dir()
+    return no_links(path, context) and not (context.ident.checkout / path).is_dir()
 
 
-def judge_command(tail):
+def judge_command(tail, applied):
     """`judge.py ask --site away-decision --question Q --option O (2 to 6) --evidence-file F [--judge jev]` only."""
     if tail[:1] != ['ask']:
         return 'unknown'
@@ -641,7 +666,8 @@ def judge_command(tail):
             or not {'--question', '--evidence-file', '--option'} <= set(values)):
         return 'unknown'
     question, options = values['--question'], values['--option']
-    if not all(plain(t) for t in (question, *options)) or not evidence_path(values['--evidence-file']):
+    if (not all(plain(t) for t in (question, *options))
+            or not evidence_path(values['--evidence-file'], context_of(applied))):
         return 'unknown'
     try:
         import judge
@@ -740,7 +766,7 @@ def ladder_command(argv, applied, coordinator):
     name, tail = own_script(argv, ('judge.py', 'delegate_env.py'))
     if name is None:
         return None
-    return judge_command(tail) if name == 'judge.py' else advisor_command(tail, applied, coordinator)
+    return judge_command(tail, applied) if name == 'judge.py' else advisor_command(tail, applied, coordinator)
 
 
 TAG = re.compile(r'v?[0-9A-Za-z][0-9A-Za-z._-]{0,63}')
@@ -869,7 +895,8 @@ def classify_argv(argv, applied, coordinator=None):
                 return 'unknown'
             return 'allowed' if current and default and current not in {default, 'main', 'master', 'trunk'} else 'forbidden'
         if verb == 'add':
-            return classify_paths(tail[1:] if tail[:1] == ['--'] else tail, applied.get('Roots', ()))
+            return classify_paths(tail[1:] if tail[:1] == ['--'] else tail, applied.get('Roots', ()),
+                                  context_of(applied))
         if verb == 'commit':
             return 'allowed' if tail and options(tail, {'--amend', '--no-edit'}, {'-m', '--message'}, positional=False) == [] else 'unknown'
         query = {
@@ -893,7 +920,7 @@ def classify_argv(argv, applied, coordinator=None):
                     revision = r'(?:HEAD(?:[~^][0-9]*)?|[0-9a-f]{7,40}|origin/[A-Za-z0-9_./-]+)'
                     if re.fullmatch(revision + r'(?:\.\.\.?' + revision + r')?', operand):
                         continue
-                    if classify_paths([operand], applied.get('Roots', ())) != 'allowed':
+                    if classify_paths([operand], applied.get('Roots', ()), context_of(applied)) != 'allowed':
                         return 'unknown'
                 return 'allowed'
         return 'unknown'
@@ -950,7 +977,7 @@ def check(folder, args):
             code = classify_argv(argv, applied, args.coordinator)
         else:
             argv = None
-            code = classify_paths(args.paths, applied['Roots'])
+            code = classify_paths(args.paths, applied['Roots'], context_of(applied))
         if code == 'allowed':
             counters = lease['counters']
             counters['actions'] += 1
