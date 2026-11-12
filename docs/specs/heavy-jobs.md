@@ -30,6 +30,15 @@ Two gaps caused it:
   lands before that rule is merged. It never covers Codex or Antigravity.
 - **Default thresholds (owner, 2026-11-08):** one-minute load average below 12 and at least 3 GB of free plus inactive
   memory; wait cap 40 minutes.
+- **Memory gates (2026-11-11, brief from the owner's coordinator after a read-only review; starting heuristics, not
+  measured safe limits):** the load gate passed while the machine paged hard (about 52 MB/s of swap-out at a load below
+  12). On macOS a start also needs the kernel's pressure state (`kern.memorystatus_vm_pressure_level`) normal at every
+  poll for a 60-second window and swap-outs (`vm_stat`) averaging at most 5 MB/s over that window; the memory minimum
+  rises to 4 GB; total swap used has no cutoff. An unreadable pressure or swap-out reading waits and restarts the window
+  (the wait cap still ends the wait with exit 75); it never counts as a pass. Other platforms skip these two gates.
+  Nothing is watched after admission. Each value is a `## Heavy jobs` key. Light targeted tests (one worker, about a
+  minute, well under 512 MB extra, no browser, container, database or large build) skip the lock and the load gate but
+  still wait while pressure is critical.
 
 ## A. The script (contract; mechanism is decided when the code is written)
 
@@ -54,7 +63,8 @@ must hold. How the lock is kept is an implementation choice, settled in the code
 - Gate before start: wait while the lock is held, the one-minute load average is at or above the limit, or free memory
   is below the minimum. Poll every 15 seconds up to a wait cap (default 40 minutes), then exit 75 with a message that
   names the holder's label and age when known. Load and memory come from `os.getloadavg()` and `vm_stat`, run once per
-  poll as fixed argv with no shell; on a platform without `vm_stat` only load is checked and `status` says so.
+  poll as fixed argv with no shell; on a platform without `vm_stat` only load is checked and `status` says so. The
+  memory gates above add `sysctl -n kern.memorystatus_vm_pressure_level` and the `vm_stat` Swapouts count to each poll.
 - Detached work: `run` refuses a command that asks for detached work: `-d` or `--detach` as an option of `up` or `run`
   in any Compose spelling (`docker compose`, `docker-compose`) or of `docker run` and `docker container run`; exit 64
   with a fixed message that tells the caller to wrap a foreground script that starts, tests and tears down.
