@@ -405,14 +405,42 @@ def stale_label(start):
     return text if len(text) <= 80 else text[:77] + "..."
 
 
-def stale_rows(hours=None):
-    """Stale open records: (id, age, budget, label, log description, outcome or None, note)."""
+MAX_PROJECT = 200  # characters of a project name a stale preview binds
+
+
+def this_project(cwd=None):
+    """This repository's ledger project as `status` resolves it, or None.
+
+    The approved `ledger` entry of the repository's project settings, else the checkout folder name; None outside a
+    repository or when approved settings broke (status then reports the join as unknown)."""
+    try:
+        import project_store as store
+        found, ident = store.identity(os.getcwd() if cwd is None else cwd)
+        if found != "found":
+            return None
+        state, values = store.settings_state(ident.checkout)
+    except Exception:
+        return None
+    if state == "broken":
+        return None
+    name = values.get("ledger", ident.checkout.name)
+    return name if isinstance(name, str) and 0 < len(name) <= MAX_PROJECT else None
+
+
+ALL_PROJECTS_WARNING = ("ledger: warning: --all-projects lists every project's records; "
+                        "other projects' runs cannot be judged from this checkout")
+
+
+def stale_rows(hours=None, project=None):
+    """Stale open records of `project` (every project when None): (id, age, budget, label, log, outcome, note)."""
     import log_scan
     starts, finishes = load()
     current = datetime.now(timezone.utc)
     rows = []
     for ident, start in starts.items():
         if ident in finishes:
+            continue
+        if project is not None and start.get("project") != project:
             continue
         age = past_threshold(start, current, hours)
         if age is None:
@@ -445,8 +473,16 @@ def plan_digest(plan):
     return hashlib.sha256(json.dumps(plan, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
 
-def stale_preview(hours=None):
-    rows = stale_rows(hours)
+def stale_preview(hours=None, all_projects=False):
+    if all_projects:
+        project = None
+        print(ALL_PROJECTS_WARNING)
+    else:
+        project = this_project()
+        if project is None:
+            raise ValueError("stale refused: no ledger project resolved for this checkout; run it inside the "
+                             "repository, or pass --all-projects to preview every project")
+    rows = stale_rows(hours, project)
     if not rows:
         print("ledger: no open records past the stale threshold")
         return
@@ -460,21 +496,26 @@ def stale_preview(hours=None):
     if not records:
         print("ledger: nothing to close; ledger unchanged")
         return
-    plan = {"root": str(root), "created": time.time(), "older_than_hours": hours, "records": records}
+    plan = {"root": str(root), "created": time.time(), "older_than_hours": hours, "project": project,
+            "records": records}
     value = plan_digest(plan)
     with dr.data_folder(STALE_STATE, create=True, private=True) as state:
         fcntl.flock(state, fcntl.LOCK_EX | fcntl.LOCK_NB)
         dr.atomic_write(state, "preview.json", json.dumps({"plan": plan, "digest": value}).encode())
     print(f"Closes {len(records)} of {len(rows)} listed records; none is marked accepted.")
     print("Digest: " + value)
-    print("Close with: ledger.py stale --close --digest <at least 12 hex digits of the digest>")
+    print("Close with: ledger.py stale --close " + ("--all-projects " if all_projects else "")
+          + "--digest <at least 12 hex digits of the digest>")
     print("Preview expires in 60 minutes; ledger unchanged.")
 
 
 def valid_plan(plan):
-    if not isinstance(plan, dict) or set(plan) != {"root", "created", "older_than_hours", "records"}:
+    if not isinstance(plan, dict) or set(plan) != {"root", "created", "older_than_hours", "project", "records"}:
         return False
     if type(plan["created"]) not in (int, float) or not isinstance(plan["records"], list):
+        return False
+    scope = plan["project"]
+    if scope is not None and (not isinstance(scope, str) or not 0 < len(scope) <= MAX_PROJECT):
         return False
     hours = plan["older_than_hours"]
     if hours is not None and (type(hours) is not int or not 1 <= hours <= MAX_HOURS):
@@ -484,7 +525,7 @@ def valid_plan(plan):
                and isinstance(r["note"], str) and len(r["note"]) <= 200 for r in plan["records"])
 
 
-def stale_close(value):
+def stale_close(value, all_projects=False):
     if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{12,64}", value):
         raise ValueError("at least 12 hex digits of the preview digest required")
     root = dr.consent_root()
@@ -507,6 +548,14 @@ def stale_close(value):
             raise ValueError("data root changed; preview again")
         if not 0 <= time.time() - plan["created"] <= STALE_EXPIRY:
             raise ValueError("preview expired; preview again")
+        # The digest binds the scope too: a one-project preview closes only from that project's checkout.
+        scope = plan["project"]
+        if scope is None and not all_projects:
+            raise ValueError("the preview covered every project; close it with --all-projects")
+        if scope is not None and all_projects:
+            raise ValueError("the preview covered one project; close it without --all-projects")
+        if scope is not None and this_project() != scope:
+            raise ValueError("ledger project changed since the preview; preview again")
         with finish_lock():  # the open-state check and the appends happen under the finish writers' lock
             starts, finishes = load()
             current = datetime.now(timezone.utc)
@@ -514,6 +563,7 @@ def stale_close(value):
             for item in plan["records"]:
                 start = starts.get(item["id"])
                 if (start is None or item["id"] in finishes
+                        or (scope is not None and start.get("project") != scope)
                         or past_threshold(start, current, plan["older_than_hours"]) is None):
                     continue  # finished since the preview, or not past the preview's threshold: never closed here
                 append({"event": "finish", "id": item["id"], "ts": now(), "outcome": item["outcome"],
@@ -534,9 +584,9 @@ def cmd_stale(args):
         sys.exit("ledger: --older-than-hours goes with the preview; --close uses the preview's threshold")
     try:
         if args.close:
-            stale_close(args.digest)
+            stale_close(args.digest, args.all_projects)
         else:
-            stale_preview(args.older_than_hours)
+            stale_preview(args.older_than_hours, args.all_projects)
     except log_scan.FolderRefused as error:
         sys.exit("ledger: " + str(error))
     except FileNotFoundError:
@@ -745,8 +795,10 @@ def build_parser():
     o.add_argument("--project", help="only dispatches of this exact project name")
     o.set_defaults(func=cmd_open)
 
-    st = sub.add_parser("stale", help="preview open records past twice their budget and 24 hours; close them "
-                                      "with --close --digest")
+    st = sub.add_parser("stale", help="preview this repository's open records past twice their budget and 24 "
+                                      "hours; close them with --close --digest")
+    st.add_argument("--all-projects", action="store_true",
+                    help="every project's records, with a warning; a close of such a preview repeats this flag")
     st.add_argument("--older-than-hours", type=stale_hours,
                     help="preview threshold in hours (1 to 8760); a record inside its budget is never stale")
     st.add_argument("--close", action="store_true", help="close the records the preview listed")

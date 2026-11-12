@@ -866,11 +866,16 @@ class StaleLedgerTest(unittest.TestCase):
         patch = mock.patch.object(log_scan, "run_log_folder", return_value=self.logs)
         patch.start()
         self.addCleanup(patch.stop)
+        # `stale` acts on this repository's ledger project; these tests stand in a checkout named `demo`.
+        self.resolve = self.ledger.this_project
+        patch = mock.patch.object(self.ledger, "this_project", return_value="demo")
+        self.project = patch.start()
+        self.addCleanup(patch.stop)
 
-    def start(self, ident, minutes_ago, budget):
+    def start(self, ident, minutes_ago, budget, project="demo"):
         from datetime import datetime, timedelta, timezone
         ts = (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).isoformat(timespec="seconds")
-        return {"event": "start", "id": ident, "ts": ts, "project": "demo", "task": "t", "kind": "implement",
+        return {"event": "start", "id": ident, "ts": ts, "project": project, "task": "t", "kind": "implement",
                 "grade": "easy", "coordinator": "claude", "agent": "codex", "model": "m", "reason": "routing",
                 "budget_min": budget}
 
@@ -919,6 +924,71 @@ class StaleLedgerTest(unittest.TestCase):
         code, _, err = self.stale("--close", "--digest", digest[:12])
         self.assertEqual(code, 0, err)
         self.assertEqual(set(self.finishes()), {"d20261101-000000-aaaa", "d20261101-000000-dddd"})
+
+    # Scope: `stale` sees only this repository's project unless --all-projects widens the preview.
+
+    MINE, OTHER = "d20261101-000000-a101", "d20261101-000000-a102"
+
+    def write_two_projects(self):
+        self.write([self.start(self.MINE, 1500, 30), self.start(self.OTHER, 1500, 30, project="other-app")])
+
+    def test_stale_previews_and_closes_only_this_repositorys_project(self):
+        self.write_two_projects()
+        out, digest = self.preview_digest()
+        self.assertIn(self.MINE, out)
+        self.assertNotIn(self.OTHER, out)
+        self.assertNotIn("other-app", out)
+        self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
+        self.assertEqual(set(self.finishes()), {self.MINE})
+
+    def test_all_projects_widens_the_preview_with_a_warning_and_binds_the_scope(self):
+        self.write_two_projects()
+        code, out, err = self.stale("--all-projects")
+        self.assertEqual(code, 0, err)
+        self.assertIn(self.ledger.ALL_PROJECTS_WARNING, out)
+        self.assertIn(self.MINE, out)
+        self.assertIn(self.OTHER, out)
+        self.assertIn("stale --close --all-projects --digest", out)
+        digest = [line.split(": ", 1)[1] for line in out.splitlines() if line.startswith("Digest: ")][0]
+        before = self.path.read_bytes()
+        code, _, _ = self.stale("--close", "--digest", digest)  # the scope is part of what the digest binds
+        self.assertNotEqual(code, 0)
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.stale("--close", "--all-projects", "--digest", digest)[0], 0)
+        self.assertEqual(set(self.finishes()), {self.MINE, self.OTHER})
+
+    def test_a_one_project_preview_closes_only_from_that_project(self):
+        self.write_two_projects()
+        _, digest = self.preview_digest()
+        before = self.path.read_bytes()
+        code, _, _ = self.stale("--close", "--all-projects", "--digest", digest)
+        self.assertNotEqual(code, 0)
+        self.project.return_value = "other-app"  # the same preview, closed from another repository's checkout
+        code, _, _ = self.stale("--close", "--digest", digest)
+        self.assertNotEqual(code, 0)
+        self.assertEqual(self.path.read_bytes(), before)
+        self.project.return_value = "demo"
+        self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
+        self.assertEqual(set(self.finishes()), {self.MINE})
+
+    def test_an_unresolved_project_refuses_without_all_projects(self):
+        self.write_two_projects()
+        self.project.return_value = None
+        code, out, _ = self.stale()
+        self.assertNotEqual(code, 0)
+        self.assertNotIn("Digest:", out)
+        with self.assertRaises(ValueError) as refused:
+            self.ledger.stale_preview()
+        self.assertIn("--all-projects", str(refused.exception))
+        self.assertEqual(self.stale("--all-projects")[0], 0)
+
+    def test_the_project_resolves_as_status_does_from_the_checkout_folder(self):
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Path(folder).resolve() / "demo-repo"
+            (repo / "sub").mkdir(parents=True)
+            subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
+            self.assertEqual(self.resolve(cwd=str(repo / "sub")), "demo-repo")
+            self.assertIsNone(self.resolve(cwd=folder))  # outside any repository
 
     def test_nothing_past_budget_prints_so_and_writes_no_preview(self):
         self.write([self.start("d20261101-000000-bbbb", 10, 30)])
