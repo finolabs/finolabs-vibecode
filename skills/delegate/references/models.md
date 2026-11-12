@@ -16,9 +16,9 @@ Route by tier first, then by agent. A tier names what the work needs; the agent 
 
 | Tier | Claude Code | Codex | Antigravity | ZCode |
 | --- | --- | --- | --- | --- |
-| frontier | Opus 5.5; Fable 5.1 when Opus has already fallen short | `gpt-6-astra` | `claude-opus-5-5-*` (Claude pool) | GLM coding plan models, when configured |
-| strong | Sonnet 5.5 | `gpt-6.1-sol` | `gemini-4-argon-*`, `claude-sonnet-5-5-*` | <as configured> |
-| fast | Haiku 5.5 | `gpt-6.1-terra`, `gpt-6-luna` | `gemini-3.8-flash-*` | <as configured> |
+| frontier | Opus 5.5; Fable 5.1 when Opus has already fallen short | `gpt-6-astra` | `claude-opus-5-5-*` (Claude pool) | unverified |
+| strong | Sonnet 5.5 | `gpt-6.1-sol` | `gemini-4-argon-*`, `claude-sonnet-5-5-*` | unverified |
+| fast | Haiku 5.5 | `gpt-6.1-terra`, `gpt-6-luna` | `gemini-3.8-flash-*` | unverified |
 
 The model places the work in a tier; effort is a separate choice. **Default to `medium` effort on every agent and tier, hard work included**: a `medium` run still does hard work, and it spends less quota and time. By grade (`SKILL.md` "Grade"): `medium` for easy, medium and hard work, `high` for very hard, `xhigh` for ultra hard, and `max` only when `xhigh` has fallen short. A run that fell short at its level is retried one level up. A host config's "Effort preference" overrides this default.
 
@@ -53,13 +53,13 @@ Recheck: `agy models`, `agy --help`, and `agy -p /usage --output-format json`.
 
 ## ZCode
 
-Recheck: `zcode --help` (or the bundled CLI at `<ZCode.app>/Contents/Resources/glm/zcode.cjs`), `/model` in a session, and `~/.zcode/v2/provider_config.json`.
+Experimental and unverified (12/11/2026): not dispatched until the facts `agents.md` "ZCode" lists are confirmed. Recheck: `zcode --help` and `/model` in a session; where ZCode keeps its settings on a given machine belongs in that machine's host config.
 
-- Models: chosen in ZCode's own settings (`/model` or provider config), not per-dispatch CLI flags; the model the user confirmed for delegation is recorded in host config `## ZCode`. Commonly GLM models on a coding plan; <list the confirmed model ids here>.
-- Effort: no per-dispatch effort flag exists; the session's configured reasoning level applies, so the effort default above cannot be raised for a zcode dispatch.
-- Strengths: headless runs with `--cwd`, `--mode build|edit|plan|guarded` and `--json` output; `--disallowed-tools` restricts tools when the user asks.
-- Weak spots: no headless quota query and no `--model`/`--effort` flags; the hard-cap wrapper alone bounds a run.
-- Quota: coding-plan limits in the user's account; no probe parser exists yet, so treat quota as unverified.
+- Trust bar: ZCode's publisher, license, install source and network behavior are not yet confirmed. A dispatch would send the brief and the repository code it reads to ZCode's model provider, under that provider's terms; that provider is unconfirmed.
+- Models: chosen in ZCode's own settings, reportedly not through per-dispatch CLI flags (unverified); the model the user confirmed for delegation is recorded in host config `## ZCode`, and a `zcode` model in the assignment matrix is informational only. <list the confirmed model ids here>.
+- Effort: no per-dispatch effort flag is known (unverified), so the effort default above may not apply to ZCode.
+- Modes, the read-only form and the `--json` result are unverified; see `agents.md` "ZCode".
+- Quota: no probe parser exists, so treat quota as unverified.
 
 ## Strength overrides
 

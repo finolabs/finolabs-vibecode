@@ -159,7 +159,8 @@ FNL_DISPATCH_ID="<ledger id>" python3 -I <delegate skill folder>/scripts/delegat
 
 ## ZCode
 
-- First lint the brief with `brief_check.py` from `handoff`; set `umask 077` and create the private log folder as the common procedure in `agents.md` requires; the wrapper checks its mode. Headless command: FNL_DISPATCH_ID=<ledger id> python3 -I <delegate skill folder>/scripts/delegate_env.py --family zcode -- <hard-cap wrapper, e.g. perl -e 'alarm 5400; exec @ARGV'> <zcode path, e.g. /Applications/ZCode.app/Contents/Resources/glm/zcode.cjs or a `zcode` launcher on PATH> -p "$(cat "$B")" --cwd "$W" --mode <build for code work, edit for auto-approved edits, guarded for pause-on-dangerous-commands> --json < /dev/null
-- Allowed models: configured in ZCode's own settings (`~/.zcode/v2/provider_config.json` or `/model`), not per-dispatch flags; record here which model the user confirmed for delegation: <model id>.
-- No `--model` or `--effort` flags exist on the CLI; the effort preference above cannot be applied to zcode dispatches, so the hard-cap wrapper alone bounds the run.
-- Restrict tools with `--disallowed-tools "<tools the brief must not use>"` when the user asks; `--mode` controls write permission otherwise.
+Placeholder. ZCode is experimental and unverified (12/11/2026): the coordinator does not dispatch ZCode for code, review or advice until the facts `agents.md` "ZCode" lists (modes, read-only form, headless form, JSON result, denial handling, outcome mapping, provenance) are confirmed from ZCode's own documentation or `zcode --help`. No dispatch command is recorded here until then.
+
+- Executable: <absolute path the user confirmed, once verified>.
+- Model the user confirmed for delegation: <model id, once verified>.
+- Config file location on this machine, if the user wants it recorded: <path>.

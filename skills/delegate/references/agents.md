@@ -65,6 +65,20 @@ Through the `agybird` runner, read its envelope `status` instead:
 | `blocked` | `blocked` | reroute, or rewrite the brief edit-only |
 | `error` | `quota` when `evidence.agy_error` shows a spent pool (the Quota rule above), or, with an older `agybird`, when `/usage` shows that model's pool at 0%; else `error` | for `quota`, the quota fallback, keeping its tier rules; for `error`, read `agy_error` before any retry |
 
+## ZCode
+
+**Experimental and unverified (12/11/2026).** ZCode can be recorded in the host config's inventory, but the coordinator does not dispatch ZCode for code, review or advice until each fact below is confirmed from ZCode's own documentation or `zcode --help` and recorded here with its date (advisory, agent judgment; the review router and the away advisor form refuse ZCode in code). Route the work to another present family instead.
+
+Missing facts:
+
+- **Modes**: the exact `--mode` values, what each one approves (file writes, shell commands, network), and which mode applies when none is passed.
+- **Read-only form**: a mode or flag that allows only reads and searches, for reviews and advice.
+- **Headless form**: the program and arguments to run without a session, and how the brief is passed.
+- **JSON result**: the shape of the `--json` output and the field that carries the final message.
+- **Denial handling**: how a denied or approval-needing action is reported, and whether a run that hit one can still exit 0.
+- **Outcome mapping**: which results map to `accepted`, `needs-permission`, `timeout`, `quota` and `error` in the ledger.
+- **Provenance**: publisher, license, install source, process name, and network and credential behavior beyond the user's own account.
+
 ## When an agent coordinates
 
 The coordinator's own sandbox decides which delegates it can reach. Each delegate CLI needs network access and its own state and credential folders, which it reads by itself; the coordinator never reads them.
