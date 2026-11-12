@@ -990,6 +990,73 @@ class StaleLedgerTest(unittest.TestCase):
             self.assertEqual(self.resolve(cwd=str(repo / "sub")), "demo-repo")
             self.assertIsNone(self.resolve(cwd=folder))  # outside any repository
 
+    # The dispatch wrapper's `ended` line: read by load, open and stale, never a finish, ignored by summary.
+
+    def ended(self, ident, code):
+        return {"event": "ended", "id": ident, "ts": "2026-11-01T00:00:00+00:00", "exit": code}
+
+    def test_ended_lines_fill_their_own_map_and_are_never_finishes(self):
+        ident = "d20261101-000000-c001"
+        self.write([self.start(ident, 30, 60), self.ended(ident, 2), {"event": "ended", "id": ident}])
+        err, ended = io.StringIO(), {}
+        with contextlib.redirect_stderr(err):
+            starts, finishes = self.ledger.load(ended)
+            plain = self.ledger.load()
+        self.assertEqual((set(starts), finishes), ({ident}, {}))
+        self.assertEqual(ended[ident]["exit"], 2)
+        self.assertEqual(plain, (starts, finishes))  # callers that pass no map see the two maps unchanged
+        self.assertNotIn("malformed line 2", err.getvalue())
+        self.assertIn("malformed line 3", err.getvalue())  # an ended line without its keys is still malformed
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            self.ledger.cmd_open(self.ledger.build_parser().parse_args(["open"]))
+        [line] = out.getvalue().splitlines()
+        self.assertTrue(line.startswith(ident))
+        self.assertTrue(line.endswith("ended exit=2"))
+
+    def test_summary_ignores_ended_lines(self):
+        done, running = "d20261101-000000-c002", "d20261101-000000-c003"
+        finish = {"event": "finish", "id": done, "ts": "2026-11-02T00:00:00+00:00", "outcome": "rejected",
+                  "rework_rounds": 0}
+        self.write([self.start(done, 3000, 30), self.ended(done, 0), finish,
+                    self.start(running, 3000, 30), self.ended(running, 1)])
+        [row] = self.ledger.summary_rows()
+        self.assertEqual((row["n"], row["accepted"], row["error"]), (1, 0, 0))
+
+    def test_an_ended_run_is_due_without_waiting_for_twice_its_budget(self):
+        ids = {name: "d20261101-000000-" + name for name in ("c101", "c102", "c103", "c104")}
+        self.write([self.start(ids["c101"], 1500, 800), self.ended(ids["c101"], 3),    # ended nonzero: error
+                    self.start(ids["c102"], 1500, 800), self.ended(ids["c102"], 0),    # ended 0: cancelled
+                    self.start(ids["c103"], 1500, 800),                                # no ended line: waits 2x budget
+                    self.start(ids["c104"], 120, 30), self.ended(ids["c104"], 1)])     # ended, under 24 hours
+        self.log(ids["c101"], "exit=0\n")  # the ended line wins; the log is not read
+        out, digest = self.preview_digest()
+        listed = {ident for ident in ids.values() if ident in out}
+        self.assertEqual(listed, {ids["c101"], ids["c102"]})
+        self.assertIn("ended exit=3  -> error", out)
+        self.assertIn("ended exit=0  -> cancelled", out)
+        self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
+        finishes = self.finishes()
+        self.assertEqual(set(finishes), {ids["c101"], ids["c102"]})
+        self.assertEqual(finishes[ids["c101"]]["outcome"], "error")
+        self.assertEqual(finishes[ids["c102"]]["outcome"], "cancelled")
+        self.assertIn("run ended exit 0; no verdict recorded", finishes[ids["c102"]]["note"])
+        for finish in finishes.values():
+            self.assertNotEqual(finish["outcome"], "accepted")
+
+    def test_older_than_hours_lowers_the_floor_for_an_ended_run_even_inside_its_budget(self):
+        ident = "d20261101-000000-c201"
+        self.write([self.start(ident, 120, 600), self.ended(ident, 1)])
+        code, out, _ = self.stale()
+        self.assertEqual(code, 0)
+        self.assertNotIn(ident, out)
+        code, out, err = self.stale("--older-than-hours", "1")
+        self.assertEqual(code, 0, err)
+        self.assertIn(ident, out)
+        digest = [line.split(": ", 1)[1] for line in out.splitlines() if line.startswith("Digest: ")][0]
+        self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
+        self.assertEqual(self.finishes()[ident]["outcome"], "error")
+
     def test_nothing_past_budget_prints_so_and_writes_no_preview(self):
         self.write([self.start("d20261101-000000-bbbb", 10, 30)])
         code, out, _ = self.stale()
@@ -1126,9 +1193,9 @@ class StaleLedgerTest(unittest.TestCase):
                 yield
                 held.pop()
 
-        def load():
+        def load(*args):
             self.assertTrue(held, "close read the open state outside the finish lock")
-            return real_load()
+            return real_load(*args)
 
         with mock.patch.object(self.ledger, "finish_lock", lock), mock.patch.object(self.ledger, "load", load):
             self.ledger.stale_close(digest)

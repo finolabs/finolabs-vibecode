@@ -47,6 +47,8 @@ REQUIRED = {
     "start": {"id", "ts", "project", "task", "kind", "grade", "agent", "model", "reason"},
     "finish": {"id", "ts", "outcome", "rework_rounds"},
 }
+# The dispatch wrapper's `ended` line: the run's process exited with this code. It is not a finish.
+ENDED = {"id", "ts", "exit"}
 # A posted review comment, checked by pattern only and never fetched.
 REVIEW_URL = re.compile(r"https://github\.com/[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}/pull/[1-9][0-9]{0,9}"
                         r"#issuecomment-[1-9][0-9]{0,19}")
@@ -122,7 +124,13 @@ def load_away():
     return records
 
 
-def load():
+def valid_ended(rec):
+    code = rec.get("exit")
+    return ENDED <= rec.keys() and isinstance(rec["id"], str) and type(code) is int and -255 <= code <= 255
+
+
+def load(ended=None):
+    """The `start` and `finish` maps by id; `ended` lines fill the `ended` dict when one is passed, else are skipped."""
     lines = read_lines()
     starts, finishes = {}, {}
     for n, line in enumerate(lines, 1):
@@ -134,6 +142,10 @@ def load():
             rec = None
         if isinstance(rec, dict) and rec.get("event") in AWAY_EVENTS:
             continue  # away lines are read by load_away(), never reported as malformed
+        if isinstance(rec, dict) and rec.get("event") == "ended" and valid_ended(rec):
+            if ended is not None:
+                ended[rec["id"]] = rec
+            continue  # the run's process exited; its outcome is still open
         required = REQUIRED.get(rec.get("event")) if isinstance(rec, dict) else None
         if not required or not required <= rec.keys():
             print(f"ledger: skipping malformed line {n}", file=sys.stderr)
@@ -316,15 +328,17 @@ def minutes(start, finish):
 
 
 def cmd_open(args):
-    starts, finishes = load()
+    ended = {}
+    starts, finishes = load(ended)
     current = datetime.now(timezone.utc)
     for dispatch_id, s in starts.items():
         if args.project is not None and s["project"] != args.project:
             continue
         if dispatch_id not in finishes:
             age = (current - datetime.fromisoformat(s["ts"])).total_seconds() / 60
+            mark = f"  ended exit={ended[dispatch_id]['exit']}" if dispatch_id in ended else ""
             print(f"{dispatch_id}  {s['ts']}  age {age:.0f}/{s.get('budget_min', '?')} min  "
-                  f"{s['agent']}/{s['model']}  {s['project']}: {s['task']}")
+                  f"{s['agent']}/{s['model']}  {s['project']}: {s['task']}{mark}")
 
 
 STALE_STATE = "state/ledger-stale"
@@ -346,15 +360,18 @@ def stale_hours(value):
     return int(value)
 
 
-def past_threshold(start, current, hours=None):
+def past_threshold(start, current, hours=None, ended=False):
     """Age in minutes when the record is stale, else None.
 
     By default stale means past twice a positive budget and at least 24 hours (24 hours without a usable budget);
-    `hours` replaces that threshold, but a record still inside a positive budget is never stale."""
+    `hours` replaces that threshold, but a record still inside a positive budget is never stale. A record whose run
+    has an `ended` line no longer waits on its budget: 24 hours, or `hours` when given."""
     budget = start.get("budget_min")
     if type(budget) is not int or budget <= 0:
         budget = None
-    if hours is None:
+    if ended:
+        limit = STALE_FLOOR if hours is None else hours * 60
+    elif hours is None:
         limit = max(2 * budget, STALE_FLOOR) if budget else STALE_FLOOR
     else:
         limit = max(hours * 60, budget or 0)
@@ -434,7 +451,8 @@ ALL_PROJECTS_WARNING = ("ledger: warning: --all-projects lists every project's r
 def stale_rows(hours=None, project=None):
     """Stale open records of `project` (every project when None): (id, age, budget, label, log, outcome, note)."""
     import log_scan
-    starts, finishes = load()
+    ended = {}
+    starts, finishes = load(ended)
     current = datetime.now(timezone.utc)
     rows = []
     for ident, start in starts.items():
@@ -442,12 +460,19 @@ def stale_rows(hours=None, project=None):
             continue
         if project is not None and start.get("project") != project:
             continue
-        age = past_threshold(start, current, hours)
+        age = past_threshold(start, current, hours, ident in ended)
         if age is None:
             continue
         budget, label = start.get("budget_min"), stale_label(start)
         if not isinstance(ident, str) or not SAFE_ID.fullmatch(ident):
             rows.append(("(invalid id)", age, budget, label, "unchecked", None, ""))
+            continue
+        if ident in ended:
+            # The wrapper recorded the exit; the log is not read.
+            code = ended[ident]["exit"]
+            reason = f"run ended exit={code}" if code else "run ended exit 0; no verdict recorded"
+            rows.append((ident, age, budget, label, f"ended exit={code}", "error" if code else "cancelled",
+                         "closed late by ledger stale: " + reason))
             continue
         try:
             facts = log_facts(ident, current)
@@ -557,14 +582,15 @@ def stale_close(value, all_projects=False):
         if scope is not None and this_project() != scope:
             raise ValueError("ledger project changed since the preview; preview again")
         with finish_lock():  # the open-state check and the appends happen under the finish writers' lock
-            starts, finishes = load()
+            ended = {}
+            starts, finishes = load(ended)
             current = datetime.now(timezone.utc)
             closed = 0
             for item in plan["records"]:
                 start = starts.get(item["id"])
                 if (start is None or item["id"] in finishes
                         or (scope is not None and start.get("project") != scope)
-                        or past_threshold(start, current, plan["older_than_hours"]) is None):
+                        or past_threshold(start, current, plan["older_than_hours"], item["id"] in ended) is None):
                     continue  # finished since the preview, or not past the preview's threshold: never closed here
                 append({"event": "finish", "id": item["id"], "ts": now(), "outcome": item["outcome"],
                         "rework_rounds": 0, "tests": "not-run", "note": item["note"], "log_scan": "not_scanned"})

@@ -115,7 +115,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/context_snapshot.py` | Records/reads Claude Code or Antigravity status-line context counts, probes Claude Code or Codex on request through the confirmed program, and feeds the steward. |
 | `scripts/context_steward.py` | Applies the deterministic action table to supplied counts, threshold and boundary; never compacts. |
 | `scripts/data_root.py` | Resolves account-owned canonical storage and checks safe paths; environment overrides cannot select trusted state. |
-| `scripts/delegate_env.py` | Starts headless forms with approved environment names; HOME remains reachable. |
+| `scripts/delegate_env.py` | Starts headless forms with approved environment names; HOME remains reachable. With a valid `FNL_DISPATCH_ID` it appends one `ended` ledger line (id, time, exit code) after the child exits. |
 | `scripts/fnl_metrics.py` | Shared consent, metadata schema, storage, retention and event helpers. |
 | `scripts/git_metadata.py` | Reads bounded local Git metadata without starting Git. |
 | `scripts/handover_state.py` | Stores/reads private bounded handovers; compact SessionStart can re-inject them on Claude Code/Codex. |

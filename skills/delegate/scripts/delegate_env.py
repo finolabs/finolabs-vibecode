@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-"""Rule 2 dispatch wrapper. Canonical host config stores names and consent only."""
+"""Rule 2 dispatch wrapper. Canonical host config stores names and consent only.
+
+After the child exits, when FNL_DISPATCH_ID holds a valid dispatch id, it appends one `ended` line (id, time, exit
+code) to the dispatch ledger; any failure there is silent and the exit status stays the child's.
+"""
 import argparse
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -14,6 +19,7 @@ import run_env
 REFUSED = 125
 
 FAMILIES = ('claude', 'codex', 'antigravity')
+DISPATCH_ID = re.compile(r'd[0-9]{8}-[0-9]{6}-[0-9a-f]{4}')  # the ids `ledger.py start` writes
 
 
 class Parser(argparse.ArgumentParser):
@@ -89,6 +95,27 @@ def prepare_logs():
         pass
 
 
+def record_ended(code):
+    """Append `{"event": "ended", "id", "ts", "exit"}` for the dispatch in FNL_DISPATCH_ID; silent on any failure.
+
+    Writes nothing for a missing or malformed id, an unresolved data root or a ledger that does not exist yet, and
+    never records command text, output or paths."""
+    try:
+        ident = os.environ.get('FNL_DISPATCH_ID', '')
+        if not DISPATCH_ID.fullmatch(ident) or type(code) is not int:
+            return
+        root = dr.consent_root()
+        if root is None:
+            return
+        os.lstat(root / 'ledger.jsonl')  # never creates a ledger: its start line wrote it
+        from datetime import datetime, timezone
+        import away_lease  # the plugin's safe ledger append: no-follow, owner-checked, one appended line
+        away_lease.append_ledger({'event': 'ended', 'id': ident,
+                                  'ts': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'exit': code})
+    except Exception:
+        pass
+
+
 def main():
     parser = Parser(description=__doc__, allow_abbrev=False)
     parser.add_argument('--family', required=True, choices=FAMILIES)
@@ -102,6 +129,7 @@ def main():
         env = environment(args.family, config_dir=args.claude_config_dir)
         prepare_logs()
         code = subprocess.call(argv, env=env)
+        record_ended(code)
         return code if 0 <= code <= 255 and code != REFUSED else 1
     except (OSError, ValueError, UnicodeError):
         print('delegate_env: refused', file=sys.stderr)
