@@ -6,6 +6,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFESTS = [ROOT / d / "plugin.json" for d in (".claude-plugin", ".codex-plugin", ".antigravity-plugin")]
+# Skills added after the 0.2.5 rename never had an fnl- name, so they have no alias folder.
+NO_OLDER_NAME = {"clarify"}
 
 
 def user_only(name):
@@ -60,8 +62,11 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(re.findall(r"\b(\d+) alias folders\b", readme), [str(aliases)])
 
     def test_every_older_fnl_name_is_a_user_only_thin_alias(self):
-        skills = sorted(p.parent for p in (ROOT / "skills").glob("*/SKILL.md") if not p.parent.name.startswith("fnl-"))
+        skills = sorted(p.parent for p in (ROOT / "skills").glob("*/SKILL.md")
+                        if not p.parent.name.startswith("fnl-") and p.parent.name not in NO_OLDER_NAME)
         aliases = sorted(p.parent.name for p in (ROOT / "skills").glob("fnl-*/SKILL.md"))
+        for name in NO_OLDER_NAME:
+            self.assertFalse((ROOT / "skills" / ("fnl-" + name)).exists(), name)
         self.assertEqual(aliases, ["fnl-" + p.name for p in skills])
         for skill in skills:
             alias = ROOT / "skills" / ("fnl-" + skill.name)

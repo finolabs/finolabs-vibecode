@@ -33,7 +33,7 @@ class HelpMapTest(unittest.TestCase):
             self.assertIn(needed, rows[0])
 
     def test_new_skills_are_in_the_skill_table(self):
-        for name in ("help", "ask", "pause", "gtg", "afk"):
+        for name in ("help", "ask", "pause", "gtg", "afk", "clarify"):
             self.assertRegex(self.text, rf"(?m)^\| `{name}` \|")
 
 
