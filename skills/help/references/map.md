@@ -119,7 +119,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/instructions_write.py` | Previews and writes one approved instruction file/block with digest and backups. |
 | `scripts/judge.py` | Screens bounded questions, validates supplied host answers or calls optional Jev, and discloses fallback; neither judge accepts work. |
 | `scripts/log_scan.py` | Scans logs, shows redacted views and applies digest-bound local redaction; never reads a raw log into a receipt. |
-| `scripts/merge_notice_hook.py` | Claude Code reminder after a successful `gh pr merge`: one fixed line pointing to `worktree_sweep.py`; stores nothing, always exits 0. |
+| `scripts/merge_notice_hook.py` | Claude Code reminder after a successful `gh pr merge` that ends the command line: one fixed line pointing to `worktree_sweep.py`; stores nothing, always exits 0. |
 | `scripts/metrics_hook.py` | Records consented usage metadata and triggers local dashboard refreshes. |
 | `scripts/mode.py` | Shows effective settings/sources and writes previewed confirmed changes for `/setup mode`. |
 | `scripts/nav_state.py` | Collects bounded current anchors/metadata, screens payloads and checks report references; it does not prove drift. |
@@ -146,7 +146,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 
 | Path | Purpose |
 | --- | --- |
-| `skills/commit-messages/scripts/worktree_sweep.py` | Lists linked worktrees (branch, size, clean or dirty, unpushed, merged); `--remove` takes only merged, clean, fully pushed ones named with `--path` or finished in the ledger, never forced, and lists the rest with the reason. Copy in `review-gate`. |
+| `skills/commit-messages/scripts/worktree_sweep.py` | Lists linked worktrees (branch, size, clean or dirty, unpushed, merged); `--remove` takes only merged, clean, fully pushed ones, with no symlink in the path and no nested worktree, named with `--path` or finished in the ledger, never forced, and lists the rest with the reason. Copy in `review-gate`. |
 | `skills/checks/scripts/checks.py` | Runs or shows the repository's approved stored checks (a changed or unapproved check file runs nothing) in order through `heavy_run.py`, stops at the first failure, narrows Python test modules with `--changed`, and writes a local receipt only for a whole passing run on a clean, unmoved head when that mode is on; `run --dispatch <id>` writes, on the same conditions and whatever that mode, the verification receipt `ledger.py finish --outcome accepted` needs. `usage --from <file>` summarises hosted CI runs, minutes, the document-only share and days left from a run list the agent produced; no network call and no process. |
 | `skills/delegate/scripts/autopilot.py` | Autopilot lease, closed action classification (Tier 1 or Tier 3) and private action log; executes nothing. |
 | `skills/delegate/scripts/heavy_run.py` | Runs one heavy command at a time per machine under a kernel lock, with load and memory gates, a wait cap and a maximum run time. |
