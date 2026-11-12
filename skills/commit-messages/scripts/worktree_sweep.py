@@ -76,15 +76,17 @@ def run_gh(args, cwd):
 
 
 def worktrees(checkout):
-    """[info] from `git worktree list --porcelain`; the first entry is the main checkout."""
+    """[info] from `git worktree list --porcelain -z`; the first entry is the main checkout.
+
+    NUL-separated, so a path or branch holding a newline cannot forge another entry."""
     try:
-        done = git(checkout, "worktree", "list", "--porcelain")
+        done = git(checkout, "worktree", "list", "--porcelain", "-z")
     except (OSError, subprocess.SubprocessError) as error:
         raise OwnError("git could not run: " + type(error).__name__)
     if done.returncode != 0:
         raise OwnError("not inside a git repository")
     entries, current = [], None
-    for line in done.stdout.splitlines():
+    for line in done.stdout.split("\0"):
         if line.startswith("worktree "):
             current = {"path": line[len("worktree "):]}
             entries.append(current)
@@ -232,6 +234,8 @@ def describe(entry, default):
 
 
 def reason_not_candidate(info, place, cwd):
+    if any(ord(c) < 32 or ord(c) == 127 for c in info["path"] + (info["branch"] or "")):
+        return "control character in the path or branch"
     if info["missing"]:
         return "its folder is missing"
     if info["locked"]:
@@ -259,13 +263,13 @@ def report(info, reason):
     pushed = ("unknown" if count is None else str(count)) + ("" if upstream else " (no upstream)")
     if info["forge_head"]:
         pushed = "0 (no upstream; the forge merged this head)"
-    text = (f"{info['path']}  branch={info['branch'] or '(detached)'}  size={human(info['size'])}  "
+    text = (f"{info['path'].encode('unicode_escape').decode('ascii')}  branch={info['branch'] or '(detached)'}  size={human(info['size'])}  "
             f"{info['state']}  unpushed={pushed}  merged={info['merged']}  ")
     if reason:
         return [text + f"candidate=no ({reason})"]
     return [text + "candidate=yes",
-            "  git worktree remove " + shlex.quote(info["path"]),
-            "  git branch -d " + shlex.quote(info["branch"])]
+            "  git worktree remove -- " + shlex.quote(info["path"]),
+            "  git branch -d -- " + shlex.quote(info["branch"])]
 
 
 def main(argv=None):

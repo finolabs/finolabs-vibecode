@@ -174,12 +174,31 @@ class SweepTest(unittest.TestCase):
         result = self.sweep("list")
         line, commands = self.block(result.stdout, merged)
         self.assertIn("candidate=yes", line)
-        self.assertEqual(commands, ["git worktree remove " + shlex.quote(str(merged)),
-                                    "git branch -d feat-merged"])
+        self.assertEqual(commands, ["git worktree remove -- " + shlex.quote(str(merged)),
+                                    "git branch -d -- feat-merged"])
         for command in commands:  # what the agent runs after the merge
             self.git(self.main, *shlex.split(command)[1:])
         self.assertFalse(merged.exists())  # git also removed the ignored files inside it
         self.assertNotIn("feat-merged", self.git(self.main, "branch", "--list").stdout)
+
+    def test_a_path_with_a_newline_is_never_a_candidate_and_cannot_forge_another_entry(self):
+        merged = self.worktree("feat-merged", merge=True)
+        odd = self.worktree("feat-odd", merge=True, parent=self.main / ("odd\nworktree " + str(merged)))
+        output = self.sweep("list").stdout
+        self.assertNotIn("git worktree remove -- " + shlex.quote(str(odd)), output)
+        self.assertIn("candidate=no (control character in the path or branch)", output)
+        removals = [l for l in output.splitlines() if l.strip().startswith("git worktree remove")]
+        self.assertEqual(removals, ["  git worktree remove -- " + shlex.quote(str(merged))])
+
+    def test_an_option_like_branch_name_is_ended_with_double_dash(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("worktree_sweep_unit", SWEEP)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        info = {"path": "/synthetic/.wt/feat", "branch": "--unset-upstream", "size": (0, True), "state": "clean",
+                "unpushed": (0, True), "merged": "yes", "forge_head": False}
+        lines = module.report(info, None)
+        self.assertEqual(lines[1:], ["  git worktree remove -- /synthetic/.wt/feat", "  git branch -d -- --unset-upstream"])
 
     def test_only_merged_clean_fully_pushed_worktrees_are_candidates(self):
         dirty = self.worktree("feat-dirty", merge=True)
