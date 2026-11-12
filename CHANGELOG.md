@@ -11,6 +11,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- `/afk start` now keeps the session working while you are away: it prints a goal you can type in the host's `/goal` command before you leave (the lease only bounds actions and never starts a turn), and starts a self-paced `/loop` on Claude Code when work waits on CI, reviews or a delegated run, stopping it when the lease ends. Neither widens what the lease allows.
 - `ledger.py stale` is more conservative by default: an open record is stale only past twice its budget and at least 24 hours (before: past its budget), and a record with no usable budget becomes stale after 24 hours (before: never). Each preview line now shows the record's label, and `stale --close` rechecks each record against the threshold its preview used.
 - Record the owner decision for a context probe (seventh scoped exception in `CLAUDE.md`, `docs/specs/context-probe.md`, `PRIVACY.md`): on request it reads the current session's context size from Claude Code's local `/context` or Codex's app-server, so `fnl-session-hygiene` gets real numbers where no status line runs. No code yet.
 - A second `/afk start` while a lease is live now reports when that lease ends and tells the session to work under it, instead of a generic refusal that led a second session to work outside the lease. The lease covers every session on the machine; nothing is extended or reset.
