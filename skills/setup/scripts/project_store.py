@@ -32,7 +32,12 @@ PROJECT_FOLDERS = ('.finolabs', 'vibecode')
 SETTINGS_FILE = 'settings.json'
 SETTINGS_LIMIT = 16384
 SETTINGS_APPROVED = 'state/settings-approved'
-SETTING_KEYS = ('ledger', 'tasks', 'parallel', 'parallel-caps', 'label')
+SETTING_KEYS = ('ledger', 'tasks', 'parallel', 'parallel-caps', 'label', 'autopilot')
+# The project-scoped away keys (docs/specs/autopilot.md "Project scope"), in stored order; every other autopilot
+# key is user scope only, so a project file cannot carry it.
+AUTOPILOT_KEYS = {'task-choice': ('choose', 'listed'), 'push-and-pull-requests': ('yes', 'no'),
+                  'merge': ('yes', 'no'), 'trusted-authors': ('own',), 'roots': None}
+ROOT_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}')
 METADATA_LIMIT = 4096
 CODE = re.compile(r'[0-9a-f]{8}')
 DIGEST = re.compile(r'[0-9a-f]{64}')
@@ -177,7 +182,34 @@ def read_project_file(folder, name, limit):
 
 # Settings values, validated exactly as the host.md entries were
 
+def valid_autopilot(value):
+    """The closed `autopilot` object: at least one project-scoped key, each with a fixed value or a roots list."""
+    if not isinstance(value, dict) or not value or not set(value) <= set(AUTOPILOT_KEYS):
+        return False
+    for key, item in value.items():
+        if key == 'roots':
+            if (not isinstance(item, list) or not 1 <= len(item) <= 16 or len(set(map(str, item))) != len(item)
+                    or not all(isinstance(name, str) and ROOT_NAME.fullmatch(name)
+                               and name.upper() not in INSTRUCTION_FILES for name in item)):
+                return False
+        elif not isinstance(item, str) or item not in AUTOPILOT_KEYS[key]:
+            return False
+    return True
+
+
+def autopilot_value(text):
+    """The canonical `autopilot` object of a JSON string (fixed key order); ValueError when it is not valid."""
+    if not isinstance(text, str) or len(text) > 4096:
+        raise ValueError('invalid project setting')
+    value = json.loads(text, object_pairs_hook=_object, parse_constant=_constant)
+    if not valid_autopilot(value):
+        raise ValueError('invalid project setting')
+    return {key: value[key] for key in AUTOPILOT_KEYS if key in value}
+
+
 def valid_setting(key, value):
+    if key == 'autopilot':
+        return valid_autopilot(value)
     if not isinstance(value, str):
         return False
     if key == 'parallel':
@@ -212,7 +244,8 @@ def _constant(value):
 
 
 def parse_settings(raw):
-    """The settings of the closed schema `{"version": 1, <key>: "<value>", ...}`; anything else raises."""
+    """The settings of the closed schema `{"version": 1, <key>: "<value>", ..., "autopilot": {...}}`; anything else
+    raises."""
     data = json.loads(raw.decode('utf-8'), object_pairs_hook=_object, parse_constant=_constant)
     if (not isinstance(data, dict) or type(data.get('version')) is not int or data['version'] != 1
             or not set(data) - {'version'} <= set(SETTING_KEYS)):
@@ -228,7 +261,9 @@ def render_settings(values):
     """The exact bytes a writer stores: the version, then every set key in fixed order."""
     data = {'version': 1}
     for key in SETTING_KEYS:
-        if key in values:
+        if key == 'autopilot' and key in values and isinstance(values[key], dict):
+            data[key] = {name: values[key][name] for name in AUTOPILOT_KEYS if name in values[key]}
+        elif key in values:
             data[key] = values[key]
     raw = (json.dumps(data, indent=2, ensure_ascii=True) + '\n').encode()
     parse_settings(raw)

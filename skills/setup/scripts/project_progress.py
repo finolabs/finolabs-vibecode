@@ -93,7 +93,10 @@ def project_label(root):
 
 
 def set_setting(cwd, key, value):
-    if key not in ('ledger', 'tasks', 'parallel', 'parallel-caps') or value is not None and not valid_setting(key, value):
+    # The away object arrives as JSON text; the parallel and away keys record no usage data either.
+    if key == 'autopilot' and value is not None:
+        value = store.autopilot_value(value)
+    if key not in ('ledger', 'tasks', 'parallel', 'parallel-caps', 'autopilot') or value is not None and not valid_setting(key, value):
         raise ValueError('invalid project setting')
     # Keep the consent schema shared with metrics, without a cross-skill import. The parallel keys
     # record no usage data, so they never need that consent.
@@ -1109,7 +1112,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('choice', choices=('on', 'off', 'label', 'settings'))
     parser.add_argument('--set', dest='label')
-    parser.add_argument('--clear', choices=('ledger', 'tasks', 'parallel', 'parallel-caps'))
+    parser.add_argument('--clear', choices=('ledger', 'tasks', 'parallel', 'parallel-caps', 'autopilot'))
     parser.add_argument('--reset', action='store_true')
     parser.add_argument('--yes', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
@@ -1132,6 +1135,12 @@ def main(argv=None):
                 key, separator, value = args.label.partition('=')
                 if not separator:
                     raise ValueError('setting requires equals')
+            if args.dry_run:
+                # Only the away object has a preview: it prints the object the setter would store, writing nothing.
+                if key != 'autopilot' or value is None or args.yes:
+                    raise ValueError('dry run previews only an autopilot object')
+                print(json.dumps({'autopilot': store.autopilot_value(value)}, indent=2))
+                return 0
             changed = set_setting(os.getcwd(), key, value)
             print(key + (' changed' if changed else ' not changed'))
             exclude_note()

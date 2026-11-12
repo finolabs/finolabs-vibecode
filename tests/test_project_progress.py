@@ -1,4 +1,5 @@
 """Project progress acceptance: synthetic account, files, records and clock only."""
+import hashlib
 import importlib.util
 import json
 import os
@@ -1021,6 +1022,73 @@ class SettingsFileTest(unittest.TestCase):
         self.assertEqual(self.host.read_bytes(), before)
         self.assertEqual((self.repo / '.git/info/exclude').read_text().count('.finolabs/'), 1)
         self.assertFalse((self.repo / '.gitignore').exists())
+
+    def test_the_autopilot_object_is_a_closed_schema_set_and_cleared_without_metrics_consent(self):
+        (self.data / 'state/consent.json').unlink()  # the project's away permissions record no usage data
+        before = self.host.read_bytes()
+        value = json.dumps({'roots': ['packages', 'services'], 'merge': 'no', 'task-choice': 'listed'})
+        self.assertTrue(self.pp.set_setting(self.repo, 'autopilot', value))
+        self.assertFalse(self.pp.set_setting(self.repo, 'autopilot', value))
+        data = json.loads(self.file().read_text())
+        # Stored in a fixed key order, whatever order the caller used.
+        self.assertEqual(list(data['autopilot']), ['task-choice', 'merge', 'roots'])
+        self.assertEqual(self.pp.store.settings_state(self.repo),
+                         ('approved', {'autopilot': {'task-choice': 'listed', 'merge': 'no',
+                                                     'roots': ['packages', 'services']}}))
+        self.assertTrue(self.pp.set_setting(self.repo, 'parallel', '4'))
+        self.assertEqual(self.pp.store.settings_state(self.repo)[1]['autopilot']['merge'], 'no')
+        self.assertTrue(self.pp.set_setting(self.repo, 'autopilot', None))
+        self.assertEqual(json.loads(self.file().read_text()), {'version': 1, 'parallel': '4'})
+        self.assertEqual(self.host.read_bytes(), before)
+
+    def test_the_autopilot_object_refuses_user_only_keys_and_unsafe_roots(self):
+        store = self.pp.store
+        for value in ({}, {'merge': 'maybe'}, {'merge': True}, {'trusted-authors': 'anyone'},
+                      {'task-choice': 'all'}, {'push-and-pull-requests': 'force'},
+                      {'lease-hours': '24'}, {'hosts': 'Codex'}, {'max-runs': '9'}, {'quota-floor-percent': '0'},
+                      {'Merge': 'yes'}, {'roots': []}, {'roots': 'packages'}, {'roots': ['packages', 'packages']},
+                      {'roots': ['../up']}, {'roots': ['a/b']}, {'roots': ['/abs']}, {'roots': ['.github']},
+                      {'roots': ['.']}, {'roots': ['..']}, {'roots': ['']}, {'roots': ['x' * 65]},
+                      {'roots': [7]}, {'roots': ['dir name']}, {'roots': ['CLAUDE.md']},
+                      {'roots': ['r%d' % i for i in range(17)]}, ['merge'], 'merge'):
+            with self.subTest(value=value):
+                self.assertFalse(store.valid_setting('autopilot', value))
+                with self.assertRaises(ValueError):
+                    self.pp.set_setting(self.repo, 'autopilot', json.dumps(value))
+        for text in ('{"merge": "no", "merge": "yes"}', '{"merge": NaN}', 'not json', '{"merge": "no"} x'):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                self.pp.set_setting(self.repo, 'autopilot', text)
+        self.assertFalse(self.file().exists())
+        for value in ({'merge': 'yes'}, {'trusted-authors': 'own'}, {'roots': ['packages', 'services_2', 'web.app']},
+                      {'task-choice': 'choose', 'push-and-pull-requests': 'no', 'merge': 'no',
+                       'trusted-authors': 'own', 'roots': ['apps']}):
+            with self.subTest(value=value):
+                self.assertTrue(store.valid_setting('autopilot', value))
+        # A file that carries a user-only key, even with a matching approval, is broken, never partly read.
+        raw = (json.dumps({'version': 1, 'autopilot': {'merge': 'yes', 'lease-hours': '24'}}) + '\n').encode()
+        self.file().parent.mkdir(parents=True, mode=0o700)
+        self.file().write_bytes(raw)
+        self.file().chmod(0o600)
+        self.approval().parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+        self.approval().write_text(json.dumps({'sha256': hashlib.sha256(raw).hexdigest(), 'approved': 1}))
+        self.assertEqual(store.settings_state(self.repo), ('broken', {}))
+
+    def test_the_cli_previews_the_autopilot_object_and_writes_it_only_without_dry_run(self):
+        import io
+        value = 'autopilot=' + json.dumps({'merge': 'no', 'roots': ['packages']})
+        with mock.patch('os.getcwd', return_value=str(self.repo)), \
+                mock.patch('sys.stdout', new_callable=io.StringIO) as out:
+            self.assertEqual(self.pp.main(['settings', '--set', value, '--dry-run']), 0)
+        self.assertEqual(json.loads(out.getvalue()), {'autopilot': {'merge': 'no', 'roots': ['packages']}})
+        self.assertFalse(self.file().exists())
+        with mock.patch('os.getcwd', return_value=str(self.repo)), \
+                mock.patch('sys.stdout', new_callable=io.StringIO) as out:
+            self.assertEqual(self.pp.main(['settings', '--set', value]), 0)
+            self.assertEqual(self.pp.main(['settings', '--set', 'autopilot={"merge": "perhaps"}', '--dry-run']), 1)
+        self.assertEqual(json.loads(self.file().read_text())['autopilot'], {'merge': 'no', 'roots': ['packages']})
+        with mock.patch('os.getcwd', return_value=str(self.repo)), mock.patch('sys.stdout', new_callable=io.StringIO):
+            self.assertEqual(self.pp.main(['settings', '--clear', 'autopilot']), 0)
+        self.assertFalse(self.file().exists())
 
     def test_the_cli_writes_the_file_and_never_echoes_values(self):
         import io
