@@ -65,7 +65,10 @@ jobs:
           bad = []
           for p in sorted(pathlib.Path("skills").glob("*/SKILL.md")):
               m = re.search(r"^name: (.+)$", p.read_text(), re.M)
-              if not m or m.group(1).strip() != p.parent.name or not p.parent.name.startswith("fnl-"):
+              # A skill name has no prefix; an fnl- folder is the alias of the skill beside it.
+              name = p.parent.name
+              target = name[len("fnl-"):] if name.startswith("fnl-") else name
+              if not m or m.group(1).strip() != name or not re.fullmatch(r"[a-z][a-z0-9-]*", target) or not (p.parent.parent / target / "SKILL.md").is_file():
                   bad.append(str(p))
           print("\n".join(bad) or "all skills ok")
           sys.exit(bool(bad))
@@ -74,41 +77,41 @@ jobs:
         run: |
           python3 - <<'PY'
           import filecmp, sys
-          groups = [['scripts/run_env.py', 'skills/fnl-delegate/scripts/run_env.py', 'skills/fnl-checks/scripts/run_env.py', 'skills/fnl-setup/scripts/run_env.py', 'skills/fnl-update/scripts/run_env.py'],
-                    ['scripts/checks_list.py', 'skills/fnl-setup/scripts/checks_list.py', 'skills/fnl-checks/scripts/checks_list.py', 'skills/fnl-review-gate/scripts/checks_list.py'],
-                    ['skills/fnl-delegate/scripts/heavy_run.py', 'skills/fnl-checks/scripts/heavy_run.py'],
-                    ['skills/fnl-delegate/scripts/pause.py', 'skills/fnl-checks/scripts/pause.py'],
-                    ['scripts/delegate_env.py', 'skills/fnl-delegate/scripts/delegate_env.py'],
-                    ['scripts/away_lease.py', 'skills/fnl-delegate/scripts/away_lease.py'],
-                    ['scripts/log_scan.py', 'skills/fnl-delegate/scripts/log_scan.py'],
-                    ['scripts/secret_patterns.py', 'skills/fnl-delegate/scripts/secret_patterns.py', 'skills/fnl-handoff/scripts/secret_patterns.py'],
-                    ['scripts/brief_check.py', 'skills/fnl-handoff/scripts/brief_check.py'],
-                    ["scripts/instructions_write.py", "skills/fnl-setup/scripts/instructions_write.py"],
-                    ["scripts/data_root.py", "skills/fnl-coding-router/scripts/data_root.py", "skills/fnl-delegate/scripts/data_root.py", "skills/fnl-review-gate/scripts/data_root.py", "skills/fnl-setup/scripts/data_root.py", "skills/fnl-status/scripts/data_root.py", "skills/fnl-session-hygiene/scripts/data_root.py", "skills/fnl-checks/scripts/data_root.py", "skills/fnl-restore-point/scripts/data_root.py", "skills/fnl-update/scripts/data_root.py"],
-                    ["scripts/fnl_metrics.py", "skills/fnl-coding-router/scripts/fnl_metrics.py", "skills/fnl-status/scripts/fnl_metrics.py", "skills/fnl-update/scripts/fnl_metrics.py"],
-                    ["skills/fnl-help/references/plain-language.md", "skills/fnl-setup/references/plain-language.md"],
-                    ["skills/fnl-help/references/plain-terms.md", "skills/fnl-setup/references/plain-terms.md"],
-                    ["scripts/quota_probe.py", "skills/fnl-setup/scripts/quota_probe.py", "skills/fnl-delegate/scripts/quota_probe.py", "skills/fnl-update/scripts/quota_probe.py", "skills/fnl-review-gate/scripts/quota_probe.py"],
-                    ["scripts/review_route.py", "skills/fnl-delegate/scripts/review_route.py", "skills/fnl-review-gate/scripts/review_route.py"],
-                    ["scripts/review_config.py", "skills/fnl-delegate/scripts/review_config.py", "skills/fnl-review-gate/scripts/review_config.py"],
-                    ["scripts/git_metadata.py", "skills/fnl-delegate/scripts/git_metadata.py", "skills/fnl-review-gate/scripts/git_metadata.py"],
-                    ["scripts/post_review.py", "skills/fnl-review-gate/scripts/post_review.py"],
-                    ["scripts/project_progress.py", "skills/fnl-status/scripts/project_progress.py", "skills/fnl-setup/scripts/project_progress.py", "skills/fnl-checks/scripts/project_progress.py", "skills/fnl-review-gate/scripts/project_progress.py"],
-                    ["scripts/agent_processes.py", "skills/fnl-status/scripts/agent_processes.py", "skills/fnl-setup/scripts/agent_processes.py"],
-                    ["scripts/judge.py", "skills/fnl-delegate/scripts/judge.py", "skills/fnl-session-hygiene/scripts/judge.py", "skills/fnl-checks/scripts/judge.py"],
-                    ["scripts/assignments.py", "skills/fnl-setup/scripts/assignments.py", "skills/fnl-delegate/scripts/assignments.py", "skills/fnl-review-gate/scripts/assignments.py", "skills/fnl-session-hygiene/scripts/assignments.py", "skills/fnl-checks/scripts/assignments.py"],
-                    ["scripts/verify_claim.py", "skills/fnl-checks/scripts/verify_claim.py"],
-                    ["scripts/select_tests.py", "skills/fnl-checks/scripts/select_tests.py"],
-                    ["scripts/record.py", "skills/fnl-coding-router/scripts/record.py", "skills/fnl-delegate/scripts/record.py", "skills/fnl-checks/scripts/record.py"],
-                    ["scripts/context_steward.py", "skills/fnl-session-hygiene/scripts/context_steward.py"],
-                    ["scripts/project_store.py", "skills/fnl-status/scripts/project_store.py", "skills/fnl-setup/scripts/project_store.py", "skills/fnl-checks/scripts/project_store.py", "skills/fnl-review-gate/scripts/project_store.py", "skills/fnl-delegate/scripts/project_store.py"],
-                    ["scripts/parallel_slots.py","skills/fnl-delegate/scripts/parallel_slots.py", "skills/fnl-status/scripts/parallel_slots.py", "skills/fnl-checks/scripts/parallel_slots.py"],
-                    ["scripts/context_snapshot.py", "skills/fnl-session-hygiene/scripts/context_snapshot.py"],
-                    ["scripts/statusline_setup.py", "skills/fnl-setup/scripts/statusline_setup.py"],
-                    ["scripts/compact_setup.py", "skills/fnl-setup/scripts/compact_setup.py"],
-                    ["scripts/auto_gate.py", "skills/fnl-delegate/scripts/auto_gate.py"],
-                    ["scripts/handover_state.py", "skills/fnl-delegate/scripts/handover_state.py"],
-                    ["scripts/mode.py", "skills/fnl-delegate/scripts/mode.py", "skills/fnl-setup/scripts/mode.py"]]
+          groups = [['scripts/run_env.py', 'skills/delegate/scripts/run_env.py', 'skills/checks/scripts/run_env.py', 'skills/setup/scripts/run_env.py', 'skills/update/scripts/run_env.py'],
+                    ['scripts/checks_list.py', 'skills/setup/scripts/checks_list.py', 'skills/checks/scripts/checks_list.py', 'skills/review-gate/scripts/checks_list.py'],
+                    ['skills/delegate/scripts/heavy_run.py', 'skills/checks/scripts/heavy_run.py'],
+                    ['skills/delegate/scripts/pause.py', 'skills/checks/scripts/pause.py'],
+                    ['scripts/delegate_env.py', 'skills/delegate/scripts/delegate_env.py'],
+                    ['scripts/away_lease.py', 'skills/delegate/scripts/away_lease.py'],
+                    ['scripts/log_scan.py', 'skills/delegate/scripts/log_scan.py'],
+                    ['scripts/secret_patterns.py', 'skills/delegate/scripts/secret_patterns.py', 'skills/handoff/scripts/secret_patterns.py'],
+                    ['scripts/brief_check.py', 'skills/handoff/scripts/brief_check.py'],
+                    ["scripts/instructions_write.py", "skills/setup/scripts/instructions_write.py"],
+                    ["scripts/data_root.py", "skills/coding-router/scripts/data_root.py", "skills/delegate/scripts/data_root.py", "skills/review-gate/scripts/data_root.py", "skills/setup/scripts/data_root.py", "skills/status/scripts/data_root.py", "skills/session-hygiene/scripts/data_root.py", "skills/checks/scripts/data_root.py", "skills/restore-point/scripts/data_root.py", "skills/update/scripts/data_root.py"],
+                    ["scripts/fnl_metrics.py", "skills/coding-router/scripts/fnl_metrics.py", "skills/status/scripts/fnl_metrics.py", "skills/update/scripts/fnl_metrics.py"],
+                    ["skills/help/references/plain-language.md", "skills/setup/references/plain-language.md"],
+                    ["skills/help/references/plain-terms.md", "skills/setup/references/plain-terms.md"],
+                    ["scripts/quota_probe.py", "skills/setup/scripts/quota_probe.py", "skills/delegate/scripts/quota_probe.py", "skills/update/scripts/quota_probe.py", "skills/review-gate/scripts/quota_probe.py"],
+                    ["scripts/review_route.py", "skills/delegate/scripts/review_route.py", "skills/review-gate/scripts/review_route.py"],
+                    ["scripts/review_config.py", "skills/delegate/scripts/review_config.py", "skills/review-gate/scripts/review_config.py"],
+                    ["scripts/git_metadata.py", "skills/delegate/scripts/git_metadata.py", "skills/review-gate/scripts/git_metadata.py"],
+                    ["scripts/post_review.py", "skills/review-gate/scripts/post_review.py"],
+                    ["scripts/project_progress.py", "skills/status/scripts/project_progress.py", "skills/setup/scripts/project_progress.py", "skills/checks/scripts/project_progress.py", "skills/review-gate/scripts/project_progress.py"],
+                    ["scripts/agent_processes.py", "skills/status/scripts/agent_processes.py", "skills/setup/scripts/agent_processes.py"],
+                    ["scripts/judge.py", "skills/delegate/scripts/judge.py", "skills/session-hygiene/scripts/judge.py", "skills/checks/scripts/judge.py"],
+                    ["scripts/assignments.py", "skills/setup/scripts/assignments.py", "skills/delegate/scripts/assignments.py", "skills/review-gate/scripts/assignments.py", "skills/session-hygiene/scripts/assignments.py", "skills/checks/scripts/assignments.py"],
+                    ["scripts/verify_claim.py", "skills/checks/scripts/verify_claim.py"],
+                    ["scripts/select_tests.py", "skills/checks/scripts/select_tests.py"],
+                    ["scripts/record.py", "skills/coding-router/scripts/record.py", "skills/delegate/scripts/record.py", "skills/checks/scripts/record.py"],
+                    ["scripts/context_steward.py", "skills/session-hygiene/scripts/context_steward.py"],
+                    ["scripts/project_store.py", "skills/status/scripts/project_store.py", "skills/setup/scripts/project_store.py", "skills/checks/scripts/project_store.py", "skills/review-gate/scripts/project_store.py", "skills/delegate/scripts/project_store.py"],
+                    ["scripts/parallel_slots.py","skills/delegate/scripts/parallel_slots.py", "skills/status/scripts/parallel_slots.py", "skills/checks/scripts/parallel_slots.py"],
+                    ["scripts/context_snapshot.py", "skills/session-hygiene/scripts/context_snapshot.py"],
+                    ["scripts/statusline_setup.py", "skills/setup/scripts/statusline_setup.py"],
+                    ["scripts/compact_setup.py", "skills/setup/scripts/compact_setup.py"],
+                    ["scripts/auto_gate.py", "skills/delegate/scripts/auto_gate.py"],
+                    ["scripts/handover_state.py", "skills/delegate/scripts/handover_state.py"],
+                    ["scripts/mode.py", "skills/delegate/scripts/mode.py", "skills/setup/scripts/mode.py"]]
           bad = [g for g in groups if not all(filecmp.cmp(g[0], p, shallow=False) for p in g[1:])]
           print(bad or "shared copies match")
           sys.exit(bool(bad))

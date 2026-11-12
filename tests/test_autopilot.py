@@ -15,7 +15,7 @@ from unittest.mock import patch
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / 'skills/fnl-delegate/scripts/autopilot.py'
+SCRIPT = ROOT / 'skills/delegate/scripts/autopilot.py'
 SETUP = ('## Autopilot\n- Hosts: Claude Code\n- Task choice: choose\n'
          '- Push and pull requests: yes\n- Merge: yes\n- Trusted authors: own\n')
 
@@ -94,7 +94,12 @@ class AutopilotTest(AutopilotBase):
         self.assertEqual(self.lease()['expiry'] - self.lease()['start'], 7200)
         self.assertEqual(stat.S_IMODE(self.state.stat().st_mode), 0o700)
         self.assertEqual(stat.S_IMODE((self.state / 'lease.json').stat().st_mode), 0o600)
-        self.assertEqual(self.invoke('start')[0], 3)
+        before = (self.state / 'lease.json').read_bytes()
+        status, joined = self.invoke('start')
+        self.assertEqual(status, 0, joined)  # a second session joins the machine-wide lease instead of failing
+        self.assertIn('Autopilot already live until ', joined)
+        self.assertIn('covers every session on this machine', joined)
+        self.assertEqual((self.state / 'lease.json').read_bytes(), before)  # nothing extended or reset
         for _ in range(2):
             status, output = self.invoke('stop')
             self.assertEqual(status, 0, output)
@@ -184,7 +189,7 @@ class AutopilotTest(AutopilotBase):
         for name in ('ledger.py', 'record.py'):
             self.check(['python3', '-I', str(SCRIPT.parent / name), 'start' if name == 'ledger.py' else 'run'])
         self.check(['python3', '-I', str(SCRIPT.parent / 'heavy_run.py'), 'run', '--label', 'tests', '--', 'gh', 'pr', 'view', '7'])
-        self.check(['python3', '-I', str(ROOT / 'skills/fnl-review-gate/scripts/merge_check.py'), '7', '--independent'])
+        self.check(['python3', '-I', str(ROOT / 'skills/review-gate/scripts/merge_check.py'), '7', '--independent'])
         self.check(paths=['src/example.py', 'tests/test_example.py', 'docs/guide.md'])
         self.assertEqual(self.lease()['counters']['runs'], 1)
 
@@ -223,7 +228,7 @@ class AutopilotTest(AutopilotBase):
                      'src/settings.json', 'host.md', 'state/autopilot/lease.json', 'setup.json',
                      '.env.local', 'src/secret.key', '.ssh/id_rsa', 'unknown/file.py', '../src/example.py',
                      '/tmp/example.py', 'skills/example/SKILL.md',
-                     'skills/fnl-delegate/scripts/autopilot.py', 'skills/fnl-review-gate/scripts/merge_check.py'):
+                     'skills/delegate/scripts/autopilot.py', 'skills/review-gate/scripts/merge_check.py'):
             with self.subTest(path=path):
                 self.check(paths=[path], tier=3, code='unknown' if path in {'unknown/file.py', '../src/example.py', '/tmp/example.py'} else 'protected')
 
@@ -244,7 +249,7 @@ class AutopilotTest(AutopilotBase):
             self.check(['git', 'push', 'origin', refspec], tier=3, code='forbidden')
         self.check(['git', 'push', 'origin', 'topic:refs/heads/topic'])
         # Instruction files and review enforcers are protected wherever they live.
-        for path in ('docs/CONVENTIONS.md', 'docs/copilot-instructions.md', 'skills/fnl-review-gate/scripts/review_route.py'):
+        for path in ('docs/CONVENTIONS.md', 'docs/copilot-instructions.md', 'skills/review-gate/scripts/review_route.py'):
             self.check(paths=[path], tier=3, code='protected')
         # A directory operand would stage everything below it, including a protected descendant.
         (self.repo / 'src/bundle.py').mkdir(parents=True)
@@ -260,13 +265,13 @@ class AutopilotTest(AutopilotBase):
         self.check(['git', 'push', 'origin', 'v-example:refs/heads/topic'])
         # Every trusted wrapper and its dependencies are protected as paths and through git add.
         for name in ('heavy_run.py', 'ledger.py', 'record.py', 'delegate_env.py', 'run_env.py', 'data_root.py', 'assignments.py'):
-            path = 'skills/fnl-delegate/scripts/' + name
+            path = 'skills/delegate/scripts/' + name
             self.check(paths=[path], tier=3, code='protected')
             self.check(['git', 'add', '--', path], tier=3, code='protected')
-        self.check(paths=['skills/fnl-review-gate/scripts/merge_check.py'], tier=3, code='protected')
+        self.check(paths=['skills/review-gate/scripts/merge_check.py'], tier=3, code='protected')
         # Case aliases name the same file on a case-insensitive filesystem.
         for name in ('Heavy_run.py', 'LEDGER.py', 'Run_env.py', 'Data_Root.py', 'Merge_Check.py'):
-            path = 'skills/fnl-delegate/scripts/' + name
+            path = 'skills/delegate/scripts/' + name
             self.check(paths=[path], tier=3, code='protected')
             self.check(['git', 'add', '--', path], tier=3, code='protected')
 
@@ -274,7 +279,7 @@ class AutopilotTest(AutopilotBase):
         self.start()
         self.repo = ROOT  # the checkout whose scripts are the installed wrappers
         # New modules next to the trusted wrappers could shadow an import in them, so the folders are protected.
-        for folder in ('fnl-review-gate', 'fnl-delegate', 'fnl-setup'):
+        for folder in ('review-gate', 'delegate', 'setup'):
             for name in ('struct.py', 'zlib.py', 'helper.py', 'pkg/__init__.py'):
                 path = 'skills/%s/scripts/%s' % (folder, name)
                 self.check(paths=[path], tier=3, code='protected')
@@ -283,21 +288,21 @@ class AutopilotTest(AutopilotBase):
     def test_linked_sibling_skill_folders_are_protected_by_target_and_wrapper_refused(self):
         # A synthetic install whose review-gate skill is a link to another checkout.
         install = self.home / 'install/skills'
-        (install / 'fnl-delegate/scripts').mkdir(parents=True)
-        checkout = self.home / 'other/skills/fnl-review-gate/scripts'
+        (install / 'delegate/scripts').mkdir(parents=True)
+        checkout = self.home / 'other/skills/review-gate/scripts'
         checkout.mkdir(parents=True)
         (checkout / 'merge_check.py').write_text('# synthetic')
-        (install / 'fnl-review-gate').symlink_to(self.home / 'other/skills/fnl-review-gate')
+        (install / 'review-gate').symlink_to(self.home / 'other/skills/review-gate')
         ap = self.load()
-        copy = install / 'fnl-delegate/scripts/autopilot.py'
+        copy = install / 'delegate/scripts/autopilot.py'
         copy.write_text(SCRIPT.read_text())
         spec = importlib.util.spec_from_file_location('autopilot_linked', copy)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         with patch('os.getcwd', return_value=str(self.home / 'other')):
-            self.assertTrue(module.plugin_code('skills/fnl-review-gate/scripts/difflib.py'))
+            self.assertTrue(module.plugin_code('skills/review-gate/scripts/difflib.py'))
         applied = dict(module.DEFAULTS, Merge='yes')
-        wrapper = ['python3', '-I', str(install / 'fnl-review-gate/scripts/merge_check.py'), '7', '--independent']
+        wrapper = ['python3', '-I', str(install / 'review-gate/scripts/merge_check.py'), '7', '--independent']
         self.assertEqual(module.script_command(wrapper, applied), 'unknown')
 
     def test_merge_and_push_settings(self):
@@ -754,7 +759,7 @@ class AwayDecisionTest(AutopilotBase):
     def test_the_judge_form_denies_any_other_site_flag_shape_or_copy(self):
         self.start(SETUP_AWAY)
         site = JUDGE.index('away-decision')
-        other = str(ROOT / 'skills/fnl-checks/scripts/judge.py')
+        other = str(ROOT / 'skills/checks/scripts/judge.py')
         option = JUDGE.index('Split it')
         for argv in (JUDGE[:site] + ['navigator'] + JUDGE[site + 1:], JUDGE + ['--base-url', 'http://127.0.0.1:9'],
                      JUDGE + ['--dry-run'], JUDGE + ['--answers', 'docs/answers.json'],

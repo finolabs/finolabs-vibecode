@@ -1,4 +1,4 @@
-"""Tests for skills/fnl-status/scripts/refresh.py: the six metrics from a fixture store and ledger, and the files it writes."""
+"""Tests for skills/status/scripts/refresh.py: the six metrics from a fixture store and ledger, and the files it writes."""
 
 import importlib.util
 import json
@@ -16,9 +16,9 @@ from tests.data_root_fixture import account
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
-REFRESH = ROOT / "skills/fnl-status/scripts/refresh.py"
-LEDGER = ROOT / "skills/fnl-delegate/scripts/ledger.py"
-PAGE = ROOT / "skills/fnl-status/assets/dashboard.html"
+REFRESH = ROOT / "skills/status/scripts/refresh.py"
+LEDGER = ROOT / "skills/delegate/scripts/ledger.py"
+PAGE = ROOT / "skills/status/assets/dashboard.html"
 X, Y = "aaaaaaaa", "bbbbbbbb"
 
 
@@ -205,8 +205,8 @@ class RefreshTest(unittest.TestCase):
                 self.assertNotIn(os.fsdecode(path).split('/')[-1], ('CLAUDE.md', 'AGENTS.md'))
             return original(path, *args, **kwargs)
         with mock.patch('os.open', side_effect=guarded):
-            for path in (ROOT / 'scripts/project_progress.py', ROOT / 'skills/fnl-status/scripts/project_progress.py',
-                         ROOT / 'skills/fnl-setup/scripts/project_progress.py'):
+            for path in (ROOT / 'scripts/project_progress.py', ROOT / 'skills/status/scripts/project_progress.py',
+                         ROOT / 'skills/setup/scripts/project_progress.py'):
                 spec = importlib.util.spec_from_file_location('progress_guard', path)
                 pp = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(pp)
@@ -288,7 +288,7 @@ class RefreshTest(unittest.TestCase):
         code = self.data()['progress']['current']
         self.project_setting(repo, 'label', 'My project')
         self.write_events([self.event(12, 'session1', code, 'session_start', host='codex', dispatch=None, source='startup'),
-                           self.event(11, 'session1', code, 'skill', name='fnl-status'),
+                           self.event(11, 'session1', code, 'skill', name='status'),
                            self.event(30, 'session2', X, 'session_start', host='claude', dispatch=None, source='startup')])
         self.refresh('run', '--cwd', str(repo))
         progress = self.data()['progress']
@@ -632,7 +632,7 @@ class RefreshTest(unittest.TestCase):
     def test_live_sessions_are_built_from_existing_events_with_snapshot_off(self):
         self.consent()
         rows = [self.event(85 * 24 * 60, 'parent', X, 'session_start', host='claude', dispatch=None, source='startup'),
-                self.event(1, 'parent', X, 'skill', name='fnl-status'),
+                self.event(1, 'parent', X, 'skill', name='status'),
                 self.event(2, 'child', X, 'session_start', host='codex', dispatch=None, source='startup')]
         self.write_events(rows)
         before = {p: p.read_bytes() for p in self.dir.glob('events-*.jsonl')}
@@ -765,7 +765,7 @@ class RefreshTest(unittest.TestCase):
     def fixture_store(self):
         start = {"host": "claude", "dispatch": None, "source": "startup"}
         self.write_events([
-            self.event(120, "a", X, "session_start", **start), self.event(119, "a", X, "skill", name="fnl-coding-router"),
+            self.event(120, "a", X, "session_start", **start), self.event(119, "a", X, "skill", name="coding-router"),
             self.event(118, "a", X, "router", depth="DEEP", trigger="security"), self.event(110, "a", X, "first_edit"),
             self.event(100, "b", X, "session_start", **start), self.event(90, "b", X, "first_edit"),
             self.event(80, "c", X, "session_start", host="claude", dispatch="d20261103-1", source="startup"),
@@ -893,7 +893,7 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(d["router"], {"covered": 2, "missed": 1, "excluded": 1, "unclassified": 1, "eligible": 3})
         self.assertAlmostEqual(d["kpi"]["router_coverage"], 2 / 3)
         self.assertEqual({(u["kind"], u["name"], u["count"]) for u in d["use"]},
-                         {("skill", "fnl-coding-router", 1), ("agent", "fnl-reviewer", 2)})
+                         {("skill", "coding-router", 1), ("agent", "fnl-reviewer", 2)})
         self.assertEqual(d["kpi"]["calls"], 3)
         self.assertEqual({r["depth"]: (r["receipts"], r["reworked"]) for r in d["depth"]}, {"MIN": (1, 0), "DEEP": (1, 1)})
         self.assertEqual({(r["repo"], r["pr"]): r["verdicts"] for r in d["reviews"]},
@@ -901,8 +901,8 @@ class RefreshTest(unittest.TestCase):
         [row] = d["delegation"]
         self.assertEqual((row["agent"], row["runs"], row["first_pass"], row["quota"], row["error"]), ("codex", 2, 0.5, 1, 0))
         self.assertAlmostEqual(d["kpi"]["first_pass"], 0.5)
-        size = (ROOT / "skills/fnl-coding-router/SKILL.md").stat().st_size // 4
-        self.assertEqual(d["load"]["top"], [{"name": "fnl-coding-router", "tokens": size, "loads": 1}])
+        size = (ROOT / "skills/coding-router/SKILL.md").stat().st_size // 4
+        self.assertEqual(d["load"]["top"], [{"name": "coding-router", "tokens": size, "loads": 1}])
         self.assertEqual(len(d["activity"]), 84)
         self.assertEqual(sum(a["count"] for a in d["activity"]), 17)
         self.assertEqual(d["errors"], 0)
@@ -975,7 +975,7 @@ class RefreshTest(unittest.TestCase):
         self.consent()
         self.write_events([self.event(10, "a", X, "first_edit")])
         self.refresh("run")
-        self.assertEqual(self.data()["missing"]["use"], "no fnl- skill or agent used in this period")
+        self.assertEqual(self.data()["missing"]["use"], "no skill or agent of this plugin used in this period")
 
     def test_kept_work_is_counted_beside_the_implementation_runs_handed_off(self):
         self.consent()
@@ -1161,7 +1161,7 @@ class RefreshTest(unittest.TestCase):
     def test_a_commit_counts_as_a_change_when_files_were_written_through_the_shell(self):
         start = {"host": "claude", "dispatch": None, "source": "startup"}
         self.consent()
-        self.write_events([self.event(30, "s", X, "session_start", **start), self.event(29, "s", X, "skill", name="fnl-coding-router"),
+        self.write_events([self.event(30, "s", X, "session_start", **start), self.event(29, "s", X, "skill", name="coding-router"),
                            self.event(20, "s", X, "commit")])
         self.refresh("run")
         self.assertEqual(self.data()["router"]["eligible"], 1)
@@ -1169,12 +1169,12 @@ class RefreshTest(unittest.TestCase):
 
     def test_the_antigravity_hook_is_refused_for_a_skill_outside_the_plugin(self):
         tree = Path(self.tmp.name) / "repo" / ".claude"
-        shutil.copytree(ROOT / "skills/fnl-status", tree / "skills/fnl-status")
+        shutil.copytree(ROOT / "skills/status", tree / "skills/status")
         (tree / "scripts").mkdir()
         (tree / "scripts/metrics_hook.py").write_text("print('pwned')\n")
         config = Path(self.tmp.name) / "hooks.json"
         config.write_text("{}")
-        result = subprocess.run([sys.executable, "-I", str(tree / "skills/fnl-status/scripts/refresh.py"), "antigravity-hook",
+        result = subprocess.run([sys.executable, "-I", str(tree / "skills/status/scripts/refresh.py"), "antigravity-hook",
                                  "--config", str(config), "--yes"], capture_output=True, text=True, env=self.env)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not inside the finolabs-vibecode plugin", result.stderr)

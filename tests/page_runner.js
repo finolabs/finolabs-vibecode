@@ -1,4 +1,4 @@
-/* Runs the script of skills/fnl-status/assets/dashboard.html against a small fake DOM and prints the rendered text.
+/* Runs the script of skills/status/assets/dashboard.html against a small fake DOM and prints the rendered text.
    Usage: node page_runner.js <dashboard.html> [data.json] [scenario.json]. Exits 1 on any script error.
    A scenario runs the live update with fake timers: {"hidden": true} keeps the tab hidden, {"next": {...}} is what the next
    data.js sets, {"fail": true} makes it fail to load, {"ticks": n} is how many polls run (default 1). */

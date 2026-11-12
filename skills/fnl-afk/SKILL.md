@@ -1,11 +1,11 @@
 ---
 name: fnl-afk
-description: Start the away mandate so your agents keep working while you are away from the keyboard, or stop it on return; short name for fnl-autopilot.
+description: "Older name for afk, kept so the old name still works when typed; follows afk with the same arguments."
 disable-model-invocation: true
 argument-hint: "[start|stop]"
 ---
 
-# Away from keyboard
+# fnl-afk
 
-Dependency: `fnl-autopilot`. Load and follow it with the same arguments (advisory (agent judgment)).
+Dependency: `afk`. Load and follow it with the same arguments (advisory (agent judgment)).
 This alias holds no rules of its own.

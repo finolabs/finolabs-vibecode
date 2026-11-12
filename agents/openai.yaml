@@ -4,4 +4,4 @@ interface:
   icon_small: "./assets/icon.svg"
   icon_large: "./assets/icon.svg"
   brand_color: "#9750C4"
-  default_prompt: "Explain the skills and fnl-reviewer, fnl-security-reviewer, fnl-navigator; use fnl-setup for Quick or Advanced, add <feature>, instructions, check, scan and mode."
+  default_prompt: "Explain the skills and fnl-reviewer, fnl-security-reviewer, fnl-navigator; use setup for Quick or Advanced, add <feature>, instructions, check, scan and mode."

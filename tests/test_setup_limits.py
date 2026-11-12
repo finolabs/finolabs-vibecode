@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL = ROOT / "skills/fnl-setup"
+SKILL = ROOT / "skills/setup"
 REFS = SKILL / "references"
 FEATURES = sorted((REFS / "features").glob("*.md"))
 MARKDOWN = [SKILL / "SKILL.md", *sorted(REFS.rglob("*.md"))]
@@ -51,10 +51,10 @@ INVENTORY = [
 ]
 # Approvals found outside the numbered design inventory. Same home/shape contract.
 EXTRA_APPROVALS = [
-    ('May the agents choose new tasks from your task list?', REFS / "features" / "autopilot.md"),
-    ('May the agents push their branches and open pull requests?', REFS / "features" / "autopilot.md"),
-    ('May the agents merge pull requests while a lease is live?', REFS / "features" / "autopilot.md"),
-    ('Save the shown away-session settings?', REFS / "features" / "autopilot.md"),
+    ('May the agents choose new tasks from your task list?', REFS / "features" / "afk.md"),
+    ('May the agents push their branches and open pull requests?', REFS / "features" / "afk.md"),
+    ('May the agents merge pull requests while a lease is live?', REFS / "features" / "afk.md"),
+    ('Save the shown away-session settings?', REFS / "features" / "afk.md"),
     ('Let the agents decide this kind of work while you are away?', REFS / "autopilot-decisions.md"),
     ('Let excerpts of your past decisions go to the judge or another AI provider when agents decide for you?',
      REFS / "autopilot-decisions.md"),
@@ -74,7 +74,7 @@ EXTRA_APPROVALS = [
 PREREQUISITES = {
     "delegation": "the agent scan", "quota": "the agent scan", "roles": "the agent scan",
     "metrics": "the plugin's hooks installed", "project": "metrics consent",
-    "autopilot": "nothing", "compaction": "nothing for the native threshold", "companions": "nothing",
+    "afk": "nothing", "compaction": "nothing for the native threshold", "companions": "nothing",
     "checks": "a git repository",
 }
 
@@ -178,7 +178,7 @@ class ConsentInventoryTests(unittest.TestCase):
                     self.assertNotIn(word, extra_choices)
 
     def test_autopilot_settings_are_separate_and_merge_is_last(self):
-        text = (REFS / "features/autopilot.md").read_text()
+        text = (REFS / "features/afk.md").read_text()
         questions = re.findall(r'Ask(?: Merge last among the settings)?: "([^"\n]+)"', text)
         self.assertEqual(len(questions), 10)
         self.assertEqual(len(set(questions)), 10)
@@ -190,7 +190,7 @@ class ConsentInventoryTests(unittest.TestCase):
         self.assertIn("There is no default for Merge", text)
 
     def test_autopilot_stop_table_marks_fixed_rows_and_risks(self):
-        feature = (REFS / "features/autopilot.md").read_text()
+        feature = (REFS / "features/afk.md").read_text()
         text = (REFS / "autopilot-decisions.md").read_text()
         self.assertIn("(../autopilot-decisions.md)", feature)
         self.assertLess(feature.index("autopilot-decisions.md"), feature.index("Ask Merge last among the settings"))
@@ -286,7 +286,7 @@ class EntryAndVocabularyTests(unittest.TestCase):
 
     def test_three_entry_forms_and_sentence_rules(self):
         skill = (SKILL / "SKILL.md").read_text()
-        for words in ("Codex: `$fnl-setup <word>`", "| none |", "A plain sentence", "never answers a consent question",
+        for words in ("Codex: `$setup <word>`", "| none |", "A plain sentence", "never answers a consent question",
                       "one clarifying question", "never several features at once", "is unverified",
                       "`add <feature>`", "`instructions`", "`check`", "`scan` / `mode [args]`"):
             self.assertIn(words, skill)
@@ -300,10 +300,10 @@ class EntryAndVocabularyTests(unittest.TestCase):
                          (SKILL / "scripts/instructions_write.py").read_bytes())
 
     def test_vocabulary_is_user_scope_and_project_scope(self):
-        for path in [*MARKDOWN, ROOT / "README.md", ROOT / "skills/fnl-delegate/references/host-template.md"]:
+        for path in [*MARKDOWN, ROOT / "README.md", ROOT / "skills/delegate/references/host-template.md"]:
             text = path.read_text()
             self.assertNotRegex(text, r"(?i)machine scope|scope: machine|machine,? project|machine step|machine consent", path.name)
-            self.assertNotRegex(text, r"fnl-setup`? (?:\(section [A-G]\)|section [A-G]|Check)|the remembered grants of section A", path.name)
+            self.assertNotRegex(text, r"setup`? (?:\(section [A-G]\)|section [A-G]|Check)|the remembered grants of section A", path.name)
             for old in ("fnl-setup-instructions", "fnl-scan-agents", "fnl-set-mode"):
                 self.assertNotIn(old, text, path.name)
 
@@ -327,7 +327,7 @@ class ParityBuildTests(unittest.TestCase):
             checkout = base / "checkout"
             (checkout / "scripts").mkdir(parents=True)
             shutil.copy2(ROOT / "scripts/build-parity-plugins.sh", checkout / "scripts")
-            shutil.copytree(SKILL, checkout / "skills/fnl-setup")
+            shutil.copytree(SKILL, checkout / "skills/setup")
             upstream = base / "upstream"
             grilling = upstream / "skills/productivity/grilling"
             grilling.mkdir(parents=True)
@@ -338,8 +338,8 @@ class ParityBuildTests(unittest.TestCase):
             for path, with_grilling in (("parity-interview-ours/plugins/ours", False),
                                         ("parity-interview-with-grilling/plugins/with-grilling", True)):
                 plugin = checkout / "evals" / path
-                self.assertEqual((plugin / "skills/fnl-setup/SKILL.md").read_bytes(), (SKILL / "SKILL.md").read_bytes())
-                self.assertEqual((plugin / "skills/fnl-setup/scripts/instructions_write.py").read_bytes(),
+                self.assertEqual((plugin / "skills/setup/SKILL.md").read_bytes(), (SKILL / "SKILL.md").read_bytes())
+                self.assertEqual((plugin / "skills/setup/scripts/instructions_write.py").read_bytes(),
                                  (SKILL / "scripts/instructions_write.py").read_bytes())
                 self.assertEqual((plugin / "skills/grilling/SKILL.md").is_file(), with_grilling)
                 self.assertFalse((plugin / "skills/fnl-setup-instructions").exists())

@@ -13,7 +13,7 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / 'skills/fnl-setup/scripts/levels_setup.py'
+SCRIPT = ROOT / 'skills/setup/scripts/levels_setup.py'
 PREFIX = b'# Host\r\n\r\n## Other\r\nkeep \xc3\xa9  \r\n'
 
 
@@ -197,7 +197,7 @@ class FunctionDispatchEnvironmentTest(unittest.TestCase):
         self.assertEqual(self.run_function('## Delegate environment\n- claude: none\n'), ['state:unset'])
 
     def test_documented_launch_form_uses_the_filter_and_the_users_zsh(self):
-        text = (ROOT / 'skills/fnl-delegate/references/agents.md').read_text()
+        text = (ROOT / 'skills/delegate/references/agents.md').read_text()
         line = next(l for l in text.splitlines() if 'Declared Claude Code commands' in l)
         self.assertIn('delegate_env.py --family claude -- /bin/zsh -ic', line)
         self.assertNotIn('never behind `delegate_env.py`', line)

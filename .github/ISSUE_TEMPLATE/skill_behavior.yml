@@ -10,7 +10,7 @@ body:
     id: skill
     attributes:
       label: Skill
-      placeholder: "fnl-review-gate"
+      placeholder: "review-gate"
     validations:
       required: true
   - type: input

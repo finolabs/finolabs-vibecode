@@ -41,7 +41,7 @@ Claude Code [official hooks docs](https://code.claude.com/docs/en/hooks.md), res
 - The session-start and `PostToolUse` hooks stop starting workers: they keep reading the cache only. The worker
   code, its nonce guard (`FNL_QUOTA_WORKER`, imported today by `session_start.py`, `metrics_hook.py`, `update_check.py`, `auto_gate_hook.py` and `precompact.py`) and its tests are removed, each importer updated; the guard test that no hook starts a
   worker is kept and strengthened (no hook starts any process).
-- `fnl-delegate` Route step 4 now says: before routing, for each candidate family run
+- `delegate` Route step 4 now says: before routing, for each candidate family run
   `quota_probe.py read --family <f>` (advisory, agent judgment; the script enforces the age, backoff and limits),
   then `quota_probe.py status`; honor markers (part B); a reading older than 8 hours stays `unverified`; the user's own
   statement wins. A delegated headless run reads and does not start readings (advisory, agent judgment; the script enforces the age and busy rules for everyone). Autopilot (`autopilot.md`) stops on a missing reading, so it runs `read` first.
@@ -78,8 +78,8 @@ start; any new network call by the plugin; changing which commands are run or th
 - Routing: a test pins the 15-minute age, that a marker excludes its family until the reset time or one hour (never
   more than five), that an older cache is `unverified`, and that the user's statement wins.
 - Homebrew: tests for the stock layout (group `admin`, group-writable, allowed), a group-writable component of another group, a world-writable component, a symlink leaving the prefix, a tap or nested repository under the prefix, an interpreter outside the prefix, and an executable in another repository (all refused).
-- Every consumer of the 4-hour cadence or the hook-started worker is updated: `tests/test_quota_probe.py` (the cadence sentence and nonce tests), `tests/test_session_start.py`, `tests/test_metrics_hook.py`, README, `fnl-setup` `SKILL.md`, `check.md` and `host-template.md`, the `FRESH` constant in the script copies (CI compares them), `dashboard-freshness.md`, `autopilot.md`, and `PRIVACY.md` (which keeps the line about the family and time of a rate-limit marker).
-- `PRIVACY.md`, `fnl-delegate` text and references, `fnl-setup` Check/preview text, `docs/specs/release-0.1.8.md`
+- Every consumer of the 4-hour cadence or the hook-started worker is updated: `tests/test_quota_probe.py` (the cadence sentence and nonce tests), `tests/test_session_start.py`, `tests/test_metrics_hook.py`, README, `setup` `SKILL.md`, `check.md` and `host-template.md`, the `FRESH` constant in the script copies (CI compares them), `dashboard-freshness.md`, `autopilot.md`, and `PRIVACY.md` (which keeps the line about the family and time of a rate-limit marker).
+- `PRIVACY.md`, `delegate` text and references, `setup` Check/preview text, `docs/specs/release-0.1.8.md`
   (a note that its cadence and its "no new hook entry" premise are superseded here) and `CHANGELOG.md` updated; the rule in `CLAUDE.md` is this spec's source
   and was merged first.
 - The implementation pull request gets its own security review.

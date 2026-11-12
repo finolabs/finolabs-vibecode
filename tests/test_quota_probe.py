@@ -27,7 +27,7 @@ from tests.data_root_fixture import account
 
 FIXTURES = ROOT / "tests/fixtures/quota"
 COPIES = ["scripts/quota_probe.py", *[f"skills/{name}/scripts/quota_probe.py" for name in
-          ("fnl-setup", "fnl-delegate", "fnl-update", "fnl-review-gate")]]
+          ("setup", "delegate", "update", "review-gate")]]
 MEASURED = qp.timestamp("2026-11-05T09:00:00Z")
 
 
@@ -512,14 +512,14 @@ class QuotaTest(unittest.TestCase):
         module.fm.write_consent(90)
         payload = json.dumps({"hook_event_name": "PostToolUse", "session_id": "large-hook",
                               "cwd": str(self.base), "tool_name": "Skill",
-                              "tool_input": {"skill": "fnl-setup"}, "tool_response": "x" * 70000}).encode()
+                              "tool_input": {"skill": "setup"}, "tool_response": "x" * 70000}).encode()
         stream = io.BytesIO(payload)
         with mock.patch.object(sys, "stdin", SimpleNamespace(buffer=stream)), \
              mock.patch.object(qp, "command") as command, mock.patch.object(module, "refresh_if_stale"):
             module.main()
         events = [json.loads(line) for path in (self.root / "state").glob("events-*.jsonl")
                   for line in path.read_text().splitlines()]
-        self.assertEqual([(e["event"], e["name"]) for e in events], [("skill", "fnl-setup")])
+        self.assertEqual([(e["event"], e["name"]) for e in events], [("skill", "setup")])
         command.assert_not_called()
         self.assertLessEqual(stream.tell(), 65536)
 
@@ -822,7 +822,7 @@ class QuotaTest(unittest.TestCase):
         self.assertFalse((self.root / "host.md").exists())
 
     def setup_module(self):
-        spec = importlib.util.spec_from_file_location("quota_setup_test", ROOT / "skills/fnl-setup/scripts/quota_setup.py")
+        spec = importlib.util.spec_from_file_location("quota_setup_test", ROOT / "skills/setup/scripts/quota_setup.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
@@ -1111,8 +1111,8 @@ class QuotaTest(unittest.TestCase):
             qp.read_family("agy")
         # Empty PATH ensures the scan can never find a real agent executable.
         env = {"HOME": str(self.home), "PATH": ""}
-        for script, args in (("fnl-setup/scripts/agent_scan.py", ["--host", "codex"]),
-                             ("fnl-setup/scripts/checkup.py", ["--json"])):
+        for script, args in (("setup/scripts/agent_scan.py", ["--host", "codex"]),
+                             ("setup/scripts/checkup.py", ["--json"])):
             with self.subTest(script=script):
                 result = subprocess.run([sys.executable, "-I", str(ROOT / "skills" / script), *args],
                                         cwd=self.base, env=env, text=True, capture_output=True, timeout=5)
@@ -1207,7 +1207,7 @@ class CopiesTest(unittest.TestCase):
 
 class DocumentationTest(unittest.TestCase):
     def test_routing_thresholds_and_advisory(self):
-        text = (ROOT / "skills/fnl-delegate/references/route.md").read_text()
+        text = (ROOT / "skills/delegate/references/route.md").read_text()
         step = text.split("4. **Reachability and quota**", 1)[1].split("5. **Effort**", 1)[0]
         for phrase in ("advisory, agent judgment", "Below 10%", "reset time still ahead", "older than 8 hours",
                        "excludes nothing", "week-all", "user's own statement", "wins", "state/quota/quota.json"):
@@ -1221,9 +1221,9 @@ class DocumentationTest(unittest.TestCase):
             self.assertIn(phrase, text)
 
     def test_setup_consent_and_displays(self):
-        text = (ROOT / "skills/fnl-setup/references/features/quota.md").read_text()
+        text = (ROOT / "skills/setup/references/features/quota.md").read_text()
         self.assertIn("Let this plugin check your AI usage limits before sharing work with helpers?", text)
         self.assertIn("its hooks, plugins and servers run", text)
         self.assertIn("neutral Yes and No", text)
-        for file in ("skills/fnl-setup/scripts/checkup.py", "skills/fnl-setup/scripts/agent_scan.py"):
+        for file in ("skills/setup/scripts/checkup.py", "skills/setup/scripts/agent_scan.py"):
             self.assertIn("status_lines()", (ROOT / file).read_text())

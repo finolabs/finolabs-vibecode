@@ -14,7 +14,7 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "skills/fnl-setup/scripts/compact_setup.py"
+SCRIPT = ROOT / "skills/setup/scripts/compact_setup.py"
 spec = importlib.util.spec_from_file_location("compact_setup", SCRIPT)
 cs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cs)

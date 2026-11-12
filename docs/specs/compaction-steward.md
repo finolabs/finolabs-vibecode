@@ -1,4 +1,4 @@
-> Retirement: `fnl-steward` is retired. Follow `fnl-session-hygiene` Context pressure and its `context_steward.py` script; this document retains the historical design.
+> Retirement: `fnl-steward` is retired. Follow `session-hygiene` Context pressure and its `context_steward.py` script; this document retains the historical design.
 
 # Compaction steward (option B)
 
@@ -60,9 +60,9 @@ a `session_id` is present it appends the output of the `read` function of
 fails closed (adds no handover text) on any error, uses no network, and leaves its existing
 output unchanged. On the same `compact` input, when Delegation mode is not `manual`,
 it first prints one fixed reminder of at most 500 characters and no data: apply
-`fnl-delegate` "Keep or hand off" before the first of two or more independent tasks,
+`delegate` "Keep or hand off" before the first of two or more independent tasks,
 send reviews and parallel work to another agent family when one is present, and
-re-read `fnl-delegate` if its steps are not in context. A compaction drops the skill
+re-read `delegate` if its steps are not in context. A compaction drops the skill
 body; in a small sample of 10 sessions (November 2026 usage events) runs handed to
 other families fell from 1.37 to 0.70 per hour after the first compaction, with
 confounds noted in the 0.2.1 backlog. Agent judgment enforces the behavior (advisory).
@@ -89,7 +89,7 @@ Sources: Claude Code [hooks](https://code.claude.com/docs/en/hooks.md) and [cont
 
 All numbers are integers in range; anything else is refused with exit 2 and a
 fixed message. The script reads no file and runs nothing. Pure function, fully
-tested. The threshold is the one the user chose in `fnl-setup`; the steward
+tested. The threshold is the one the user chose in `setup`; the steward
 never invents one.
 
 ### 4. Steward agent
@@ -108,11 +108,11 @@ reply.
 
 ### 5. Skill text
 
-`fnl-session-hygiene` "Context pressure" names the steward, the `prepare`
+`session-hygiene` "Context pressure" names the steward, the `prepare`
 action and who enforces what: the host enforces its threshold; the script
 decides the action; the model judges the boundary; the agent writing the
-handover is advisory. the load-sharing rule of `fnl-delegate` may call the steward for a
-child session whose context it can read. `fnl-setup` explains the steward after
+handover is advisory. the load-sharing rule of `delegate` may call the steward for a
+child session whose context it can read. `setup` explains the steward after
 the threshold step and writes nothing new. README and `PRIVACY.md` (the
 handover file: local, 0600, user's own text, never sent, 24-hour life).
 CHANGELOG `Unreleased`.

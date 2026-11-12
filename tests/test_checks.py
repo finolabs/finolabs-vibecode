@@ -15,7 +15,7 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / 'skills/fnl-checks/scripts'
+SCRIPTS = ROOT / 'skills/checks/scripts'
 SCRIPT = SCRIPTS / 'checks.py'
 
 FAKE_HEAVY = """import json, subprocess, sys
@@ -240,7 +240,7 @@ class ChecksRunTest(unittest.TestCase):
         code, out, err = self.run_cli(module, 'run')
         self.assertEqual(code, 3)
         self.assertIn('changed since it was approved', out + err)
-        self.assertIn('/fnl-setup add checks', out + err)
+        self.assertIn('/setup add checks', out + err)
         self.assertEqual(self.launched(), [])
         self.assertFalse(self.receipt().exists())
         code, out, _ = self.run_cli(module, 'show')
@@ -457,7 +457,7 @@ class ChecksRunTest(unittest.TestCase):
         self.git('remote', 'add', 'origin', 'https://github.com/acme/demo.git')
         self.assertEqual(self.run_cli(self.module(), 'run')[0], 0)
         self.assertTrue(self.receipt().exists())
-        merge_check = load('merge_check_for_rerun', ROOT / 'skills/fnl-review-gate/scripts/merge_check.py')
+        merge_check = load('merge_check_for_rerun', ROOT / 'skills/review-gate/scripts/merge_check.py')
         head = self.git('rev-parse', 'HEAD')
         self.assertEqual(merge_check.local_receipt(head, 'acme/demo'), (True, 'matches'))
         flag.write_text('x\n')

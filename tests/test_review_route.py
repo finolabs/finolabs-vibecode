@@ -38,14 +38,14 @@ class ReviewConfigTest(unittest.TestCase):
     def test_owned_script_copies_match(self):
         for name in ("review_route.py", "review_config.py", "post_review.py", "git_metadata.py", "data_root.py", "quota_probe.py"):
             expected = (ROOT / "scripts" / name).read_bytes()
-            skills = ("fnl-delegate", "fnl-review-gate") if name in {"review_route.py", "review_config.py", "git_metadata.py"} else ("fnl-review-gate",)
+            skills = ("delegate", "review-gate") if name in {"review_route.py", "review_config.py", "git_metadata.py"} else ("review-gate",)
             for skill in skills:
                 self.assertEqual((ROOT / "skills" / skill / "scripts" / name).read_bytes(), expected)
 
     def test_review_copy_inventory_is_complete_and_listed_in_ci(self):
         ci = (ROOT / ".github/workflows/validate.yml").read_text()
         for name in ("review_route.py", "review_config.py", "post_review.py", "git_metadata.py"):
-            skills = ("fnl-delegate", "fnl-review-gate") if name != "post_review.py" else ("fnl-review-gate",)
+            skills = ("delegate", "review-gate") if name != "post_review.py" else ("review-gate",)
             copies = {f"scripts/{name}", *[f"skills/{skill}/scripts/{name}" for skill in skills]}
             actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob(name)}
             with self.subTest(script=name):
@@ -64,8 +64,8 @@ class ReviewConfigTest(unittest.TestCase):
             "guard.start(); runpy.run_path(script,run_name='__main__')"
         )
         with tempfile.TemporaryDirectory() as temp:
-            skill = Path(temp) / "fnl-review-gate"
-            shutil.copytree(ROOT / "skills/fnl-review-gate", skill)
+            skill = Path(temp) / "review-gate"
+            shutil.copytree(ROOT / "skills/review-gate", skill)
             scripts = sorted((skill / "scripts").glob("*.py"))
             self.assertTrue(scripts)
             for script in scripts:

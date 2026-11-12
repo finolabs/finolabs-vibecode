@@ -3,7 +3,7 @@
 Status: implemented; checked setup writer (release 0.1.10, package 1, pull request 97); running-session effect and Codex default remain unverified.
 
 Decision: 2026-11-06. Setup writes the chosen threshold after explicit approval.
-Scope: one stdlib-only script, `skills/fnl-setup/scripts/compact_setup.py`;
+Scope: one stdlib-only script, `skills/setup/scripts/compact_setup.py`;
 no network, subprocess, hook invocation, environment writes or other settings.
 ## Verified host facts
 
@@ -27,7 +27,7 @@ These sources were named in the supplied evidence, not fetched for this change.
 Codex default and effect on a running session remain unverified.
 ## Consent and preview
 
-Agent judgment (advisory): only a user request reaching `fnl-setup` invokes the
+Agent judgment (advisory): only a user request reaching `setup` invokes the
 writer. Ask neutral Yes/No with no default via the native question tool when
 available; after yes, ask a free-text token value and state the host's range.
 Explain that a lower threshold compacts earlier; prescribe no value.

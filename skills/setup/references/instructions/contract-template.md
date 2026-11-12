@@ -1,0 +1,64 @@
+# Working contract: sections and questions
+
+Sections marked *optional* are skipped when the user has no need. Each section lists the decisions to settle; turn each answer into one or two imperative lines.
+
+Each rule line says who enforces it: a host setting, a hook, the review gate, or agent judgment. A rule enforced only by agent judgment is advisory. Write each line so a reviewer can decide pass or fail on it, give a short reason for any rule that is not obvious, and use plain wording rather than capitals or "must" for emphasis; a rule with no exceptions belongs in a hook or permission instead of text.
+
+## 1. Identity and voice (required)
+
+- Default language for replies, and when to switch (the user writes in another language, a document is for another audience).
+- How to address the user and how the agent refers to itself, if the language has forms of address.
+- Domains the user works in and expertise to assume, so the agent skips basics.
+- Tone: concise or detailed, candor (challenge assumptions, say when something is wrong), and how to scale explanation to the stakes.
+- Public writing (posts, docs for others): language, concrete numbers and detail, house style or editing skill to use.
+
+## 2. Authority and approvals (required)
+
+- Actions that always need the user's explicit yes: push, merge, deploy, publish, send messages, delete or overwrite data, change shared settings or other people's work.
+- Whether repository or organization ownership grants access by itself (recommended: no).
+- How to handle conflicting instructions (recommended: expose the conflict; a newer instruction does not win by being newer).
+- Other sessions and agents: may the agent message, rename or stop sessions it did not start? (recommended: only with authority).
+
+## 3. Secrets and private data (required)
+
+- Credentials are injected by the approved mechanism and never read, printed or embedded (name it: environment variables, keychain, secret manager).
+- Files the agent never reads (`.env`, credential stores).
+- What happens on a leak: stop, tell the user, keep traces for rotation.
+- Personal or customer data: which law or policy applies, and which services may receive it.
+
+## 4. How work is done (required)
+
+- Surgical changes in the existing style; no unsolicited refactors or features.
+- Coding entry: "Before substantive coding, load `coding-router`." It covers routing, depth, review, verification and delegation.
+- Status words for reports: drafted, verified, integrated, delivered, parked.
+- Test scope (recommended: targeted tests for changed code and its consumers; full suites only on request, as `checks` says).
+- Commits and versions: point to `commit-messages` and `versioning`; add only the user's own deviations.
+- Learning from corrections: when the user corrects the same behavior twice in a session, propose one line for this contract at the end of the task, at most one proposal per session, and write it only after the user says yes.
+
+## 5. Delegation (optional)
+
+- Which other agents the user has (Codex, Antigravity, Claude Code sessions) and that `delegate` governs routing, budgets and acceptance.
+- Acceptance proof for a delegated task (recommended: every test of the package or test module that holds the changed code, plus its traced consumers, chosen from the diff, not a name-filtered subset; a repository-wide suite still runs only on the owner's request, as `checks` says). A repository whose owner instructions scope task-level proof more narrowly wins for that repository: the coordinator then builds the filter from the diff itself and runs the whole package at the boundary the repository names. This is a default for every repository; a repository's narrower rule lives in that repository's own instructions, not in the user contract.
+- Which Delegation mode the user wants: `manual`, `suggest` (default) or `auto`, and whether Routing is `on` (default) or `off`. `/setup mode` shows their effective sources and changes them after a clear yes; environment overrides win over host config. `/setup` asks these preferences during onboarding. Modes govern other-family hand-offs; own-family sessions follow the project and context rules in `delegate` and retain delegate authority limits.
+- Facts about this computer live in the delegation host config, not here. `/setup scan` refreshes present families and user-confirmed allowed models; `/setup` configures their reach.
+
+## 6. Knowledge base (optional)
+
+- Where durable notes live (a knowledge base such as Orrery, an Obsidian vault, a docs repository) and the only approved way to access them.
+- Which single knowledge base agents use (Orrery where available, or an Obsidian vault), and that any other store is retired from agent use.
+- What gets written back, and where decisions and lessons go. `session-hygiene` "Remember or recall" covers the practice; the contract holds only the user's stores and access rules.
+
+## 7. Evaluators and external services (optional)
+
+- Services approved to receive task data (for example a judgment or evaluation API), what fields may be sent, and spend limits.
+- Services explicitly not approved.
+
+## 8. Formats (optional)
+
+- Time zone, date and number formats, currency, brand colors and fonts for documents.
+
+## 9. Host section (one per host)
+
+- Session titles: when and how to name or rename the session.
+- Context pressure: when to compact or start fresh (`session-hygiene` "Context pressure"); the host owns the compaction threshold; about 60% is advisory (agent judgment), not a prescribed host setting. Enforcement belongs to host settings or hooks written by `setup`; a contract line alone is advisory, and no enforcement is claimed until verified.
+- Host quirks: model selection, review commands, tools that need care.

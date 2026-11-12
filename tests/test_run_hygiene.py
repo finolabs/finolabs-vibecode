@@ -174,7 +174,7 @@ class RunHygieneTest(unittest.TestCase):
         self.assertEqual(checked, OWN_ENV)
 
     def test_setup_individual_neutral_consent_names_only(self):
-        text = (ROOT / 'skills/fnl-setup/references/features/delegation.md').read_text()
+        text = (ROOT / 'skills/setup/references/features/delegation.md').read_text()
         for expected in ('For each present agent family', 'Default none', 'names only, never values',
                          'KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, SESSIONID or SESSID anywhere',
                          'PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION or PRIVATE as a complete',
@@ -184,9 +184,9 @@ class RunHygieneTest(unittest.TestCase):
             self.assertIn(expected, text)
 
     def test_lesson_report_and_every_dispatch_family(self):
-        lesson = (ROOT / 'skills/fnl-session-hygiene/SKILL.md').read_text()
+        lesson = (ROOT / 'skills/session-hygiene/SKILL.md').read_text()
         self.assertIn('Corrected-lesson example: on 2026-11-07 a delegated test assertion dumped the process environment', lesson)
-        agents = (ROOT / 'skills/fnl-delegate/references/agents.md').read_text()
+        agents = (ROOT / 'skills/delegate/references/agents.md').read_text()
         for family in ('claude', 'codex', 'antigravity'):
             self.assertIn('delegate_env.py --family ' + family + ' --', agents)
         for expected in ('brief_check.py', 'agybird runner', 'environment-only',
@@ -198,15 +198,15 @@ class RunHygieneTest(unittest.TestCase):
     def test_new_script_copies_are_explicit_ci_groups(self):
         from tests.test_shared_copies import ci_copy_groups
         groups = ci_copy_groups()
-        for name, skills in {'run_env.py': ['fnl-delegate', 'fnl-checks', 'fnl-setup', 'fnl-update'],
-                             'delegate_env.py': ['fnl-delegate'], 'log_scan.py': ['fnl-delegate'],
-                             'secret_patterns.py': ['fnl-delegate', 'fnl-handoff'],
-                             'brief_check.py': ['fnl-handoff']}.items():
+        for name, skills in {'run_env.py': ['delegate', 'checks', 'setup', 'update'],
+                             'delegate_env.py': ['delegate'], 'log_scan.py': ['delegate'],
+                             'secret_patterns.py': ['delegate', 'handoff'],
+                             'brief_check.py': ['handoff']}.items():
             self.assertIn([f'scripts/{name}', *[f'skills/{s}/scripts/{name}' for s in skills]], groups)
 
     def test_touched_skill_documents_respect_setup_size_limits(self):
         # Apply the spec's limits to touched skill bodies, feature docs and new reference text.
-        for relative in ('fnl-setup/SKILL.md', 'fnl-delegate/SKILL.md', 'fnl-handoff/SKILL.md', 'fnl-session-hygiene/SKILL.md', 'fnl-checks/SKILL.md', 'fnl-setup/references/features/delegation.md'):
+        for relative in ('setup/SKILL.md', 'delegate/SKILL.md', 'handoff/SKILL.md', 'session-hygiene/SKILL.md', 'checks/SKILL.md', 'setup/references/features/delegation.md'):
             path = ROOT / 'skills' / relative
             text = path.read_text()
             self.assertLessEqual(len(text.encode()), 10000 if path.name == 'SKILL.md' else 8000)
