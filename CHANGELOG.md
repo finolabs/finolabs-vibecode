@@ -51,6 +51,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- `coding-router`'s Spec Kit adapter follows a core `speckit-*` skill marked `disable-model-invocation: true` (Spec Kit 1.4's `--no-model-invocation` integration option) by reading its `SKILL.md`, instead of calling the skill tool that refuses it or reporting an integration gap.
 - An alias whose skill is user-only (`fnl-help`, `ask`, `afk`, `brb`, `gtg` and the older names of `autopilot`, `pause`, `restore-point`, `setup`, `status` and `update`) no longer tells the agent to load that skill, which made it call the Skill tool and get refused: it now says the skill is user-only and to read its `SKILL.md` in the plugin's skills folder and follow it, never through the Skill tool. Older names of short names load the final skill directly (`fnl-ask` → `help`, `fnl-verification` → `checks`, `fnl-afk` and `fnl-brb` → `autopilot`, `fnl-gtg` → `pause`); a test and `check-references.py` hold both rules for every alias.
 
 ## [0.2.4] - 2026-11-11
