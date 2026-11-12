@@ -155,6 +155,10 @@ Only when the coordinator or you run `context_snapshot.py probe` (never from a h
 
 To let the agent pass its own session id, the session-start hook prints one validated `Session id:` line. That id enters the host's model context, which the host may keep; the plugin does not store it as plain text in snapshots or events. Antigravity is not covered. `FNL_CONTEXT_PROBE=off` stops the probe. Design: `docs/specs/context-probe.md`.
 
+## Compaction nudge
+
+On Claude Code, on by default, one `UserPromptSubmit` hook tells the agent when the session nears the compaction threshold, so it saves a handover and writes back decisions before the host compacts. To measure, it reads only the integer token counts (`usage`: input, cache creation, cache read and output tokens) of the latest assistant entry in the last 256 KiB of the session's own transcript file, which it opens only when it is a regular file, not a symlink, inside the host's `projects` folder; it never reads, keeps, logs or sends any other field or any of your conversation. It reads `autoCompactEnabled` and `autoCompactWindow` from your Claude Code settings files and the integer values of `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` and `DISABLE_AUTO_COMPACT` from the environment, nothing else. At 80% and again at 90% of the threshold it prints one fixed line with a whole percent into the agent's context. It stores one integer per session (the last band it reported) under a hash of the session id in the data root's private state folder, records no metrics event, never blocks anything and sends nothing anywhere. `FNL_COMPACT_NUDGE=off` turns it off. Codex and Antigravity are not covered. Design: `docs/specs/compaction-nudge.md`.
+
 ## Repository checks
 
 `/setup add checks` stores a repository's check list, as argument arrays you approved, in that repository's own `.finolabs/vibecode/checks.json` (in the main checkout, shared by its linked worktrees; folders 0700, file 0600), and adds the line `.finolabs/` to the repository's `.git/info/exclude`, never to a tracked `.gitignore`.
