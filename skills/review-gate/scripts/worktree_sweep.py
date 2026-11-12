@@ -9,17 +9,25 @@ its branch, its size on disk (a bounded walk that follows no symlink), clean or 
 --porcelain`, untracked files included), unpushed commits and merged:
 
 - unpushed: commits ahead of the branch's upstream; with no upstream, or one deleted on the forge,
-  commits that no remote-tracking branch holds, marked "(no upstream)".
+  commits that no remote-tracking branch holds, marked "(no upstream)". When the forge merged a pull
+  request at exactly the branch's current head, that head was pushed, so the count is 0.
 - merged: yes when the branch head is an ancestor of `origin/<default>` as known locally, or when
-  `gh pr list --head <branch> --state merged` (a read) finds a merged pull request; no when gh finds none;
-  unknown when neither can tell, for example without gh.
+  `gh pr list --head <branch> --state merged --json number,headRefOid` (a read) finds a merged pull
+  request whose head commit is the branch's current head; no when gh finds no merged pull request;
+  unknown when neither can tell, for example without gh, or when the merged pull requests had another head.
 
-`--remove` takes a worktree only when every check holds: it is named with `--path`, or, with no `--path`,
-it is the checkout of a finished dispatch in the delegation ledger; no open ledger dispatch names it; it
-is neither locked nor detached, nor the current working directory or a parent of it; it is clean, holds
-no unpushed commit and is merged. It runs `git worktree remove <path>` (never forced), then
-`git branch -d <branch>` (never -D), then `git worktree prune`, and prints what it removed and what it
-kept with the reason. Anything it cannot tell is kept. Files git ignores go with a removed worktree.
+`--remove` takes a worktree only when every check holds: neither its path nor any folder above it is a
+symlink; it holds no other registered worktree and lies inside no other linked worktree; it is named with
+`--path`, or, with no `--path`, it is the checkout of a finished dispatch in the delegation ledger; no
+open ledger dispatch names it; it is neither locked nor detached, nor the current working directory or a
+parent of it; it is clean, holds no unpushed commit and is merged. Paths are compared normalized and
+unresolved with git's own list, so a `--path` reached through a symlink matches nothing. Just before
+removal it rereads git's list and checks again that the path is registered, has no symlink, is the same
+folder (device and inode) it described and still nests no worktree. It runs `git worktree remove <path>`
+(never forced), then `git branch -d <branch>` (never -D), then `git worktree prune`, and prints what it
+removed, what it kept with the reason, and any removal git did not finish (files may already be gone
+from such a folder). Anything it cannot tell is kept. Files git ignores go with a removed worktree. A
+change made between the last check and git's own removal is not covered.
 It stores nothing and makes no network call of its own; gh, when present, reads the forge.
 """
 
@@ -27,6 +35,7 @@ import argparse
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -129,6 +138,48 @@ def state(path):
     return "unknown" if out is None else ("clean" if out == "" else "dirty")
 
 
+def normal(path):
+    """An absolute, normalized path with no symlink resolved, so it compares with git's own list as written."""
+    return Path(os.path.normpath(os.path.abspath(path)))
+
+
+def symlinked(path):
+    """True when the path or any folder above it is a symlink, or a component cannot be checked."""
+    path = normal(path)
+    for part in (path, *path.parents):
+        try:
+            if os.path.islink(part):
+                return True
+        except OSError:
+            return True
+    return False
+
+
+def identity(path):
+    """(device, inode) of the folder itself, never through a symlink, or None."""
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return None
+    return (info.st_dev, info.st_ino) if stat.S_ISDIR(info.st_mode) else None
+
+
+def nesting(path, main_path, linked):
+    """Why a worktree must stay because of where it lies among the registered worktrees, or None.
+
+    Removing a folder removes every worktree inside it, whatever protects that one; a linked worktree
+    inside another linked worktree is kept too. Linked worktrees inside the main checkout are the usual
+    layout and stay eligible.
+    """
+    for other in (main_path, *linked):
+        if other != path and path in other.parents:
+            return "it holds another worktree"
+    for other in linked:
+        if other != path and other in path.parents:
+            return "it lies inside another worktree"
+    return None
+
+
 def unpushed(path):
     """(count or None, has upstream)."""
     if git_out(path, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"):
@@ -144,47 +195,70 @@ def default_ref(main):
 
 
 def merged(path, head, branch, default):
-    """"yes", "no" or "unknown"."""
+    """("yes", "no" or "unknown", "ancestor", "forge" or None for what proved a yes).
+
+    The forge counts only for a merged pull request whose head commit is the branch's current head: a
+    branch name reused, or pushed to after its pull request merged, proves nothing.
+    """
     if default and head:
         try:
             done = git(path, "merge-base", "--is-ancestor", head, default)
             if done.returncode == 0:
-                return "yes"
+                return "yes", "ancestor"
         except (OSError, subprocess.SubprocessError):
             pass
-    if not branch:
-        return "unknown"
+    if not branch or not head:
+        return "unknown", None
     try:
-        done = run_gh(["pr", "list", "--head", branch, "--state", "merged", "--json", "number"], str(path))
+        done = run_gh(["pr", "list", "--head", branch, "--state", "merged", "--json", "number,headRefOid"],
+                      str(path))
         found = json.loads(done.stdout) if done.returncode == 0 else None
     except (OSError, subprocess.SubprocessError, ValueError):
         found = None
     if not isinstance(found, list):
-        return "unknown"
-    return "yes" if found else "no"
+        return "unknown", None
+    if not found:
+        return "no", None
+    for pull in found:
+        if isinstance(pull, dict) and isinstance(pull.get("headRefOid"), str) \
+                and pull["headRefOid"].lower() == head.lower():
+            return "yes", "forge"
+    return "unknown", None
 
 
 def describe(main, entry, default):
-    path = entry["path"]
+    path = normal(entry["path"])
     branch = entry.get("branch", "")
     branch = branch[len("refs/heads/"):] if branch.startswith("refs/heads/") else ""
+    linked_by_symlink = symlinked(path)
     info = {"path": path, "rel": os.path.relpath(path, main), "branch": branch, "head": entry.get("HEAD"),
-            "locked": "locked" in entry, "prunable": "prunable" in entry or not path.is_dir()}
-    if info["prunable"]:
-        info.update(size=(0, True), state="unknown", unpushed=(None, False), merged="unknown")
+            "locked": "locked" in entry, "symlink": linked_by_symlink, "forge_head": False,
+            "prunable": "prunable" in entry or (not linked_by_symlink and not path.is_dir())}
+    if info["symlink"] or info["prunable"]:  # never walk or run git through a symlinked path
+        info.update(size=(0, True), state="unknown", unpushed=(None, False), merged="unknown", identity=None)
         return info
+    info["identity"] = identity(path)
     info["size"] = size_on_disk(path)
     info["state"] = state(path)
     info["unpushed"] = unpushed(path)
-    info["merged"] = merged(path, info["head"], branch, default)
+    info["merged"], proof = merged(path, info["head"], branch, default)
+    count, upstream = info["unpushed"]
+    if proof == "forge" and not upstream and count:
+        # The forge merged a pull request at exactly this head, so every commit of it was pushed; the
+        # remote-tracking refs no longer hold them only because the branch was deleted after a squash.
+        info["unpushed"] = (0, False)
+        info["forge_head"] = True
     return info
 
 
 def line(info):
     count, upstream = info["unpushed"]
     pushed = ("unknown" if count is None else str(count)) + ("" if upstream else " (no upstream)")
-    return (f"{info['rel']}  branch={info['branch'] or '(detached)'}  size={human(info['size'])}  "
+    if info["forge_head"]:
+        pushed = "0 (no upstream; the forge merged this head)"
+    text = (f"{info['rel']}  branch={info['branch'] or '(detached)'}  size={human(info['size'])}  "
             f"{info['state']}  unpushed={pushed}  merged={info['merged']}")
+    return text + ("  path or a parent folder is a symlink" if info["symlink"] else "")
 
 
 def ledger_checkouts():
@@ -217,8 +291,12 @@ def checkout_id(path):
     return hashlib.sha256(os.fsencode(Path(path).resolve())).hexdigest()
 
 
-def reason_to_keep(info, named, ledger, cwd):
-    path = info["path"].resolve()
+def reason_to_keep(info, named, ledger, cwd, place):
+    path = info["path"]
+    if info["symlink"]:
+        return "its path or a parent folder is a symlink"
+    if place:
+        return place
     ident = checkout_id(path)
     if info["prunable"]:
         return "its folder is missing; git worktree prune clears the record"
@@ -250,29 +328,51 @@ def reason_to_keep(info, named, ledger, cwd):
     return None
 
 
+def registered(main):
+    """(main checkout, [linked worktrees]) as git lists them now, normalized but not resolved."""
+    entries = worktrees(main)
+    return normal(entries[0]["path"]), [normal(entry["path"]) for entry in entries[1:]]
+
+
+def still_safe(main, info):
+    """Recheck, just before removal, what could have changed since the worktree was described."""
+    try:
+        main_path, linked = registered(main)
+    except OwnError:
+        return False
+    path = info["path"]
+    return (path in linked and not symlinked(path) and info["identity"] is not None
+            and identity(path) == info["identity"] and nesting(path, main_path, linked) is None)
+
+
 def remove(main, entries, default, paths):
-    cwd = Path.cwd().resolve()
-    named = None if not paths else {Path(p).resolve() for p in paths}
+    cwd = normal(Path.cwd())
+    named = None if not paths else {normal(p) for p in paths}
     ledger = ledger_checkouts()
-    main_path = entries[0]["path"].resolve()
-    linked = {entry["path"].resolve() for entry in entries[1:]}
+    main_path = normal(entries[0]["path"])
+    linked = [normal(entry["path"]) for entry in entries[1:]]
     for path in sorted(named or ()):
         if path == main_path:
             print(f"kept {os.path.relpath(path, main)}: the main checkout is never removed")
         elif path not in linked:
             print(f"kept {os.path.relpath(path, main)}: not a linked worktree of this repository")
-    removed = 0
+    removed = failed = 0
     for entry in entries[1:]:
-        if named is not None and entry["path"].resolve() not in named:
+        if named is not None and normal(entry["path"]) not in named:
             continue
         info = describe(main, entry, default)
-        reason = reason_to_keep(info, named, ledger, cwd)
+        place = nesting(info["path"], main_path, linked)
+        reason = reason_to_keep(info, named, ledger, cwd, place)
+        if not reason and not still_safe(main, info):
+            reason = "it changed while it was checked"
         if reason:
             print(f"kept {info['rel']} ({human(info['size'])}): {reason}")
             continue
         done = git(main, "worktree", "remove", str(info["path"]))
         if done.returncode != 0:
-            print(f"kept {info['rel']} ({human(info['size'])}): git worktree remove refused it")
+            failed += 1
+            print(f"failed {info['rel']} ({human(info['size'])}): git worktree remove did not finish; "
+                  "files git ignores in it may already be gone")
             continue
         removed += 1
         gone = git(main, "branch", "-d", info["branch"])
@@ -280,7 +380,9 @@ def remove(main, entries, default, paths):
             f"branch {info['branch']} kept: git branch -d refused it"
         print(f"removed {info['rel']} ({human(info['size'])}); {note}")
     git(main, "worktree", "prune")
-    if removed == 0:
+    if failed:
+        print(f"worktree_sweep: {failed} removal(s) did not finish; check those folders")
+    elif removed == 0:
         print("worktree_sweep: nothing removed")
 
 
