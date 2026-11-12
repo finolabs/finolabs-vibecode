@@ -19,13 +19,14 @@ Coordinator: unverified
 | Claude Code | unverified | unverified | unverified | unverified |
 | Codex | unverified | unverified | unverified | unverified |
 | Antigravity | unverified | unverified | unverified | unverified |
+| ZCode | unverified | unverified | unverified | unverified |
 
 ## Delegate environment
 
 <!--
 The `Delegate environment` section accepts only blank lines and `- <family>: none` or one
 `- <family>: <NAME>` per variable; replace `none` when adding names. Families are `claude`, `codex`,
-`antigravity`. Names match `^[A-Z][A-Z0-9_]{0,63}$`, with no duplicates, values or wildcards.
+`antigravity`, `zcode`. Names match `^[A-Z][A-Z0-9_]{0,63}$`, with no duplicates, values or wildcards.
 Loader/interpreter controls, `GIT_*`, `*_PROXY`, `SSL_CERT_*` are refused by `delegate_env.py`.
 A name containing KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL, SESSIONID or SESSID anywhere, or
 PASS, PASSWD, PASSPHRASE, AUTH, COOKIE, COOKIES, SESSION or PRIVATE as a complete
@@ -39,6 +40,7 @@ Private HOME is an open owner decision and is not offered or created in this pac
 - claude: none
 - codex: none
 - antigravity: none
+- zcode: none
 
 ## Agent roles
 
@@ -52,6 +54,7 @@ Private HOME is an open owner decision and is not offered or created in this pac
 - claude: unverified (checked 2026-11-07)
 - codex: unverified (checked 2026-11-07)
 - antigravity: unverified (checked 2026-11-07)
+- zcode: unverified (checked 2026-11-07)
 
 ## Quota probe
 
@@ -99,11 +102,12 @@ Brief preamble that lets a delegated agent skip its own workflow entry read: "<p
 
 Which agent can coordinate on this machine, and which delegates each one can reach (`agents.md` "When an agent coordinates"). A delegate marked unreachable is skipped by routing. `/setup scan` prefills suggested reach with present agents other than the recorded coordinator; the user still confirms reachability and permission. Presence in `Agents on this machine` restricts this table: a reach entry never makes an absent family eligible.
 
-| Coordinator | Claude Code | Codex | Antigravity |
-| --- | --- | --- | --- |
-| Claude Code | — | <yes / no: reason> | <yes / no: reason> |
-| Codex | <yes / no> | — | <yes / no> |
-| Antigravity | <yes / no> | <yes / no> | — |
+| Coordinator | Claude Code | Codex | Antigravity | ZCode |
+| --- | --- | --- | --- | --- |
+| Claude Code | — | <yes / no: reason> | <yes / no: reason> | <yes / no: reason> |
+| Codex | <yes / no> | — | <yes / no> | <yes / no> |
+| Antigravity | <yes / no> | <yes / no> | — | <yes / no> |
+| ZCode | <yes / no> | <yes / no> | <yes / no> | — |
 
 ## Route judgment
 
@@ -117,7 +121,7 @@ Judge selection lives in canonical `## Assignment matrix` when that section exis
     - Judge: <jev | host>
     - <agent>: levels <L>-<H>[; works on <type>, ...][; model <id>][; roles <role>, ... | roles none]
 
-Agents are `claude`, `codex`, `antigravity` or an extra Claude Code command; types are `frontend`, `design`, `video`, `three-d`, `image-generation`, `transcription`; roles are `code-review`, `security-review`, `navigator`, `advisor`, each named by one agent at most.
+Agents are `claude`, `codex`, `antigravity`, `zcode` or an extra Claude Code command; types are `frontend`, `design`, `video`, `three-d`, `image-generation`, `transcription`; roles are `code-review`, `security-review`, `navigator`, `advisor`, each named by one agent at most.
 
 - Instruction check: <on | off>. Default off. `on` means the user approved, on <DD/MM/YYYY>, sending lines of their private instruction files to the configured judge for the Check judgment items. Instruction checks use the small host fallback because they are outside the four outbound sites; retention is the host provider's. It is separate from the routing approval and is global to this machine; turning it off takes effect on the next run.
 
@@ -156,3 +160,11 @@ FNL_DISPATCH_ID="<ledger id>" python3 -I <delegate skill folder>/scripts/delegat
 - Allowed models and their pools: <list>.
 - Per-run settings file with allow-rules: <path>. Global allow-rules: <file path and the command prefixes allowed>. Everything else is soft-denied.
 - Rules the user granted per repository (test and check commands), as a record only: the grant itself lives in Antigravity's settings or the user's answer. <repository: literal commands, date approved>.
+
+## ZCode
+
+- Executable: <absolute path the user confirmed: the `zcode` single executable, or node plus the absolute path of `zcode.cjs`>. ZCode version and the date of the permission check in `agents.md` "ZCode": <version, date, result>.
+- Command: FNL_DISPATCH_ID=<ledger id> python3 -I <delegate skill folder>/scripts/delegate_env.py --family zcode -- <hard-cap wrapper> <executable> --prompt "$(cat "$B")" --cwd <worktree, absolute> --mode edit --disallowed-tools "AskUserQuestion EnterPlanMode ExitPlanMode" --output-format json --no-color. Use `--mode plan` for advice. Never `yolo`, `guarded` or `build`.
+- Model the user configured in ZCode for delegation, as a record only (ZCode takes no model flag): <model id>.
+- ZCode's configuration folder on this machine, if the user wants it recorded: <path>.
+

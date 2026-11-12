@@ -20,8 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
 
 MAX_BYTES = 262144
-AGENTS = {"claude": "Claude Code", "codex": "Codex", "antigravity": "Antigravity"}
-EXECUTABLES = {"claude": "claude", "codex": "codex", "antigravity": "agy"}
+AGENTS = {"claude": "Claude Code", "codex": "Codex", "antigravity": "Antigravity", "zcode": "ZCode"}
+EXECUTABLES = {"claude": "claude", "codex": "codex", "antigravity": "agy", "zcode": "zcode"}
 HEADING = "Agents on this machine"
 
 

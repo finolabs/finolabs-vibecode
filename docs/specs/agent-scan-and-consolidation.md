@@ -11,7 +11,7 @@ Owner decisions: 2026-11-04. All of it ships in 0.1.7 (a large upgrade); the man
 
 ## Part A: agent scan (fnl-scan-agents)
 
-A user-invoked skill (`disable-model-invocation: true`, `argument-hint: "[--host claude|codex|antigravity]"`). Host support for slash commands: skills are the supported form on Claude Code (the `commands/` folder is the older format); on Codex and Antigravity the same skill is listed with a description that says to run it only on request. No `commands/` folder is added.
+A user-invoked skill (`disable-model-invocation: true`, `argument-hint: "[--host claude|codex|antigravity|zcode]"`). Host support for slash commands: skills are the supported form on Claude Code (the `commands/` folder is the older format); on Codex and Antigravity the same skill is listed with a description that says to run it only on request. No `commands/` folder is added.
 
 **Script** `skills/fnl-scan-agents/scripts/agent_scan.py`: stdlib only, read-only by default, no network, exit 0, output at most about 40 lines.
 

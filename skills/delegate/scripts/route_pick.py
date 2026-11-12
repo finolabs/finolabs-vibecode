@@ -19,7 +19,7 @@ import review_config as config
 
 NO_PREFERENCE = "no preference: use the strength table"
 MAX_LINES = 5
-DISPLAY = {"Claude Code": "claude", "Codex": "codex", "Antigravity": "antigravity"}
+DISPLAY = {"Claude Code": "claude", "Codex": "codex", "Antigravity": "antigravity", "ZCode": "zcode"}
 
 
 class Pick:

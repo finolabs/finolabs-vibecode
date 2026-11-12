@@ -20,7 +20,7 @@ from pathlib import Path
 
 MODES = ("manual", "suggest", "auto")
 # Cache key in `quota_probe.py` -> the family name printed.
-FAMILIES = (("claude", "claude-code"), ("codex", "codex"), ("agy", "antigravity"))
+FAMILIES = (("claude", "claude-code"), ("codex", "codex"), ("agy", "antigravity"), ("zcode", "zcode"))
 # The only id shape printed for the context probe; anything else prints nothing.
 SESSION_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 LEDGER_LIMIT = 4 * 1024 * 1024  # a larger ledger reads as unknown at session start
@@ -64,7 +64,7 @@ def delegation_word():
 
 def roles_words():
     """Read canonical roles once; render only closed enumerations, never config text."""
-    families = ("claude", "codex", "antigravity")
+    families = ("claude", "codex", "antigravity", "zcode")
     keys = ("code review", "security review", "navigator", "judge")
     try:
         import review_config as config
@@ -86,7 +86,7 @@ def roles_words():
         return "; ".join(parts) + "; posting " + ", ".join(posts)
     except Exception:
         return ("code review unknown; security review unknown; navigator unknown; judge unknown; "
-                "posting claude unknown, codex unknown, antigravity unknown")
+                "posting claude unknown, codex unknown, antigravity unknown, zcode unknown")
 
 
 def assignments_line():

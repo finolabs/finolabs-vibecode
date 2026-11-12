@@ -2,7 +2,7 @@
 name: fnl-handoff
 description: "Older name for handoff, kept so the old name still works when typed; follows handoff with the same arguments."
 disable-model-invocation: true
-argument-hint: "[--agent claude|codex|antigravity] [--model <id>] [--worktree] <task>"
+argument-hint: "[--agent claude|codex|antigravity|zcode] [--model <id>] [--worktree] <task>"
 ---
 
 # fnl-handoff

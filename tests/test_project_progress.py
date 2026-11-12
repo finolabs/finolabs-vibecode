@@ -1405,7 +1405,7 @@ class SettingsFileTest(unittest.TestCase):
     def test_defaults_when_nothing_is_set(self):
         config = self.slots.parse_config('', self.repo)
         self.assertEqual((config['limit'], config['source'], config['scope']['project']), (3, 'default', 'one'))
-        self.assertEqual(config['caps'], {'claude': None, 'codex': None, 'antigravity': None})
+        self.assertEqual(config['caps'], {'claude': None, 'codex': None, 'antigravity': None, 'zcode': None})
         self.assertEqual(self.settings(), {})
         self.assertEqual(self.slots.parse_config('', None)['limit'], 3)
         with mock.patch('os.getcwd', return_value=str(self.home)):

@@ -80,9 +80,9 @@ class ParallelSlotsTest(unittest.TestCase):
         rows.append(rows[-1])
         self.write('ledger.jsonl', '\n'.join(map(json.dumps, rows)))
         state = slots.status()
-        self.assertEqual(state, dict(limit=9, open=5, stale=0, free=4, source='project settings', scope=dict(code=self.code, project=self.repo.name), other_projects=0, families={
+        self.assertEqual(state, dict(limit=9, open=6, stale=0, free=3, source='project settings', scope=dict(code=self.code, project=self.repo.name), other_projects=0, families={
             'claude': dict(open=3, cap=4, free=1), 'codex': dict(open=1, cap=3, free=2),
-            'antigravity': dict(open=1, cap=None, free=None)}))
+            'antigravity': dict(open=1, cap=None, free=None), 'zcode': dict(open=1, cap=None, free=None)}))
         code, output = self.command('status')
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(output), state)
@@ -106,7 +106,7 @@ class ParallelSlotsTest(unittest.TestCase):
         ]).encode()
         stale = {}
         counts = slots.open_counts(raw, now=now, stale=stale)
-        self.assertEqual(counts, dict(claude=1, codex=2, antigravity=1))
+        self.assertEqual(counts, dict(claude=1, codex=2, antigravity=1, zcode=0))
         self.assertEqual(stale, dict(codex=1, claude=1))
         self.assertEqual(slots.open_counts(raw, now=now), counts)
 
@@ -156,7 +156,7 @@ class ParallelSlotsTest(unittest.TestCase):
         code, output = self.command('check-config')
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(output), dict(limit=12, source='project settings',
-                                                caps=dict(claude=4, codex=None, antigravity=2), legacy_limits=False))
+                                                caps=dict(claude=4, codex=None, antigravity=2, zcode=None), legacy_limits=False))
         # An approved but invalid file is unknown, never the default of three.
         for caps in ('', 'codex=0', 'codex=33', 'codex=2, codex=3', 'other=1', 'codex=true',
                      'codex=2,', 'codex=2\n- %s parallel-caps: claude=1' % self.code):

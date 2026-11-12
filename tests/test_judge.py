@@ -63,7 +63,10 @@ class JudgeTest(unittest.TestCase):
                                ('## Agent roles\n- judge: jev\n- judge: host\n', 'host'),
                                ('## Agent roles\n- judge: invalid\n', 'host'),
                                ('## Agent roles\n- judge: jev\n- code review: codex\n', 'host'),
-                               ('## Agents on this machine\n| Codex | yes | synthetic |\n\n## Agent roles\n- judge: jev\n- code review: codex\n', 'jev')]:
+                               ('## Agents on this machine\n| Codex | yes | synthetic |\n\n## Agent roles\n- judge: jev\n- code review: codex\n', 'jev'),
+                               # A zcode role is read when the inventory names ZCode, and refused when it does not.
+                               ('## Agents on this machine\n| ZCode | yes | synthetic |\n\n## Agent roles\n- judge: jev\n- navigator: zcode\n', 'jev'),
+                               ('## Agents on this machine\n| Codex | yes | synthetic |\n\n## Agent roles\n- judge: jev\n- navigator: zcode\n', 'host')]:
             path.write_text(text)
             self.assertEqual(judge.configured_judge(), expected)
 

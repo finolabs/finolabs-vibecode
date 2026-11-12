@@ -78,13 +78,13 @@ CATEGORIES = {'Production': True, 'Real users and customer data': True, 'Unrecov
               'Shared settings': False, 'Recoverable deletion': False, 'Repository comments': False}
 CONSENT = 'Excerpts leave the machine'
 TARGETS = 'Non-production targets'
-HOST_FAMILIES = {'Claude Code': 'claude', 'Codex': 'codex', 'Antigravity': 'antigravity'}
-PROGRAMS = {'claude': 'claude', 'codex': 'codex', 'antigravity': 'agy'}
+HOST_FAMILIES = {'Claude Code': 'claude', 'Codex': 'codex', 'Antigravity': 'antigravity', 'ZCode': 'zcode'}
+PROGRAMS = {'claude': 'claude', 'codex': 'codex', 'antigravity': 'agy', 'zcode': 'zcode'}
 MODEL = re.compile(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,79}')
 LABEL = re.compile(r'[A-Za-z0-9._-](?:[A-Za-z0-9 ._-]{0,58}[A-Za-z0-9._-])?')
 DECISION_ID = re.compile(r'q[0-9]{8}-[0-9]{6}-[0-9a-f]{4}')
 DISPATCH_ID = re.compile(r'd[0-9]{8}-[0-9]{6}-[0-9a-f]{4}')
-ADVISOR = re.compile(r'(?:claude|codex|antigravity)[a-z0-9]{0,24}')
+ADVISOR = re.compile(r'(?:claude|codex|antigravity|zcode)[a-z0-9]{0,24}')
 FIELDS = ('by', 'option', 'of', 'probability', 'dispatch', 'model')
 # The closed attempt schema of "Record for analysis": (rung, settled) -> (required, optional).
 ATTEMPTS = {('rule', 'yes'): ({'by', 'option', 'of'}, set()), ('rule', 'no'): ({'by'}, set()),
@@ -735,6 +735,9 @@ def advisor_command(tail, applied, coordinator):
     if len(tail) < 4 or tail[0] != '--family' or tail[2] != '--':
         return 'unknown'
     family, rest = tail[1], tail[3:]
+    # ZCode has no verified read-only advisor form; never parse it with another family's grammar.
+    if family == 'zcode':
+        return 'unknown'
     hosts = {HOST_FAMILIES[h] for h in applied['Hosts'].split(', ')}
     if family not in PROGRAMS or family not in hosts or coordinator not in PROGRAMS or coordinator == family:
         return 'unknown'

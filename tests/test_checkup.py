@@ -250,10 +250,10 @@ class CheckupTest(unittest.TestCase):
         self.assertEqual(row["reason"], ".claude: enabled; selected home: disabled")
         self.assertNotIn("PRIVATE", json.dumps(row))
 
-    def inventory(self, date):
+    def inventory(self, date, names=("Claude Code", "Codex", "Antigravity", "ZCode")):
         return "## Agents on this machine\n\nCoordinator: Codex\n\n" + "\n".join(
             f"| {name} | yes | fake | unverified | {date} |"
-            for name in ("Claude Code", "Codex", "Antigravity")) + "\n"
+            for name in names) + "\n"
 
     def ledger_entry(self, name):
         """Set this repository's ledger name in its own approved settings file, as the setter does."""
@@ -336,6 +336,11 @@ class CheckupTest(unittest.TestCase):
         config.write_text(self.inventory((today - datetime.timedelta(days=30)).isoformat()))
         self.assertEqual(self.setup_item("agents inventory")["status"], "ok")
         config.write_text(self.inventory("unverified"))
+        self.assertEqual(self.setup_item("agents inventory")["status"], "unverified")
+        # An inventory written before ZCode existed has three rows and stays valid.
+        config.write_text(self.inventory(today.isoformat(), ("Claude Code", "Codex", "Antigravity")))
+        self.assertEqual(self.setup_item("agents inventory")["status"], "ok")
+        config.write_text(self.inventory(today.isoformat(), ("Claude Code", "Codex", "ZCode")))
         self.assertEqual(self.setup_item("agents inventory")["status"], "unverified")
         config.unlink()
         outside = self.write(self.base / "outside.md", self.inventory(today.isoformat()))
@@ -478,7 +483,8 @@ class CheckupTest(unittest.TestCase):
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)))
         self.assertEqual(self.setup_item("host config")["status"], "ok")
         template = (ROOT / "skills/delegate/references/host-template.md").read_text()
-        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Heavy jobs"})
+        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Heavy jobs", "ZCode"})
+        self.assertNotIn("ZCode", checkup.HEADINGS)  # host configs written before ZCode stay complete
         for heading in ("Agent roles", "Review posting", "Delegate environment"):
             with self.subTest(heading=heading):
                 config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS - {heading})))
@@ -522,7 +528,7 @@ class CheckupTest(unittest.TestCase):
         expected = ['Delegation mode', 'Routing', 'Agents on this machine', 'Delegate environment',
                     'Agent roles', 'Review posting', 'Quota probe', 'Limits', 'Heavy jobs',
                     'Effort preference', 'Briefs folder', 'Coordinators and reach', 'Route judgment',
-                    'Dispatch marker', 'Claude Code', 'Codex', 'Antigravity']
+                    'Dispatch marker', 'Claude Code', 'Codex', 'Antigravity', 'ZCode']
         self.assertEqual(headings, expected)
         self.assertTrue(all('`' not in heading and len(heading) <= 60 for heading in headings))
         config = template.replace('Instruction check: <on | off>', 'Instruction check: on')

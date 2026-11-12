@@ -533,7 +533,7 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(block['parallel_limit'], 6)
         self.assertEqual((block['parallel_source'], block['parallel_project']), ('project settings', None))
         self.assertEqual(block['family_slots'], dict(claude=dict(open=2, cap=4), codex=dict(open=3, cap=3),
-                                                   antigravity=dict(open=0, cap=None)))
+                                                   antigravity=dict(open=0, cap=None), zcode=dict(open=0, cap=None)))
         self.assertEqual(original, self.ledger.read_bytes())
         # An approved file that was edited or deleted is unknown and says settings need setup, never the default.
         settings = repo / '.finolabs/vibecode/settings.json'

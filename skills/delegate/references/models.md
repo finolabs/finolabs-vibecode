@@ -14,11 +14,11 @@ Route by tier first, then by agent. A tier names what the work needs; the agent 
 - **strong**: everyday agentic coding across several files, reviews of easy work.
 - **fast**: bounded edits, mechanical changes, extraction, bulk runs.
 
-| Tier | Claude Code | Codex | Antigravity |
-| --- | --- | --- | --- |
-| frontier | Opus 5.5; Fable 5.1 when Opus has already fallen short | `gpt-6-astra` | `claude-opus-5-5-*` (Claude pool) |
-| strong | Sonnet 5.5 | `gpt-6.1-sol` | `gemini-4-argon-*`, `claude-sonnet-5-5-*` |
-| fast | Haiku 5.5 | `gpt-6.1-terra`, `gpt-6-luna` | `gemini-3.8-flash-*` |
+| Tier | Claude Code | Codex | Antigravity | ZCode |
+| --- | --- | --- | --- | --- |
+| frontier | Opus 5.5; Fable 5.1 when Opus has already fallen short | `gpt-6-astra` | `claude-opus-5-5-*` (Claude pool) | unverified |
+| strong | Sonnet 5.5 | `gpt-6.1-sol` | `gemini-4-argon-*`, `claude-sonnet-5-5-*` | unverified |
+| fast | Haiku 5.5 | `gpt-6.1-terra`, `gpt-6-luna` | `gemini-3.8-flash-*` | unverified |
 
 The model places the work in a tier; effort is a separate choice. **Default to `medium` effort on every agent and tier, hard work included**: a `medium` run still does hard work, and it spends less quota and time. By grade (`SKILL.md` "Grade"): `medium` for easy, medium and hard work, `high` for very hard, `xhigh` for ultra hard, and `max` only when `xhigh` has fallen short. A run that fell short at its level is retried one level up. A host config's "Effort preference" overrides this default.
 
@@ -50,6 +50,15 @@ Recheck: `agy models`, `agy --help`, and `agy -p /usage --output-format json`.
 - Strengths: 1M context with image, video, audio and PDF input: long logs, screenshots, recordings and large documents go to Argon. Flash is cheap and fast for easy and medium edits.
 - Weak spots: terminal-heavy work, where Argon trails Opus 5.5 by third-party reports. Headless runs soft-deny every shell command outside the allow-rules.
 - Quota: separate pools for the Gemini models, for Argon, and for the Claude and GPT models; each pool has a 5-hour and a weekly limit. `/usage` in JSON gives `remaining_fraction` and `reset_time` per bucket. One empty pool leaves the others usable.
+
+## ZCode
+
+Read from ZCode's own CLI documentation on 12/11/2026 (`agents.md` "ZCode"). Recheck: `zcode --version` and the model chosen in ZCode's settings.
+
+- Trust bar: published by Z.ai ([zai-org/ZCode](https://github.com/zai-org/ZCode), Apache-2.0, actively maintained). A dispatch sends the brief and the repository code it reads to the model provider set in ZCode's configuration, under that provider's terms.
+- Models: chosen in ZCode's own settings; the CLI has no per-dispatch model flag, so a `zcode` model in the assignment matrix and in host config `## ZCode` is a record of the user's choice, not an argument. <list the confirmed model ids here>.
+- Effort: the CLI has no effort flag, so the effort default above does not apply to ZCode.
+- Quota: no probe parser exists, so treat quota as unverified.
 
 ## Strength overrides
 
