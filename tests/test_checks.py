@@ -17,6 +17,7 @@ from tests.data_root_fixture import account
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / 'skills/checks/scripts'
 SCRIPT = SCRIPTS / 'checks.py'
+LEDGER = ROOT / 'skills/delegate/scripts/ledger.py'
 
 FAKE_HEAVY = """import json, subprocess, sys
 args = sys.argv[1:]
@@ -581,7 +582,136 @@ class ChecksRunTest(unittest.TestCase):
         code, out, _ = self.run_cli(self.module(), 'run')
         self.assertEqual(code, 0)
         self.assertFalse(self.receipt().exists())
-        self.assertNotIn('receipt', out)
+        self.assertNotIn('receipt', out.replace(str(ROOT), ''))  # the checkout's own path may contain the word
+
+    # A dispatch receipt: `run --dispatch <id>` writes the verification receipt `ledger.py finish` reads
+
+    def ledger(self, *args):
+        return subprocess.run([sys.executable, '-I', str(LEDGER), *args], capture_output=True, text=True,
+                              env=self.env)
+
+    def dispatch(self, checkout):
+        done = self.ledger('start', '--project', 'demo', '--task', 'add parser', '--kind', 'implement', '--grade',
+                           'medium', '--agent', 'codex', '--model', 'm1', '--budget', '40', '--checkout', str(checkout))
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return done.stdout.strip()
+
+    def accept(self, ident, checkout):
+        return self.ledger('finish', ident, '--outcome', 'accepted', '--checkout', str(checkout))
+
+    def verification(self, ident):
+        return self.home / '.finolabs/vibecode/state/verification' / (ident + '.json')
+
+    def test_a_dispatch_run_writes_the_receipt_the_ledger_accepts_with_the_mode_off(self):
+        self.store(('a', self.mark('a')), ('b', self.mark('b')))
+        ident = self.dispatch(self.repo)
+        refused = self.accept(ident, self.repo)
+        self.assertNotEqual(refused.returncode, 0)
+        code, out, err = self.run_cli(self.module(), 'run', '--dispatch', ident)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.marked(), ['a', 'b'])
+        record = json.loads(self.verification(ident).read_text())
+        self.assertEqual((record['id'], record['head'], record['tests'], record['mechanical'], record['criteria']),
+                         (ident, self.git('rev-parse', 'HEAD'), 'passed', 'passed', []))
+        self.assertEqual(self.verification(ident).stat().st_mode & 0o777, 0o600)
+        self.assertIn('verification receipt written for ' + ident, out)
+        self.assertFalse(self.receipt().exists())  # the local merge receipt keeps its own opt-in mode
+        done = self.accept(ident, self.repo)
+        self.assertEqual(done.returncode, 0, done.stderr)
+
+    def test_a_dispatch_run_in_a_linked_worktree_binds_that_checkout(self):
+        self.store(('a', self.mark('a')))
+        tree = self.repo.parent / 'task-tree'
+        self.git('worktree', 'add', '-q', '-b', 'task', str(tree))
+        ident = self.dispatch(tree)
+        os.chdir(tree)
+        code, out, err = self.run_cli(self.module(), 'run', '--dispatch', ident)
+        self.assertEqual(code, 0, err)
+        self.assertNotEqual(self.accept(ident, self.repo).returncode, 0)  # another checkout of the same repository
+        done = self.accept(ident, tree)
+        self.assertEqual(done.returncode, 0, done.stderr)
+
+    def test_a_failed_or_dirty_dispatch_run_drops_an_earlier_receipt_and_writes_none(self):
+        self.store(('a', self.mark('a')))
+        ident = self.dispatch(self.repo)
+        self.assertEqual(self.run_cli(self.module(), 'run', '--dispatch', ident)[0], 0)
+        self.assertTrue(self.verification(ident).exists())
+        (self.repo / 'untracked.txt').write_text('x\n')
+        code, out, _ = self.run_cli(self.module(), 'run', '--dispatch', ident)
+        self.assertEqual(code, 0)
+        self.assertFalse(self.verification(ident).exists())
+        self.assertIn('no verification receipt: the working tree is not clean', out)
+        (self.repo / 'untracked.txt').unlink()
+        self.assertEqual(self.run_cli(self.module(), 'run', '--dispatch', ident)[0], 0)
+        self.store(('a', self.mark('a', 1)))
+        code, out, _ = self.run_cli(self.module(), 'run', '--dispatch', ident)
+        self.assertEqual(code, 1)
+        self.assertFalse(self.verification(ident).exists())
+        self.assertIn('no verification receipt: a check failed', out)
+        self.assertNotEqual(self.accept(ident, self.repo).returncode, 0)
+
+    def test_a_dispatch_run_with_a_moved_head_writes_no_receipt(self):
+        self.store(('a', self.mark('a')))
+        ident = self.dispatch(self.repo)
+        module = self.module()
+        original = module.run_one
+
+        def moving(name, argv, root):
+            result = original(name, argv, root)
+            self.git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com',
+                     'commit', '-q', '--allow-empty', '-m', 'Move')
+            return result
+
+        module.run_one = moving
+        code, out, _ = self.run_cli(module, 'run', '--dispatch', ident)
+        self.assertEqual(code, 0)
+        self.assertFalse(self.verification(ident).exists())
+        self.assertIn('no verification receipt: the head moved during the run', out)
+
+    def test_a_dispatch_run_refuses_a_narrowed_run_or_an_invalid_id_and_runs_nothing(self):
+        self.store(('a', self.mark('a')))
+        for args in (('--dispatch', 'd20261101-000000-abcd', '--changed'), ('--dispatch', '../x'),
+                     ('--dispatch', 'd20261101-000000-ABCD')):
+            with self.subTest(args=args):
+                code, _, err = self.run_cli(self.module(), 'run', *args)
+                self.assertEqual(code, 2)
+                self.assertIn('checks: refused:', err)
+        self.assertEqual(self.launched(), [])
+
+    def test_a_changed_list_drops_an_earlier_dispatch_receipt_before_refusing(self):
+        self.store(('a', self.mark('a')))
+        ident = self.dispatch(self.repo)
+        self.assertEqual(self.run_cli(self.module(), 'run', '--dispatch', ident)[0], 0)
+        self.assertTrue(self.verification(ident).exists())
+        listed = self.repo / '.finolabs/vibecode/checks.json'
+        listed.write_bytes(listed.read_bytes() + b' ')
+        code, _, _ = self.run_cli(self.module(), 'run', '--dispatch', ident)
+        self.assertEqual(code, 3)
+        self.assertFalse(self.verification(ident).exists())
+        self.assertNotEqual(self.accept(ident, self.repo).returncode, 0)
+
+    def test_a_receipt_copied_to_another_dispatch_is_refused(self):
+        self.store(('a', self.mark('a')))
+        first, second = self.dispatch(self.repo), self.dispatch(self.repo)
+        self.assertEqual(self.run_cli(self.module(), 'run', '--dispatch', first)[0], 0)
+        self.verification(second).write_bytes(self.verification(first).read_bytes())
+        os.chmod(self.verification(second), 0o600)
+        self.assertNotEqual(self.accept(second, self.repo).returncode, 0)
+        self.assertEqual(self.accept(first, self.repo).returncode, 0)
+
+    def test_a_tracked_edit_after_the_pass_refuses_acceptance(self):
+        self.store(('a', self.mark('a')))
+        ident = self.dispatch(self.repo)
+        self.assertEqual(self.run_cli(self.module(), 'run', '--dispatch', ident)[0], 0)
+        tracked = self.repo / self.git('ls-files').splitlines()[0]
+        tracked.write_text(tracked.read_text() + 'changed\n')
+        self.assertNotEqual(self.accept(ident, self.repo).returncode, 0)
+
+    def test_a_dispatch_run_without_an_approved_list_runs_nothing_and_writes_nothing(self):
+        ident = self.dispatch(self.repo)
+        code, _, _ = self.run_cli(self.module(), 'run', '--dispatch', ident)
+        self.assertEqual(code, 2)
+        self.assertFalse(self.verification(ident).exists())
 
     def test_every_launch_uses_the_allowlisted_environment(self):
         self.store(('a', self.mark('a')))
