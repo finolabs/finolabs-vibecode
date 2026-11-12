@@ -87,6 +87,20 @@ class ParallelSlotsTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(output), state)
 
+    def test_ended_and_away_lines_are_skipped_not_invalid(self):
+        self.host(6, 'codex=3')
+        rows = [dict(event='start', id='a', agent='codex', project=self.repo.name),
+                dict(event='ended', id='a', ts='2026-11-12T00:00:00+00:00', exit=0),
+                dict(event='decision', id='x'), dict(event='question_denied', id='y'),
+                dict(event='start', id='b', agent='claude', project=self.repo.name),
+                dict(event='finish', id='b')]
+        self.write('ledger.jsonl', '\n'.join(map(json.dumps, rows)) + '\n')
+        state = slots.status()
+        self.assertEqual((state['open'], state['families']['codex']['open']), (1, 1))
+        self.write('ledger.jsonl', json.dumps(dict(event='bogus', id='z')) + '\n')
+        with self.assertRaises(ValueError):
+            slots.open_counts((self.root / 'ledger.jsonl').read_bytes())
+
     def test_dispatches_past_their_hard_cap_are_stale_and_left_out(self):
         from datetime import datetime, timedelta, timezone
         now = datetime(2026, 11, 8, 12, 0, tzinfo=timezone.utc)
