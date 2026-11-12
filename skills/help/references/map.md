@@ -119,6 +119,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/instructions_write.py` | Previews and writes one approved instruction file/block with digest and backups. |
 | `scripts/judge.py` | Screens bounded questions, validates supplied host answers or calls optional Jev, and discloses fallback; neither judge accepts work. |
 | `scripts/log_scan.py` | Scans logs, shows redacted views and applies digest-bound local redaction; never reads a raw log into a receipt. |
+| `scripts/merge_notice_hook.py` | Claude Code reminder after a successful `gh pr merge`: one fixed line pointing to `worktree_sweep.py`; stores nothing, always exits 0. |
 | `scripts/metrics_hook.py` | Records consented usage metadata and triggers local dashboard refreshes. |
 | `scripts/mode.py` | Shows effective settings/sources and writes previewed confirmed changes for `/setup mode`. |
 | `scripts/nav_state.py` | Collects bounded current anchors/metadata, screens payloads and checks report references; it does not prove drift. |
