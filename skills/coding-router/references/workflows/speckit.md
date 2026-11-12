@@ -6,6 +6,8 @@ Read this when the repository uses [Spec Kit](https://github.com/github/spec-kit
 
 The repository has installed `speckit-*` skills that work. Check the setup and the skill files; a `.specify` folder is a signal, not proof of a working integration. Use the invocation the current agent exposes (Codex: `$speckit-<command>`).
 
+A core skill that carries `disable-model-invocation: true` (Spec Kit 1.4 writes it with the integration option `--no-model-invocation`, to keep the skill list short) still works: the host's skill tool refuses it, so read that skill's `SKILL.md` and follow it with the same arguments instead of calling the tool (advisory, agent judgment). Extension skills stay model-invocable.
+
 ## Steps
 
 Spec Kit's installed `speckit-*` skills own the development workflow: specify, clarify, plan, tasks, implement, converge. Resume from accepted artifacts and the current phase; never restart a completed phase to satisfy a generic skill trigger. Use clarify, checklist and analyze for real ambiguity or where the installed workflow or repository requires them; use convergence only where the installed version supports it, after implementation on the tasks path. When clarify runs, run that skill's interview, but put its questions through the host's native question tool (advisory, agent judgment). Evidence of a requirement or design change can send work back to its owning phase; a generic skill trigger cannot.
@@ -32,4 +34,4 @@ Spec Kit replaces the overlapping generic process skills (brainstorming, writing
 
 ## Gaps
 
-A Spec Kit repository with a missing or broken required skill has an integration gap: report it and pause that step. Installing, migrating or substituting another workflow needs explicit authority.
+A Spec Kit repository with a missing or broken required skill has an integration gap (a user-only skill is neither): report it and pause that step. Installing, migrating or substituting another workflow needs explicit authority.
