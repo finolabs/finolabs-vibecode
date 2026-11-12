@@ -9,7 +9,7 @@ One repository, one `skills/` folder, one manifest per host. This skill holds th
 
 | Host | Manifest | Catalog | Authority for fields and checks |
 | --- | --- | --- | --- |
-| Claude Code | `.claude-plugin/plugin.json` | `.claude-plugin/marketplace.json` | [plugin manifest reference](https://code.claude.com/docs/en/plugins/manifest-reference.md), [marketplace reference](https://code.claude.com/docs/en/plugins/marketplace-reference.md), `claude plugin validate . --profile directory`; the `plugin-dev` and `skill-creator` skills for authoring |
+| Claude Code | `.claude-plugin/plugin.json` | `.claude-plugin/marketplace.json` | [plugin manifest reference](https://code.claude.com/docs/en/plugins/manifest-reference.md), [marketplace reference](https://code.claude.com/docs/en/plugins/marketplace-reference.md), `claude plugin validate . --profile directory --strict` (well-formedness only: the directory portal's **Validate** runs more checks); the `plugin-dev` and `skill-creator` skills for authoring |
 | Codex | `.codex-plugin/plugin.json` | `.agents/plugins/marketplace.json` | [build plugins](https://developers.openai.com/codex/plugins/build), [submission fields](https://developers.openai.com/plugins/deploy/submission); no local validator, the portal validates the upload |
 | Antigravity | `.antigravity-plugin/plugin.json` | none; install from the repository URL | [build plugins](https://antigravity.google/docs/build-plugins), `agy plugin validate . --strict`; the built-in `plugin` and `agy-customizations` skills |
 
@@ -17,6 +17,7 @@ One repository, one `skills/` folder, one manifest per host. This skill holds th
 
 - Skills live in `skills/<name>/SKILL.md`; the folder name equals the `name` field. A shared name prefix keeps a pack's skills together and avoids collisions with other packs.
 - Each host's manifest sits in its own folder. A root `plugin.json` is read by both Codex (its preferred location) and Antigravity (its native manifest, with a closed schema), so one file cannot satisfy both.
+  Hooks shared by Claude Code and Codex stay in shell form. Claude Code's exec form (`"command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/…"]`, no shell) has no Codex counterpart: Codex hook handlers take one `command` string and no `args`, and expose `PLUGIN_ROOT` and `CLAUDE_PLUGIN_ROOT` as environment variables. To use exec form on Claude Code, give Codex its own hooks file through the `hooks` field of its manifest, which replaces Codex's default `hooks/hooks.json` ([Claude Code hooks](https://code.claude.com/docs/en/hooks.md), [Codex hooks](https://learn.chatgpt.com/docs/hooks)).
 - Keep every skill folder self-contained: single-skill installers (skills.sh) copy one folder and nothing around it. Disclose reference material into `references/` and executables into `scripts/` beside the skill that uses them; a file two skills need gets a copy in each, with a CI check that the copies match. A skill that cannot work without another names it as a dependency and says how to install it. Keep machine-specific facts in user configuration, never in the package.
 - Ship only what the host loads: no build output, caches, OS files, local notes or eval results.
 
@@ -47,16 +48,16 @@ Apply this section only when preparing a submission to a directory that asks for
 ## 5. Distribution
 
 - Make the repository its own marketplace on hosts that use catalogs when the plugin is outside any family catalog, so `owner/repo` installs work before any directory listing; inside a family, install from the shared catalog (Codex shows each marketplace as its own group).
-- A family of plugins shares one catalog repository serving every host that uses catalogs; it either pins each plugin by commit SHA or tracks protected default branches, and says which; details in [references/catalogs.md](references/catalogs.md).
-- Antigravity installs from the repository URL (see [references/catalogs.md](references/catalogs.md)).
+- A family of plugins shares one catalog repository serving every host that uses catalogs; it either pins each plugin by commit SHA or tracks protected default branches, and says which; details in [references/catalogs.md](references/catalogs.md), which also covers Antigravity's install from the repository URL.
 - Offer single-skill installs beside the plugin: skills.sh (`npx skills add owner/repo --skill <name>`) finds `skills/<name>/SKILL.md` on its own. Tell users to pick one path per agent, since both list every skill twice.
 - Write the install commands for every host in the README, verified against each host's `--help`.
+- Before preparing a submission to Anthropic's or OpenAI's plugin directory, read [references/directories.md](references/directories.md): which portal steps need the owner's approval, per-directory editions built from one source, and what each directory refuses or holds that no local validator shows.
 
 ## 6. Checks before a release
 
 Run and read each one:
 
-- every host validator above, strict where available;
+- every host validator above, strict where available, on each rebuilt directory edition too; the portal's own validation uploads the package, so it waits for the owner's approval and stays pending in the report until then;
 - the trigger suite: one `claude plugin eval` case per model-invoked skill that must fire it, plus negative cases that must fire nothing (`--ablation none` keeps `Skill` graders scored). Run only the cases of skills whose `description` changed since the last release (`--case`), and the whole suite before a MINOR release; a patch release with no `description` change needs none;
 - after installing on Claude Code, `/skill-doctor` for each skill's listing cost, and from the second release on, whether it is ever used (an interactive check: where it cannot run, say so);
 - `open-source-review` for license, payload, leaks and community files;
@@ -66,4 +67,4 @@ A validator pass shows the package loads; only the trigger suite and real use sh
 
 ## Authority
 
-Creating a marketplace repository, submitting to a directory, tagging and publishing need the owner's explicit approval. Preparing manifests, icons and checks for review needs none.
+Creating a marketplace repository, any directory portal step (upload, draft, repository access, portal validation, submitting), tagging and publishing need the owner's explicit approval. Preparing manifests, icons, editions and local checks needs none. A directory form's answers, attestations and acknowledgements are the owner's; when one conflicts with what the plugin does, show the owner the conflict.
