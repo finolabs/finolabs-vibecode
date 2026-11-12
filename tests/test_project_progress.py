@@ -1,4 +1,5 @@
 """Project progress acceptance: synthetic account, files, records and clock only."""
+import hashlib
 import importlib.util
 import json
 import os
@@ -1022,6 +1023,94 @@ class SettingsFileTest(unittest.TestCase):
         self.assertEqual((self.repo / '.git/info/exclude').read_text().count('.finolabs/'), 1)
         self.assertFalse((self.repo / '.gitignore').exists())
 
+    def test_the_autopilot_object_is_a_closed_schema_set_and_cleared_without_metrics_consent(self):
+        (self.data / 'state/consent.json').unlink()  # the project's away permissions record no usage data
+        before = self.host.read_bytes()
+        value = json.dumps({'roots': ['packages', 'services'], 'merge': 'no', 'task-choice': 'listed'})
+        with self.assertRaises(ValueError):
+            self.pp.set_setting(self.repo, 'autopilot', value)  # the away object is written only after a preview
+        self.assertTrue(self.away(value))
+        self.assertFalse(self.away(value))
+        data = json.loads(self.file().read_text())
+        # Stored in a fixed key order, whatever order the caller used.
+        self.assertEqual(list(data['autopilot']), ['task-choice', 'merge', 'roots'])
+        self.assertEqual(self.pp.store.settings_state(self.repo),
+                         ('approved', {'autopilot': {'task-choice': 'listed', 'merge': 'no',
+                                                     'roots': ['packages', 'services']}}))
+        self.assertTrue(self.pp.set_setting(self.repo, 'parallel', '4'))
+        self.assertEqual(self.pp.store.settings_state(self.repo)[1]['autopilot']['merge'], 'no')
+        self.assertTrue(self.away(None))
+        self.assertEqual(json.loads(self.file().read_text()), {'version': 1, 'parallel': '4'})
+        self.assertEqual(self.host.read_bytes(), before)
+
+    def away(self, value):
+        token = self.pp.autopilot_preview(self.repo, value)['token']
+        return self.pp.set_setting(self.repo, 'autopilot', value, expect=token)
+
+    def test_the_autopilot_object_refuses_user_only_keys_and_unsafe_roots(self):
+        store = self.pp.store
+        for value in ({}, {'merge': 'maybe'}, {'merge': True}, {'trusted-authors': 'anyone'},
+                      {'task-choice': 'all'}, {'push-and-pull-requests': 'force'},
+                      {'lease-hours': '24'}, {'hosts': 'Codex'}, {'max-runs': '9'}, {'quota-floor-percent': '0'},
+                      {'Merge': 'yes'}, {'roots': []}, {'roots': 'packages'}, {'roots': ['packages', 'packages']},
+                      {'roots': ['../up']}, {'roots': ['a/b']}, {'roots': ['/abs']}, {'roots': ['.github']},
+                      {'roots': ['.']}, {'roots': ['..']}, {'roots': ['']}, {'roots': ['x' * 65]},
+                      {'roots': [7]}, {'roots': ['dir name']}, {'roots': ['CLAUDE.md']},
+                      {'roots': ['r%d' % i for i in range(17)]}, ['merge'], 'merge'):
+            with self.subTest(value=value):
+                self.assertFalse(store.valid_setting('autopilot', value))
+                with self.assertRaises(ValueError):
+                    self.pp.set_setting(self.repo, 'autopilot', json.dumps(value))
+        for text in ('{"merge": "no", "merge": "yes"}', '{"merge": NaN}', 'not json', '{"merge": "no"} x'):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                self.pp.set_setting(self.repo, 'autopilot', text)
+        self.assertFalse(self.file().exists())
+        for value in ({'merge': 'yes'}, {'trusted-authors': 'own'}, {'roots': ['packages', 'services_2', 'web.app']},
+                      {'task-choice': 'choose', 'push-and-pull-requests': 'no', 'merge': 'no',
+                       'trusted-authors': 'own', 'roots': ['apps']}):
+            with self.subTest(value=value):
+                self.assertTrue(store.valid_setting('autopilot', value))
+        # A file that carries a user-only key, even with a matching approval, is broken, never partly read.
+        raw = (json.dumps({'version': 1, 'autopilot': {'merge': 'yes', 'lease-hours': '24'}}) + '\n').encode()
+        self.file().parent.mkdir(parents=True, mode=0o700)
+        self.file().write_bytes(raw)
+        self.file().chmod(0o600)
+        self.approval().parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+        self.approval().write_text(json.dumps({'sha256': hashlib.sha256(raw).hexdigest(), 'approved': 1}))
+        self.assertEqual(store.settings_state(self.repo), ('broken', {}))
+
+    def test_the_cli_previews_the_autopilot_object_and_writes_it_only_without_dry_run(self):
+        import io
+        value = 'autopilot=' + json.dumps({'merge': 'no', 'roots': ['packages']})
+        with mock.patch('os.getcwd', return_value=str(self.repo)), \
+                mock.patch('sys.stdout', new_callable=io.StringIO) as out:
+            self.assertEqual(self.pp.main(['settings', '--set', value, '--dry-run']), 0)
+        shown = json.loads(out.getvalue())
+        self.assertEqual(shown['autopilot'], {'merge': 'no', 'roots': ['packages']})
+        self.assertEqual((shown['action'], shown['repository'], shown['worktree'], shown['target'], shown['state']),
+                         ('replace', str(self.repo), str(self.repo), None, 'unset'))
+        self.assertEqual(shown['effective']['Merge'], 'no (repository)')
+        self.assertEqual(shown['effective']['Push and pull requests'], 'not set (user)')
+        self.assertRegex(shown['token'], r'^[0-9a-f]{64}$')
+        self.assertFalse(self.file().exists())
+        with mock.patch('os.getcwd', return_value=str(self.repo)), \
+                mock.patch('sys.stdout', new_callable=io.StringIO) as out, \
+                mock.patch('sys.stderr', new_callable=io.StringIO):
+            self.assertEqual(self.pp.main(['settings', '--set', value]), 1)  # no preview token, no write
+            self.assertFalse(self.file().exists())
+            self.assertEqual(self.pp.main(['settings', '--set', value, '--expect', shown['token']]), 0)
+            self.assertEqual(self.pp.main(['settings', '--set', 'autopilot={"merge": "perhaps"}', '--dry-run']), 1)
+            self.assertEqual(self.pp.main(['settings', '--set', 'parallel=4', '--expect', shown['token']]), 1)
+        self.assertNotIn('packages', out.getvalue())  # apply prints the key and changed, never the value
+        self.assertEqual(json.loads(self.file().read_text())['autopilot'], {'merge': 'no', 'roots': ['packages']})
+        with mock.patch('os.getcwd', return_value=str(self.repo)), \
+                mock.patch('sys.stdout', new_callable=io.StringIO) as out:
+            self.assertEqual(self.pp.main(['settings', '--clear', 'autopilot', '--dry-run']), 0)
+            cleared = json.loads(out.getvalue())
+            self.assertEqual((cleared['action'], cleared['autopilot']), ('remove', None))
+            self.assertEqual(self.pp.main(['settings', '--clear', 'autopilot', '--expect', cleared['token']]), 0)
+        self.assertFalse(self.file().exists())
+
     def test_the_cli_writes_the_file_and_never_echoes_values(self):
         import io
         before = self.host.read_bytes()
@@ -1409,6 +1498,47 @@ class IdentityTest(unittest.TestCase):
                 finally:
                     os.chmod(path, before)
         self.assertEqual(self.codes(linked), {self.own(self.main)})
+
+    def test_the_authorization_resolver_says_found_absent_or_unknown_never_the_own_root(self):
+        store = self.pp.store
+        deep = self.main.joinpath('src', *['level'] * 25)
+        deep.mkdir(parents=True)
+        self.assertEqual(store.identity(deep), ('found', store.Identity(
+            self.main, self.main, self.main / '.git', self.main / '.git')))
+        linked = self.link('linked', self.main / '.git/worktrees/linked')
+        (linked / 'sub').mkdir()
+        self.assertEqual(store.identity(linked / 'sub'), ('found', store.Identity(
+            linked, self.main, self.main / '.git/worktrees/linked', self.main / '.git')))
+        outside = self.base / 'outside/inner'
+        outside.mkdir(parents=True)
+        self.assertEqual(store.identity(outside), ('absent', None))
+        # Every rejected layout is unknown, where `layout` (display and capacity only) falls back to the own root.
+        intruder = self.base / 'intruder'
+        intruder.mkdir()
+        (intruder / '.git').write_text('gitdir: %s\n' % (self.main / '.git/worktrees/linked'))
+        self.assertEqual(store.identity(intruder), ('unknown', None))
+        self.assertEqual(store.layout(intruder)[0], intruder)
+        for name, gitdir, commondir in (
+                ('borrow', self.base / 'borrow/meta/.git/worktrees/x', str(self.main / '.git')),
+                ('flat', self.base / 'flat-meta/worktrees/x', str(self.main / '.git'))):
+            with self.subTest(name=name):
+                self.assertEqual(store.identity(self.link(name, gitdir, commondir, back=self.base / name / '.git')),
+                                 ('unknown', None))
+        for path in (linked / '.git', self.main / '.git/worktrees/linked/gitdir'):
+            with self.subTest(unsafe=path.name):
+                os.chmod(path, 0o666)
+                try:
+                    self.assertEqual(store.identity(linked), ('unknown', None))
+                finally:
+                    os.chmod(path, 0o644)
+        (self.main / '.git/worktrees/linked/gitdir').unlink()
+        self.assertEqual(store.identity(linked), ('unknown', None))
+        link = self.base / 'link'
+        link.mkdir()
+        (link / '.git').symlink_to(self.main / '.git')
+        self.assertEqual(store.identity(link), ('unknown', None))
+        (self.main / '.git/commondir').write_text('../elsewhere\n')
+        self.assertEqual(store.identity(self.main), ('unknown', None))
 
 
 class ForeignCommonTest(unittest.TestCase):

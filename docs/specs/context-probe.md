@@ -1,6 +1,6 @@
 # Context probe: read the session's context size from the host CLI
 
-Status: accepted; owner decision 2026-11-11, scoped exception recorded in `CLAUDE.md`; no code yet.
+Status: implemented; release 0.2.5 `context_snapshot.py probe` for Claude Code and Codex with the session-start `Session id:` line, reusing the quota probe's confirmed executables; live delivery on a real host is unverified.
 
 ## Why
 
@@ -22,6 +22,15 @@ The skill triggers a command that asks the host CLI for the current session's co
 - Session id: the session-start hook prints one line `Session id: <id>` (Claude `session_id`, Codex thread id) so the model can pass its own id; the hook validates the id's character set and length before printing it and prints nothing otherwise. The id then sits in the host's model context, which the host may keep; this is a change from the snapshot design, which avoided exposing the id.
 - Executables are resolved and confirmed in `setup` as the quota probe does; the probe refuses an unconfirmed path.
 - `FNL_CONTEXT_PROBE=off` disables it; the probe is never run from a hook, a timer or a worker.
+
+## Implementation (0.2.5)
+
+- Executables: the probe has no setup step of its own. It reads the quota probe's canonical record (`Quota probe: on` with a `Resolved` path and its digest for `claude` or `codex`) and runs it through the quota probe's checks, environment and private working folder; without that record it refuses. A separate consent for the context probe is open for the owner.
+- Working folder: both hosts run in the quota probe's empty private folder, never the repository, as the rule requires. Whether `claude -p --resume <id>` finds the session from there is unverified; when it does not, the probe exits 3.
+- Claude config folders: with one folder listed in the quota record the probe uses it; with more, `--config <label>` names the install, and `CLAUDE_CONFIG_DIR` is set as the quota probe sets it.
+- Session id: the hook and the probe accept only a lowercase UUID. Codex delivery of the thread id as the hook's `session_id` is unverified.
+- Version: stored as `unknown`; neither reply is read for a version.
+- Codex: the probe also refuses a thread whose `thread/read` reply carries `archived` other than `false`, a reply for another thread id and any error reply.
 
 ## Open
 

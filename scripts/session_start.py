@@ -3,20 +3,26 @@
 
 After the reminder it prints the plugin's state from local files only: the
 delegation mode, roles and posting state, cached quota and the count of open ledger
-dispatches and, when available, this session's fresh context counts. Every value
-printed is a fixed word or a capped integer, never text read from a file, because the hook also runs in untrusted repositories. It
+dispatches, a fixed warning when the repository's main checkout is off its default
+branch and, when available, this session's fresh context counts. Every value
+printed is a fixed word or a capped integer, never text read from a file, because the hook also runs in untrusted repositories.
+The one exception is the host's own session id, printed only when it is a lowercase UUID, so the agent can run the
+context probe for its own session. It
 starts no process, makes no network call and writes nothing.
 """
 
 import json
 import math
 import os
+import re
 import sys
 from pathlib import Path
 
 MODES = ("manual", "suggest", "auto")
 # Cache key in `quota_probe.py` -> the family name printed.
 FAMILIES = (("claude", "claude-code"), ("codex", "codex"), ("agy", "antigravity"), ("zcode", "zcode"))
+# The only id shape printed for the context probe; anything else prints nothing.
+SESSION_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 LEDGER_LIMIT = 4 * 1024 * 1024  # a larger ledger reads as unknown at session start
 OPEN_CAP = 99
 
@@ -177,6 +183,29 @@ def away_line():
         return ""
 
 
+CHECKOUT_LINE = ('The main checkout is not on its default branch: keep it on the default branch and work in a worktree '
+                 '(commit-messages "Branches").\n')
+ORIGIN_HEAD = "ref: refs/remotes/origin/"
+
+
+def checkout_line():
+    """The fixed line when the main checkout of the working directory's repository is off its default branch.
+
+    Reads Git metadata through the no-follow, owner-checked readers (no Git process); prints no name or path.
+    An unknown default (no symbolic `refs/remotes/origin/HEAD`) or any error prints nothing.
+    """
+    try:
+        from git_metadata import bounded, git_dirs
+        _, common = git_dirs(os.getcwd())
+        default = bounded(common / "refs/remotes/origin/HEAD", 4096).decode("utf-8").strip()
+        if not default.startswith(ORIGIN_HEAD) or not default[len(ORIGIN_HEAD):]:
+            return ""
+        head = bounded(common / "HEAD", 4096).decode("utf-8").strip()
+        return "" if head == "ref: refs/heads/" + default[len(ORIGIN_HEAD):] else CHECKOUT_LINE
+    except Exception:
+        return ""
+
+
 def state_block():
     return ("\nPlugin state (local files; fixed words and counts only)\n"
             f"Delegation mode: {delegation_word()}\n"
@@ -185,7 +214,8 @@ def state_block():
             f"Quota (cached): {quota_words()}\n"
             f"Open ledger dispatches: {open_dispatches()}\n"
             f"Parallel slots: {parallel_words()}\n"
-            f"{away_line()}")
+            f"{away_line()}"
+            f"{checkout_line()}")
 
 
 def main():
@@ -226,6 +256,8 @@ def main():
         raw = sys.stdin.buffer.read(64 * 1024 + 1)
         if len(raw) <= 64 * 1024:
             event = json.loads(raw.decode("utf-8"))
+            if isinstance(event, dict) and isinstance(event.get("session_id"), str) and SESSION_ID.fullmatch(event["session_id"]):
+                print(f"Session id: {event['session_id']}")
             if (isinstance(event, dict) and event.get("source") != "compact"
                     and isinstance(event.get("session_id"), str) and event["session_id"]):
                 try:

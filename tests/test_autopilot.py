@@ -18,6 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'skills/delegate/scripts/autopilot.py'
 SETUP = ('## Autopilot\n- Hosts: Claude Code\n- Task choice: choose\n'
          '- Push and pull requests: yes\n- Merge: yes\n- Trusted authors: own\n')
+ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
+                 '[remote "origin"]\n\turl = https://github.com/example/demo.git\n'
+                 '\tfetch = +refs/heads/*:refs/remotes/origin/*\n')
 
 
 class AutopilotBase(unittest.TestCase):
@@ -31,6 +34,8 @@ class AutopilotBase(unittest.TestCase):
         (self.repo / '.git/refs/remotes/origin').mkdir(parents=True)
         (self.repo / '.git/HEAD').write_text('ref: refs/heads/topic\n')
         (self.repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/main\n')
+        (self.repo / '.git/config').write_text(ORIGIN_CONFIG)
+        self.cwd = self.repo
         self.clock = 1800000000
 
     def load(self):
@@ -46,7 +51,7 @@ class AutopilotBase(unittest.TestCase):
 
     def invoke(self, *argv):
         ap = self.load()
-        with patch.object(ap, 'now', return_value=self.clock), patch('os.getcwd', return_value=str(self.repo)):
+        with patch.object(ap, 'now', return_value=self.clock), patch('os.getcwd', return_value=str(self.cwd)):
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 status = ap.main(list(argv))
@@ -181,9 +186,13 @@ class AutopilotTest(AutopilotBase):
                      ['git', 'add', '--', 'src/example.py', 'tests/test_example.py'],
                      ['git', 'commit', '-m', 'Fix example'], ['git', 'push', '-u', 'origin', 'HEAD:refs/heads/topic'],
                      ['git', 'merge', 'origin/main'], ['gh', 'pr', 'view', '7', '--json', 'headRefOid'],
-                     ['gh', 'pr', 'checks', '7'], ['gh', 'pr', 'create', '--title', 'Example', '--body', 'Details'],
-                     ['gh', 'pr', 'edit', '7', '--title', 'Example'], ['gh', 'issue', 'list'],
-                     ['gh', 'pr', 'merge', '7', '--squash', '--match-head-commit', 'a' * 40]):
+                     ['gh', 'pr', 'checks', '7'],
+                     ['gh', 'pr', 'create', '--title', 'Example', '--body', 'Details', '--head', 'topic',
+                      '--repo', 'github.com/example/demo'],
+                     ['gh', 'pr', 'edit', '7', '--title', 'Example', '--repo', 'github.com/example/demo'],
+                     ['gh', 'issue', 'list'],
+                     ['gh', 'pr', 'merge', '7', '--squash', '--match-head-commit', 'a' * 40,
+                      '--repo', 'github.com/example/demo']):
             with self.subTest(argv=argv):
                 self.check(argv)
         for name in ('ledger.py', 'record.py'):
@@ -277,7 +286,7 @@ class AutopilotTest(AutopilotBase):
 
     def test_review_findings_security_one(self):
         self.start()
-        self.repo = ROOT  # the checkout whose scripts are the installed wrappers
+        self.repo = self.cwd = ROOT  # the checkout whose scripts are the installed wrappers
         # New modules next to the trusted wrappers could shadow an import in them, so the folders are protected.
         for folder in ('review-gate', 'delegate', 'setup'):
             for name in ('struct.py', 'zlib.py', 'helper.py', 'pkg/__init__.py'):
@@ -727,8 +736,8 @@ class AwayDecisionTest(AutopilotBase):
         tag = (['gh', 'release', 'create', 'v1', '--notes', 'publish'], ['git', 'tag', '-a', 'v1', '-m', 'publish'],
                ['git', 'tag', '-a', 'v1', '-m', 'deploy'], ['gh', 'release', 'create', 'v1', '--title', 'deploy:uat'])
         publish = (['npm', 'publish', '--tag', 'next'], ['pnpm', 'publish', '--access', 'public'])
-        local = (['git', 'commit', '-m', 'publish'], ['gh', 'pr', 'create', '--title', 'deploy', '--body', 'publish'],
-                 ['git', 'commit', '-m', 'deploy'])
+        local = (['git', 'commit', '-m', 'publish'], ['gh', 'pr', 'create', '--title', 'deploy', '--body', 'publish', '--head', 'topic',
+                  '--repo', 'github.com/example/demo'], ['git', 'commit', '-m', 'deploy'])
         # Tags and releases stop, Publishing decide: free text naming publishing opens no tag or release.
         self.start(base + '- Tags and releases: stop\n- Publishing: decide\n')
         for argv in tag:
@@ -823,7 +832,7 @@ class AwayDecisionTest(AutopilotBase):
         (tools / 'codex').write_bytes(b'\x7fsynthetic\n')
         (tools / 'codex').chmod(0o700)
         (self.repo / 'src').mkdir()
-        self.repo = self.repo / 'src'
+        self.repo = self.cwd = self.repo / 'src'
         self.check_as(at(tools / 'codex'), tier=3, code='unknown', real=False)
         # A symlink outside the repository that leads to repository code.
         links = self.home / 'links'
@@ -940,9 +949,12 @@ class AwayDecisionTest(AutopilotBase):
 
     def test_branch_deletion_bundled_with_a_merge_needs_its_own_category(self):
         module = self.load()
-        argv = ['gh', 'pr', 'merge', '215', '--merge', '--match-head-commit=' + 'a' * 40]
+        # Bind the merge target to a fixed verified target, not to whatever Git config the runner's checkout holds.
+        argv = ['gh', 'pr', 'merge', '215', '--merge', '--match-head-commit=' + 'a' * 40,
+                '--repo', 'github.com/example/demo']
         applied = {**module.DEFAULTS, **{c: 'stop' for c in module.CATEGORIES}, 'Merge': 'yes',
-                   module.CONSENT: 'no', module.TARGETS: []}
+                   module.CONSENT: 'no', module.TARGETS: [],
+                   module.CONTEXT: module.Context('found', None, 'user', 'github.com/example/demo')}
         self.assertEqual(module.classify_argv(argv, applied), 'allowed')
         self.assertEqual(module.classify_argv(argv + ['--delete-branch'], applied), 'forbidden')
         applied['Recoverable deletion'] = 'decide'
@@ -1010,6 +1022,850 @@ class AwayDecisionTest(AutopilotBase):
         status, output = self.invoke('packet-check', '--file', str(self.packet([])))
         self.assertEqual(status, 0, output)
         self.assertEqual(json.loads(output)['excerpts'], [])
+
+
+PIN = ['--match-head-commit', 'a' * 40]
+NO = SETUP.replace('- Merge: yes', '- Merge: no').replace('requests: yes', 'requests: no')
+
+
+class ProjectScopeTest(AutopilotBase):
+    """A repository's approved `autopilot` object in its settings file wins for five keys; user scope stays default."""
+
+    def setUp(self):
+        super().setUp()
+        spec = importlib.util.spec_from_file_location('project_store_tested', SCRIPT.parent / 'project_store.py')
+        self.store = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.store)
+
+    def project(self, value):
+        found, ident = self.store.identity(self.repo)
+        self.store.write_setting(self.repo, 'autopilot', value, ident=ident)
+
+    def settings_file(self):
+        return self.repo / '.finolabs/vibecode/settings.json'
+
+    def test_a_project_value_wins_over_the_user_value_for_merge_and_push(self):
+        self.start(NO)
+        self.project({'merge': 'yes', 'push-and-pull-requests': 'yes'})
+        self.check(['gh', 'pr', 'merge', '7'] + PIN + ['--repo', 'github.com/example/demo'])
+        self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'])
+        self.check(['gh', 'pr', 'create', '--head', 'topic', '--repo', 'github.com/example/demo'])
+        self.project({'merge': 'no', 'push-and-pull-requests': 'no'})
+        # check re-reads the project values on each call; the user-only lease hash is unchanged.
+        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+        self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
+        self.check(['git', 'status'])
+
+    def test_the_lease_hash_covers_the_user_section_only(self):
+        self.start()
+        before = self.lease()['settings_hash']
+        self.project({'merge': 'no', 'roots': ['packages']})
+        self.check(['git', 'status'])
+        self.assertEqual(self.lease()['settings_hash'], before)
+        self.setup_config(SETUP + '- Max runs: 5\n')
+        self.check(['git', 'status'], tier=3, code='setup-changed')
+
+    def test_an_unapproved_or_branch_supplied_file_sets_nothing(self):
+        self.start(NO)
+        self.settings_file().parent.mkdir(parents=True, mode=0o700)
+        self.settings_file().write_text(json.dumps({'version': 1, 'autopilot': {'merge': 'yes', 'roots': ['packages']}}))
+        self.settings_file().chmod(0o600)
+        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+        (self.repo / 'packages').mkdir()
+        self.check(paths=['packages/app.py'], tier=3, code='unknown')
+
+    def test_a_broken_approved_file_falls_back_to_off_never_wider(self):
+        self.start()
+        self.project({'roots': ['packages']})
+        self.check(['gh', 'pr', 'merge', '7'] + PIN + ['--repo', 'github.com/example/demo'])
+        self.check(paths=['packages/app.py'])
+        for change in (lambda f: f.write_bytes(f.read_bytes() + b' '), lambda f: f.unlink(),
+                       lambda f: f.chmod(0o666)):
+            with self.subTest(change=change):
+                self.store.reset_settings(self.repo)
+                self.project({'roots': ['packages']})
+                change(self.settings_file())
+                self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+                self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
+                self.check(['gh', 'pr', 'create'], tier=3, code='push-disabled')
+                self.check(paths=['packages/app.py'], tier=3, code='unknown')
+                self.check(['git', 'status'])
+        # An unreadable project state (an error while resolving it) is off too.
+        self.store.reset_settings(self.repo)
+        ap = self.load()
+        with patch.object(ap.store, 'autopilot_binding', side_effect=OSError('synthetic')):
+            self.assertEqual(ap.effective(dict(ap.DEFAULTS, Merge='yes', Roots=[]), str(self.repo))['Merge'], 'no')
+
+    def test_project_roots_join_the_built_in_roots_with_the_same_path_rules(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        (self.repo / 'packages/app').mkdir(parents=True)
+        self.check(paths=['packages/app/main.ts'], tier=3, code='unknown')
+        self.project({'roots': ['packages', 'services']})
+        self.check(paths=['packages/app/main.ts', 'services/api.py', 'src/example.py'])
+        self.check(['git', 'add', '--', 'packages/app/main.ts'])
+        self.check(['git', 'diff', '--stat', 'services/api.py'])
+        for path, code in (('packages/app/main.exe', 'unknown'), ('packages/../src/example.py', 'unknown'),
+                           ('/packages/app/main.ts', 'unknown'), ('packages', 'unknown'), ('packages/app', 'unknown'),
+                           ('packages/.env', 'protected'), ('packages/app/settings.json', 'protected'),
+                           ('packages/hooks/pre-push.py', 'protected'), ('packages/CLAUDE.md', 'protected'),
+                           ('packages/app/autopilot.py', 'protected'), ('tools/build.py', 'unknown')):
+            with self.subTest(path=path):
+                self.check(paths=[path], tier=3, code=code)
+        target = self.home / 'synthetic'
+        target.write_text('unread')
+        (self.repo / 'packages/linked.py').symlink_to(target)
+        self.check(paths=['packages/linked.py'], tier=3, code='protected')
+        (self.repo / 'services').symlink_to(self.home, target_is_directory=True)
+        self.check(paths=['services/api.py'], tier=3, code='protected')
+
+    def test_top_level_documentation_files_are_known_paths(self):
+        self.start()
+        self.check(paths=['README.md', 'CHANGELOG.md', 'CONTRIBUTING.md'])
+        self.check(['git', 'add', 'README.md'])
+        for path, code in (('LICENSE', 'unknown'), ('NOTES.md', 'unknown'), ('readme.txt', 'unknown'),
+                           ('CLAUDE.md', 'protected'), ('AGENTS.md', 'protected'), ('./README.md', 'unknown')):
+            with self.subTest(path=path):
+                self.check(paths=[path], tier=3, code=code)
+        (self.repo / 'README.md').symlink_to(self.home / 'missing')
+        self.check(paths=['README.md'], tier=3, code='protected')
+
+    def branch(self, name, packed=False):
+        if packed:
+            with open(self.repo / '.git/packed-refs', 'a') as stream:
+                stream.write('a' * 40 + ' refs/heads/' + name + '\n')
+        else:
+            path = self.repo / '.git/refs/heads' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('a' * 40 + '\n')
+
+    def test_a_local_branch_merge_into_a_work_branch_is_tier_one_when_merge_is_yes(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.branch('feature/one')
+        self.branch('packed', packed=True)
+        for argv in (['git', 'merge', '--no-ff', 'refs/heads/feature/one'], ['git', 'merge', 'feature/one'],
+                     ['git', 'merge', '--no-ff', '--no-edit', 'refs/heads/feature/one'],
+                     ['git', 'merge', '--no-ff', 'packed'], ['git', 'merge', 'origin/main']):
+            with self.subTest(argv=argv):
+                self.check(argv)
+        for argv in (['git', 'merge', 'missing'], ['git', 'merge', 'refs/heads/missing'],
+                     ['git', 'merge', 'refs/tags/v1'], ['git', 'merge', 'refs/remotes/origin/x'],
+                     ['git', 'merge', '-s', 'ours', 'feature/one'], ['git', 'merge', '--squash', 'feature/one'],
+                     ['git', 'merge', 'feature/one', 'packed'], ['git', 'merge', '--no-ff'],
+                     ['git', 'merge', 'refs/heads/../feature/one'], ['git', 'merge', 'topic'],
+                     ['git', 'merge', '-X', 'theirs', 'feature/one'], ['git', 'merge', '--no-ff=x', 'feature/one'],
+                     ['git', 'merge', 'feature/one~1'], ['git', 'merge', '--abort']):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code='unknown')
+        # A bare name that is also a tag (or another ref) is ambiguous: git would pick the tag first.
+        (self.repo / '.git/refs/tags').mkdir(parents=True)
+        (self.repo / '.git/refs/tags/shared').write_text('b' * 40 + '\n')
+        self.branch('shared')
+        self.check(['git', 'merge', 'shared'], tier=3, code='unknown')
+        self.check(['git', 'merge', 'refs/heads/shared'])
+        with open(self.repo / '.git/packed-refs', 'a') as stream:
+            stream.write('c' * 40 + ' refs/tags/packed\n')
+        self.check(['git', 'merge', 'packed'], tier=3, code='unknown')
+        self.branch('abcdef1')
+        self.check(['git', 'merge', 'abcdef1'], tier=3, code='unknown')  # could also read as a commit id
+        self.check(['git', 'merge', 'refs/heads/abcdef1'])
+
+    def test_a_local_merge_needs_merge_yes_and_never_targets_the_default_branch(self):
+        self.start(NO)
+        self.branch('feature')
+        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='merge-disabled')
+        self.project({'merge': 'yes'})
+        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'])
+        for head in ('main', 'stable'):
+            with self.subTest(head=head):
+                (self.repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/stable\n')
+                (self.repo / '.git/HEAD').write_text('ref: refs/heads/' + head + '\n')
+                self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='forbidden')
+        (self.repo / '.git/HEAD').write_text('a' * 40 + '\n')  # a detached head is not a work branch
+        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='forbidden')
+        (self.repo / '.git/HEAD').write_text('ref: refs/heads/topic\n')
+        (self.repo / '.git/refs/remotes/origin/HEAD').unlink()
+        self.check(['git', 'merge', '--no-ff', 'refs/heads/feature'], tier=3, code='unknown')
+
+    def test_delegated_runs_outside_the_wrapper_or_in_write_modes_stay_tier_three(self):
+        self.start(SETUP.replace('Claude Code', 'Claude Code, Codex') + '- Max actions per hour: 1000\n')
+        for argv in (['claude', '-p', '--model', 'm', '--output-format', 'json', '--', BRIEF],
+                     ['claudework', '-p', BRIEF], ['/bin/zsh', '-ic', 'claudework "$@"', 'claudework', '-p', BRIEF],
+                     ['codex', 'exec', '-m', 'm', '-s', 'workspace-write', '--', BRIEF],
+                     ['perl', '-e', 'alarm 900; exec @ARGV', 'codex', 'exec', '--', BRIEF],
+                     ENV + ['--family', 'claude', '--', '/bin/zsh', '-ic', 'claudework "$@"', 'claudework', '-p', BRIEF],
+                     CODEX[:CODEX.index('read-only')] + ['workspace-write'] + CODEX[CODEX.index('read-only') + 1:],
+                     CLAUDE[:CLAUDE.index('plan')] + ['acceptEdits'] + CLAUDE[CLAUDE.index('plan') + 1:]):
+            with self.subTest(argv=argv[:6]):
+                self.check(argv, tier=3, code='unknown')
+        self.assertEqual(self.lease()['counters']['actions'], 0)
+
+
+class SecurityRoundOneTest(AutopilotBase):
+    """Repository identity, merge target binding, symbolic branches and hexadecimal names fail closed."""
+
+    def setUp(self):
+        super().setUp()
+        spec = importlib.util.spec_from_file_location('project_store_tested', SCRIPT.parent / 'project_store.py')
+        self.store = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.store)
+
+    def project(self, value, repo=None):
+        found, ident = self.store.identity(repo or self.repo)
+        self.store.write_setting(repo or self.repo, 'autopilot', value, ident=ident)
+
+    def test_a_deep_descendant_keeps_the_project_values(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.project({'merge': 'no', 'push-and-pull-requests': 'no'})
+        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+        deep = self.repo.joinpath(*['level'] * 25)
+        deep.mkdir(parents=True)
+        self.cwd = deep
+        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+        self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
+        self.check(['gh', 'pr', 'create'], tier=3, code='push-disabled')
+
+    def test_a_discovery_error_is_the_strict_state_not_the_user_values(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        locked = self.repo / 'locked'
+        (locked / 'inner').mkdir(parents=True)
+        locked.chmod(0o311)  # searchable, not listable: an ancestor that cannot be opened
+        self.addCleanup(locked.chmod, 0o755)
+        self.cwd = locked / 'inner'
+        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+        self.check(['gh', 'pr', 'create'], tier=3, code='push-disabled')
+        ap = self.load()
+        for state in (('unknown', None),):
+            with patch.object(ap.store, 'identity', return_value=state):
+                result = ap.effective(dict(ap.DEFAULTS, Merge='yes', Roots=['x']), str(self.repo))
+            self.assertEqual({k: result[k] for k in ap.OFF}, ap.OFF)
+
+    def test_a_dot_git_link_is_not_skipped_for_a_parent_repository(self):
+        self.start(NO)
+        self.project({'merge': 'yes', 'push-and-pull-requests': 'yes'})
+        nested = self.repo / 'nested'
+        nested.mkdir()
+        (nested / '.git').symlink_to(self.home / 'elsewhere')
+        self.cwd = nested
+        self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
+
+    def test_a_merge_or_pull_request_on_another_repository_is_tier_three(self):
+        self.start(NO.replace('- Merge: no', '- Merge: yes').replace('requests: no', 'requests: yes')
+                   + '- Max actions per hour: 1000\n')
+        for flag in (['--repo', 'other/restricted'], ['--repo=other/restricted'], ['-R', 'other/restricted'],
+                     ['-R=other/restricted'], ['-Rother/restricted'], ['--repo', 'other.example/example/demo'],
+                     ['--repo', 'https://github.com/example/demo'], ['--repo', 'example/demo/extra'],
+                     ['--repo', 'example/demo', '--repo', 'other/restricted'], [], ['--repo', 'example/demo'],
+                     ['-R', 'EXAMPLE/Demo'], ['-R', 'github.com/example/demo']):
+            for argv in (['gh', 'pr', 'merge', '7'] + PIN, ['gh', 'pr', 'create', '--head', 'topic'],
+                         ['gh', 'pr', 'edit', '7']):
+                with self.subTest(flag=flag, argv=argv[:3]):
+                    status, output = self.invoke('check', '--argv-json', json.dumps(argv + flag))
+                    self.assertEqual(json.loads(output)['tier'], 3, output)
+        for flag in (['--repo', 'github.com/example/demo'], ['--repo=github.com/EXAMPLE/Demo']):
+            with self.subTest(flag=flag):
+                self.check(['gh', 'pr', 'merge', '7'] + PIN + flag)
+                self.check(['gh', 'pr', 'create', '--head', 'topic'] + flag)
+                self.check(['gh', 'pr', 'edit', '7'] + flag)
+
+    def test_project_merge_never_authorizes_another_repository(self):
+        self.start(NO + '- Max actions per hour: 1000\n')
+        self.project({'merge': 'yes', 'push-and-pull-requests': 'yes'})
+        self.check(['gh', 'pr', 'merge', '7'] + PIN + ['--repo', 'github.com/example/demo'])
+        self.check(['gh', 'pr', 'merge', '7', '--repo', 'github.com/other/restricted'] + PIN, tier=3, code='forbidden')
+        self.check(['gh', 'pr', 'create', '--head', 'topic', '--repo', 'github.com/other/restricted'],
+                   tier=3, code='forbidden')
+
+    def test_the_target_repository_must_be_read_safely_from_the_checkout(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        merge = ['gh', 'pr', 'merge', '7'] + PIN + ['--repo', 'github.com/example/demo']
+        config = self.repo / '.git/config'
+        for text in ('', ORIGIN_CONFIG + '[include]\n\tpath = extra\n',
+                     ORIGIN_CONFIG + '[includeIf "gitdir:x"]\n\tpath = extra\n',
+                     ORIGIN_CONFIG + '[url "https://github.com/other/"]\n\tinsteadOf = https://github.com/example/\n',
+                     ORIGIN_CONFIG + '\turl = https://github.com/other/restricted.git\n',
+                     '[remote "origin"]\n\turl = https://gitlab.example/example/demo.git\n',
+                     '[remote "origin"]\n\turl = /srv/example/demo.git\n',
+                     '[remote "origin"\n\turl = https://github.com/example/demo.git\n'):
+            with self.subTest(text=text):
+                config.write_text(text)
+                self.check(merge, tier=3, code='unknown')
+                self.check(['gh', 'pr', 'create', '--head', 'topic', '--repo', 'github.com/example/demo'],
+                           tier=3, code='unknown')
+        # An explicit --repo equal to origin binds the target even beside another remote.
+        config.write_text(ORIGIN_CONFIG + '[remote "upstream"]\n\turl = https://github.com/other/restricted.git\n')
+        self.check(merge)
+        config.unlink()
+        self.check(merge, tier=3, code='unknown')
+        for url in ('git' '@github.com:example/demo.git', 'ssh://git' '@github.com/example/demo', 'https://github.com/example/demo'):
+            with self.subTest(url=url):
+                config.write_text('[remote "origin"]\n\turl = ' + url + '\n')
+                self.check(merge)
+        (self.repo / '.git/config.worktree').write_text('[remote "origin"]\n\turl = https://github.com/other/restricted\n')
+        self.check(merge, tier=3, code='unknown')
+
+    def test_a_symbolic_current_branch_to_the_default_branch_is_forbidden(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        heads = self.repo / '.git/refs/heads'
+        heads.mkdir(parents=True)
+        (heads / 'feature').write_text('a' * 40 + '\n')
+        (heads / 'work').write_text('b' * 40 + '\n')
+        merge = ['git', 'merge', 'refs/heads/feature']
+        (heads / 'topic').write_text('ref: refs/heads/work\n')
+        self.check(merge)  # a link to an ordinary work branch stays a work branch
+        for target, code in (('refs/heads/main', 'forbidden'), ('refs/heads/stable', 'forbidden'),
+                             ('refs/heads/trunk', 'forbidden'), ('refs/heads/loop', 'unknown'),
+                             ('refs/tags/v1', 'unknown'), ('refs/remotes/origin/main', 'unknown')):
+            with self.subTest(target=target):
+                (self.repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/stable\n')
+                (heads / 'topic').write_text('ref: ' + target + '\n')
+                (heads / 'loop').write_text('ref: refs/heads/topic\n')
+                self.assertIn(self.check_code(merge), {code, 'forbidden'})
+                self.assertEqual(self.check_code(['git', 'merge', 'origin/main']), 'forbidden')
+        (heads / 'loop').unlink()
+        (heads / 'topic').write_text('ref: refs/heads/main\n')
+        self.check(['git', 'push', 'origin', 'HEAD:HEAD'], tier=3, code='forbidden')
+
+    def check_code(self, argv):
+        status, output = self.invoke('check', '--argv-json', json.dumps(argv))
+        result = json.loads(output)
+        self.assertEqual(result['tier'] == 1, result['code'] == 'allowed', output)
+        return result['code']
+
+    def git_repo(self, name):
+        import shutil
+        import subprocess
+        if not shutil.which('git', path=os.defpath + ':/usr/local/bin:/opt/homebrew/bin'):
+            self.skipTest('git is not installed')
+        repo = self.home / name
+        repo.mkdir()
+        env = {'HOME': str(self.home), 'PATH': os.defpath + ':/usr/local/bin:/opt/homebrew/bin',
+               'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull}
+
+        def git(*argv, cwd=repo):
+            return subprocess.run(['git', *argv], cwd=cwd, env=env, capture_output=True, check=True,
+                                  text=True).stdout.strip()
+        git('init', '-q', '-b', 'main')
+        git('remote', 'add', 'origin', 'https://github.com/example/demo.git')
+        for message in ('First', 'Second'):
+            git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-q',
+                '--allow-empty', '-m', message)
+        git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+        git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+        git('branch', 'feature')
+        return repo, git
+
+    def test_real_git_symbolic_head_to_main_in_ordinary_and_linked_worktrees(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        repo, git = self.git_repo('real')
+        git('branch', 'work')
+        git('symbolic-ref', 'refs/heads/topic', 'refs/heads/work')
+        git('symbolic-ref', 'HEAD', 'refs/heads/topic')
+        self.cwd = repo
+        self.assertEqual(self.check_code(['git', 'merge', 'refs/heads/feature']), 'allowed')
+        git('symbolic-ref', 'refs/heads/topic', 'refs/heads/main')
+        self.assertEqual((repo / '.git/HEAD').read_text(), 'ref: refs/heads/topic\n')
+        self.assertEqual(git('rev-parse', '--symbolic-full-name', 'HEAD'), 'refs/heads/main')
+        self.check(['git', 'merge', 'refs/heads/feature'], tier=3, code='forbidden')
+        self.check(['git', 'merge', 'origin/main'], tier=3, code='forbidden')
+        self.check(['git', 'push', 'origin', 'HEAD:HEAD'], tier=3, code='forbidden')
+        linked = self.home / 'linked'
+        git('worktree', 'add', '-q', str(linked), '-b', 'side')
+        git('symbolic-ref', 'refs/heads/alias', 'refs/heads/main')
+        git('symbolic-ref', 'HEAD', 'refs/heads/alias', cwd=linked)
+        self.cwd = linked
+        self.check(['git', 'merge', 'refs/heads/feature'], tier=3, code='forbidden')
+        git('symbolic-ref', 'HEAD', 'refs/heads/side', cwd=linked)
+        self.check(['git', 'merge', 'refs/heads/feature'])
+
+    def test_real_git_hexadecimal_branch_names_in_any_case_are_ambiguous(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        repo, git = self.git_repo('hex')
+        git('checkout', '-q', '-b', 'topic')
+        first, second = git('rev-parse', 'HEAD~1'), git('rev-parse', 'HEAD')
+        self.cwd = repo
+        for name in (first.upper(), first[:7].upper(), 'AbCdEf1', 'ABCD', 'f' * 64, 'deadBEEF' * 8):
+            with self.subTest(name=name):
+                git('branch', name, second)
+                if name == first.upper():
+                    # Git itself reads the bare name as the first commit, not the branch the classifier validated.
+                    self.assertEqual(git('rev-parse', name), first)
+                    self.assertEqual(git('rev-parse', 'refs/heads/' + name), second)
+                self.check(['git', 'merge', name], tier=3, code='unknown')
+                self.check(['git', 'merge', 'refs/heads/' + name])
+                git('branch', '-q', '-D', name)
+        git('branch', 'shared')
+        git('tag', 'shared')
+        self.check(['git', 'merge', 'shared'], tier=3, code='unknown')
+        self.check(['git', 'merge', 'feature'])
+
+
+MANY = '- Max actions per hour: 1000\n'
+REPO = ['--repo', 'github.com/example/demo']
+MERGE = ['gh', 'pr', 'merge', '7'] + PIN + REPO
+CREATE = ['gh', 'pr', 'create', '--head', 'topic'] + REPO
+EDIT = ['gh', 'pr', 'edit', '7', '--title', 'Reviewed'] + REPO
+PUSH = ['git', 'push', 'origin', 'HEAD:refs/heads/topic']
+STRICT = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', 'Trusted authors': 'own', 'Roots': []}
+
+
+class PolicyContextTest(AutopilotBase):
+    """One identity-bound policy context decides the five project-scoped values, through the full check entry point."""
+
+    def setUp(self):
+        super().setUp()
+        spec = importlib.util.spec_from_file_location('project_store_policy', SCRIPT.parent / 'project_store.py')
+        self.store = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.store)
+
+    def ident(self, root=None):
+        found, ident = self.store.identity(root or self.repo)
+        self.assertEqual(found, 'found')
+        return ident
+
+    def project(self, value, root=None):
+        ident = self.ident(root)
+        self.store.write_setting(ident.checkout, 'autopilot', value, ident=ident)
+
+    def approval(self, root=None):
+        return self.root / 'state/settings-approved' / (self.store.code_of(root or self.repo) + '.json')
+
+    def settings_file(self, root=None):
+        return (root or self.repo) / '.finolabs/vibecode/settings.json'
+
+    def effective(self):
+        status, output = self.invoke('effective')
+        self.assertEqual(status, 0, output)
+        return json.loads(output)
+
+    def check_code(self, argv):
+        status, output = self.invoke('check', '--argv-json', json.dumps(argv))
+        result = json.loads(output)
+        self.assertEqual(result['tier'] == 1, result['code'] == 'allowed', output)
+        return result['code']
+
+    def codes(self):
+        """Every bound mutation's code, and proof that the effective view agrees with check."""
+        found = {name: self.check_code(argv) for name, argv in
+                 (('merge', MERGE), ('create', CREATE), ('edit', EDIT), ('push', PUSH))}
+        values = self.effective()['values']
+        self.assertEqual(found['merge'] == 'allowed', values['Merge'] == 'yes', (found, values))
+        for name in ('create', 'edit', 'push'):
+            self.assertEqual(found[name] == 'allowed', values['Push and pull requests'] == 'yes', (found, values))
+        return found
+
+    def git_repo(self, name, origin='https://github.com/example/demo.git'):
+        import shutil
+        import subprocess
+        if not shutil.which('git', path=os.defpath + ':/usr/local/bin:/opt/homebrew/bin'):
+            self.skipTest('git is not installed')
+        repo = self.home / name
+        repo.mkdir(parents=True)
+        env = {'HOME': str(self.home), 'PATH': os.defpath + ':/usr/local/bin:/opt/homebrew/bin',
+               'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull}
+
+        def git(*argv, cwd=repo):
+            return subprocess.run(['git', *argv], cwd=cwd, env=env, capture_output=True, check=True,
+                                  text=True).stdout.strip()
+        git('init', '-q', '-b', 'main')
+        if origin:
+            git('remote', 'add', 'origin', origin)
+        git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-q',
+            '--allow-empty', '-m', 'First')
+        git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+        git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+        git('checkout', '-q', '-b', 'topic')
+        git('branch', 'feature')
+        return repo, git
+
+    # Part 2: the permission matrix
+
+    def test_both_override_directions_and_omitted_keys_inherit(self):
+        self.start(NO + MANY)
+        self.assertEqual(self.effective()['values'], dict(STRICT, **{'Task choice': 'choose'}))
+        self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'push-disabled',
+                                        'edit': 'push-disabled', 'push': 'push-disabled'})
+        # user no -> project yes
+        self.project({'merge': 'yes', 'push-and-pull-requests': 'yes'})
+        self.assertEqual(set(self.codes().values()), {'allowed'})
+        self.assertEqual(self.effective()['values']['Task choice'], 'choose')  # omitted, so inherited
+        # user yes -> project no, with push omitted and so inherited
+        self.assertEqual(self.invoke('stop')[0], 0)
+        self.start(SETUP + MANY)
+        self.project({'merge': 'no'})
+        self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'allowed', 'edit': 'allowed',
+                                        'push': 'allowed'})
+        # A new object replaces the whole old one: merge is no longer set, so the user's yes applies again.
+        self.project({'task-choice': 'listed', 'roots': ['packages']})
+        self.assertEqual(set(self.codes().values()), {'allowed'})
+        self.assertEqual(self.effective()['values'], {'Task choice': 'listed', 'Push and pull requests': 'yes',
+                                                      'Merge': 'yes', 'Trusted authors': 'own',
+                                                      'Roots': ['packages']})
+        self.assertEqual(self.effective()['repository'], 'found')
+
+    def test_every_strict_state_gives_the_whole_strict_vector(self):
+        self.start(SETUP + MANY)
+        config = self.repo / '.git/config'
+        wide = {'merge': 'yes', 'push-and-pull-requests': 'yes', 'task-choice': 'choose', 'roots': ['packages']}
+
+        def invalid():
+            raw = (json.dumps({'version': 1, 'autopilot': {'merge': 'yes', 'hosts': 'Codex'}}) + '\n').encode()
+            self.settings_file().write_bytes(raw)
+            record = json.loads(self.approval().read_text())
+            record['sha256'] = hashlib.sha256(raw).hexdigest()
+            self.approval().write_text(json.dumps(record))
+
+        def untargeted():
+            record = json.loads(self.approval().read_text())
+            record.pop('target')
+            self.approval().write_text(json.dumps(record))
+        for name, inject in (('digest mismatch', lambda: self.settings_file().write_bytes(
+                                  self.settings_file().read_bytes() + b' ')),
+                             ('missing file', lambda: self.settings_file().unlink()),
+                             ('unsafe file', lambda: self.settings_file().chmod(0o666)),
+                             ('unreadable approval', lambda: self.approval().write_text('{')),
+                             ('approval without a target', untargeted),
+                             ('invalid approved settings', invalid),
+                             ('origin changed after approval', lambda: config.write_text(
+                                 ORIGIN_CONFIG.replace('example/demo', 'other/restricted')))):
+            with self.subTest(state=name):
+                config.write_text(ORIGIN_CONFIG)
+                self.store.reset_settings(self.repo)
+                self.project(wide)
+                self.assertEqual(self.effective()['values']['Merge'], 'yes')
+                inject()
+                self.assertEqual(self.effective()['values'], STRICT)
+                self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'push-disabled',
+                                                'edit': 'push-disabled', 'push': 'push-disabled'})
+                (self.repo / 'packages').mkdir(exist_ok=True)
+                self.check(paths=['packages/app.py'], tier=3, code='unknown')
+        # Unknown identity: a discovery error and a .git link are strict too, never the user values.
+        config.write_text(ORIGIN_CONFIG)
+        locked = self.repo / 'locked'
+        (locked / 'inner').mkdir(parents=True)
+        locked.chmod(0o311)
+        self.addCleanup(locked.chmod, 0o755)
+        nested = self.repo / 'nested'
+        nested.mkdir()
+        (nested / '.git').symlink_to(self.home / 'elsewhere')
+        for cwd in (locked / 'inner', nested):
+            with self.subTest(cwd=cwd.name):
+                self.cwd = cwd
+                view = self.effective()
+                self.assertEqual((view['repository'], view['values']), ('unknown', STRICT))
+                self.assertEqual(self.check_code(MERGE), 'merge-disabled')
+                self.assertEqual(self.check_code(['git', 'merge', 'origin/main']), 'unknown')
+
+    def test_no_repository_lets_no_repository_mutation_qualify(self):
+        self.start(SETUP + MANY)
+        outside = self.home / 'outside'
+        outside.mkdir()
+        self.cwd = outside
+        view = self.effective()
+        self.assertEqual(view['repository'], 'absent')
+        self.assertEqual(view['values']['Merge'], 'yes')  # the user value, with no extra roots
+        for argv in (MERGE, CREATE, EDIT, PUSH, ['git', 'merge', 'origin/main'], ['git', 'merge', 'refs/heads/feature']):
+            with self.subTest(argv=argv[:3]):
+                self.assertNotEqual(self.check_code(argv), 'allowed')
+
+    # Part 1: identity agreement
+
+    def test_a_rejected_linked_worktree_never_regains_the_user_permissions(self):
+        self.start(SETUP + MANY)
+        main, git = self.git_repo('main')
+        linked = self.home / 'linked'
+        git('worktree', 'add', '-q', str(linked), '-b', 'side')
+        self.project({'merge': 'no', 'push-and-pull-requests': 'no'}, root=main)
+        self.cwd = linked
+        self.assertEqual(self.ident(linked).main, main)
+        self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'push-disabled',
+                                        'edit': 'push-disabled', 'push': 'push-disabled'})
+        back = main / '.git/worktrees/linked/gitdir'
+        good = back.read_text()
+        for name, change in (('missing', back.unlink),
+                             ('mismatched', lambda: back.write_text(str(self.home / 'elsewhere/.git') + '\n')),
+                             ('unsafe', lambda: back.chmod(0o666))):
+            with self.subTest(back_pointer=name):
+                if back.exists():
+                    back.unlink()
+                back.write_text(good)
+                back.chmod(0o644)
+                change()
+                view = self.effective()
+                self.assertEqual((view['repository'], view['values']), ('unknown', STRICT))
+                # With no identity the push has no branch context to read, so it is unknown before its permission.
+                self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'push-disabled',
+                                                'edit': 'push-disabled', 'push': 'unknown'})
+                for argv in (['git', 'merge', 'refs/heads/feature'], ['git', 'merge', 'origin/main']):
+                    self.assertNotEqual(self.check_code(argv), 'allowed')
+        back.write_text(good)
+        back.chmod(0o644)
+        self.assertEqual(self.effective()['repository'], 'found')
+
+    def test_deep_descendants_and_nested_repositories_use_their_own_identity(self):
+        self.start(SETUP + MANY)
+        self.project({'merge': 'no'})
+        deep = self.repo.joinpath(*['level'] * 30)
+        deep.mkdir(parents=True)
+        self.cwd = deep
+        self.assertEqual(self.check_code(MERGE), 'merge-disabled')
+        self.assertEqual(self.effective()['values']['Merge'], 'no')
+        # A nested repository has its own identity and settings: no approval there, and no origin to bind.
+        nested, _ = self.git_repo('checkout/vendor/inner', origin=None)
+        self.cwd = nested
+        view = self.effective()
+        self.assertEqual((view['repository'], view['values']['Merge']), ('found', 'yes'))
+        self.assertEqual(self.check_code(MERGE), 'unknown')  # the outer repository's target is not this one's
+
+    # Part 3: target agreement
+
+    def test_gh_mutations_need_one_explicit_full_host_repository_equal_to_the_verified_target(self):
+        self.start(SETUP + MANY)
+        for argv in (MERGE, CREATE, EDIT, ['gh', 'pr', 'merge', '7'] + PIN + ['--repo=github.com/EXAMPLE/Demo']):
+            with self.subTest(argv=argv):
+                self.check(argv)
+        bases = (['gh', 'pr', 'merge', '7'] + PIN, ['gh', 'pr', 'create', '--head', 'topic'], ['gh', 'pr', 'edit', '7'])
+        for selector, code in (([], 'unknown'), (['--repo', 'example/demo'], 'unknown'),
+                               (['-R', 'github.com/example/demo'], 'unknown'),
+                               (['--repo', 'https://github.com/example/demo'], 'unknown'),
+                               (['--repo', 'github.com/example/demo.git'], 'unknown'),
+                               (['--repo', 'other.example/example/demo'], 'unknown'),
+                               (REPO + REPO, 'unknown'), (REPO + ['--repo', 'github.com/other/restricted'], 'unknown'),
+                               (['--repo', 'github.com/other/restricted'], 'forbidden')):
+            for base in bases:
+                with self.subTest(selector=selector, argv=base[:3]):
+                    self.assertEqual(self.check_code(base + selector), code)
+        # gh's own implicit choices never matter: an explicit --repo wins over gh-resolved and GH_REPO.
+        config = self.repo / '.git/config'
+        config.write_text(ORIGIN_CONFIG + '\tgh-resolved = other/restricted\n')
+        self.check(MERGE)
+        self.assertEqual(self.check_code(['gh', 'pr', 'edit', '7']), 'unknown')
+        config.write_text(ORIGIN_CONFIG)
+        with patch.dict(os.environ, {'GH_REPO': 'other/restricted'}):
+            self.check(EDIT)
+            self.assertEqual(self.check_code(['gh', 'pr', 'edit', '7']), 'unknown')
+
+    def test_pull_request_creation_needs_an_explicit_validated_head(self):
+        self.start(SETUP + MANY)
+        create = ['gh', 'pr', 'create', '--title', 'Example']
+        self.check(create + ['--head', 'topic'] + REPO)
+        self.check(create + ['--head=feature/one'] + REPO)
+        for head, code in (([], 'unknown'), (['--head', 'main'], 'forbidden'), (['--head', 'MAIN'], 'forbidden'),
+                           (['--head', 'HEAD'], 'unknown'), (['--head', 'other:topic'], 'unknown'),
+                           (['--head', 'refs/heads/topic'], 'unknown'), (['-H', 'topic'], 'unknown'),
+                           (['--head', 'topic', '--head', 'side'], 'unknown'), (['--head', 'a/../b'], 'unknown')):
+            with self.subTest(head=head):
+                self.assertEqual(self.check_code(create + head + REPO), code)
+
+    def test_a_push_qualifies_only_when_its_effective_destination_is_bound(self):
+        self.start(SETUP + MANY)
+        config = self.repo / '.git/config'
+        same, other = 'https://github.com/example/demo.git', 'https://github.com/other/restricted.git'
+        for extra, code in (('', 'allowed'), ('\tpushurl = ' + same + '\n', 'allowed'),
+                            ('\tpushurl = ' + other + '\n', 'unknown'),
+                            ('\tpushurl = ' + same + '\n\tpushurl = ' + other + '\n', 'unknown'),
+                            ('\tmirror = true\n', 'unknown'), ('\treceivepack = other\n', 'unknown'),
+                            ('[url "https://github.com/other/"]\n\tpushInsteadOf = https://github.com/example/\n',
+                             'unknown')):
+            with self.subTest(extra=extra):
+                config.write_text(ORIGIN_CONFIG + extra)
+                self.assertEqual(self.check_code(PUSH), code)
+        # An approved project binds its target: changing origin afterwards invalidates the approval.
+        config.write_text(ORIGIN_CONFIG)
+        self.project({'push-and-pull-requests': 'yes'})
+        self.assertEqual(json.loads(self.approval().read_text())['target'], 'github.com/example/demo')
+        self.check(PUSH)
+        config.write_text(ORIGIN_CONFIG.replace('example/demo', 'other/restricted'))
+        self.assertEqual(self.check_code(PUSH), 'push-disabled')
+        self.assertEqual(self.check_code(['gh', 'pr', 'edit', '7', '--repo', 'github.com/other/restricted']),
+                         'push-disabled')
+
+    # Part 4: setup transitions
+
+    def setup_cli(self, *argv):
+        spec = importlib.util.spec_from_file_location('project_progress_policy',
+                                                      ROOT / 'skills/setup/scripts/project_progress.py')
+        pp = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pp)
+        out = io.StringIO()
+        with patch('os.getcwd', return_value=str(self.repo)), contextlib.redirect_stdout(out), \
+                contextlib.redirect_stderr(io.StringIO()):
+            status = pp.main(['settings', *argv])
+        return status, out.getvalue()
+
+    def preview(self, *argv):
+        status, output = self.setup_cli(*argv, '--dry-run')
+        self.assertEqual(status, 0, output)
+        return json.loads(output)
+
+    def apply(self, *argv):
+        token = self.preview(*argv)['token']
+        status, output = self.setup_cli(*argv, '--expect', token)
+        self.assertEqual(status, 0, output)
+
+    def test_setup_replaces_or_clears_the_whole_object_and_check_follows(self):
+        self.start(NO + MANY)
+        allow = ('--set', 'autopilot=' + json.dumps({'merge': 'yes', 'push-and-pull-requests': 'yes'}))
+        shown = self.preview(*allow)
+        self.assertEqual(shown['action'], 'replace')
+        self.assertEqual(shown['target'], 'github.com/example/demo')
+        self.assertEqual(shown['effective']['Merge'], 'yes (repository)')
+        self.assertEqual(shown['effective']['Task choice'], 'choose (user)')
+        self.assertFalse(self.settings_file().exists())  # a preview writes nothing
+        self.apply(*allow)
+        self.assertEqual(self.check_code(MERGE), 'allowed')
+        # approved merge=yes -> every answer inherits -> the user's merge=no applies again
+        cleared = self.preview('--clear', 'autopilot')
+        self.assertEqual((cleared['action'], cleared['autopilot'], cleared['effective']['Merge']),
+                         ('remove', None, 'no (user)'))
+        self.apply('--clear', 'autopilot')
+        self.assertEqual(self.check_code(MERGE), 'merge-disabled')
+        self.assertEqual(self.preview('--clear', 'autopilot')['action'], 'none')
+        # The reverse: user yes, approved project no, then all inherit.
+        self.assertEqual(self.invoke('stop')[0], 0)
+        self.start(SETUP + MANY)
+        self.apply('--set', 'autopilot={"merge": "no"}')
+        self.assertEqual(self.check_code(MERGE), 'merge-disabled')
+        self.store.write_setting(self.repo, 'parallel', '4')  # an unrelated setting stays when the object goes
+        self.apply('--clear', 'autopilot')
+        self.assertEqual(self.check_code(MERGE), 'allowed')
+        self.assertEqual(json.loads(self.settings_file().read_text()), {'version': 1, 'parallel': '4'})
+
+    def test_apply_binds_to_the_previewed_identity_and_prior_settings(self):
+        self.start(SETUP + MANY)
+        change = ('--set', 'autopilot={"merge": "no"}')
+        # No preview token, a wrong token, or a token from before a concurrent change: nothing is written.
+        self.assertEqual(self.setup_cli(*change)[0], 1)
+        self.assertEqual(self.setup_cli(*change, '--expect', '0' * 64)[0], 1)
+        token = self.preview(*change)['token']
+        self.store.write_setting(self.repo, 'parallel', '4')
+        self.assertEqual(self.setup_cli(*change, '--expect', token)[0], 1)
+        self.assertNotIn('autopilot', json.loads(self.settings_file().read_text()))
+        token = self.preview(*change)['token']
+        (self.repo / '.git/config').write_text(ORIGIN_CONFIG.replace('example/demo', 'example/renamed'))
+        self.assertEqual(self.setup_cli(*change, '--expect', token)[0], 1)
+        (self.repo / '.git/config').write_text(ORIGIN_CONFIG)
+        # Cancelling (no apply after the preview) keeps the current settings.
+        self.preview('--clear', 'autopilot')
+        self.assertEqual(self.check_code(MERGE), 'allowed')
+        self.apply(*change)
+        self.assertEqual(self.check_code(MERGE), 'merge-disabled')
+
+    def test_an_interrupted_settings_and_approval_pair_reads_strict(self):
+        self.start(SETUP + MANY)
+        for before, after in (({'merge': 'yes'}, {'merge': 'no'}), ({'merge': 'no'}, {'merge': 'yes'})):
+            with self.subTest(before=before, after=after):
+                self.store.reset_settings(self.repo)
+                self.project(before)
+                with patch.object(self.store, '_write_approval', side_effect=OSError('interrupted')):
+                    with self.assertRaises(OSError):
+                        self.project(after)
+                self.assertEqual(self.effective()['values'], STRICT)
+                self.assertEqual(self.check_code(MERGE), 'merge-disabled')
+
+    # Part 5: one identity and one base for every grant
+
+    def local_repo(self, path):
+        """A checkout with local Git metadata, a work branch, a feature branch and no origin."""
+        (path / '.git/refs/heads').mkdir(parents=True)
+        (path / '.git/refs/remotes/origin').mkdir(parents=True)
+        (path / '.git/HEAD').write_text('ref: refs/heads/topic\n')
+        (path / '.git/refs/heads/feature').write_text('a' * 40 + '\n')
+        (path / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/main\n')
+        (path / '.git/config').write_text('[core]\n\trepositoryformatversion = 0\n\tbare = false\n')
+        return path
+
+    def colliding_pair(self):
+        """Two distinct synthetic checkout paths whose eight-character repository codes are equal."""
+        seen = {}
+        for index in range(1 << 22):
+            path = str(self.home / ('collision-%d' % index))
+            code = self.store.code_of(path)
+            if code in seen:
+                return Path(seen[code]), Path(path)
+            seen[code] = path
+        self.fail('no colliding pair')
+
+    def test_a_colliding_repository_code_never_borrows_another_checkouts_approval(self):
+        self.start(NO + MANY)
+        first, second = map(self.local_repo, self.colliding_pair())
+        self.assertNotEqual(first, second)
+        self.assertEqual(self.store.code_of(first), self.store.code_of(second))
+        local = ['git', 'merge', 'refs/heads/feature']
+        self.cwd = second
+        self.assertEqual(self.check_code(local), 'merge-disabled')
+        self.project({'merge': 'yes', 'roots': ['packages']}, root=first)
+        self.cwd = first
+        self.assertEqual(self.effective()['state'], 'project')
+        self.assertEqual(self.check_code(local), 'allowed')
+        # Only the settings bytes are copied: no approval was issued for the second checkout.
+        copied = self.settings_file(second)
+        copied.parent.mkdir(parents=True, mode=0o700)
+        copied.write_bytes(self.settings_file(first).read_bytes())
+        copied.chmod(0o600)
+        (second / 'packages').mkdir()
+        self.cwd = second
+        view = self.effective()
+        self.assertNotEqual(view['state'], 'project')
+        self.assertEqual((view['values']['Merge'], view['values']['Roots']), ('no', []))
+        self.assertEqual(self.check_code(local), 'merge-disabled')
+        self.check(paths=['packages/app.py'], tier=3, code='unknown')
+
+    def test_an_approval_without_this_checkouts_full_identity_grants_nothing(self):
+        self.start(NO + MANY)
+        wide = {'merge': 'yes', 'push-and-pull-requests': 'yes'}
+        self.project(wide)
+        self.assertEqual(json.loads(self.approval().read_text())['identity'],
+                         hashlib.sha256(str(self.repo).encode()).hexdigest())
+        for name, change in (('missing', lambda record: record.pop('identity')),
+                             ('another checkout', lambda record: record.update(identity='0' * 64))):
+            with self.subTest(binding=name):
+                self.store.reset_settings(self.repo)
+                self.project(wide)
+                self.assertEqual(set(self.codes().values()), {'allowed'})
+                record = json.loads(self.approval().read_text())
+                change(record)
+                self.approval().write_text(json.dumps(record))
+                self.assertEqual(self.effective()['values'], STRICT)
+                self.assertEqual(self.codes(), {'merge': 'merge-disabled', 'create': 'push-disabled',
+                                                'edit': 'push-disabled', 'push': 'push-disabled'})
+        # Approving again binds the record to this checkout, even when the value is unchanged.
+        self.store.reset_settings(self.repo)
+        self.project(wide)
+        record = json.loads(self.approval().read_text())
+        record.pop('identity')
+        self.approval().write_text(json.dumps(record))
+        self.project(wide)
+        self.assertEqual(set(self.codes().values()), {'allowed'})
+
+    def test_paths_are_judged_from_the_repository_root_never_from_cwd(self):
+        self.start(SETUP + MANY)
+        self.project({'roots': ['packages']})
+        for folder in ('restricted/packages', '.github/packages', 'packages', 'src/inner'):
+            (self.repo / folder).mkdir(parents=True, exist_ok=True)
+        for cwd, operand, code in (('.', 'restricted/packages/app.py', 'unknown'),
+                                   ('restricted', 'packages/app.py', 'unknown'),
+                                   ('restricted', 'README.md', 'unknown'),
+                                   ('.', '.github/packages/app.py', 'protected'),
+                                   ('.github', 'packages/app.py', 'protected'),
+                                   ('.github', 'README.md', 'protected'),
+                                   ('.github', 'scripts/build.py', 'protected'),
+                                   ('packages', 'app.py', 'allowed'),
+                                   ('src', 'inner/example.py', 'allowed')):
+            with self.subTest(cwd=cwd, operand=operand):
+                self.cwd = self.repo / cwd
+                self.check(paths=[operand], tier=1 if code == 'allowed' else 3, code=code)
+                self.assertEqual(self.check_code(['git', 'add', '--', operand]), code)
+                self.assertEqual(self.check_code(['git', 'diff', '--stat', operand]) == 'allowed', code == 'allowed')
+
+    def test_an_away_evidence_file_is_judged_from_the_repository_root(self):
+        self.start(SETUP_AWAY)
+        (self.repo / '.github/.finolabs/briefs').mkdir(parents=True)
+        (self.repo / '.finolabs/briefs').mkdir(parents=True)
+        self.check(JUDGE)
+        self.cwd = self.repo / '.github'
+        self.assertEqual(self.check_code(JUDGE), 'unknown')
+        evidence = JUDGE[:-1] + ['docs/notes.md']
+        self.assertEqual(self.check_code(evidence), 'unknown')
 
 
 if __name__ == '__main__':

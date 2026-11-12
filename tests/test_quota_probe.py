@@ -27,7 +27,7 @@ from tests.data_root_fixture import account
 
 FIXTURES = ROOT / "tests/fixtures/quota"
 COPIES = ["scripts/quota_probe.py", *[f"skills/{name}/scripts/quota_probe.py" for name in
-          ("setup", "delegate", "update", "review-gate")]]
+          ("setup", "delegate", "update", "review-gate", "session-hygiene")]]
 MEASURED = qp.timestamp("2026-11-05T09:00:00Z")
 
 
@@ -487,7 +487,7 @@ class QuotaTest(unittest.TestCase):
                             self.assertNotIn("SPAWN", result.stdout)
                             self.assertNotIn("RUN", result.stdout)
                             self.assertEqual(result.stderr, "")
-        self.assertEqual(seen, {"session_start", "metrics_hook", "auto_gate_hook", "away_gate_hook", "update_check", "precompact", "quota_limit_hook"})
+        self.assertEqual(seen, {"session_start", "metrics_hook", "auto_gate_hook", "away_gate_hook", "update_check", "precompact", "quota_limit_hook", "merge_notice_hook"})
 
 
     def test_metrics_consent_never_starts_a_reading(self):

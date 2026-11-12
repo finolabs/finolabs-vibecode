@@ -7,14 +7,14 @@ The skill folders and their purposes match the README.
 | Skill | Use it when |
 | --- | --- |
 | `coding-router` | Starting or resuming any coding work, in any repository: depth (MIN, NORMAL, DEEP), review and security gates, proof, the stop-before-a-third-fix checkpoint, and a workflow path for Spec Kit (with its depth gate), mattpocock/skills, obra/superpowers, or none. |
-| `session-hygiene` | Keeping sessions healthy: context pressure, phase changes, stale titles, handovers, and remembering or recalling decisions, lessons and project state in one shared knowledge base (Orrery or an Obsidian vault); code facts stay in the repository. Opt-in Claude Code/Antigravity context snapshots feed the compaction steward; Codex is not covered by the recorder. |
+| `session-hygiene` | Keeping sessions healthy: context pressure, phase changes, stale titles, handovers, and remembering or recalling decisions, lessons and project state in one shared knowledge base (Orrery or an Obsidian vault); code facts stay in the repository. Opt-in Claude Code/Antigravity context snapshots, or an on-request Claude Code/Codex context probe, feed the compaction steward. |
 | `delegate` | Handing work to other agents (Claude Code, Codex, Antigravity, ZCode) and running it, coordinated from whichever one you run in: grading on five levels with one decision matrix (tier, effort, budget, who accepts), routing by agent and model through a dated capability map, the configured judge, quota fallback, parallel runs up to the limit you set for each project, across any mix of agent families, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger; running a spec as a coordinator with one app session per task, standby sessions and review gates. |
 | `handoff` | Writing a self-contained brief and dispatching one task, or saving a handover through session hygiene so a later session or another agent continues the work. |
 | `advisor` | Getting one second opinion from another model family, or convening two contrasting families for root-cause analysis and a plan when stuck or looping; both are read-only and spend quota, with approval governed by their procedure. |
 | `versioning` | Bumping a version, tagging a release, or writing the changelog and release notes: SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog. |
 | `commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports). |
 | `restore-point` | Saving the working tree to a private git ref before the agent edits, listing restore points and restoring one after a preview and a yes. User-invoked, git repositories only. |
-| `autopilot` | Starting a time-boxed standing mandate while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/setup add afk`; the live loop, dashboard tab, scheduler and hooks are deferred. |
+| `autopilot` | Starting a time-boxed standing mandate while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/setup add afk`, which can also save a repository's own task choice, push, merge, trusted authors and code folders in its settings file; the live loop, dashboard tab, scheduler and hooks are deferred. |
 | `afk` | Main short name for `autopilot` (away from keyboard); starts the away mandate so your agents keep working while you are away, or stops it on return. |
 | `brb` | Older short name (be right back), kept as an alias of `afk` through `autopilot`; follows the same procedure and arguments. |
 | `pause` | Before you restart or shut the machine down: stops new work, lets running work finish, writes handovers and reports what recorded work remains, with an optional `--in <minutes>` deadline; `heavy_run.py` refuses new commands while it is active. User-invoked; never stops a process or declares the machine safe. |
@@ -73,6 +73,7 @@ The skill folders and their purposes match the README.
 | Turn usage metrics, project progress or the running-agent snapshot on or off | `/setup add metrics` (each needs its own consent) | |
 | Optional companion skills from other packs | `/setup add companions` (questions and install commands only; installs nothing) | |
 | Read context counts for compaction | `/setup add compaction`, then `session-hygiene` | Claude Code/Antigravity status line only; live delivery unverified |
+| Read this session's context size on request | `session-hygiene` (`context_snapshot.py probe`, needs `/setup add quota` to confirm `claude` or `codex`) | Claude Code and Codex; live delivery unverified |
 | Long session, phase change, compaction | `session-hygiene` | `/ask-matt` covers its phase-boundary choices |
 | A story is done, or before merge | `review-gate` | `/code-review` (Claude Code), `codex review`, or `code-review` from Matt's pack |
 | Change touches auth, permissions, private data, untrusted input | `security-review-gate` | `/security-review` (Claude Code); `security-audit` from Cloudflare for a full audit |
@@ -109,7 +110,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/compact_setup.py` | Previews/applies an approved documented native compaction threshold. |
 | `scripts/compact_stop_hook.py` | Opt-in Antigravity transcript-size stop; no content read, live delivery unverified. |
 | `scripts/checks_list.py` | Reads a repository's `.finolabs/vibecode/checks.json` only while it matches its approved digest (never the host config), with its local-receipt mode, digests a list, and writes or matches the private local checks receipt; runs no command. |
-| `scripts/context_snapshot.py` | Records/reads Claude Code or Antigravity status-line context counts and feeds the steward; Codex is out of scope. |
+| `scripts/context_snapshot.py` | Records/reads Claude Code or Antigravity status-line context counts, probes Claude Code or Codex on request through the confirmed program, and feeds the steward. |
 | `scripts/context_steward.py` | Applies the deterministic action table to supplied counts, threshold and boundary; never compacts. |
 | `scripts/data_root.py` | Resolves account-owned canonical storage and checks safe paths; environment overrides cannot select trusted state. |
 | `scripts/delegate_env.py` | Starts headless forms with approved environment names; HOME remains reachable. |
@@ -119,6 +120,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/instructions_write.py` | Previews and writes one approved instruction file/block with digest and backups. |
 | `scripts/judge.py` | Screens bounded questions, validates supplied host answers or calls optional Jev, and discloses fallback; neither judge accepts work. |
 | `scripts/log_scan.py` | Scans logs, shows redacted views and applies digest-bound local redaction; never reads a raw log into a receipt. |
+| `scripts/merge_notice_hook.py` | Claude Code reminder after a successful `gh pr merge` that ends the command line: one fixed line pointing to `worktree_sweep.py list` and the git commands it prints; quoted excluded flags print nothing; stores nothing, always exits 0. |
 | `scripts/metrics_hook.py` | Records consented usage metadata and triggers local dashboard refreshes. |
 | `scripts/mode.py` | Shows effective settings/sources and writes previewed confirmed changes for `/setup mode`. |
 | `scripts/nav_state.py` | Collects bounded current anchors/metadata, screens payloads and checks report references; it does not prove drift. |
@@ -135,7 +137,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/route_task.py` | Prints matrix tier, effort, budget and family order for a kind/grade; the coordinator chooses the model. |
 | `scripts/run_env.py` | Builds the allowlisted child environment for headless delegates and verification commands. |
 | `scripts/secret_patterns.py` | Shared secret-pattern and environment-dump detection for briefs and logs. |
-| `scripts/session_start.py` | Read-only Claude Code/Codex reminder and fixed state summary, with advisory slots and optional context/handover. |
+| `scripts/session_start.py` | Read-only Claude Code/Codex reminder and fixed state summary, with advisory slots, a fixed warning when the main checkout is off its default branch, a validated session id line and optional context/handover. |
 | `scripts/statusline_setup.py` | Previews/applies/removes the opt-in context recorder; existing status lines get a manual recipe. |
 | `scripts/update_check.py` | Cached update status, skip/never/pin preferences, the detached fixed-endpoint release check, the upgrade-notes checklist (`whats-new`, `onboard seen`/`skip`) and evidence-checked `target`. |
 | `scripts/verify_claim.py` | Checks head, scope and targeted tests, writes verification metadata and prepares host-judge evidence; grants no acceptance. |
@@ -145,8 +147,9 @@ Paths below are relative to the full plugin root. There are three agent definiti
 
 | Path | Purpose |
 | --- | --- |
+| `skills/commit-messages/scripts/worktree_sweep.py` | Read-only list of linked worktrees (path as git lists it, branch, size, clean or dirty, unpushed, merged, candidate); under each candidate prints `git worktree remove <path>` and `git branch -d <branch>` for the agent to run, so git does the removal. Deletes nothing. Copy in `review-gate`. |
 | `skills/checks/scripts/checks.py` | Runs or shows the repository's approved stored checks (a changed or unapproved check file runs nothing) in order through `heavy_run.py`, stops at the first failure, narrows Python test modules with `--changed`, and writes a local receipt only for a whole passing run on a clean, unmoved head when that mode is on; `run --dispatch <id>` writes, on the same conditions and whatever that mode, the verification receipt `ledger.py finish --outcome accepted` needs. `usage --from <file>` summarises hosted CI runs, minutes, the document-only share and days left from a run list the agent produced; no network call and no process. |
-| `skills/delegate/scripts/autopilot.py` | Autopilot lease, closed action classification (Tier 1 or Tier 3) and private action log; executes nothing. |
+| `skills/delegate/scripts/autopilot.py` | Autopilot lease, closed action classification (Tier 1 or Tier 3) against one repository identity and target, a read-only view of the values it applies, and private action log; executes nothing. |
 | `skills/delegate/scripts/heavy_run.py` | Runs one heavy command at a time per machine under a kernel lock, with load and memory gates, a wait cap and a maximum run time. |
 | `skills/delegate/scripts/ledger.py` | Records runs; accepted finishes need a current-head receipt or explicit reason-digested exception. `stale [--older-than-hours <n>]` previews open records past twice their budget and 24 hours (id, age, label); `stale --close --digest <digest>` appends one closing `finish` line per previewed record, never `accepted`. |
 | `skills/delegate/scripts/pause.py` | `pause` marker: start, status (open dispatches, heavy jobs, checkpoints) and resume; stops no process and runs nothing. |
