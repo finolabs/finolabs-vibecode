@@ -126,6 +126,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/metrics_hook.py` | Records consented usage metadata and triggers local dashboard refreshes. |
 | `scripts/mode.py` | Shows effective settings/sources and writes previewed confirmed changes for `/setup mode`. |
 | `scripts/nav_state.py` | Collects bounded current anchors/metadata, screens payloads and checks report references; it does not prove drift. |
+| `scripts/open_dispatch_nudge.py` | Claude Code prompt reminder: one fixed line, at most every 30 minutes per session, counting this session's dispatches with no ledger outcome that ended or passed their budget; reads only the ledger and its own mark, never denies, `FNL_DISPATCH_NUDGE=off` disables it. |
 | `scripts/parallel_slots.py` | Reads user-set total/per-family capacity; advisory snapshots, not reservations or a ledger-start gate. |
 | `scripts/post_review.py` | Posts a bounded marker-checked private draft to the checkout's repository only when authorized. |
 | `scripts/precompact.py` | Prints a nonblocking reminder; Claude stdout feeds summary instructions, Codex plain stdout does not reach the model. |

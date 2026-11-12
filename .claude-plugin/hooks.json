@@ -66,6 +66,15 @@
             "async": true
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/open_dispatch_nudge.py\"; exit 0",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "Stop": [
