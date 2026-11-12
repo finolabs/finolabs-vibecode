@@ -211,7 +211,12 @@ class RunHygieneTest(unittest.TestCase):
 
     def test_touched_skill_documents_respect_setup_size_limits(self):
         # Apply the spec's limits to touched skill bodies, feature docs and new reference text.
-        for relative in ('setup/SKILL.md', 'delegate/SKILL.md', 'handoff/SKILL.md', 'session-hygiene/SKILL.md', 'checks/SKILL.md', 'setup/references/features/delegation.md'):
+        for relative in ('setup/SKILL.md', 'delegate/SKILL.md', 'handoff/SKILL.md', 'session-hygiene/SKILL.md', 'checks/SKILL.md', 'setup/references/features/delegation.md',
+                         'plugin-packaging/SKILL.md', 'plugin-packaging/references/directories.md',
+                         'plugin-packaging/references/directory-anthropic.md', 'open-source-review/SKILL.md',
+                         'open-source-review/references/repository-settings.md',
+                         'open-source-review/references/plugin-packages.md',
+                         'open-source-review/references/community-files.md'):
             path = ROOT / 'skills' / relative
             text = path.read_text()
             self.assertLessEqual(len(text.encode()), 10000 if path.name == 'SKILL.md' else 8000)
