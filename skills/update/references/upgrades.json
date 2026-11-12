@@ -205,6 +205,38 @@
           "id": "0.2.5/full-names",
           "kind": "info",
           "text": "On Claude Code, type /finolabs-vibecode:help and /finolabs-vibecode:status in full; /help and /status are the host's own commands."
+        },
+        {
+          "id": "0.2.5/afk-project",
+          "kind": "setup",
+          "text": "A repository can now set its own away choices: run /setup add afk inside it to set task choice, push, merge, trusted authors and code folders, or keep your user setting.",
+          "setup": "/setup add afk"
+        },
+        {
+          "id": "0.2.5/compaction-nudge",
+          "kind": "setup",
+          "text": "On Claude Code a hook asks the agent to run tidy at 80% and 90% of the compaction threshold; it needs the window set in compaction setup. FNL_COMPACT_NUDGE=off turns it off.",
+          "setup": "/setup add compaction"
+        },
+        {
+          "id": "0.2.5/shape",
+          "kind": "info",
+          "text": "New shape skill: brainstorming or discussing an idea or design runs an interview through the question tool; the router sends open ideas to it first, and grilling only if you ask for it."
+        },
+        {
+          "id": "0.2.5/zcode",
+          "kind": "info",
+          "text": "ZCode can be a delegate for code tasks in its edit mode and advice in its plan mode; reviews are not routed to it and the away lease refuses it. /setup scan finds it."
+        },
+        {
+          "id": "0.2.5/ledger-closure",
+          "kind": "info",
+          "text": "Delegated runs now record when they end; ledger.py stale previews only this repository's records (--all-projects widens it); a review dispatch is accepted on its posted review."
+        },
+        {
+          "id": "0.2.5/dispatch-nudge",
+          "kind": "info",
+          "text": "On Claude Code a hook reminds a session, at most every 30 minutes, of its own delegated runs that ended or ran past their budget with no outcome. FNL_DISPATCH_NUDGE=off turns it off."
         }
       ]
     }
