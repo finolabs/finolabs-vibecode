@@ -57,6 +57,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- `afk` no longer treats the plugin's own wrapper commands (`ledger.py`, `record.py`, `heavy_run.py`, `judge.py`, `delegate_env.py`, `merge_check.py`) as protected when the plugin is installed under a `.claude` or `.codex` folder, as Claude Code and Codex install it. Only that one exact script path is spared the protected-name check; every other token, including a nested command's, is still checked.
 - An alias whose skill is user-only (`fnl-help`, `ask`, `afk`, `brb`, `gtg` and the older names of `autopilot`, `pause`, `restore-point`, `setup`, `status` and `update`) no longer tells the agent to load that skill, which made it call the Skill tool and get refused: it now says the skill is user-only and to read its `SKILL.md` in the plugin's skills folder and follow it, never through the Skill tool. Older names of short names load the final skill directly (`fnl-ask` → `help`, `fnl-verification` → `checks`, `fnl-afk` and `fnl-brb` → `autopilot`, `fnl-gtg` → `pause`); a test and `check-references.py` hold both rules for every alias.
 
 ## [0.2.4] - 2026-11-11
