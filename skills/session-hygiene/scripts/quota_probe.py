@@ -359,6 +359,33 @@ def has_line_break(value):
     return any(char in "\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029" for char in value)
 
 
+VERSION_FOLDER = re.compile(r"[0-9]{1,6}(?:\.[0-9A-Za-z]{1,12}){0,4}(?:-[0-9A-Za-z]{1,12})?")
+
+
+def program_change(entry):
+    """(old, new) version names, ("", "") when they cannot be shown, or None when the
+    confirmed path still resolves; checks the path only and runs nothing."""
+    try:
+        recorded = entry["resolved"]
+        current = str(Path(entry["executable"]).resolve(strict=True))
+    except (OSError, RuntimeError, KeyError, TypeError, ValueError):
+        return None
+    if not recorded or current == recorded:
+        return None
+    old, new = Path(recorded).parts, Path(current).parts
+    differ = [i for i, (a, b) in enumerate(zip(old, new)) if a != b]
+    if (len(old) == len(new) and len(differ) == 1 and len(old[differ[0]]) <= 32 and len(new[differ[0]]) <= 32
+            and VERSION_FOLDER.fullmatch(old[differ[0]]) and VERSION_FOLDER.fullmatch(new[differ[0]])):
+        return old[differ[0]], new[differ[0]]
+    return "", ""
+
+
+def changed_line(agent, change):
+    """One fixed line: the agent and at most two sanitized version names, never a path."""
+    versions = f" ({change[0]} to {change[1]})" if change[0] else ""
+    return f"{agent}: program changed since setup{versions}; run /setup add quota to re-confirm the new path"
+
+
 def checked_executable(agent, entry):
     if agent not in SOURCES or Path(entry["executable"]).name != agent:
         raise ValueError("executable missing or wrong name")
@@ -663,6 +690,9 @@ def read_family(family, max_age_minutes=15):
         except (OSError, ValueError, TypeError, KeyError):
             cache = {}
         return read_lines(family, labels, {label: "off" for label in labels}, cache)
+    change = program_change(entry)
+    if change:
+        return ["Quota " + changed_line(family, change)]  # never run the changed program
     configs = {family: entry}
     cache, states, token = {}, {}, None
     labels = entry["configs"]

@@ -46,6 +46,12 @@ NO_PROBE = "Context probe unavailable: off, unconfirmed program, refused thread 
 SESSION = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 AMOUNT = r"([0-9]{1,9}(?:\.[0-9]{1,3})?)([kKmM]?)"
 TOKENS = re.compile(r"Tokens: " + AMOUNT + " / " + AMOUNT + r"(?![0-9A-Za-z.])")
+
+
+class ProgramChanged(Exception):
+    """The confirmed program's path changed since setup; its text is one fixed line, no path."""
+
+
 INITIALIZE = {"id": 1, "method": "initialize", "params": {"clientInfo": {"name": "fnl-context", "version": "1"}}}
 
 
@@ -335,6 +341,9 @@ def probe(host, session, label=None):
         entry = qp.canonical_config().get(host)
         if not entry:
             return None
+        change = qp.program_change(entry)
+        if change:
+            raise ProgramChanged("Context probe " + qp.changed_line(host, change))
         argv = qp.checked_executable(host, entry)
         folder = None
         if host == "claude":
@@ -354,6 +363,8 @@ def probe(host, session, label=None):
             used, window = run_program(qp, argv, entry, folder, cwd, session if host == "codex" else None)
         store(filename(session, host), used, window, "unknown", host)
         return read(session, host=host)
+    except ProgramChanged:
+        raise
     except Exception:
         return None
 
@@ -415,6 +426,9 @@ def main():
             result = steward_check(result["used"], result["window"], args.threshold, args.boundary)
         emit(json.dumps(result) + "\n")
         return 0
+    except ProgramChanged as change:
+        print(str(change), file=sys.stderr)
+        return 3
     except Exception:
         if recording:
             return 0

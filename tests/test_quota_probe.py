@@ -703,6 +703,57 @@ class QuotaTest(unittest.TestCase):
                 qp.checked_executable("agy", entry)
             spawn.assert_not_called()
 
+    def versioned(self, agent, recorded, current):
+        """A synthetic versioned install: <bin>/<agent> links to versions/<current>; setup confirmed <recorded>."""
+        versions = self.bin / "versions"
+        versions.mkdir(mode=0o700, exist_ok=True)
+        target = versions / current if "/" not in current else Path(current)
+        target.write_text("#!" + self.interpreter + "\nprint('unused')\n")
+        target.chmod(0o700)
+        alias = self.bin / agent
+        if alias.is_symlink():
+            alias.unlink()
+        alias.symlink_to(target)
+        return {"executable": str(alias), "resolved": str(versions / recorded), "interpreter": self.interpreter,
+                "configs": {"default": str(self.config_dir) if agent == "claude" else None}}
+
+    def test_changed_program_path_is_reported_and_never_run(self):
+        expected = ("Quota claude: program changed since setup (2.1.318 to 2.1.319); "
+                    "run /setup add quota to re-confirm the new path")
+        for current, line in (("2.1.319", expected),
+                              (str(self.bin / "renamed"), expected.replace(" (2.1.318 to 2.1.319)", ""))):
+            with self.subTest(current=current):
+                self.configure({"claude": self.versioned("claude", "2.1.318", current)})
+                with mock.patch.object(qp.subprocess, "Popen", side_effect=AssertionError("must not spawn")) as spawn, \
+                        mock.patch.object(qp, "command", side_effect=AssertionError("must not run")) as command:
+                    lines = qp.read_family("claude")
+                spawn.assert_not_called()
+                command.assert_not_called()
+                self.assertEqual(lines, [line])
+                self.assertNotIn(str(self.base), "\n".join(lines))
+                self.assertNotIn("versions", "\n".join(lines))
+
+    def test_unchanged_program_path_reads_as_before(self):
+        entry = self.versioned("claude", "2.1.319", "2.1.319")
+        self.configure({"claude": entry})
+        self.assertIsNone(qp.program_change(qp.config()["claude"]))
+        with mock.patch.object(qp, "command", side_effect=OSError("synthetic")) as command:
+            lines = qp.read_family("claude")
+        self.assertEqual(command.call_count, 1)
+        self.assertNotIn("program changed", "\n".join(lines))
+        self.assertIn(": unverified;", lines[0])
+
+    def test_program_change_versions_are_sanitized(self):
+        for recorded, current, expected in (
+                ("/x/versions/2.1.318", "/x/versions/2.1.319", ("2.1.318", "2.1.319")),
+                ("/x/versions/2.1.318", "/x/versions/2.1.319;rm", ("", "")),
+                ("/x/versions/2.1.318", "/y/versions/2.1.319", ("", "")),
+                ("/x/versions/2.1.318", "/x/other/2.1.318", ("", "")),
+                ("/x/versions/" + "1" * 40, "/x/versions/2", ("", ""))):
+            with self.subTest(current=current):
+                with mock.patch.object(qp.Path, "resolve", return_value=Path(current)):
+                    self.assertEqual(qp.program_change({"executable": "/x/claude", "resolved": recorded}), expected)
+
     def test_preview_refuses_line_breaks_in_recorded_values(self):
         setup = self.setup_module()
         entry = self.fake("claude")

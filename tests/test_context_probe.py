@@ -157,6 +157,25 @@ class ContextProbeTest(unittest.TestCase):
         raw = (self.root / "state/context" / ctx.filename(SESSION, "claude")).read_text()
         self.assertNotIn(SESSION, raw)
 
+    def test_changed_program_path_is_named_and_never_run(self):
+        entry = self.claude()
+        versions = self.bin / "versions"
+        versions.mkdir(mode=0o700)
+        current = versions / "2.1.319"
+        Path(entry["executable"]).rename(current)
+        Path(entry["executable"]).symlink_to(current)
+        self.configure({"claude": dict(entry, resolved=str(versions / "2.1.318"))})
+        code, out, err = self.cli("probe", "--host", "claude", "--session", SESSION)
+        self.assertEqual((code, out), (3, ""))
+        self.assertEqual(err, "Context probe claude: program changed since setup (2.1.318 to 2.1.319); "
+                              "run /setup add quota to re-confirm the new path\n")
+        self.assertNotIn(str(self.base), err)
+        self.assertFalse(self.seen.exists())
+        self.assertFalse((self.root / "state/context" / ctx.filename(SESSION, "claude")).exists())
+        self.configure({"claude": dict(entry, resolved=str(current))})
+        self.assertEqual(self.cli("probe", "--host", "claude", "--session", SESSION)[0], 0)
+        self.assertTrue(self.seen.exists())
+
     def test_claude_window_units_and_integer_counts(self):
         for text, used, window in (("Tokens: 31k / 200k (15%)", 31000, 200000),
                                    ("Tokens: 950 / 200k (0%)", 950, 200000),
