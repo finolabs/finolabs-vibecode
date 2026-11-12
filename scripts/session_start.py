@@ -4,19 +4,24 @@
 After the reminder it prints the plugin's state from local files only: the
 delegation mode, roles and posting state, cached quota and the count of open ledger
 dispatches and, when available, this session's fresh context counts. Every value
-printed is a fixed word or a capped integer, never text read from a file, because the hook also runs in untrusted repositories. It
+printed is a fixed word or a capped integer, never text read from a file, because the hook also runs in untrusted repositories.
+The one exception is the host's own session id, printed only when it is a lowercase UUID, so the agent can run the
+context probe for its own session. It
 starts no process, makes no network call and writes nothing.
 """
 
 import json
 import math
 import os
+import re
 import sys
 from pathlib import Path
 
 MODES = ("manual", "suggest", "auto")
 # Cache key in `quota_probe.py` -> the family name printed.
 FAMILIES = (("claude", "claude-code"), ("codex", "codex"), ("agy", "antigravity"))
+# The only id shape printed for the context probe; anything else prints nothing.
+SESSION_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 LEDGER_LIMIT = 4 * 1024 * 1024  # a larger ledger reads as unknown at session start
 OPEN_CAP = 99
 
@@ -226,6 +231,8 @@ def main():
         raw = sys.stdin.buffer.read(64 * 1024 + 1)
         if len(raw) <= 64 * 1024:
             event = json.loads(raw.decode("utf-8"))
+            if isinstance(event, dict) and isinstance(event.get("session_id"), str) and SESSION_ID.fullmatch(event["session_id"]):
+                print(f"Session id: {event['session_id']}")
             if (isinstance(event, dict) and event.get("source") != "compact"
                     and isinstance(event.get("session_id"), str) and event["session_id"]):
                 try:
