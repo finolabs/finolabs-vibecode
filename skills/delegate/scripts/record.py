@@ -118,7 +118,10 @@ def read_verification(dispatch):
     dispatch_id(dispatch)
     with dr.data_folder("state/verification", private=True) as folder:
         rec = json.loads(dr.read_file(folder, dispatch + ".json", 65536))
-    return validate_verification(rec)
+    rec = validate_verification(rec)
+    if rec["id"] != dispatch:
+        raise ValueError("receipt belongs to another dispatch")
+    return rec
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
