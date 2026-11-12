@@ -113,7 +113,9 @@ The schema is closed: `version` 1 and the optional string keys `ledger`, `tasks`
 file invalid; nothing is repaired on read. The file is
 read with no-follow descent, owner-checked and not writable by group or others (as `checks.json`), at
 most 16 KiB, and only while its bytes match the SHA-256 that a setter recorded in
-`<data root>/state/settings-approved/<repository code>.json`. A repository is in one of three states.
+`<data root>/state/settings-approved/<repository code>.json`, together with the full SHA-256 of the main checkout
+root; the eight-character code only names that file, and a record holding another checkout's digest is broken here.
+A repository is in one of three states.
 Never configured: no approval record, so a branch-supplied or hand-written file nobody approved here sets
 nothing and the defaults hold. Approved: the record exists and the file matches it. Broken: the record
 exists but the file is now missing, unreadable, unsafe, invalid or edited, or the record cannot be read;
