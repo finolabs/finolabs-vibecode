@@ -56,13 +56,13 @@ There is no default for Merge. Starting a lease applies this answer; it does not
 Translate the answers into `python3 -I <this skill folder>/scripts/afk_setup.py preview --hosts <names> --task-choice <choose|listed> --push-and-pull-requests <yes|no> --trusted-authors own --lease-hours <n> --max-runs <n> --max-runtime-minutes <n> --max-actions-per-hour <n> --quota-floor-percent <n> --merge <yes|no> [--decide <key>]... [--non-production-target '<command>']... --excerpts-leave-the-machine <yes|no>`.
 Quote "Claude Code" as one name. Pass every answer explicitly. Show the target, entire section, backup and SHA-256 digest before asking the separate write approval:
 "Save the shown away-session settings?"
-Yes: Apply only the previewed Autopilot section in local host.md, keeping a backup of an existing file. No lease starts and no permission beyond the answered settings is granted.
+Yes: Apply only the previewed afk section in local host.md, keeping a backup of an existing file. No lease starts and no permission beyond the answered settings is granted.
 No: Leave host.md unchanged; discard or replace the preview later.
 Undo: Stop any live lease; preview and approve changed settings, or restore the shown backup after checking later edits.
 Choices: "Yes, save these settings" / "No, leave settings unchanged".
 
 Apply with `python3 -I <this skill folder>/scripts/afk_setup.py apply --yes --digest <prefix>`; use at least the first 12 hex digits of the shown Digest (the full digest also works). Preview state is private in `<data root>/state/autopilot-setup/preview.json`, expires after 60 minutes and is consumed on success.
-Apply enforces the digest, unchanged host bytes and mode, canonical root, safe files and section bounds; it refuses links and ambiguity. Only the Autopilot section changes; other host content stays byte for byte (script-enforced). Backups and preview state are local writer records, not lease changes.
+Apply enforces the digest, unchanged host bytes and mode, canonical root, safe files and section bounds; it refuses links and ambiguity. Only the `## afk` section changes; other host content stays byte for byte (script-enforced). An older `## Autopilot` section is not read and not changed; tell the user to delete it by hand. Backups and preview state are local writer records, not lease changes.
 
 To change choices, repeat `/setup add afk`; a live lease stops accepting actions after setup changes. Starting and stopping remain `/afk` and `/afk stop`. Push notifications, the live dashboard, scheduler and host backstop are deferred; offer no settings for them in this slice.
 ## Project scope

@@ -158,6 +158,18 @@
           "text": "Skills lost the fnl- prefix (fnl-setup is now setup). Old names work only when typed; instruction files must use the new names. /setup check lists each old name with its new one."
         },
         {
+          "id": "0.2.5/afk-section",
+          "kind": "setup",
+          "text": "/autopilot is now /afk and the ## Autopilot section of host.md is no longer read: run /setup add afk again, then delete the old ## Autopilot section by hand.",
+          "setup": "/setup add afk",
+          "check": ["skills/setup/scripts/upgrade_state.py", "afk-section"]
+        },
+        {
+          "id": "0.2.5/tidy-rename",
+          "kind": "info",
+          "text": "session-hygiene is now tidy. The old name works only when typed; instruction files must name tidy. /setup check lists each old name with its new one."
+        },
+        {
           "id": "0.2.5/codex-hook-trust",
           "kind": "hook",
           "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; the session-start and metrics hooks changed."

@@ -16,7 +16,7 @@ Check the question before it enters the ladder, and check the chosen action agai
 | --- | --- | --- |
 | 1 | Credentials, or the agent's own limits (hooks, permission rules, agent instructions, lease and setup files) | park |
 | 2 | Production, a live environment, real users or real customer data, or unsure whether it reaches them | park |
-| 3 | Any category of `## Autopilot` that applies is `stop`, missing or invalid | park |
+| 3 | Any category of `## afk` that applies is `stop`, missing or invalid | park |
 | 4 | A deploy that does not equal a `Non-production targets` entry exactly | park |
 | 5 | Every applicable category is `decide`, or the deploy equals a listed target | go on |
 | 6 | Local work no category names | classified as usual |

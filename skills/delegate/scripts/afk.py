@@ -5,7 +5,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 
 | Rule | Enforcer |
 | --- | --- |
-| Setup is one canonical ## Autopilot key/value section; Merge has no default, hours are 1..24 | settings, start |
+| Setup is one canonical ## afk key/value section (an older ## Autopilot heading is not read); Merge has no default, hours are 1..24 | settings, start |
 | State stays outside Git, private (directories 0700/files 0600), no links, atomic and serialized | private_folder, read_private, write_private, data_root, flock |
 | One live lease for the machine; a second start reports it and changes nothing; stop removes it and leaves a stop marker; starting clears that marker | start, stop |
 | Missing/expired/stopped/changed setup or exhausted runs, wall/runtime minutes or rolling-hour actions denies every check | lease_guard |
@@ -124,7 +124,7 @@ def now():
 
 def settings():
     text = dr.read_data('host.md', slots.HOST_LIMIT).decode('utf-8')
-    start, body, end = slots.host_section(text, 'Autopilot')
+    start, body, end = slots.host_section(text, 'afk')
     if start == body == end:
         raise ValueError('afksetup is missing')
     result, seen = {**DEFAULTS, **{c: 'stop' for c in CATEGORIES}, CONSENT: 'no', TARGETS: []}, set()

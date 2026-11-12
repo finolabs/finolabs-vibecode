@@ -62,11 +62,22 @@ class UpgradeStateTest(unittest.TestCase):
         self.assertEqual(self.state('levels', '## Agent levels\n'), us.DONE)
         self.assertEqual(self.state('levels', '## Assignment matrix\n'), us.DONE)
         self.assertEqual(self.state('levels', '## Routing\n'), us.OPEN)
-        self.assertEqual(self.state('afk', '## Autopilot\n- Merge: no\n'), us.DONE)
+        self.assertEqual(self.state('afk', '## afk\n- Merge: no\n'), us.DONE)
         self.assertEqual(self.state('afk', '## Routing\n'), us.OPEN)
-        self.assertEqual(self.state('afk-decisions', '## Autopilot\n- Merge: no\n'), us.OPEN)
-        self.assertEqual(self.state('afk-decisions', '## Autopilot\n- Excerpts leave the machine: no\n'), us.DONE)
+        self.assertEqual(self.state('afk-decisions', '## afk\n- Merge: no\n'), us.OPEN)
+        self.assertEqual(self.state('afk-decisions', '## afk\n- Excerpts leave the machine: no\n'), us.DONE)
         self.assertEqual(self.state('afk-decisions', '## Routing\n- Excerpts leave the machine: no\n'), us.OPEN)
+        # The old heading is no longer read, so it satisfies neither state.
+        self.assertEqual(self.state('afk', '## Autopilot\n- Merge: no\n'), us.OPEN)
+        self.assertEqual(self.state('afk-decisions', '## Autopilot\n- Excerpts leave the machine: no\n'), us.OPEN)
+
+    def test_afk_section_is_open_until_the_old_heading_is_gone(self):
+        self.assertEqual(self.state('afk-section', '## Autopilot\n- Merge: no\n'), us.OPEN)
+        self.assertEqual(self.state('afk-section', '## Autopilot\n- Merge: no\n\n## afk\n- Merge: no\n'), us.OPEN)
+        self.assertEqual(self.state('afk-section', '## Routing\non\n## afk\n- Merge: no\n'), us.DONE)
+        # Never set up: nothing to move. A fenced example is not a section.
+        self.assertEqual(self.state('afk-section', '## Routing\non\n'), us.NOT_APPLICABLE)
+        self.assertEqual(self.state('afk-section', '## afk\n- Merge: no\n```\n## Autopilot\n```\n'), us.DONE)
 
     def test_several_states_combine(self):
         self.host.write_text('## Project settings\n')

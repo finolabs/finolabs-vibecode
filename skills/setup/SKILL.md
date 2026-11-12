@@ -38,4 +38,4 @@ In every mode these keep their own question: moving the data root and its copy; 
 
 ## Menu
 
-After core, load [references/menu.md](references/menu.md) (`afk`, `compaction`; `add autopilot` loads `afk`).
+After core, load [references/menu.md](references/menu.md) (`afk`, `compaction`).

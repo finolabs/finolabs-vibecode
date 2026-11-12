@@ -100,14 +100,14 @@ AWAY_DEFAULTS = {'Task choice': 'choose', 'Push and pull requests': 'yes', 'Trus
 
 
 def user_away():
-    """The user-scope values of the four away keys in host.md `## Autopilot`, for the setup preview only.
+    """The user-scope values of the four away keys in host.md `## afk`, for the setup preview only.
 
-    A missing section, an unreadable host file or an unknown value reads as not set; `autopilot.py` stays the reader
+    A missing section, an unreadable host file or an unknown value reads as not set; `afk.py` stays the reader
     that enforces them.
     """
     try:
         text = dr.read_data('host.md', 262144).decode('utf-8')
-        start, body, end = host_section(text, 'Autopilot')
+        start, body, end = host_section(text, 'afk')
     except (OSError, ValueError, UnicodeError):
         return {}
     if start == body == end:

@@ -16,7 +16,7 @@ from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'skills/delegate/scripts/afk.py'
-SETUP = ('## Autopilot\n- Hosts: Claude Code\n- Task choice: choose\n'
+SETUP = ('## afk\n- Hosts: Claude Code\n- Task choice: choose\n'
          '- Push and pull requests: yes\n- Merge: yes\n- Trusted authors: own\n')
 ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
                  '[remote "origin"]\n\turl = https://github.com/example/demo.git\n'
@@ -89,6 +89,20 @@ class AfkTest(AfkBase):
             self.assertEqual(status, 3, output)
             self.assertFalse((self.state / 'lease.json').exists())
 
+    def test_only_the_afk_heading_is_read_never_the_old_autopilot_heading(self):
+        old = SETUP.replace('## afk\n', '## Autopilot\n')
+        for text in (old, '## Autopilot\n- Merge: yes\n'):
+            self.setup_config(text)
+            status, output = self.invoke('start')
+            self.assertEqual(status, 3, output)
+            self.assertFalse((self.state / 'lease.json').exists())
+        # Beside a leftover old section, the new one is read and the old one ignored.
+        self.setup_config('## Autopilot\n- Merge: perhaps\n- Lease hours: 99\n\n' + SETUP)
+        status, summary = self.invoke('start')
+        self.assertEqual(status, 0, summary)
+        self.assertIn('Merge: yes', summary)
+        self.assertIn('Lease hours: 8', summary)
+
     def test_summary_private_lease_second_start_and_stop(self):
         self.setup_config()
         status, summary = self.invoke('start', '--hours', '2')
@@ -118,7 +132,7 @@ class AfkTest(AfkBase):
     def test_invalid_setup_and_hours_fail_closed(self):
         for text in (SETUP + '- Merge: no\n', SETUP + '- Unknown: yes\n',
                      SETUP + '- Lease hours: 25\n', SETUP + '- Max runs: 0\n',
-                     SETUP.replace('choose', 'anything'), SETUP + '## Autopilot\n- Merge: yes\n'):
+                     SETUP.replace('choose', 'anything'), SETUP + '## afk\n- Merge: yes\n'):
             self.setup_config(text)
             self.assertEqual(self.invoke('start')[0], 3)
         self.setup_config()

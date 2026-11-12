@@ -61,7 +61,8 @@ class AfkSetupTest(unittest.TestCase):
     def preview(self, *args):
         code, out, err = self.cli('preview', '--merge', 'no', *args)
         self.assertEqual(code, 0, err)
-        self.assertIn('## Autopilot', out)
+        self.assertIn('## afk', out)
+        self.assertNotIn('## Autopilot', out)
         return out.split('Digest: ')[1].splitlines()[0]
 
     def apply(self, digest):
@@ -89,9 +90,9 @@ class AfkSetupTest(unittest.TestCase):
         self.assertFalse(self.plan.exists())
 
     def test_explicit_values_round_trip_and_surrounding_bytes(self):
-        prefix = self.host.read_bytes() + b'```\r\n## Autopilot\r\nexample\r\n```\r\n'
+        prefix = self.host.read_bytes() + b'```\r\n## afk\r\nexample\r\n```\r\n'
         suffix = b'# Later\nlast line without newline'
-        self.host.write_bytes(prefix + b'## Autopilot\r\n- Merge: no\r\n\r\n' + suffix)
+        self.host.write_bytes(prefix + b'## afk\r\n- Merge: no\r\n\r\n' + suffix)
         digest = self.preview('--hosts', 'Codex', 'Antigravity', '--task-choice', 'listed',
                               '--push-and-pull-requests', 'no', '--merge', 'yes',
                               '--lease-hours', '24', '--max-runs', '10000',
@@ -107,6 +108,16 @@ class AfkSetupTest(unittest.TestCase):
             'Push and pull requests': 'no', 'Merge': 'yes', 'Trusted authors': 'own',
             'Lease hours': 24, 'Max runs': 10000, 'Max runtime minutes': 1440,
             'Max actions per hour': 10000, 'Quota floor percent': 100})
+
+    def test_an_old_autopilot_section_is_left_for_the_user_and_afk_is_added(self):
+        old = b'## Autopilot\n- Merge: yes\n\n'
+        self.host.write_bytes(old)
+        self.apply(self.preview())
+        raw = self.host.read_bytes()
+        # The old section is neither read nor rewritten; the upgrade note asks the user to delete it.
+        self.assertTrue(raw.startswith(old))
+        self.assertEqual(raw.count(b'## afk\n'), 1)
+        self.assertEqual(self.reader().settings()['Merge'], 'no')
 
     def test_mismatch_and_missing_yes_write_nothing(self):
         digest = self.preview()
@@ -249,7 +260,7 @@ class AfkSetupTest(unittest.TestCase):
         self.assertEqual(self.cli('preview', '--merge', 'no', '--excerpts-leave-the-machine', 'maybe')[0], 1)
 
     def test_ambiguous_host_refused_and_missing_host_created(self):
-        for raw in (b'## Autopilot\n- Merge: no\n## Autopilot\n', b'```\nunclosed\n'):
+        for raw in (b'## afk\n- Merge: no\n## afk\n', b'```\nunclosed\n'):
             self.host.write_bytes(raw)
             self.assertEqual(self.cli('preview', '--merge', 'no')[0], 1)
             self.assertEqual(self.host.read_bytes(), raw)

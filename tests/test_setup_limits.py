@@ -178,6 +178,15 @@ class ConsentInventoryTests(unittest.TestCase):
                 for word in ('recommend', 'default', 'preselect'):
                     self.assertNotIn(word, extra_choices)
 
+    def test_setup_offers_afk_and_no_longer_add_autopilot(self):
+        for path in (SKILL / "SKILL.md", REFS / "menu.md", REFS / "features" / "afk.md"):
+            text = path.read_text()
+            self.assertNotIn("add autopilot", text, path.name)
+            self.assertNotIn("autopilot_setup.py", text, path.name)
+        feature = (REFS / "features" / "afk.md").read_text()
+        self.assertIn("/setup add afk", feature)
+        self.assertIn("Only the `## afk` section changes", feature)
+
     def test_afk_settings_are_separate_and_merge_is_last(self):
         text = (REFS / "features/afk.md").read_text().split("## Project scope")[0]
         questions = re.findall(r'Ask(?: Merge last among the settings)?: "([^"\n]+)"', text)
