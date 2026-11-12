@@ -211,6 +211,26 @@ class SessionStartTest(SyntheticStateTest):
             out, _ = self.run_hook(raw)
             self.assertEqual(out, self.baseline("on"))
 
+    def test_a_valid_session_id_is_printed_once_on_every_source(self):
+        session = "00000000-0000-4000-8000-0000000000a1"
+        line = f"Session id: {session}\n".encode()
+        for source in ("startup", "resume", "clear", "other", None):
+            with self.subTest(source=source):
+                out, _ = self.run_hook(json.dumps({"source": source, "session_id": session}).encode())
+                self.assertEqual(out, self.baseline("on") + line)
+        out, _ = self.run_hook(json.dumps({"source": "compact", "session_id": session}).encode(),
+                               reader=mock.Mock(return_value=""))
+        self.assertEqual(out, self.baseline("on") + line + hook.COMPACT_TITLE.encode() + hook.COMPACT_DELEGATION.encode())
+
+    def test_an_invalid_session_id_prints_nothing(self):
+        for session in ("synthetic", "00000000-0000-4000-8000-0000000000A1", "00000000-0000-4000-8000-0000000000a1\n",
+                        "00000000-0000-4000-8000-0000000000a1 ", "00000000-0000-4000-8000-0000000000a12",
+                        "../00000000-0000-4000-8000-0000000000a1", "0" * 36, None, 1, ["x"]):
+            with self.subTest(session=session):
+                out, _ = self.run_hook(json.dumps({"source": "startup", "session_id": session}).encode())
+                self.assertNotIn(b"Session id", out)
+                self.assertEqual(out, self.baseline("on"))
+
     def test_existing_hook_declarations_retain_pre_steward_bytes(self):
         # Baseline main 421b2d0; changing Codex declarations requires renewed trust.
         expected = {"claude": "72844c7d76488bf4b60a78ef28826a86269772c79423c6835197c1562086dc9b",

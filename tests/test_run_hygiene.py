@@ -92,6 +92,9 @@ def unsafe_launches(source, filename=''):
                 and target(n.value.func) == 'run_env.environment' for n in ast.walk(builder)))
         own = ((filename, function) == ('quota_probe.py', 'command')
                and env is not None and ast.dump(env) == expression('environment(entry, folder)'))
+        # The context probe reuses the quota probe's allowlisted environment builder unchanged.
+        own |= ((filename, function) == ('context_snapshot.py', 'run_program')
+                and env is not None and ast.dump(env) == expression('qp.environment(entry, folder)'))
         own |= ((filename, function) == ('agent_processes.py', '_run')
                 and isinstance(env, ast.Dict) and {k.value for k in env.keys if isinstance(k, ast.Constant)} == {'PATH', 'LC_ALL'}
                 and len(env.keys) == 2)
