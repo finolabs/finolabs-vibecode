@@ -7,7 +7,7 @@ The skill folders and their purposes match the README.
 | Skill | Use it when |
 | --- | --- |
 | `coding-router` | Starting or resuming any coding work, in any repository: depth (MIN, NORMAL, DEEP), review and security gates, proof, the stop-before-a-third-fix checkpoint, and a workflow path for Spec Kit (with its depth gate), mattpocock/skills, obra/superpowers, or none. |
-| `session-hygiene` | Keeping sessions healthy: context pressure, phase changes, stale titles, handovers, and remembering or recalling decisions, lessons and project state in one shared knowledge base (Orrery or an Obsidian vault); code facts stay in the repository. Opt-in Claude Code/Antigravity context snapshots feed the compaction steward; Codex is not covered by the recorder. |
+| `session-hygiene` | Keeping sessions healthy: context pressure, phase changes, stale titles, handovers, and remembering or recalling decisions, lessons and project state in one shared knowledge base (Orrery or an Obsidian vault); code facts stay in the repository. Opt-in Claude Code/Antigravity context snapshots, or an on-request Claude Code/Codex context probe, feed the compaction steward. |
 | `delegate` | Handing work to other agents (Claude Code, Codex, Antigravity) and running it, coordinated from whichever one you run in: grading on five levels with one decision matrix (tier, effort, budget, who accepts), routing by agent and model through a dated capability map, the configured judge, quota fallback, parallel runs up to the limit you set for each project, across any mix of agent families, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger; running a spec as a coordinator with one app session per task, standby sessions and review gates. |
 | `handoff` | Writing a self-contained brief and dispatching one task, or saving a handover through session hygiene so a later session or another agent continues the work. |
 | `advisor` | Getting one second opinion from another model family, or convening two contrasting families for root-cause analysis and a plan when stuck or looping; both are read-only and spend quota, with approval governed by their procedure. |
@@ -73,6 +73,7 @@ The skill folders and their purposes match the README.
 | Turn usage metrics, project progress or the running-agent snapshot on or off | `/setup add metrics` (each needs its own consent) | |
 | Optional companion skills from other packs | `/setup add companions` (questions and install commands only; installs nothing) | |
 | Read context counts for compaction | `/setup add compaction`, then `session-hygiene` | Claude Code/Antigravity status line only; live delivery unverified |
+| Read this session's context size on request | `session-hygiene` (`context_snapshot.py probe`, needs `/setup add quota` to confirm `claude` or `codex`) | Claude Code and Codex; live delivery unverified |
 | Long session, phase change, compaction | `session-hygiene` | `/ask-matt` covers its phase-boundary choices |
 | A story is done, or before merge | `review-gate` | `/code-review` (Claude Code), `codex review`, or `code-review` from Matt's pack |
 | Change touches auth, permissions, private data, untrusted input | `security-review-gate` | `/security-review` (Claude Code); `security-audit` from Cloudflare for a full audit |
@@ -109,7 +110,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/compact_setup.py` | Previews/applies an approved documented native compaction threshold. |
 | `scripts/compact_stop_hook.py` | Opt-in Antigravity transcript-size stop; no content read, live delivery unverified. |
 | `scripts/checks_list.py` | Reads a repository's `.finolabs/vibecode/checks.json` only while it matches its approved digest (never the host config), with its local-receipt mode, digests a list, and writes or matches the private local checks receipt; runs no command. |
-| `scripts/context_snapshot.py` | Records/reads Claude Code or Antigravity status-line context counts and feeds the steward; Codex is out of scope. |
+| `scripts/context_snapshot.py` | Records/reads Claude Code or Antigravity status-line context counts, probes Claude Code or Codex on request through the confirmed program, and feeds the steward. |
 | `scripts/context_steward.py` | Applies the deterministic action table to supplied counts, threshold and boundary; never compacts. |
 | `scripts/data_root.py` | Resolves account-owned canonical storage and checks safe paths; environment overrides cannot select trusted state. |
 | `scripts/delegate_env.py` | Starts headless forms with approved environment names; HOME remains reachable. |
@@ -135,7 +136,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/route_task.py` | Prints matrix tier, effort, budget and family order for a kind/grade; the coordinator chooses the model. |
 | `scripts/run_env.py` | Builds the allowlisted child environment for headless delegates and verification commands. |
 | `scripts/secret_patterns.py` | Shared secret-pattern and environment-dump detection for briefs and logs. |
-| `scripts/session_start.py` | Read-only Claude Code/Codex reminder and fixed state summary, with advisory slots and optional context/handover. |
+| `scripts/session_start.py` | Read-only Claude Code/Codex reminder and fixed state summary, with advisory slots, a validated session id line and optional context/handover. |
 | `scripts/statusline_setup.py` | Previews/applies/removes the opt-in context recorder; existing status lines get a manual recipe. |
 | `scripts/update_check.py` | Cached update status, skip/never/pin preferences, the detached fixed-endpoint release check, the upgrade-notes checklist (`whats-new`, `onboard seen`/`skip`) and evidence-checked `target`. |
 | `scripts/verify_claim.py` | Checks head, scope and targeted tests, writes verification metadata and prepares host-judge evidence; grants no acceptance. |
