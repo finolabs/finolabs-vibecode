@@ -358,6 +358,100 @@ class CheckupTest(unittest.TestCase):
         self.assertEqual(self.setup_item("retired skill pointers")["status"], "ok")
 
 
+    def test_old_fnl_skill_names_are_listed_with_their_new_names(self):
+        # The aliases are user-only, so a file telling the model to invoke an old name no longer loads it.
+        self.write(self.repo / "AGENTS.md", "Use fnl-coding-router, then fnl-verification.\nfnl-reviewer stays.\n")
+        self.write(self.home / ".claude/CLAUDE.md", "Help: fnl-ask.\n")
+        row = self.setup_item("old skill names")
+        self.assertEqual(row["status"], "missing")
+        for pair in ("fnl-coding-router -> coding-router", "fnl-verification -> checks", "fnl-ask -> help"):
+            self.assertIn(pair, row["reason"])
+        self.assertIn("instruction files must use the new names", row["reason"])
+        self.assertNotIn("fnl-reviewer", row["reason"])
+        rows = [r for r in self.instruction_rows("I14") if r["pattern"] == "old-skill-name"]
+        self.assertEqual(sorted((r["file"], r["line"], r["status"]) for r in rows),
+                         [("AGENTS.md", 1, "warn"), ("AGENTS.md", 1, "warn"), ("~/.claude/CLAUDE.md", 1, "warn")])
+        self.assertIn("fnl-coding-router: use coding-router", {r["reason"] for r in rows})
+        (self.repo / "AGENTS.md").unlink()
+        (self.home / ".claude/CLAUDE.md").unlink()
+        self.assertFalse([r for r in self.data()["setup"] if r["check"] == "old skill names"])
+
+    def test_renamed_names_match_the_shipped_alias_folders(self):
+        aliases = {p.name for p in (ROOT / "skills").iterdir() if p.name.startswith("fnl-")}
+        self.assertEqual(set(checkup.RENAMED), aliases)
+        for old, new in checkup.RENAMED.items():
+            self.assertTrue((ROOT / "skills" / new / "SKILL.md").is_file(), new)
+
+    def test_delegation_never_set_up_is_reported_not_failed(self):
+        config = self.home / ".finolabs/vibecode/host.md"
+        self.write(config, "## Delegation mode\n- suggest\n\n## Routing\n- on\n")
+        row = self.setup_item("host config")
+        self.assertEqual(row["status"], "ok")
+        self.assertTrue(row["reason"].startswith("delegation not set up; /setup add delegation sets it up"))
+        self.assertNotIn("required headings absent", row["reason"])
+        # Set up, then a section lost: missing, naming the heading.
+        self.write(config, "\n".join("## " + h for h in sorted(checkup.HEADINGS - {"Codex"})) + "\n")
+        row = self.setup_item("host config")
+        self.assertEqual(row["status"], "missing")
+        self.assertIn("required headings absent: Codex", row["reason"])
+
+    def test_leftover_legacy_host_settings_have_one_row_with_the_fix(self):
+        config = self.home / ".finolabs/vibecode/host.md"
+        self.write(config, "## Checks\n- repo: zq-check\n\n## Project progress\n- Ledger project: zq-name\n")
+        row = self.setup_item("legacy host settings")
+        self.assertEqual(row["status"], "missing")
+        self.assertEqual(row["reason"], "no longer read: ## Checks, Ledger project:/Task file: lines; set again per "
+                         "repository (/setup add project, /setup add checks), then delete by hand")
+        self.assertNotIn("zq-", json.dumps(self.data()))
+        self.write(config, "## Routing\n- on\n")
+        self.assertFalse([r for r in self.data()["setup"] if r["check"] == "legacy host settings"])
+
+    def test_contradictory_compaction_settings_get_a_row_with_names_only(self):
+        settings = self.home / ".claude/settings.json"
+        self.write(settings, json.dumps({"autoCompactWindow": 400000, "theme": "zq-theme"}))
+        self.assertFalse([r for r in self.data()["setup"] if r["check"] == "compaction settings"])
+        self.write(self.repo / ".claude/settings.local.json", json.dumps({"autoCompactEnabled": False}))
+        self.env["DISABLE_AUTO_COMPACT"] = "zq-value"
+        row = self.setup_item("compaction settings")
+        self.assertEqual(row["status"], "missing")
+        self.assertEqual(row["reason"], "a compaction window is set, but autoCompactEnabled is false in local "
+                         "settings; DISABLE_AUTO_COMPACT is set; turn auto-compaction on or remove the window")
+        self.assertNotIn("zq-", json.dumps(self.data()))
+        # Without a window there is nothing to contradict.
+        settings.unlink()
+        self.assertFalse([r for r in self.data()["setup"] if r["check"] == "compaction settings"])
+
+    def test_quota_config_names_each_broken_family_without_running_anything(self):
+        import hashlib as h
+        import quota_probe
+        config = self.home / ".finolabs/vibecode/host.md"
+        self.assertIsNone(checkup.quota_config())
+        target = "/opt/example/codex-1.2"
+        section = ("## Quota probe\n- Quota probe: on\n- Date: 2026-11-01\n- Agents: agy, codex\n"
+                   "- Executable agy: /opt/example/agy\n"
+                   "- Executable codex: /opt/example/codex\n- Resolved codex: " + target + "\n"
+                   "- Resolved digest codex: " + h.sha256(target.encode()).hexdigest() + "\n")
+        self.write(config, section)
+        with mock.patch.object(quota_probe, "checked_executable", side_effect=FileNotFoundError) as checked, \
+                mock.patch.object(quota_probe.subprocess, "run") as run, \
+                mock.patch.object(quota_probe.subprocess, "Popen") as popen:
+            self.assertEqual(checkup.quota_config(), (
+                "config: agy confirmation missing, codex executable gone; run /setup add quota again", True))
+        run.assert_not_called()
+        popen.assert_not_called()
+        self.assertEqual([c.args[0] for c in checked.call_args_list], ["codex"])
+        with mock.patch.object(quota_probe, "checked_executable",
+                               side_effect=ValueError("executable target changed; preview again")):
+            self.assertIn("codex target changed", checkup.quota_config()[0])
+        with mock.patch.object(quota_probe, "checked_executable", side_effect=ValueError("unsafe owner or mode")):
+            self.assertIn("codex path refused", checkup.quota_config()[0])
+        self.write(config, section.replace("- Agents: agy, codex", "- Agents: codex")
+                   .replace("- Executable agy: /opt/example/agy\n", ""))
+        with mock.patch.object(quota_probe, "checked_executable", return_value=[target]):
+            self.assertEqual(checkup.quota_config(), ("config: codex ok", False))
+        self.write(config, "## Quota probe\n- Quota probe: off\n")
+        self.assertIsNone(checkup.quota_config())
+
     def test_missing_host_config(self):
         self.assertEqual(self.setup_item("host config")["status"], "missing")
 

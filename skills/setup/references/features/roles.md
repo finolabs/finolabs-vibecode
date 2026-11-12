@@ -4,6 +4,8 @@ Needs: the agent scan (`scan.md`), asked as its own consent; declining it ends t
 
 Every question follows [interview.md](../interview.md): native question tool, neutral approvals, explicit yes; fallback only as stated there (advisory, agent judgment).
 
+The assignment matrix ([../matrix.md](../matrix.md), part of `add delegation`) is the one path for roles and the judge. When `## Assignment matrix` exists, its readers ignore `## Agent roles`: set roles and the judge there (its judge step asks the TypeSafe question below), and use this page only for the instruction check and review posting. The steps below write `## Agent roles` only for a user without a matrix.
+
 ## Judge
 
 Ask with three neutral choices: Jev (TypeSafe’s evidence-checking service), a small model of your current AI app, or none. Question: "Who should help check whether task evidence meets a requirement?"

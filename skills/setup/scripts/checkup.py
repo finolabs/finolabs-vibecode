@@ -20,6 +20,20 @@ HEADINGS = {"Limits", "Briefs folder", "Coordinators and reach", "Route judgment
             "Dispatch marker", "Claude Code", "Codex", "Antigravity",
             "Agent roles", "Review posting", "Delegate environment"}
 MAX_BYTES = 262144
+# Skills that lost the fnl- prefix in 0.2.5. The old names are user-only aliases: typed, they still load the
+# skill, but a file that tells the model to invoke one no longer does. Each maps to the name files must use.
+RENAMED = {"fnl-" + name: target for name, target in (
+    ("advisor", "advisor"), ("afk", "afk"), ("ask", "help"), ("autopilot", "autopilot"), ("brb", "afk"),
+    ("checks", "checks"), ("coding-router", "coding-router"), ("commit-messages", "commit-messages"),
+    ("delegate", "delegate"), ("gtg", "pause"), ("handoff", "handoff"), ("help", "help"),
+    ("open-source-review", "open-source-review"), ("pause", "pause"), ("plugin-packaging", "plugin-packaging"),
+    ("restore-point", "restore-point"), ("review-gate", "review-gate"),
+    ("security-review-gate", "security-review-gate"), ("session-hygiene", "session-hygiene"), ("setup", "setup"),
+    ("status", "status"), ("update", "update"), ("verification", "checks"), ("versioning", "versioning"))}
+
+
+def renamed_in(line):
+    return [name for name in RENAMED if re.search(r"(?<![\w-])" + re.escape(name) + r"(?![\w-])", line)]
 
 
 def open_safe(path, directory=False):
@@ -324,6 +338,16 @@ def retired_evidence(paths, reader=read):
     return item("retired skill pointers", "unverified" if unknown else "ok",
                 "some context files unreadable or symlink refused" if unknown else
                 "none in readable known context files; runtime loading unverified")
+
+
+def renamed_evidence(paths, reader=read):
+    """One row only when a readable instruction file names a skill by its old fnl- name."""
+    found = sorted({name for path in paths for status, text in [reader(path)] if status == "ok"
+                    for line in text.splitlines() if len(line) <= 2000 for name in renamed_in(line)})
+    if not found:
+        return []
+    return [item("old skill names", "missing", ", ".join(name + " -> " + RENAMED[name] for name in found) +
+                 "; instruction files must use the new names (old names load only when typed)")]
 
 
 # The instruction scan has its own bounded, in-memory evidence set. Reports contain
@@ -662,6 +686,8 @@ def instruction_scan(home, codex, root, cwd, git, common_git=None, claude=None):
                            "setup-instructions", "scan-agents", "set-mode"):
                 if re.search(r"(?<![\w-])fnl-" + suffix + r"(?![\w-])", line):
                     add("I14", "warn", path, number, "retired-skill", "retired skill pointer")
+            for name in renamed_in(line):
+                add("I14", "warn", path, number, "old-skill-name", name + ": use " + RENAMED[name])
         try:
             fd = open_safe(path)
             try:
@@ -947,6 +973,64 @@ def project_tracking(text, root):
     return rows
 
 
+def legacy_evidence(status, text):
+    """Retired host.md sections and lines, by fixed name only; never a value from them."""
+    from upgrade_state import legacy
+    found = legacy(text) if status == "ok" else []
+    if not found:
+        return []
+    return [item("legacy host settings", "missing", "no longer read: " + ", ".join(found) +
+                 "; set again per repository (/setup add project, /setup add checks), then delete by hand")]
+
+
+def quota_config():
+    """(reason, broken) for the recorded quota programs, checked without running any; None when not set up."""
+    import quota_probe as qp
+    try:
+        text = dr.read_data("host.md", MAX_BYTES).decode("utf-8")
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, UnicodeError):
+        return "config: unreadable; run /setup add quota again", True
+    values = dict(re.findall(r"^- ([A-Za-z ]+): (.+?)\s*$", qp.section(text), re.M))
+    if values.get("Quota probe") != "on":
+        return None
+    agents = [name for name in values.get("Agents", "").split(", ") if name in qp.SOURCES]
+    if not agents:
+        return "config: no recorded program; run /setup add quota again", True
+    entries, rows = qp.canonical_config(), []
+    for agent in agents:
+        problem = None
+        if agent not in entries:
+            problem = "confirmation missing"
+        else:
+            try:
+                qp.checked_executable(agent, entries[agent])  # path and owner checks only; nothing runs
+            except FileNotFoundError:
+                problem = "executable gone"
+            except ValueError as error:
+                problem = "target changed" if "changed" in str(error) else "path refused"
+            except OSError:
+                problem = "executable unreadable"
+        rows.append(agent + " " + (problem or "ok"))
+    broken = any(not row.endswith(" ok") for row in rows)
+    return "config: " + ", ".join(rows) + ("; run /setup add quota again" if broken else ""), broken
+
+
+def compaction_evidence(claude_home, root):
+    """Contradictory Claude Code compaction settings, by key and variable name only."""
+    import compact_setup as cs
+    files = [("user", claude_home / "settings.json"), ("project", root / ".claude/settings.json"),
+             ("local", root / ".claude/settings.local.json"), *cs.managed_settings()]
+    window, findings = cs.auto_compact_conflicts(
+        [(label, text.encode()) for label, path in files for status, text in [read(path)] if status == "ok"],
+        os.environ)
+    if not window or not findings:
+        return []
+    return [item("compaction settings", "missing", "a compaction window is set, but " + "; ".join(findings) +
+                 "; turn auto-compaction on or remove the window")]
+
+
 def claude_home_names(home):
     """Directory names shaped like Claude config homes among up to 4096 entries, no links followed."""
     try:
@@ -1079,9 +1163,13 @@ def collect(payload=False):
     matrix = assignments.parse(text)
     # A present matrix replaces the legacy roles section, so that heading is no longer required.
     required = HEADINGS - {"Agent roles"} if matrix.state != "absent" else HEADINGS
-    missing = sorted(required - set(re.findall(r"^## (.+?)\s*$", text, re.M)))
-    host_config = item("host config", status if status != "ok" else ("missing" if missing else "ok"),
-                       ("required headings present; values not validated" if not missing else
+    present = set(re.findall(r"^## (.+?)\s*$", text, re.M))
+    missing = sorted(required - present)
+    # Roles and posting have their own setup step, so only the delegation template's sections show it ran.
+    never = not (HEADINGS - {"Agent roles", "Review posting"}) & present
+    host_config = item("host config", status if status != "ok" else ("missing" if missing and not never else "ok"),
+                       ("delegation not set up; /setup add delegation sets it up" if never else
+                        "required headings present; values not validated" if not missing else
                         "required headings absent: " + ", ".join(missing)) if status == "ok" else
                        "host config absent or unreadable")
     # Folded into this row so the report stays within forty lines.
@@ -1108,11 +1196,18 @@ def collect(payload=False):
     data_path, data_source = dr.data_root()
     from quota_probe import status_lines
     quota = item("quota", "unverified", "advisory cache; " + " | ".join(status_lines()))
+    configured = quota_config()
+    if configured:
+        quota["reason"] += " | " + configured[0]
+        quota["status"] = "missing" if configured[1] else quota["status"]
     return {"principle": PRINCIPLE, "hosts": hosts, "instructions": instruction_block, "setup": [
             item("data root", data_source, str(data_path)), host_config, inventory, quota,
+            *legacy_evidence(config_status, config_text),
+            *compaction_evidence(claude_home, root),
             *other_claude_homes(home, claude_home),
             *claude_plugin_enablement(home, claude_home),
             retired_evidence([*user_context, *context], reader=context_read),
+            *renamed_evidence([*user_context, *context], reader=context_read),
             item("effective settings", "ok", "delegation mode=" + settings["delegation_mode"] +
                  "; routing=" + settings["routing"] + "; auto gate=" + settings["auto_gate"] + "; selected values only, not runtime proof"), *repository]}
 

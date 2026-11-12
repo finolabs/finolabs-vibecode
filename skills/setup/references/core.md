@@ -16,7 +16,8 @@ Yes: Copy locally, switch the pointer; source kept. Nothing is sent.
 No: Keep the files and location; ask later.
 Undo: Switch back to the retained source.
 Choices: "Yes, copy and switch" / "No, keep it here".
-After yes: `data_location.py apply --to <path> --yes --digest <full 64-hex preview digest>`. Script checks digest/target; private copy, no symlinks; pointer last, source kept. Invalid pointer blocks consent writes.
+After yes: `data_location.py apply --to <path> --yes --digest <full 64-hex digest>`. Script checks digest/target; private copy, no symlinks; pointer last, source kept. Invalid pointer blocks consent writes.
+Then run `python3 -I <update skill folder>/scripts/update_check.py onboard first` (fresh root only).
 2. **Scan.** `references/scan.md`.
 3. **Mode/Routing.** `references/mode.md`.
 4. **Knowledge base.** Save judge/date, coordinators/limit/host path through the access those instructions approve; follow `session-hygiene` "Remember or recall". It asks nothing new; no consent row; report any write that failed.
@@ -37,13 +38,13 @@ Yes: Add .finolabs/ and .orchestration/ to this repository’s local .git/info/e
 No: Keep the list; ask later.
 Undo: Remove those entries.
 Choices: "Yes, hide these files" / "No, keep the list".
-Exclude legacy `.orchestration/`; shared `.gitignore` needs request.
-2. **Agent skills block.** Existing context only; offer per file in `AGENTS.md` and `CLAUDE.md` (skip a `CLAUDE.md` that imports it):
+`.gitignore` only on request.
+2. **Agent skills block.** Existing context only; offer per file in `AGENTS.md` and `CLAUDE.md` (skip one that imports it):
 
 ```markdown
 ## Agent skills
 
-This repository uses the finolabs-vibecode skills. Routing on: use `coding-router`. <Spec Kit line, when present: use Spec Kit.> <Work-record line, when adopted: use work records.> Pull requests follow `review-gate` "Pull requests"; reviewers may post code/security reviews. <Single-owner option: Pull requests may take the low-risk lane of `review-gate`.> Help: `/ask`.
+This repository uses the finolabs-vibecode skills. Routing on: use `coding-router`. <Spec Kit line, when present: use Spec Kit.> <Work-record line, when adopted: use work records.> Pull requests follow `review-gate` "Pull requests"; reviewers may post code/security reviews. <Single-owner option: Pull requests may take the low-risk lane of `review-gate`.> Help: `/finolabs-vibecode:help` (Codex `$help`).
 ```
 
    Include only the confirmed workflow line, neither when none. `python3 -I <this skill folder>/scripts/instructions_write.py preview --target <file> --content-file <draft> --block "Agent skills"`; show diff/full digest. Ask: "Save these plugin rules for AI sessions in this repository?"
@@ -54,5 +55,5 @@ Choices: "Yes, save the rules" / "No, keep the file".
 After yes: `instructions_write.py apply --digest <full digest> --yes`. Read back. Script checks target/digest/expiry; no symlinks; atomic backup/block.
 3. **Workflow detection.** Ask: "How does this repository keep its building plan and task progress?"
 Description: Choose Spec Kit (plan/task files), work records (goals/evidence), or neither. Undecided keeps notes; choose/correct later. Nothing sent; separate write approval.
-Folders prove no integration; instructions owns Work tracking/open questions.
-4. **Read-back and report.** Inert facts; report as user step 6. Dashboard settings/label: `project` feature, separate metrics/progress prerequisites.
+Instructions owns Work tracking/open questions.
+4. **Read-back and report.** Inert facts; report as user step 6. Dashboard settings/label: `project` feature (metrics/progress prerequisites).
