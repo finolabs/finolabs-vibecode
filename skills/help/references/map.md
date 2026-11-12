@@ -146,6 +146,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | Path | Purpose |
 | --- | --- |
 | `skills/checks/scripts/checks.py` | Runs or shows the repository's approved stored checks (a changed or unapproved check file runs nothing) in order through `heavy_run.py`, stops at the first failure, narrows Python test modules with `--changed`, and writes a local receipt only for a whole passing run on a clean, unmoved head when that mode is on. `usage --from <file>` summarises hosted CI runs, minutes, the document-only share and days left from a run list the agent produced; no network call and no process. |
+| `skills/commit-messages/scripts/worktree_sweep.py` | Lists linked worktrees (branch, size, clean or dirty, unpushed, merged); `--remove` takes only merged, clean, fully pushed ones named with `--path` or finished in the ledger, never forced, and lists the rest with the reason. Copy in `review-gate`. |
 | `skills/delegate/scripts/autopilot.py` | Autopilot lease, closed action classification (Tier 1 or Tier 3) and private action log; executes nothing. |
 | `skills/delegate/scripts/heavy_run.py` | Runs one heavy command at a time per machine under a kernel lock, with load and memory gates, a wait cap and a maximum run time. |
 | `skills/delegate/scripts/ledger.py` | Records runs; accepted finishes need a current-head receipt or explicit reason-digested exception. |
