@@ -47,6 +47,9 @@ REQUIRED = {
     "start": {"id", "ts", "project", "task", "kind", "grade", "agent", "model", "reason"},
     "finish": {"id", "ts", "outcome", "rework_rounds"},
 }
+# A posted review comment, checked by pattern only and never fetched.
+REVIEW_URL = re.compile(r"https://github\.com/[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}/pull/[1-9][0-9]{0,9}"
+                        r"#issuecomment-[1-9][0-9]{0,19}")
 # Away-decision lines (docs/specs/away-decisions.md): load() skips them silently, load_away() returns them.
 AWAY_EVENTS = {
     "decision": {"id", "ts", "lease_start", "rung", "settled"},
@@ -246,22 +249,29 @@ def finish_locked(args, status):
         sys.exit(f"ledger: no start line for {args.id}")
     if args.id in finishes:
         sys.exit(f"ledger: {args.id} already has a finish line")
-    if args.head is not None and starts[args.id]["kind"] != "implement":
-        sys.exit("ledger: only implementation dispatches can bind a head")
+    kind = starts[args.id]["kind"]
+    if args.head is not None and kind not in ("implement", "review"):
+        sys.exit("ledger: only implementation and review dispatches can bind a head")
     if args.head is not None and not re.fullmatch(r"[0-9a-f]{40}", args.head):
         sys.exit("ledger: invalid head")
+    if args.review_url is not None:
+        if kind != "review" or args.outcome != "accepted":
+            sys.exit("ledger: --review-url goes only with an accepted review dispatch")
+        if not REVIEW_URL.fullmatch(args.review_url):
+            sys.exit("ledger: invalid review URL")
     extra = {}
     if args.accept_unverified and args.outcome != "accepted":
         sys.exit("ledger: --accept-unverified requires accepted")
-    if args.reason and not args.accept_unverified:
-        sys.exit("ledger: --reason requires --accept-unverified")
+    if args.reason is not None and (not args.reason.strip() or len(args.reason) > 4096):
+        sys.exit("ledger: --reason must be nonempty and at most 4096 characters")
     if args.outcome == "accepted":
         if args.accept_unverified:
-            if not args.reason or not args.reason.strip() or len(args.reason) > 4096:
+            if args.reason is None:
                 sys.exit("ledger: --accept-unverified requires a bounded nonempty --reason")
-            # Free text is never persisted. The digest identifies the coordinator's report.
-            extra = {"accept_unverified": True,
-                     "reason_id": hashlib.sha256(args.reason.encode()).hexdigest()}
+            extra = {"accept_unverified": True}
+        elif kind == "review":
+            # A review produces a posted review, not a test receipt; the URL is checked by pattern, never stored.
+            extra = {"review_posted": True} if args.review_url is not None else {}
         else:
             try:
                 from record import checkout_identity, current_head, git, read_verification
@@ -279,11 +289,21 @@ def finish_locked(args, status):
             except (ImportError, OSError, ValueError, TypeError, subprocess.SubprocessError):
                 sys.exit("ledger: acceptance refused: current checkout head needs a passing verify receipt; "
                          "or use --accept-unverified --reason")
+    if args.reason is not None:
+        # Free text is never persisted. The digest identifies the coordinator's report.
+        extra["reason_id"] = hashlib.sha256(args.reason.encode()).hexdigest()
     if status != "no_findings":
         print("ledger: log_scan: " + status, file=sys.stderr)
+    # Only an implementation head binds authorship for review routing; a review records the head it reviewed.
+    if args.head is None:
+        bound = {}
+    elif kind == "implement":
+        bound = {"head": args.head, "agent": starts[args.id]["agent"]}
+    else:
+        bound = {"reviewed_head": args.head}
     append({
         **extra,
-        **({"head": args.head, "agent": starts[args.id]["agent"]} if args.head is not None else {}),
+        **bound,
         "event": "finish", "id": args.id, "ts": now(), "outcome": args.outcome,
         "rework_rounds": args.rework_rounds, "tests": args.tests, "note": args.note,
         "log_scan": status,
@@ -707,14 +727,18 @@ def build_parser():
     f = sub.add_parser("finish", help="record how a dispatch ended")
     f.add_argument("id")
     f.add_argument("--log-path", help="regular file inside the private run-log folder")
-    f.add_argument("--head", help="exact reviewed implementation head for trusted review routing")
+    f.add_argument("--head", help="exact implementation head for trusted review routing, or the head a review "
+                                  "dispatch reviewed")
+    f.add_argument("--review-url", help="the posted review comment of an accepted review dispatch; pattern-checked, "
+                                        "never fetched or stored")
     f.add_argument("--outcome", required=True, choices=OUTCOMES)
     f.add_argument("--rework-rounds", type=int, default=0)
     f.add_argument("--tests", default="not-run", choices=TESTS)
     f.add_argument("--note", default="")
     f.add_argument("--checkout", default=".", help="the checkout named at dispatch")
     f.add_argument("--accept-unverified", action="store_true")
-    f.add_argument("--reason", help="reason retained only as a digest; keep text in the coordinator report")
+    f.add_argument("--reason", help="reason for any outcome, retained only as a digest; keep text in the "
+                                    "coordinator report")
     f.set_defaults(func=cmd_finish)
 
     o = sub.add_parser("open", help="list dispatches with no finish line")

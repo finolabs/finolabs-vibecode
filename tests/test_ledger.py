@@ -286,11 +286,88 @@ class LedgerTest(unittest.TestCase):
     def test_review_dispatch_cannot_claim_implementation_head(self):
         args = ["review" if a == "implement" else a for a in START]
         dispatch_id = self.run_ledger(*args).stdout.strip()
-        result = self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--head", "a" * 40,
-                                 "--accept-unverified", "--reason", "Head binding fixture", check=False)
-        self.assertIn("only implementation dispatches", result.stderr)
+        self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--head", "a" * 40,
+                        "--accept-unverified", "--reason", "Head binding fixture")
+        finish = self.records()[-1]
+        # The reviewed head is kept apart: it never binds authorship for review routing.
+        self.assertEqual(finish["reviewed_head"], "a" * 40)
+        self.assertNotIn("head", finish)
+        self.assertNotIn("agent", finish)
+        advise = self.run_ledger(*["advise" if a == "implement" else a for a in START]).stdout.strip()
+        result = self.run_ledger("finish", advise, "--outcome", "rejected", "--head", "a" * 40, check=False)
+        self.assertIn("only implementation and review dispatches", result.stderr)
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(len(self.records()), 1)
+        self.assertEqual(self.records()[-1]["event"], "start")
+
+    # A review dispatch is accepted on its posted review, not on a test receipt.
+
+    REVIEW_URL = "https://github.com/example-org/demo-app/pull/12#issuecomment-345678"
+
+    def start_kind(self, kind):
+        return self.run_ledger(*[kind if a == "implement" else a for a in START]).stdout.strip()
+
+    def test_review_accept_needs_no_receipt_and_records_a_given_url_as_a_flag(self):
+        plain = self.start_kind("review")
+        self.run_ledger("finish", plain, "--outcome", "accepted", "--head", "b" * 40)
+        finish = self.records()[-1]
+        self.assertEqual((finish["outcome"], finish["reviewed_head"]), ("accepted", "b" * 40))
+        self.assertNotIn("review_posted", finish)
+        self.assertNotIn("accept_unverified", finish)
+        posted = self.start_kind("review")
+        self.run_ledger("finish", posted, "--outcome", "accepted", "--review-url", self.REVIEW_URL)
+        finish = self.records()[-1]
+        self.assertIs(finish["review_posted"], True)
+        self.assertNotIn("issuecomment", self.path.read_text())  # the URL itself is never stored
+        [row] = json.loads(self.run_ledger("summary", "--json").stdout)
+        self.assertEqual((row["kind"], row["accepted"], row["accepted_unverified"]), ("review", 1, 0))
+
+    def test_review_url_is_pattern_checked_and_only_for_an_accepted_review(self):
+        review = self.start_kind("review")
+        for bad in ("http://github.com/example-org/demo-app/pull/12#issuecomment-345678",
+                    "https://github.com.example/example-org/demo-app/pull/12#issuecomment-345678",
+                    "https://github.com/example-org/demo-app/pull/12",
+                    "https://github.com/example-org/demo-app/issues/12#issuecomment-345678",
+                    "https://github.com/example-org/demo-app/pull/12#issuecomment-345678 extra",
+                    "https://github.com/example-org/demo-app/pull/12#issuecomment-345678\n"):
+            with self.subTest(url=bad):
+                result = self.run_ledger("finish", review, "--outcome", "accepted", "--review-url", bad, check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("invalid review URL", result.stderr)
+        rejected = self.run_ledger("finish", review, "--outcome", "rejected", "--review-url", self.REVIEW_URL,
+                                   check=False)
+        self.assertIn("only with an accepted review", rejected.stderr)
+        implement = self.run_ledger(*START).stdout.strip()
+        other = self.run_ledger("finish", implement, "--outcome", "accepted", "--review-url", self.REVIEW_URL,
+                                "--accept-unverified", "--reason", "Synthetic fixture", check=False)
+        self.assertIn("only with an accepted review", other.stderr)
+        self.assertEqual([r["event"] for r in self.records()], ["start", "start"])
+
+    def test_other_kinds_still_need_a_receipt_to_be_accepted(self):
+        for kind in ("implement", "advise", "committee"):
+            with self.subTest(kind=kind):
+                dispatch = self.start_kind(kind)
+                done = self.run_ledger("finish", dispatch, "--outcome", "accepted", check=False)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("passing verify receipt", done.stderr)
+                self.assertEqual(self.records()[-1]["event"], "start")
+
+    def test_reason_goes_with_any_outcome_and_is_kept_only_as_a_digest(self):
+        for outcome in ("rejected", "error", "cancelled", "stalled"):
+            with self.subTest(outcome=outcome):
+                dispatch = self.run_ledger(*START).stdout.strip()
+                self.run_ledger("finish", dispatch, "--outcome", outcome, "--reason", "Synthetic reason text")
+                finish = self.records()[-1]
+                self.assertEqual(finish["reason_id"], hashlib.sha256(b"Synthetic reason text").hexdigest())
+                self.assertNotIn("accept_unverified", finish)
+        review = self.start_kind("review")
+        self.run_ledger("finish", review, "--outcome", "accepted", "--reason", "Synthetic reason text")
+        self.assertEqual(len(self.records()[-1]["reason_id"]), 64)
+        self.assertNotIn("Synthetic reason text", self.path.read_text())
+        dispatch = self.run_ledger(*START).stdout.strip()
+        for bad in (" ", "x" * 4097):
+            result = self.run_ledger("finish", dispatch, "--outcome", "rejected", "--reason", bad, check=False)
+            self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.records()[-1]["event"], "start")
 
     def test_open_lists_unfinished_runs_with_age_against_budget(self):
         dispatch_id = self.run_ledger(*START).stdout.strip()
