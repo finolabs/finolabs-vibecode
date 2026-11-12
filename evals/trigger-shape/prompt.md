@@ -1,5 +1,5 @@
 ---
-name: trigger-clarify
+name: trigger-shape
 tags: [trigger]
 runs: 3
 max_turns: 5

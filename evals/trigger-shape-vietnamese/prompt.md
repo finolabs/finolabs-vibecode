@@ -1,5 +1,5 @@
 ---
-name: trigger-clarify-vietnamese
+name: trigger-shape-vietnamese
 tags: [trigger]
 runs: 3
 max_turns: 5

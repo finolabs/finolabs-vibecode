@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MANIFESTS = [ROOT / d / "plugin.json" for d in (".claude-plugin", ".codex-plugin", ".antigravity-plugin")]
 # Skills added after the 0.2.5 rename never had an fnl- name, so they have no alias folder.
-NO_OLDER_NAME = {"clarify"}
+NO_OLDER_NAME = {"shape"}
 
 
 def user_only(name):
