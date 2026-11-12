@@ -45,6 +45,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
   `checks_setup.py` adds `.finolabs/` to the repository's `.git/info/exclude` once (never to `.gitignore`), keeps a replaced file as `checks.json.bak-<date>`, and never opens `host.md`. Undo is `checks_setup.py remove` for this repository; a stale remove preview changes nothing.
 - Breaking for lists saved with 0.2.4: the `## Checks` section of `host.md` is no longer read, with no fallback and no migration command (owner decision, 2026-11-11). Until you run `/setup add checks` again in each repository, it has no checks and its local receipt is off; then delete the old section from `host.md` by hand. The 0.2.5 upgrade note in `/update` says so.
 
+### Fixed
+
+- `afk` no longer treats the plugin's own wrapper commands (`ledger.py`, `record.py`, `heavy_run.py`, `judge.py`, `delegate_env.py`, `merge_check.py`) as protected when the plugin is installed under a `.claude` or `.codex` folder, as Claude Code and Codex install it. Only that one exact script path is spared the protected-name check; every other token, including a nested command's, is still checked.
+
 ## [0.2.4] - 2026-11-11
 
 ### Added

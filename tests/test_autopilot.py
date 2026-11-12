@@ -202,6 +202,28 @@ class AutopilotTest(AutopilotBase):
         self.check(paths=['src/example.py', 'tests/test_example.py', 'docs/guide.md'])
         self.assertEqual(self.lease()['counters']['runs'], 1)
 
+    def test_install_under_a_dot_claude_folder_keeps_its_own_wrappers(self):
+        # Plugins install under ~/.claude/plugins or ~/.codex; the install path itself must not make
+        # this install's own wrapper scripts protected, while any other .claude token still is.
+        import shutil
+        install = self.home / '.claude/plugins/cache/example/plugin/1.0.0/skills'
+        for skill in ('delegate', 'review-gate'):
+            shutil.copytree(ROOT / 'skills' / skill / 'scripts', install / skill / 'scripts')
+        global SCRIPT
+        saved, SCRIPT = SCRIPT, install / 'delegate/scripts/autopilot.py'
+        try:
+            self.start()
+            own = install / 'delegate/scripts'
+            self.check(['python3', '-I', str(own / 'ledger.py'), 'start'])
+            self.check(['python3', '-I', str(own / 'heavy_run.py'), 'run', '--label', 'tests', '--', 'gh', 'pr', 'view', '7'])
+            self.check(['python3', '-I', str(install / 'review-gate/scripts/merge_check.py'), '7', '--independent'])
+            self.check(['python3', '-I', str(own / 'heavy_run.py'), 'run', '--', 'rm', '-rf', 'temp'], tier=3, code='forbidden')
+            self.check(['python3', '-I', str(own / 'ledger.py'), 'start', '--note', '.claude'], tier=3, code='protected')
+            self.check(['python3', '-I', str(own / 'heavy_run.py'), 'run', '--', 'cat', str(own / 'ledger.py')], tier=3, code='protected')
+            self.check(['python3', '-I', str(own / 'other.py')], tier=3, code='protected')
+        finally:
+            SCRIPT = saved
+
     def test_tier_three_commands(self):
         self.start()
         for argv, code in ((['git', 'tag', 'v1'], 'forbidden'), (['gh', 'release', 'view'], 'forbidden'),
