@@ -715,6 +715,9 @@ def advisor_command(tail, applied, coordinator):
     if len(tail) < 4 or tail[0] != '--family' or tail[2] != '--':
         return 'unknown'
     family, rest = tail[1], tail[3:]
+    # ZCode has no verified read-only advisor form; never parse it with another family's grammar.
+    if family == 'zcode':
+        return 'unknown'
     hosts = {HOST_FAMILIES[h] for h in applied['Hosts'].split(', ')}
     if family not in PROGRAMS or family not in hosts or coordinator not in PROGRAMS or coordinator == family:
         return 'unknown'
