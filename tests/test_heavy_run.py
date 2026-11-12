@@ -31,10 +31,17 @@ class HeavyRunTest(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.load = 1.0
         self.free = 8.0
-        for name, value in (('read_load', lambda: self.load), ('read_free_gb', lambda: self.free)):
+        self.pressure = 'normal'
+        self.swapped = 0
+        for name, value in (('read_load', lambda: self.load), ('read_free_gb', lambda: self.free),
+                            ('read_pressure', lambda: self.pressure), ('read_swapout_bytes', lambda: self.swapped),
+                            ('memory_gates_available', lambda: True)):
             patcher = mock.patch.object(heavy, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
+        window = mock.patch.dict(heavy.DEFAULTS, {'memory_window_seconds': 0.01})
+        window.start()
+        self.addCleanup(window.stop)
 
     def run_cli(self, *argv, poll='0.02'):
         out, err = io.StringIO(), io.StringIO()
@@ -49,7 +56,8 @@ class HeavyRunTest(unittest.TestCase):
         """A real second process running the wrapper, as another repository's agent would."""
         pre = ('import sys, pwd, types; sys.path.insert(0, %r); '
                'pwd.getpwuid = lambda uid: types.SimpleNamespace(pw_dir=%r); import heavy_run as h; '
-               'h.read_load = lambda: 1.0; h.read_free_gb = lambda: 8.0; '
+               'h.read_load = lambda: 1.0; h.read_free_gb = lambda: 8.0; h.read_pressure = lambda: "normal"; '
+               'h.read_swapout_bytes = lambda: 0; h.DEFAULTS["memory_window_seconds"] = 0.01; '
                % (str(SCRIPTS), str(self.home)))
         code = pre + 'sys.exit(h.main(%r))' % (['--poll', '0.02', *cli],)
         child = subprocess.Popen([sys.executable, '-c', code], cwd=cwd, env={'PATH': os.environ['PATH'], **(extra_env or {})})
@@ -93,6 +101,27 @@ class HeavyRunTest(unittest.TestCase):
             self.assertIn('load' if attribute == 'load' else 'memory', err)
             self.load, self.free = 1.0, 8.0
         self.assertEqual(self.run_cli('run', '--', sys.executable, '-c', 'pass')[0], 0)
+
+    def test_memory_pressure_other_than_normal_waits_and_unreadable_never_passes(self):
+        for level in ('warning', 'critical', None):
+            self.pressure = level
+            code, _, err = self.run_cli('run', '--wait-seconds', '0.1', '--', sys.executable, '-c', 'pass')
+            self.assertEqual(code, 75, level)
+            self.assertIn('memory pressure', err)
+        self.pressure = 'normal'
+        self.assertEqual(self.run_cli('run', '--', sys.executable, '-c', 'pass')[0], 0)
+
+    def test_an_unreadable_swap_out_count_never_passes(self):
+        self.swapped = None
+        code, _, err = self.run_cli('run', '--wait-seconds', '0.1', '--', sys.executable, '-c', 'pass')
+        self.assertEqual(code, 75)
+        self.assertIn('swap-out', err)
+
+    def test_status_shows_the_pressure_state(self):
+        self.pressure = 'warning'
+        self.assertIn('pressure: warning', self.run_cli('status')[1])
+        self.pressure = None
+        self.assertIn('pressure: unknown', self.run_cli('status')[1])
 
     def test_without_a_memory_reading_only_load_is_checked(self):
         with mock.patch.object(heavy, 'read_free_gb', lambda: None):
@@ -215,7 +244,7 @@ class HeavyRunTest(unittest.TestCase):
         attempts = []
         original = heavy.resource_wait
 
-        def gate(config):
+        def gate(config, watch=None):
             attempts.append(clock[0])
             return 'busy' if clock[0] < 5 else None
 
@@ -243,7 +272,7 @@ class HeavyRunTest(unittest.TestCase):
     def test_a_slow_resource_reading_that_crosses_the_wait_cap_starts_nothing(self):
         clock = [0.0]
 
-        def gate(config):
+        def gate(config, watch=None):
             clock[0] += 2.0
             return None
 
@@ -425,10 +454,16 @@ class HeavyRunTest(unittest.TestCase):
             self.assertEqual(self.run_cli('run', '--label', label, '--', sys.executable, '-c', 'pass')[0], 2, label)
 
     def test_config_section_sets_limits_and_bad_values_fall_back(self):
-        (self.root / 'host.md').write_text('## Heavy jobs\n- Load limit: 3\n- Memory minimum GB: 99999\n- Wait cap minutes: 5\n- Max job minutes: 30\n')
+        (self.root / 'host.md').write_text('## Heavy jobs\n- Load limit: 3\n- Memory minimum GB: 99999\n- Wait cap minutes: 5\n- Max job minutes: 30\n'
+                                           '- Memory window seconds: 0\n- Swap-out limit MB per second: 99999\n')
         os.chmod(self.root / 'host.md', 0o600)
         limits = heavy.limits()
-        self.assertEqual((limits['load'], limits['memory_gb'], limits['wait_minutes'], limits['max_minutes']), (3.0, 3.0, 5.0, 30.0))
+        self.assertEqual((limits['load'], limits['memory_gb'], limits['wait_minutes'], limits['max_minutes']), (3.0, 4.0, 5.0, 30.0))
+        self.assertEqual((limits['memory_window_seconds'], limits['swapout_mb_per_second']), (0.01, 5.0))  # a zero window is refused
+        (self.root / 'host.md').write_text('## Heavy jobs\n- Memory window seconds: 30\n- Swap-out limit MB per second: 2.5\n')
+        limits = heavy.limits()
+        self.assertEqual((limits['memory_window_seconds'], limits['swapout_mb_per_second']), (30.0, 2.5))
+        (self.root / 'host.md').write_text('## Heavy jobs\n- Load limit: 3\n')
         self.load = 4.0
         self.assertEqual(self.run_cli('run', '--wait-seconds', '0.1', '--', sys.executable, '-c', 'pass')[0], 75)
 
@@ -543,9 +578,132 @@ class MeasureTest(unittest.TestCase):
     def test_old_vm_stat_output_without_the_optional_lines_keeps_the_old_sum(self):
         self.assertAlmostEqual(self.free_gb(vm_text(1000, 60000, 1000)), 62000 * 16384 / 2 ** 30)
 
+    def test_pressure_level_comes_from_the_kernel_sysctl(self):
+        for text, expected in (('1\n', 'normal'), ('2\n', 'warning'), ('4\n', 'critical'), ('7\n', None), ('x', None), ('', None)):
+            with mock.patch.object(heavy.subprocess, 'run', fake_run(text)):
+                self.assertEqual(heavy.read_pressure(), expected, text)
+        with mock.patch.object(heavy.subprocess, 'run', fake_run('1\n', returncode=1)):
+            self.assertIsNone(heavy.read_pressure())
+        with mock.patch.object(heavy.subprocess, 'run', fake_run('', error=subprocess.TimeoutExpired('x', 5))):
+            self.assertIsNone(heavy.read_pressure())
+        calls = []
+
+        def run(argv, **kwargs):
+            calls.append((argv, kwargs))
+            return subprocess.CompletedProcess(argv, 0, '1\n', '')
+        with mock.patch.object(heavy.subprocess, 'run', run):
+            heavy.read_pressure()
+        self.assertEqual(calls[0][0], ['/usr/sbin/sysctl', '-n', 'kern.memorystatus_vm_pressure_level'])
+        self.assertEqual(calls[0][1]['timeout'], 5)
+        self.assertFalse(calls[0][1].get('shell', False))
+
+    def test_swap_out_bytes_come_from_vm_stat(self):
+        text = vm_text(1, 2, 3) + 'Swapins: 9.\nSwapouts: 100.\n'
+        with mock.patch.object(heavy.subprocess, 'run', fake_run(text)):
+            self.assertEqual(heavy.read_swapout_bytes(), 100 * 16384)
+        for bad in (vm_text(1, 2, 3), 'Swapouts: 100.\n'):
+            with mock.patch.object(heavy.subprocess, 'run', fake_run(bad)):
+                self.assertIsNone(heavy.read_swapout_bytes())
+        with mock.patch.object(heavy.subprocess, 'run', fake_run(text, returncode=1)):
+            self.assertIsNone(heavy.read_swapout_bytes())
+
     def test_unreadable_vm_stat_is_none(self):
         self.assertIsNone(self.free_gb('nothing useful'))
         self.assertIsNone(self.free_gb(vm_text(1, 2, 3).replace('Pages free', 'Pages gone')))
+
+
+class MemoryWatchTest(unittest.TestCase):
+    """The pressure and swap-out gates over a window, driven by explicit times and patched readings."""
+
+    def setUp(self):
+        self.pressure, self.swapped = 'normal', 0
+        for name, value in (('read_pressure', lambda: self.pressure), ('read_swapout_bytes', lambda: self.swapped),
+                            ('memory_gates_available', lambda: True)):
+            patcher = mock.patch.object(heavy, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.config = dict(heavy.DEFAULTS)
+        self.watch = heavy.MemoryWatch()
+
+    def at(self, now, pressure='normal', swapped_mb=0):
+        self.pressure, self.swapped = pressure, None if swapped_mb is None else int(swapped_mb * 2 ** 20)
+        return self.watch.reason(self.config, now)
+
+    def test_defaults_match_the_agreed_heuristics(self):
+        self.assertEqual((heavy.DEFAULTS['memory_gb'], heavy.DEFAULTS['memory_window_seconds'],
+                          heavy.DEFAULTS['swapout_mb_per_second']), (4.0, 60.0, 5.0))
+
+    def test_pressure_must_stay_normal_for_the_whole_window(self):
+        self.assertIn('normal for', self.at(0))
+        self.assertIn('normal for', self.at(45))
+        self.assertIsNone(self.at(60))
+        self.assertIn('warning', self.at(75, 'warning'))
+        self.assertIn('normal for', self.at(90))  # the run of normal readings starts again
+        self.assertIn('normal for', self.at(120))
+        self.assertIsNone(self.at(150))
+        self.assertIn('critical', self.at(165, 'critical'))
+
+    def test_swap_out_above_the_limit_over_the_window_waits(self):
+        self.at(0, swapped_mb=0)
+        self.at(15, swapped_mb=400)
+        reason = self.at(60, swapped_mb=400)  # 400 MB over 60 s is about 6.7 MB/s
+        self.assertIn('swap-out', reason)
+        self.assertIsNone(self.at(120, swapped_mb=400))  # the burst left the window
+
+    def test_swap_out_at_or_below_the_limit_passes(self):
+        self.at(0, swapped_mb=0)
+        self.at(30, swapped_mb=150)
+        self.assertIsNone(self.at(60, swapped_mb=300))  # exactly 5 MB/s
+
+    def test_an_unreadable_swap_out_reading_restarts_the_window(self):
+        self.at(0)
+        self.assertIn('swap-out', self.at(30, swapped_mb=None))
+        self.assertIn('normal for', self.at(60))
+        self.assertIn('normal for', self.at(90))
+        self.assertIsNone(self.at(120))
+
+    def test_unreadable_readings_never_pass(self):
+        self.assertIn('unreadable', self.at(0, pressure=None))
+        self.assertIn('unreadable', self.at(100, swapped_mb=None))
+        self.assertIn('unreadable', self.at(200, pressure=None))
+
+    def test_a_tiny_window_still_needs_two_distinct_samples_for_the_rate(self):
+        self.config.update(memory_window_seconds=0.0, swapout_mb_per_second=0.0)
+        self.assertIn('swap-out', self.at(0, swapped_mb=0))  # one sample is no rate, never a pass
+        self.assertIn('swap-out', self.at(1, swapped_mb=500))
+        self.assertIsNone(self.at(2, swapped_mb=500))
+
+    def test_readings_are_stamped_when_they_complete(self):
+        clock = [0.0]
+        latency = [9.0]
+
+        def slow_pressure():
+            clock[0] += latency[0] / 2
+            return 'normal'
+
+        def slow_swap():
+            clock[0] += latency[0] / 2
+            return int(5.5 * 2 ** 20 * max(0.0, clock[0] - 9.0))  # steady 5.5 MB/s from the first completed reading
+
+        with mock.patch.object(heavy, 'read_pressure', slow_pressure), mock.patch.object(heavy, 'read_swapout_bytes', slow_swap), \
+                mock.patch.object(heavy.time, 'monotonic', lambda: clock[0]):
+            self.watch.reason(self.config)
+            self.assertEqual(self.watch.samples[-1][0], 9.0)
+            latency[0] = 0.0
+            for start in (24.0, 39.0, 54.0, 69.0):
+                clock[0] = start
+                reason = self.watch.reason(self.config)
+        self.assertIn('swap-out', reason)  # 330 MB over the 60 s from 9 to 69 is 5.5 MB/s
+
+    def test_a_counter_that_goes_backwards_restarts_the_window(self):
+        self.at(0, swapped_mb=1000)
+        self.assertIn('normal for', self.at(15, swapped_mb=0))
+        self.assertIn('normal for', self.at(60, swapped_mb=200))
+        self.assertIsNone(self.at(75, swapped_mb=200))
+
+    def test_gates_are_off_where_the_kernel_readings_do_not_exist(self):
+        with mock.patch.object(heavy, 'memory_gates_available', lambda: False):
+            self.assertIsNone(self.at(0, pressure=None, swapped_mb=None))
 
 
 class QueueViewTest(unittest.TestCase):
@@ -558,7 +716,7 @@ class QueueViewTest(unittest.TestCase):
         patch = mock.patch.dict(os.environ, {'PATH': os.environ.get('PATH', '')}, clear=True)
         patch.start()
         self.addCleanup(patch.stop)
-        for name, value in (('read_load', lambda: 1.0), ('read_free_gb', lambda: 8.0)):
+        for name, value in (('read_load', lambda: 1.0), ('read_free_gb', lambda: 8.0), ('read_pressure', lambda: 'normal')):
             patcher = mock.patch.object(heavy, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
