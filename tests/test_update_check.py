@@ -421,6 +421,26 @@ class OnboardTest(unittest.TestCase):
             self.assertEqual(u.check_state(['scripts/check_slow.py']), 'unknown')
         with mock.patch.object(u, 'plugin_root', return_value=None):
             self.assertEqual(u.check_state(['scripts/check_done.py']), 'unknown')
+        self.assertEqual(kwargs['cwd'], str(self.plugin / 'scripts'))
+
+    def test_an_info_item_is_told_as_info(self):
+        self.notes_file.write_text(json.dumps({'versions': [{'version': '0.1.7', 'items': [
+            {'id': '0.1.7/news', 'kind': 'info', 'text': 'Synthetic news.'}]}]}))
+        with mock.patch.object(u, 'installed_version', return_value='0.1.7'):
+            self.assertEqual(self.call('whats-new'), '0.1.7\n- [info] 0.1.7/news: Synthetic news.\n')
+
+    def test_a_repository_check_runs_in_the_current_folder(self):
+        with mock.patch.object(u.subprocess, 'run') as run, mock.patch.object(u.os, 'getcwd', return_value='/work/repo'):
+            run.return_value.returncode = 0
+            self.assertEqual(u.check_state(['scripts/check_done.py'], 'repository'), 'done')
+        self.assertEqual(run.call_args[1]['cwd'], '/work/repo')
+        self.notes_file.write_text(json.dumps({'versions': [{'version': '0.1.7', 'items': [
+            {'id': '0.1.7/repo', 'kind': 'setup', 'text': 'Synthetic repository item.',
+             'check': ['scripts/check_done.py'], 'where': 'repository'}]}]}))
+        with mock.patch.object(u, 'check_state', return_value='done') as state, \
+                mock.patch.object(u, 'installed_version', return_value='0.1.7'):
+            self.assertIn('[done] 0.1.7/repo', self.call('whats-new'))
+        state.assert_called_once_with(['scripts/check_done.py'], 'repository')
 
     def test_onboard_seen_and_skip_are_the_only_writers_and_bounded(self):
         self.assertEqual(self.call('onboard', 'seen', '0.1.7'), '')
@@ -441,6 +461,35 @@ class OnboardTest(unittest.TestCase):
         before = self.onboard_file().read_bytes()
         self.call('onboard', 'skip', '0.1.8/n200')
         self.assertEqual(self.onboard_file().read_bytes(), before)
+
+    def test_onboard_first_marks_a_fresh_data_root_seen_and_leaves_an_existing_one(self):
+        host = self.folder.parent / 'host.md'
+        # Fresh: no host config and no onboarding state, so a new user gets no upgrade notes.
+        with mock.patch.object(u, 'installed_version', return_value='0.1.7'):
+            self.assertEqual(self.call('onboard', 'first'), '')
+            self.assertEqual(json.loads(self.onboard_file().read_text()), {'last_seen': '0.1.7', 'skipped': []})
+            self.assertEqual(self.real('whats-new'), 'No new upgrade notes.\n')
+            self.assertIsNone(u.onboard_line('0.1.7'))
+        # A development build records its own release, so that release's notes are not offered either.
+        self.onboard_file().unlink()
+        self.assertEqual(self.call('onboard', 'first'), '')  # installed 0.1.7-dev
+        self.assertEqual(json.loads(self.onboard_file().read_text())['last_seen'], '0.1.7')
+        # Existing: a host config or an onboarding file means an earlier install; nothing changes.
+        self.save('onboard.json', {'last_seen': '0.1.5', 'skipped': ['0.1.6/old']})
+        before = self.onboard_file().read_bytes()
+        self.call('onboard', 'first')
+        self.assertEqual(self.onboard_file().read_bytes(), before)
+        self.onboard_file().unlink()
+        host.write_text('## Routing\non\n')
+        self.call('onboard', 'first')
+        self.assertFalse(self.onboard_file().exists())
+        host.unlink()
+        for args in [('onboard', 'first', '0.1.7'), ('onboard', 'first', 'x')]:
+            self.call(*args)
+            self.assertFalse(self.onboard_file().exists())
+        with mock.patch.object(u, 'installed_version', return_value=None):
+            self.call('onboard', 'first')
+        self.assertFalse(self.onboard_file().exists())
 
     def test_a_full_skip_ledger_of_long_ids_round_trips(self):
         slug = lambda r, i: f'r{r}-' + 'x' * 34 + f'-{i:02d}'

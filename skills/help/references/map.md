@@ -142,6 +142,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/session_start.py` | Read-only Claude Code/Codex reminder and fixed state summary, with advisory slots, a fixed warning when the main checkout is off its default branch, a validated session id line and optional context/handover. |
 | `scripts/statusline_setup.py` | Previews/applies/removes the opt-in context recorder; existing status lines get a manual recipe. |
 | `scripts/update_check.py` | Cached update status, skip/never/pin preferences, the detached fixed-endpoint release check, the upgrade-notes checklist (`whats-new`, `onboard seen`/`skip`) and evidence-checked `target`. |
+| `skills/setup/scripts/upgrade_state.py` | Read-only checks behind the upgrade-notes checklist and `setup check`: whether each note's legacy host settings or approved files are still present, so a done step shows as done. |
 | `scripts/verify_claim.py` | Checks head, scope and targeted tests, writes verification metadata and prepares host-judge evidence; grants no acceptance. |
 | `scripts/select_tests.py` | Lists the test modules that name a file changed since a base, treating shared copies as one, with commands of at most two modules; runs no test. |
 

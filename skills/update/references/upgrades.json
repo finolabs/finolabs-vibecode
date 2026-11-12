@@ -1,6 +1,97 @@
 {
   "versions": [
     {
+      "version": "0.2.0",
+      "items": [
+        {
+          "id": "0.2.0/codex-hook-trust",
+          "kind": "hook",
+          "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; changed hook scripts need renewed trust."
+        },
+        {
+          "id": "0.2.0/context-reading",
+          "kind": "setup",
+          "text": "Context recording needs a status-line command in your own host settings: setup previews one, or gives a recipe when you already have a status line.",
+          "setup": "/setup add compaction"
+        },
+        {
+          "id": "0.2.0/removed-skills",
+          "kind": "removed",
+          "text": "The separate scan-agents, set-mode and setup-instructions skills are gone: use /setup scan, /setup mode and /setup instructions. /setup check lists files that still name them."
+        }
+      ]
+    },
+    {
+      "version": "0.2.1",
+      "items": [
+        {
+          "id": "0.2.1/codex-hook-trust",
+          "kind": "hook",
+          "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; the session-start hook changed."
+        },
+        {
+          "id": "0.2.1/parallel-limits",
+          "kind": "setup",
+          "text": "The Parallel lines in ## Limits of host.md are no longer read: set the limit again in each repository, then delete those lines by hand and keep the rest of ## Limits.",
+          "setup": "/setup add delegation",
+          "check": ["skills/setup/scripts/upgrade_state.py", "no-parallel-lines"]
+        },
+        {
+          "id": "0.2.1/away-setup",
+          "kind": "setup",
+          "text": "The away session (/afk) needs its settings recorded first; skip this if you do not use it.",
+          "setup": "/setup add afk",
+          "check": ["skills/setup/scripts/upgrade_state.py", "afk"]
+        }
+      ]
+    },
+    {
+      "version": "0.2.2",
+      "items": [
+        {
+          "id": "0.2.2/agent-levels",
+          "kind": "setup",
+          "text": "Delegation can record which task levels (1 easy to 5 ultra hard) each helper takes; setup now asks this as part of the assignment matrix.",
+          "setup": "/setup add delegation",
+          "check": ["skills/setup/scripts/upgrade_state.py", "levels"]
+        }
+      ]
+    },
+    {
+      "version": "0.2.3",
+      "items": [
+        {
+          "id": "0.2.3/matrix-migrate",
+          "kind": "migration",
+          "text": "Move ## Agent roles and ## Agent levels into the assignment matrix: setup runs matrix_setup.py migrate, shows what it drops and asks your consent again.",
+          "setup": "/setup add delegation",
+          "check": ["skills/setup/scripts/upgrade_state.py", "matrix"]
+        },
+        {
+          "id": "0.2.3/help-rename",
+          "kind": "rename",
+          "text": "fnl-ask is now help (on Claude Code type /finolabs-vibecode:help). The old name works only when you type it; instruction files must name help."
+        },
+        {
+          "id": "0.2.3/away-decisions",
+          "kind": "setup",
+          "text": "The away session can now decide some questions itself: setup asks which kinds of decision stop it, optional non-production targets and a separate excerpt consent.",
+          "setup": "/setup add afk",
+          "check": ["skills/setup/scripts/upgrade_state.py", "afk-decisions"]
+        },
+        {
+          "id": "0.2.3/question-gate-trust",
+          "kind": "hook",
+          "text": "On Claude Code a new hook holds the question tool during a live away lease; trust the plugin's changed hooks if Claude Code asks."
+        },
+        {
+          "id": "0.2.3/codex-hook-trust",
+          "kind": "hook",
+          "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; the hook scripts changed."
+        }
+      ]
+    },
+    {
       "version": "0.2.4",
       "items": [
         {
@@ -13,7 +104,9 @@
           "id": "0.2.4/checks-setup",
           "kind": "setup",
           "text": "Run /setup add checks to save a check list per repository, with the optional local receipt and pre-push hook.",
-          "setup": "/setup add checks"
+          "setup": "/setup add checks",
+          "check": ["skills/setup/scripts/upgrade_state.py", "repo-checks"],
+          "where": "repository"
         },
         {
           "id": "0.2.4/ci-workflow",
@@ -35,30 +128,71 @@
           "id": "0.2.5/checks-store",
           "kind": "setup",
           "text": "A check list saved with 0.2.4 is no longer read: run /setup add checks again in each repository, then delete the old ## Checks section from host.md by hand.",
-          "setup": "/setup add checks"
+          "setup": "/setup add checks",
+          "check": ["skills/setup/scripts/upgrade_state.py", "no-checks-section"]
         },
         {
           "id": "0.2.5/parallel-settings",
           "kind": "setup",
           "text": "Parallel limits in host.md are no longer read: set parallel and caps again in each repository before you delete ## Project settings by hand.",
-          "setup": "/setup add delegation"
+          "setup": "/setup add delegation",
+          "check": ["skills/setup/scripts/upgrade_state.py", "no-project-settings"]
         },
         {
           "id": "0.2.5/project-settings",
           "kind": "setup",
           "text": "Settings in host.md are no longer read: set them again in each repository, then delete ## Project settings and the Ledger project: and Task file: lines by hand.",
-          "setup": "/setup add project"
+          "setup": "/setup add project",
+          "check": ["skills/setup/scripts/upgrade_state.py", "no-project-settings", "no-global-lines"]
         },
         {
           "id": "0.2.5/project-labels",
           "kind": "setup",
           "text": "Labels in host.md are no longer read: set each again inside each repository, then delete the ## Project labels section by hand.",
-          "setup": "/setup add project"
+          "setup": "/setup add project",
+          "check": ["skills/setup/scripts/upgrade_state.py", "no-project-labels"]
         },
         {
           "id": "0.2.5/skill-names",
           "kind": "rename",
-          "text": "Skills lost the fnl- prefix (fnl-setup is now setup). Old names still work when typed, and your files that reference old names keep working through the aliases."
+          "text": "Skills lost the fnl- prefix (fnl-setup is now setup). Old names work only when typed; instruction files must use the new names. /setup check lists each old name with its new one."
+        },
+        {
+          "id": "0.2.5/codex-hook-trust",
+          "kind": "hook",
+          "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; the session-start and metrics hooks changed."
+        },
+        {
+          "id": "0.2.5/quota-repin",
+          "kind": "setup",
+          "text": "After any Claude Code or Codex update, run the quota setup again: the probe refuses a program whose location changed, and /setup check names the family.",
+          "setup": "/setup add quota"
+        },
+        {
+          "id": "0.2.5/context-probe",
+          "kind": "setup",
+          "text": "Reading the current session's context size on request uses the Claude Code or Codex program confirmed in the quota setup; set that up first.",
+          "setup": "/setup add quota"
+        },
+        {
+          "id": "0.2.5/worktree-sweep",
+          "kind": "info",
+          "text": "After a merge, worktree_sweep.py list shows which worktrees are safe to remove, and on Claude Code a hook reminds you after gh pr merge; git's own checks do the removal."
+        },
+        {
+          "id": "0.2.5/afk-goal",
+          "kind": "info",
+          "text": "/afk start now prints a goal to type into /goal before you leave, and on Claude Code starts a /loop while work waits on CI, reviews or a delegated run."
+        },
+        {
+          "id": "0.2.5/main-checkout",
+          "kind": "info",
+          "text": "The main checkout stays on the default branch: branches are cut in worktrees, and session start says when the main checkout is on another branch."
+        },
+        {
+          "id": "0.2.5/full-names",
+          "kind": "info",
+          "text": "On Claude Code, type /finolabs-vibecode:help and /finolabs-vibecode:status in full; /help and /status are the host's own commands."
         }
       ]
     }

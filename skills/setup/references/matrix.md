@@ -10,6 +10,7 @@ Ask once per helper, in one pass, as free text; a blank answer skips that part:
 3. Model: "Which full model id should <helper> use for those types? Blank for its default." A model not allowed on this machine is kept and shown as unverified.
 4. Roles: "Which roles does <helper> own? Choose from code-review, security-review, navigator, advisor (the optional agent asked for opinions and away decisions); each role goes to one helper; blank or none for no role."
 Then ask the judge: "Who judges evidence: jev (TypeSafe, needs your own key and approval) or host (the small host model)?"
+If the answer is jev, ask the separate TypeSafe consent question of [features/roles.md](features/roles.md) ("Judge"), with its Yes, No, Undo and Choices, before the save question below; pass `--judge jev` only after its own yes, otherwise `--judge host`. The save question never stands in for that consent.
 
 Build one line per helper: `<agent>: levels L-H[; works on <type>, ...][; model <id>][; roles <role>, ...]`, keys in that order, with no leading dash.
 Preview: `python3 -I <this skill folder>/scripts/matrix_setup.py preview --judge <jev|host> --consent yes --line "<agent line>" ...` (repeat `--line`; `validate` takes the same options and prints without saving). Show the lines printed and the digest.
@@ -22,4 +23,4 @@ After a clear yes run `matrix_setup.py apply --digest <printed Digest prefix, at
 
 Moving from the old sections: `matrix_setup.py migrate` previews a matrix built from `## Agent roles` and `## Agent levels` (roles become each helper's `roles`, a helper named only in roles shows `levels 1-5` to edit, levels carry over, the judge carries over). Every line it cannot map is printed as `dropped`; `apply` refuses (exit 3) until the user has read them and you add `--ack-dropped`. Consent is not inherited: ask the question above again, and only after a clear yes add `--consent yes` to `apply`, which then removes both old sections in the same write. The backup keeps the originals. It refuses when the matrix already exists.
 
-The matrix replaces `levels.md`; that legacy path stays until the readers are switched.
+The matrix is the one path for levels, roles and the judge: with a valid matrix the readers ignore `## Agent roles` and `## Agent levels`, and `levels.md` and `add roles` serve only a user who declines it.
