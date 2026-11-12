@@ -2,21 +2,26 @@
 """Claude Code PostToolUse hook: after a successful `gh pr merge`, remind the agent to sweep its worktree.
 
 Reads one hook payload from stdin. When the event is PostToolUse for the Bash tool, the call was not
-interrupted, any exit code the payload reports is 0, and the command runs `gh pr merge` (not `--auto`,
-`--disable-auto` or `--help`), it prints one fixed line as context for the agent. A failed Bash call
-reaches the PostToolUseFailure event instead, so it prints nothing. One Bash call prints the line at
-most once. The command text is tested in memory and discarded: it is never stored, logged or sent.
+interrupted, any exit code the payload reports is 0, and the last command of the line is `gh pr merge`
+(not `--auto`, `--disable-auto` or `--help`), it prints one fixed line as context for the agent. A failed
+Bash call reaches the PostToolUseFailure event instead, so it prints nothing. One Bash call prints the
+line at most once. The command text is tested in memory and discarded: it is never stored, logged or sent.
 The hook stores nothing, starts nothing, always exits 0 and never blocks the session.
+
+The payload carries only the whole command's outcome, so the hook trusts it only where that outcome is
+the merge's own: one line whose commands are joined by `;` or `&&` alone and whose last command is the
+merge. It prints nothing for `||`, a pipe, a background `&`, a subshell or group, a redirection, a
+command substitution, a line break, unbalanced quotes, or a merge that is not the last command. It cannot
+tell from the payload whether the shell ran with errexit off inside a sourced script, whether an alias or
+function named `gh` replaced the real program, or whether a merge queue only queued the pull request.
 """
 
 import json
-import re
+import shlex
 import sys
 
-# A command starts at the beginning of the text or after ; & | ( or a newline, optionally behind VAR=value words.
-START = r"(?:^|[;&|(\n])[ \t]*(?:\w+=\S+[ \t]+)*"
-MERGE = re.compile(START + r"gh[ \t]+pr[ \t]+merge(?![\w-])([^;&|)\n]*)")
-NOT_A_MERGE = re.compile(r"(?:^|[ \t])(?:--auto|--disable-auto|--help|-h)(?![\w-])")
+OPERATORS = (";", "&&")  # the only separators whose last command decides the shell's exit status here
+NOT_A_MERGE = ("--auto", "--disable-auto", "--help", "-h")
 EXIT_KEYS = ("exit_code", "exitCode", "returnCode", "return_code")
 MAX_COMMAND = 8192  # longer command text is not tested at all
 LINE = "fnl: a pull request merged; run worktree_sweep.py to remove its clean worktree (advisory)."
@@ -34,12 +39,42 @@ def succeeded(response):
     return True
 
 
+def last_command(command):
+    """The words of the line's last command, or None when its outcome is not the line's outcome."""
+    if "\n" in command.strip() or "`" in command or "$(" in command or "\\" in command:
+        return None
+    # Not posix: a quoted ';' keeps its quotes, so it never reads as an operator.
+    lexer = shlex.shlex(command, posix=False, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        tokens = list(lexer)
+    except ValueError:  # unbalanced quotes
+        return None
+    commands = [[]]
+    for token in tokens:
+        if token in OPERATORS:
+            commands.append([])
+        elif lexer.punctuation_chars and token and all(c in lexer.punctuation_chars for c in token):
+            return None  # ||, |, &, (, ), <, > and the like
+        else:
+            commands[-1].append(token)
+    while commands and not commands[-1]:
+        commands.pop()  # a trailing ;
+    return commands[-1] if commands else None
+
+
 def merged(command):
     if isinstance(command, list) and all(isinstance(word, str) for word in command):
-        command = " ".join(command)  # an argv array, as some hosts send it
-    if not isinstance(command, str) or len(command) > MAX_COMMAND or "merge" not in command:
+        words = command  # an argv array, as some hosts send it
+    elif isinstance(command, str) and len(command) <= MAX_COMMAND and "merge" in command:
+        words = last_command(command)
+    else:
         return False
-    return any(not NOT_A_MERGE.search(found.group(1)) for found in MERGE.finditer(command))
+    if not words:
+        return False
+    while words and "=" in words[0] and words[0].split("=", 1)[0].isidentifier():
+        words = words[1:]  # VAR=value words before the program
+    return words[:3] == ["gh", "pr", "merge"] and not any(word in NOT_A_MERGE for word in words[3:])
 
 
 def main():

@@ -26,6 +26,7 @@ class MergeNoticeHookTest(unittest.TestCase):
     def test_a_successful_merge_prints_the_fixed_line_once(self):
         for command in ("gh pr merge 12 --merge --match-head-commit 0123abc --delete-branch",
                         "cd repo && gh pr merge 12 --merge && gh pr merge 13 --merge",
+                        "git fetch; GH_REPO=demo/repo gh pr merge 5 --squash;",
                         ["gh", "pr", "merge", "4", "--merge"]):
             with self.subTest(command=command):
                 output = self.run_hook(self.payload(command, {"stdout": "", "stderr": "", "interrupted": False}))
@@ -43,7 +44,20 @@ class MergeNoticeHookTest(unittest.TestCase):
                  self.payload("echo gh pr merge 12"),
                  self.payload("gh pr view 12"),
                  self.payload("gh pr merge 12", tool="Edit"),
-                 self.payload("x" * 9000 + "; gh pr merge 1")]
+                 self.payload("x" * 9000 + "; gh pr merge 1"),
+                 # The overall exit status does not say the merge ran and succeeded.
+                 self.payload("gh pr merge 245 --merge || true"),
+                 self.payload("false && gh pr merge 245 --merge; true"),
+                 self.payload("printf '%s\\n' '; gh pr merge 245 --merge'"),
+                 self.payload("gh pr merge 245 --merge | cat"),
+                 self.payload("gh pr merge 245 --merge &"),
+                 self.payload("(gh pr merge 245 --merge)"),
+                 self.payload("gh pr merge 245 --merge\ntrue"),
+                 self.payload("echo `gh pr merge 245`"),
+                 self.payload("echo ';' gh pr merge 245"),
+                 self.payload("echo \\; gh pr merge 245"),
+                 self.payload("gh pr merge 245 2>&1"),
+                 self.payload("gh pr merge 245 --merge 'unclosed")]
         for payload in cases:
             with self.subTest(payload=payload["tool_input"]["command"][:40]):
                 self.assertEqual(self.run_hook(payload), "")
