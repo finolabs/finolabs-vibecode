@@ -390,8 +390,7 @@ COPIES = ["scripts/data_root.py",
           "skills/status/scripts/data_root.py",
           "skills/session-hygiene/scripts/data_root.py",
           "skills/checks/scripts/data_root.py",
-          "skills/restore-point/scripts/data_root.py", "skills/update/scripts/data_root.py",
-          "skills/commit-messages/scripts/data_root.py"]
+          "skills/restore-point/scripts/data_root.py", "skills/update/scripts/data_root.py"]
 
 
 class DataRootCopiesTest(unittest.TestCase):
