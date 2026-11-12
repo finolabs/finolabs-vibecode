@@ -10,6 +10,7 @@ The skill folders and their purposes match the README.
 | `session-hygiene` | Keeping sessions healthy: context pressure, phase changes, stale titles, handovers, and remembering or recalling decisions, lessons and project state in one shared knowledge base (Orrery or an Obsidian vault); code facts stay in the repository. Opt-in Claude Code/Antigravity context snapshots, or an on-request Claude Code/Codex context probe, feed the compaction steward. |
 | `delegate` | Handing work to other agents (Claude Code, Codex, Antigravity, ZCode) and running it, coordinated from whichever one you run in: grading on five levels with one decision matrix (tier, effort, budget, who accepts), routing by agent and model through a dated capability map, the configured judge, quota fallback, parallel runs up to the limit you set for each project, across any mix of agent families, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger; running a spec as a coordinator with one app session per task, standby sessions and review gates. |
 | `handoff` | Writing a self-contained brief and dispatching one task, or saving a handover through session hygiene so a later session or another agent continues the work. |
+| `shape` | Brainstorming, discussing or stress-testing an idea, plan or design, or unclear requirements before building: an interview in rounds where each question waits for the decisions it depends on and comes with a recommended answer, through the host's native question tool; nothing is acted on until the user confirms the result. It runs first; `grilling` runs when `shape` is missing or the user asks for it by name. |
 | `advisor` | Getting one second opinion from another model family, or convening two contrasting families for root-cause analysis and a plan when stuck or looping; both are read-only and spend quota, with approval governed by their procedure. |
 | `versioning` | Bumping a version, tagging a release, or writing the changelog and release notes: SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog. |
 | `commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports). |
@@ -46,6 +47,7 @@ The skill folders and their purposes match the README.
 | Showing or changing Delegation mode or Routing, including environment overrides | `/setup mode` | |
 | Starting, resuming or redirecting coding work | `coding-router` | |
 | Requirements unclear | `coding-router` (workflow adapter's clarification step, with questions put through the host's native question tool; advisory, agent judgment) | `/grill-me`, or `/grill-with-docs` to keep a glossary and ADRs |
+| Brainstorming or discussing an idea, plan or design ("let's brainstorm", "let's discuss", in any language) | `shape` first (`coding-router` routes it when the idea leads to code) | `/grill-me` when `shape` is missing or you ask for it; `brainstorming` from obra/superpowers when you want many divergent design ideas |
 | A design question only code can answer | `coding-router` | `prototype` |
 | Ready to implement one seam | `coding-router` (depth, gates) | `tdd` for the red-green loop |
 | Bug, failing CI, unexplained behavior | `coding-router` (workflow adapter's debug path, router checkpoint) | `diagnosing-bugs` |
@@ -140,6 +142,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/session_start.py` | Read-only Claude Code/Codex reminder and fixed state summary, with advisory slots, a fixed warning when the main checkout is off its default branch, a validated session id line and optional context/handover. |
 | `scripts/statusline_setup.py` | Previews/applies/removes the opt-in context recorder; existing status lines get a manual recipe. |
 | `scripts/update_check.py` | Cached update status, skip/never/pin preferences, the detached fixed-endpoint release check, the upgrade-notes checklist (`whats-new`, `onboard seen`/`skip`) and evidence-checked `target`. |
+| `skills/setup/scripts/upgrade_state.py` | Read-only checks behind the upgrade-notes checklist and `setup check`: whether each note's legacy host settings or approved files are still present, so a done step shows as done. |
 | `scripts/verify_claim.py` | Checks head, scope and targeted tests, writes verification metadata and prepares host-judge evidence; grants no acceptance. |
 | `scripts/select_tests.py` | Lists the test modules that name a file changed since a base, treating shared copies as one, with commands of at most two modules; runs no test. |
 

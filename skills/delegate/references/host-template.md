@@ -74,9 +74,13 @@ Advisory (agent judgment): use `/setup add quota` to opt in after the scan and c
 ## Heavy jobs
 
 - Load limit: 12
-- Memory minimum GB: 3
+- Memory minimum GB: 4
+- Memory window seconds: 60
+- Swap-out limit MB per second: 5
 - Wait cap minutes: 40
 - Max job minutes: 90
+
+On macOS a start also waits until memory pressure has read normal for the whole window and swap-outs over it average at most the limit; an unreadable reading waits. Starting values, not measured safe limits: tune them here.
 
 The lock itself needs no setting: `heavy_run.py` keeps it in the fixed anchor folder, so relocating the data root does not move it.
 

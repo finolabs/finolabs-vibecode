@@ -116,7 +116,23 @@ class SessionStartTest(SyntheticStateTest):
         text = (ROOT / "rules/AGENTS.md").read_text(encoding="utf-8")
         if routing == "off":
             text = "\n".join(line for line in text.splitlines() if "coding-router" not in line) + "\n"
-        return (text + STATE_BASELINE).encode()
+        return (text + hook.user_only_line(routing) + STATE_BASELINE).encode()
+
+    def test_user_only_line_names_exactly_the_user_only_skills(self):
+        user_only = sorted(p.parent.name for p in (ROOT / "skills").glob("*/SKILL.md")
+                           if not p.parent.name.startswith("fnl-")
+                           and "\ndisable-model-invocation: true\n" in p.read_text().split("---", 2)[1])
+        self.assertEqual(sorted(hook.USER_ONLY), user_only)
+        for routing in ("on", "off"):
+            line = hook.user_only_line(routing)
+            self.assertLessEqual(len(line), 500)
+            self.assertEqual(line.count("\n"), 1)
+            self.assertIn("never call them with the Skill tool", line)
+            self.assertIn("tell the user the command to type", line)
+            self.assertIn("advisor", line)
+            self.assertEqual("coding-router" in line, routing == "on")
+            out, _ = self.run_hook(b"", routing)
+            self.assertEqual(out.count(line.encode()), 1)
 
     def test_idle_stdin_does_not_hold_the_start(self):
         read_fd, write_fd = os.pipe()
