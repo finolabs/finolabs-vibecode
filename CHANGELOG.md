@@ -4,6 +4,11 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- A repository can set its own away choices (owner decisions, 2026-11-11 and 2026-11-12): `/setup add afk`, inside a repository, asks Task choice, Push and pull requests, Merge, Trusted authors and a new `Roots` list (top-level code folders such as `packages`), each with "Use my user setting" as the default, previews the object and, after a yes, saves it as `autopilot` in the repository's approved `settings.json` (`project_progress.py settings --set autopilot=<JSON>`, `--dry-run` to preview, `--clear autopilot` to undo). A set project value wins over `## Autopilot` in `host.md` for that repository; hosts, lease hours, limits, the quota floor and the categories stay user scope only. An unapproved or branch-supplied file sets nothing, and an approved file that is now broken turns those five keys off, never wider. `autopilot.py check` re-reads them on every call, and the lease hash covers the user section only, so a project change does not end a live lease.
+- `autopilot.py check` accepts a path under a project root with the built-in roots' rules, a top-level `README.md`, `CHANGELOG.md` or `CONTRIBUTING.md`, and `git merge [--no-ff] [--no-edit]` of an existing local branch (`refs/heads/<branch>`, or an unambiguous bare name) into a work branch when Merge is yes for the repository; into the default branch it stays Tier 3. Delegated `claude -p` and `codex exec` runs outside the read-only `delegate_env.py` advisor form, including write-capable dispatches and shell-function commands, stay Tier 3.
+
 ### Changed
 
 - A second `/afk start` while a lease is live now reports when that lease ends and tells the session to work under it, instead of a generic refusal that led a second session to work outside the lease. The lease covers every session on the machine; nothing is extended or reset.

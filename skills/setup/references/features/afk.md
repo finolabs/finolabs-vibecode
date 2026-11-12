@@ -65,3 +65,16 @@ Apply with `python3 -I <this skill folder>/scripts/autopilot_setup.py apply --ye
 Apply enforces the digest, unchanged host bytes and mode, canonical root, safe files and section bounds; it refuses links and ambiguity. Only the Autopilot section changes; other host content stays byte for byte (script-enforced). Backups and preview state are local writer records, not lease changes.
 
 To change choices, repeat `/setup add afk`; a live lease stops accepting actions after setup changes. Starting and stopping remain `/autopilot` and `/autopilot stop`. Push notifications, the live dashboard, scheduler and host backstop are deferred; offer no settings for them in this slice.
+## Project scope
+Offer this only inside a repository, after the user-scope questions; host.md stays unchanged. A project value wins over the user value here, for five keys only; Hosts, Lease hours, the limits, the quota floor and the categories stay user scope only (one lease covers the machine). Each default answer is "Use my user setting", which leaves the key out.
+Ask: "In this repository, may the agents choose new tasks from your task list?" Use my user setting / Yes / No (`task-choice`: choose or listed).
+Ask: "In this repository, may the agents push their branches and open pull requests?" Use my user setting / Yes / No (`push-and-pull-requests`).
+Ask: "In this repository, whose pull requests may the agents check out and test?" Use my user setting / Your own account and autopilot's branches (`trusted-authors`: own).
+Ask: "Which other top-level folders hold this repository's code?" Use my user setting (none) or names such as packages (`roots`, at most 16, no leading dot); same path rules as src, protected paths stay protected.
+Ask: "In this repository, may the agents merge pull requests and local branches while a lease is live?" Use my user setting / Yes / No (`merge`); ask it last; yes is your own decision.
+If every answer is Use my user setting, write nothing. Else preview: `python3 -I <this skill folder>/scripts/project_progress.py settings --set 'autopilot=<JSON of the answered keys>' --dry-run`; show the object, then ask:
+"Save these away settings for this repository?"
+Yes: Run the same command without --dry-run; it writes the `autopilot` object to the repository's settings file and approves its digest.
+No: Leave the repository's settings unchanged.
+Undo: Run `project_progress.py settings --clear autopilot` here to return to your user settings.
+Choices: "Yes, save them for this repository" / "No, keep my user settings here".

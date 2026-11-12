@@ -62,6 +62,39 @@ A money cap is not offered: paid usage cannot be measured from local records, so
 ledger can measure. Each setting is a separate question (neutral Yes and No where yes/no, none preselected), with a
 preview and digest like the other setup writers. Setup writes nothing outside the host config.
 
+## Project scope
+
+Release 0.2.5, owner decisions 2026-11-11 and 2026-11-12. User scope, the `## Autopilot` section of `host.md`, stays the default. A repository may set its own value for
+exactly five keys, and a set project value wins over the user value for work in that repository: Task choice, Push and
+pull requests, Merge, Trusted authors and `Roots`, a list of repository-relative top-level folders the path check
+accepts beside the built-in roots. Hosts, lease hours, max runs, max runtime minutes, max actions per hour, the quota
+floor and the stop/decide categories stay user scope only, because one lease covers the machine.
+
+- Storage: one optional `autopilot` object in `<main checkout>/.finolabs/vibecode/settings.json`, closed schema
+  (`task-choice`: choose or listed; `push-and-pull-requests`: yes or no; `merge`: yes or no; `trusted-authors`: own;
+  `roots`: 1 to 16 distinct folder names of letters, digits, `.`, `_` and `-`, no leading dot, no instruction file
+  name), at least one key, written through `project_progress.py settings --set autopilot=<JSON>` (`--dry-run`
+  prints the stored object and writes nothing; `--clear autopilot` removes it). It is bound to the approved digest of
+  `project_store.py` like every project setting: the writer, lock and approval are the same; it needs no metrics
+  consent because it records no usage data.
+- Reading: `autopilot.py check` resolves the repository of the current working directory (`project_store.layout`)
+  and re-reads its values on every call. Unset (no approval record, so an unapproved or branch-supplied file) gives no
+  project values; broken (an approved file now changed, missing, unsafe or invalid, or any error while reading it)
+  turns the five keys off: Task choice listed, push and merge no, no extra roots, which is never wider than user scope.
+- The lease hash covers the user section only, so a project change does not end a live lease.
+- Roots: a path under a listed root is a known path with the same rules as the built-in roots (extension list, no
+  `..`, no absolute path, no symlink on the way, a single file) and never one the protected rules match. A top-level
+  `README.md`, `CHANGELOG.md` or `CONTRIBUTING.md` is a known path in every repository.
+- Local merges: `git merge [--no-ff] [--no-edit] refs/heads/<branch>` or `git merge [--no-ff] [--no-edit] <branch>` of
+  an existing local branch is Tier 1 only when the effective Merge is yes and the current branch is a named branch other
+  than the default branch (and not `main`, `master` or `trunk`); into the default branch it is Tier 3. A bare name that
+  also names a tag or another ref, or reads like a commit id, is ambiguous and Tier 3. `git merge origin/main` is
+  unchanged.
+- Delegated runs: a `claude -p` or `codex exec` run outside the `delegate_env.py` form, a shell function such as a
+  declared `claude<suffix>` command, and a write-capable run inside that form stay Tier 3; only the read-only advisor
+  form of `away-decisions.md` is Tier 1. A write-capable delegated run needs a hard-cap wrapper and a tool grant the
+  classifier cannot bound yet, so it is left to a later slice.
+
 ## Decisions: three tiers, classified by code before any model sees the case
 
 `autopilot.py check` classifies an action from the real command or change, not from a label the agent supplies: it
