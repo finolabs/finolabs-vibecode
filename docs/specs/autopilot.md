@@ -62,6 +62,101 @@ A money cap is not offered: paid usage cannot be measured from local records, so
 ledger can measure. Each setting is a separate question (neutral Yes and No where yes/no, none preselected), with a
 preview and digest like the other setup writers. Setup writes nothing outside the host config.
 
+## Project scope
+
+Release 0.2.5, owner decisions 2026-11-11 and 2026-11-12. User scope, the `## Autopilot` section of `host.md`, stays the default. A repository may set its own value for
+exactly five keys, and a set project value wins over the user value for work in that repository: Task choice, Push and
+pull requests, Merge, Trusted authors and `Roots`, a list of repository-relative top-level folders the path check
+accepts beside the built-in roots. Hosts, lease hours, max runs, max runtime minutes, max actions per hour, the quota
+floor and the stop/decide categories stay user scope only, because one lease covers the machine.
+
+- Storage: one optional `autopilot` object in `<main checkout>/.finolabs/vibecode/settings.json`, closed schema
+  (`task-choice`: choose or listed; `push-and-pull-requests`: yes or no; `merge`: yes or no; `trusted-authors`: own;
+  `roots`: 1 to 16 distinct folder names of letters, digits, `.`, `_` and `-`, no leading dot, no instruction file
+  name), at least one key, written through `project_progress.py settings --set autopilot=<JSON>` or removed with
+  `--clear autopilot`, each only with `--expect <token>` from its `--dry-run` preview. It is bound to the approved
+  digest of `project_store.py` like every project setting: the writer, lock and approval are the same; it needs no
+  metrics consent because it records no usage data. Its approval record also holds `target`, the GitHub repository
+  (`github.com/<owner>/<name>`, or null) of origin when it was approved; writing any other key carries that binding
+  forward unchanged. Every approval record also holds `identity`, the full SHA-256 of the main checkout root it was
+  approved for, and a reader compares it with the identity it resolved: the eight-character repository code only
+  names the record's file, so two checkouts whose codes collide never share an approval (the other checkout's record
+  reads as broken). A record without `identity` grants no `autopilot` object; approving the object again binds it.
+- Identity: one resolver, `project_store.identity`, gives every authorization reader the same answer: found (checkout
+  root, main checkout root, worktree Git folder, common Git folder), positively absent, or unknown. It uses the
+  reciprocal-worktree rules of `git_metadata.checkout_dirs`: the working directory and every parent are checked with
+  no depth bound, a linked worktree counts only in the canonical, reciprocal, owner- and mode-checked layout
+  `<main>/.git/worktrees/<name>`, and a missing, mismatched or unsafe back-pointer, an unreadable or unsafe folder, a
+  `.git` link or a `commondir` in a main `.git` is unknown, never the checkout's own identity. Absent means every
+  parent was checked and none holds `.git`. The settings lookup, the setup writer, the branch reader and the remote
+  reader all take that one result; `project_store.layout`, which falls back to the checkout's own root, serves
+  display, capacity, labels and checks only.
+- Policy context: after the lease checks, `check` builds one context and derives the five values from this table,
+  starting from the strict vector (Task choice listed, push and merge no, Trusted authors own, no extra roots) and
+  leaving it only once each prerequisite holds. Nested classifiers (the `heavy_run.py` form), the branch reader and the
+  target readers use that context.
+
+  | State | Five project-scoped values | Verified target |
+  | --- | --- | --- |
+  | Found; approval positively absent, or approved settings without an `autopilot` object | User values, no extra roots | origin now |
+  | Found; approved, valid `autopilot` object whose record holds this identity and whose recorded `target` equals origin now | Explicit project values replace user values; omitted keys inherit | origin now |
+  | Found; unreadable approval, a record bound to another identity or to none, digest mismatch, missing or unsafe file, invalid settings, no recorded `target`, or origin changed since approval | Strict vector | none |
+  | Unknown identity, or any error while building the context | Strict vector | none |
+  | Positively no repository | User values, no extra roots | none: no repository mutation qualifies |
+
+  Both directions are kept: a repository may turn on what the user scope leaves off and turn off what it leaves on.
+  `autopilot.py effective` prints the same context read-only (lease state, repository found, absent or unknown, the
+  state, the verified target and the five values; no path), so Task choice and Trusted authors, which stay advisory,
+  can follow the value `check` applies. It reserves no action.
+- Target binding: `gh pr merge`, `gh pr create` and `gh pr edit` are Tier 1 only with exactly one explicit
+  `--repo github.com/OWNER/NAME` (separate or `=` form; owner and name compared case-insensitively) equal to the
+  context's verified target. gh's implicit choice (a remote, `remote.<name>.gh-resolved`, `GH_REPO`) is never
+  predicted: an explicit `--repo` takes precedence over all of them, so a form without one is Tier 3 (`unknown`), and
+  so are `-R`, a repeated `--repo`, another host, a URL form and a `.git` name; another GitHub repository is
+  `forbidden`. `gh pr edit` names one pull request by number. `gh pr create` needs one explicit `--head <branch>` (a
+  plain branch name, not the default branch, `main`, `master` or `trunk`), so gh pushes nothing itself; without it,
+  with `-H`, a `refs/` name, an `owner:branch` form or `HEAD` it is Tier 3. `git push origin <src>:refs/heads/<b>`
+  is Tier 1 only when its effective destination, origin's single `pushurl` or else its single `url`, is the verified
+  target. The remote reader takes the identity's own config only: no config, a per-worktree config, an include, a URL
+  rewrite (`insteadOf`, `pushInsteadOf`), a remote key it does not know (such as `mirror` or `receivepack`), a second
+  URL or an unrecognized line leaves no verified target. Advisory limit: global and system Git config are not read.
+- Synchronization exemption: `git merge [--no-edit] origin/main` into a named work branch of a found repository needs
+  no Merge setting; it stays Tier 3 into the default branch, a detached head or without a validated identity.
+- Setup: the five answers become one desired object, omitted keys meaning inheritance. A non-empty object replaces the
+  whole previous `autopilot` object; when every answer inherits, the object is cleared (`--clear autopilot`) and every
+  other project setting stays; cancelling changes nothing. The preview prints the repository identity (main checkout,
+  worktree, code), its state, the origin the approval will bind, the action (`replace`, `remove` or `none`), the object
+  and the effective value of each key, and a token over the identity, the prior state and settings digest, that origin
+  and the object. Apply repeats the token and the writer recomputes it under the settings lock, so a concurrent setup
+  change, a new origin or another repository refuses the write. The settings file is written before its approval, so
+  an interrupted pair reads as broken, which is strict, until the two agree again.
+- Bounded claim: `check` classifies; it executes nothing. These rules make each classification follow one identity,
+  one approval and one target. They cannot guarantee that a later command runs in the same working directory, with
+  the same metadata or environment, or that the agent calls `check` at all (advisory, agent judgment); that would
+  need a trusted execution boundary that revalidates and runs the bound operation, which is not part of this release.
+  Unsupported or unproved mutation forms stay Tier 3.
+- The lease hash covers the user section only, so a project change does not end a live lease.
+- Roots: a path under a listed root is a known path with the same rules as the built-in roots (extension list, no
+  `..`, no absolute path, no symlink on the way, a single file) and never one the protected rules match. A top-level
+  `README.md`, `CHANGELOG.md` or `CONTRIBUTING.md` is a known path in every repository. An operand is read from the
+  working directory, and every path rule (roots, top-level documents, protected names, links) applies to its path
+  relative to the checkout root of the context's identity, so a descendant working directory neither turns a root
+  into the same name below it nor hides a protected folder above it; the away evidence file follows the same rule.
+  Without a found identity no path is a known path.
+- Local merges: `git merge [--no-ff] [--no-edit] refs/heads/<branch>` or `git merge [--no-ff] [--no-edit] <branch>` of
+  an existing local branch is Tier 1 only when the effective Merge is yes and the current branch is a named branch other
+  than the default branch (and not `main`, `master` or `trunk`); into the default branch it is Tier 3. The current
+  branch is resolved through its symbolic refs (at most five, no cycle) to the branch Git would update: if any name on
+  the way is the default branch, `main`, `master` or `trunk` (compared case-insensitively), it is that branch; a chain
+  that leaves `refs/heads`, loops or runs long is a detached head and Tier 3. The same resolution applies to
+  `git merge origin/main` and a push of `HEAD`. A bare name that also names a tag or another ref, or reads like a
+  commit id (4 to 64 hexadecimal digits in any case), is ambiguous and Tier 3; `refs/heads/<name>` stays available.
+  `git merge origin/main` is otherwise unchanged.
+- Delegated runs: a `claude -p` or `codex exec` run outside the `delegate_env.py` form, a shell function such as a
+  declared `claude<suffix>` command, and a write-capable run inside that form stay Tier 3; only the read-only advisor
+  form of `away-decisions.md` is Tier 1. A write-capable delegated run needs a hard-cap wrapper and a tool grant the
+  classifier cannot bound yet, so it is left to a later slice.
+
 ## Decisions: three tiers, classified by code before any model sees the case
 
 `autopilot.py check` classifies an action from the real command or change, not from a label the agent supplies: it
@@ -195,6 +290,16 @@ instruction files; any use of credentials by the plugin.
 5. The dashboard tab renders every field with `textContent`, shows data age, and handles an empty log.
 6. `PRIVACY.md`, README, CHANGELOG, `docs/specs/index.md`; `check-references.py`, `claude plugin validate .` and
    targeted tests pass; skill text names its enforcer for every rule.
+7. Project scope, through the full `check` entry point and the `effective` view, which agree: both override directions
+   and omitted-key inheritance; every strict state of the "Policy context" table gives the whole strict vector;
+   ordinary repositories, valid linked worktrees, deep descendants and nested repositories resolve their own identity,
+   and a linked worktree with a missing, mismatched or unsafe back-pointer never regains a permission its main
+   checkout turned off; gh mutations qualify only with one matching explicit full-host `--repo` (implicit, foreign,
+   repeated, short and malformed selectors, a conflicting `gh-resolved` and `GH_REPO` do not change that), creation only
+   with a validated `--head`, a push only to a bound destination (`pushurl` included), and an origin changed after
+   approval is strict; the real-Git symref, default-branch, tag-collision and hexadecimal regressions stay; the
+   `origin/main` synchronization exemption holds only into a work branch of a found repository; setup replaces,
+   clears (keeping other settings), cancels, refuses a stale preview, and an interrupted write reads strict.
 
 ## Open
 

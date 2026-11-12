@@ -269,6 +269,10 @@ class SessionStartTest(SyntheticStateTest):
                 # The away question gate adds only its own PreToolUse group, last in that list.
                 gate = manifest["hooks"]["PreToolUse"].pop()
                 self.assertEqual(gate["matcher"], "AskUserQuestion")
+                # The merge notice adds only its own PostToolUse group for Bash, last in that list.
+                notice = manifest["hooks"]["PostToolUse"].pop()
+                self.assertEqual(notice["matcher"], "Bash")
+                self.assertIn("merge_notice_hook.py", notice["hooks"][0]["command"])
                 # Typed-skill recording adds only UserPromptSubmit.
                 self.assertEqual(len(manifest["hooks"].pop("UserPromptSubmit")), 1)
                 raw = (json.dumps(manifest, indent=2) + "\n").encode()

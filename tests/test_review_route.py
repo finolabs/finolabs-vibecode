@@ -46,7 +46,9 @@ class ReviewConfigTest(unittest.TestCase):
         ci = (ROOT / ".github/workflows/validate.yml").read_text()
         for name in ("review_route.py", "review_config.py", "post_review.py", "git_metadata.py"):
             skills = ("delegate", "review-gate") if name != "post_review.py" else ("review-gate",)
-            copies = {f"scripts/{name}", *[f"skills/{skill}/scripts/{name}" for skill in skills]}
+            if name == "git_metadata.py":  # project_store's identity resolver needs it beside every copy
+                skills += ("checks", "setup", "status")
+            copies ={f"scripts/{name}", *[f"skills/{skill}/scripts/{name}" for skill in skills]}
             actual = {str(p.relative_to(ROOT)) for base in (ROOT / "scripts", ROOT / "skills") for p in base.rglob(name)}
             with self.subTest(script=name):
                 self.assertEqual(actual, copies)
