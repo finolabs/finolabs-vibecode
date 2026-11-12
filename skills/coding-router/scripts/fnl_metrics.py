@@ -44,10 +44,12 @@ TASK_ID = re.compile(r"^T[0-9]{1,4}\Z")
 NAME = re.compile(r"^fnl-[a-z][a-z-]{0,39}\Z")  # agent names, and skill names stored before 0.2.5
 # The plugin's skill names: a closed set, so a name from another plugin is never recorded.
 # Each also answers to its older `fnl-` name, which is recorded under the name here.
-SKILLS = ("advisor", "afk", "ask", "autopilot", "brb", "checks", "coding-router", "commit-messages",
+SKILLS = ("advisor", "afk", "ask", "brb", "checks", "coding-router", "commit-messages",
           "delegate", "gtg", "handoff", "help", "open-source-review", "pause", "plugin-packaging",
-          "restore-point", "review-gate", "security-review-gate", "session-hygiene", "setup", "status",
+          "restore-point", "review-gate", "security-review-gate", "setup", "status", "tidy",
           "update", "verification", "versioning")
+# Skills renamed in 0.2.5 after the prefix drop: the older name, typed, called or in a stored line, counts as the new one.
+RENAMED = {"autopilot": "afk", "session-hygiene": "tidy"}
 REPO = re.compile(r"^[0-9a-f]{8}\Z")
 TS = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+00:00\Z")
 EVENT_FILE = re.compile(r"^events-(\d{4})-(\d{2})\.jsonl\Z")
@@ -62,16 +64,17 @@ def _name(v):
 
 
 def skill_name(v):
-    """The current name of one of the plugin's skills, given that name or its older `fnl-` alias; else None."""
+    """The current name of one of the plugin's skills, given that name, a renamed one or its older `fnl-` alias; else None."""
     if not isinstance(v, str):
         return None
     name = v[len("fnl-"):] if v.startswith("fnl-") else v
+    name = RENAMED.get(name, name)
     return name if name in SKILLS else None
 
 
 def _skill(v):
-    # A current name, or an `fnl-` name in a line stored before 0.2.5 (shown under its current name).
-    return skill_name(v) == v or _name(v)
+    # A current name, a renamed one, or an `fnl-` name in a line stored before 0.2.5 (shown under its current name).
+    return skill_name(v) == v or v in RENAMED or _name(v)
 
 
 def _tasks(v):

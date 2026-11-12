@@ -23,13 +23,17 @@ MAX_BYTES = 262144
 # Skills that lost the fnl- prefix in 0.2.5. The old names are user-only aliases: typed, they still load the
 # skill, but a file that tells the model to invoke one no longer does. Each maps to the name files must use.
 RENAMED = {"fnl-" + name: target for name, target in (
-    ("advisor", "advisor"), ("afk", "afk"), ("ask", "help"), ("autopilot", "autopilot"), ("brb", "afk"),
+    ("advisor", "advisor"), ("afk", "afk"), ("ask", "help"), ("autopilot", "afk"), ("brb", "afk"),
     ("checks", "checks"), ("coding-router", "coding-router"), ("commit-messages", "commit-messages"),
     ("delegate", "delegate"), ("gtg", "pause"), ("handoff", "handoff"), ("help", "help"),
     ("open-source-review", "open-source-review"), ("pause", "pause"), ("plugin-packaging", "plugin-packaging"),
     ("restore-point", "restore-point"), ("review-gate", "review-gate"),
-    ("security-review-gate", "security-review-gate"), ("session-hygiene", "session-hygiene"), ("setup", "setup"),
+    ("security-review-gate", "security-review-gate"), ("session-hygiene", "tidy"), ("setup", "setup"),
     ("status", "status"), ("update", "update"), ("verification", "checks"), ("versioning", "versioning"))}
+# Skills renamed again in 0.2.5: session-hygiene stays a user-only alias of tidy; autopilot was dropped for afk,
+# so it and its fnl- name no longer load at all.
+RENAMED.update({"session-hygiene": "tidy", "autopilot": "afk"})
+DROPPED = {"autopilot", "fnl-autopilot"}
 
 
 def renamed_in(line):
@@ -348,7 +352,8 @@ def renamed_evidence(paths, reader=read):
     if not found:
         return []
     return [item("old skill names", "missing", ", ".join(name + " -> " + RENAMED[name] for name in found) +
-                 "; instruction files must use the new names (old names load only when typed)")]
+                 "; instruction files must use the new names (old names load only when typed" +
+                 ("; autopilot no longer loads at all" if DROPPED & set(found) else "") + ")")]
 
 
 # The instruction scan has its own bounded, in-memory evidence set. Reports contain
