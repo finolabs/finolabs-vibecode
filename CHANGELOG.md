@@ -6,6 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Record the owner decision for a context probe (seventh scoped exception in `CLAUDE.md`, `docs/specs/context-probe.md`, `PRIVACY.md`): on request it reads the current session's context size from Claude Code's local `/context` or Codex's app-server, so `fnl-session-hygiene` gets real numbers where no status line runs. No code yet.
 - A second `/afk start` while a lease is live now reports when that lease ends and tells the session to work under it, instead of a generic refusal that led a second session to work outside the lease. The lease covers every session on the machine; nothing is extended or reset.
 - The away-session setup is now `/setup add afk`; `add autopilot` still works as an older word. Its choices stay in the `## Autopilot` section of `host.md`, so nothing needs to be set again.
 - Breaking: skill names drop the `fnl-` prefix so they are short and easy to remember (owner decision, 2026-11-11): `fnl-setup` is now `setup`, `fnl-coding-router` is `coding-router`, and so on for every skill, the short aliases included (`afk`, `brb`, `ask`, `verification`, `gtg`). Every old name stays as a user-only alias (`skills/fnl-<name>/`) that loads the renamed skill with the same arguments, so `/fnl-setup` typed by you and any file of yours that names an old skill keep working; the model does not see the aliases.
