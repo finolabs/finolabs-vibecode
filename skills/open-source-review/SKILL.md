@@ -26,7 +26,7 @@ Mark each item **PASS**, **FAIL**, **N/A** (with why) or **BLOCKED** (with what 
 ### Secrets and private data
 
 - Recommend a `security-audit` run from [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) before the first public release of code that runs (services, CLIs, plugins with scripts or hooks); report whether one ran and its verdicts.
-- Scan the working tree and the full history for secrets (`gitleaks detect`, `trufflehog git file://.`, or `git log -p` with targeted patterns when no scanner is installed). Report the file and commit, never the secret's value. Install nothing yourself, but strongly recommend that the user installs a scanner when none is present: name `gitleaks` or `trufflehog` with its install command, and say that the `git log -p` fallback covers less.
+- Scan the full history and the working tree for secrets: `gitleaks git .` and `gitleaks dir .` (current gitleaks; the older `detect` still runs but is hidden and deprecated), `trufflehog git file://.`, or `git log -p` with targeted patterns when no scanner is installed. Report the file and commit, never the secret's value. Install nothing yourself, but strongly recommend that the user installs a scanner when none is present: name `gitleaks` or `trufflehog` with its install command, and say that the `git log -p` fallback covers less.
 - No real `.env` files, credentials, keys, cookies, transcripts, customer data or personal data, in the tree or the history.
 - A leaked secret is a stop: tell the owner so it can be rotated. Removing it from the tree does not remove it from history.
 
@@ -82,7 +82,8 @@ Check before publishing what the forge plan offers on a private repository, and 
 
 Only when the repository ships a plugin or skills:
 
-- The validators pass: `claude plugin validate .` (and `--profile directory` before a directory submission); the Codex manifest is checked against its current schema.
+- The validators pass: `claude plugin validate .` (and `--profile directory --strict` before a directory submission); the Codex manifest is checked against its current schema. Run them on a fresh clone of the commit under review, because they read the disk: in a working checkout they report untracked files such as `.DS_Store`, which a directory blocks inside the plugin folder.
+- Before a directory submission, walk that directory's own pre-submission list ([Anthropic](https://claude.com/docs/plugins/pre-submission-checklist.md), [OpenAI](https://developers.openai.com/plugins/deploy/submission)) against the submitted folder or ZIP, not the repository root: a README and license inside it, no hooks for OpenAI, no credential read from the user's environment and sent on, everything the plugin runs, sends or fetches described in its README. The portal's own validation finds more than any local check; list the items only the portal can confirm in the report beside the recheck items, so a ready verdict does not hide them.
 - Each skill has a valid `name` and a trigger-rich `description`; a trigger check shows each model-invoked skill fires on a representative prompt and stays quiet on an unrelated one.
 - Host-specific facts (paths, commands, allow-rules) live in configuration or references, not in skill bodies.
 - Listing assets that the target directory requires (icon, URLs) exist inside the package.
