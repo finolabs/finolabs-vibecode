@@ -17,6 +17,7 @@ One repository, one `skills/` folder, one manifest per host. This skill holds th
 
 - Skills live in `skills/<name>/SKILL.md`; the folder name equals the `name` field. A shared name prefix keeps a pack's skills together and avoids collisions with other packs.
 - Each host's manifest sits in its own folder. A root `plugin.json` is read by both Codex (its preferred location) and Antigravity (its native manifest, with a closed schema), so one file cannot satisfy both.
+- Hooks shared by Claude Code and Codex stay in shell form. Claude Code's exec form (`"command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/…"]`, no shell) has no Codex counterpart: Codex hook handlers take one `command` string and no `args`, and expose `PLUGIN_ROOT` and `CLAUDE_PLUGIN_ROOT` as environment variables. To use exec form on Claude Code, give Codex its own hooks file through the `hooks` field of its manifest, which replaces Codex's default `hooks/hooks.json` ([Claude Code hooks](https://code.claude.com/docs/en/hooks.md), [Codex hooks](https://learn.chatgpt.com/docs/hooks)).
 - Keep every skill folder self-contained: single-skill installers (skills.sh) copy one folder and nothing around it. Disclose reference material into `references/` and executables into `scripts/` beside the skill that uses them; a file two skills need gets a copy in each, with a CI check that the copies match. A skill that cannot work without another names it as a dependency and says how to install it. Keep machine-specific facts in user configuration, never in the package.
 - Ship only what the host loads: no build output, caches, OS files, local notes or eval results.
 
@@ -59,7 +60,7 @@ Read [references/directories.md](references/directories.md) before preparing a s
 - When a directory refuses a component the plugin ships (Anthropic's policy excludes AI image generation; OpenAI refuses lifecycle hooks), submit a generated **edition** instead of trimming the plugin itself. One build script per directory derives the edition from the same sources: it copies the files the edition keeps, removes regions between marker comments, applies exact text edits that fail the build when the source no longer contains them, and overlays the edition's own files (a README, a setup skill without the refused feature).
 - An edition Anthropic's directory follows is committed in its own folder, which becomes the submitted plugin path, and a test fails while it differs from what the build script produces. An edition uploaded as a ZIP (Codex) is built from the release tag and never committed.
 - Runtime code reads which files the edition ships and turns off the features whose files are missing, so no command offers what the edition left out.
-- Leave out of an edition everything a directory holds without need: hooks, URLs in scripts that hand the environment on, `package.json` and lockfiles, binaries, files over 256 KiB.
+- Leave out of an edition everything a directory holds or refuses without need: hooks, URLs in scripts that hand the environment on, `package.json` and lockfiles, binaries, files over 256 KiB. For an organization that is not Verified, Anthropic's directory refuses scripts and other local code outright, so an edition there holds Markdown, JSON and images only, or the plugin stays on its own marketplace.
 
 ## 6. Checks before a release
 
