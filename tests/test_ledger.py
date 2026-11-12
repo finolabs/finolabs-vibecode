@@ -1107,11 +1107,11 @@ class StaleLedgerTest(unittest.TestCase):
 
     def test_the_preview_lists_id_age_and_label_only(self):
         start = self.start("d20261101-000000-aaaa", 1500, 30)
-        start.update(project="demo-app", task="003 T101", model="synthetic-model")
+        start.update(project="demo", task="003 T101", model="synthetic-model")
         self.write([start])
         out, _ = self.preview_digest()
         [line] = [line for line in out.splitlines() if line.startswith("d20261101-000000-aaaa")]
-        self.assertIn("demo-app: 003 T101", line)
+        self.assertIn("demo: 003 T101", line)
         self.assertNotIn("synthetic-model", out)
 
     def test_session_start_counts_stale_closed_records_as_closed(self):
