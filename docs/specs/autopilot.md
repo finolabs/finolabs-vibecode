@@ -110,7 +110,7 @@ floor and the stop/decide categories stay user scope only, because one lease cov
   `autopilot.py effective` prints the same context read-only (lease state, repository found, absent or unknown, the
   state, the verified target and the five values; no path), so Task choice and Trusted authors, which stay advisory,
   can follow the value `check` applies. It reserves no action.
-- Target binding: `gh pr merge`, `gh pr create` and `gh pr edit` are Tier 1 only with exactly one explicit
+- Target binding: `gh pr merge`, `gh pr create`, `gh pr edit` and `gh pr comment` are Tier 1 only with exactly one explicit
   `--repo github.com/OWNER/NAME` (separate or `=` form; owner and name compared case-insensitively) equal to the
   context's verified target. gh's implicit choice (a remote, `remote.<name>.gh-resolved`, `GH_REPO`) is never
   predicted: an explicit `--repo` takes precedence over all of them, so a form without one is Tier 3 (`unknown`), and
@@ -182,6 +182,39 @@ a tier; unknown commands and paths are Tier 3.
 - 2026-11-10: deploy classification changed per `away-decisions.md` "Where it must stop": a deploy that equals a
   `Non-production targets` entry exactly is Tier 1, every other deploy stays Tier 3, and tags, releases and publishing
   are Tier 1 only when the user moved their category to `decide`; production, live and real-user rows stay fixed at stop.
+- 2026-11-13 (release 0.2.5, owner): the own-branch flow the mandate authorizes is Tier 1 end to end.
+  - Protected names split in two. Hard names stay Tier 3 everywhere: credential, env and key names, `.git/` and git
+    hook names, `.github/`, `.claude/` and `.codex/` (the repository's live session settings and hooks), host, lease and
+    log state, and every path outside the repository. Soft names (`hooks`, `settings`, `config`, `setup.*`, `SKILL.md`,
+    `CLAUDE.md`, `AGENTS.md`) and the enforcer script names are spared for the plugin's own source (`skills/**`,
+    `scripts/**`, top-level `CLAUDE.md` and `AGENTS.md`, `.<host>-plugin/*.json`) when the check's own checkout is on a
+    non-default work branch and Push and pull requests or Merge is yes. That covers both editing and the merge gate's
+    changed-path check, run in the pull request's worktree. A merge on the forge does not change the live install; a
+    later pull into the live checkout does and stays unclassified.
+  - This install's own checkout stays protected on every branch: every path, read from the check's folder (argv
+    operands and `--paths`), whose validated checkout (`project_store.identity`) is the running install's plugin root
+    is Tier 3, which also covers its top-level `scripts/`. The match is by identity, not by path prefix, so a linked
+    worktree of the install's repository under its `.claude/worktrees` stays editable.
+  - An argv path operand inside a checkout of this repository (its own, the main checkout or a linked worktree that
+    `project_store.identity` validates) is judged by its path relative to that checkout's root, and `git -C <folder>`
+    as the same command run in that folder; a folder under `.claude/` that is not a registered worktree stays Tier 3.
+  - `gh pr comment <number>` follows `Repository comments` and the target binding. Title and body values of
+    `gh pr create|edit|comment` and `git commit -m` messages are data: newlines, tabs and a leading `-` pass; other
+    controls, a backtick, `$(` and `$` before a letter, `_` or `{` deny (`unknown`), so Markdown and shell examples go
+    through a file; a secret, machine path or sensitive assignment is `unsafe`. Text carrying a review gate marker
+    (`<!--`, optional whitespace, `fnl-`, any case) is `forbidden`, inline or in a file, so only `post_review.py` posts
+    reviews. One `--body-file` (gh) or `-F` (`git commit`) must be a regular file of at most 64 KiB inside the check's
+    own checkout (for example its git-ignored `.finolabs/`), outside the data root, with no link from that checkout
+    root down and no `..` step; its text is screened only for controls, secrets, machine paths and the marker.
+  - With Merge yes, the merge gate's cleanup is Tier 1: `git worktree remove [--] <path>` of a linked worktree whose
+    HEAD is a full SHA that a `log --kind merge --pr <n> --head <sha>` entry of the current lease recorded (never forced, the
+    main checkout, the current checkout or a worktree that is or holds this install), and `git branch -d [--] <branch>`
+    (never `-D`, the current or a default branch). A git verb that changes a work tree, index or HEAD (`merge`, `commit`, `add`, `rm`, `pull`,
+    `checkout` and the like) is `protected` when it would run in this install's own checkout, by its working folder or
+    `git -C`, so the running install never changes without a person. `git rm [-r] [-q] [--] <paths>` on a work branch classifies each
+    path like a change.
+  - `check` exits 0 on Tier 1 and 3 on Tier 3 with the same JSON, so `check ... && command` never runs a denied
+    command. As before, only a Tier 1 answer reserves an action or a run.
 
 ## Untrusted input
 
