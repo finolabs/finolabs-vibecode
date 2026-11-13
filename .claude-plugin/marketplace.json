@@ -10,7 +10,7 @@
     {
       "name": "finolabs-vibecode",
       "source": "./",
-      "description": "Engineering practice for AI coding agents: routing, delegation, review and security gates, verification, versioning and open source readiness.",
+      "description": "25 skills and 3 agents (fnl-reviewer, fnl-security-reviewer, fnl-navigator) for review routing, verification, setup, run hygiene and quota on demand.",
       "homepage": "https://github.com/finolabs/finolabs-vibecode",
       "repository": "https://github.com/finolabs/finolabs-vibecode",
       "license": "MIT",
