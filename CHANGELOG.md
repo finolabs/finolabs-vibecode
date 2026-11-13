@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Fixed
+
+- `afk.py check` lets an install that is the main checkout (a `-dev` install read from it) remove a merged linked worktree, as `afk` "Merge gate" says: `git worktree` no longer counts as a command that changes the install's own work tree, since its only Tier 1 form removes another worktree and still refuses the main checkout, a forced removal and any worktree holding the install (owner, 13/11/2026). The worktree rule docs name `log --kind merge --pr <number> --head`.
+
 ## [0.2.5] - 2026-11-13
 
 ### Added
