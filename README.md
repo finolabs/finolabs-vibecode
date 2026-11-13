@@ -30,7 +30,7 @@ Depth routing, cross-agent delegation and review gates for Claude Code, Codex an
 - **No agent approves its own work.** A reviewer in a fresh context, from another model family whenever one is available (a same-family fallback is disclosed), posts a code review and a security review pinned to the exact commit, and `merge_check.py` blocks the merge until both approve that commit. (`review-gate`, `security-review-gate`)
 - **Proof, not "done".** Tests are rerun and a receipt is written before work counts as finished. (`checks`)
 
-Built with itself: from 2 to 13 November 2026, 255 pull requests merged in this repository, 249 of them with a posted code and security review, and 103 were sent back for rework at least once before they merged.
+Built with itself: from 2 to 13 November 2026, 263 pull requests merged in this repository, 255 of them with a posted code and security review, and 104 were sent back for rework at least once before they merged.
 
 ## Install at a glance
 
@@ -142,10 +142,10 @@ The agent loads `handoff` directly through `delegate`, proposes `advisor` for on
 | `handoff` | Writing a self-contained brief and dispatching one task, or saving a handover through `tidy` so a later session or another agent continues the work. |
 | `shape` | Brainstorming, discussing or stress-testing an idea, plan or design, or unclear requirements before building: an interview in rounds where each question waits for the decisions it depends on and comes with a recommended answer, through the host's native question tool; nothing is acted on until you confirm the result. It runs first; `grilling` (`/grill-me`) runs when `shape` is missing or you ask for it by name. |
 | `advisor` | Getting one second opinion from another model family, or convening two contrasting families for root-cause analysis and a plan when stuck or looping; both are read-only and spend quota, with approval governed by their procedure. During an away lease its choose mode returns exactly one of the given options, or `none`. |
-| `versioning` | Bumping a version, tagging a release, or writing the changelog and release notes: SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog. |
+| `versioning` | Bumping a version, tagging a release, or writing the changelog and release notes: SemVer, `0.y.z` until a stable release is declared, immutable `vX.Y.Z` tags, Keep a Changelog; runs the README checklist of `plugin-packaging` before a release. |
 | `commit-messages` | Committing, writing a pull request description, or working with branches: atomic commits, imperative subjects, no secrets or build output, the host attribution trailer, and the branch flow (naming, base, sync, conflicts, merge, cleanup, backports): every branch in its own worktree so the main checkout stays on the default branch, and after a merge `worktree_sweep.py list` shows which worktrees are safe to remove (git does the removal). |
 | `restore-point` | Saving the working tree to a private git ref before the agent edits, listing restore points and restoring one after a preview and a yes. User-invoked, git repositories only. |
-| `afk` | Away from keyboard: starting a time-boxed standing mandate so your agents keep working while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/setup add afk`; inside a repository it also sets that repository's own task choice, push, merge, trusted authors and code folders. Start prints a goal for you to type in `/goal` and, on Claude Code, starts a self-paced `/loop` when work waits on CI, reviews or a delegated run. A question it would ask you goes up the away ladder instead (a recorded rule, Jev, an advisor of another family, the host), checked twice against what must stop and recorded with who decided; on Claude Code a question gate denies the question tool during the lease. With push and merge allowed it runs the own-branch flow (edit, commit, pull request, review posting, merge gate, cleanup) itself. On return you mark each decision kept or reversed. A plugin-run loop, dashboard tab and scheduler are deferred. |
+| `afk` | Away from keyboard: starting a time-boxed standing mandate so your agents keep working while you are away, checking each action against its lease and tiers, and stopping on return. User-invoked; requires recorded setup. Set up with `/setup add afk`, which first asks whether the rules are for your account or only this repository; for a repository it asks only the rules you want different (task choice, push, merge, trusted authors, code folders). Start prints a goal for you to type in `/goal` and, on Claude Code, starts a self-paced `/loop` when work waits on CI, reviews or a delegated run. A question it would ask you goes up the away ladder instead (a recorded rule, Jev, an advisor of another family, the host), checked twice against what must stop and recorded with who decided; on Claude Code a question gate denies the question tool during the lease. With push and merge allowed it runs the own-branch flow (edit, commit, pull request, review posting, merge gate, cleanup) itself. On return you mark each decision kept or reversed. A plugin-run loop, dashboard tab and scheduler are deferred. |
 | `brb` | Older short name (be right back), kept as an alias of `afk`; follows the same procedure and arguments. |
 | `pause` | Before you restart or shut the machine down: stops new work, lets running work finish, writes handovers and reports what recorded work remains, with an optional `--in <minutes>` deadline; `heavy_run.py` refuses new commands while it is active. User-invoked; never stops a process or declares the machine safe. |
 | `gtg` | Short name (got to go) for `pause`; follows the same procedure and arguments. |
@@ -262,7 +262,7 @@ The features `add` opens:
 | Feature | What it sets |
 | --- | --- |
 | `delegation` | Which helpers take work, the parallel limit per project, and the assignment matrix: levels, types of work, model and roles per agent, plus the judge, written in one pass to `## Assignment matrix` |
-| `afk` | The away mandate: hosts, limits, the quota floor, which categories stop or are decided during a lease (two always stop), optional `Non-production targets`, a separate consent for precedent excerpts, and Merge; run inside a repository, also that repository's own task choice, push, merge, trusted authors and code folders |
+| `afk` | The away mandate: hosts, limits, the quota floor, which categories stop or are decided during a lease (two always stop), optional `Non-production targets`, a separate consent for precedent excerpts, and Merge; it first asks whether the rules are for your account or only this repository, and for a repository asks only the rules you want different (task choice, push, merge, trusted authors, code folders) |
 | `checks` | A repository's check list, read from its scripts and CI without running them, saved in its own folder after a yes, with an optional local receipt, pre-push hook and cheaper CI workflow |
 | `roles` | Review roles and the judge in `## Assignment matrix` (the only source; `## Agent roles` is no longer read), plus review posting |
 | `project` | Per-repository ledger and task-file settings and the dashboard label, in the repository's own settings file |
@@ -281,7 +281,7 @@ The short version is "Start here" above; the order is `/finolabs-vibecode:help`,
 
 1. **Install** for your host (above), then open a new session: plugins load when a session starts.
 2. **Type `/finolabs-vibecode:help`** (`$help` on Codex). It explains where to begin. For a beginner, it loads plain-language guidance that the agent follows for the conversation.
-3. **Run setup once**: `/setup` (Claude Code, Antigravity) or `$setup` (Codex). Choose user scope, project scope or both first, then Quick for recommended defaults and a confirmation before writing, or Advanced to decide each part. The beginner path uses plain questions within the chosen scope and defers technical choices. The user-scope core runs `/setup scan` before configuring reach; Quick then asks one companion multi-select question and at most four separate offers to show install commands; Advanced interviews each companion and offers the widening features afterwards. Setup installs nothing; usage recording needs its own consent. On Codex, type `$setup instructions` next so your instructions point coding work at the router from the first task.
+3. **Run setup once**: `/setup` (Claude Code, Antigravity) or `$setup` (Codex). Choose user scope, project scope or both first, then Quick for recommended defaults and a confirmation before writing, or Advanced to decide each part. The beginner path uses plain questions within the chosen scope and defers technical choices. On the Quick and Advanced paths the user-scope core runs `/setup scan` before configuring reach (the beginner path defers the scan to a later run); Quick then asks one companion multi-select question and at most four separate offers to show install commands; Advanced interviews each companion and offers the widening features afterwards. Setup installs nothing; usage recording needs its own consent. On Codex, type `$setup instructions` next so your instructions point coding work at the router from the first task.
 4. **Give it a first real task.** Ask for a change; the agent starts coding work by loading `coding-router`. It chooses a workflow and depth (MIN, NORMAL or DEEP), checks the result, and explains what happened in your register within the same chat. On Claude Code and Codex a session-start reminder prompts the router (Codex hooks need your trust) and on Antigravity an always-on rule does; setting Routing to off removes the Claude Code/Codex reminder, while Antigravity's static rule stays.
 5. **What you should see:** a stated depth and reason, expressed in everyday words for a beginner; commits written as `commit-messages` says; pull requests held for posted code and security reviews (the adopted low-risk lane can use one reviewer for both); sensitive boundaries add the full security procedure; and, if delegation is set up, bounded tasks whose results are checked before acceptance.
 6. **After your first result**, type `/setup instructions` to set how your assistants work with you (already done after setup on Codex). After a few sessions, type `/finolabs-vibecode:status` to see how the practice is working, if you consented to usage metrics. Return to `/finolabs-vibecode:help` whenever you need help with a skill.
@@ -360,6 +360,8 @@ Optional quota probing is configured in `/setup add quota`, off by default and i
   </picture>
 </p>
 
+_This diagram predates 0.2.6: roles and the judge now live only in the assignment matrix._
+
 Project progress uses per-repository ledger and task-file settings confirmed in `/setup add project`, while `/setup instructions` writes the project work convention and dated Outcome anchors. These settings, the parallel limit and the dashboard label live in each repository's own settings file, `.finolabs/vibecode/settings.json` in the main checkout (kept out of git through `.git/info/exclude`, and read only while it matches the digest approved in the data root). Since 0.2.5 the `## Project settings` and `## Project labels` sections and the global `Ledger project:` and `Task file:` lines of `host.md` are no longer read: set them again per repository, then delete them by hand.
 
 Parallel capacity is user-set, advisory and shared across coordinators; [slot checks](docs/specs/parallel-instances.md) do not reserve capacity.
@@ -428,6 +430,13 @@ The trigger cases check that each skill fires on a representative prompt and tha
 One engineering practice for AI coding agents, packaged as a single plugin with a focused skill set. It tells an agent how to route a change, how deep to go, how to delegate to other agents and accept their work, how to commit, version and release, and which review and verification gates a change must pass.
 
 The [0.2.0 changes](CHANGELOG.md#020---2026-11-08) include [review roles, the navigator and verification receipts](docs/specs/agent-roles.md), [setup modes and companions](docs/specs/setup-restructure.md), [run hygiene](docs/specs/run-hygiene.md), [work records](docs/specs/work-tracking.md), [quota on demand](docs/specs/quota-on-demand.md) and [parallel slots](docs/specs/parallel-instances.md). [`route_task.py`](scripts/route_task.py) prints the delegation matrix's tier, effort, budget and family order; the coordinator still selects an available allowed model.
+
+Release 0.2.6 ([release record](docs/specs/release-0.2.6.md)):
+
+- **Breaking: one place for roles and the judge.** `## Agent roles` in `host.md` is no longer read; review roles and the Jev judge come only from the assignment matrix. Run `/setup add delegation` to convert the section and give consent again; until then reviews follow the capability order and the judge is the host model.
+- **Away leases end cleanly.** `afk.py check` adds an `end` line when a lease is missing, expired, stopped or exhausted, telling the agent to stop the loop it started; spent runs or runtime now answer `exhausted` instead of `limit` (breaking for scripts that match `limit`). A merge's `--head` record is bound to an allowed merge check, and the main checkout can remove a merged worktree.
+- **Shorter first setup.** The beginner path asks only the essentials; the agent scan, companions and other extras wait for a later run or `/setup add <feature>`.
+- **README standard.** `plugin-packaging` ships a README standard and checklist with `readme_check.py`, and `versioning` runs it before a release. The README opens as a landing page with a Privacy section.
 
 Release 0.2.5 ([release record](docs/specs/release-0.2.5.md)):
 
@@ -506,6 +515,8 @@ Two sequence diagrams follow the agents step by step. [One delegated task, dispa
   </picture>
 </p>
 
+_This diagram predates 0.2.6: roles and the judge now live only in the assignment matrix, and a lease end tells the loop to stop._
+
 The sources of all seven diagrams are in [`docs/diagrams/`](docs/diagrams/).
 
 ### Bricks, not a framework
@@ -544,7 +555,7 @@ Start any of them with `/setup` (on Codex, also `$setup instructions` right afte
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-It targets Claude Code, Codex and Antigravity from one `skills/` folder, and can hand tasks to ZCode. Release documented here: **0.2.5** (phase 0; see `versioning` and the [release record](docs/specs/release-0.2.5.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.6-dev`.
+It targets Claude Code, Codex and Antigravity from one `skills/` folder, and can hand tasks to ZCode. Release documented here: **0.2.6** (phase 0; see `versioning` and the [release record](docs/specs/release-0.2.6.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.7-dev`.
 
 <p align="center">
   <picture>
