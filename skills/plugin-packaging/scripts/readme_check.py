@@ -80,10 +80,13 @@ def blank_comments(text):
 
 
 def opens_comment(line, open_comment):
-    """Whether an HTML comment is still open after this line (inline code already removed)."""
-    for token in re.findall(r"<!--|-->", line):
-        open_comment = token == "<!--"
-    return open_comment
+    """Whether an HTML comment block is still open after this line (inline code already removed).
+
+    Only a `<!--` at the start of a line opens a block, as in CommonMark; one in prose does not."""
+    if open_comment:
+        return "-->" not in line
+    start = re.match(r" {0,3}<!--", line)
+    return bool(start) and "-->" not in line[start.end():]
 
 
 def strip_code(text):
@@ -238,7 +241,8 @@ class Check:
             except re.error:
                 raise BadInput(f"readme-standard.json: sections.{sid} is not a valid regular expression") from None
         hosts = config.get("hosts", [])
-        if "hosts" in config and (not hosts or not all(h in KNOWN_HOSTS for h in hosts) or len(set(hosts)) != len(hosts)):
+        if "hosts" in config and (not hosts or not all(isinstance(h, str) and h in KNOWN_HOSTS for h in hosts)
+                                  or len(set(hosts)) != len(hosts)):
             raise BadInput("readme-standard.json: hosts must list one or more of " + ", ".join(KNOWN_HOSTS))
         if not all(isinstance(p, str) for p in config.get("exclude_skills", [])):
             raise BadInput("readme-standard.json: exclude_skills must list strings")
@@ -344,7 +348,7 @@ class Check:
                 self.fail("B3", f"no badge for {host}, which has a manifest")
         for host in sorted(hosts_badged - set(self.manifests)):
             if (self.root / KNOWN_HOSTS[host] / "plugin.json").is_file():
-                self.fail("B3", f"badge for {host}, which the hosts override does not list")
+                self.fail("B3", f"badge for {host}: add it to the override's hosts to serve it")
             else:
                 self.fail("B3", f"badge for {host}, which has no manifest")
 
@@ -386,8 +390,6 @@ class Check:
         header_text = re.sub(r"<[^>]+>", " ", self.header)
         install = spans.get("install")
         subheads = [h.lower() for i, lv, h in self.heads if install and install[0] <= i < install[1]]
-        for host in self.missing_hosts:
-            self.fail("H1", f"the hosts override lists {host}, which has no manifest")
         for host in self.manifests:
             if host.lower() not in header_text.lower():
                 self.fail("H1", f"header does not name {host}")
@@ -529,13 +531,15 @@ class Check:
         self.check_images_links(readme_anchors)
         self.check_placeholders()
         self.check_license(spans)
+        for host in self.missing_hosts:  # reported even when no listed host has a manifest
+            self.fail("H1", f"the hosts override lists {host}, which has no manifest")
         if self.manifests:
             self.check_badges(readme_anchors)
             self.check_counts(spans, shipped)
             self.check_hosts(spans)
             self.check_descriptions()
         else:
-            self.na |= PLUGIN_ITEMS
+            self.na |= PLUGIN_ITEMS - {item for item in PLUGIN_ITEMS if self.failures[item]}
         failed = False
         for item in ITEMS:
             for detail in self.failures[item]:

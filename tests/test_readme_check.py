@@ -386,8 +386,23 @@ class ReadmeCheckTest(unittest.TestCase):
         self.assertTrue(any("Antigravity" in l and "no manifest" in l for l in self.fails("H1")))
 
     def test_an_unknown_host_is_bad_input(self):
-        self.write(".github/readme-standard.json", json.dumps({"hosts": ["Cursor"]}))
-        self.assertIn("hosts", self.bad_input())
+        for hosts in (["Cursor"], [["Codex"]], []):
+            with self.subTest(hosts=hosts):
+                self.write(".github/readme-standard.json", json.dumps({"hosts": hosts}))
+                self.assertIn("hosts", self.bad_input())
+
+    def test_hosts_whose_manifests_are_all_missing_still_fail(self):
+        self.write(".github/readme-standard.json", json.dumps({"hosts": ["Antigravity"]}))
+        self.assertIn("FAIL H1 the hosts override lists Antigravity, which has no manifest", self.fails("H1"))
+
+    def test_an_inline_comment_opener_in_prose_keeps_later_fences(self):
+        self.edit("## Supported platforms", "Type <!-- to open a comment.\n\n```text\nTODO in code\n# not a heading\n```\n\n## Supported platforms")
+        code, lines = self.run_check()
+        self.assertEqual(code, 0, lines)
+
+    def test_a_cowork_badge_without_a_hosts_override_says_how_to_list_it(self):
+        self.edit('  <a href="#codex">', '  <a href="#codex"><img src="https://img.shields.io/badge/Claude%20Cowork-plugin-1F6FEB" alt="Claude Cowork plugin"></a>\n  <a href="#codex">')
+        self.assertIn("FAIL B3 badge for Claude Cowork: add it to the override's hosts to serve it", self.fails("B3"))
 
     def test_one_row_may_name_several_skills(self):
         self.edit("| `alpha` | Alpha work. |\n| `beta` | Beta work. |", "| `alpha`, `beta` | Both. |")
