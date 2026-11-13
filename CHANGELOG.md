@@ -11,7 +11,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Fixed
 
 - `afk.py check` lets an install that is the main checkout (a `-dev` install read from it) remove a merged linked worktree, as `afk` "Merge gate" says: `git worktree` no longer counts as a command that changes the install's own work tree, since its only Tier 1 form removes another worktree and still refuses the main checkout, a forced removal and any worktree holding the install (owner, 13/11/2026). The worktree rule docs name `log --kind merge --pr <number> --head`.
-- `afk.py log --kind merge --pr <number> --head <sha>` is refused unless an allowed `gh pr merge <number> --match-head-commit <sha>` check of the live lease pinned that number and head, so the head that lets the merge gate's cleanup remove a worktree is no longer only self-attested; an allowed merge check records the pair in the private afk log. A check whose repository identity cannot be validated keeps its own folder, so the work-tree gate never falls back to the process's working directory.
+- `afk.py log --kind merge --pr <number> --head <sha>` is refused unless an allowed `gh pr merge <number> --match-head-commit <sha>` check of the live lease pinned that number and head, so the head that lets the merge gate's cleanup remove a worktree is bound to an allowed merge check (not to proof that GitHub merged it); an allowed merge check records the pair in the private afk log. A merge check's number takes the ASCII grammar of `log --pr`. A check whose repository identity cannot be validated keeps its own folder, so the work-tree gate never falls back to the process's working directory.
 
 ## [0.2.5] - 2026-11-13
 

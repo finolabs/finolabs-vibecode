@@ -1965,6 +1965,10 @@ class AwayFlowTest(AfkBase):
         self.cwd, _ = self.git_repo('pinned')
         head, other = 'c' * 40, 'd' * 40
         self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)  # no check yet
+        for number in ('\u0667', '07', '0'):  # an Arabic-Indic seven, a leading zero, zero
+            with self.subTest(number=number):
+                self.check(['gh', 'pr', 'merge', number, '--match-head-commit', head, '--repo', 'github.com/example/demo'],
+                           tier=3, code='unknown')
         self.check(['gh', 'pr', 'merge', '7', '--match-head-commit', other, '--repo', 'github.com/example/elsewhere'],
                    tier=3, code='forbidden')  # a denied check pins nothing
         self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', other)[0], 3)

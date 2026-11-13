@@ -1343,8 +1343,8 @@ def classify_argv(argv, applied, coordinator=None):
             if '--delete-branch' in tail and not permits({'Recoverable deletion'}, applied):
                 return 'forbidden'  # row 3: the deletion is its own category beside Merge
             operands = options(tail, {'--squash', '--merge', '--rebase', '--delete-branch'}, {'--match-head-commit', '--repo', '-R'})
-            if operands is None or len(operands) != 1 or not operands[0].isdigit():
-                return 'unknown'
+            if operands is None or len(operands) != 1 or not re.fullmatch(r'[1-9][0-9]{0,9}', operands[0]):
+                return 'unknown'  # the same ASCII number grammar `log --pr` takes, so a pin names what gh merges
             return target_check(tail, context_of(applied))  # the permission is this context's target, never another
         if group == 'pr' and verb in {'create', 'edit'}:
             if applied['Push and pull requests'] != 'yes':
