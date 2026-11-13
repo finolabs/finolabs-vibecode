@@ -76,7 +76,7 @@ The skill requires a Tier 1 check before every action, so rungs 2 and 3 need com
 - `judge.py` of this install, with isolated Python, and only the site `away-decision` and its validated options. No other site, no base-URL flag.
 - The advisor's run: this install's `delegate_env.py` wrapper followed by one closed read-only argv shape per family, taken from `advisor`'s own dispatch commands, the family being one of the lease's Hosts and other than the coordinator's. The program is the family's owner-approved executable: the absolute path recorded in the canonical host config for the quota probe (`Executable`, `Resolved` and its confirmed digest), passing that probe's owner, mode, repository and target checks at check time; no record means the form is denied, and a bare name, a PATH lookup, another path with the same name and a time-cap wrapper such as `perl`, which has no such record, deny. The brief is passed only by the mechanism those commands already use, behind an unambiguous boundary: Codex and Claude end their options with a literal `--` immediately before the brief, Antigravity takes it as the value of `-p`, and in every form a brief that starts with `-` (an option, or `-` for unvalidated standard input) denies. Any write-enabling flag, unknown option or other program denies.
 
-Each check reserves an action, and the advisor's ledger start also reserves a run, as today. Acceptance cases show both calls returning Tier 1 under a live lease, and a changed site, a write flag, a family outside Hosts and an unknown program being denied.
+Each Tier 1 check reserves an action, and the advisor's ledger start also reserves a run; a denied check reserves nothing. Acceptance cases show both calls returning Tier 1 under a live lease, and a changed site, a write flag, a family outside Hosts and an unknown program being denied.
 
 Tier 3 never enters the ladder. `autopilot.py check` still classifies the resulting action, so a choice made here
 grants no authority: an option the check denies is parked. The rungs choose among options the agent already may take.
@@ -144,8 +144,8 @@ The user chooses (owner, 2026-11-09). `/setup add afk` shows one table of closed
 Moving any category from `stop` to `decide` is its own neutral question, with what could go wrong stated and no default, like Merge.
 A change that touches security in code is not a category: it goes through the review gates and the merge gate.
 
-**What no setting can open.** Production and live environments and real users or customer data, because the owner requires a person there (the two fixed rows). Credentials, because handling them is outside what any agent may do here. An agent changing its own limits (hooks, permission rules, agent instructions, the lease and setup files), because a limit the agent can
-lift for itself is no limit.
+**What no setting can open.** Production and live environments and real users or customer data, because the owner requires a person there (the two fixed rows). Credentials, because handling them is outside what any agent may do here. An agent changing its own limits (hooks, permission rules, agent instructions, the lease and setup files, and any path in the running install's own checkout on any branch, while its linked worktrees stay editable), because a limit the agent can
+lift for itself is no limit. Approving its own work: pull request and commit text carrying a review gate marker is Tier 3, and reviews post only through `post_review.py`. Removing a worktree under the recoverable-deletion row covers only the worktree whose head a `log --kind merge --head` entry of the current lease recorded, never the one holding the install.
 
 **One precedence rule.** An action goes on only when every category that applies to it permits it. Checked in this order, the first match wins:
 
