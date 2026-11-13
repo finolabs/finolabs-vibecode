@@ -77,36 +77,20 @@ def matrix_agents(text):
 
 
 def matrix_state(text):
-    """`absent` keeps the legacy reading, `valid` lets the matrix alone decide, `unset` means nothing may be routed."""
+    """`absent` leaves roles unset (the no-roles default), `valid` lets the matrix alone decide, `unset` means nothing may be routed."""
     matrix = am.parse(text)
     return "absent" if matrix.state == "absent" else "valid" if usable(matrix) else "unset"
 
 
 def read_roles(text):
-    """Three states: no matrix reads the legacy section; a usable matrix alone decides; any other matrix grants nothing."""
+    """Only a usable matrix sets roles and the judge; the retired `## Agent roles` section is never read."""
     matrix = am.parse(text)
-    if matrix.state != "absent":
-        if not usable(matrix):
-            return {"judge": "host"}
-        # An extra Claude Code command (`claude<suffix>`) belongs to the claude family for routing.
-        families = {role.replace("-", " "): agent if agent in FAMILIES else "claude"
-                    for role, agent in matrix.roles.items()}
-        return {"judge": matrix.judge, **families}
-    lines = section(text, "Agent roles")
-    roles = {}
-    if lines is None:
+    if not usable(matrix):
         return {"judge": "host"}
-    recorded, _ = machine_families(text)
-    for line in lines:
-        match = re.fullmatch(r"- (code review|security review|navigator|judge): ([a-z]+)", line)
-        if not match or match[1] in roles:
-            return {"judge": "host"}
-        key, value = match.groups()
-        allowed = {"jev", "host"} if key == "judge" else recorded
-        if value not in allowed:
-            return {"judge": "host"}
-        roles[key] = value
-    return {"judge": "host", **roles}
+    # An extra Claude Code command (`claude<suffix>`) belongs to the claude family for routing.
+    families = {role.replace("-", " "): agent if agent in FAMILIES else "claude"
+                for role, agent in matrix.roles.items()}
+    return {"judge": matrix.judge, **families}
 
 
 def read_posting(text, today=None):
