@@ -4,7 +4,7 @@ Needs: the agent scan (`scan.md`), asked as its own consent; declining it ends t
 
 Every question follows [interview.md](../interview.md): native question tool, neutral approvals, explicit yes; fallback only as stated there (advisory, agent judgment).
 
-Run the scan procedure with the running host passed explicitly, including its model confirmation, preview and clear yes before its section-only write. If it is unavailable, leave the inventory unverified and point to `/setup scan`; never guess which families exist.
+Reuse this run's scan answer if given; otherwise run the scan procedure with the running host passed explicitly, including its model confirmation, preview and clear yes before its section-only write. If it is unavailable, leave the inventory unverified and point to `/setup scan`; never guess which families exist.
 
 Then record what each helper takes with the assignment matrix in [matrix.md](../matrix.md): levels, types of work, model, roles and the judge in one pass. It is the one path: with a valid matrix, `## Agent roles` and `## Agent levels` are ignored, so [levels.md](../levels.md) and `add roles` serve only a user who declines it.
 

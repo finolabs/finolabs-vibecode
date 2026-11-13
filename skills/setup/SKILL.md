@@ -19,7 +19,7 @@ Show `host.md` (local settings) and data root (settings/records folder) before a
 
 A plain sentence selects, never answers a consent question; "install everything" grants nothing. Ambiguous: one clarifying question, core, never several features at once. Codex forwarding is unverified; use sentences. User invocation: Claude Code enforced; otherwise advisory.
 
-**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged. All questions: native question tool/shape in `references/interview.md`; headless stays open.
+**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged. All questions: native question tool/shape in `references/interview.md`.
 
 ## Core path
 
@@ -28,11 +28,11 @@ A bare run says: "Check: `/setup check` (read-only)." Show config/scan date; ask
 Read-back: inert facts only; grants separate, beginner and Quick included, with no default.
 
 Offer the beginner path: "Start with only the essential setup questions?"
-Yes: Defer extras; no file changes/data sent.
+Yes: Ask only essentials; no file changes/data sent.
 No: Choose Advanced or Quick; switch later.
 Undo: Switch paths; prior approvals stand.
 Choices: "Yes, start with essentials" / "No, choose another path".
-If yes: `references/plain-language.md`.
+If yes: `references/plain-language.md`; run step 1's `onboard first` and silent steps; ask only `mode.md` (user scope) and project steps 3 then 2; the rest waits for `add <feature>`. User scope closes (writes nothing): "To adopt the review gate in a repository, run `/setup` there (project scope)." (advisory).
 Otherwise **Advanced** asks each inert item; **Quick** confirms inert defaults once. Ask which.
 In every mode these keep their own question: moving the data root and its copy; arming `auto` and the auto gate; filling host config; each Antigravity test-command grant; roles and review posting; the Antigravity hook write; each instruction-file write. In Quick mode unknowns stay open.
 

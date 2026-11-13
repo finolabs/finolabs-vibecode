@@ -12,7 +12,7 @@ No: Keep this folder; ask later.
 Undo: Use this step to move back.
 Choices: "Yes, choose a folder" / "No, keep it here".
 Move: absolute/non-git. Preview: `python3 -I <this skill folder>/scripts/data_location.py preview --to <path>`; show files/digest; ask separately: "Copy the saved settings and records to the folder shown?"
-Yes: Copy locally, switch the pointer; source kept. Nothing is sent.
+Yes: Copy locally, switch the pointer; source kept; nothing sent.
 No: Keep the files and location; ask later.
 Undo: Switch back to the retained source.
 Choices: "Yes, copy and switch" / "No, keep it here".
@@ -21,13 +21,13 @@ Then run `python3 -I <update skill folder>/scripts/update_check.py onboard first
 2. **Scan.** `references/scan.md`.
 3. **Mode/Routing.** `references/mode.md`.
 4. **Knowledge base.** Save judge/date, coordinators/limit/host path through the access those instructions approve; follow `tidy` "Remember or recall". It asks nothing new; no consent row; report any write that failed.
-5. **Read-back.** Quick confirms inert defaults once; Advanced asks each inert item. Nothing that grants something is in it. Both scopes ask:
+5. **Read-back.** Nothing that grants something is in it. Both scopes ask:
 "Save only the notes shown about this setup?"
 Yes: Save shown inert notes at listed local targets; saving sends nothing.
 No: Keep notes unchanged; answer later.
 Undo: Restore prior notes.
 Choices: "Yes, save these notes" / "No, keep current notes".
-6. **Report.** Writes/skips/pending/reasons. **After your first result**: offer instructions (before Codex coding), missing-companion reminders (questions in `companions`, after core), `/setup check`; ask what to build.
+6. **Report.** Writes/skips/pending/reasons. **After your first result**: offer instructions (not beginner; before Codex coding), missing-companion reminders, `/setup check`; ask what to build.
 
 ## Project scope
 
