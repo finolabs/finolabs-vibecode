@@ -16,6 +16,7 @@ Status: in progress; the release pull request moves the changelog under 0.2.6; p
 | 270 | `/setup add afk` asks first whether the rules are for the account or only this repository, then for a repository only the rules that differ. |
 | 271 | `readme_check.py` blanks README comments only outside code. |
 | 272 | Agents never wait for the user while an away lease is live. |
+| 273 | `readme_check.py` reads a `hosts` list for Claude Cowork-only plugins, and a code fence inside an unclosed HTML comment no longer hides the rest of the README. |
 
 The changelog's 0.2.6 section holds the user-facing wording; `update` carries the 0.2.6 upgrade notes.
 
@@ -37,7 +38,7 @@ The README's "Built with itself" counts come from `gh` over pull requests merged
 
 ## Known follow-ups
 
-- Pull requests 268 and 271 merged with no posted reviews; they count among the merged ones but not the reviewed ones.
+- Pull requests 268, 271 and 273 merged with no posted reviews; 268 and 271 count among the merged ones but not the reviewed ones, and 273 merged after the evidence window.
 - A lease scoped to one repository (direction 1, planned for 0.2.7).
 - `post_review.py` is not an allowed wrapper in `afk.py check`.
 - `skills/afk/SKILL.md` is over its size limit.
