@@ -27,9 +27,9 @@ class RunNamesTest(unittest.TestCase):
         table = (ROOT / "skills/tidy/references/titles.md").read_text()
         self.assertIn("`<emoji> <project> <scope>: <activity>`", skill)
         emojis = [line.split("|")[1].strip() for line in table.split("## Emoji", 1)[1].splitlines()
-                  if line.startswith("| ") and not line.startswith("| Emoji")]
+                  if line.startswith("| ") and not line.startswith(("| Emoji", "| ---"))]
         self.assertEqual(len(emojis), len(set(emojis)))
-        self.assertGreaterEqual(len(emojis), 8)
+        self.assertEqual(len(emojis), 25)
         for example in ("`🐛 billing-api: fix webhook retries`", "`🔍 docs-site: review PR 12`"):
             self.assertIn(example, skill)
             self.assertIn(example[1], emojis)
