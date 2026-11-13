@@ -350,6 +350,12 @@ class ReadmeCheckTest(unittest.TestCase):
         code, lines = self.run_check()
         self.assertEqual(code, 0, lines)
 
+    def test_comment_markers_inside_code_spans_hide_nothing(self):
+        self.edit("## Start here (you)", "Write `<!--` to open a comment.\n\n## Start here (you)")
+        self.edit("## Supported platforms", "Close it with `-->`.\n\n## Supported platforms")
+        code, lines = self.run_check()
+        self.assertEqual(code, 0, lines)
+
     def test_one_row_may_name_several_skills(self):
         self.edit("| `alpha` | Alpha work. |\n| `beta` | Beta work. |", "| `alpha`, `beta` | Both. |")
         code, lines = self.run_check()
