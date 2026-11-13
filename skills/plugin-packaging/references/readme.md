@@ -100,7 +100,7 @@ Run `python3 -I <this skill folder>/scripts/readme_check.py [repository root]`. 
 
 ## Repository-local override and house style
 
-A repository may keep `.github/readme-standard.json`. It adapts the standard to the repository and may add a house style; it never removes a required item. Unknown keys are ignored.
+A repository may keep `.github/readme-standard.json`. It adapts the standard to the repository and may add a house style; it never removes a required item. Unknown top-level keys are ignored; a key of the wrong type, an unknown section id under `sections` or a pattern that is not a valid regular expression stops the check with exit 2, naming the key.
 
 ```json
 {

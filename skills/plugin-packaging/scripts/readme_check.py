@@ -167,7 +167,8 @@ class Check:
         self.root = root
         self.text = (root / "README.md").read_text(encoding="utf-8")
         self.raw = self.text.splitlines()
-        self.lines = strip_code(blank_comments(self.text))
+        # Strip code first, so a comment marker inside a code span or block hides nothing.
+        self.lines = blank_comments("\n".join(strip_code(self.text))).split("\n")
         self.heads = headings(self.lines)
         self.failures = {item: [] for item in ITEMS}
         self.na = set()
