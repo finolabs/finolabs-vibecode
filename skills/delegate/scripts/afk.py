@@ -24,7 +24,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | One identity per check (found, absent or unknown; a rejected linked worktree is unknown) feeds settings, branch and remote reads | project_store.identity, effective, Context |
 | The five project values start strict; a positively absent approval gives user values; an approved valid `autopilot` object whose record carries this checkout's full identity digest and whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding, project_store.bound |
 | PR merge/create/edit/comment need exactly one `--repo github.com/OWNER/NAME` equal to the verified target; create needs one validated `--head`; implicit targets are Tier 3 | target_check, head_check, project_store.origin_target |
-| Title and body values of PR create/edit/comment, and `git commit -m` messages, are data: newlines, tabs and a leading `-` pass; other controls, a backtick, `$(` and `$` before a letter, `_` or `{` deny; a review gate marker (`<!--`, optional space, `fnl-`) is `forbidden`; a secret, machine path or sensitive assignment is `unsafe`; one `--body-file` (gh) or `-F` (git commit) must be a regular file of at most 64 KiB inside the check's own checkout, outside the data root, with no link from that root down, whose text passes the control, marker, secret and path screens, read only for that verdict; comments follow `Repository comments` | text_values, text_ok, file_place, body_file, pr_text, commit_text |
+| Title and body values of PR create/edit/comment, and `git commit -m` messages, are data (one exact `fnl-router` line included): newlines, tabs and a leading `-` pass; other controls, a backtick, `$(` and `$` before a letter, `_` or `{` deny; a review gate marker (`<!--`, optional space, `fnl-`) is `forbidden`; a secret, machine path or sensitive assignment is `unsafe`; one `--body-file` (gh) or `-F` (git commit) must be a regular file of at most 64 KiB inside the check's own checkout, outside the data root, with no link from that root down, whose text passes the control, marker, secret and path screens, read only for that verdict; comments follow `Repository comments` | text_values, text_ok, file_place, body_file, pr_text, commit_text |
 | With Merge yes: `git worktree remove [--] <path>` of a linked worktree of this repository whose HEAD is a full SHA a `log --kind merge --pr <number> --head` entry of this lease recorded, itself refused unless an allowed `gh pr merge` check of this lease pinned that number and head (never forced, the main checkout, the current checkout or a worktree holding this install) and `git branch -d [--] <branch>` (never -D, the current or a default branch) are Tier 1; `git rm [-r] [-q] [--] <paths>` on a work branch classifies each path like a change | worktree_remove, head_commit, merged_heads, branch_delete, tracked_remove |
 | `effective` prints the same context read-only for the advisory Task choice and Trusted authors | show_effective |
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
@@ -1004,6 +1004,9 @@ COMMIT_TEXT_FLAGS = {'-m', '--message'}  # a commit message is data like a PR bo
 TEXT_LIMIT = 65536
 # A review gate marker (`<!-- fnl-... -->`): only post_review.py posts one, so PR or commit text carrying it is refused.
 MARKER = re.compile(r'<!--\s*fnl-', re.I)
+# The one marker a pull request body must carry (`coding-router`; merge_check.py's ROUTER): one exact line is data.
+ROUTER_LINE = re.compile(r'<!-- fnl-router depth=(MIN|NORMAL|DEEP) trigger=(none|contract|security|privacy|permission|'
+                         r'migration|dependency|uncertainty|consumers|irreversible|calculation|prediction|input) -->')
 # Inline argv text passes through a shell in many callers: command substitution and parameter expansion deny.
 EXPANSION = re.compile(r'\$\(|\$[A-Za-z_{]|`')
 
@@ -1038,7 +1041,10 @@ def text_ok(value, inline=True):
     """'allowed' for title, body or message data: newlines, tabs and a leading `-` are data; a review gate marker is
     'forbidden'; other controls, and inline a backtick, `$(` or `$` before a letter, `_` or `{`, are 'unknown'; a
     secret, machine path or sensitive assignment is 'unsafe'. File text (`inline` false) skips the shell screen."""
-    if MARKER.search(value):
+    lines = value.split('\n')
+    routers = [i for i, line in enumerate(lines) if ROUTER_LINE.fullmatch(line)]
+    rest = '\n'.join(line for i, line in enumerate(lines) if i not in routers[:1])
+    if len(routers) > 1 or MARKER.search(rest):
         return 'forbidden'
     if (not 0 < len(value) <= TEXT_LIMIT or inline and EXPANSION.search(value)
             or any(unicodedata.category(c).startswith('C') and c not in '\n\t' for c in value)):
