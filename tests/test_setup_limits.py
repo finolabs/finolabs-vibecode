@@ -55,7 +55,7 @@ EXTRA_APPROVALS = [
     ('May the agents push their branches and open pull requests?', REFS / "features" / "afk.md"),
     ('May the agents merge pull requests while a lease is live?', REFS / "features" / "afk.md"),
     ('Save the shown away-session settings?', REFS / "features" / "afk.md"),
-    ('Save these away settings for this repository?', REFS / "features" / "afk.md"),
+    ('Save these away settings for this repository?', REFS / "afk-project.md"),
     ('Keep the table as shown?', REFS / "afk-decisions.md"),
     ('Let the agents decide this kind of work while you are away?', REFS / "afk-decisions.md"),
     ('Let excerpts of your past decisions go to the judge or another AI provider when agents decide for you?',
@@ -208,16 +208,23 @@ class ConsentInventoryTests(unittest.TestCase):
     def test_afk_project_scope_asks_five_keys_previews_and_writes_after_a_yes(self):
         text = (REFS / "features/afk.md").read_text()
         self.assertIn("## Project scope", text)
-        user, project = text.split("## Project scope")
+        self.assertIn("(../afk-project.md)", text.split("## Project scope")[1])
+        project = (REFS / "afk-project.md").read_text()
         self.assertIn("inside a repository", project)
+        # Four tickable keys fit one native multi-select; trusted authors has no other choice yet.
         questions = re.findall(r'Ask: "([^"\n]+)"', project)
-        self.assertEqual(len(questions), 5, questions)
+        self.assertEqual(len(questions), 4, questions)
+        self.assertIn("one multi-select of four", project)
+        # An existing repository object is read first and removed only through the previewed save question.
+        self.assertLess(project.index("--clear autopilot --dry-run"),
+                        project.index("Should this repository use different away rules than your account?"))
+        self.assertIn("preview its removal and ask the save question", project)
         for key in ("task-choice", "push-and-pull-requests", "merge", "trusted-authors", "roots"):
             self.assertIn("`%s`" % key, project)
         # Only the keys the user ticks as different are asked; every other key inherits.
         self.assertIn("Should this repository use different away rules than your account?", project)
         self.assertIn("Which rules should differ in this repository?", project)
-        self.assertIn("Use my user setting", project)
+        self.assertGreaterEqual(project.count("Use my user setting"), 4)
         self.assertIn("default answer", project)
         self.assertIn("settings --set 'autopilot=", project)
         self.assertIn("--dry-run", project)
