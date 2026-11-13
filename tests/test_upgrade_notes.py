@@ -122,7 +122,8 @@ class NotesSchemaTest(unittest.TestCase):
                 if check:
                     self.assertTrue((ROOT / check[0]).is_file())
                 self.assertEqual(item.get('where'), 'repository' if ident == '0.2.4/checks-setup' else None)
-        for ident in ('0.2.0/codex-hook-trust', '0.2.1/codex-hook-trust', '0.2.3/codex-hook-trust', '0.2.5/codex-hook-trust'):
+        for ident in ('0.2.0/codex-hook-trust', '0.2.1/codex-hook-trust', '0.2.3/codex-hook-trust', '0.2.5/codex-hook-trust',
+                      '0.2.6/codex-hook-trust'):
             self.assertIn('/hooks', items[ident]['text'])
         for phrase in ('## Limits', 'no longer read', 'each repository', 'by hand'):
             self.assertIn(phrase, items['0.2.1/parallel-limits']['text'])
@@ -187,6 +188,20 @@ class NotesSchemaTest(unittest.TestCase):
         self.assertTrue((ROOT / retired['check'][0]).is_file())
         for phrase in ('Breaking', '## Agent roles', 'no longer read', 'host', 'Jev', 'migrate', 'consent'):
             self.assertIn(phrase, retired['text'])
+        hooks = items['0.2.6/codex-hook-trust']
+        self.assertEqual(hooks['kind'], 'hook')
+        for phrase in ('/hooks', 'session-start'):
+            self.assertIn(phrase, hooks['text'])
+        for ident in ('0.2.6/afk-end', '0.2.6/setup-beginner', '0.2.6/afk-scope', '0.2.6/afk-worktree-cleanup'):
+            self.assertEqual(items[ident]['kind'], 'info')
+            self.assertNotIn('setup', items[ident])
+            self.assertNotIn('check', items[ident])
+        for phrase in ('exhausted', 'limit', 'end line', 'stop its loop'):
+            self.assertIn(phrase, items['0.2.6/afk-end']['text'])
+        for phrase in ('beginner', 'later run', '/setup add <feature>'):
+            self.assertIn(phrase, items['0.2.6/setup-beginner']['text'])
+        for phrase in ('/setup add afk', 'account', 'this repository', 'want different'):
+            self.assertIn(phrase, items['0.2.6/afk-scope']['text'])
 
     def test_025_names_the_afk_section_step_and_the_tidy_rename(self):
         items = {item['id']: item for entry in u.parse_notes(json.loads(NOTES.read_text()))

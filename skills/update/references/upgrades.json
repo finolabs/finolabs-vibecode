@@ -259,6 +259,31 @@
           "text": "Breaking: ## Agent roles is no longer read; without a matrix no review roles are set and the judge is host (no Jev). Setup runs matrix_setup.py migrate and asks consent again.",
           "setup": "/setup add delegation",
           "check": ["skills/setup/scripts/upgrade_state.py", "roles-retired"]
+        },
+        {
+          "id": "0.2.6/codex-hook-trust",
+          "kind": "hook",
+          "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; the session-start hook changed."
+        },
+        {
+          "id": "0.2.6/afk-end",
+          "kind": "info",
+          "text": "afk.py check answers exhausted when a lease's runs or runtime are spent (limit is now only the hourly cap) and adds an end line telling the agent to stop its loop once the lease ends."
+        },
+        {
+          "id": "0.2.6/setup-beginner",
+          "kind": "info",
+          "text": "The setup beginner path asks only the essentials; extras such as the agent scan and companions wait for a later run or /setup add <feature>."
+        },
+        {
+          "id": "0.2.6/afk-scope",
+          "kind": "info",
+          "text": "/setup add afk first asks whether the rules are for your account or only this repository, then for a repository asks only the rules you want different."
+        },
+        {
+          "id": "0.2.6/afk-worktree-cleanup",
+          "kind": "info",
+          "text": "With Merge allowed, an install read from the main checkout may remove the worktree of a pull request the lease merged; never the main or current checkout, a forced removal or the install's own."
         }
       ]
     }

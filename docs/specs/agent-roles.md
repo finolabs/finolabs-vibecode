@@ -1,6 +1,6 @@
 # Agent roles: routed reviews, verification without an agent, and a navigator
 
-Status: in progress; release 0.2.0 scripts and local tests are implemented; relay receipt/dashboard counters remain unimplemented; independent navigator/judge validation and live-host routing, posting and SessionStart delivery remain unverified.
+Status: in progress; part B (the host section) retired in 0.2.6; release 0.2.0 scripts and local tests are implemented; relay receipt/dashboard counters remain unimplemented; independent navigator/judge validation and live-host routing, posting and SessionStart delivery remain unverified.
 
 ## Why
 
