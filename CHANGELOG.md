@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-13
+
 ### Added
 
 - ZCode, Z.ai's coding agent (Apache-2.0), as a fourth delegate family (contributed by nta-jeremy): it can be recorded in the host config's inventory, the environment allowlist and the assignment matrix, and the coordinator dispatches it for code tasks in `--mode edit` (no shell; the coordinator runs the tests) and for advice in `--mode plan`, never `yolo`, `guarded` or `build`, with facts taken from ZCode's own CLI documentation on 12/11/2026 and a permission check on a machine's first dispatch (`delegate` `references/agents.md` "ZCode"). Review routing skips it, the away lease denies it, and a host config without a ZCode row still passes `setup check`.
@@ -37,14 +39,11 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `ledger.py stale --older-than-hours <n>` (1 to 8760) sets the stale threshold for one preview; a record inside its budget is still never listed. `fnl-status` now says when to preview and close stale records.
 - Documentation matches 0.2.5: the README describes the release, the context probe, the compaction nudge, the merge notice and the dispatch nudge, embeds the new diagrams and lists ZCode under "Supported agents"; `docs/how-it-compares.md`, the help map and the away and session diagrams say that `/afk start` prints a `/goal` line and starts `/loop`; the worktree sweep's docs say it escapes paths and quotes its commands; and `/update` gains 0.2.5 notes for the repository's own afk choices, the compaction nudge's window, `shape`, ZCode, the ledger closure and the dispatch nudge.
 
-### Changed
-
 - `heavy_run.py` now also waits on macOS until the kernel's memory pressure has read normal at every poll for a whole window (default 60 seconds) and swap-outs over that window average at most a limit (default 5 MB/s); an unreadable pressure or swap-out reading waits and never counts as a pass, and other platforms skip these two gates. The memory minimum default rises from 3 to 4 GB. New `## Heavy jobs` keys: `Memory window seconds` (1 to 900) and `Swap-out limit MB per second`; readings are stamped when they complete, one sample is never a rate, and a swap-out count that goes backwards restarts the window. `status` prints a `pressure:` line. Light targeted tests skip the lock and the load gate but still wait while pressure is critical.
 - `plugin-packaging` covers directory submissions: a new `references/directories.md` holds what Anthropic's and OpenAI's plugin directories ask (who submits, the tracked branch or tag, field limits, the desktop-only path for plugins that run a local program) and the portal holds no local validator shows, and a new "Directory editions" part describes building a per-directory edition from the same sources with a test that fails while a committed edition is stale. Every portal step (upload, draft, repository access, portal validation, submitting) waits for the owner's approval, a new prepare-only eval checks that the skill stops before it, and the form's answers and attestations stay the owner's. It also records, as observed and reported rather than published, that Anthropic's directory refuses after submitting local code (command hooks, local MCP servers, mods, scripts, broad `allowed-tools`) from organizations that are not Verified, keeps the design-only exception to the image-generation restriction, and that hooks shared with Codex stay in shell form because Codex hooks take no `args`.
 - `open-source-review` scans with `gitleaks git` and `gitleaks dir`, runs the plugin validators on a fresh clone so untracked files such as `.DS_Store` do not show, and walks the target directory's own pre-submission list against the submitted folder or ZIP.
 - `/afk start` now keeps the session working while you are away: it prints a goal you can type in the host's `/goal` command before you leave (the lease only bounds actions and never starts a turn), and starts a self-paced `/loop` on Claude Code when work waits on CI, reviews or a delegated run, stopping it when the lease ends. Neither widens what the lease allows.
 - `ledger.py stale` is more conservative by default: an open record is stale only past twice its budget and at least 24 hours (before: past its budget), and a record with no usable budget becomes stale after 24 hours (before: never). Each preview line now shows the record's label, and `stale --close` rechecks each record against the threshold its preview used.
-- Record the owner decision for a context probe (seventh scoped exception in `CLAUDE.md`, `docs/specs/context-probe.md`, `PRIVACY.md`): on request it reads the current session's context size from Claude Code's local `/context` or Codex's app-server, so `tidy` gets real numbers where no status line runs. No code yet.
 - A second `/afk start` while a lease is live now reports when that lease ends and tells the session to work under it, instead of a generic refusal that led a second session to work outside the lease. The lease covers every session on the machine; nothing is extended or reset.
 - The assignment matrix is the one setup path for levels, roles and the judge: `add roles` defers to it when it exists, and its Jev choice asks the same separate TypeSafe consent question as `add roles`. The Agent skills block now names help as `/finolabs-vibecode:help` (Codex `$help`).
 - The away-session setup is now `/setup add afk`; its choices move to `## afk` in `host.md` (see the rename of `autopilot` to `afk` above).
@@ -557,7 +556,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.1...v0.2.2
