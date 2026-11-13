@@ -1,6 +1,6 @@
 ---
 name: plugin-packaging
-description: Package agent skills as a plugin that installs on Claude Code, Codex and Antigravity from one repository. Use when creating or restructuring a plugin or skill repository, writing or fixing a plugin manifest or marketplace catalog, designing a plugin icon, preparing listing metadata, adding a new host, or checking that a package validates before a release or directory submission.
+description: Package agent skills as a plugin that installs on Claude Code, Codex and Antigravity from one repository. Use when creating or restructuring a plugin or skill repository, writing or fixing a plugin manifest or marketplace catalog, writing or reviewing a plugin's README against its standard and checklist, designing a plugin icon, preparing listing metadata, adding a new host, or checking that a package validates before a release or directory submission.
 ---
 
 # Plugin packaging
@@ -50,7 +50,7 @@ Apply this section only when preparing a submission to a directory that asks for
 - Make the repository its own marketplace on hosts that use catalogs when the plugin is outside any family catalog, so `owner/repo` installs work before any directory listing; inside a family, install from the shared catalog (Codex shows each marketplace as its own group).
 - A family of plugins shares one catalog repository serving every host that uses catalogs; it either pins each plugin by commit SHA or tracks protected default branches, and says which; details in [references/catalogs.md](references/catalogs.md), which also covers Antigravity's install from the repository URL.
 - Offer single-skill installs beside the plugin: skills.sh (`npx skills add owner/repo --skill <name>`) finds `skills/<name>/SKILL.md` on its own. Tell users to pick one path per agent, since both list every skill twice.
-- Write the install commands for every host in the README, verified against each host's `--help`.
+- Write the README to [references/readme.md](references/readme.md): its sections in order, the facts it takes from the repository, and the install commands for every host, verified against each host's `--help`.
 - Before preparing a submission to Anthropic's or OpenAI's plugin directory, read [references/directories.md](references/directories.md): which portal steps need the owner's approval, per-directory editions built from one source, and what each directory refuses or holds that no local validator shows.
 
 ## 6. Checks before a release
@@ -61,6 +61,7 @@ Run and read each one:
 - the trigger suite: one `claude plugin eval` case per model-invoked skill that must fire it, plus negative cases that must fire nothing (`--ablation none` keeps `Skill` graders scored). Run only the cases of skills whose `description` changed since the last release (`--case`), and the whole suite before a MINOR release; a patch release with no `description` change needs none;
 - after installing on Claude Code, `/skill-doctor` for each skill's listing cost, and from the second release on, whether it is ever used (an interactive check: where it cannot run, say so);
 - `open-source-review` for license, payload, leaks and community files;
+- the README checklist in [references/readme.md](references/readme.md) "Checklist": `scripts/readme_check.py` for the mechanical items (advisory: it reads files only), then the agent items; fix each failure in the release pull request or write there, per item, why not;
 - when the plugin is listed in a shared catalog, run the catalog check and, if the catalog pins SHAs, update it after the tag.
 
 A validator pass shows the package loads; only the trigger suite and real use show the skills help.
