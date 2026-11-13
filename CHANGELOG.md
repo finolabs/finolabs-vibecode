@@ -7,6 +7,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Changed
 
 - The README opens as a landing page: the icon, the tagline and subhead, badges for the release, licence and the three hosts, the banner, a "What you get" block, the install commands for each host and the request-to-merge diagram. "For engineers" (release notes, compaction steward, diagrams, Bricks) moves below the reference sections; nothing is removed. The banner (`assets/banner.png`) is also the new GitHub social preview, generated from `.github/social-preview.json`.
+- The `setup` beginner path asks only the essentials: the Delegation mode and Routing questions in user scope, and the workflow and Agent skills block questions in project scope. Moving the data root, the agent scan, the notes read-back, hiding local files, companions, extras and the instructions offer wait for a later run or `add <feature>`, each still with its own question. User scope ends with one line on how to adopt the review gate in a repository. A feature that needs the agent scan reuses the answer given earlier in the same run instead of asking it again.
 
 ### Fixed
 

@@ -291,7 +291,7 @@ The short version is "Start here" above; the order is `/finolabs-vibecode:help`,
 | --- | --- | --- |
 | Quick | Confirm recommended inert defaults once; grants keep their own questions. | One multi-select question, then "Show me how to install" / "Not now" per selected companion, at most four. Only "none of these" records `companions: declined`; explicit `add companions` asks again. |
 | Advanced | Ask each inert item; grants keep their own questions. | Interview each companion about benefit, a stack example, costs/data and fallback before the same neutral offer; optional roles/judge, quota, metrics, compaction, project settings and review instruments. |
-| Beginner | Plain questions and Quick inert defaults; grants keep their own questions. | Skip companion questions and defer extras. |
+| Beginner | Plain questions: only the Delegation mode and Routing questions in user scope, and the workflow and Agent skills block questions in project scope; every other item keeps its own question for a later run or `add <feature>`. | Skip companion questions, extras and the instructions offer; user scope ends with how to adopt the review gate in a repository (`/setup` there, project scope). |
 
 Companion choices never install anything: a Yes prints a checked command, a No records nothing, and defaults or timeouts grant nothing. Setup's [`companions` feature](skills/setup/references/features/companions.md) uses the [checked companion table](skills/setup/references/companions.md), including markmap for mind maps and outlines. `typesafe-ai` is optional cookbook guidance; the plugin's `judge.py` makes calls without it.
 

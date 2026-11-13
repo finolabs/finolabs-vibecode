@@ -21,13 +21,13 @@ Then run `python3 -I <update skill folder>/scripts/update_check.py onboard first
 2. **Scan.** `references/scan.md`.
 3. **Mode/Routing.** `references/mode.md`.
 4. **Knowledge base.** Save judge/date, coordinators/limit/host path through the access those instructions approve; follow `tidy` "Remember or recall". It asks nothing new; no consent row; report any write that failed.
-5. **Read-back.** Quick confirms inert defaults once; Advanced asks each inert item. Nothing that grants something is in it. Both scopes ask:
+5. **Read-back.** Nothing that grants something is in it. Both scopes ask:
 "Save only the notes shown about this setup?"
 Yes: Save shown inert notes at listed local targets; saving sends nothing.
 No: Keep notes unchanged; answer later.
 Undo: Restore prior notes.
 Choices: "Yes, save these notes" / "No, keep current notes".
-6. **Report.** Writes/skips/pending/reasons. **After your first result**: offer instructions (before Codex coding), missing-companion reminders (questions in `companions`, after core), `/setup check`; ask what to build.
+6. **Report.** Writes/skips/pending/reasons. **After your first result**: offer instructions (before Codex coding), missing-companion reminders, `/setup check`; ask what to build.
 
 ## Project scope
 

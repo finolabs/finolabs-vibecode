@@ -1,6 +1,6 @@
 # Setup menu (after core)
 
-The beginner skips companion questions/extras. Quick opens `companions` directly unless declined. Advanced skips recorded declines on a bare run; otherwise interviews, then offers extras. `add <feature>` works in either.
+The beginner skips companion questions/extras and the instructions offer. Quick opens `companions` directly unless declined. Advanced skips recorded declines on a bare run; otherwise interviews, then offers extras. `add <feature>` works in either.
 Show feature/cost lines in Advanced. Load selected features only. For each extra, ask "Explore <the plain-language goal of this feature>?"
 Yes: Open only that interview; no feature setting changes or data is sent by this answer. Each later grant keeps its own approval.
 No: Save only <feature>: declined in Setup features in local host.md; leave feature settings unchanged. Ask later with add <feature>.
