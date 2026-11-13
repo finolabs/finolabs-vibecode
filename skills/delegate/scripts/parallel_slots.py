@@ -184,6 +184,9 @@ def _stale(record, now):
     return (now - begun).total_seconds() / 60 > max(budget * 4 / 3, budget + 10)
 
 
+SKIPPED_EVENTS = ('ended', 'decision', 'question_denied', 'decision_review')
+
+
 def open_counts(raw, now=None, stale=None, scope=None, other=None):
     """Counts of open dispatches per family; `stale` (a dict) receives the per-family counts of stale ones left out."""
     now = now or datetime.now(timezone.utc)
@@ -192,6 +195,8 @@ def open_counts(raw, now=None, stale=None, scope=None, other=None):
         if not line.strip():
             continue
         record = json.loads(line)
+        if isinstance(record, dict) and record.get('event') in SKIPPED_EVENTS:
+            continue  # run-ended and away lines carry no dispatch count
         if (not isinstance(record, dict) or not isinstance(record.get('id'), str)
                 or not record['id'] or record.get('event') not in ('start', 'finish')):
             raise ValueError('invalid ledger')

@@ -71,6 +71,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/open_dispatch_nudge.py\"; exit 0",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/compact_nudge.py\" 2>/dev/null; exit 0",
             "timeout": 5
           }

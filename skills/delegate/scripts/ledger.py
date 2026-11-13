@@ -47,6 +47,11 @@ REQUIRED = {
     "start": {"id", "ts", "project", "task", "kind", "grade", "agent", "model", "reason"},
     "finish": {"id", "ts", "outcome", "rework_rounds"},
 }
+# The dispatch wrapper's `ended` line: the run's process exited with this code. It is not a finish.
+ENDED = {"id", "ts", "exit"}
+# A posted review comment, checked by pattern only and never fetched.
+REVIEW_URL = re.compile(r"https://github\.com/[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}/pull/[1-9][0-9]{0,9}"
+                        r"#issuecomment-[1-9][0-9]{0,19}")
 # Away-decision lines (docs/specs/away-decisions.md): load() skips them silently, load_away() returns them.
 AWAY_EVENTS = {
     "decision": {"id", "ts", "lease_start", "rung", "settled"},
@@ -119,7 +124,13 @@ def load_away():
     return records
 
 
-def load():
+def valid_ended(rec):
+    code = rec.get("exit")
+    return ENDED <= rec.keys() and isinstance(rec["id"], str) and type(code) is int and -255 <= code <= 255
+
+
+def load(ended=None):
+    """The `start` and `finish` maps by id; `ended` lines fill the `ended` dict when one is passed, else are skipped."""
     lines = read_lines()
     starts, finishes = {}, {}
     for n, line in enumerate(lines, 1):
@@ -131,6 +142,10 @@ def load():
             rec = None
         if isinstance(rec, dict) and rec.get("event") in AWAY_EVENTS:
             continue  # away lines are read by load_away(), never reported as malformed
+        if isinstance(rec, dict) and rec.get("event") == "ended" and valid_ended(rec):
+            if ended is not None:
+                ended[rec["id"]] = rec
+            continue  # the run's process exited; its outcome is still open
         required = REQUIRED.get(rec.get("event")) if isinstance(rec, dict) else None
         if not required or not required <= rec.keys():
             print(f"ledger: skipping malformed line {n}", file=sys.stderr)
@@ -246,22 +261,29 @@ def finish_locked(args, status):
         sys.exit(f"ledger: no start line for {args.id}")
     if args.id in finishes:
         sys.exit(f"ledger: {args.id} already has a finish line")
-    if args.head is not None and starts[args.id]["kind"] != "implement":
-        sys.exit("ledger: only implementation dispatches can bind a head")
+    kind = starts[args.id]["kind"]
+    if args.head is not None and kind not in ("implement", "review"):
+        sys.exit("ledger: only implementation and review dispatches can bind a head")
     if args.head is not None and not re.fullmatch(r"[0-9a-f]{40}", args.head):
         sys.exit("ledger: invalid head")
+    if args.review_url is not None:
+        if kind != "review" or args.outcome != "accepted":
+            sys.exit("ledger: --review-url goes only with an accepted review dispatch")
+        if not REVIEW_URL.fullmatch(args.review_url):
+            sys.exit("ledger: invalid review URL")
     extra = {}
     if args.accept_unverified and args.outcome != "accepted":
         sys.exit("ledger: --accept-unverified requires accepted")
-    if args.reason and not args.accept_unverified:
-        sys.exit("ledger: --reason requires --accept-unverified")
+    if args.reason is not None and (not args.reason.strip() or len(args.reason) > 4096):
+        sys.exit("ledger: --reason must be nonempty and at most 4096 characters")
     if args.outcome == "accepted":
         if args.accept_unverified:
-            if not args.reason or not args.reason.strip() or len(args.reason) > 4096:
+            if args.reason is None:
                 sys.exit("ledger: --accept-unverified requires a bounded nonempty --reason")
-            # Free text is never persisted. The digest identifies the coordinator's report.
-            extra = {"accept_unverified": True,
-                     "reason_id": hashlib.sha256(args.reason.encode()).hexdigest()}
+            extra = {"accept_unverified": True}
+        elif kind == "review":
+            # A review produces a posted review, not a test receipt; the URL is checked by pattern, never stored.
+            extra = {"review_posted": True} if args.review_url is not None else {}
         else:
             try:
                 from record import checkout_identity, current_head, git, read_verification
@@ -279,11 +301,21 @@ def finish_locked(args, status):
             except (ImportError, OSError, ValueError, TypeError, subprocess.SubprocessError):
                 sys.exit("ledger: acceptance refused: current checkout head needs a passing verify receipt; "
                          "or use --accept-unverified --reason")
+    if args.reason is not None:
+        # Free text is never persisted. The digest identifies the coordinator's report.
+        extra["reason_id"] = hashlib.sha256(args.reason.encode()).hexdigest()
     if status != "no_findings":
         print("ledger: log_scan: " + status, file=sys.stderr)
+    # Only an implementation head binds authorship for review routing; a review records the head it reviewed.
+    if args.head is None:
+        bound = {}
+    elif kind == "implement":
+        bound = {"head": args.head, "agent": starts[args.id]["agent"]}
+    else:
+        bound = {"reviewed_head": args.head}
     append({
         **extra,
-        **({"head": args.head, "agent": starts[args.id]["agent"]} if args.head is not None else {}),
+        **bound,
         "event": "finish", "id": args.id, "ts": now(), "outcome": args.outcome,
         "rework_rounds": args.rework_rounds, "tests": args.tests, "note": args.note,
         "log_scan": status,
@@ -296,15 +328,17 @@ def minutes(start, finish):
 
 
 def cmd_open(args):
-    starts, finishes = load()
+    ended = {}
+    starts, finishes = load(ended)
     current = datetime.now(timezone.utc)
     for dispatch_id, s in starts.items():
         if args.project is not None and s["project"] != args.project:
             continue
         if dispatch_id not in finishes:
             age = (current - datetime.fromisoformat(s["ts"])).total_seconds() / 60
+            mark = f"  ended exit={ended[dispatch_id]['exit']}" if dispatch_id in ended else ""
             print(f"{dispatch_id}  {s['ts']}  age {age:.0f}/{s.get('budget_min', '?')} min  "
-                  f"{s['agent']}/{s['model']}  {s['project']}: {s['task']}")
+                  f"{s['agent']}/{s['model']}  {s['project']}: {s['task']}{mark}")
 
 
 STALE_STATE = "state/ledger-stale"
@@ -326,15 +360,18 @@ def stale_hours(value):
     return int(value)
 
 
-def past_threshold(start, current, hours=None):
+def past_threshold(start, current, hours=None, ended=False):
     """Age in minutes when the record is stale, else None.
 
     By default stale means past twice a positive budget and at least 24 hours (24 hours without a usable budget);
-    `hours` replaces that threshold, but a record still inside a positive budget is never stale."""
+    `hours` replaces that threshold, but a record still inside a positive budget is never stale. A record whose run
+    has an `ended` line no longer waits on its budget: 24 hours, or `hours` when given."""
     budget = start.get("budget_min")
     if type(budget) is not int or budget <= 0:
         budget = None
-    if hours is None:
+    if ended:
+        limit = STALE_FLOOR if hours is None else hours * 60
+    elif hours is None:
         limit = max(2 * budget, STALE_FLOOR) if budget else STALE_FLOOR
     else:
         limit = max(hours * 60, budget or 0)
@@ -385,21 +422,57 @@ def stale_label(start):
     return text if len(text) <= 80 else text[:77] + "..."
 
 
-def stale_rows(hours=None):
-    """Stale open records: (id, age, budget, label, log description, outcome or None, note)."""
+MAX_PROJECT = 200  # characters of a project name a stale preview binds
+
+
+def this_project(cwd=None):
+    """This repository's ledger project as `status` resolves it, or None.
+
+    The approved `ledger` entry of the repository's project settings, else the checkout folder name; None outside a
+    repository or when approved settings broke (status then reports the join as unknown)."""
+    try:
+        import project_store as store
+        found, ident = store.identity(os.getcwd() if cwd is None else cwd)
+        if found != "found":
+            return None
+        state, values = store.settings_state(ident.checkout)
+    except Exception:
+        return None
+    if state == "broken":
+        return None
+    name = values.get("ledger", ident.checkout.name)
+    return name if isinstance(name, str) and 0 < len(name) <= MAX_PROJECT else None
+
+
+ALL_PROJECTS_WARNING = ("ledger: warning: --all-projects lists every project's records; "
+                        "other projects' runs cannot be judged from this checkout")
+
+
+def stale_rows(hours=None, project=None):
+    """Stale open records of `project` (every project when None): (id, age, budget, label, log, outcome, note)."""
     import log_scan
-    starts, finishes = load()
+    ended = {}
+    starts, finishes = load(ended)
     current = datetime.now(timezone.utc)
     rows = []
     for ident, start in starts.items():
         if ident in finishes:
             continue
-        age = past_threshold(start, current, hours)
+        if project is not None and start.get("project") != project:
+            continue
+        age = past_threshold(start, current, hours, ident in ended)
         if age is None:
             continue
         budget, label = start.get("budget_min"), stale_label(start)
         if not isinstance(ident, str) or not SAFE_ID.fullmatch(ident):
             rows.append(("(invalid id)", age, budget, label, "unchecked", None, ""))
+            continue
+        if ident in ended:
+            # The wrapper recorded the exit; the log is not read.
+            code = ended[ident]["exit"]
+            reason = f"run ended exit={code}" if code else "run ended exit 0; no verdict recorded"
+            rows.append((ident, age, budget, label, f"ended exit={code}", "error" if code else "cancelled",
+                         "closed late by ledger stale: " + reason))
             continue
         try:
             facts = log_facts(ident, current)
@@ -425,8 +498,16 @@ def plan_digest(plan):
     return hashlib.sha256(json.dumps(plan, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
 
-def stale_preview(hours=None):
-    rows = stale_rows(hours)
+def stale_preview(hours=None, all_projects=False):
+    if all_projects:
+        project = None
+        print(ALL_PROJECTS_WARNING)
+    else:
+        project = this_project()
+        if project is None:
+            raise ValueError("stale refused: no ledger project resolved for this checkout; run it inside the "
+                             "repository, or pass --all-projects to preview every project")
+    rows = stale_rows(hours, project)
     if not rows:
         print("ledger: no open records past the stale threshold")
         return
@@ -440,21 +521,26 @@ def stale_preview(hours=None):
     if not records:
         print("ledger: nothing to close; ledger unchanged")
         return
-    plan = {"root": str(root), "created": time.time(), "older_than_hours": hours, "records": records}
+    plan = {"root": str(root), "created": time.time(), "older_than_hours": hours, "project": project,
+            "records": records}
     value = plan_digest(plan)
     with dr.data_folder(STALE_STATE, create=True, private=True) as state:
         fcntl.flock(state, fcntl.LOCK_EX | fcntl.LOCK_NB)
         dr.atomic_write(state, "preview.json", json.dumps({"plan": plan, "digest": value}).encode())
     print(f"Closes {len(records)} of {len(rows)} listed records; none is marked accepted.")
     print("Digest: " + value)
-    print("Close with: ledger.py stale --close --digest <at least 12 hex digits of the digest>")
+    print("Close with: ledger.py stale --close " + ("--all-projects " if all_projects else "")
+          + "--digest <at least 12 hex digits of the digest>")
     print("Preview expires in 60 minutes; ledger unchanged.")
 
 
 def valid_plan(plan):
-    if not isinstance(plan, dict) or set(plan) != {"root", "created", "older_than_hours", "records"}:
+    if not isinstance(plan, dict) or set(plan) != {"root", "created", "older_than_hours", "project", "records"}:
         return False
     if type(plan["created"]) not in (int, float) or not isinstance(plan["records"], list):
+        return False
+    scope = plan["project"]
+    if scope is not None and (not isinstance(scope, str) or not 0 < len(scope) <= MAX_PROJECT):
         return False
     hours = plan["older_than_hours"]
     if hours is not None and (type(hours) is not int or not 1 <= hours <= MAX_HOURS):
@@ -464,7 +550,7 @@ def valid_plan(plan):
                and isinstance(r["note"], str) and len(r["note"]) <= 200 for r in plan["records"])
 
 
-def stale_close(value):
+def stale_close(value, all_projects=False):
     if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{12,64}", value):
         raise ValueError("at least 12 hex digits of the preview digest required")
     root = dr.consent_root()
@@ -487,14 +573,24 @@ def stale_close(value):
             raise ValueError("data root changed; preview again")
         if not 0 <= time.time() - plan["created"] <= STALE_EXPIRY:
             raise ValueError("preview expired; preview again")
+        # The digest binds the scope too: a one-project preview closes only from that project's checkout.
+        scope = plan["project"]
+        if scope is None and not all_projects:
+            raise ValueError("the preview covered every project; close it with --all-projects")
+        if scope is not None and all_projects:
+            raise ValueError("the preview covered one project; close it without --all-projects")
+        if scope is not None and this_project() != scope:
+            raise ValueError("ledger project changed since the preview; preview again")
         with finish_lock():  # the open-state check and the appends happen under the finish writers' lock
-            starts, finishes = load()
+            ended = {}
+            starts, finishes = load(ended)
             current = datetime.now(timezone.utc)
             closed = 0
             for item in plan["records"]:
                 start = starts.get(item["id"])
                 if (start is None or item["id"] in finishes
-                        or past_threshold(start, current, plan["older_than_hours"]) is None):
+                        or (scope is not None and start.get("project") != scope)
+                        or past_threshold(start, current, plan["older_than_hours"], item["id"] in ended) is None):
                     continue  # finished since the preview, or not past the preview's threshold: never closed here
                 append({"event": "finish", "id": item["id"], "ts": now(), "outcome": item["outcome"],
                         "rework_rounds": 0, "tests": "not-run", "note": item["note"], "log_scan": "not_scanned"})
@@ -514,9 +610,9 @@ def cmd_stale(args):
         sys.exit("ledger: --older-than-hours goes with the preview; --close uses the preview's threshold")
     try:
         if args.close:
-            stale_close(args.digest)
+            stale_close(args.digest, args.all_projects)
         else:
-            stale_preview(args.older_than_hours)
+            stale_preview(args.older_than_hours, args.all_projects)
     except log_scan.FolderRefused as error:
         sys.exit("ledger: " + str(error))
     except FileNotFoundError:
@@ -707,22 +803,28 @@ def build_parser():
     f = sub.add_parser("finish", help="record how a dispatch ended")
     f.add_argument("id")
     f.add_argument("--log-path", help="regular file inside the private run-log folder")
-    f.add_argument("--head", help="exact reviewed implementation head for trusted review routing")
+    f.add_argument("--head", help="exact implementation head for trusted review routing, or the head a review "
+                                  "dispatch reviewed")
+    f.add_argument("--review-url", help="the posted review comment of an accepted review dispatch; pattern-checked, "
+                                        "never fetched or stored")
     f.add_argument("--outcome", required=True, choices=OUTCOMES)
     f.add_argument("--rework-rounds", type=int, default=0)
     f.add_argument("--tests", default="not-run", choices=TESTS)
     f.add_argument("--note", default="")
     f.add_argument("--checkout", default=".", help="the checkout named at dispatch")
     f.add_argument("--accept-unverified", action="store_true")
-    f.add_argument("--reason", help="reason retained only as a digest; keep text in the coordinator report")
+    f.add_argument("--reason", help="reason for any outcome, retained only as a digest; keep text in the "
+                                    "coordinator report")
     f.set_defaults(func=cmd_finish)
 
     o = sub.add_parser("open", help="list dispatches with no finish line")
     o.add_argument("--project", help="only dispatches of this exact project name")
     o.set_defaults(func=cmd_open)
 
-    st = sub.add_parser("stale", help="preview open records past twice their budget and 24 hours; close them "
-                                      "with --close --digest")
+    st = sub.add_parser("stale", help="preview this repository's open records past twice their budget and 24 "
+                                      "hours; close them with --close --digest")
+    st.add_argument("--all-projects", action="store_true",
+                    help="every project's records, with a warning; a close of such a preview repeats this flag")
     st.add_argument("--older-than-hours", type=stale_hours,
                     help="preview threshold in hours (1 to 8760); a record inside its budget is never stale")
     st.add_argument("--close", action="store_true", help="close the records the preview listed")

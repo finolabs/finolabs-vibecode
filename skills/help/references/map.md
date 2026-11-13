@@ -116,7 +116,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/context_snapshot.py` | Records/reads Claude Code or Antigravity status-line context counts, probes Claude Code or Codex on request through the confirmed program, and feeds the steward. |
 | `scripts/context_steward.py` | Applies the deterministic action table to supplied counts, threshold and boundary; never compacts. |
 | `scripts/data_root.py` | Resolves account-owned canonical storage and checks safe paths; environment overrides cannot select trusted state. |
-| `scripts/delegate_env.py` | Starts headless forms with approved environment names; HOME remains reachable. |
+| `scripts/delegate_env.py` | Starts headless forms with approved environment names; HOME remains reachable. With a valid `FNL_DISPATCH_ID` it appends one `ended` ledger line (id, time, exit code) after the child exits. |
 | `scripts/fnl_metrics.py` | Shared consent, metadata schema, storage, retention and event helpers. |
 | `scripts/git_metadata.py` | Reads bounded local Git metadata without starting Git. |
 | `scripts/handover_state.py` | Stores/reads private bounded handovers; compact SessionStart can re-inject them on Claude Code/Codex. |
@@ -127,6 +127,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/metrics_hook.py` | Records consented usage metadata and triggers local dashboard refreshes. |
 | `scripts/mode.py` | Shows effective settings/sources and writes previewed confirmed changes for `/setup mode`. |
 | `scripts/nav_state.py` | Collects bounded current anchors/metadata, screens payloads and checks report references; it does not prove drift. |
+| `scripts/open_dispatch_nudge.py` | Claude Code prompt reminder: one fixed line, at most every 30 minutes per session, counting this session's dispatches with no ledger outcome that ended or passed their budget; reads only the ledger and its own mark, never denies, `FNL_DISPATCH_NUDGE=off` disables it. |
 | `scripts/parallel_slots.py` | Reads user-set total/per-family capacity; advisory snapshots, not reservations or a ledger-start gate. |
 | `scripts/post_review.py` | Posts a bounded marker-checked private draft to the checkout's repository only when authorized. |
 | `scripts/precompact.py` | Prints constant summary instructions (what the summary must keep); Claude stdout feeds summary instructions, Codex plain stdout does not reach the model. |
@@ -155,7 +156,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `skills/checks/scripts/checks.py` | Runs or shows the repository's approved stored checks (a changed or unapproved check file runs nothing) in order through `heavy_run.py`, stops at the first failure, narrows Python test modules with `--changed`, and writes a local receipt only for a whole passing run on a clean, unmoved head when that mode is on; `run --dispatch <id>` writes, on the same conditions and whatever that mode, the verification receipt `ledger.py finish --outcome accepted` needs. `usage --from <file>` summarises hosted CI runs, minutes, the document-only share and days left from a run list the agent produced; no network call and no process. |
 | `skills/delegate/scripts/afk.py` | afk lease, closed action classification (Tier 1 or Tier 3) against one repository identity and target, a read-only view of the values it applies, and private action log; executes nothing. |
 | `skills/delegate/scripts/heavy_run.py` | Runs one heavy command at a time per machine under a kernel lock, with load and memory gates, a wait cap and a maximum run time. |
-| `skills/delegate/scripts/ledger.py` | Records runs; accepted finishes need a current-head receipt or explicit reason-digested exception. `stale [--older-than-hours <n>]` previews open records past twice their budget and 24 hours (id, age, label); `stale --close --digest <digest>` appends one closing `finish` line per previewed record, never `accepted`. |
+| `skills/delegate/scripts/ledger.py` | Records runs; accepted finishes need a current-head receipt or explicit reason-digested exception, except a review dispatch, accepted on its posted review (`--review-url`). `stale [--older-than-hours <n>]` previews this repository's open records past twice their budget and 24 hours (id, age, label); `--all-projects` widens it with a warning; `stale --close --digest <digest>` appends one closing `finish` line per previewed record, never `accepted`. |
 | `skills/delegate/scripts/pause.py` | `pause` marker: start, status (open dispatches, heavy jobs, checkpoints) and resume; stops no process and runs nothing. |
 | `skills/delegate/scripts/route_pick.py` | Answers which agent takes a work type at a level from the assignment matrix and cached quota, with the dropped agents and why; a preference that never blocks. |
 | `skills/restore-point/scripts/restore_point.py` | Saves/lists/previews/restores private git snapshots; captures non-ignored untracked files and keeps extra current files on restore. |
