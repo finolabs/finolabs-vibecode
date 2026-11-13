@@ -23,7 +23,7 @@ Placement: `plugin-packaging`, which already owns the README's install commands 
 - [x] T2 Write `scripts/readme_check.py` and `tests/test_readme_check.py`.
 - [x] T3 Wire `versioning`, `plugin-packaging`, the help map, the README layout and the changelog.
 - [x] T4 Add `.github/readme-standard.json` for this repository and fix its README (Privacy section) and marketplace description.
-- [ ] T5 Owner decision: the README names an unpublished knowledge base in the `tidy` row and in Acknowledgements (checklist P3).
+- [x] T5 Owner decision (2026-11-13): keep the README's two mentions of the unpublished knowledge base, in the `tidy` row and in Acknowledgements (checklist P3 approved by the owner).
 
 ## Evidence
 

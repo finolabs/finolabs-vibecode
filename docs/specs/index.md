@@ -40,4 +40,4 @@
 | [Parallel agent instances](parallel-instances.md) | implemented; shared helper, setup, SessionStart, dashboard, CI copy group and documentation are integrated locally; targeted verification is recorded in the spec, while live-host scheduling and UI behavior remain unverified. |
 | [Heavy-job guard and test scope](heavy-jobs.md) | draft; `heavy_run.py` is implemented; the gate, its installer and the setup question are not; the gate exception is recorded in CLAUDE.md. |
 | [Agent levels](agent-levels.md) | implemented; the writer, strict reader, candidates command and routing text are merged; routing by levels is advisory and unverified on a live host. |
-| [README standard and release checklist](readme-standard.md) | in progress; `plugin-packaging` standard, checklist and `readme_check.py` written and wired into `versioning`; one owner decision open (unpublished name in the README). |
+| [README standard and release checklist](readme-standard.md) | in progress; `plugin-packaging` standard, checklist and `readme_check.py` written and wired into `versioning`; the owner kept the README's unpublished name (2026-11-13). |
