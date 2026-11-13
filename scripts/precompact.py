@@ -7,7 +7,7 @@ so it says what the summary must keep instead of asking for a handover.
 
 import os
 
-INSTRUCTIONS = (b"The summary must keep: the goal and acceptance criteria, settled decisions with their dates, "
+INSTRUCTIONS = (b"The summary must keep the goal and acceptance criteria, settled decisions with their dates, "
                 b"work in progress, open background runs and pull requests, the next action, and whether a "
                 b"handover was saved with handover_state.py.\n")
 

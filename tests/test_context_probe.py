@@ -296,7 +296,10 @@ class ContextProbeTest(unittest.TestCase):
         self.refused("probe", "--host", "codex", "--session", SESSION)
         moved = dict(entry, resolved=str(self.bin / "elsewhere"))
         self.configure({"claude": moved})
-        self.refused("probe", "--host", "claude", "--session", SESSION)
+        code, out, err = self.cli("probe", "--host", "claude", "--session", SESSION)
+        self.assertEqual((code, out), (3, ""))
+        self.assertIn("program changed since setup", err)
+        self.assertNotIn(str(self.bin), err)
         self.assertFalse(self.seen.exists())
 
     def test_no_hook_runs_the_probe(self):

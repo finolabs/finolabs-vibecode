@@ -286,11 +286,88 @@ class LedgerTest(unittest.TestCase):
     def test_review_dispatch_cannot_claim_implementation_head(self):
         args = ["review" if a == "implement" else a for a in START]
         dispatch_id = self.run_ledger(*args).stdout.strip()
-        result = self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--head", "a" * 40,
-                                 "--accept-unverified", "--reason", "Head binding fixture", check=False)
-        self.assertIn("only implementation dispatches", result.stderr)
+        self.run_ledger("finish", dispatch_id, "--outcome", "accepted", "--head", "a" * 40,
+                        "--accept-unverified", "--reason", "Head binding fixture")
+        finish = self.records()[-1]
+        # The reviewed head is kept apart: it never binds authorship for review routing.
+        self.assertEqual(finish["reviewed_head"], "a" * 40)
+        self.assertNotIn("head", finish)
+        self.assertNotIn("agent", finish)
+        advise = self.run_ledger(*["advise" if a == "implement" else a for a in START]).stdout.strip()
+        result = self.run_ledger("finish", advise, "--outcome", "rejected", "--head", "a" * 40, check=False)
+        self.assertIn("only implementation and review dispatches", result.stderr)
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(len(self.records()), 1)
+        self.assertEqual(self.records()[-1]["event"], "start")
+
+    # A review dispatch is accepted on its posted review, not on a test receipt.
+
+    REVIEW_URL = "https://github.com/example-org/demo-app/pull/12#issuecomment-345678"
+
+    def start_kind(self, kind):
+        return self.run_ledger(*[kind if a == "implement" else a for a in START]).stdout.strip()
+
+    def test_review_accept_needs_no_receipt_and_records_a_given_url_as_a_flag(self):
+        plain = self.start_kind("review")
+        self.run_ledger("finish", plain, "--outcome", "accepted", "--head", "b" * 40)
+        finish = self.records()[-1]
+        self.assertEqual((finish["outcome"], finish["reviewed_head"]), ("accepted", "b" * 40))
+        self.assertNotIn("review_posted", finish)
+        self.assertNotIn("accept_unverified", finish)
+        posted = self.start_kind("review")
+        self.run_ledger("finish", posted, "--outcome", "accepted", "--review-url", self.REVIEW_URL)
+        finish = self.records()[-1]
+        self.assertIs(finish["review_posted"], True)
+        self.assertNotIn("issuecomment", self.path.read_text())  # the URL itself is never stored
+        [row] = json.loads(self.run_ledger("summary", "--json").stdout)
+        self.assertEqual((row["kind"], row["accepted"], row["accepted_unverified"]), ("review", 1, 0))
+
+    def test_review_url_is_pattern_checked_and_only_for_an_accepted_review(self):
+        review = self.start_kind("review")
+        for bad in ("http://github.com/example-org/demo-app/pull/12#issuecomment-345678",
+                    "https://github.com.example/example-org/demo-app/pull/12#issuecomment-345678",
+                    "https://github.com/example-org/demo-app/pull/12",
+                    "https://github.com/example-org/demo-app/issues/12#issuecomment-345678",
+                    "https://github.com/example-org/demo-app/pull/12#issuecomment-345678 extra",
+                    "https://github.com/example-org/demo-app/pull/12#issuecomment-345678\n"):
+            with self.subTest(url=bad):
+                result = self.run_ledger("finish", review, "--outcome", "accepted", "--review-url", bad, check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("invalid review URL", result.stderr)
+        rejected = self.run_ledger("finish", review, "--outcome", "rejected", "--review-url", self.REVIEW_URL,
+                                   check=False)
+        self.assertIn("only with an accepted review", rejected.stderr)
+        implement = self.run_ledger(*START).stdout.strip()
+        other = self.run_ledger("finish", implement, "--outcome", "accepted", "--review-url", self.REVIEW_URL,
+                                "--accept-unverified", "--reason", "Synthetic fixture", check=False)
+        self.assertIn("only with an accepted review", other.stderr)
+        self.assertEqual([r["event"] for r in self.records()], ["start", "start"])
+
+    def test_other_kinds_still_need_a_receipt_to_be_accepted(self):
+        for kind in ("implement", "advise", "committee"):
+            with self.subTest(kind=kind):
+                dispatch = self.start_kind(kind)
+                done = self.run_ledger("finish", dispatch, "--outcome", "accepted", check=False)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("passing verify receipt", done.stderr)
+                self.assertEqual(self.records()[-1]["event"], "start")
+
+    def test_reason_goes_with_any_outcome_and_is_kept_only_as_a_digest(self):
+        for outcome in ("rejected", "error", "cancelled", "stalled"):
+            with self.subTest(outcome=outcome):
+                dispatch = self.run_ledger(*START).stdout.strip()
+                self.run_ledger("finish", dispatch, "--outcome", outcome, "--reason", "Synthetic reason text")
+                finish = self.records()[-1]
+                self.assertEqual(finish["reason_id"], hashlib.sha256(b"Synthetic reason text").hexdigest())
+                self.assertNotIn("accept_unverified", finish)
+        review = self.start_kind("review")
+        self.run_ledger("finish", review, "--outcome", "accepted", "--reason", "Synthetic reason text")
+        self.assertEqual(len(self.records()[-1]["reason_id"]), 64)
+        self.assertNotIn("Synthetic reason text", self.path.read_text())
+        dispatch = self.run_ledger(*START).stdout.strip()
+        for bad in (" ", "x" * 4097):
+            result = self.run_ledger("finish", dispatch, "--outcome", "rejected", "--reason", bad, check=False)
+            self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.records()[-1]["event"], "start")
 
     def test_open_lists_unfinished_runs_with_age_against_budget(self):
         dispatch_id = self.run_ledger(*START).stdout.strip()
@@ -789,11 +866,16 @@ class StaleLedgerTest(unittest.TestCase):
         patch = mock.patch.object(log_scan, "run_log_folder", return_value=self.logs)
         patch.start()
         self.addCleanup(patch.stop)
+        # `stale` acts on this repository's ledger project; these tests stand in a checkout named `demo`.
+        self.resolve = self.ledger.this_project
+        patch = mock.patch.object(self.ledger, "this_project", return_value="demo")
+        self.project = patch.start()
+        self.addCleanup(patch.stop)
 
-    def start(self, ident, minutes_ago, budget):
+    def start(self, ident, minutes_ago, budget, project="demo"):
         from datetime import datetime, timedelta, timezone
         ts = (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).isoformat(timespec="seconds")
-        return {"event": "start", "id": ident, "ts": ts, "project": "demo", "task": "t", "kind": "implement",
+        return {"event": "start", "id": ident, "ts": ts, "project": project, "task": "t", "kind": "implement",
                 "grade": "easy", "coordinator": "claude", "agent": "codex", "model": "m", "reason": "routing",
                 "budget_min": budget}
 
@@ -842,6 +924,138 @@ class StaleLedgerTest(unittest.TestCase):
         code, _, err = self.stale("--close", "--digest", digest[:12])
         self.assertEqual(code, 0, err)
         self.assertEqual(set(self.finishes()), {"d20261101-000000-aaaa", "d20261101-000000-dddd"})
+
+    # Scope: `stale` sees only this repository's project unless --all-projects widens the preview.
+
+    MINE, OTHER = "d20261101-000000-a101", "d20261101-000000-a102"
+
+    def write_two_projects(self):
+        self.write([self.start(self.MINE, 1500, 30), self.start(self.OTHER, 1500, 30, project="other-app")])
+
+    def test_stale_previews_and_closes_only_this_repositorys_project(self):
+        self.write_two_projects()
+        out, digest = self.preview_digest()
+        self.assertIn(self.MINE, out)
+        self.assertNotIn(self.OTHER, out)
+        self.assertNotIn("other-app", out)
+        self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
+        self.assertEqual(set(self.finishes()), {self.MINE})
+
+    def test_all_projects_widens_the_preview_with_a_warning_and_binds_the_scope(self):
+        self.write_two_projects()
+        code, out, err = self.stale("--all-projects")
+        self.assertEqual(code, 0, err)
+        self.assertIn(self.ledger.ALL_PROJECTS_WARNING, out)
+        self.assertIn(self.MINE, out)
+        self.assertIn(self.OTHER, out)
+        self.assertIn("stale --close --all-projects --digest", out)
+        digest = [line.split(": ", 1)[1] for line in out.splitlines() if line.startswith("Digest: ")][0]
+        before = self.path.read_bytes()
+        code, _, _ = self.stale("--close", "--digest", digest)  # the scope is part of what the digest binds
+        self.assertNotEqual(code, 0)
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.stale("--close", "--all-projects", "--digest", digest)[0], 0)
+        self.assertEqual(set(self.finishes()), {self.MINE, self.OTHER})
+
+    def test_a_one_project_preview_closes_only_from_that_project(self):
+        self.write_two_projects()
+        _, digest = self.preview_digest()
+        before = self.path.read_bytes()
+        code, _, _ = self.stale("--close", "--all-projects", "--digest", digest)
+        self.assertNotEqual(code, 0)
+        self.project.return_value = "other-app"  # the same preview, closed from another repository's checkout
+        code, _, _ = self.stale("--close", "--digest", digest)
+        self.assertNotEqual(code, 0)
+        self.assertEqual(self.path.read_bytes(), before)
+        self.project.return_value = "demo"
+        self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
+        self.assertEqual(set(self.finishes()), {self.MINE})
+
+    def test_an_unresolved_project_refuses_without_all_projects(self):
+        self.write_two_projects()
+        self.project.return_value = None
+        code, out, _ = self.stale()
+        self.assertNotEqual(code, 0)
+        self.assertNotIn("Digest:", out)
+        with self.assertRaises(ValueError) as refused:
+            self.ledger.stale_preview()
+        self.assertIn("--all-projects", str(refused.exception))
+        self.assertEqual(self.stale("--all-projects")[0], 0)
+
+    def test_the_project_resolves_as_status_does_from_the_checkout_folder(self):
+        with tempfile.TemporaryDirectory() as folder:
+            repo = Path(folder).resolve() / "demo-repo"
+            (repo / "sub").mkdir(parents=True)
+            subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
+            self.assertEqual(self.resolve(cwd=str(repo / "sub")), "demo-repo")
+            self.assertIsNone(self.resolve(cwd=folder))  # outside any repository
+
+    # The dispatch wrapper's `ended` line: read by load, open and stale, never a finish, ignored by summary.
+
+    def ended(self, ident, code):
+        return {"event": "ended", "id": ident, "ts": "2026-11-01T00:00:00+00:00", "exit": code}
+
+    def test_ended_lines_fill_their_own_map_and_are_never_finishes(self):
+        ident = "d20261101-000000-c001"
+        self.write([self.start(ident, 30, 60), self.ended(ident, 2), {"event": "ended", "id": ident}])
+        err, ended = io.StringIO(), {}
+        with contextlib.redirect_stderr(err):
+            starts, finishes = self.ledger.load(ended)
+            plain = self.ledger.load()
+        self.assertEqual((set(starts), finishes), ({ident}, {}))
+        self.assertEqual(ended[ident]["exit"], 2)
+        self.assertEqual(plain, (starts, finishes))  # callers that pass no map see the two maps unchanged
+        self.assertNotIn("malformed line 2", err.getvalue())
+        self.assertIn("malformed line 3", err.getvalue())  # an ended line without its keys is still malformed
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            self.ledger.cmd_open(self.ledger.build_parser().parse_args(["open"]))
+        [line] = out.getvalue().splitlines()
+        self.assertTrue(line.startswith(ident))
+        self.assertTrue(line.endswith("ended exit=2"))
+
+    def test_summary_ignores_ended_lines(self):
+        done, running = "d20261101-000000-c002", "d20261101-000000-c003"
+        finish = {"event": "finish", "id": done, "ts": "2026-11-02T00:00:00+00:00", "outcome": "rejected",
+                  "rework_rounds": 0}
+        self.write([self.start(done, 3000, 30), self.ended(done, 0), finish,
+                    self.start(running, 3000, 30), self.ended(running, 1)])
+        [row] = self.ledger.summary_rows()
+        self.assertEqual((row["n"], row["accepted"], row["error"]), (1, 0, 0))
+
+    def test_an_ended_run_is_due_without_waiting_for_twice_its_budget(self):
+        ids = {name: "d20261101-000000-" + name for name in ("c101", "c102", "c103", "c104")}
+        self.write([self.start(ids["c101"], 1500, 800), self.ended(ids["c101"], 3),    # ended nonzero: error
+                    self.start(ids["c102"], 1500, 800), self.ended(ids["c102"], 0),    # ended 0: cancelled
+                    self.start(ids["c103"], 1500, 800),                                # no ended line: waits 2x budget
+                    self.start(ids["c104"], 120, 30), self.ended(ids["c104"], 1)])     # ended, under 24 hours
+        self.log(ids["c101"], "exit=0\n")  # the ended line wins; the log is not read
+        out, digest = self.preview_digest()
+        listed = {ident for ident in ids.values() if ident in out}
+        self.assertEqual(listed, {ids["c101"], ids["c102"]})
+        self.assertIn("ended exit=3  -> error", out)
+        self.assertIn("ended exit=0  -> cancelled", out)
+        self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
+        finishes = self.finishes()
+        self.assertEqual(set(finishes), {ids["c101"], ids["c102"]})
+        self.assertEqual(finishes[ids["c101"]]["outcome"], "error")
+        self.assertEqual(finishes[ids["c102"]]["outcome"], "cancelled")
+        self.assertIn("run ended exit 0; no verdict recorded", finishes[ids["c102"]]["note"])
+        for finish in finishes.values():
+            self.assertNotEqual(finish["outcome"], "accepted")
+
+    def test_older_than_hours_lowers_the_floor_for_an_ended_run_even_inside_its_budget(self):
+        ident = "d20261101-000000-c201"
+        self.write([self.start(ident, 120, 600), self.ended(ident, 1)])
+        code, out, _ = self.stale()
+        self.assertEqual(code, 0)
+        self.assertNotIn(ident, out)
+        code, out, err = self.stale("--older-than-hours", "1")
+        self.assertEqual(code, 0, err)
+        self.assertIn(ident, out)
+        digest = [line.split(": ", 1)[1] for line in out.splitlines() if line.startswith("Digest: ")][0]
+        self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
+        self.assertEqual(self.finishes()[ident]["outcome"], "error")
 
     def test_nothing_past_budget_prints_so_and_writes_no_preview(self):
         self.write([self.start("d20261101-000000-bbbb", 10, 30)])
@@ -893,11 +1107,11 @@ class StaleLedgerTest(unittest.TestCase):
 
     def test_the_preview_lists_id_age_and_label_only(self):
         start = self.start("d20261101-000000-aaaa", 1500, 30)
-        start.update(project="demo-app", task="003 T101", model="synthetic-model")
+        start.update(project="demo", task="003 T101", model="synthetic-model")
         self.write([start])
         out, _ = self.preview_digest()
         [line] = [line for line in out.splitlines() if line.startswith("d20261101-000000-aaaa")]
-        self.assertIn("demo-app: 003 T101", line)
+        self.assertIn("demo: 003 T101", line)
         self.assertNotIn("synthetic-model", out)
 
     def test_session_start_counts_stale_closed_records_as_closed(self):
@@ -979,9 +1193,9 @@ class StaleLedgerTest(unittest.TestCase):
                 yield
                 held.pop()
 
-        def load():
+        def load(*args):
             self.assertTrue(held, "close read the open state outside the finish lock")
-            return real_load()
+            return real_load(*args)
 
         with mock.patch.object(self.ledger, "finish_lock", lock), mock.patch.object(self.ledger, "load", load):
             self.ledger.stale_close(digest)

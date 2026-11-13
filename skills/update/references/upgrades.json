@@ -177,7 +177,7 @@
         {
           "id": "0.2.5/quota-repin",
           "kind": "setup",
-          "text": "After any Claude Code or Codex update, run the quota setup again: the quota probe, the context probe and /setup check say \"program changed since setup\" for a program whose location changed and refuse to run it until you re-confirm the new path.",
+          "text": "After a Claude Code or Codex update, the probes and /setup check say \"program changed since setup\" and refuse that program until you re-confirm its new path with the quota setup.",
           "setup": "/setup add quota"
         },
         {
