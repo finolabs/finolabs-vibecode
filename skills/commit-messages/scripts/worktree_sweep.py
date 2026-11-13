@@ -6,7 +6,7 @@
 It deletes nothing: git does the removal, with its own checks, when the agent runs the printed commands.
 
 For each linked worktree (never the main checkout), in the order `git worktree list --porcelain` gives,
-it prints the path exactly as git lists it, its branch, its size on disk (a bounded walk that follows
+it prints the path with backslashes, control and non-ASCII characters escaped, its branch, its size on disk (a bounded walk that follows
 no symlink), clean or dirty (`git status --porcelain`, untracked files included), unpushed commits,
 merged and whether it is a candidate:
 
@@ -23,9 +23,9 @@ merged and whether it is a candidate:
   as written, resolved and case-folded, so another spelling of a path counts as the same path. Otherwise
   it prints "candidate=no" with the first reason.
 
-Under each candidate it prints the two commands to run, the path quoted for a POSIX shell:
-`git worktree remove <path as git lists it>` (never forced; git refuses a dirty worktree) and
-`git branch -d <branch>` (git refuses an unmerged branch). `git worktree remove` also deletes the files
+Under each candidate it prints the two commands to run, each name quoted for a POSIX shell:
+`git worktree remove -- <path>` (never forced; git refuses a dirty worktree) and
+`git branch -d -- <branch>` (git refuses an unmerged branch). `git worktree remove` also deletes the files
 git ignores inside that worktree. A change made after the listing is for git's own checks to catch.
 It stores nothing and makes no network call of its own; gh, when present, reads the forge.
 """

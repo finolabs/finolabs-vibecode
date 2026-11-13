@@ -107,6 +107,12 @@ class NotesSchemaTest(unittest.TestCase):
             '0.2.5/full-names': ('info', None, None),
             '0.2.5/afk-section': ('setup', '/setup add afk', [state, 'afk-section']),
             '0.2.5/tidy-rename': ('info', None, None),
+            '0.2.5/afk-project': ('setup', '/setup add afk', None),
+            '0.2.5/compaction-nudge': ('setup', '/setup add compaction', None),
+            '0.2.5/shape': ('info', None, None),
+            '0.2.5/zcode': ('info', None, None),
+            '0.2.5/ledger-closure': ('info', None, None),
+            '0.2.5/dispatch-nudge': ('info', None, None),
         }
         for ident, (kind, setup, check) in expected.items():
             with self.subTest(item=ident):
@@ -128,6 +134,10 @@ class NotesSchemaTest(unittest.TestCase):
         self.assertIn('/finolabs-vibecode:status', items['0.2.5/full-names']['text'])
         self.assertIn('/goal', items['0.2.5/afk-goal']['text'])
         self.assertIn('/loop', items['0.2.5/afk-goal']['text'])
+        self.assertIn('/setup add afk inside it', items['0.2.5/afk-project']['text'])
+        self.assertIn('FNL_COMPACT_NUDGE=off', items['0.2.5/compaction-nudge']['text'])
+        self.assertIn('FNL_DISPATCH_NUDGE=off', items['0.2.5/dispatch-nudge']['text'])
+        self.assertIn('--all-projects', items['0.2.5/ledger-closure']['text'])
         # Superseded steps (the 0.2.0 Limits lines and Agent roles) are not offered again.
         self.assertFalse([i for i in items if i.startswith('0.2.0/') and ('roles' in i or 'limits' in i)])
 

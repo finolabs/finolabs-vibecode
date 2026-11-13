@@ -14,21 +14,21 @@ svg{width:100%;min-width:900px;display:block}
 </style></head><body><div class="frame">
 <p class="eyebrow">Sequence · finolabs-vibecode</p>
 <h1>One delegated task, dispatch to merge</h1>
-<p class="sub">The ledger records the run and prints its name; the coordinator verifies and accepts; reviewers, of another family when one is available, post markers that merge_check.py reads for the current head.</p>
-<svg viewBox="0 0 1280 1020" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="delegation-sequence-dark-title delegation-sequence-dark-desc">
+<p class="sub">The ledger records the run and prints its name; the coordinator verifies and accepts; reviewers, of another family when one is available, post markers that merge_check.py reads for the current head; after the merge the coordinator cleans up its worktree.</p>
+<svg viewBox="0 0 1280 1060" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="delegation-sequence-dark-title delegation-sequence-dark-desc">
 <title id="delegation-sequence-dark-title">One delegated task, dispatch to merge</title>
-<desc id="delegation-sequence-dark-desc">Sequence diagram across six lanes: coordinator (delegate), dispatch ledger (ledger.py), implementer, code reviewer (fnl-reviewer), security reviewer (fnl-security-reviewer) and the pull request. The coordinator grades, routes with route_pick.py and briefs; ledger.py start returns the id and prints the run label on stderr, which goes into the host's name field; the implementer runs in the background and reports. The coordinator runs log_scan.py and verify_claim.py, then ledger.py finish, which by default refuses an accepted outcome without a passing receipt at the head (an --accept-unverified acceptance is logged). The coordinator opens the pull request, review_route.py picks a reviewer family other than the author's when one is available (otherwise the same family, and a security trigger then needs the user's decision), each reviewer posts its marker with post_review.py, a REWORK verdict sends the work back for a new head, and when merge_check.py passes the merge is pinned to the reviewed head with the owner's go.</desc>
+<desc id="delegation-sequence-dark-desc">Sequence diagram across six lanes: coordinator (delegate), dispatch ledger (ledger.py), implementer, code reviewer (fnl-reviewer), security reviewer (fnl-security-reviewer) and the pull request. The coordinator grades, routes with route_pick.py and briefs; ledger.py start returns the id and prints the run label on stderr, which goes into the host's name field; the implementer runs in the background and reports. The coordinator runs log_scan.py and verify_claim.py, then ledger.py finish, which by default refuses an accepted outcome without a passing receipt at the head (an --accept-unverified acceptance is logged). The coordinator opens the pull request, review_route.py picks a reviewer family other than the author's when one is available (otherwise the same family, and a security trigger then needs the user's decision), each reviewer posts its marker with post_review.py, a REWORK verdict sends the work back for a new head, and when merge_check.py passes the merge is pinned to the reviewed head with the owner's go; after the merge the coordinator removes the clean worktree and branch it created and lists the rest.</desc>
 <defs>
 <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#BCBCD0"/></marker>
 <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#E5D2F4"/></marker>
 </defs>
 <rect width="100%" height="100%" fill="#050510"/>
-<path d="M140,104 L140,888" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,4"/>
-<path d="M340,104 L340,888" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,4"/>
-<path d="M540,104 L540,888" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,4"/>
-<path d="M740,104 L740,888" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,4"/>
-<path d="M940,104 L940,888" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,4"/>
-<path d="M1140,104 L1140,888" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,4"/>
+<path d="M140,104 L140,928" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,4"/>
+<path d="M340,104 L340,928" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,4"/>
+<path d="M540,104 L540,928" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,4"/>
+<path d="M740,104 L740,928" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,4"/>
+<path d="M940,104 L940,928" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,4"/>
+<path d="M1140,104 L1140,928" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,4"/>
 <rect x="52" y="40" width="176" height="64" rx="8" fill="#050510"/>
 <rect x="52" y="40" width="176" height="64" rx="8" fill="rgba(151,80,196,0.18)" stroke="#E5D2F4" stroke-width="1.2"/>
 <rect x="60" y="46" width="38" height="12" rx="2" fill="none" stroke="#E5D2F4" stroke-opacity="0.5" stroke-width="0.8"/>
@@ -133,9 +133,12 @@ svg{width:100%;min-width:900px;display:block}
 <path d="M140,862 L1134,862" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="507.1" y="846" width="265.8" height="12" fill="#050510"/>
 <text x="640" y="855" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">16 merge pinned to the reviewed head SHA (owner's go)</text>
-<rect x="40" y="908" width="1200" height="88" rx="8" fill="none" stroke="rgba(255,255,255,0.55)" stroke-opacity="0.5" stroke-width="1" stroke-dasharray="4,3"/>
-<text x="60" y="930" fill="#8B8BA6" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.18em">WHAT ENFORCES WHAT</text>
-<text x="60" y="950" fill="#FFFFFF" font-size="12" font-family="'Space Grotesk', system-ui, sans-serif">Scripts: by default ledger.py refuses an accepted finish without a passing receipt for the current head (--accept-unverified is logged);</text>
-<text x="60" y="968" fill="#FFFFFF" font-size="12" font-family="'Space Grotesk', system-ui, sans-serif">merge_check.py blocks until the code and security APPROVE markers name the current head. A push makes both stale.</text>
-<text x="60" y="986" fill="#BCBCD0" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace">Advisory (agent judgment): grade, route, brief, copying the label into the host's name field, the verdict. Merges: owner's.</text>
+<path d="M140,896 L162,896 L162,910 L146,910" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#arrow)"/>
+<rect x="168" y="897" width="290" height="12" fill="#050510"/>
+<text x="172" y="906" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">17 remove the clean worktree and branch it created, list the rest</text>
+<rect x="40" y="948" width="1200" height="88" rx="8" fill="none" stroke="rgba(255,255,255,0.55)" stroke-opacity="0.5" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="60" y="970" fill="#8B8BA6" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.18em">WHAT ENFORCES WHAT</text>
+<text x="60" y="990" fill="#FFFFFF" font-size="12" font-family="'Space Grotesk', system-ui, sans-serif">Scripts: by default ledger.py refuses an accepted finish without a passing receipt for the current head (--accept-unverified is logged);</text>
+<text x="60" y="1008" fill="#FFFFFF" font-size="12" font-family="'Space Grotesk', system-ui, sans-serif">merge_check.py blocks until the code and security APPROVE markers name the current head. A push makes both stale.</text>
+<text x="60" y="1026" fill="#BCBCD0" font-size="9" font-family="'JetBrains Mono', ui-monospace, monospace">Advisory (agent judgment): grade, route, brief, copying the label into the host's name field, the verdict. Merges: owner's.</text>
 </svg></div></body></html>
