@@ -1108,6 +1108,14 @@ class SettingsFileTest(unittest.TestCase):
             self.assertEqual(self.pp.main(['settings', '--clear', 'autopilot', '--dry-run']), 0)
             cleared = json.loads(out.getvalue())
             self.assertEqual((cleared['action'], cleared['autopilot']), ('remove', None))
+            # The preview names what the repository holds now and which effective values the change would move.
+            self.assertEqual(cleared['current'], {'merge': 'no', 'roots': ['packages']})
+            self.assertEqual(sorted(cleared['changed']), ['Merge', 'Roots'])
+            out.seek(0)
+            out.truncate()
+            self.assertEqual(self.pp.main(['settings', '--set', 'autopilot={"roots": ["packages"]}', '--dry-run']), 0)
+            narrowed = json.loads(out.getvalue())
+            self.assertEqual((narrowed['current'], narrowed['changed']), ({'merge': 'no', 'roots': ['packages']}, ['Merge']))
             self.assertEqual(self.pp.main(['settings', '--clear', 'autopilot', '--expect', cleared['token']]), 0)
         self.assertFalse(self.file().exists())
 
