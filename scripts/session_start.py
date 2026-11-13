@@ -184,7 +184,7 @@ def parallel_words():
         return "unknown"
 
 
-AWAY_LINE = 'Away mandate active: do not ask the user; follow afk "Decide"\n'
+AWAY_LINE = 'Away mandate active: never ask or wait for the user; afk "Decide" settles it\n'
 
 
 def away_line():
