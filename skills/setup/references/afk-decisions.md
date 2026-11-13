@@ -22,7 +22,9 @@ No: Pick the rows to change next.
 Undo: Repeat setup to change the rows.
 Choices: "Yes, keep the table" / "No, change some rows".
 
-On No, ask the changeable rows in one or two multi-select questions (at most four rows each), every option named by its plain category: "Tick each kind of work the agents may decide while you are away. Unticked kinds wait for you." A ticked row ends at decide and an unticked one at stop, whatever it started as.
+On No, ask the seven changeable rows in two multi-select questions, in table order (four rows, then three). Each option's label is the row's key in the user's language; its description is the category text. Ask: "Tick each kind of work the agents may decide while you are away. Unticked kinds wait for you, including Recoverable deletion and Repository comments, which the agents decide now."
+
+A ticked row that started at stop ends at decide only after the confirmation below. Every unticked row, and every row of a question left unanswered or answered unclearly, ends at stop; read a free-text answer back before counting it as ticks.
 
 Then for each row moved from stop to decide: "Let the agents decide this kind of work while you are away?"
 Yes: Save that key as decide; first name the row and state its "What could go wrong". A decision is never permission: the action is still checked.

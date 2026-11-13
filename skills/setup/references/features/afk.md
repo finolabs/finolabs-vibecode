@@ -1,48 +1,37 @@
 # Feature: afk (user scope)
 
-Needs: nothing; this saves standing choices in the canonical host.md only. It starts no lease, installs no hook and sends nothing.
+Needs: nothing; saves standing choices in the canonical host.md and, for one repository, its settings; starts no lease, installs no hook, sends nothing.
 
-Every question follows [interview.md](../interview.md): native question tool; each setting gets its own question, including in Quick mode (advisory, agent judgment). Yes/No choices are neutral, with none preselected or recommended. Silence is not consent. Keep unanswered settings open; never infer Merge from the owner's examples or from starting a lease.
+Every question follows [interview.md](../interview.md): native question tool; each permission gets its own question, including in Quick mode (advisory, agent judgment). Silence is not consent. Keep unanswered settings open; never infer Merge from the owner's examples or from starting a lease.
+
+Scope first. Outside a repository say "These are your account's away rules (every repository)." and ask nothing. Inside one, ask: "Set away rules for your account (every repository) or only for this repository?" Choices: "Your account" / "Only this repository". Only this repository goes to "Project scope" when host.md already has a valid `## afk` section; otherwise say the account rules come first (apps, limits and the table live only there) and run them.
 
 Ask: "Which AI apps may run while you are away?"
 Choices: Claude Code / Codex / Antigravity; allow several. Suggest Claude Code; save the chosen names as Hosts.
-Undo: Run this interview again to change the allowed apps.
+Undo: Repeat setup to change the apps.
 
 Ask: "May the agents choose new tasks from your task list?"
 Yes: Save Task choice: choose; agents may choose eligible tasks while a lease is live.
 No: Save Task choice: listed; work only on tasks you list at start.
-Undo: Run this interview again to change task selection.
+Undo: Repeat setup to change it.
 Choices: "Yes, allow task selection" / "No, use only my listed tasks".
 
 Ask: "May the agents push their branches and open pull requests?"
 Yes: Save Push and pull requests: yes; allow their branches and pull requests, never a push to the default branch.
 No: Save Push and pull requests: no; keep that permission off.
-Undo: Run this interview again to change this permission.
+Undo: Repeat setup to change it.
 Choices: "Yes, allow branches and pull requests" / "No, keep that permission off".
 
 Ask: "Whose pull requests may the agents check out and test?"
 Choices: Your own account, including agents using that login, and afk's own branches (Trusted authors: own). This slice offers no other authors; declining leaves setup pending.
-Undo: Stop afk if you no longer want those pull requests handled.
+Undo: Stop afk to stop handling them.
 
-Ask: "How many hours may one away session last?"
-Choices: A whole number from 1 to 24; suggest 8 (Lease hours). A start can shorten this limit.
-Undo: Stop the current lease; repeat setup to change future leases.
-
-Ask: "How many helper runs may one away session start?"
-Choices: A whole number from 1 to 10000; suggest 20 (Max runs).
+Ask: "Use these limits for one away session: 8 hours, 20 helper runs, 480 runtime minutes, 30 actions an hour, and stop when 15% of AI usage is left?"
+Yes: Save Lease hours 8, Max runs 20, Max runtime minutes 480, Max actions per hour 30, Quota floor percent 15.
+No: Ask each in one round as a whole number: hours 1-24 (a start can shorten it), runs 1-10000, runtime minutes 1-1440, actions an hour 1-10000, quota floor 0-100.
 Undo: Stop the lease; repeat setup to change future limits.
-
-Ask: "How many runtime minutes may one away session use?"
-Choices: A whole number from 1 to 1440; suggest 480 (Max runtime minutes).
-Undo: Stop the lease; repeat setup to change future limits.
-
-Ask: "How many actions may the agents take in one hour?"
-Choices: A whole number from 1 to 10000; suggest 30 (Max actions per hour).
-Undo: Stop the lease; repeat setup to change future limits.
-
-Ask: "At what remaining AI usage percentage should work stop?"
-Choices: A whole number from 0 to 100; suggest 15 (Quota floor percent). Missing or stale readings also stop routing; the coordinator checks readings in this slice (advisory, agent judgment).
-Undo: Stop the lease; repeat setup to change the floor.
+Choices: "Yes, use these limits" / "No, set each limit".
+Missing or stale usage readings also stop routing (advisory, agent judgment).
 
 Then follow [../afk-decisions.md](../afk-decisions.md): what must wait for you, optional deploy targets and the separate excerpt consent.
 
@@ -64,14 +53,14 @@ Choices: "Yes, save these settings" / "No, leave settings unchanged".
 Apply with `python3 -I <this skill folder>/scripts/afk_setup.py apply --yes --digest <prefix>`; use at least the first 12 hex digits of the shown Digest (the full digest also works). Preview state is private in `<data root>/state/autopilot-setup/preview.json`, expires after 60 minutes and is consumed on success.
 Apply enforces the digest, unchanged host bytes and mode, canonical root, safe files and section bounds; it refuses links and ambiguity. Only the `## afk` section changes; other host content stays byte for byte (script-enforced). An older `## Autopilot` section is not read and not changed; tell the user to delete it by hand. Backups and preview state are local writer records, not lease changes.
 
-To change choices, repeat `/setup add afk`; a live lease stops accepting actions after setup changes. Starting and stopping remain `/afk` and `/afk stop`. Push notifications, the live dashboard, scheduler and host backstop are deferred; offer no settings for them in this slice.
+To change choices, repeat `/setup add afk`; a live lease stops accepting actions after setup changes. Starting and stopping remain `/afk` and `/afk stop`. Offer no settings for notifications, the dashboard, scheduler or host backstop (deferred).
 ## Project scope
-Offer this only inside a repository, after the user-scope questions; host.md stays unchanged. A project value wins over the user value here, for five keys only; Hosts, Lease hours, the limits, the quota floor and the categories stay user scope only. Each default answer is "Use my user setting".
-Ask: "In this repository, may the agents choose new tasks from your task list?" Use my user setting / Yes / No (`task-choice`: choose or listed).
-Ask: "In this repository, may the agents push their branches and open pull requests?" Use my user setting / Yes / No (`push-and-pull-requests`).
-Ask: "In this repository, whose pull requests may the agents check out and test?" Use my user setting / Your own account and afk's branches (`trusted-authors`: own).
-Ask: "Which other top-level folders hold this repository's code?" Use my user setting (none) or names such as packages (`roots`, at most 16, no leading dot; src's path rules apply).
-Ask: "In this repository, may the agents merge pull requests and local branches while a lease is live?" Use my user setting / Yes / No (`merge`); ask it last; yes is your own decision.
+Offered only inside a repository; host.md stays unchanged. After the account rules ask: "Should this repository use different away rules than your account?" No saves nothing for it. On Yes, or when the user chose Only this repository, ask: "Which rules should differ in this repository?" (multi-select of the five below); each unticked key keeps its default answer, "Use my user setting". Ask only the ticked ones. A project value wins over the user value for these five keys only; Hosts, Lease hours, the limits, the quota floor and the categories stay user scope only.
+Ask: "In this repository, may the agents choose new tasks from your task list?" Yes / No (`task-choice`: choose or listed).
+Ask: "In this repository, may the agents push their branches and open pull requests?" Yes / No (`push-and-pull-requests`).
+Ask: "In this repository, whose pull requests may the agents check out and test?" Your own account and afk's branches (`trusted-authors`: own).
+Ask: "Which other top-level folders hold this repository's code?" Names such as packages (`roots`, at most 16, no leading dot; src's path rules apply).
+Ask: "In this repository, may the agents merge pull requests and local branches while a lease is live?" Yes / No (`merge`); ask it last; yes is your own decision.
 Answers become one object; "Use my user setting" leaves a key out. Preview: `python3 -I <this skill folder>/scripts/project_progress.py settings --set 'autopilot=<JSON>' --dry-run` (replaces the whole object), or `settings --clear autopilot --dry-run` when every answer inherits (keeps other settings). Report a refusal; on action `none`, stop. Else show the repository, `target`, action, object and effective values, then ask:
 "Save these away settings for this repository?"
 Yes: Rerun it with `--expect <token>` instead of `--dry-run`; a changed repository, settings or origin refuses (script), so preview again. PR commands then need `--repo github.com/OWNER/NAME` (create also `--head <branch>`); a changed origin turns these permissions off.

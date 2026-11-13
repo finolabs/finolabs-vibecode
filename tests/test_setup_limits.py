@@ -56,6 +56,7 @@ EXTRA_APPROVALS = [
     ('May the agents merge pull requests while a lease is live?', REFS / "features" / "afk.md"),
     ('Save the shown away-session settings?', REFS / "features" / "afk.md"),
     ('Save these away settings for this repository?', REFS / "features" / "afk.md"),
+    ('Keep the table as shown?', REFS / "afk-decisions.md"),
     ('Let the agents decide this kind of work while you are away?', REFS / "afk-decisions.md"),
     ('Let excerpts of your past decisions go to the judge or another AI provider when agents decide for you?',
      REFS / "afk-decisions.md"),
@@ -190,9 +191,14 @@ class ConsentInventoryTests(unittest.TestCase):
     def test_afk_settings_are_separate_and_merge_is_last(self):
         text = (REFS / "features/afk.md").read_text().split("## Project scope")[0]
         questions = re.findall(r'Ask(?: Merge last among the settings)?: "([^"\n]+)"', text)
-        self.assertEqual(len(questions), 10)
-        self.assertEqual(len(set(questions)), 10)
+        # Each permission has its own question; the five limits are accepted together or set in one round.
+        self.assertEqual(len(questions), 6)
+        self.assertEqual(len(set(questions)), 6)
         self.assertEqual(questions[-1], "May the agents merge pull requests while a lease is live?")
+        self.assertIn('"Yes, use these limits" / "No, set each limit"', text)
+        # The scope is settled before any rule is asked.
+        self.assertLess(text.index("Set away rules for your account (every repository) or only for this repository?"),
+                        text.index('Ask: "Which AI apps may run while you are away?"'))
         for key in ("Hosts", "Task choice", "Push and pull requests", "Merge", "Trusted authors",
                     "Lease hours", "Max runs", "Max runtime minutes", "Max actions per hour", "Quota floor percent"):
             self.assertIn(key, text)
@@ -208,7 +214,10 @@ class ConsentInventoryTests(unittest.TestCase):
         self.assertEqual(len(questions), 5, questions)
         for key in ("task-choice", "push-and-pull-requests", "merge", "trusted-authors", "roots"):
             self.assertIn("`%s`" % key, project)
-        self.assertGreaterEqual(project.count("Use my user setting"), 5)
+        # Only the keys the user ticks as different are asked; every other key inherits.
+        self.assertIn("Should this repository use different away rules than your account?", project)
+        self.assertIn("Which rules should differ in this repository?", project)
+        self.assertIn("Use my user setting", project)
         self.assertIn("default answer", project)
         self.assertIn("settings --set 'autopilot=", project)
         self.assertIn("--dry-run", project)
