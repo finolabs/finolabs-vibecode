@@ -2153,7 +2153,7 @@ class AwayFlowTest(AfkBase):
         self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='unknown')
         head = git('rev-parse', 'HEAD', cwd=tree)
         for flags in (('--kind', 'merge', '--head', head.upper()), ('--kind', 'merge', '--head', head[:12]),
-                      ('--kind', 'action', '--head', head)):
+                      ('--kind', 'action', '--head', head), ('--kind', 'merge', '--head', head)):
             with self.subTest(flags=flags):
                 self.assertEqual(self.invoke('log', *flags)[0], 3)
         self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='unknown')
@@ -2260,6 +2260,17 @@ class AwayFlowTest(AfkBase):
                     self.check(['git', 'add', '--', path])
             self.cwd = install
             self.check(['git', '-C', str(tree), 'add', '--', 'skills/example/SKILL.md'])
+            # A git command that changes the install's work tree without naming a path stays protected too.
+            git('symbolic-ref', 'HEAD', 'refs/heads/topic')
+            for argv in (['git', 'merge', '--no-ff', '--no-edit', 'refs/heads/main'], ['git', 'merge', 'origin/main'],
+                         ['git', 'commit', '-m', 'Example'], ['git', 'pull']):
+                with self.subTest(argv=argv, checkout='install'):
+                    self.check(argv, tier=3, code='protected')
+            self.cwd = tree  # from a linked worktree of the install's own repository, -C reaches the install
+            for argv in (['git', '-C', str(install), 'merge', '--no-ff', '--no-edit', 'refs/heads/main'],
+                         ['git', '-C', str(install), 'commit', '-m', 'Example']):
+                with self.subTest(argv=argv, checkout='-C install'):
+                    self.check(argv, tier=3, code='protected')
         finally:
             SCRIPT = saved
 
@@ -2270,7 +2281,7 @@ class AwayFlowTest(AfkBase):
         try:
             self.start(SETUP + '- Max actions per hour: 1000\n')
             self.cwd = repo
-            self.assertEqual(self.invoke('log', '--kind', 'merge', '--head', git('rev-parse', 'HEAD', cwd=tree))[0], 0)
+            self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', git('rev-parse', 'HEAD', cwd=tree))[0], 0)
             for operand in (str(tree), '.claude/worktrees/wt'):
                 with self.subTest(operand=operand):
                     self.check(['git', 'worktree', 'remove', operand], tier=3, code='protected')

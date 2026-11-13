@@ -16,7 +16,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | A precedent packet holds at most eight excerpts and 8 KB; a secret or machine path drops an excerpt; excerpts need the separate consent | packet_check |
 | Hard names (credentials/env/key names, .git, .github, .claude, .codex, git hook names, host/lease/log state) are Tier 3 anywhere in argv or paths; soft names (hooks, settings, config, setup, SKILL.md, CLAUDE.md, AGENTS.md) too, except in a source path of this check's own checkout on a non-default work branch with Push and pull requests or Merge yes, and never inside this install; the one exact script path of this install's own trusted wrapper is spared (the install may lie under ~/.claude or ~/.codex) | protected, own_wrapper_index, source_mode |
 | An argv path operand inside a checkout of this repository (its own, the main checkout or a linked worktree `project_store.identity` validates; never a lexical .claude/worktrees allow) is judged by its path relative to that checkout's root; `git -C <folder>` is judged as the same command run in that folder | token_protected, checkout_of, check |
-| Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper), and so is every path, read from the check's folder, in this install's own checkout on every branch (the checkout `project_store.identity` validates for it is the plugin root, so its linked worktrees stay editable); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3 | classify_paths, token_protected, install_owned |
+| Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper), and so is every path, read from the check's folder, in this install's own checkout on every branch (the checkout `project_store.identity` validates for it is the plugin root, so its linked worktrees stay editable); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3; a git verb that changes a work tree, index or HEAD is protected when it would run in that checkout, by its folder or `git -C` | classify_paths, token_protected, install_owned, WORK_TREE_VERBS |
 | On a non-default work branch with Push and pull requests or Merge yes, a source path (skills/**, scripts/**, top-level CLAUDE.md and AGENTS.md, .<host>-plugin/*.json) of this check's own checkout is a known path, enforcer scripts included; the default branch, this install's own checkout and the hard names stay Tier 3 | source_mode, source_path, classify_paths |
 | Read-only Git/gh queries use closed verbs and option sets; command/config overrides and unknown options deny | classify_argv, options |
 | Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and whose effective destination (origin's single pushurl, else its url) is the verified target, and merge origin/main into a work branch of a found repository (the synchronization exemption) are Tier 1 | classify_argv, branch_context |
@@ -1210,6 +1210,11 @@ def tracked_remove(tail, applied):
     return classify_paths(rest, applied.get('Roots', ()), context, source_mode(applied))
 
 
+# git verbs that change a checkout's work tree, index or HEAD; never run inside this install's own checkout.
+WORK_TREE_VERBS = {'merge', 'commit', 'add', 'rm', 'mv', 'worktree', 'checkout', 'switch', 'restore', 'reset',
+                   'pull', 'rebase', 'cherry-pick', 'revert', 'stash', 'apply', 'am'}
+
+
 def classify_argv(argv, applied, coordinator=None):
     if not isinstance(argv, list) or not argv or len(argv) > 256 or not all(isinstance(t, str) and t for t in argv):
         return 'unknown'
@@ -1238,6 +1243,10 @@ def classify_argv(argv, applied, coordinator=None):
         return script_command(argv, applied)
     if command == 'git' and len(argv) >= 2:
         verb, tail = argv[1], argv[2:]
+        if verb in WORK_TREE_VERBS:
+            context = context_of(applied)
+            if install_owned('.', context.cwd or os.getcwd()):
+                return 'protected'  # changes this install's own files without naming a path (a merge, a commit)
         if verb == 'push':
             if any(t.startswith(('--force', '--delete', '--mirror', '--all', '--tags')) or t.startswith('+')
                    or t in {'-f', '-d'} for t in tail):
@@ -1605,8 +1614,8 @@ def log(folder, args):
         fields['pr'] = int(args.pr)
     if args.head is not None:
         # The merged pull request's full head SHA: the one worktree `git worktree remove` may then take away.
-        if args.kind != 'merge' or not SHA.fullmatch(args.head):
-            raise ValueError('afk head belongs to the merge kind and is a full lowercase SHA')
+        if args.kind != 'merge' or not SHA.fullmatch(args.head) or args.pr is None:
+            raise ValueError('afk head belongs to the merge kind with its --pr and is a full lowercase SHA')
         fields['head'] = args.head
     note = safe_note(args.note or '')
     raw = read_private(folder, 'log.jsonl', MAX_LOG)
