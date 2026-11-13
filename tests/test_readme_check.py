@@ -356,6 +356,54 @@ class ReadmeCheckTest(unittest.TestCase):
         code, lines = self.run_check()
         self.assertEqual(code, 0, lines)
 
+    def test_an_unclosed_fence_inside_a_comment_hides_nothing(self):
+        self.edit("## Start here (you)", "<!--\n```bash\nold\n-->\n\n## Start here (you)")
+        code, lines = self.run_check()
+        self.assertEqual(code, 0, lines)
+
+    def cowork_only(self):
+        (self.root / ".codex-plugin/plugin.json").unlink()
+        self.write(".github/readme-standard.json", json.dumps({"hosts": ["Claude Cowork"], "sections": {"install": "Install in Cowork"}}))
+        self.write("README.md", README.replace("Claude Code and Codex", "Claude Cowork")
+                   .replace("badge/Claude%20Code-plugin", "badge/Claude%20Cowork-plugin").replace('alt="Claude Code plugin"', 'alt="Claude Cowork plugin"')
+                   .replace('  <a href="#codex"><img src="https://img.shields.io/badge/Codex-plugin-1F6FEB" alt="Codex plugin"></a>\n', "")
+                   .replace('href="#claude-code"', 'href="#install-in-cowork"')
+                   .replace("## Install\n\n### Claude Code\n", "## Install in Cowork\n\n")
+                   .replace("### Codex\n\n```bash\ncodex plugin add demo-plugin@demo-plugin\n```\n", ""))
+
+    def test_a_cowork_only_plugin_gets_no_claude_code_demands(self):
+        self.cowork_only()
+        code, lines = self.run_check()
+        self.assertEqual(code, 0, lines)
+        self.assertFalse([l for l in lines if "Claude Code" in l], lines)
+
+    def test_a_listed_host_still_needs_its_badge_and_manifest(self):
+        self.cowork_only()
+        self.edit('  <a href="#install-in-cowork"><img src="https://img.shields.io/badge/Claude%20Cowork-plugin-1F6FEB" alt="Claude Cowork plugin"></a>\n', "")
+        self.assertIn("FAIL B3 no badge for Claude Cowork, which has a manifest", self.fails("B3"))
+        self.setUp()
+        self.write(".github/readme-standard.json", json.dumps({"hosts": ["Claude Code", "Antigravity"]}))
+        self.assertTrue(any("Antigravity" in l and "no manifest" in l for l in self.fails("H1")))
+
+    def test_an_unknown_host_is_bad_input(self):
+        for hosts in (["Cursor"], [["Codex"]], []):
+            with self.subTest(hosts=hosts):
+                self.write(".github/readme-standard.json", json.dumps({"hosts": hosts}))
+                self.assertIn("hosts", self.bad_input())
+
+    def test_hosts_whose_manifests_are_all_missing_still_fail(self):
+        self.write(".github/readme-standard.json", json.dumps({"hosts": ["Antigravity"]}))
+        self.assertIn("FAIL H1 the hosts override lists Antigravity, which has no manifest", self.fails("H1"))
+
+    def test_an_inline_comment_opener_in_prose_keeps_later_fences(self):
+        self.edit("## Supported platforms", "Type <!-- to open a comment.\n\n```text\nTODO in code\n# not a heading\n```\n\n## Supported platforms")
+        code, lines = self.run_check()
+        self.assertEqual(code, 0, lines)
+
+    def test_a_cowork_badge_without_a_hosts_override_says_how_to_list_it(self):
+        self.edit('  <a href="#codex">', '  <a href="#codex"><img src="https://img.shields.io/badge/Claude%20Cowork-plugin-1F6FEB" alt="Claude Cowork plugin"></a>\n  <a href="#codex">')
+        self.assertIn("FAIL B3 badge for Claude Cowork: add it to the override's hosts to serve it", self.fails("B3"))
+
     def test_one_row_may_name_several_skills(self):
         self.edit("| `alpha` | Alpha work. |\n| `beta` | Beta work. |", "| `alpha`, `beta` | Both. |")
         code, lines = self.run_check()
