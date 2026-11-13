@@ -204,7 +204,7 @@ def main(argv=None):
             apply(args.digest, args.yes)
         return 0
     except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
-        print('afk setup refused:invalid arguments, unsafe or changed file, or stale preview; preview again.', file=sys.stderr)
+        print('afk setup refused: invalid arguments, unsafe or changed file, or stale preview; preview again.', file=sys.stderr)
         return 1
 
 
