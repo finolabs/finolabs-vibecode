@@ -94,7 +94,7 @@ grants no authority: an option the check denies is parked. The rungs choose amon
   the user gives by hand wins over the role, and the role wins over the contrast rule.
 - The question gate below enforces that the user is not asked during a lease, on Claude Code.
 - While a lease is active, `session_start.py` prints one fixed line, after a compaction or resume as well: `Away mandate active:
-  do not ask the user; follow autopilot "Decide"`. It reads only whether a live lease exists and prints no content.
+  never ask or wait for the user; afk "Decide" settles it` (owner, 13/11/2026: no hand-off of any form waits for the user). It reads only whether a live lease exists and prints no content.
   The skill says the same when the lease starts.
 
 ## Grounded in the user's memory
@@ -168,7 +168,7 @@ What the script can enforce: tags, releases, publishing, deploys and forced push
 ## The question gate (Claude Code)
 
 One `PreToolUse` hook for the `AskUserQuestion` tool, in its own group, under the sixth scoped exception in `CLAUDE.md`. While a live
-lease exists it denies that one call with one fixed message: the user is away, follow autopilot "Decide". It reads only whether
+lease exists it denies that one call with one fixed message: the user is away, do not ask or wait for the user in any form, settle the choice with afk "Decide" and park only stop work. It reads only whether
 a valid, unexpired lease exists, through the same safe reader as `autopilot.py`; no lease, an expired, stopped or unreadable one, or any
 error allows. It never reads the question, never denies another tool, a prompt, a session start or the user's own stop.
 Starting the lease is the user's opt-in; `FNL_AWAY_GATE=off` disables it. It appends one ledger line (below) and sends nothing.
