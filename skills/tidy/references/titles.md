@@ -11,20 +11,34 @@ How each host sets a session's title, as checked against each CLI's help and com
 
 ## Emoji
 
-A title starts with one emoji for the kind of work the session is doing now. Pick by the activity, not the project; when the activity changes kind, change the emoji with it.
+A title starts with one emoji for the kind of work the session is doing now. Pick the most specific row for the activity, not the project; when the activity changes kind, change the emoji with it.
 
 | Emoji | Work |
 | --- | --- |
 | 🐛 | bug fix, failing test, incident |
+| 🚑 | urgent hotfix on a live problem |
 | ✨ | new feature or capability |
-| 🔧 | refactor, chore, configuration, dependency update |
-| 🧭 | planning, spec, design, brainstorm |
-| 🔍 | code review, investigation, research |
+| 🔧 | refactor, chore, configuration |
+| 📦 | dependencies, packaging, plugin manifests |
+| 🧭 | planning, spec, design |
+| 💡 | brainstorm, shaping an idea |
+| 🔍 | code review |
+| 🔬 | investigation, root cause, research |
 | 🔒 | security review or security fix |
 | 🧪 | tests and verification |
 | 📝 | docs, README, writing |
+| 🎨 | UI, visual design, diagrams |
+| ⚡ | performance |
+| 💾 | data, schema, migration |
+| 🧱 | infrastructure, CI, deploy |
+| 📊 | metrics, dashboards, reports |
+| 🌐 | translation, localization |
+| 🔀 | merge, branches, conflicts |
+| ⏪ | revert, rollback |
 | 🚀 | release, versioning, publishing |
 | 🤝 | coordinating delegated runs or sessions |
+| 💬 | advice, second opinion, committee |
+| 🧠 | knowledge, memory, decisions |
 | 🧹 | cleanup, wrap-up, handover |
 
 Use only these, so a user learns the set. Hosts without titles skip the emoji: the ledger label and log file names stay plain text, and a slug is ASCII only (below).
