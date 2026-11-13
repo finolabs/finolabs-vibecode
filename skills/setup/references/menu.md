@@ -6,7 +6,7 @@ Yes: Open only that interview; no feature setting changes or data is sent by thi
 No: Save only <feature>: declined in Setup features in local host.md; leave feature settings unchanged. Ask later with add <feature>.
 Undo: Run add <feature> to revisit it.
 Choices: "Yes, explore this option" / "No, skip this option".
-Ask `Needs:` separately; declining it ends the dependent feature and never records consent as given.
+Ask `Needs:` separately, once per run: a need this run already answered (the core scan, say) reuses that answer, yes or no; declining it ends the dependent feature and never records consent as given.
 Menu No: `python3 -I <this skill folder>/scripts/setup_features.py decline <feature> --yes`; a bare run does not offer it again (`show` lists them); that record is not a consent; `add <feature>` always asks again. Companions: own procedure. Last offer instructions here: "Draft instructions for how AI helpers should work with you?"
 Yes: Open the instructions interview and draft locally; no instruction file changes before its separate approval. The draft uses your current AI provider.
 No: Leave instruction files unchanged; ask later with /setup instructions.
