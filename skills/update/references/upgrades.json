@@ -237,6 +237,16 @@
           "id": "0.2.5/dispatch-nudge",
           "kind": "info",
           "text": "On Claude Code a hook reminds a session, at most every 30 minutes, of its own delegated runs that ended or ran past their budget with no outcome. FNL_DISPATCH_NUDGE=off turns it off."
+        },
+        {
+          "id": "0.2.5/afk-check",
+          "kind": "info",
+          "text": "afk.py check now exits 3 on Tier 3 (0 only on Tier 1), and an away session can run the own-branch flow up to merge and cleanup. Update scripts that relied on exit 0."
+        },
+        {
+          "id": "0.2.5/title-emoji",
+          "kind": "info",
+          "text": "Session titles now start with one emoji for the kind of work, from the fixed set in tidy references/titles.md."
         }
       ]
     }
