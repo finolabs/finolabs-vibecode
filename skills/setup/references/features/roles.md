@@ -22,7 +22,7 @@ payload and disclose the fallback. Deterministic rules and explicit choices prec
 Receipts hold the answer and an identifier, never the criterion text.
 
 Before recording Jev, ask separately: "Let TypeSafe check task evidence using your service account and approved budget?"
-Yes: Save judge: jev in local host.md; only the four allowed call sites send capped English evidence to TypeSafe using your approved account and spend budget. No hook calls it.
+Yes: Carry `Judge: jev` into the matrix, written only at its save question; only the four allowed call sites send capped English evidence to TypeSafe using your approved account and spend budget. No hook calls it.
 No: Leave the saved judge unchanged and use the small host fallback; ask later.
 Undo: Choose host in setup or use FNL_JUDGE=off; already sent data follows TypeSafe's policy.
 Choices: "Yes, allow budgeted TypeSafe checks" / "No, keep the host fallback".

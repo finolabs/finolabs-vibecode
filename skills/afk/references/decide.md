@@ -37,7 +37,7 @@ Build it before rung 2 or 3; the advisor never searches (advisory, agent judgmen
 ## The ladder
 
 1. **A recorded rule.** The user's instructions, the assignment matrix, the task brief, or a precedent that answers this exact question settles it (advisory, agent judgment). Rung `rule`.
-2. **Jev**, only when `judge: jev` is set and the options are closed: `python3 -I <judge.py> ask --site away-decision --question '<question>' --option '<1>' --option '<2>' [...] --evidence-file <checked packet file> --judge jev`, after `check` returns Tier 1 for that exact argv. It settles when the top option's probability is at least 0.8; below that, go on. The site's schema and caps are enforced by `judge.py`.
+2. **Jev**, only when the assignment matrix's judge is jev and the options are closed: `python3 -I <judge.py> ask --site away-decision --question '<question>' --option '<1>' --option '<2>' [...] --evidence-file <checked packet file> --judge jev`, after `check` returns Tier 1 for that exact argv. It settles when the top option's probability is at least 0.8; below that, go on. The site's schema and caps are enforced by `judge.py`.
 3. **The advisor**: `advisor` in its choose mode, one read-only run, an `advise` dispatch that counts against the lease's run limit. It returns one option with its reason, or `none`. Selection and the output contract are in that skill.
 4. **The host.** No rung answered: choose the option that best serves the goal anchor yourself. Rung `host`.
 
