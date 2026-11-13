@@ -24,7 +24,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | One identity per check (found, absent or unknown; a rejected linked worktree is unknown) feeds settings, branch and remote reads | project_store.identity, effective, Context |
 | The five project values start strict; a positively absent approval gives user values; an approved valid `autopilot` object whose record carries this checkout's full identity digest and whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding, project_store.bound |
 | PR merge/create/edit/comment need exactly one `--repo github.com/OWNER/NAME` equal to the verified target; create needs one validated `--head`; implicit targets are Tier 3 | target_check, head_check, project_store.origin_target |
-| Title and body values of PR create/edit/comment are data: newlines, tabs, a leading `-` and backticks pass, other controls and `$(` deny, a secret, machine path or sensitive assignment is `unsafe`; one `--body-file` must be a regular file (no link) of at most 64 KiB passing the same screen, read only for that verdict; comments follow `Repository comments` | text_values, text_ok, body_file, pr_text |
+| Title and body values of PR create/edit/comment, and `git commit -m` messages, are data: newlines, tabs, a leading `-` and backticks pass, other controls and `$(` deny, a secret, machine path or sensitive assignment is `unsafe`; one `--body-file` must be a regular file (no link) of at most 64 KiB passing the same screen, read only for that verdict; comments follow `Repository comments` | text_values, text_ok, body_file, pr_text |
 | With Merge yes: `git worktree remove [--] <path>` of a linked worktree of this repository (never forced, the main checkout or the current checkout) and `git branch -d [--] <branch>` (never -D, the current or a default branch) are Tier 1; `git rm [-r] [-q] [--] <paths>` on a work branch classifies each path like a change | worktree_remove, branch_delete, tracked_remove |
 | `effective` prints the same context read-only for the advisory Task choice and Trusted authors | show_effective |
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
@@ -943,22 +943,27 @@ def release_command(argv, applied, categories, deploy):
 
 
 TEXT_FLAGS = {'--title', '-t', '--body', '-b'}
+COMMIT_TEXT_FLAGS = {'-m', '--message'}  # a commit message is data like a PR body
 TEXT_LIMIT = 65536
 
 
 def text_values(argv):
-    """For `gh pr create|edit|comment`: argv with each title and body value replaced by a placeholder, and the values.
+    """For `gh pr create|edit|comment` and `git commit`: argv with each title, body and message value replaced by a placeholder, and the values.
     Left to right like gh's parser; a flag-looking value of another option then fails that option's grammar."""
-    if argv[:2] != ['gh', 'pr'] or argv[2:3] not in (['create'], ['edit'], ['comment']):
+    if argv[:2] == ['git', 'commit']:
+        flags, start = COMMIT_TEXT_FLAGS, 2
+    elif argv[:2] == ['gh', 'pr'] and argv[2:3] in (['create'], ['edit'], ['comment']):
+        flags, start = TEXT_FLAGS, 3
+    else:
         return argv, []
-    out, values, index = argv[:3], [], 3
+    out, values, index = argv[:start], [], start
     while index < len(argv):
         token = argv[index]
         key, equal, value = token.partition('=')
-        if equal and key in TEXT_FLAGS and key.startswith('--'):
+        if equal and key in flags and key.startswith('--'):
             out.append(key + '=text')
             values.append(value)
-        elif token in TEXT_FLAGS and index + 1 < len(argv):
+        elif token in flags and index + 1 < len(argv):
             out += [token, 'text']
             values.append(argv[index + 1])
             index += 1
@@ -1159,7 +1164,7 @@ def classify_argv(argv, applied, coordinator=None):
         if verb == 'rm':
             return tracked_remove(tail, applied)
         if verb == 'commit':
-            return 'allowed' if tail and options(tail, {'--amend', '--no-edit'}, {'-m', '--message'}, positional=False) == [] else 'unknown'
+            return 'allowed' if tail and options(tail, {'--amend', '--no-edit', '-q', '--quiet'}, {'-m', '--message'}, positional=False) == [] else 'unknown'
         query = {
             'status': ({'--short', '-s', '--porcelain', '--branch', '-b'}, set()),
             'log': ({'--oneline', '--stat', '--all', '--decorate', '--graph', '--no-decorate', '-N'}, {'-n', '--max-count', '--format', '--pretty'}),

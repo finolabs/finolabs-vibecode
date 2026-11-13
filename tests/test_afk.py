@@ -2009,8 +2009,8 @@ class AwayFlowTest(AfkBase):
                            (create + ['--body', 'See /Us' + 'ers/synthetic/notes'], 'unsafe'),
                            (create + ['--body', 'x', '--body-file', 'body.md'], 'unknown'),
                            (['gh', 'pr', 'create', '--head', 'topic', '--body', '--repo=github.com/example/demo'], 'unknown'),
-                           (['git', 'commit', '-m', 'Fix `x`'], 'unknown'),
-                           (['git', 'commit', '-m', 'Fix $(x)'], 'unknown')):
+                           (['git', 'commit', '-m', 'Fix $(x)'], 'unknown'),
+                           (['git', 'commit', '-m', 'Key ghp_' + 'x' * 30], 'unsafe')):
             with self.subTest(argv=argv):
                 self.check(argv, tier=3, code=code)
         good = self.home / 'body.md'
@@ -2021,7 +2021,7 @@ class AwayFlowTest(AfkBase):
                      ['gh', 'pr', 'comment', '7', '--body', body, *repo]):
             with self.subTest(argv=argv):
                 self.check(argv)
-        secret = self.home / 'secret.md'
+        secret = self.home / 'leaky.md'
         secret.write_text('Review notes\nghp_' + 'x' * 30 + '\n')
         link = self.home / 'link.md'
         link.symlink_to(good)
@@ -2048,6 +2048,14 @@ class AwayFlowTest(AfkBase):
         self.check(['git', 'status'])
         self.assertEqual((self.lease()['counters']['runs'], self.lease()['counters']['actions']), (1, 2))
         self.check(['git', 'status'], tier=3, code='limit')
+
+    def test_a_commit_message_is_data(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        for argv in (['git', 'commit', '-m', 'Fix `x`'],
+                     ['git', 'commit', '-q', '-m', 'Update hooks.json and SKILL.md', '-m', 'Body line one\nline two'],
+                     ['git', 'commit', '--message=Rename settings and setup text']):
+            with self.subTest(argv=argv):
+                self.check(argv)
 
     def test_check_exits_three_on_tier_three_and_zero_on_tier_one(self):
         self.start()
