@@ -23,6 +23,10 @@ ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
                  '\tfetch = +refs/heads/*:refs/remotes/origin/*\n')
 
 
+# An ended or exhausted lease tells the caller, in one fixed line, to stop any loop it started for the lease.
+ENDED_CODES = {'no-lease', 'expired', 'stopped', 'exhausted'}
+ENDED_LINE = 'The away lease has ended: stop any loop or wakeup you started for it, then report to the user.'
+
 class AfkBase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -78,7 +82,10 @@ class AfkBase(unittest.TestCase):
         flags = ('--argv-json', json.dumps(argv)) if argv is not None else ('--paths', *paths)
         status, output = self.invoke('check', *flags)
         self.assertEqual(status, 0 if tier == 1 else 3, output)  # a denied check never exits 0
-        self.assertEqual(json.loads(output), {'tier': tier, 'code': code})
+        expected = {'tier': tier, 'code': code}
+        if code in ENDED_CODES:
+            expected['end'] = ENDED_LINE
+        self.assertEqual(json.loads(output), expected)
 
 
 class AfkTest(AfkBase):
@@ -178,9 +185,9 @@ class AfkTest(AfkBase):
         self.check(['git', 'status'], tier=3, code='setup-changed')
         self.setup_config()
         self.change_lease(lambda v: v['counters'].update(runs=20))
-        self.check(['git', 'status'], tier=3, code='limit')
+        self.check(['git', 'status'], tier=3, code='exhausted')
         self.change_lease(lambda v: v['counters'].update(runs=0, runtime_minutes=480))
-        self.check(['git', 'status'], tier=3, code='limit')
+        self.check(['git', 'status'], tier=3, code='exhausted')
         self.change_lease(lambda v: v['counters'].update(runtime_minutes=0, hour_actions=[self.clock] * 30))
         self.check(['git', 'status'], tier=3, code='limit')
         self.clock += 3601
@@ -190,7 +197,7 @@ class AfkTest(AfkBase):
     def test_runtime_limit_uses_elapsed_time(self):
         self.start(SETUP + '- Max runtime minutes: 10\n')
         self.clock += 600
-        self.check(['git', 'status'], tier=3, code='limit')
+        self.check(['git', 'status'], tier=3, code='exhausted')
 
     def test_tier_one_commands_and_paths(self):
         self.start(SETUP + '- Max actions per hour: 100\n')
@@ -538,7 +545,10 @@ class AwayDecisionTest(AfkBase):
         if code is None:  # any Tier 3 code: a checkout under a protected folder may say `protected` first
             self.assertEqual(result['tier'], 3, argv)
         else:
-            self.assertEqual(result, {'tier': tier, 'code': code}, argv)
+            expected = {'tier': tier, 'code': code}
+            if code in ENDED_CODES:
+                expected['end'] = ENDED_LINE
+            self.assertEqual(result, expected, argv)
 
     # Record for analysis
 
