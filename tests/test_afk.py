@@ -77,7 +77,7 @@ class AfkBase(unittest.TestCase):
     def check(self, argv=None, paths=None, tier=1, code='allowed'):
         flags = ('--argv-json', json.dumps(argv)) if argv is not None else ('--paths', *paths)
         status, output = self.invoke('check', *flags)
-        self.assertEqual(status, 0, output)
+        self.assertEqual(status, 0 if tier == 1 else 3, output)  # a denied check never exits 0
         self.assertEqual(json.loads(output), {'tier': tier, 'code': code})
 
 
@@ -268,6 +268,7 @@ class AfkTest(AfkBase):
 
     def test_paths_fail_closed(self):
         self.start()
+        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')  # source paths are known on a work branch only
         for path in ('.github/workflows/check.yml', 'src/.github/settings.json', 'hooks/check.py',
                      'src/pre-commit', 'CLAUDE.md', 'docs/AGENTS.md', 'GEMINI.md',
                      'src/settings.json', 'host.md', 'state/autopilot/lease.json', 'setup.json',
@@ -293,7 +294,8 @@ class AfkTest(AfkBase):
                         'topic:refs/notes/x', 'refs/tags/v1:topic'):
             self.check(['git', 'push', 'origin', refspec], tier=3, code='forbidden')
         self.check(['git', 'push', 'origin', 'topic:refs/heads/topic'])
-        # Instruction files and review enforcers are protected wherever they live.
+        # Instruction files and review enforcers are protected wherever they live (on the default branch).
+        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')
         for path in ('docs/CONVENTIONS.md', 'docs/copilot-instructions.md', 'skills/review-gate/scripts/review_route.py'):
             self.check(paths=[path], tier=3, code='protected')
         # A directory operand would stage everything below it, including a protected descendant.
@@ -308,7 +310,8 @@ class AfkTest(AfkBase):
         for refspec in ('v-example', 'topic:v-example', 'topic', 'HEAD', 'v-example:v-example'):
             self.check(['git', 'push', 'origin', refspec], tier=3, code='unknown')
         self.check(['git', 'push', 'origin', 'v-example:refs/heads/topic'])
-        # Every trusted wrapper and its dependencies are protected as paths and through git add.
+        # Every trusted wrapper and its dependencies are protected as paths and through git add on the default branch.
+        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')
         for name in ('heavy_run.py', 'ledger.py', 'record.py', 'delegate_env.py', 'run_env.py', 'data_root.py', 'assignments.py'):
             path = 'skills/delegate/scripts/' + name
             self.check(paths=[path], tier=3, code='protected')
@@ -386,7 +389,7 @@ class AfkTest(AfkBase):
         self.start()
         for raw in ('null', '{}', '[1]', 'invalid', '[]'):
             status, output = self.invoke('check', '--argv-json', raw)
-            self.assertEqual(status, 0, output)
+            self.assertEqual(status, 3, output)
             self.assertEqual(json.loads(output), dict(tier=3, code='unknown'))
         (self.state / 'lease.json').chmod(0o644)
         self.check(['git', 'status'], tier=3, code='unsafe')
@@ -530,8 +533,8 @@ class AwayDecisionTest(AfkBase):
         argv = self.real(argv) if real else argv
         flags = ('--coordinator', coordinator) if coordinator else ()
         status, output = self.invoke('check', *flags, '--argv-json', json.dumps(argv))
-        self.assertEqual(status, 0, output)
         result = json.loads(output)
+        self.assertEqual(status, 0 if result['tier'] == 1 else 3, output)
         if code is None:  # any Tier 3 code: a checkout under a protected folder may say `protected` first
             self.assertEqual(result['tier'], 3, argv)
         else:
@@ -1166,6 +1169,7 @@ class ProjectScopeTest(AfkBase):
 
     def test_top_level_documentation_files_are_known_paths(self):
         self.start()
+        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')  # CLAUDE.md is source on a work branch only
         self.check(paths=['README.md', 'CHANGELOG.md', 'CONTRIBUTING.md'])
         self.check(['git', 'add', 'README.md'])
         for path, code in (('LICENSE', 'unknown'), ('NOTES.md', 'unknown'), ('readme.txt', 'unknown'),
@@ -1912,6 +1916,239 @@ class PolicyContextTest(AfkBase):
         self.assertEqual(self.check_code(JUDGE), 'unknown')
         evidence = JUDGE[:-1] + ['docs/notes.md']
         self.assertEqual(self.check_code(evidence), 'unknown')
+
+
+SOURCE_PATHS = ('skills/example/SKILL.md', 'skills/example/references/hooks.md', 'skills/delegate/scripts/afk.py',
+                'skills/review-gate/scripts/merge_check.py', 'scripts/hooks.py', 'CLAUDE.md', 'AGENTS.md',
+                '.claude-plugin/hooks.json', '.codex-plugin/plugin.json')
+LIVE_PATHS = ('.github/workflows/x.yml', '.claude/settings.json', '.claude/hooks/check.py', '.git/hooks/pre-push',
+              'skills/example/.env', 'scripts/credentials.json', 'skills/example/CLAUDE.md', 'GEMINI.md',
+              'CLAUDE.local.md', 'hooks/check.py', 'src/settings.json', 'host.md', 'state/autopilot/lease.json')
+
+
+class AwayFlowTest(AfkBase):
+    """The own-branch flow an away mandate authorizes: worktrees, PR text, limits, exit status, cleanup and source."""
+
+    def git_repo(self, name):
+        import shutil
+        import subprocess
+        if not shutil.which('git', path=os.defpath + ':/usr/local/bin:/opt/homebrew/bin'):
+            self.skipTest('git is not installed')
+        repo = self.home / name
+        repo.mkdir()
+        env = {'HOME': str(self.home), 'PATH': os.defpath + ':/usr/local/bin:/opt/homebrew/bin',
+               'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull}
+
+        def git(*argv, cwd=repo):
+            return subprocess.run(['git', *argv], cwd=cwd, env=env, capture_output=True, check=True,
+                                  text=True).stdout.strip()
+        git('init', '-q', '-b', 'main')
+        git('remote', 'add', 'origin', 'https://github.com/example/demo.git')
+        git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-q',
+            '--allow-empty', '-m', 'First')
+        git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+        git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+        return repo, git
+
+    def worktree(self):
+        """A main checkout on main and a registered linked worktree under its .claude/worktrees on branch work."""
+        repo, git = self.git_repo('flow')
+        tree = repo / '.claude/worktrees/wt'
+        git('worktree', 'add', '-q', str(tree), '-b', 'work')
+        return repo, tree, git
+
+    def test_a_worktree_path_is_judged_from_inside_that_worktree(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        repo, tree, _ = self.worktree()
+        ledger = ['python3', '-I', str(SCRIPT.parent / 'ledger.py'), 'start', '--checkout']
+        self.cwd = repo
+        self.check(ledger + [str(tree)])
+        self.check(ledger + ['.claude/worktrees/wt'])
+        self.check(['git', '-C', str(tree), 'status'])
+        self.check(['git', '-C', '.claude/worktrees/wt', 'status', '--short'])
+        self.check(['git', '-C', str(tree), 'add', '--', 'src/example.py'])
+        self.cwd = tree  # the same commands from inside the worktree
+        self.check(['git', 'status'])
+        self.check(['git', 'add', '--', 'src/example.py'])
+        # Inside the worktree its own live paths stay protected, through -C as from inside.
+        self.check(['git', 'add', '--', '.claude/settings.json'], tier=3, code='protected')
+        self.cwd = repo
+        for path in ('.github/workflows/x.yml', '.claude/settings.json', '.git/hooks/pre-push'):
+            with self.subTest(path=path):
+                self.check(['git', '-C', str(tree), 'add', '--', path], tier=3, code='protected')
+                self.check(ledger + [str(tree / path)], tier=3, code='protected')
+        # Anything else under .claude stays protected: a folder that is not a registered worktree, the settings.
+        (repo / '.claude/worktrees/stray').mkdir(parents=True)
+        self.check(ledger + [str(repo / '.claude/worktrees/stray')], tier=3, code='protected')
+        self.check(ledger + ['.claude/worktrees/stray'], tier=3, code='protected')
+        self.check(['git', '-C', str(repo / '.claude/worktrees/stray'), 'status'], tier=3, code='unknown')
+        self.check(['git', '-C', str(repo / '.claude'), 'status'], tier=3, code='unknown')
+        self.check(paths=['.claude/settings.json'], tier=3, code='protected')
+        # A worktree of another repository is never judged relatively.
+        other, git = self.git_repo('other')
+        foreign = other / '.claude/worktrees/x'
+        git('worktree', 'add', '-q', str(foreign), '-b', 'x')
+        self.check(ledger + [str(foreign)], tier=3, code='protected')
+        self.check(['git', '-C', str(foreign), 'status'], tier=3, code='unknown')
+        self.assertEqual(self.lease()['counters']['actions'], 7)
+
+    def test_pull_request_text_is_data_and_a_body_file_is_screened(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n- Repository comments: decide\n')
+        repo = '--repo', 'github.com/example/demo'
+        create = ['gh', 'pr', 'create', '--head', 'topic', *repo]
+        body = '## Summary\n\n- Fix `afk.py check` for hooks, settings and SKILL.md.\n\tIndented line.'
+        for argv in (create + ['--title', 'Fix `check`', '--body', body],
+                     create + ['--title', '-leading dash', '--body', '--repo github.com/other/restricted'],
+                     create + ['--body=' + body],
+                     ['gh', 'pr', 'edit', '7', '--body', body, *repo]):
+            with self.subTest(argv=argv):
+                self.check(argv)
+        for argv, code in ((create + ['--body', 'Run $(id) first'], 'unknown'),
+                           (create + ['--body', 'bell\x07'], 'unknown'),
+                           (create + ['--body', 'Token ghp_' + 'x' * 30], 'unsafe'),
+                           (create + ['--body', 'See /Us' + 'ers/synthetic/notes'], 'unsafe'),
+                           (create + ['--body', 'x', '--body-file', 'body.md'], 'unknown'),
+                           (['gh', 'pr', 'create', '--head', 'topic', '--body', '--repo=github.com/example/demo'], 'unknown'),
+                           (['git', 'commit', '-m', 'Fix `x`'], 'unknown'),
+                           (['git', 'commit', '-m', 'Fix $(x)'], 'unknown')):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code=code)
+        good = self.home / 'body.md'
+        good.write_text(body + '\r\n')
+        for argv in (create + ['--body-file', str(good)], create + ['-F', str(good)],
+                     ['gh', 'pr', 'edit', '7', '--body-file=' + str(good), *repo],
+                     ['gh', 'pr', 'comment', '7', '--body-file', str(good), *repo],
+                     ['gh', 'pr', 'comment', '7', '--body', body, *repo]):
+            with self.subTest(argv=argv):
+                self.check(argv)
+        secret = self.home / 'secret.md'
+        secret.write_text('Review notes\nghp_' + 'x' * 30 + '\n')
+        link = self.home / 'link.md'
+        link.symlink_to(good)
+        large = self.home / 'large.md'
+        large.write_text('x' * 70000)
+        for name in (secret, link, large, self.home / 'missing.md', self.home):
+            with self.subTest(name=name):
+                self.check(create + ['--body-file', str(name)], tier=3, code='unsafe')
+        self.check(create + ['--body-file', '-'], tier=3, code='unknown')
+        self.check(['gh', 'pr', 'comment', '7', '--body-file', str(good)], tier=3, code='unknown')
+        self.check(['gh', 'pr', 'comment', '7', *repo], tier=3, code='unknown')
+        self.invoke('stop')  # without the category's decide answer a comment is Tier 3
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.check(['gh', 'pr', 'comment', '7', '--body-file', str(good), *repo], tier=3, code='forbidden')
+
+    def test_only_a_tier_one_answer_reserves_an_action_or_a_run(self):
+        self.start(SETUP + '- Max actions per hour: 2\n')
+        ledger = ['python3', '-I', str(SCRIPT.parent / 'ledger.py'), 'start']
+        for _ in range(5):
+            self.check(ledger + ['--checkout', '.claude/settings.json'], tier=3, code='protected')
+            self.check(['git', 'push', 'origin', 'main'], tier=3, code='forbidden')
+        self.assertEqual(self.lease()['counters'], dict(runs=0, runtime_minutes=0, actions=0, hour_actions=[]))
+        self.check(ledger)
+        self.check(['git', 'status'])
+        self.assertEqual((self.lease()['counters']['runs'], self.lease()['counters']['actions']), (1, 2))
+        self.check(['git', 'status'], tier=3, code='limit')
+
+    def test_check_exits_three_on_tier_three_and_zero_on_tier_one(self):
+        self.start()
+        for argv, status, tier in ((['git', 'status'], 0, 1), (['git', 'push', 'origin', 'main'], 3, 3),
+                                   (['git', 'show', 'HEAD:.env'], 3, 3), (['echo', 'safe'], 3, 3)):
+            with self.subTest(argv=argv):
+                result = self.invoke('check', '--argv-json', json.dumps(argv))
+                self.assertEqual(result[0], status, result)
+                self.assertEqual(json.loads(result[1])['tier'], tier)
+        self.assertEqual(self.invoke('check', '--paths', '.github/workflows/x.yml')[0], 3)
+        self.invoke('stop')
+        self.assertEqual(self.invoke('check', '--argv-json', '["git", "status"]')[0], 3)  # no lease
+
+    def test_merged_worktree_and_branch_cleanup_and_tracked_removal(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        repo, tree, git = self.worktree()
+        git('branch', 'done')
+        self.cwd = repo
+        for argv in (['git', 'worktree', 'remove', str(tree)], ['git', 'worktree', 'remove', '--', str(tree)],
+                     ['git', 'worktree', 'remove', '.claude/worktrees/wt'],
+                     ['git', 'branch', '-d', 'done'], ['git', 'branch', '-d', '--', 'done']):
+            with self.subTest(argv=argv):
+                self.check(argv)
+        for argv, code in ((['git', 'worktree', 'remove', '--force', str(tree)], 'forbidden'),
+                           (['git', 'worktree', 'remove', '-f', str(tree)], 'forbidden'),
+                           (['git', 'worktree', 'remove', str(repo)], 'forbidden'),
+                           (['git', 'worktree', 'remove', '.'], 'forbidden'),
+                           (['git', 'worktree', 'add', str(tree)], 'unknown'),
+                           (['git', 'branch', '-D', 'done'], 'unknown'),
+                           (['git', 'branch', '-d', 'main'], 'forbidden'),
+                           (['git', 'branch', '-d', 'missing'], 'unknown'),
+                           (['git', 'branch', '-d', 'done', 'work'], 'unknown')):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code=code)
+        self.cwd = tree  # the current checkout and its own branch stay
+        self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='unknown')
+        self.check(['git', 'branch', '-d', 'work'], tier=3, code='unknown')
+        # git rm of tracked files on the work branch classifies each path like a change.
+        for argv in (['git', 'rm', 'src/old.py'], ['git', 'rm', '-q', '--', 'src/old.py', 'docs/old.md'],
+                     ['git', 'rm', '-r', 'skills/example/SKILL.md']):
+            with self.subTest(argv=argv):
+                self.check(argv)
+        for argv, code in ((['git', 'rm', '-f', 'src/old.py'], 'unknown'), (['git', 'rm', '--cached', 'src/old.py'], 'unknown'),
+                           (['git', 'rm', '--', '.github/workflows/x.yml'], 'protected'),
+                           (['git', 'rm', 'unknown/file.py'], 'unknown')):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code=code)
+        self.cwd = repo  # on the default branch
+        self.check(['git', 'rm', 'src/old.py'], tier=3, code='forbidden')
+        self.invoke('stop')
+        self.start(SETUP.replace('- Merge: yes', '- Merge: no'))
+        self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='merge-disabled')
+        self.check(['git', 'branch', '-d', 'done'], tier=3, code='merge-disabled')
+
+    def test_plugin_source_is_known_on_a_work_branch_and_live_config_stays_protected(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.assertEqual((self.repo / '.git/HEAD').read_text(), 'ref: refs/heads/topic\n')
+        for path in SOURCE_PATHS:
+            with self.subTest(path=path):
+                self.check(paths=[path])
+                self.check(['git', 'add', '--', path])
+        self.check(paths=list(SOURCE_PATHS))
+        for path in LIVE_PATHS:
+            with self.subTest(path=path):
+                self.check(paths=[path], tier=3, code='protected')
+                self.check(['git', 'add', '--', path], tier=3, code='protected')
+        for path in ('/' + 'tmp/settings.json', str(self.home / '.claude/settings.json'), str(self.root / 'host.md')):
+            with self.subTest(path=path):
+                self.check(paths=[path], tier=3, code='protected')
+        # The default branch keeps every source path protected.
+        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')
+        for path in SOURCE_PATHS:
+            with self.subTest(path=path, branch='main'):
+                # A manifest with no protected name is outside the built-in roots there.
+                self.check(paths=[path], tier=3, code='unknown' if path == '.codex-plugin/plugin.json' else 'protected')
+                self.check(['git', 'add', '--', path], tier=3,
+                           code='unknown' if path == '.codex-plugin/plugin.json' else 'protected')
+        # Without Push and pull requests and Merge, a work branch is not enough.
+        (self.repo / '.git/HEAD').write_text('ref: refs/heads/topic\n')
+        off = SETUP.replace('- Merge: yes', '- Merge: no').replace('requests: yes', 'requests: no')
+        self.invoke('stop')
+        self.start(off)
+        self.check(paths=['skills/example/SKILL.md'], tier=3, code='protected')
+
+    def test_this_installs_own_scripts_stay_protected_on_a_work_branch(self):
+        # A synthetic install that is itself this checkout, on a work branch: its running scripts stay protected.
+        import shutil
+        for skill in ('delegate', 'review-gate'):
+            shutil.copytree(ROOT / 'skills' / skill / 'scripts', self.repo / 'skills' / skill / 'scripts')
+        global SCRIPT
+        saved, SCRIPT = SCRIPT, self.repo / 'skills/delegate/scripts/afk.py'
+        try:
+            self.start()
+            for path in ('skills/delegate/scripts/afk.py', 'skills/review-gate/scripts/merge_check.py',
+                         'skills/delegate/scripts/helper.py'):
+                with self.subTest(path=path):
+                    self.check(paths=[path], tier=3, code='protected')
+                    self.check(['git', 'add', '--', path], tier=3, code='protected')
+            self.check(paths=['skills/example/SKILL.md'])
+        finally:
+            SCRIPT = saved
 
 
 if __name__ == '__main__':
