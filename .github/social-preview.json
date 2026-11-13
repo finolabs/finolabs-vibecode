@@ -1,18 +1,18 @@
 {
   "name": "Vibecode",
-  "tagline": "One engineering practice for\nClaude Code, Codex, Antigravity",
-  "mark": "../assets/social-mark-dark.svg",
-  "input": "Route this change and tell me\nthe depth you chose.",
-  "output": "router receipt:\n  depth=NORMAL\n  trigger=none",
+  "tagline": "Make your coding agents work\nlike a senior team, automatically",
+  "mark": "../assets/icon-dark.svg",
+  "input": "Add rate limiting to the\nlogin endpoint.",
+  "output": "router receipt:\n  depth=NORMAL\nok    code review: APPROVE\nok    security review:\n      APPROVE\nMERGE OK",
   "footer": [
-    "A **FINOLABS** plugin for AI coding agents",
+    "**Claude Code**, **Codex**, **Antigravity** plugin by **FINOLABS**",
     "MIT licensed, github.com/finolabs/finolabs-vibecode"
   ],
   "layout": {
-    "markX": 640,
-    "markY": 64,
-    "markSize": 360,
-    "outputX": 930,
-    "outputY": 40
+    "markX": 630,
+    "markY": 90,
+    "markSize": 250,
+    "outputX": 905,
+    "outputY": 56
   }
 }

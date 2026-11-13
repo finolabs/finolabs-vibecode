@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- The README opens as a landing page: the icon, the tagline and subhead, badges for the release, licence and the three hosts, the banner, a "What you get" block, the install commands for each host and the request-to-merge diagram. "For engineers" (release notes, compaction steward, diagrams, Bricks) moves below the reference sections; nothing is removed. The banner (`assets/banner.png`) is also the new GitHub social preview, generated from `.github/social-preview.json`.
+
 ### Fixed
 
 - `afk.py check` lets an install that is the main checkout (a `-dev` install read from it) remove a merged linked worktree, as `afk` "Merge gate" says: `git worktree` no longer counts as a command that changes the install's own work tree, since its only Tier 1 form removes another worktree and still refuses the main checkout, a forced removal and any worktree holding the install (owner, 13/11/2026). The worktree rule docs name `log --kind merge --pr <number> --head`.
