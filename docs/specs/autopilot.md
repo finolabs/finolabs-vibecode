@@ -211,7 +211,9 @@ a tier; unknown commands and paths are Tier 3.
     main checkout, the current checkout or a worktree that is or holds this install), and `git branch -d [--] <branch>`
     (never `-D`, the current or a default branch). A git verb that changes a work tree, index or HEAD (`merge`, `commit`, `add`, `rm`, `pull`,
     `checkout` and the like) is `protected` when it would run in this install's own checkout, by its working folder or
-    `git -C`, so the running install never changes without a person. `git rm [-r] [-q] [--] <paths>` on a work branch classifies each
+    `git -C`, so the running install never changes without a person. Removing
+    another merged worktree is not such a verb, so an install that is the main checkout runs the cleanup from there.
+    `git rm [-r] [-q] [--] <paths>` on a work branch classifies each
     path like a change.
   - `check` exits 0 on Tier 1 and 3 on Tier 3 with the same JSON, so `check ... && command` never runs a denied
     command. As before, only a Tier 1 answer reserves an action or a run.

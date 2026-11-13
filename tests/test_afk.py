@@ -2274,6 +2274,29 @@ class AwayFlowTest(AfkBase):
         finally:
             SCRIPT = saved
 
+    def test_an_install_that_is_the_main_checkout_cleans_up_a_merged_worktree(self):
+        # A dev install read from the main checkout runs the merge gate's cleanup from there: removing another,
+        # merged linked worktree changes neither the install's work tree, its index nor its HEAD.
+        repo, tree, git = self.worktree()
+        global SCRIPT
+        saved, SCRIPT = SCRIPT, self.install_into(repo)
+        try:
+            self.start(SETUP + '- Max actions per hour: 1000\n')
+            self.cwd = repo
+            self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', git('rev-parse', 'HEAD', cwd=tree))[0], 0)
+            for argv in (['git', 'worktree', 'remove', str(tree)], ['git', 'worktree', 'remove', '--', '.claude/worktrees/wt']):
+                with self.subTest(argv=argv):
+                    self.check(argv)
+            for argv, code in ((['git', 'worktree', 'remove', '--force', str(tree)], 'forbidden'),
+                               (['git', 'worktree', 'remove', '.'], 'protected'),
+                               (['git', 'worktree', 'add', str(repo / 'new')], 'protected'),
+                               (['git', 'worktree', 'prune'], 'unknown'),
+                               (['git', 'commit', '-m', 'Example'], 'protected')):
+                with self.subTest(argv=argv):
+                    self.check(argv, tier=3, code=code)
+        finally:
+            SCRIPT = saved
+
     def test_the_worktree_holding_this_install_is_never_removed(self):
         repo, tree, git = self.worktree()
         global SCRIPT
