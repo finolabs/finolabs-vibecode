@@ -139,14 +139,20 @@ def autopilot_preview(cwd, value):
         action = 'none'
     else:
         action = 'remove' if desired is None else 'replace'
-    user, shown = user_away(), {}
-    for key, name in AWAY_KEYS:
-        shown[name] = ('%s (repository)' % desired[key] if desired and key in desired
-                       else '%s (user)' % user.get(name, 'not set'))
-    shown['Roots'] = (', '.join(desired['roots']) + ' (repository)' if desired and 'roots' in desired
-                      else 'none (user)')
+    user = user_away()
+
+    def effective(obj):
+        shown = {}
+        for key, name in AWAY_KEYS:
+            shown[name] = ('%s (repository)' % obj[key] if obj and key in obj
+                           else '%s (user)' % user.get(name, 'not set'))
+        shown['Roots'] = (', '.join(obj['roots']) + ' (repository)' if obj and 'roots' in obj else 'none (user)')
+        return shown
+    # The stored object and the keys whose effective value would move, so a change is never shown as a new state only.
+    shown, before = effective(desired), effective(current)
     return dict(repository=str(ident.main), worktree=str(ident.checkout), code=store.code_of(ident.main),
-                target=target, state=state, action=action, autopilot=desired, effective=shown,
+                target=target, state=state, action=action, current=current, autopilot=desired, effective=shown,
+                changed=[name for name in shown if shown[name] != before[name]],
                 token=store.preview_token(ident, state, prior, target, desired))
 
 
