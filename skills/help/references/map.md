@@ -22,7 +22,7 @@ The skill folders and their purposes match the README.
 | `review-gate` | A user story is done or a pull request is about to merge: an independent code review, a disposition for every finding, a regression test per runtime fix. |
 | `security-review-gate` | A change touches auth, permissions, private data, untrusted input or payments: a permission-boundary review, with negative tests proving that not even a record's existence leaks. |
 | `checks` | Choosing targeted tests, checking current-head verification receipts, completing host/judge criterion checks and deciding whether to accept reported work; the coordinator keeps the verdict. Also runs a repository's stored checks locally (`checks.py run`, set up with `/setup add checks`), and covers a cheaper CI workflow and what CI minutes cost. |
-| `plugin-packaging` | Packaging skills as a plugin for Claude Code, Codex and Antigravity from one repository: layout, manifests, icon, marketplaces, checks. |
+| `plugin-packaging` | Packaging skills as a plugin for Claude Code, Codex and Antigravity from one repository: layout, manifests, the README standard and checklist, icon, marketplaces, checks. |
 | `setup` | Configure user scope, project scope or both: Quick confirms inert defaults and asks companion choices; Advanced interviews each companion and offers widening features. `add <feature>` opens one feature, `check` is read-only, `scan` refreshes inventory, `mode` manages Delegation mode and Routing, and `instructions` drafts instruction files with approval per file; setup installs nothing. |
 | `status` | Opening the usage dashboard: router coverage, skill and agent use, load cost, depth against review outcome, delegation and the review gate, from the usage events (after you consent in setup) and the dispatch ledger. Overview holds activity and reviews; Now shows repository-labelled running lanes, advisory slots, per-install quota and named repositories active in the last 24 hours. It also lists this repository's delegated runs still open. |
 | `update` | Showing installed and cached available versions, updating through the host after a clear yes and walking the new version's setup checklist, showing what is new, targeting a chosen or pinned version, skipping a release, or stopping update notices. |
@@ -86,6 +86,7 @@ The skill folders and their purposes match the README.
 | Release, tag, changelog | `versioning` | |
 | Making a repository public, or checking a public repository's settings | `open-source-review` | `security-audit` from Cloudflare |
 | Packaging skills as a plugin | `plugin-packaging` | |
+| Checking a plugin's README before a release | `plugin-packaging` `references/readme.md` (`readme_check.py`, then the agent items) | |
 
 ## Agents and scripts
 
@@ -154,6 +155,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | Path | Purpose |
 | --- | --- |
 | `skills/commit-messages/scripts/worktree_sweep.py` | Read-only list of linked worktrees (escaped path, branch, size, clean or dirty, unpushed, merged, candidate); under each candidate prints `git worktree remove -- <path>` and `git branch -d -- <branch>`, shell-quoted, for the agent to run, so git does the removal. Deletes nothing. Copy in `review-gate`. |
+| `skills/plugin-packaging/scripts/readme_check.py` | Checks a plugin repository's README against the standard in `plugin-packaging` `references/readme.md`: section order, badges, counts and tables, hosts and install commands, descriptions, license, images, links and placeholders; prints `FAIL`/`PASS` per item and the external links to open. Reads files only; advisory. |
 | `skills/checks/scripts/checks.py` | Runs or shows the repository's approved stored checks (a changed or unapproved check file runs nothing) in order through `heavy_run.py`, stops at the first failure, narrows Python test modules with `--changed`, and writes a local receipt only for a whole passing run on a clean, unmoved head when that mode is on; `run --dispatch <id>` writes, on the same conditions and whatever that mode, the verification receipt `ledger.py finish --outcome accepted` needs. `usage --from <file>` summarises hosted CI runs, minutes, the document-only share and days left from a run list the agent produced; no network call and no process. |
 | `skills/delegate/scripts/afk.py` | afk lease, closed action classification (Tier 1 or Tier 3) against one repository identity and target, a read-only view of the values it applies, and private action log; executes nothing. |
 | `skills/delegate/scripts/heavy_run.py` | Runs one heavy command at a time per machine under a kernel lock, with load and memory gates, a wait cap and a maximum run time. |
