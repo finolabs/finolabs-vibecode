@@ -16,7 +16,15 @@ Show this table of what must wait for you. `stop` waits for a person; `decide` l
 | Deleting local or recoverable things (Recoverable deletion) | decide | work you wanted must be restored |
 | Comments on the repository's own pull requests and issues (Repository comments) | decide | a comment you would not have posted |
 
-Ask once which rows to change, then for each row moved from stop to decide: "Let the agents decide this kind of work while you are away?"
+Ask: "Keep the table as shown? Agents decide recoverable deletion and repository comments; everything else waits for you."
+Yes: Keep every row as its Starts column says.
+No: Pick the rows to change next.
+Undo: Repeat setup to change the rows.
+Choices: "Yes, keep the table" / "No, change some rows".
+
+On No, ask the changeable rows in one or two multi-select questions (at most four rows each), every option named by its plain category: "Tick each kind of work the agents may decide while you are away. Unticked kinds wait for you." A ticked row ends at decide and an unticked one at stop, whatever it started as.
+
+Then for each row moved from stop to decide: "Let the agents decide this kind of work while you are away?"
 Yes: Save that key as decide; first name the row and state its "What could go wrong". A decision is never permission: the action is still checked.
 No: Keep it at stop; the agents park that work for you.
 Undo: Stop the current lease and repeat setup with the row at stop.
