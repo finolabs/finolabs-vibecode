@@ -25,7 +25,7 @@ class SkillFiringTest(unittest.TestCase):
     def test_router_directs_session_naming_at_task_start_and_phase_change(self):
         step1 = self.router.split("## 1.", 1)[1].split("## 2.", 1)[0]
         flat = " ".join(step1.split())
-        self.assertIn("invoke `session-hygiene` to name or rename the session", flat)
+        self.assertIn("invoke `tidy` to name or rename the session", flat)
         self.assertIn("phase changes", flat)
 
     def test_router_invokes_checks_before_claims_and_delegated_acceptance(self):

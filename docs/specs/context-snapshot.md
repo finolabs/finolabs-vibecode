@@ -16,7 +16,7 @@ Codex 0.167.0 [app-server docs](https://learn.chatgpt.com/docs/app-server), [con
 
 ## 1. Recorder, reader and steward input
 
-`scripts/context_snapshot.py` uses only the Python standard library, no subprocess and no network. The standalone copy in `session-hygiene` uses identical `data_root.py` and `context_steward.py` copies.
+`scripts/context_snapshot.py` uses only the Python standard library, no subprocess and no network. The standalone copy in `tidy` uses identical `data_root.py` and `context_steward.py` copies.
 
 - `record [--host claude|antigravity] [--line]` reads one UTF-8 JSON object from stdin, at most 64 KiB. Invalid, oversized or duplicate-key JSON writes nothing. Invalid session/window data writes nothing. Null, missing, non-integer, negative or unreasonably large usage clears that session's old snapshot without creating a directory merely to clear it; an unsafe snapshot is never removed. Booleans are not integers. A valid reading stores only `used`, `window`, whole `percent` (integer floor), UTC `measured`, short numeric host `version` (sanitized to `unknown` if unsupported) and the explicit `host` (`claude` by default). Window is a positive integer up to 10 million; used is between zero and ten windows, matching the steward's upper bound. No output by default; `--line` emits one ASCII line such as `ctx 62%` only after a successful write. Record always exits 0 and errors disclose no input.
 - The path is `<data root>/state/context/<sha256(session_id)[:16]>.json`, mode 0600 in a 0700 folder. `data_root.py` resolves from the account database and validates the pointer, owner and ancestors; environment variables cannot redirect trusted state. Descriptor-relative no-follow operations reject symlinks, wrong owners, non-regular files, extra hard links and non-private snapshots. A directory lock serializes scan/evict/write. At most 20 snapshots remain, oldest by mtime evicted first, before the atomic write so the cap also holds if a write fails. `data_root.atomic_write` fsyncs and replaces a temporary 0600 file; failed replacement leaves the target intact and removes its temporary file. An eviction can remain after a later write failure.
@@ -41,7 +41,7 @@ Vendor docs researched 07/11/2026 document SessionStart `source: compact` as the
 
 ## 3. Session hygiene
 
-`session-hygiene` replaces the absolute claim that an agent cannot see its own percentage with the conditional reader/check procedure. A correctly identified fresh snapshot supplies real numbers to the steward; without it the agent says that a reading is unavailable. About 60% remains advisory, not an enforced trigger. The user chooses the threshold, the host enforces its native threshold, the steward script chooses its action, the judge can inform an uncertain boundary, and the agent writes the handover and requests compaction. No new autonomous command or blocking hook is added.
+`tidy` replaces the absolute claim that an agent cannot see its own percentage with the conditional reader/check procedure. A correctly identified fresh snapshot supplies real numbers to the steward; without it the agent says that a reading is unavailable. About 60% remains advisory, not an enforced trigger. The user chooses the threshold, the host enforces its native threshold, the steward script chooses its action, the judge can inform an uncertain boundary, and the agent writes the handover and requests compaction. No new autonomous command or blocking hook is added.
 
 ## 4. Setup
 

@@ -13,7 +13,7 @@ ADVISORY = "**Advisory (agent judgment):** " + RULE
 # These skills ask or offer choices without mentioning the native question tool.
 OTHER_ASKING_SKILLS = {
     "advisor", "commit-messages", "handoff", "plugin-packaging",
-    "session-hygiene", "checks", "versioning",
+    "tidy", "checks", "versioning",
 }
 
 

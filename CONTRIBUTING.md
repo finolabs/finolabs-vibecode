@@ -42,7 +42,7 @@ A host is an agent that installs the plugin or takes delegated work (today Claud
 2. **Install and setup**: the README sections for people and for AI agents, with the install, verify and setup commands, each checked on a real install.
 3. **Session start**: the host's way of loading the coding-router reminder (a hook, an always-on rule such as `rules/AGENTS.md`).
 4. **Delegation**: a section in `delegate`'s `references/agents.md` (headless command, read-only mode, end of run, quota, outcome mapping), a column in `references/models.md` with its recheck command, a section in `references/host-template.md`, and the host's name in the `AGENTS` and `COORDINATORS` lists of `skills/delegate/scripts/ledger.py` (with a test).
-5. **Per-host references**: instruction files in `setup/references/instructions/hosts.md`, titles in `session-hygiene/references/titles.md`, review instruments in `review-gate` and `security-review-gate`.
+5. **Per-host references**: instruction files in `setup/references/instructions/hosts.md`, titles in `tidy/references/titles.md`, review instruments in `review-gate` and `security-review-gate`.
 6. **Evidence**: a trigger run on the new host for a few skills, recorded in the pull request, and the facts dated where the file keeps a "checked" date.
 
 ## Releasing

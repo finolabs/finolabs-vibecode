@@ -105,6 +105,8 @@ class NotesSchemaTest(unittest.TestCase):
             '0.2.5/afk-goal': ('info', None, None),
             '0.2.5/main-checkout': ('info', None, None),
             '0.2.5/full-names': ('info', None, None),
+            '0.2.5/afk-section': ('setup', '/setup add afk', [state, 'afk-section']),
+            '0.2.5/tidy-rename': ('info', None, None),
         }
         for ident, (kind, setup, check) in expected.items():
             with self.subTest(item=ident):
@@ -165,6 +167,22 @@ class NotesSchemaTest(unittest.TestCase):
             self.assertIn(phrase, labels['text'])
         for item in (store, parallel, settings, labels):
             self.assertNotIn('migrate', item['text'])
+
+    def test_025_names_the_afk_section_step_and_the_tidy_rename(self):
+        items = {item['id']: item for entry in u.parse_notes(json.loads(NOTES.read_text()))
+                 for item in entry['items']}
+        afk = items['0.2.5/afk-section']
+        # Modeled on checks-store: the old section is not read, setup runs again, the user deletes it by hand.
+        self.assertEqual((afk['kind'], afk['setup'], afk['check']),
+                         ('setup', '/setup add afk', ['skills/setup/scripts/upgrade_state.py', 'afk-section']))
+        self.assertTrue((ROOT / afk['check'][0]).is_file())
+        for phrase in ('/afk', '## Autopilot', 'host.md', 'no longer read', '/setup add afk', 'by hand'):
+            self.assertIn(phrase, afk['text'])
+        tidy = items['0.2.5/tidy-rename']
+        self.assertEqual(tidy['kind'], 'info')
+        self.assertNotIn('setup', tidy)
+        for phrase in ('session-hygiene', 'tidy', 'typed', 'instruction files', '/setup check'):
+            self.assertIn(phrase, tidy['text'])
 
     def test_release_version_needs_an_entry(self):
         notes = u.parse_notes(json.loads(NOTES.read_text()))

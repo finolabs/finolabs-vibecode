@@ -11,7 +11,7 @@ import sys
 
 MESSAGE = (b'{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny",'
            b'"permissionDecisionReason":"The user is away under an active away mandate: do not ask the user; '
-           b'follow autopilot \\"Decide\\"."}}\n')
+           b'follow afk \\"Decide\\"."}}\n')
 
 
 def main():

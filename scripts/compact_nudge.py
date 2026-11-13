@@ -28,7 +28,7 @@ TOKENS = (1000, 10000000)
 USAGE = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
 FOLDER = "state/compaction-nudge"
 MESSAGE = ("Context is at {}% of this session's compaction threshold. Before the host compacts, run "
-           "session-hygiene now: save the handover, write back decisions and lessons, note background runs "
+           "tidy now: save the handover, write back decisions and lessons, note background runs "
            "and open pull requests, then offer to compact or start a fresh session.\n")
 
 

@@ -1,5 +1,5 @@
 ---
-name: trigger-session-hygiene-knowledge
+name: trigger-tidy-knowledge
 tags: [trigger]
 runs: 3
 max_turns: 5

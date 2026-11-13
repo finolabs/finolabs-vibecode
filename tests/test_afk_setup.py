@@ -1,4 +1,4 @@
-"""Autopilot setup acceptance with synthetic accounts and the real lease reader."""
+"""afk setup acceptance with synthetic accounts and the real lease reader."""
 import contextlib
 import importlib.util
 import io
@@ -13,7 +13,7 @@ from unittest import mock
 from tests.data_root_fixture import account
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / 'skills/setup/scripts/autopilot_setup.py'
+SCRIPT = ROOT / 'skills/setup/scripts/afk_setup.py'
 
 
 def load(name, path):
@@ -23,7 +23,7 @@ def load(name, path):
     return module
 
 
-class AutopilotSetupTest(unittest.TestCase):
+class AfkSetupTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -51,8 +51,8 @@ class AutopilotSetupTest(unittest.TestCase):
         self.plan = self.host.parent / 'state/autopilot-setup/preview.json'
 
     def cli(self, *args):
-        self.assertTrue(SCRIPT.is_file(), 'Autopilot setup preview/apply writer is missing')
-        writer = load('autopilot_setup_test', SCRIPT)
+        self.assertTrue(SCRIPT.is_file(), 'afk setup preview/apply writer is missing')
+        writer = load('afk_setup_test', SCRIPT)
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = writer.main(list(args))
@@ -61,7 +61,8 @@ class AutopilotSetupTest(unittest.TestCase):
     def preview(self, *args):
         code, out, err = self.cli('preview', '--merge', 'no', *args)
         self.assertEqual(code, 0, err)
-        self.assertIn('## Autopilot', out)
+        self.assertIn('## afk', out)
+        self.assertNotIn('## Autopilot', out)
         return out.split('Digest: ')[1].splitlines()[0]
 
     def apply(self, digest):
@@ -73,7 +74,7 @@ class AutopilotSetupTest(unittest.TestCase):
                 for p in self.home.rglob('*') if p.is_file()}
 
     def reader(self):
-        return load('autopilot_reader_test', ROOT / 'skills/delegate/scripts/autopilot.py')
+        return load('afk_reader_test', ROOT / 'skills/delegate/scripts/afk.py')
 
     def test_round_trip_defaults_and_preview_only(self):
         before = self.host.read_bytes()
@@ -89,9 +90,9 @@ class AutopilotSetupTest(unittest.TestCase):
         self.assertFalse(self.plan.exists())
 
     def test_explicit_values_round_trip_and_surrounding_bytes(self):
-        prefix = self.host.read_bytes() + b'```\r\n## Autopilot\r\nexample\r\n```\r\n'
+        prefix = self.host.read_bytes() + b'```\r\n## afk\r\nexample\r\n```\r\n'
         suffix = b'# Later\nlast line without newline'
-        self.host.write_bytes(prefix + b'## Autopilot\r\n- Merge: no\r\n\r\n' + suffix)
+        self.host.write_bytes(prefix + b'## afk\r\n- Merge: no\r\n\r\n' + suffix)
         digest = self.preview('--hosts', 'Codex', 'Antigravity', '--task-choice', 'listed',
                               '--push-and-pull-requests', 'no', '--merge', 'yes',
                               '--lease-hours', '24', '--max-runs', '10000',
@@ -108,6 +109,16 @@ class AutopilotSetupTest(unittest.TestCase):
             'Lease hours': 24, 'Max runs': 10000, 'Max runtime minutes': 1440,
             'Max actions per hour': 10000, 'Quota floor percent': 100})
 
+    def test_an_old_autopilot_section_is_left_for_the_user_and_afk_is_added(self):
+        old = b'## Autopilot\n- Merge: yes\n\n'
+        self.host.write_bytes(old)
+        self.apply(self.preview())
+        raw = self.host.read_bytes()
+        # The old section is neither read nor rewritten; the upgrade note asks the user to delete it.
+        self.assertTrue(raw.startswith(old))
+        self.assertEqual(raw.count(b'## afk\n'), 1)
+        self.assertEqual(self.reader().settings()['Merge'], 'no')
+
     def test_mismatch_and_missing_yes_write_nothing(self):
         digest = self.preview()
         for args in (('apply', '--yes', '--digest', '0' * 64),
@@ -123,7 +134,7 @@ class AutopilotSetupTest(unittest.TestCase):
         self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 1)
         self.assertEqual(self.snapshot(), before)
         digest = self.preview()
-        writer = load('autopilot_setup_clock', SCRIPT)
+        writer = load('afk_setup_clock', SCRIPT)
         with mock.patch.object(writer.time, 'time', return_value=0):
             self.assertEqual(self.cli('apply', '--yes', '--digest', digest)[0], 1)
         self.assertEqual(self.host.read_bytes(), before['.finolabs/vibecode/host.md'])
@@ -181,7 +192,7 @@ class AutopilotSetupTest(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
 
     def writer(self):
-        return load('autopilot_setup_names', SCRIPT)
+        return load('afk_setup_names', SCRIPT)
 
     def test_category_names_match_the_reader(self):
         writer, reader = self.writer(), self.reader()
@@ -249,7 +260,7 @@ class AutopilotSetupTest(unittest.TestCase):
         self.assertEqual(self.cli('preview', '--merge', 'no', '--excerpts-leave-the-machine', 'maybe')[0], 1)
 
     def test_ambiguous_host_refused_and_missing_host_created(self):
-        for raw in (b'## Autopilot\n- Merge: no\n## Autopilot\n', b'```\nunclosed\n'):
+        for raw in (b'## afk\n- Merge: no\n## afk\n', b'```\nunclosed\n'):
             self.host.write_bytes(raw)
             self.assertEqual(self.cli('preview', '--merge', 'no')[0], 1)
             self.assertEqual(self.host.read_bytes(), raw)

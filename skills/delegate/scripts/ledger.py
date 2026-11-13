@@ -393,7 +393,7 @@ def log_facts(ident, current):
     except FileNotFoundError:
         return None  # a preview never creates the run-log folder
     with log_scan.folder_descriptor(root) as folder:
-        # Logs are named `<id>-<slug>` (session-hygiene "Titles"); the bare `<id>.log` is accepted too.
+        # Logs are named `<id>-<slug>` (tidy "Titles"); the bare `<id>.log` is accepted too.
         names = sorted(n for n in os.listdir(folder)
                        if n == ident + ".log" or (n.startswith(ident + "-") and n.endswith(".log")))
         if not names:

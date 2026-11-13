@@ -45,7 +45,7 @@ usage events; purge removes them. The refresh builders enforce these bounds and 
 
 Since 0.2.5 a repository's settings (`ledger`, `tasks`, `parallel`, `parallel-caps`, the display
 `label` and the optional `autopilot` object: the repository's own away choices for task choice, push and pull
-requests, merge, trusted authors and extra top-level code folders, which `autopilot.py check` reads in memory and never
+requests, merge, trusted authors and extra top-level code folders, which `afk.py check` reads in memory and never
 stores) live in that repository's own folder: `settings.json` in `.finolabs/vibecode/` of the main
 checkout (a linked worktree shares it only in the canonical, reciprocal, owner-checked layout
 `<main>/.git/worktrees/<name>`). The file never leaves
@@ -218,8 +218,8 @@ original without a backup; an idle open descriptor alone is not detected and a c
 provider copies cannot be undone. HOME remains reachable: the protection is environment-only for headless
 command forms, excluding interactive, desktop-app sessions and in-session subagents. Private HOME is deferred.
 
-## Autopilot lease and log
+## afk lease and log
 
-When you run autopilot's `start`, the plugin writes `state/autopilot/lease.json` and, as actions are classified or logged, `state/autopilot/log.jsonl` in the private state folder of the data root (folders 0700, files 0600; never in a repository). The lease holds a lease id, its start and end times, a hash of the setup it applied, and counters of runs, runtime minutes and actions per hour. The log holds, per entry, the time, a tier, a fixed kind word, task, run and pull request ids, and a note of at most 500 characters from which control characters, paths, command text and secret-looking values are removed. Command lines and file paths given to `check` are classified in memory and never stored. This is a local record kept apart from the usage metrics and their consent: it is never in the events, never sent anywhere by the plugin, entries older than 30 days are pruned when the log is written, and the file is capped at 8 MiB. `stop` deletes the lease; delete the folder to remove the log. The advisor and Jev calls of the full design are not part of this release.
+When you run afk's `start`, the plugin writes `state/autopilot/lease.json` and, as actions are classified or logged, `state/autopilot/log.jsonl` in the private state folder of the data root (folders 0700, files 0600; never in a repository). The lease holds a lease id, its start and end times, a hash of the setup it applied, and counters of runs, runtime minutes and actions per hour. The log holds, per entry, the time, a tier, a fixed kind word, task, run and pull request ids, and a note of at most 500 characters from which control characters, paths, command text and secret-looking values are removed. Command lines and file paths given to `check` are classified in memory and never stored. This is a local record kept apart from the usage metrics and their consent: it is never in the events, never sent anywhere by the plugin, entries older than 30 days are pruned when the log is written, and the file is capped at 8 MiB. `stop` deletes the lease; delete the folder to remove the log. The advisor and Jev calls of the full design are not part of this release.
 
 When you run `pause`, the plugin writes `state/pause.json` in the same private state folder (folder 0700, file 0600; never in a repository). It holds a start time, a kind (`restart`, `shutdown` or `none`) and a deadline time, nothing else: no path, command or session text. `resume` deletes it, and a marker older than 24 hours is ignored. It is never in the events and is never sent anywhere by the plugin.

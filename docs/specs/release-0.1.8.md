@@ -149,7 +149,7 @@ Acceptance: the router line exists and names its enforcer; a unit test checks th
 
 Problem: when an agent starts a background task (a headless Codex or Antigravity run) or a reviewer or other subagent, the user cannot tell which agent is running or what it is doing.
 
-Rule, in `session-hygiene` "Titles" with a per-host paragraph in `references/titles.md`: every background run or agent gets, at the moment it starts, the label `<runner>: <project> <scope> <activity>`, where the runner is the agent family with a short model name (`codex sol`, `agy flash`, `claude sonnet`) or, for a reviewer or subagent, its role (`code review`, `sec review`). The same label goes in the host's name or description field, the ledger task, the log file names and the dispatch line. `delegate`, `review-gate` and `handoff` point to it. Advisory (agent judgment); no hook renames a tool call. Not in the user contract: the rule needs per-host fields and the contract is loaded every turn.
+Rule, in `tidy` (then `session-hygiene`) "Titles" with a per-host paragraph in `references/titles.md`: every background run or agent gets, at the moment it starts, the label `<runner>: <project> <scope> <activity>`, where the runner is the agent family with a short model name (`codex sol`, `agy flash`, `claude sonnet`) or, for a reviewer or subagent, its role (`code review`, `sec review`). The same label goes in the host's name or description field, the ledger task, the log file names and the dispatch line. `delegate`, `review-gate` and `handoff` point to it. Advisory (agent judgment); no hook renames a tool call. Not in the user contract: the rule needs per-host fields and the contract is loaded every turn.
 
 Acceptance: a unit test pins the rule and its enforcer in `session-hygiene` and the pointers in the three skills.
 
@@ -287,7 +287,7 @@ Asked of the owner through the native question form on 2026-11-05; each took the
 2. **Restore point trigger:** user-invoked only; no automatic snapshot.
 3. **`auto` gate:** a recorded decision is a ledger `start` line or a keep receipt; blocks are not counted in usage metrics.
 4. **Native form sweep:** the remaining text questions move to the native form (follow-up to package 2).
-5. **Package 10 (run names):** added at the owner's go on 2026-11-05, after a proposal that the rule live in `session-hygiene` "Titles" and not in the user contract.
+5. **Package 10 (run names):** added at the owner's go on 2026-11-05, after a proposal that the rule live in `tidy` (then `session-hygiene`) "Titles" and not in the user contract.
 6. **Package 11 (instruction standard):** added at the owner's request on 2026-11-05. Scope full (guidance and script checks); lengths warn at 150 lines and fail at 200, plus the Codex and Antigravity byte limits; non-script items are a checklist with stated criteria, graded by the route judge (Jev through `typesafe-ai`) first and by the agent as fallback, with `/doctor prompt-audit` suggested on Claude Code.
 7. **Package 12 (judge metrics):** added at the owner's request on 2026-11-05; in 0.1.8 as its own package, receipt plus dashboard group, metadata only.
 8. **Package 13 (quota probe):** added at the owner's request on 2026-11-05. Opt-in, every 4 hours, started by existing hooks as a detached worker, for all three hosts and every listed Claude Code install (a work install included), commands verified on 2026-11-05, with a scoped second network exception in `CLAUDE.md`.

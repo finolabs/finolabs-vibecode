@@ -30,10 +30,10 @@ OTHER_NAMES = {"fnl-review", "fnl-router"}  # the review and router markers in p
 # Spell retired names only in the changelog, not in this source.
 RETIRED = {"fnl-" + old: new for old, new in (
     ("committee", "advisor"), ("coordinator-sessions", "delegate"),
-    ("knowledge", "session-hygiene"))}
+    ("knowledge", "tidy"))}
 # Historical specs and released entries retain these names; current callers use the replacements.
 RETIRED_AGENTS = {"fnl-" + old: new for old, new in (
-    ("verifier", "verification"), ("steward", "session-hygiene"))}
+    ("verifier", "verification"), ("steward", "tidy"))}
 # Setup commands were folded into one skill in 0.2.0. Keep the original
 # decisions in these specs; current surfaces must use the replacement commands.
 SETUP_RETIRED = {"fnl-" + old: "/setup " + new for old, new in (

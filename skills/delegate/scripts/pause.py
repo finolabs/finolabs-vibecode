@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pause new work before the machine restarts or shuts down, and report what recorded work remains.
 
-`start [restart|shutdown] [--in MINUTES]` writes the pause marker and ends an active autopilot lease; `status
+`start [restart|shutdown] [--in MINUTES]` writes the pause marker and ends an active afk lease; `status
 [--checkpoint SESSION]...` reports the marker, the open ledger dispatches, the heavy-job facts, the checkpoints and
 a verdict about recorded work only; `resume` removes the marker. The marker is `pause.json` in the private state
 folder of the canonical data root and holds a start time, a kind and a deadline, nothing else. While it is active
@@ -93,20 +93,20 @@ def write_marker(kind, deadline):
         dr.atomic_write(folder, MARKER, raw)
 
 
-def end_autopilot():
-    """Say whether an active autopilot lease was ended, through autopilot's own stop logic."""
+def end_afk():
+    """Say whether an active afk lease was ended, through afk's own stop logic."""
     try:
-        import autopilot
+        import afk
         import contextlib
         import io
-        with autopilot.private_folder() as folder:
-            existed = autopilot.read_private(folder, 'lease.json') is not None
+        with afk.private_folder() as folder:
+            existed = afk.read_private(folder, 'lease.json') is not None
             if existed:
                 with contextlib.redirect_stdout(io.StringIO()):
-                    autopilot.stop(folder)
-        return 'autopilot lease ended' if existed else 'no autopilot lease'
+                    afk.stop(folder)
+        return 'afk lease ended' if existed else 'no afk lease'
     except Exception:
-        return 'autopilot lease not checked'
+        return 'afk lease not checked'
 
 
 def minutes_since(stamp):
@@ -330,10 +330,10 @@ def start(kind, minutes):
     previous, _ = marker_state()
     deadline = now() + minutes * 60 if minutes else 0
     write_marker(kind, deadline)
-    autopilot = end_autopilot()
+    lease = end_afk()
     print('pause started (%s)%s; %s%s; nothing is started or stopped' % (
         kind, ', deadline in %d min' % minutes if minutes else ', no deadline',
-        autopilot, '; replaced an earlier marker' if previous != 'missing' else ''))
+        lease,'; replaced an earlier marker' if previous != 'missing' else ''))
 
 
 def resume():
@@ -352,7 +352,7 @@ def resume():
         print('open dispatches: %d; these may have ended without a finish line' % len(rows))
         for row in rows:
             print(dispatch_line(row))
-    print('nothing is restarted; autopilot is not restarted')
+    print('nothing is restarted; afk is not restarted')
 
 
 def minutes_type(text):

@@ -370,7 +370,7 @@ class VerificationTest(unittest.TestCase):
                     capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(self.receipt()['criteria'][0]['answer'], 'yes')
-        for name, skills in [('judge.py', ['delegate', 'checks', 'session-hygiene']),
+        for name, skills in [('judge.py', ['delegate', 'checks', 'tidy']),
                              ('verify_claim.py', ['checks'])]:
             for skill in skills:
                 self.assertEqual((ROOT / 'skills' / skill / 'scripts' / name).read_bytes(),

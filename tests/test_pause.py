@@ -174,27 +174,27 @@ class StartTest(Base):
         self.assertIn('replaced', out)
         self.assertEqual(json.loads((self.state / 'pause.json').read_text())['kind'], 'shutdown')
 
-    def test_start_ends_an_active_autopilot_lease(self):
-        import autopilot
+    def test_start_ends_an_active_afk_lease(self):
+        import afk
         calls = []
-        with mock.patch.object(autopilot, 'stop', lambda folder: calls.append(folder)):
+        with mock.patch.object(afk, 'stop', lambda folder: calls.append(folder)):
             self.cli('start')
             self.assertEqual(calls, [])  # no lease: nothing to end, and that is fine
-            with mock.patch.object(autopilot, 'read_private', lambda folder, name, cap=0: b'{}'):
+            with mock.patch.object(afk, 'read_private', lambda folder, name, cap=0: b'{}'):
                 _, out, _ = self.cli('start')
         self.assertEqual(len(calls), 1)
         self.assertIn('lease ended', out)
 
-    def test_start_survives_an_autopilot_failure_and_says_so(self):
-        import autopilot
+    def test_start_survives_an_afk_failure_and_says_so(self):
+        import afk
         stop = mock.Mock(side_effect=OSError('x'))
-        with mock.patch.object(autopilot, 'read_private', lambda folder, name, cap=0: b'{}'), \
-                mock.patch.object(autopilot, 'stop', stop):
+        with mock.patch.object(afk, 'read_private', lambda folder, name, cap=0: b'{}'), \
+                mock.patch.object(afk, 'stop', stop):
             code, out, _ = self.cli('start')
         self.assertEqual(code, 0)
         stop.assert_called_once()
         self.assertTrue(pause.paused())
-        self.assertIn('autopilot lease not checked', out)
+        self.assertIn('afk lease not checked', out)
 
 
 class StatusTest(Base):
@@ -429,9 +429,9 @@ class ResumeTest(Base):
         self.assertNotIn(handover_state.filename('session-aaaaaaaa')[:16], out)
         self.assertNotIn('aaaaaaaa', out)
 
-    def test_resume_does_not_restart_autopilot_or_start_anything(self):
-        import autopilot
-        with mock.patch.object(autopilot, 'start', side_effect=AssertionError), \
+    def test_resume_does_not_restart_afk_or_start_anything(self):
+        import afk
+        with mock.patch.object(afk, 'start', side_effect=AssertionError), \
                 mock.patch.object(heavy, 'main', side_effect=AssertionError):
             self.assertEqual(self.cli('resume')[0], 0)
 

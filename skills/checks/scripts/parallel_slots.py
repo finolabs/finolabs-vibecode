@@ -27,7 +27,7 @@ DEFAULT_LIMIT = 3
 INSTRUCTION_FILES = ('CLAUDE.MD', 'CLAUDE.LOCAL.MD', 'AGENTS.MD', 'AGENTS.OVERRIDE.MD', 'GEMINI.MD',
                      'COPILOT-INSTRUCTIONS.MD', 'CONVENTIONS.MD', '.CURSORRULES', '.WINDSURFRULES', '.CLINERULES')
 
-# Kept for heavy_run and autopilot, which read these names from this module.
+# Kept for heavy_run and afk, which read these names from this module.
 def host_section(text, title="Project progress"):
     """Return authoritative section bounds, ignoring fenced examples; ambiguity fails closed."""
     headings, fence, offset = [], None, 0

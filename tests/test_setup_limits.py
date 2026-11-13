@@ -56,9 +56,9 @@ EXTRA_APPROVALS = [
     ('May the agents merge pull requests while a lease is live?', REFS / "features" / "afk.md"),
     ('Save the shown away-session settings?', REFS / "features" / "afk.md"),
     ('Save these away settings for this repository?', REFS / "features" / "afk.md"),
-    ('Let the agents decide this kind of work while you are away?', REFS / "autopilot-decisions.md"),
+    ('Let the agents decide this kind of work while you are away?', REFS / "afk-decisions.md"),
     ('Let excerpts of your past decisions go to the judge or another AI provider when agents decide for you?',
-     REFS / "autopilot-decisions.md"),
+     REFS / "afk-decisions.md"),
     ("Start with only the essential setup questions?", SKILL / "SKILL.md"),
     ("Save only the notes shown about this setup?", REFS / "core.md"),
     ("Save the shown helper preferences and coding-guide setting?", REFS / "mode.md"),
@@ -178,7 +178,16 @@ class ConsentInventoryTests(unittest.TestCase):
                 for word in ('recommend', 'default', 'preselect'):
                     self.assertNotIn(word, extra_choices)
 
-    def test_autopilot_settings_are_separate_and_merge_is_last(self):
+    def test_setup_offers_afk_and_no_longer_add_autopilot(self):
+        for path in (SKILL / "SKILL.md", REFS / "menu.md", REFS / "features" / "afk.md"):
+            text = path.read_text()
+            self.assertNotIn("add autopilot", text, path.name)
+            self.assertNotIn("autopilot_setup.py", text, path.name)
+        feature = (REFS / "features" / "afk.md").read_text()
+        self.assertIn("/setup add afk", feature)
+        self.assertIn("Only the `## afk` section changes", feature)
+
+    def test_afk_settings_are_separate_and_merge_is_last(self):
         text = (REFS / "features/afk.md").read_text().split("## Project scope")[0]
         questions = re.findall(r'Ask(?: Merge last among the settings)?: "([^"\n]+)"', text)
         self.assertEqual(len(questions), 10)
@@ -190,7 +199,7 @@ class ConsentInventoryTests(unittest.TestCase):
         self.assertIn("This is your own decision", text)
         self.assertIn("There is no default for Merge", text)
 
-    def test_autopilot_project_scope_asks_five_keys_previews_and_writes_after_a_yes(self):
+    def test_afk_project_scope_asks_five_keys_previews_and_writes_after_a_yes(self):
         text = (REFS / "features/afk.md").read_text()
         self.assertIn("## Project scope", text)
         user, project = text.split("## Project scope")
@@ -208,11 +217,11 @@ class ConsentInventoryTests(unittest.TestCase):
         for word in ("Hosts", "Lease hours", "user scope only"):
             self.assertIn(word, project)
 
-    def test_autopilot_stop_table_marks_fixed_rows_and_risks(self):
+    def test_afk_stop_table_marks_fixed_rows_and_risks(self):
         feature = (REFS / "features/afk.md").read_text()
-        text = (REFS / "autopilot-decisions.md").read_text()
-        self.assertIn("(../autopilot-decisions.md)", feature)
-        self.assertLess(feature.index("autopilot-decisions.md"), feature.index("Ask Merge last among the settings"))
+        text = (REFS / "afk-decisions.md").read_text()
+        self.assertIn("(../afk-decisions.md)", feature)
+        self.assertLess(feature.index("afk-decisions.md"), feature.index("Ask Merge last among the settings"))
         rows = re.findall(r"^\| (?!Category)[^|]+\((?P<key>[A-Za-z ]+)\) \| (?P<start>[^|]+) \|(?P<risk>[^|]*)\|$", text, re.M)
         self.assertEqual([key for key, _, _ in rows], [
             "Production", "Real users and customer data", "Unrecoverable deletion", "Messages outside the repository",

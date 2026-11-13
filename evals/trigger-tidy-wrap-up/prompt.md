@@ -1,5 +1,5 @@
 ---
-name: trigger-session-hygiene-wrap-up
+name: trigger-tidy-wrap-up
 tags: [trigger]
 runs: 3
 max_turns: 5

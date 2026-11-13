@@ -33,8 +33,14 @@ class HelpMapTest(unittest.TestCase):
             self.assertIn(needed, rows[0])
 
     def test_new_skills_are_in_the_skill_table(self):
-        for name in ("help", "ask", "pause", "gtg", "afk", "shape"):
+        for name in ("help", "ask", "pause", "gtg", "afk", "shape", "tidy", "session-hygiene"):
             self.assertRegex(self.text, rf"(?m)^\| `{name}` \|")
+
+    def test_renamed_skills_use_their_new_names(self):
+        # autopilot became afk with no alias; session-hygiene became tidy and stays as an alias.
+        self.assertNotRegex(self.text, r"(?m)^\| `autopilot` \|")
+        self.assertNotIn("autopilot.py", self.text)
+        self.assertRegex(self.text, r"(?m)^\| `session-hygiene` \| Older name for `tidy`")
 
 
 if __name__ == "__main__":

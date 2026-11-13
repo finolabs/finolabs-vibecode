@@ -101,7 +101,7 @@ the data root).
 Antigravity is present: a separate consent question (neutral Yes and No, none
 preselected, through the host's native question tool), the preview, then apply.
 Advisory (agent judgment) that the question is asked and the preview shown; the
-installer enforces digest, expiry and file safety. `session-hygiene` "Context
+installer enforces digest, expiry and file safety. `tidy` "Context
 pressure" names the stop and its limits. `PRIVACY.md`: the section in `host.md`, the
 mark files (an integer per conversation, hashed key, local), nothing sent. README row.
 CHANGELOG `Unreleased`.

@@ -89,6 +89,21 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual((m.skill_name("fnl-status"), m.skill_name("status"), m.skill_name("fnl-x")),
                          ("status", "status", None))
 
+    def test_lines_stored_under_autopilot_or_session_hygiene_read_as_afk_and_tidy(self):
+        self.consent()
+        self.record()
+        good = json.loads(next(self.dir.glob("events-*.jsonl")).read_text().splitlines()[0])
+        for old, new in (("autopilot", "afk"), ("session-hygiene", "tidy"),
+                         ("fnl-autopilot", "afk"), ("fnl-session-hygiene", "tidy")):
+            with self.subTest(old=old):
+                self.assertTrue(m.valid_event({**good, "name": old}))
+                self.assertEqual(m.skill_name(old), new)
+        self.assertNotIn("autopilot", m.SKILLS)
+        self.assertNotIn("session-hygiene", m.SKILLS)
+        # A new line holds the current name.
+        self.assertTrue(self.record(name="session-hygiene"))
+        self.assertEqual(self.events()[-1]["name"], "tidy")
+
     def test_an_invalid_event_is_dropped_and_counted(self):
         self.consent()
         bad = [("skill", {"name": "other-skill"}), ("skill", {"name": "fnl-x", "extra": 1}), ("skill", {}),

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Preview and apply only the canonical host's Autopilot section; start no lease."""
+"""Preview and apply only the canonical host's afk section; start no lease.
+
+An older `## Autopilot` section is neither read nor changed: the user deletes it by hand (upgrade note 0.2.5)."""
 try:
     import fcntl
 except ImportError:
@@ -74,13 +76,13 @@ def render(values):
     lines = ''.join(f'- {key}: {values[key]}\n' for key in keys)
     if values[TARGETS]:  # an empty list is no line: the reader's default is empty
         lines += f'- {TARGETS}: ' + '; '.join(values[TARGETS]) + '\n'
-    return '## Autopilot\n\n' + lines + '\n'
+    return '## afk\n\n' + lines + '\n'
 
 
 def transform(raw, values):
     text = raw.decode('utf-8') if raw is not None else ''
     headings, fence = sf.split(text)
-    indexes = [i for i, (_, title) in enumerate(headings) if title == '## Autopilot']
+    indexes = [i for i, (_, title) in enumerate(headings) if title == '## afk']
     if fence is not None or len(indexes) > 1:
         raise ValueError('ambiguous host section')
     newline = '\r\n' if '\r\n' in text else '\n'
@@ -169,7 +171,7 @@ def apply(value, yes):
                 cs.write_target(folder, 'host.md', result, mode)
         os.unlink('preview.json', dir_fd=state)
         os.fsync(state)
-    print('Autopilot section saved; no lease started.')
+    print('afk section saved; no lease started.')
 
 
 def main(argv=None):
@@ -202,7 +204,7 @@ def main(argv=None):
             apply(args.digest, args.yes)
         return 0
     except (OSError, ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
-        print('Autopilot setup refused: invalid arguments, unsafe or changed file, or stale preview; preview again.', file=sys.stderr)
+        print('afk setup refused: invalid arguments, unsafe or changed file, or stale preview; preview again.', file=sys.stderr)
         return 1
 
 

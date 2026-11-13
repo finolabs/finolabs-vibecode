@@ -382,10 +382,26 @@ class CheckupTest(unittest.TestCase):
         self.assertFalse([r for r in self.data()["setup"] if r["check"] == "old skill names"])
 
     def test_renamed_names_match_the_shipped_alias_folders(self):
-        aliases = {p.name for p in (ROOT / "skills").iterdir() if p.name.startswith("fnl-")}
-        self.assertEqual(set(checkup.RENAMED), aliases)
+        aliases = {p.parent.name for p in (ROOT / "skills").glob("fnl-*/SKILL.md")}
+        # The 0.2.5 renames add session-hygiene and autopilot; autopilot and fnl-autopilot ship no folder.
+        self.assertEqual(set(checkup.RENAMED), aliases | {"fnl-autopilot", "session-hygiene", "autopilot"})
+        self.assertEqual((checkup.RENAMED["session-hygiene"], checkup.RENAMED["fnl-session-hygiene"]), ("tidy", "tidy"))
+        self.assertEqual((checkup.RENAMED["autopilot"], checkup.RENAMED["fnl-autopilot"]), ("afk", "afk"))
         for old, new in checkup.RENAMED.items():
             self.assertTrue((ROOT / "skills" / new / "SKILL.md").is_file(), new)
+
+    def test_session_hygiene_and_autopilot_are_listed_with_tidy_and_afk(self):
+        self.write(self.repo / "AGENTS.md", "Invoke session-hygiene, then fnl-session-hygiene.\nRun /autopilot start.\n")
+        row = self.setup_item("old skill names")
+        self.assertEqual(row["status"], "missing")
+        for pair in ("session-hygiene -> tidy", "fnl-session-hygiene -> tidy", "autopilot -> afk"):
+            self.assertIn(pair, row["reason"])
+        self.assertIn("autopilot no longer loads at all", row["reason"])
+        rows = {r["reason"] for r in self.instruction_rows("I14") if r["pattern"] == "old-skill-name"}
+        self.assertEqual(rows, {"session-hygiene: use tidy", "fnl-session-hygiene: use tidy", "autopilot: use afk"})
+        # tidy and afk themselves are not old names.
+        self.write(self.repo / "AGENTS.md", "Invoke tidy; type /afk start.\n")
+        self.assertFalse([r for r in self.data()["setup"] if r["check"] == "old skill names"])
 
     def test_delegation_never_set_up_is_reported_not_failed(self):
         config = self.home / ".finolabs/vibecode/host.md"

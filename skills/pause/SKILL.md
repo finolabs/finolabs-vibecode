@@ -14,7 +14,7 @@ Dependency: `delegate`. Resolve <pause> to `<delegate folder>/scripts/pause.py` 
 ## Start
 
 1. Run only on the user's invocation (host setting `disable-model-invocation`). With no argument, treat it as `start` (advisory (agent judgment)).
-2. Run `python3 -I <pause> start [restart|shutdown] [--in <minutes>]`. `--in` is the time left before the machine goes down, as the user said it (script: integer 1 to 1440). The script writes the marker, ends an active autopilot lease and starts nothing.
+2. Run `python3 -I <pause> start [restart|shutdown] [--in <minutes>]`. `--in` is the time left before the machine goes down, as the user said it (script: integer 1 to 1440). The script writes the marker, ends an active afk lease and starts nothing.
 3. From then on start no delegated run and no heavy job (advisory (agent judgment)). `heavy_run.py` refuses a new command with exit 77 while the marker is active (script); a missing, damaged or older-than-24-hours marker never blocks it.
 
 ## Drain and checkpoint
@@ -27,6 +27,6 @@ Dependency: `delegate`. Resolve <pause> to `<delegate folder>/scripts/pause.py` 
 
 ## Resume
 
-9. After the restart, on the user's `resume`, run `python3 -I <pause> resume`. It removes the marker, counts handovers still within their lifetime and lists open dispatches that may have ended without a finish line. It starts nothing and does not restart autopilot (script). Read the handovers before continuing (advisory (agent judgment)).
+9. After the restart, on the user's `resume`, run `python3 -I <pause> resume`. It removes the marker, counts handovers still within their lifetime and lists open dispatches that may have ended without a finish line. It starts nothing and does not restart afk (script). Read the handovers before continuing (advisory (agent judgment)).
 
 `status` alone, at any time, only reports; it changes nothing.

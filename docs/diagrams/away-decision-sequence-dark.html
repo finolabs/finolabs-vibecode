@@ -17,7 +17,7 @@ svg{width:100%;min-width:900px;display:block}
 <p class="sub">During an away lease the question gate denies the question tool. The host climbs the ladder (a recorded rule, Jev at 0.8, an advisor of another family, its own choice), checks twice against what must stop, records every attempt, and on your return asks you to keep or reverse each decision.</p>
 <svg viewBox="0 0 1280 1100" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="away-decision-sequence-dark-title away-decision-sequence-dark-desc">
 <title id="away-decision-sequence-dark-title">A decision while you are away</title>
-<desc id="away-decision-sequence-dark-desc">Sequence diagram across six lanes: the host agent following autopilot Decide under a live lease, the question gate (away_gate_hook.py, Claude Code only), autopilot.py and the ledger, Jev through judge.py, the advisor in the advisor choose mode of another family, and you. The gate denies AskUserQuestion during the lease and appends a question_denied line. The host frames two to six closed options and a goal anchor, runs the first check with autopilot.py check against Where it must stop, and parks on a match. It then climbs the ladder and stops at the first rung that settles: a recorded rule; Jev through judge.py at the away-decision site, settling when the top option reaches probability 0.8, after autopilot.py packet-check screens the precedent packet; one read-only advisor run that returns one option or none; and finally the host's own choice for the goal anchor. A second check runs on the chosen action, which parks on a match and acts only on Tier 1, and every attempt is recorded with autopilot.py log. On return the host lists the lease's decisions, you mark each kept or reversed, recorded with autopilot.py review, and a reversal goes to the knowledge base for the next packet.</desc>
+<desc id="away-decision-sequence-dark-desc">Sequence diagram across six lanes: the host agent following afk Decide under a live lease, the question gate (away_gate_hook.py, Claude Code only), afk.py and the ledger, Jev through judge.py, the advisor in the advisor choose mode of another family, and you. The gate denies AskUserQuestion during the lease and appends a question_denied line. The host frames two to six closed options and a goal anchor, runs the first check with afk.py check against Where it must stop, and parks on a match. It then climbs the ladder and stops at the first rung that settles: a recorded rule; Jev through judge.py at the away-decision site, settling when the top option reaches probability 0.8, after afk.py packet-check screens the precedent packet; one read-only advisor run that returns one option or none; and finally the host's own choice for the goal anchor. A second check runs on the chosen action, which parks on a match and acts only on Tier 1, and every attempt is recorded with afk.py log. On return the host lists the lease's decisions, you mark each kept or reversed, recorded with afk.py review, and a reversal goes to the knowledge base for the next packet.</desc>
 <defs>
 <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#BCBCD0"/></marker>
 <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#E5D2F4"/></marker>
@@ -34,7 +34,7 @@ svg{width:100%;min-width:900px;display:block}
 <rect x="60" y="46" width="38" height="12" rx="2" fill="none" stroke="#E5D2F4" stroke-opacity="0.5" stroke-width="0.8"/>
 <text x="79" y="55" fill="#E5D2F4" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">COORD</text>
 <text x="140" y="72" fill="#FFFFFF" font-size="13" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Host agent</text>
-<text x="140" y="86" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">autopilot "Decide"</text>
+<text x="140" y="86" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">afk "Decide"</text>
 <text x="140" y="98" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">under a live lease</text>
 <rect x="252" y="40" width="176" height="64" rx="8" fill="#050510"/>
 <rect x="252" y="40" width="176" height="64" rx="8" fill="#16162A" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
@@ -47,7 +47,7 @@ svg{width:100%;min-width:900px;display:block}
 <rect x="452" y="40" width="176" height="64" rx="8" fill="rgba(127,226,206,0.14)" stroke="#BFF0E3" stroke-width="1" stroke-opacity="0.75"/>
 <rect x="460" y="46" width="44" height="12" rx="2" fill="none" stroke="#BFF0E3" stroke-opacity="0.5" stroke-width="0.8"/>
 <text x="482" y="55" fill="#BFF0E3" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SCRIPT</text>
-<text x="540" y="72" fill="#FFFFFF" font-size="13" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">autopilot.py + ledger</text>
+<text x="540" y="72" fill="#FFFFFF" font-size="13" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">afk.py + ledger</text>
 <text x="540" y="86" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">check · packet-check</text>
 <text x="540" y="98" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">log · review · ledger lines</text>
 <rect x="652" y="40" width="176" height="64" rx="8" fill="#050510"/>
@@ -75,7 +75,7 @@ svg{width:100%;min-width:900px;display:block}
 <text x="240" y="151" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">1 AskUserQuestion</text>
 <path d="M340,198 L146,198" fill="none" stroke="#E5D2F4" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow-accent)"/>
 <rect x="145.5" y="182" width="189" height="12" fill="#050510"/>
-<text x="240" y="191" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">denied: follow autopilot "Decide"</text>
+<text x="240" y="191" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">denied: follow afk "Decide"</text>
 <path d="M340,238 L534,238" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="359.9" y="222" width="160.2" height="12" fill="#050510"/>
 <text x="440" y="231" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">question_denied line, time only</text>
@@ -84,7 +84,7 @@ svg{width:100%;min-width:900px;display:block}
 <text x="172" y="282" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">2 frame 2-6 closed options + goal anchor</text>
 <path d="M140,318 L534,318" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="207.1" y="302" width="265.8" height="12" fill="#050510"/>
-<text x="340" y="311" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">3 check 1: autopilot.py check vs "Where it must stop"</text>
+<text x="340" y="311" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">3 check 1: afk.py check vs "Where it must stop"</text>
 <path d="M540,358 L146,358" fill="none" stroke="#E5D2F4" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow-accent)"/>
 <rect x="214.3" y="342" width="251.4" height="12" fill="#050510"/>
 <text x="340" y="351" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">match → park, record rung park, tell the user once</text>
@@ -96,7 +96,7 @@ svg{width:100%;min-width:900px;display:block}
 <text x="172" y="410" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">4 rung rule: instructions, matrix, brief, precedent</text>
 <path d="M140,446 L534,446" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="226.3" y="430" width="227.4" height="12" fill="#050510"/>
-<text x="340" y="439" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">5 autopilot.py packet-check, precedent packet</text>
+<text x="340" y="439" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">5 afk.py packet-check, precedent packet</text>
 <path d="M140,486 L734,486" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="326.3" y="470" width="227.4" height="12" fill="#050510"/>
 <text x="440" y="479" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">6 rung jev: judge.py ask --site away-decision</text>
@@ -117,13 +117,13 @@ svg{width:100%;min-width:900px;display:block}
 <text x="1236" y="677" fill="#8B8BA6" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.18em" text-anchor="end">ACT AND RECORD</text>
 <path d="M140,694 L534,694" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="214.3" y="678" width="251.4" height="12" fill="#050510"/>
-<text x="340" y="687" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">9 check 2: autopilot.py check on the chosen action</text>
+<text x="340" y="687" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">9 check 2: afk.py check on the chosen action</text>
 <path d="M540,734 L146,734" fill="none" stroke="#E5D2F4" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow-accent)"/>
 <rect x="257.5" y="718" width="165" height="12" fill="#050510"/>
 <text x="340" y="727" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">match → park; act only on Tier 1</text>
 <path d="M140,774 L534,774" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="209.5" y="758" width="261" height="12" fill="#050510"/>
-<text x="340" y="767" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">10 autopilot.py log --kind decision, one per attempt</text>
+<text x="340" y="767" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">10 afk.py log --kind decision, one per attempt</text>
 <line x1="40" y1="792" x2="1240" y2="792" stroke="rgba(255,255,255,0.12)" stroke-width="0.8"/>
 <rect x="1172.2" y="796" width="67.8" height="12" fill="#050510"/>
 <text x="1236" y="805" fill="#8B8BA6" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.18em" text-anchor="end">ON RETURN</text>
@@ -135,7 +135,7 @@ svg{width:100%;min-width:900px;display:block}
 <text x="640" y="855" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">kept or reversed, each decision</text>
 <path d="M140,902 L534,902" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="209.5" y="886" width="261" height="12" fill="#050510"/>
-<text x="340" y="895" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">12 autopilot.py review --decision &lt;id&gt; kept|reversed</text>
+<text x="340" y="895" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">12 afk.py review --decision &lt;id&gt; kept|reversed</text>
 <path d="M140,936 L162,936 L162,950 L146,950" fill="none" stroke="#BCBCD0" stroke-width="1.2" marker-end="url(#arrow)"/>
 <rect x="168" y="937" width="299.4" height="12" fill="#050510"/>
 <text x="172" y="946" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="start">13 a reversal goes to the knowledge base for the next packet</text>

@@ -11,7 +11,7 @@ def read(*parts):
 
 class RunNamesTest(unittest.TestCase):
     def test_titles_defines_the_run_name_and_its_enforcer(self):
-        text = " ".join(read("skills", "session-hygiene", "SKILL.md").split())
+        text = " ".join(read("skills", "tidy", "SKILL.md").split())
         self.assertIn("**Background runs and agents.**", text)
         self.assertIn(FORMAT, text)
         self.assertIn("The enforcer is agent judgment", text)
@@ -20,7 +20,7 @@ class RunNamesTest(unittest.TestCase):
     def test_dispatching_skills_point_to_it(self):
         for skill in ("delegate", "handoff", "review-gate"):
             text = read("skills", skill, "SKILL.md")
-            self.assertIn('`session-hygiene` "Titles"', text, skill)
+            self.assertIn('`tidy` "Titles"', text, skill)
 
 
 if __name__ == "__main__":

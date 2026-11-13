@@ -1,4 +1,4 @@
-> Retirement: `fnl-steward` is retired. Follow `session-hygiene` Context pressure and its `context_steward.py` script; this document retains the historical design.
+> Retirement: `fnl-steward` is retired. Follow `tidy` Context pressure and its `context_steward.py` script; this document retains the historical design.
 
 # Compaction steward (option B)
 
@@ -108,7 +108,7 @@ reply.
 
 ### 5. Skill text
 
-`session-hygiene` "Context pressure" names the steward, the `prepare`
+`tidy` "Context pressure" names the steward, the `prepare`
 action and who enforces what: the host enforces its threshold; the script
 decides the action; the model judges the boundary; the agent writing the
 handover is advisory. the load-sharing rule of `delegate` may call the steward for a

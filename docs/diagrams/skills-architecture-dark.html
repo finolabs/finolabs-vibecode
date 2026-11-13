@@ -24,7 +24,7 @@ svg { width: 100%; min-width: 900px; display: block; }
 <p class="sub">Setup is one skill with Quick, Advanced and subcommands. The hook points the agent at the router; the router hands work to delegation (parallel pools), gates, and session and git skills; the commands you type keep the machine's config and logs current, start an away lease or drain work before a restart.</p>
 <svg viewBox="0 0 1280 1152" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="skills-architecture-dark-title skills-architecture-dark-desc">
 <title id="skills-architecture-dark-title">How the finolabs-vibecode skills work together</title>
-<desc id="skills-architecture-dark-desc">Architecture of the skill set for release 0.2.4: a session-start hook reminds the agent to use the coding router, which hands work to delegation (route_pick over the assignment matrix, parallel pools, log_scan, the advisor's choose mode), gates (verify_claim with judge, review_route, post_review, merge_check), and session and git skills (context snapshots, fnl-navigator). The commands you type manage configuration and logs on the user machine: setup (with the assignment matrix in add delegation), status, restore-point, help (alias ask), update, afk (alias brb, loading autopilot) for the away lease and its decision ladder, and pause (alias gtg) to drain work before a restart.</desc>
+<desc id="skills-architecture-dark-desc">Architecture of the skill set for release 0.2.4: a session-start hook reminds the agent to use the coding router, which hands work to delegation (route_pick over the assignment matrix, parallel pools, log_scan, the advisor's choose mode), gates (verify_claim with judge, review_route, post_review, merge_check), and session and git skills (context snapshots, fnl-navigator). The commands you type manage configuration and logs on the user machine: setup (with the assignment matrix in add delegation), status, restore-point, help (alias ask), update, afk (alias brb) for the away lease and its decision ladder, and pause (alias gtg) to drain work before a restart.</desc>
 <defs>
 <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#BCBCD0"/></marker>
 <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#87D3E1"/></marker>
@@ -130,7 +130,7 @@ svg { width: 100%; min-width: 900px; display: block; }
 <text x="632.0" y="537" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">review_route.py · post_review.py</text>
 <rect x="864" y="252" width="352" height="72" rx="8" fill="#050510"/>
 <rect x="864" y="252" width="352" height="72" rx="8" fill="#16162A" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
-<text x="1040.0" y="284" fill="#FFFFFF" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">session-hygiene</text>
+<text x="1040.0" y="284" fill="#FFFFFF" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">tidy</text>
 <text x="1040.0" y="301" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">context snapshots (Claude/Agy) · steward</text>
 <text x="1040.0" y="314" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">titles · handovers · knowledge</text>
 <rect x="864" y="364" width="168" height="72" rx="8" fill="#050510"/>
@@ -212,7 +212,7 @@ svg { width: 100%; min-width: 900px; display: block; }
 <rect x="68" y="968" width="148" height="72" rx="8" fill="#050510"/>
 <rect x="68" y="968" width="148" height="72" rx="8" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
 <text x="142.0" y="1000" fill="#FFFFFF" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">afk</text>
-<text x="142.0" y="1015" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">→ autopilot lease</text>
+<text x="142.0" y="1015" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">→ afk lease</text>
 <text x="142.0" y="1027" fill="#BCBCD0" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">decision ladder · gate</text>
 <rect x="234" y="968" width="148" height="72" rx="8" fill="#050510"/>
 <rect x="234" y="968" width="148" height="72" rx="8" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="4,3"/>

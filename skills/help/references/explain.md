@@ -4,7 +4,7 @@ Read the shared rules in [map.md](map.md#rules).
 
 The user asks how a skill, agent or script works. Read its `SKILL.md`, `agents/<name>.md` or the script's header comment and argument definitions (read the file; run nothing), then answer in plain words: what it does, when it fires (typed by the user, or loaded by the agent), what it needs and writes, what it costs (quota, time, a confirmation), and what to type. Keep it to about six lines, or one short paragraph and a few bullets, then offer to go deeper on the part they care about (steps, cost, limits); leave the rest in the file. For a companion skill from another pack, say in one line what it is and that it is a separate project.
 
-For a committee, read `advisor`'s `references/committee.md`; for spec coordinator sessions, read `delegate`'s `references/coordinator-sessions.md`; for remembering or recalling, read `session-hygiene`'s `references/knowledge.md`. Saved handovers are in `session-hygiene` "Handover content". Read only the reference the question needs; explaining it runs nothing.
+For a committee, read `advisor`'s `references/committee.md`; for spec coordinator sessions, read `delegate`'s `references/coordinator-sessions.md`; for remembering or recalling, read `tidy`'s `references/knowledge.md`. Saved handovers are in `tidy` "Handover content". Read only the reference the question needs; explaining it runs nothing.
 
 When a question is about the plugin's own behaviour and the file does not say, say that it does not, and name the file you read.
 

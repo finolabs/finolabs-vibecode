@@ -27,7 +27,7 @@ BREAKS = [
      "skills/fnl-ask: alias does not load `help`"),
     ("skills/delegate/references/host-template.md", '"When an agent coordinates"', '"When coordinating"',
      '`agents.md` has no section "When coordinating"'),
-    ("skills/session-hygiene/SKILL.md", "(references/titles.md)", "(references/title.md)",
+    ("skills/tidy/SKILL.md", "(references/titles.md)", "(references/title.md)",
      "link target references/title.md does not exist"),
     ("skills/delegate/references/ledger.md", "--rework-rounds 1", "--rework 1",
      "ledger.py has no option --rework"),
@@ -216,7 +216,7 @@ class CheckReferencesTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_retired_agents_are_allowed_only_in_history_or_migration_mapping(self):
-        for suffix, replacement in (("verifier", "verification"), ("steward", "session-hygiene")):
+        for suffix, replacement in (("verifier", "verification"), ("steward", "tidy")):
             name, target = "fnl-" + suffix, replacement
             for relative in ("docs/specs/agent-roles.md", "docs/specs/compaction-steward.md",
                              "README.md", "skills/help/references/map.md", "skills/setup/SKILL.md"):

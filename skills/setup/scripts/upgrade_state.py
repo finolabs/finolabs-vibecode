@@ -92,12 +92,18 @@ def state(name):
         return DONE if "Assignment matrix" in titles else NOT_APPLICABLE
     if name == "levels":
         return DONE if {"Agent levels", "Assignment matrix"} & titles else OPEN
+    # Since 0.2.5 the away settings live in `## afk`; an older `## Autopilot` section is no longer read.
     if name == "afk":
-        return DONE if "Autopilot" in titles else OPEN
+        return DONE if "afk" in titles else OPEN
     if name == "afk-decisions":
         # 0.2.3 added the stop-or-decide questions, recorded with the separate excerpt answer.
-        return DONE if any(line.startswith("- Excerpts leave the machine:") for line in section(text, "Autopilot")) \
+        return DONE if any(line.startswith("- Excerpts leave the machine:") for line in section(text, "afk")) \
             else OPEN
+    if name == "afk-section":
+        # 0.2.5 renamed the section: open while the old heading remains, done once only `## afk` is there.
+        if "Autopilot" in titles:
+            return OPEN
+        return DONE if "afk" in titles else NOT_APPLICABLE
     return UNKNOWN
 
 
