@@ -464,7 +464,7 @@ class StateBlockTest(SyntheticStateTest):
             self.qp.write_json(folder, "limits.json", {"claude": stamp(current - hours(minutes=10))})
         self.assertIn("Quota (cached): claude-code limited, codex out 3%", self.state())
 
-    AWAY = 'Away mandate active: do not ask the user; follow afk "Decide"\n'
+    AWAY = 'Away mandate active: never ask or wait for the user; afk "Decide" settles it\n'
 
     def write_lease(self, start, expiry):
         self.write("state/autopilot/lease.json", json.dumps({

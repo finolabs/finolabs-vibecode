@@ -23,7 +23,7 @@ runpy.run_path(script, run_name="__main__")
 '''
 DENY = {"hookSpecificOutput": {
     "hookEventName": "PreToolUse", "permissionDecision": "deny",
-    "permissionDecisionReason": 'The user is away under an active away mandate: do not ask the user; follow afk "Decide".'}}
+    "permissionDecisionReason": 'The user is away under an active away mandate: do not ask or wait for the user in any form; settle the choice with afk "Decide" and park only stop work.'}}
 
 
 class AwayGateHookTest(unittest.TestCase):

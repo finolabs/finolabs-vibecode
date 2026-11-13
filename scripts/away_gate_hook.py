@@ -10,8 +10,8 @@ import signal
 import sys
 
 MESSAGE = (b'{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny",'
-           b'"permissionDecisionReason":"The user is away under an active away mandate: do not ask the user; '
-           b'follow afk \\"Decide\\"."}}\n')
+           b'"permissionDecisionReason":"The user is away under an active away mandate: do not ask or wait for the user '
+           b'in any form; settle the choice with afk \\"Decide\\" and park only stop work."}}\n')
 
 
 def main():

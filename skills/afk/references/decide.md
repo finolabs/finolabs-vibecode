@@ -1,6 +1,6 @@
 # Decide: the away ladder
 
-While a lease is live, a decision you would otherwise ask the user goes up this ladder and stops at the first rung that settles it. Do not ask the user: on Claude Code the away question gate denies the question tool during a lease (hook); on Codex and Antigravity this is advisory (agent judgment). Following the ladder is advisory (agent judgment): `afk.py` runs nothing, so it cannot climb it for you. It enforces the record, the packet caps and the command forms below.
+While a lease is live, a decision you would otherwise ask the user goes up this ladder and stops at the first rung that settles it. That is every hand-off to the user or owner, whatever its form: a question tool or text question, a wrap-up question, an open decision in a plan, or a skill step that says the owner decides, such as `review-gate`'s stop after two rework rounds. Never end a turn waiting for an answer: settle it here, or park only what the checks below park and carry on with other work. Do not ask the user: on Claude Code the away question gate denies the question tool during a lease (hook); on Codex and Antigravity this is advisory (agent judgment). Following the ladder is advisory (agent judgment): `afk.py` runs nothing, so it cannot climb it for you. It enforces the record, the packet caps and the command forms below.
 
 `<script>` is `afk.py` from `delegate`, as in `SKILL.md`.
 
