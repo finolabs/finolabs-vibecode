@@ -299,7 +299,7 @@ def show():
         return 3
     matrix = am.parse(text)
     if matrix.state == 'absent':
-        print('The assignment matrix is not set; the legacy Agent roles and Agent levels sections apply.')
+        print('The assignment matrix is not set: no review roles, judge host; Agent roles is no longer read, and migrate converts it.')
         return 0
     if matrix.state == 'invalid':
         for reason in matrix.problems:
