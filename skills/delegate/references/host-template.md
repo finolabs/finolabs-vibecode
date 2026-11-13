@@ -134,7 +134,7 @@ Each headless command below starts with `FNL_DISPATCH_ID=<ledger id>`, the id `l
 - First lint the brief with `brief_check.py` from `handoff`; set `umask 077` and create the private log folder as the common procedure in `agents.md` requires; the wrapper checks its mode. Headless command: FNL_DISPATCH_ID=<ledger id> python3 -I <delegate skill folder>/scripts/delegate_env.py --family claude -- <hard-cap wrapper> <claude path> -p "$(cat "$B")" --model <full model id> --effort <level> --output-format json --max-turns <n> --max-budget-usd <cap> --allowedTools "<tools the brief needs>" < /dev/null
 - Allowed models: <full model ids>.
 - How task sessions start on this host: <desktop app session tools | `claude -p` headless>.
-- Session title convention: <`<project> <scope>: <activity>` as `tidy` says, or this machine's own>.
+- Session title convention: <`<emoji> <project> <scope>: <activity>` as `tidy` says, or this machine's own>.
 
 ## Codex
 
