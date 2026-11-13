@@ -18,7 +18,7 @@ PRINCIPLE = "A file that says something is on is not proof that it runs."
 # Required sections; Effort preference, Delegation mode, Routing and ZCode are optional.
 HEADINGS = {"Limits", "Briefs folder", "Coordinators and reach", "Route judgment",
             "Dispatch marker", "Claude Code", "Codex", "Antigravity",
-            "Agent roles", "Review posting", "Delegate environment"}
+            "Review posting", "Delegate environment"}
 MAX_BYTES = 262144
 # Skills that lost the fnl- prefix in 0.2.5. The old names are user-only aliases: typed, they still load the
 # skill, but a file that tells the model to invoke one no longer does. Each maps to the name files must use.
@@ -309,17 +309,27 @@ def canonical_matrix():
     return "ok", assignments.parse(text), text
 
 
+def has_agent_roles(text):
+    """Retired 13/11/2026: only the assignment matrix sets roles and the judge; a fenced example does not count."""
+    from upgrade_state import headings
+    return "Agent roles" in headings(text)
+
+
 def assignments_evidence(status, matrix, text):
     """(status, reason) for the matrix state with fixed problem reasons only, never a value from the section;
     None when the canonical host config cannot be read."""
     from assignments import ROLES
     if status != "ok":
         return None
-    legacy = bool(re.search(r"^## Agent (?:roles|levels)[ \t]*\r?$", text, re.M))
-    ignored = "; legacy Agent roles or Agent levels present and ignored" if legacy else ""
+    # A leftover Agent roles section beside a matrix is named in the legacy host settings row instead.
+    legacy = bool(re.search(r"^## Agent levels[ \t]*\r?$", text, re.M))
+    ignored = "; legacy Agent levels present and ignored" if legacy else ""
     unset = "roles and judge unset, reviews not routed, judge falls to the host model" + ignored
     if matrix.state == "absent":
-        return "ok", "matrix absent; legacy Agent roles and Agent levels in use until 0.3.0"
+        if has_agent_roles(text):
+            return "missing", ("roles: missing; matrix absent and Agent roles no longer read, so roles are unset and "
+                               "the judge is host; /setup add delegation (migrate) converts it")
+        return "ok", "matrix absent; roles unset, judge host"
     if matrix.state != "valid":
         return "missing", "matrix invalid (" + ", ".join(matrix.problems) + "); " + unset
     if matrix.consent != "yes":
@@ -982,11 +992,16 @@ def project_tracking(text, root):
 def legacy_evidence(status, text):
     """Retired host.md sections and lines, by fixed name only; never a value from them."""
     from upgrade_state import legacy
+    import assignments
     found = legacy(text) if status == "ok" else []
+    fixes = ["set again per repository (/setup add project, /setup add checks), then delete by hand"] if found else []
+    # Without a matrix the host config row reports Agent roles with its conversion instead.
+    if status == "ok" and has_agent_roles(text) and assignments.parse(text).state != "absent":
+        found.append("## Agent roles beside the matrix")
+        fixes.append("the matrix holds roles and the judge, so delete Agent roles by hand")
     if not found:
         return []
-    return [item("legacy host settings", "missing", "no longer read: " + ", ".join(found) +
-                 "; set again per repository (/setup add project, /setup add checks), then delete by hand")]
+    return [item("legacy host settings", "missing", "no longer read: " + ", ".join(found) + "; " + "; ".join(fixes))]
 
 
 def quota_config():
@@ -1171,14 +1186,10 @@ def collect(payload=False):
         }[host]
         hosts[host].append(item("mode enforcement", "unverified", enforcement + "; auto is never 100%"))
     status, text = config_status, config_text
-    import assignments
-    matrix = assignments.parse(text)
-    # A present matrix replaces the legacy roles section, so that heading is no longer required.
-    required = HEADINGS - {"Agent roles"} if matrix.state != "absent" else HEADINGS
     present = set(re.findall(r"^## (.+?)\s*$", text, re.M))
-    missing = sorted(required - present)
-    # Roles and posting have their own setup step, so only the delegation template's sections show it ran.
-    never = not (HEADINGS - {"Agent roles", "Review posting"}) & present
+    missing = sorted(HEADINGS - present)
+    # Posting has its own setup step, so only the delegation template's sections show it ran.
+    never = not (HEADINGS - {"Review posting"}) & present
     host_config = item("host config", status if status != "ok" else ("missing" if missing and not never else "ok"),
                        ("delegation not set up; /setup add delegation sets it up" if never else
                         "required headings present; values not validated" if not missing else

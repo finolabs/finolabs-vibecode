@@ -22,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('package_judge', ROOT / 'scripts/judge.py')
 judge = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(judge)
+# The only opt-in: a valid matrix with its own consent names Jev.
+JEV_MATRIX = '## Assignment matrix\n\n- Consent: yes (2026-11-09)\n- Judge: jev\n- codex: levels 1-5; roles code-review\n'
 
 
 class JudgeTest(unittest.TestCase):
@@ -58,17 +60,15 @@ class JudgeTest(unittest.TestCase):
         self.assertEqual(judge.configured_judge(), 'host')
         path = self.home / '.finolabs/vibecode/host.md'
         path.parent.mkdir(parents=True)
-        for text, expected in [('## Agent roles\n- judge: jev\n', 'jev'),
-                               ('## Agent roles\n- navigator: codex\n', 'host'),
-                               ('## Agent roles\n- judge: jev\n- judge: host\n', 'host'),
-                               ('## Agent roles\n- judge: invalid\n', 'host'),
-                               ('## Agent roles\n- judge: jev\n- code review: codex\n', 'host'),
-                               ('## Agents on this machine\n| Codex | yes | synthetic |\n\n## Agent roles\n- judge: jev\n- code review: codex\n', 'jev'),
-                               # A zcode role is read when the inventory names ZCode, and refused when it does not.
-                               ('## Agents on this machine\n| ZCode | yes | synthetic |\n\n## Agent roles\n- judge: jev\n- navigator: zcode\n', 'jev'),
-                               ('## Agents on this machine\n| Codex | yes | synthetic |\n\n## Agent roles\n- judge: jev\n- navigator: zcode\n', 'host')]:
-            path.write_text(text)
-            self.assertEqual(judge.configured_judge(), expected)
+        # Retired 13/11/2026: a legacy `## Agent roles` section alone never chooses Jev, however well formed.
+        with mock.patch('urllib.request.build_opener') as opener:
+            for text in ('## Agent roles\n- judge: jev\n',
+                         '## Agents on this machine\n| Codex | yes | synthetic |\n\n## Agent roles\n- judge: jev\n- code review: codex\n',
+                         '## Agent roles\n- judge: invalid\n'):
+                with self.subTest(text=text):
+                    path.write_text(text)
+                    self.assertEqual(judge.configured_judge(), 'host')
+        opener.assert_not_called()
 
     def test_assignment_matrix_states_decide_the_judge(self):
         path = self.home / '.finolabs/vibecode/host.md'
@@ -77,7 +77,7 @@ class JudgeTest(unittest.TestCase):
         legacy_jev = '## Agent roles\n- judge: jev\n\n'
         legacy_host = '## Agent roles\n- judge: host\n\n'
         cases = [
-            ('absent, fenced example only', '```md\n' + matrix % 'host' + '```\n\n' + legacy_jev, 'jev'),
+            ('absent, fenced example only', '```md\n' + matrix % 'jev' + '```\n\n' + legacy_jev, 'host'),
             ('valid jev over legacy host', legacy_host + matrix % 'jev', 'jev'),
             ('valid host over legacy jev', legacy_jev + matrix % 'host', 'host'),
             ('invalid matrix, valid legacy', legacy_jev + matrix % 'jev' + '- gemini: levels 1-2\n', 'host'),
@@ -267,7 +267,7 @@ class JudgeTest(unittest.TestCase):
     def test_canonical_opt_in_disable_unresolved_and_invalid_pointer(self):
         host = self.home / '.finolabs/vibecode/host.md'
         host.parent.mkdir(parents=True)
-        host.write_text('## Agent roles\n- judge: jev\n')
+        host.write_text(JEV_MATRIX)
         self.assertEqual(judge.configured_judge(), 'jev')
         with mock.patch.dict(os.environ, {'FNL_JUDGE': 'off', 'TYPESAFE_API_KEY': 'synthetic-key'}, clear=True), \
                 mock.patch('urllib.request.build_opener') as opener:
@@ -284,7 +284,7 @@ class JudgeTest(unittest.TestCase):
             self.assertEqual(judge.configured_judge(), 'host')
         host.unlink()
         outside = Path(self.tmp.name) / 'other-host.md'
-        outside.write_text('## Agent roles\n- judge: jev\n')
+        outside.write_text(JEV_MATRIX)
         with mock.patch.dict(os.environ, {'ORCHESTRATION_HOST_CONFIG': str(outside),
                 'FNL_JUDGE': 'jev', 'TYPESAFE_API_KEY': 'synthetic-key'}, clear=True), \
                 mock.patch('urllib.request.build_opener') as opener:
@@ -364,7 +364,7 @@ class JudgeTest(unittest.TestCase):
     def test_cli_loopback_flag_and_failure_host_fallback(self):
         host = self.home / '.finolabs/vibecode/host.md'
         host.parent.mkdir(parents=True)
-        host.write_text('## Agent roles\n- judge: jev\n')
+        host.write_text(JEV_MATRIX)
         evidence = Path(self.tmp.name) / 'cli-evidence'
         evidence.write_text('added guard')
         answers = Path(self.tmp.name) / 'cli-answers'

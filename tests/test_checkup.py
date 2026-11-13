@@ -427,6 +427,24 @@ class CheckupTest(unittest.TestCase):
         self.write(config, "## Routing\n- on\n")
         self.assertFalse([r for r in self.data()["setup"] if r["check"] == "legacy host settings"])
 
+    def test_agent_roles_beside_a_matrix_is_named_in_the_legacy_row(self):
+        config = self.home / ".finolabs/vibecode/host.md"
+        matrix = "## Assignment matrix\n\n- Consent: yes (2026-11-09)\n- Judge: host\n- codex: levels 1-5; roles code-review\n"
+        self.write(config, "## Agent roles\n- judge: zq-value\n\n" + matrix)
+        row = self.setup_item("legacy host settings")
+        self.assertEqual(row, {"check": "legacy host settings", "status": "missing", "reason":
+                               "no longer read: ## Agent roles beside the matrix; the matrix holds roles and the judge, "
+                               "so delete Agent roles by hand"})
+        self.write(config, "## Checks\n- repo: zq-check\n\n## Agent roles\n- judge: jev\n\n" + matrix)
+        self.assertEqual(self.setup_item("legacy host settings")["reason"],
+                         "no longer read: ## Checks, ## Agent roles beside the matrix; set again per repository "
+                         "(/setup add project, /setup add checks), then delete by hand; the matrix holds roles and "
+                         "the judge, so delete Agent roles by hand")
+        self.assertNotIn("zq-", json.dumps(self.data()))
+        # Without a matrix the host config row reports it with the conversion, not this row.
+        self.write(config, "## Agent roles\n- judge: jev\n")
+        self.assertFalse([r for r in self.data()["setup"] if r["check"] == "legacy host settings"])
+
     def test_contradictory_compaction_settings_get_a_row_with_names_only(self):
         settings = self.home / ".claude/settings.json"
         self.write(settings, json.dumps({"autoCompactWindow": 400000, "theme": "zq-theme"}))
@@ -523,7 +541,7 @@ class CheckupTest(unittest.TestCase):
         row = self.setup_item("host config")
         self.assertEqual(row["status"], "missing")
         self.assertIn("Briefs folder", row["reason"])
-        self.assertIn("Agent roles", row["reason"])
+        self.assertNotIn("Agent roles", row["reason"])
         self.assertIn("Review posting", row["reason"])
         self.assertIn("Delegate environment", row["reason"])
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)))
@@ -531,7 +549,7 @@ class CheckupTest(unittest.TestCase):
         template = (ROOT / "skills/delegate/references/host-template.md").read_text()
         self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Heavy jobs", "ZCode"})
         self.assertNotIn("ZCode", checkup.HEADINGS)  # host configs written before ZCode stay complete
-        for heading in ("Agent roles", "Review posting", "Delegate environment"):
+        for heading in ("Review posting", "Delegate environment"):
             with self.subTest(heading=heading):
                 config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS - {heading})))
                 row = self.setup_item("host config")
@@ -547,14 +565,18 @@ class CheckupTest(unittest.TestCase):
         self.write(config, legacy)
         row = self.setup_item("host config")
         self.assertEqual(row, {"check": "host config", "status": "ok", "reason": present +
-                               "matrix absent; legacy Agent roles and Agent levels in use until 0.3.0"})
-        # Valid: the matrix alone decides, so a missing legacy roles heading is no longer required.
-        self.write(config, "\n".join("## " + h for h in sorted(checkup.HEADINGS - {"Agent roles"})) + "\n" + matrix)
+                               "matrix absent; roles unset, judge host"})
+        # Retired 13/11/2026: a legacy roles section without a matrix sets nothing and points to the conversion.
+        self.write(config, legacy + "## Agent roles\n- code review: codex\n- judge: jev\n")
+        self.assertEqual(self.setup_item("host config"), {"check": "host config", "status": "missing", "reason": present +
+                         "roles: missing; matrix absent and Agent roles no longer read, so roles are unset and the "
+                         "judge is host; /setup add delegation (migrate) converts it"})
+        self.write(config, legacy + matrix)
         self.assertEqual(self.setup_item("host config"), {"check": "host config", "status": "ok", "reason": present +
                          "matrix valid; 2 agents; judge jev; roles assigned: code-review, navigator"})
-        self.write(config, legacy + matrix)
+        self.write(config, legacy + "## Agent levels\n" + matrix)
         self.assertTrue(self.setup_item("host config")["reason"].endswith(
-            "; legacy Agent roles or Agent levels present and ignored"))
+            "; legacy Agent levels present and ignored"))
         # Invalid, even with a valid legacy section: unset, with each fixed reason and never the offending text.
         self.write(config, legacy + matrix + "- gemini: levels 1-2\n- codex: levels 1-5\n")
         row = self.setup_item("host config")
@@ -572,7 +594,7 @@ class CheckupTest(unittest.TestCase):
         template = (ROOT / "skills/delegate/references/host-template.md").read_text()
         headings = re.findall(r"^## (.+)$", template, re.M)
         expected = ['Delegation mode', 'Routing', 'Agents on this machine', 'Delegate environment',
-                    'Agent roles', 'Review posting', 'Quota probe', 'Limits', 'Heavy jobs',
+                    'Review posting', 'Quota probe', 'Limits', 'Heavy jobs',
                     'Effort preference', 'Briefs folder', 'Coordinators and reach', 'Route judgment',
                     'Dispatch marker', 'Claude Code', 'Codex', 'Antigravity', 'ZCode']
         self.assertEqual(headings, expected)
@@ -580,7 +602,8 @@ class CheckupTest(unittest.TestCase):
         config = template.replace('Instruction check: <on | off>', 'Instruction check: on')
         self.assertTrue(checkup.instruction_consent(config))
         route = template.split('## Route judgment\n', 1)[1].split('\n## ', 1)[0]
-        self.assertIn('canonical `## Agent roles`; this legacy heading retains instruction-check consent.', route)
+        self.assertIn('only in canonical `## Assignment matrix`', route)
+        self.assertIn('This legacy heading retains instruction-check consent.', route)
         environment = template.split('## Delegate environment\n', 1)[1].split('\n## ', 1)[0]
         self.assertIn('The `Delegate environment` section accepts only', environment)
 

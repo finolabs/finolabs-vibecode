@@ -42,13 +42,6 @@ Private HOME is an open owner decision and is not offered or created in this pac
 - antigravity: none
 - zcode: none
 
-## Agent roles
-
-- code review: antigravity
-- security review: codex
-- navigator: claude
-- judge: host
-
 ## Review posting
 
 - claude: unverified (checked 2026-11-07)
@@ -111,9 +104,9 @@ Which agent can coordinate on this machine, and which delegates each one can rea
 
 ## Route judgment
 
-Judge selection lives in canonical `## Assignment matrix` when that section exists, otherwise in canonical `## Agent roles`; this legacy heading retains instruction-check consent. `judge.py` caps calls at 24 per run, and no skill install is required for calls.
+Judge selection lives only in canonical `## Assignment matrix`; without a valid, consented matrix the judge is `host`. This legacy heading retains instruction-check consent. `judge.py` caps calls at 24 per run, and no skill install is required for calls.
 
-`/setup add delegation` writes `## Assignment matrix` (`matrix_setup.py`; `migrate` builds it from the old sections, asks for a new consent and removes them in the same write). It replaces `## Agent roles` and `## Agent levels`, which are read only while no matrix exists and are removed in 0.3.0. A valid matrix with its own yes consent alone decides roles and judge, and a role no line names is unassigned; an invalid matrix or one without consent leaves roles and judge unset, never falling back to the old sections. Its shape, shown indented here so that no reader takes it for a section:
+`/setup add delegation` writes `## Assignment matrix` (`matrix_setup.py`; `migrate` builds it from the old sections, asks for a new consent and removes them in the same write). It replaces `## Agent roles`, which no reader takes roles or the judge from since 0.2.6 (without a matrix no review role is set and the judge is `host`), and `## Agent levels`, read only while no matrix exists and removed in 0.3.0. A valid matrix with its own yes consent alone decides roles and judge, and a role no line names is unassigned; an invalid matrix or one without consent leaves roles and judge unset, never falling back to the old sections. Its shape, shown indented here so that no reader takes it for a section:
 
     ## Assignment matrix
 

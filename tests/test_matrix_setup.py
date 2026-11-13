@@ -255,7 +255,7 @@ class MatrixSetupTest(unittest.TestCase):
     def test_show_absent_says_legacy_applies(self):
         code, out, _ = self.cli('show')
         self.assertEqual(code, 0)
-        self.assertEqual(out.strip(), 'The assignment matrix is not set; the legacy Agent roles and Agent levels sections apply.')
+        self.assertEqual(out.strip(), 'The assignment matrix is not set: no review roles, judge host; Agent roles is no longer read, and migrate converts it.')
         self.host.unlink()
         self.assertEqual(self.cli('show')[:2], (0, out))
 

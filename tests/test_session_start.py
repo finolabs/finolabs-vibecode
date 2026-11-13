@@ -350,7 +350,8 @@ class StateBlockTest(SyntheticStateTest):
 
     def test_no_metrics_consent_still_reads_recorded_roles(self):
         self.write("host.md", "## Agents on this machine\n| Codex | yes | x | x | x |\n"
-                   "## Agent roles\n- code review: codex\n- security review: codex\n- navigator: codex\n")
+                   "## Assignment matrix\n- Consent: yes (2026-11-09)\n- Judge: host\n"
+                   "- codex: levels 1-5; roles code-review, security-review, navigator\n")
         self.assertFalse((self.root / "state" / "consent.json").exists())
         self.assertIn("Roles: code review codex; security review codex; navigator codex; judge host; "
                       "posting claude unverified, codex unverified, antigravity unverified, zcode unverified\n", self.state())
@@ -387,8 +388,8 @@ class StateBlockTest(SyntheticStateTest):
     def test_roles_and_posting_are_read_only_fixed_words(self):
         self.write("host.md", "## Agents on this machine\n"
                    "| Claude Code | yes | x | x | x |\n| Codex | yes | x | x | x |\n"
-                   "## Agent roles\n- code review: codex\n- security review: claude\n"
-                   "- navigator: claude\n- judge: jev\n"
+                   "## Assignment matrix\n- Consent: yes (2026-11-09)\n- Judge: jev\n"
+                   "- codex: levels 1-5; roles code-review\n- claude: levels 1-5; roles security-review, navigator\n"
                    "## Review posting\n- codex: yes (checked 2026-01-01)\n"
                    "- claude: no (checked 2026-01-01)\n")
         self.assertIn("Roles: code review codex; security review claude; navigator claude; judge jev; "
@@ -409,10 +410,10 @@ class StateBlockTest(SyntheticStateTest):
         self.assertIn("Roles: code review unassigned; security review codex; navigator claude; judge host; "
                       "posting claude unverified, codex unverified, antigravity unverified, zcode unverified\n" + line, state)
         self.assertLessEqual(len(line), 80)
-        # Absent: legacy roles as before and no assignments line.
+        # Absent: the retired legacy section sets no role, the judge is host, and no assignments line prints.
         self.write("host.md", legacy)
         state = self.state()
-        self.assertIn("Roles: code review codex; security review claude; navigator unassigned; judge jev; ", state)
+        self.assertIn(ROLES_DEFAULT, state)
         self.assertNotIn("Assignments:", state)
         # Invalid or without consent, even beside a valid legacy section: unset roles and no assignments line.
         for broken in (matrix + "- gemini: levels 1-2\n", "## Assignment matrix\n- Consent: no\n- Judge: host\n"):

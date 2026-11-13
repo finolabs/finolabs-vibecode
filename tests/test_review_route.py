@@ -31,7 +31,17 @@ def host(present=("claude", "codex", "antigravity"), roles="", posting=""):
     text = "## Agents on this machine\n\n| Agent | Present | Version | Allowed models (confirmed by user) | Checked |\n| --- | --- | --- | --- | --- |\n"
     for name, family in config.AGENTS.items():
         text += f"| {name} | {'yes' if family in present else 'no'} | fixture | unverified | 2026-11-01 |\n"
+    # `roles` fills the retired `## Agent roles` section, which no reader takes roles or the judge from.
     return text + "\n## Agent roles\n" + roles + "\n## Review posting\n" + posting + "\n"
+
+
+def matrix(judge="host", **roles):
+    """A consented matrix giving each role (code, security, navigator, advisor) to the named agent."""
+    owned = {}
+    for role, agent in roles.items():
+        owned.setdefault(agent, []).append(role if role in ("navigator", "advisor") else role + "-review")
+    lines = "".join(f"- {agent}: levels 1-5; roles {', '.join(names)}\n" for agent, names in owned.items())
+    return f"## Assignment matrix\n\n- Consent: yes (2026-11-09)\n- Judge: {judge}\n" + lines
 
 
 class ReviewConfigTest(unittest.TestCase):
@@ -85,22 +95,19 @@ class ReviewConfigTest(unittest.TestCase):
                         self.assertIn("the following arguments are required: pr", result.stderr)
                         self.assertNotIn("Traceback", result.stderr)
 
-    def test_exact_roles_and_absent_judge(self):
-        text = host(roles="- code review: antigravity\n- security review: codex\n- navigator: claude\n- judge: jev")
+    def test_exact_roles_and_judge_from_the_matrix(self):
+        text = host() + matrix("jev", code="antigravity", security="codex", navigator="claude")
         self.assertEqual(config.read_roles(text), {"code review": "antigravity", "security review": "codex", "navigator": "claude", "judge": "jev"})
-        self.assertEqual(config.read_roles(host(roles="- code review: codex"))["judge"], "host")
+        self.assertEqual(config.read_roles(host() + matrix(code="codex"))["judge"], "host")
 
-    def test_invalid_role_shapes_discard_entire_section(self):
-        for body in ("- code review: codex\n- code review: claude", "- code review: missing", "- judge: codex",
-                     "- navigator: host", "- Judge: host", "- security review: codex\nextra", "- judge: host\n" * 11,
-                     "- code review: codex\n\n- judge: host", "- code review: Codex", "- code review: codex "):
+    def test_legacy_roles_section_alone_sets_no_role_and_judge_host(self):
+        # Retired 13/11/2026: a well-formed `## Agent roles` section is never read for roles or the judge.
+        for body in ("- code review: antigravity\n- security review: codex\n- navigator: claude\n- judge: jev",
+                     "- navigator: codex", "- judge: jev"):
             with self.subTest(body=body):
-                # Internal and trailing spaces on a line are rejected. Section
-                # trailing whitespace follows mode.py's section-strip behavior.
-                if body.endswith(" "):
-                    body += "\n- judge: host"
-                self.assertEqual(config.read_roles(host(roles=body)), {"judge": "host"})
-        self.assertEqual(config.read_roles(host(("claude",), "- navigator: codex")), {"judge": "host", "navigator": "codex"})
+                text = host(roles=body)
+                self.assertEqual(config.read_roles(text), {"judge": "host"})
+                self.assertEqual(config.matrix_state(text), "absent")
         self.assertEqual(config.read_roles("## Agent roles\n- navigator: codex"), {"judge": "host"})
 
     def test_missing_duplicate_and_fenced_sections(self):
@@ -108,11 +115,11 @@ class ReviewConfigTest(unittest.TestCase):
         self.assertEqual(config.read_roles(host(roles="- code review: codex") + "\n## Agent roles\n- judge: jev"), {"judge": "host"})
         self.assertEqual(config.read_roles("```md\n" + host(roles="- judge: jev") + "```\n"), {"judge": "host"})
 
-    def test_matrix_absent_keeps_the_legacy_roles(self):
+    def test_matrix_absent_ignores_the_legacy_roles(self):
         legacy = host(roles="- code review: antigravity\n- judge: jev")
-        self.assertEqual(config.read_roles(legacy), {"code review": "antigravity", "judge": "jev"})
+        self.assertEqual(config.read_roles(legacy), {"judge": "host"})
         fenced = legacy + "```md\n" + MATRIX + "```\n"
-        self.assertEqual(config.read_roles(fenced), {"code review": "antigravity", "judge": "jev"})
+        self.assertEqual(config.read_roles(fenced), {"judge": "host"})
         self.assertIsNone(config.matrix_agents(legacy))
 
     def test_valid_matrix_alone_decides_roles_and_judge(self):
@@ -153,6 +160,9 @@ class ReviewConfigTest(unittest.TestCase):
     def test_absent_matrix_keeps_the_capability_fallback(self):
         self.assertEqual({row[2] for row in route.route("claude", host(roles="- judge: host"), [])},
                          {"capability-one-run-two-comments"})
+        # A legacy assignment no longer steers routing: codex leads the capability order, not antigravity.
+        legacy = host(roles="- code review: antigravity\n- security review: antigravity")
+        self.assertEqual(route.route("claude", legacy, []), [("codex", "headless", "capability-one-run-two-comments")] * 2)
 
     def test_posting_grammar_dates_duplicates_and_cap(self):
         valid = "- codex: yes (checked 2026-11-01)\n- claude: no (checked 2026-11-01)\n- antigravity: unverified (checked 2026-11-01)"
@@ -170,7 +180,7 @@ class RouteTest(unittest.TestCase):
         return route.route("claude", host() if text is None else text, [], **kwargs)
 
     def test_assigned_family(self):
-        rows = self.pick(host(roles="- code review: antigravity\n- security review: codex"))
+        rows = self.pick(host() + matrix(code="antigravity", security="codex"))
         self.assertEqual(rows, [("antigravity", "headless", "assigned"), ("codex", "headless", "assigned")])
 
     def test_same_family_fresh_context_disclosure(self):
@@ -179,8 +189,8 @@ class RouteTest(unittest.TestCase):
         self.assertTrue(all("same-family" in r[2] for r in rows))
 
     def test_absent_or_stale_assignment_falls_back_to_capability_order(self):
-        self.assertEqual(self.pick(host(("claude", "codex"), "- code review: antigravity"))[0][0], "codex")
-        self.assertEqual(self.pick(host(roles="- code review: antigravity\n- navigator: missing"))[0][0], "codex")
+        self.assertEqual(self.pick(host(("claude", "codex")) + matrix(code="antigravity", security="codex"))[0][0], "codex")
+        self.assertEqual(self.pick(host(roles="- code review: antigravity"))[0][0], "codex")
 
     def test_both_kinds_one_run_two_comments(self):
         rows = self.pick()
@@ -188,22 +198,22 @@ class RouteTest(unittest.TestCase):
         self.assertTrue(all(r == ("codex", "headless", "capability-one-run-two-comments") for r in rows))
 
     def test_lane_uses_code_reviewer_for_both(self):
-        rows = self.pick(host(roles="- code review: antigravity\n- security review: codex"), lane=True)
+        rows = self.pick(host() + matrix(code="antigravity", security="codex"), lane=True)
         self.assertTrue(all(r[0] == "antigravity" and "lane-one-run-two-comments" in r[2] for r in rows))
 
     def test_posting_tie_break_never_overrides_independence_or_assignment(self):
         posting = "- claude: yes (checked 2026-11-01)\n- antigravity: yes (checked 2026-11-01)"
         self.assertEqual(self.pick(host(posting=posting))[0][0], "antigravity")
-        self.assertEqual(self.pick(host(roles="- code review: codex", posting=posting))[0][0], "codex")
+        self.assertEqual(self.pick(host(posting=posting) + matrix(code="codex", security="antigravity"))[0][0], "codex")
         self.assertEqual(self.pick(host(("claude", "codex"), posting=posting))[0][0], "codex")
 
     def test_family_without_review_form_is_skipped_not_raised(self):
         self.assertNotIn("zcode", route.ORDER)
         self.assertTrue(set(route.ORDER) <= set(route.FORMS))
         present = ("claude", "codex", "antigravity", "zcode")
-        rows = self.pick(host(present, "- code review: zcode\n- security review: zcode"))
+        rows = self.pick(host(present) + matrix(code="zcode", security="zcode"))
         self.assertEqual(rows, [("codex", "headless", "capability-one-run-two-comments")] * 2)
-        rows = self.pick(host(("claude", "zcode"), "- code review: zcode"), kinds=("code",))
+        rows = self.pick(host(("claude", "zcode")) + matrix(code="zcode"), kinds=("code",))
         self.assertEqual(rows, [("claude", "agent", "same-family")])
         with self.assertRaisesRegex(ValueError, "unverified author"):
             route.route("zcode", host(present), [])
@@ -398,7 +408,7 @@ class LocalEvidenceTest(unittest.TestCase):
         self.assertEqual(rows[0][0], "antigravity")
 
     def test_canonical_reader_ignores_override_and_refuses_symlink(self):
-        dr.write_data("host.md", host(roles="- judge: jev").encode())
+        dr.write_data("host.md", (host() + matrix("jev")).encode())
         with mock.patch.dict(os.environ, {"ORCHESTRATION_HOST_CONFIG": str(self.base / "other.md")}):
             self.assertEqual(config.read_roles(config.host_text())["judge"], "jev")
         path = dr.consent_root() / "host.md"

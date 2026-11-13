@@ -7,7 +7,7 @@ with the minimum supporting evidence, as data, through `scripts/judge.py ask --s
 
 ## Which judge
 
-Canonical `## Agent roles` chooses `judge: host` (the default) or `judge: jev`. The host is a small model on the
+Canonical `## Assignment matrix` chooses `Judge: host` (the default) or `Judge: jev`; without a valid matrix with its own yes consent the judge is `host` (script-enforced). The host is a small model on the
 host's fast tier; supply its answer to `judge.py check-host`. A `yes` needs a verbatim quote with at least eight
 alphanumeric characters. Jev calls go directly through `judge.py`, only with canonical setup opt-in and the user's
 API budget; the optional `typesafe-ai` skill supplies cookbooks. `FNL_JUDGE=off` stops outbound calls. The script

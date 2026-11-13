@@ -273,7 +273,10 @@ def post(body, values, base_url, kind):
 
 
 def configured_judge():
-    """The assignment matrix when present, else the strict legacy role section; anything malformed or unreadable means host."""
+    """Only the assignment matrix chooses the judge; absent, malformed, unconsented or unreadable means host.
+
+    The retired `## Agent roles` section is never read (owner decision, 13/11/2026).
+    """
     try:
         import data_root as dr
         if os.environ.get("FNL_JUDGE") == "off":
@@ -281,35 +284,9 @@ def configured_judge():
         text = dr.read_data("host.md").decode("utf-8")
         import assignments
         matrix = assignments.parse(text)
-        if matrix.state != "absent":
-            # A present matrix alone decides; invalid or without its own yes consent, the judge is the host model.
-            usable = matrix.state == "valid" and matrix.consent == "yes" and matrix.judge in ("jev", "host")
-            return matrix.judge if usable else "host"
-        sections = text.split("## Agent roles\n")
-        if len(sections) != 2:
-            return "host"
-        section = sections[1].split("\n## ", 1)[0]
-        lines = [line.strip() for line in section.splitlines() if line.strip()]
-        if len(lines) > 10:
-            return "host"
-        inventory = text.split("## Agents on this machine\n")
-        named = set()
-        if len(inventory) == 2:
-            names = {"Claude Code": "claude", "Codex": "codex", "Antigravity": "antigravity", "ZCode": "zcode"}
-            table = inventory[1].split("\n## ", 1)[0]
-            named = {names[match.group(1)] for match in re.finditer(
-                r"^\|\s*(" + "|".join(map(re.escape, names)) + r")\s*\|", table, re.M)}
-        roles = {}
-        for line in lines:
-            key, value = line.removeprefix("- ").split(": ")
-            if not line.startswith("- ") or key in roles or key not in ("code review", "security review", "navigator", "judge"):
-                return "host"
-            if value not in (("jev", "host") if key == "judge" else ("claude", "codex", "antigravity", "zcode")):
-                return "host"
-            if key != "judge" and value not in named:
-                return "host"
-            roles[key] = value
-        return roles.get("judge", "host")
+        # Invalid, absent or without its own yes consent, the judge is the host model.
+        usable = matrix.state == "valid" and matrix.consent == "yes" and matrix.judge in ("jev", "host")
+        return matrix.judge if usable else "host"
     except (ImportError, OSError, ValueError, UnicodeError, KeyError, TypeError):
         return "host"
 
