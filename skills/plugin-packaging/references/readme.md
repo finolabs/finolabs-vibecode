@@ -2,7 +2,7 @@
 
 The README of a plugin or skill repository is read by two audiences: people deciding whether to install it, and AI agents asked to install it for them. This standard fixes the sections both need, in order, and a checklist that proves the README agrees with what the repository ships. Read it on every release (`versioning` "Cadence") and in any pull request that adds, removes or renames a skill, agent, command or host.
 
-A repository that is not a plugin or skill package applies the header, What you get and Install sections and the checklist items that fit; it skips the skills, agents, commands and host items.
+A repository that is not a plugin or skill package (it has no host manifest) needs only the header, What you get and Install; the other sections it has keep their order. It applies the checklist items that fit and skips the skills, agents, commands and host items.
 
 ## Facts come from the repository
 
@@ -44,7 +44,7 @@ Required sections appear in this order. A conditional section appears when its c
 | 14 | License | `License` | required | One line with the license as `LICENSE` states it, linked |
 | 15 | Acknowledgements | `Acknowledgements` | the repository builds on or credits others' work | Linked prior art with each one's license |
 
-Headings match at level 2, or level 3 for Skills, Agents and Commands.
+Headings match at level 2, or level 3 for Skills, Agents and Commands. Write them as ATX headings (`## What you get`); the script does not read underlined (setext) headings.
 
 ## Checklist
 
@@ -66,8 +66,8 @@ Run `python3 -I <this skill folder>/scripts/readme_check.py [repository root]`. 
 
 ### Counts and tables
 
-- **C1** (script) Every "N skills", "N skill folders", "N agents" and "N commands" in the README and the manifests' descriptions equals the shipped count.
-- **C2** (script) Every shipped skill, agent and command appears as a table row `` | `name` | ``, and every row in the Skills, Agents and Commands tables names one that ships.
+- **C1** (script) Every "N skills", "N skill folders", "N agents" and "N commands" in the README and the manifests' descriptions equals the shipped count. A number that counts something else (skills of one kind, or another repository's) is reworded, for example "13 of the skills", or recorded in the release pull request as a false positive.
+- **C2** (script) Every shipped skill, agent and command appears as a table row `` | `name` | ``, and every row in the Skills, Agents and Commands tables names one that ships. A first cell may name several, each in its own backticks (`` | `pause`, `gtg` | ``), and may carry the `/plugin:` or `$` prefix the host types.
 - **C3** (agent) Each row's "Use it when" agrees with that skill's `description` or that agent's or command's frontmatter.
 
 ### Hosts and install
@@ -112,7 +112,7 @@ A repository may keep `.github/readme-standard.json`. It adapts the standard to 
 }
 ```
 
-- `sections` maps a section id (`header`, `what-you-get`, `install-at-a-glance`, `how-it-works`, `start-here`, `for-ai-agents`, `skills`, `agents`, `commands`, `supported-platforms`, `install`, `privacy`, `contributing`, `license`, `acknowledgements`) to a heading regular expression matched against the whole heading text, case-insensitively.
+- `sections` maps a section id (`what-you-get`, `install-at-a-glance`, `how-it-works`, `start-here`, `for-ai-agents`, `skills`, `agents`, `commands`, `supported-platforms`, `install`, `privacy`, `contributing`, `license`, `acknowledgements`) to a heading regular expression matched against the whole heading text, case-insensitively.
 - `exclude_skills` lists folder-name patterns that are aliases or internal and are left out of the counts and tables.
 - `badge_color` makes every host badge use that colour (script).
 - `catalog` is the shared catalog the README installs from; H2 accepts it, and D2 compares with its entry.

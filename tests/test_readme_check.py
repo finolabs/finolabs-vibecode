@@ -277,6 +277,84 @@ class ReadmeCheckTest(unittest.TestCase):
         self.assertIn("N/A C1 no plugin manifest", lines)
         self.assertEqual(code, 0, lines)
 
+    def bad_input(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = readme_check.main(["readme_check.py", str(self.root)])
+        self.assertEqual(code, 2, err.getvalue())
+        return err.getvalue()
+
+    def test_malformed_overrides_are_bad_input_naming_the_key(self):
+        for config, key in (({"sections": ["x"]}, "sections"),
+                            ({"sections": {"install": "Install("}}, "sections.install"),
+                            ({"sections": {"nowhere": "X"}}, "sections.nowhere"),
+                            ({"exclude_skills": None}, "exclude_skills"),
+                            ({"exclude_skills": [1]}, "exclude_skills"),
+                            ({"catalog": "example-org/plugins"}, "catalog"),
+                            ({"badge_color": 7}, "badge_color")):
+            with self.subTest(config=config):
+                self.write(".github/readme-standard.json", json.dumps(config))
+                self.assertIn(key, self.bad_input())
+        self.write(".github/readme-standard.json", "not json")
+        self.bad_input()
+
+    def test_a_manifest_with_a_null_interface_is_read(self):
+        data = manifest(".codex-plugin")
+        data["interface"] = None
+        self.write(".codex-plugin/plugin.json", json.dumps(data))
+        (self.root / ".claude-plugin/plugin.json").unlink()
+        code, lines = self.run_check()
+        self.assertIn(code, (0, 1), lines)
+
+    def test_a_repository_without_manifests_needs_only_header_what_you_get_and_install(self):
+        for folder in (".claude-plugin", ".codex-plugin"):
+            for path in (self.root / folder).iterdir():
+                path.unlink()
+        self.write("README.md", "<h1>demo-plugin</h1>\n\n## What you get\n\nThings.\n\n## Install\n\nCopy it.\n")
+        code, lines = self.run_check()
+        self.assertEqual(code, 0, lines)
+        self.write("README.md", "<h1>demo-plugin</h1>\n\n## Install\n\nCopy it.\n\n## What you get\n\nThings.\n")
+        self.fails("S1")
+
+    def test_other_license_file_names(self):
+        (self.root / "LICENSE").unlink()
+        self.write("LICENSE.md", "MIT License\n")
+        self.edit("MIT. See [LICENSE](LICENSE).", "MIT. See [LICENSE.md](LICENSE.md).")
+        self.edit('<a href="LICENSE">', '<a href="LICENSE.md">')
+        code, lines = self.run_check()
+        self.assertEqual(code, 0, lines)
+
+    def test_root_relative_links_and_encoded_anchors(self):
+        self.write("docs/guide.md", "# Guide\n\n## Bắt đầu\n")
+        self.edit("[the skills](#skills)", "[the guide](/docs/guide.md#b%E1%BA%AFt-%C4%91%E1%BA%A7u) and <a href=\"docs/guide.md#nope\">x</a>")
+        found = self.fails("K1")
+        self.assertEqual(found, ["FAIL K1 missing anchor: docs/guide.md#nope"])
+
+    def test_an_unreadable_linked_document_fails_only_that_link(self):
+        (self.root / "docs").mkdir()
+        (self.root / "docs/latin.md").write_bytes(b"# \xe9t\xe9\n")
+        (self.root / "docs/dir.md").mkdir()
+        self.edit("[the skills](#skills)", "[a](docs/latin.md#x) [b](docs/dir.md#y)")
+        self.assertEqual(len(self.fails("K1")), 2)
+
+    def test_links_in_angle_brackets_may_hold_spaces(self):
+        self.write("docs/my guide.md", "# Guide\n")
+        self.edit("[the skills](#skills)", "[the guide](<docs/my guide.md>)")
+        code, lines = self.run_check()
+        self.assertEqual(code, 0, lines)
+        self.edit("[the guide](<docs/my guide.md>)", "[the guide](<docs/no guide.md>)")
+        self.fails("K1")
+
+    def test_html_comments_are_not_scanned(self):
+        self.edit("## Supported platforms", "<!--\nTODO later\n<img src=\"gone.png\">\n-->\n\n## Supported platforms")
+        code, lines = self.run_check()
+        self.assertEqual(code, 0, lines)
+
+    def test_one_row_may_name_several_skills(self):
+        self.edit("| `alpha` | Alpha work. |\n| `beta` | Beta work. |", "| `alpha`, `beta` | Both. |")
+        code, lines = self.run_check()
+        self.assertEqual(code, 0, lines)
+
     def test_missing_readme_is_bad_input(self):
         (self.root / "README.md").unlink()
         with contextlib.redirect_stderr(io.StringIO()):

@@ -36,6 +36,7 @@ SECTIONS = (
     ("acknowledgements", r"Acknowledge?ments", "present"),
 )
 TABLE_SECTIONS = {"skills", "agents", "commands"}
+NON_PLUGIN_SECTIONS = {"what-you-get", "install"}
 INSTALL_SECTIONS = ("install-at-a-glance", "for-ai-agents", "install")
 ITEMS = ("S1", "S2", "B1", "B2", "B3", "C1", "C2", "H1", "H2", "D1", "L1", "I1", "I2", "K1", "P1")
 PLUGIN_ITEMS = {"B2", "B3", "C1", "C2", "H1", "H2", "D1"}
@@ -52,10 +53,15 @@ LICENSES = (  # first-line pattern, SPDX id, word the README's License line must
 PLACEHOLDERS = re.compile(r"\b(?:TODO|TBD|FIXME|XXX)\b|lorem ipsum|coming soon|\{\{[^}]*\}\}|<your-[^>]*>", re.I)
 PLACEHOLDER_CASE = re.compile(r"\b(?:todo|tbd|fixme|xxx)\b")  # lower-case words are prose, not markers
 COUNT = re.compile(r"\b(\d+) (skill folders|skills?|agents?|commands?)\b")
-ROW = re.compile(r"^\|\s*`([^`|]+)`\s*\|")
+ROW = re.compile(r"^\|\s*((?:`[^`|]+`[\s,/]*)+)\|")  # one or more backticked names in the first cell
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
-LINK = re.compile(r"(?<!!)\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
-MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
+LINK = re.compile(r"(?<!!)\[[^\]]*\]\(\s*(?:<([^>]+)>|([^)\s]+))(?:\s+\"[^\"]*\")?\s*\)")
+MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(\s*(?:<([^>]+)>|([^)\s]+))(?:\s+\"[^\"]*\")?\s*\)")
+LICENSE_FILES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")
+
+
+class BadInput(Exception):
+    """Input the script cannot judge: it exits 2 and names the key."""
 TAG = re.compile(r"<(img|source|a)\b([^>]*)>", re.I)
 ATTR = re.compile(r"([a-zA-Z-]+)\s*=\s*(\"[^\"]*\"|'[^']*')")
 SLUG = re.compile(r"github\.com[/:]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$")
@@ -63,6 +69,11 @@ SLUG = re.compile(r"github\.com[/:]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/
 
 def attrs(text):
     return {k.lower(): v[1:-1] for k, v in ATTR.findall(text)}
+
+
+def blank_comments(text):
+    """Blank HTML comments, keeping line numbers."""
+    return re.sub(r"<!--.*?-->", lambda m: "\n" * m.group(0).count("\n"), text, flags=re.S)
 
 
 def strip_code(text):
@@ -156,13 +167,12 @@ class Check:
         self.root = root
         self.text = (root / "README.md").read_text(encoding="utf-8")
         self.raw = self.text.splitlines()
-        self.lines = strip_code(self.text)
+        self.lines = strip_code(blank_comments(self.text))
         self.heads = headings(self.lines)
         self.failures = {item: [] for item in ITEMS}
         self.na = set()
         self.external = []
-        config = load_json(root / ".github" / "readme-standard.json")
-        self.config = config if isinstance(config, dict) else {}
+        self.config = self.read_config(root / ".github" / "readme-standard.json")
         self.manifests = {}
         for host, folder in HOSTS:
             data = load_json(root / folder / "plugin.json")
@@ -170,7 +180,10 @@ class Check:
                 self.manifests[host] = data
         first = self.manifests.get("Claude Code") or next(iter(self.manifests.values()), {})
         self.name = first.get("name", "")
-        self.display = first.get("displayName") or first.get("interface", {}).get("displayName", "")
+        interface = first.get("interface") if isinstance(first.get("interface"), dict) else {}
+        self.display = first.get("displayName") or interface.get("displayName", "")
+        self.name = self.name if isinstance(self.name, str) else ""
+        self.display = self.display if isinstance(self.display, str) else ""
         self.repository = first.get("repository", "")
         if isinstance(self.repository, dict):
             self.repository = self.repository.get("url", "")
@@ -178,13 +191,38 @@ class Check:
         first_section = next((i for i, level, _ in self.heads if level == 2), len(self.raw))
         self.header = "\n".join(self.raw[:first_section])
 
+    @staticmethod
+    def read_config(path):
+        if not path.exists():
+            return {}
+        config = load_json(path)
+        if not isinstance(config, dict):
+            raise BadInput("readme-standard.json is not a JSON object")
+        kinds = {"sections": dict, "exclude_skills": list, "catalog": dict, "badge_color": str, "banner_follow_up": str}
+        for key, kind in kinds.items():
+            if key in config and not isinstance(config[key], kind):
+                raise BadInput(f"readme-standard.json: {key} must be a {kind.__name__}")
+        known = {sid for sid, _, _ in SECTIONS}
+        for sid, pattern in config.get("sections", {}).items():
+            if sid not in known or not isinstance(pattern, str):
+                raise BadInput(f"readme-standard.json: sections.{sid} is not a known section with a string pattern")
+            try:
+                re.compile(pattern)
+            except re.error:
+                raise BadInput(f"readme-standard.json: sections.{sid} is not a valid regular expression") from None
+        if not all(isinstance(p, str) for p in config.get("exclude_skills", [])):
+            raise BadInput("readme-standard.json: exclude_skills must list strings")
+        if not all(isinstance(v, str) for v in config.get("catalog", {}).values()):
+            raise BadInput("readme-standard.json: catalog values must be strings")
+        return config
+
     def fail(self, item, detail):
         self.failures[item].append(detail)
 
     # Sections ------------------------------------------------------------
     def section_spans(self):
         patterns = dict((sid, pat) for sid, pat, _ in SECTIONS)
-        patterns.update({k: v for k, v in self.config.get("sections", {}).items() if isinstance(v, str)})
+        patterns.update(self.config.get("sections", {}))
         found = {}
         for sid, _, _ in SECTIONS:
             levels = (2, 3) if sid in TABLE_SECTIONS else (2,)
@@ -200,7 +238,7 @@ class Check:
         return found
 
     def shipped(self):
-        excluded = [p for p in self.config.get("exclude_skills", []) if isinstance(p, str)]
+        excluded = self.config.get("exclude_skills", [])
         skills = sorted(p.parent.name for p in self.root.glob("skills/*/SKILL.md")
                         if not any(fnmatch.fnmatch(p.parent.name, pat) for pat in excluded))
         agents = []
@@ -216,6 +254,8 @@ class Check:
         order = []
         for sid, _, cond in SECTIONS:
             needed = cond is None or (cond != "present" and conditions.get(cond))
+            if not self.manifests:  # a repository that is not a plugin needs only these
+                needed = sid in NON_PLUGIN_SECTIONS
             if sid in spans:
                 order.append((spans[sid][0], sid))
             elif needed:
@@ -227,8 +267,9 @@ class Check:
         title = re.search(r"<h1[^>]*>(.*?)</h1>", self.header, re.I | re.S)
         title = plain(title.group(1)) if title else next((h for _, lv, h in self.heads if lv == 1), "")
         if not title:  # a wordmark image stands in for the title
-            alts = MD_IMAGE.findall(self.header) + [(attrs(t).get("alt", ""), "") for t in re.findall(r"<img\b[^>]*>", self.header, re.I)]
-            title = next((alt for alt, _ in alts if alt.strip()), "")
+            alts = [m[0] for m in MD_IMAGE.findall(self.header)]
+            alts += [attrs(t).get("alt", "") for t in re.findall(r"<img\b[^>]*>", self.header, re.I)]
+            title = next((alt for alt in alts if alt.strip()), "")
         names = [n for n in (self.name, self.display) if n]
         if not title:
             self.fail("S2", "no title before the first section")
@@ -285,7 +326,7 @@ class Check:
                 kind = kinds[word]
                 if int(number) != len(shipped[kind]):
                     self.fail("C1", f"{where} says {number} {word}; {len(shipped[kind])} ship")
-        rows = {self.row_name(m.group(1)) for line in self.raw if (m := ROW.match(line))}
+        rows = {name for line in self.raw if (m := ROW.match(line)) for name in self.row_names(m.group(1))}
         for kind, names in shipped.items():
             for name in names:
                 if name not in rows:
@@ -294,14 +335,18 @@ class Check:
                 start, end = spans[kind]
                 for line in self.raw[start:end]:
                     m = ROW.match(line)
-                    if m and self.row_name(m.group(1)) not in names:
-                        self.fail("C2", f"{kind} table lists {m.group(1)}, which does not ship")
+                    for name in self.row_names(m.group(1)) if m else ():
+                        if name not in names:
+                            self.fail("C2", f"{kind} table lists {name}, which does not ship")
 
-    def row_name(self, cell):
+    def row_names(self, cell):
         """`/plugin:name`, `$name` and `name` all name the same skill or command."""
-        cell = cell.strip().lstrip("/$")
         prefix = f"{self.name}:"
-        return cell[len(prefix):] if self.name and cell.startswith(prefix) else cell
+        names = []
+        for name in re.findall(r"`([^`]+)`", cell):
+            name = name.strip().lstrip("/$")
+            names.append(name[len(prefix):] if self.name and name.startswith(prefix) else name)
+        return names
 
     # Hosts and install ---------------------------------------------------
     def check_hosts(self, spans):
@@ -353,9 +398,9 @@ class Check:
                     self.fail("D1", ".claude-plugin/marketplace.json entry description differs from the manifest")
 
     def check_license(self, spans):
-        path = self.root / "LICENSE"
-        if not path.is_file():
-            self.fail("L1", "no LICENSE file")
+        path = next((self.root / n for n in LICENSE_FILES if (self.root / n).is_file()), None)
+        if path is None:
+            self.fail("L1", "no LICENSE, LICENSE.md, LICENSE.txt or COPYING file")
             return
         head = path.read_text(encoding="utf-8", errors="replace")[:400]
         match = next(((spdx, word) for pat, spdx, word in LICENSES if re.search(pat, head, re.I)), None)
@@ -371,8 +416,8 @@ class Check:
             body = "\n".join(self.raw[start + 1:end])
             if word.lower() not in body.lower():
                 self.fail("L1", f"License section does not name {spdx}")
-            if "LICENSE" not in body:
-                self.fail("L1", "License section does not link LICENSE")
+            if path.name not in body:
+                self.fail("L1", f"License section does not link {path.name}")
 
     # Images and links ----------------------------------------------------
     def local(self, target):
@@ -391,12 +436,13 @@ class Check:
                     self.target(src.strip().split(" ")[0], "I1", readme_anchors)
             elif "href" in a:
                 self.target(a["href"], "K1", readme_anchors)
-        for alt, src in MD_IMAGE.findall(body):
+        for alt, bracketed, bare in MD_IMAGE.findall(body):
+            src = bracketed or bare
             if not alt.strip():
                 self.fail("I1", f"image without alt text: {src}")
             self.target(src, "I1", readme_anchors)
-        for target in LINK.findall(body):
-            self.target(target, "K1", readme_anchors)
+        for bracketed, bare in LINK.findall(body):
+            self.target(bracketed or bare, "K1", readme_anchors)
         for block in re.findall(r"<picture\b.*?</picture>", body, re.I | re.S):
             media = [(re.sub(r"\s", "", attrs(t).get("media", "")), attrs(t).get("srcset", ""))
                      for t in re.findall(r"<source\b[^>]*>", block, re.I)]
@@ -423,15 +469,21 @@ class Check:
         if not self.local(target):
             return
         path, _, anchor = target.partition("#")
-        file = (self.root / unquote(path.split("?")[0])).resolve()
+        file = (self.root / unquote(path.split("?")[0]).lstrip("/")).resolve()
         if not file.exists():
             self.fail(item, f"missing file: {path}")
-        elif anchor and file.suffix == ".md" and anchor not in anchors(file.read_text(encoding="utf-8")):
-            self.fail(item, f"missing anchor: {target}")
+        elif anchor and file.suffix == ".md":
+            try:
+                found = anchors(file.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError):
+                self.fail(item, f"cannot read the anchors of {path}")
+                return
+            if unquote(anchor) not in found:
+                self.fail(item, f"missing anchor: {target}")
 
     def check_placeholders(self):
         for i, line in enumerate(self.lines):
-            for m in PLACEHOLDERS.finditer(re.sub(r"<!--.*?-->", "", line)):
+            for m in PLACEHOLDERS.finditer(line):
                 if not PLACEHOLDER_CASE.fullmatch(m.group(0)):
                     self.fail("P1", f"line {i + 1}: {m.group(0)}")
 
@@ -471,6 +523,9 @@ def main(argv):
         return 2
     try:
         return Check(root).run()
+    except BadInput as error:
+        print(f"bad input: {error}", file=sys.stderr)
+        return 2
     except (OSError, UnicodeDecodeError) as error:
         print(f"cannot read the repository: {error.__class__.__name__}", file=sys.stderr)
         return 2
