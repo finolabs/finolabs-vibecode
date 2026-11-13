@@ -946,10 +946,11 @@ class AwayDecisionTest(AfkBase):
                 (CODEX[:-1] + ['ghp_' + 'x' * 30], 'claude'),  # a brief with a secret
                 (CODEX[:-1], 'claude'),  # no brief
                 (CODEX[:-2], 'claude'),  # no brief and no separator
-                (['python3', '-I', str(ROOT / 'scripts/delegate_env.py')] + CODEX[3:], 'claude'),
                 (['python3'] + CODEX[2:], 'claude')):
             with self.subTest(argv=argv[3:9], coordinator=coordinator):
                 self.check_as(argv, coordinator=coordinator, tier=3, code='unknown')
+        # Another copy of the wrapper is not the form; inside this install's checkout it is also a protected path.
+        self.check_as(['python3', '-I', str(ROOT / 'scripts/delegate_env.py')] + CODEX[3:], tier=3, code=None)
         self.assertEqual(self.lease()['counters']['actions'], 0)
 
     def test_the_brief_position_never_accepts_an_option(self):
@@ -1924,6 +1925,9 @@ SOURCE_PATHS = ('skills/example/SKILL.md', 'skills/example/references/hooks.md',
 LIVE_PATHS = ('.github/workflows/x.yml', '.claude/settings.json', '.claude/hooks/check.py', '.git/hooks/pre-push',
               'skills/example/.env', 'scripts/credentials.json', 'skills/example/CLAUDE.md', 'GEMINI.md',
               'CLAUDE.local.md', 'hooks/check.py', 'src/settings.json', 'host.md', 'state/autopilot/lease.json')
+INSTALL_PATHS = ('skills/delegate/scripts/afk.py', 'skills/review-gate/scripts/merge_check.py',
+                 'skills/delegate/scripts/helper.py', 'scripts/session_start.py', 'scripts/away_gate_hook.py',
+                 '.claude-plugin/hooks.json', 'skills/afk/SKILL.md', 'skills/example/SKILL.md')
 
 
 class AwayFlowTest(AfkBase):
@@ -1996,8 +2000,8 @@ class AwayFlowTest(AfkBase):
         self.start(SETUP + '- Max actions per hour: 1000\n- Repository comments: decide\n')
         repo = '--repo', 'github.com/example/demo'
         create = ['gh', 'pr', 'create', '--head', 'topic', *repo]
-        body = '## Summary\n\n- Fix `afk.py check` for hooks, settings and SKILL.md.\n\tIndented line.'
-        for argv in (create + ['--title', 'Fix `check`', '--body', body],
+        body = '## Summary\n\n- Fix the afk check for hooks, settings and SKILL.md ($5, 100%).\n\tIndented line.'
+        for argv in (create + ['--title', 'Fix check', '--body', body],
                      create + ['--title', '-leading dash', '--body', '--repo github.com/other/restricted'],
                      create + ['--body=' + body],
                      ['gh', 'pr', 'edit', '7', '--body', body, *repo]):
@@ -2013,21 +2017,23 @@ class AwayFlowTest(AfkBase):
                            (['git', 'commit', '-m', 'Key ghp_' + 'x' * 30], 'unsafe')):
             with self.subTest(argv=argv):
                 self.check(argv, tier=3, code=code)
-        good = self.home / 'body.md'
-        good.write_text(body + '\r\n')
+        folder = self.repo / '.finolabs'  # the checkout's own git-ignored folder
+        folder.mkdir()
+        good = folder / 'body.md'
+        good.write_text(body + '\nRun `afk.py check` or $(id) in a shell example.\r\n')
         for argv in (create + ['--body-file', str(good)], create + ['-F', str(good)],
                      ['gh', 'pr', 'edit', '7', '--body-file=' + str(good), *repo],
                      ['gh', 'pr', 'comment', '7', '--body-file', str(good), *repo],
                      ['gh', 'pr', 'comment', '7', '--body', body, *repo]):
             with self.subTest(argv=argv):
                 self.check(argv)
-        secret = self.home / 'leaky.md'
+        secret = folder / 'leaky.md'
         secret.write_text('Review notes\nghp_' + 'x' * 30 + '\n')
-        link = self.home / 'link.md'
+        link = folder / 'link.md'
         link.symlink_to(good)
-        large = self.home / 'large.md'
+        large = folder / 'large.md'
         large.write_text('x' * 70000)
-        for name in (secret, link, large, self.home / 'missing.md', self.home):
+        for name in (secret, link, large, folder / 'missing.md', folder, self.home):
             with self.subTest(name=name):
                 self.check(create + ['--body-file', str(name)], tier=3, code='unsafe')
         self.check(create + ['--body-file', '-'], tier=3, code='unknown')
@@ -2051,11 +2057,78 @@ class AwayFlowTest(AfkBase):
 
     def test_a_commit_message_is_data(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
-        for argv in (['git', 'commit', '-m', 'Fix `x`'],
+        for argv in (['git', 'commit', '-m', 'Fix x for $5 cases'],
                      ['git', 'commit', '-q', '-m', 'Update hooks.json and SKILL.md', '-m', 'Body line one\nline two'],
                      ['git', 'commit', '--message=Rename settings and setup text']):
             with self.subTest(argv=argv):
                 self.check(argv)
+
+    def text_forms(self):
+        """The pull request create form, its --repo pair and the checkout's own git-ignored .finolabs folder."""
+        repo = ('--repo', 'github.com/example/demo')
+        folder = self.repo / '.finolabs'
+        folder.mkdir(exist_ok=True)
+        return ['gh', 'pr', 'create', '--head', 'topic', *repo], repo, folder
+
+    def test_a_review_marker_in_pull_request_or_commit_text_is_forbidden(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n- Repository comments: decide\n')
+        create, repo, folder = self.text_forms()
+        for marker in ('<!-- fnl-code-review head -->', '<!--fnl-security-review-->', '<!--\n  FNL-Code-Review -->'):
+            text = 'Looks good.\n\n' + marker
+            file = folder / 'review.md'
+            file.write_text(text + '\n')
+            for argv in (create + ['--body', text], create + ['--title', marker], create + ['--body=' + text],
+                         create + ['-b=' + text], create + ['--body-file', str(file)], create + ['-F', str(file)],
+                         ['gh', 'pr', 'edit', '7', '--body', text, *repo],
+                         ['gh', 'pr', 'edit', '7', '--body-file', str(file), *repo],
+                         ['gh', 'pr', 'comment', '7', '--body', text, *repo],
+                         ['gh', 'pr', 'comment', '7', '--body-file', str(file), *repo],
+                         ['git', 'commit', '-m', text], ['git', 'commit', '-m=' + text],
+                         ['git', 'commit', '--message=' + text], ['git', 'commit', '-F', str(file)]):
+                with self.subTest(marker=marker, argv=argv[:4]):
+                    self.check(argv, tier=3, code='forbidden')
+        self.check(create + ['--body', 'An HTML comment <!-- note --> and the fnl- prefix are data.'])
+
+    def test_inline_text_is_shell_safe_and_file_text_may_hold_shell_examples(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        create, _, folder = self.text_forms()
+        file = folder / 'body.md'
+        for text in ('Fix `check`', 'Uses $NAME', 'Uses ${NAME}', 'Uses $_x', 'Run $(id) first'):
+            file.write_text(text + '\n')
+            for argv in (create + ['--body', text], create + ['--title', text], ['git', 'commit', '-m', text]):
+                with self.subTest(argv=argv[-2:]):
+                    self.check(argv, tier=3, code='unknown')
+            for argv in (create + ['--body-file', str(file)], ['git', 'commit', '-F', str(file)],
+                         ['git', 'commit', '-q', '-F', '.finolabs/body.md']):
+                with self.subTest(argv=argv[-2:], text=text):
+                    self.check(argv)
+        self.check(['git', 'commit', '-m', 'Costs $5, 100% of cases'])
+        for argv in (['git', 'commit', '-F', str(file), '-m', 'Extra'], ['git', 'commit', '-F', str(file), '-F', str(file)],
+                     ['git', 'commit', '-F=' + str(file)], ['git', 'commit', '-F' + str(file)], ['git', 'commit', '-F', '-']):
+            with self.subTest(argv=argv[2:]):
+                self.check(argv, tier=3, code='unknown')
+
+    def test_a_body_file_must_lie_inside_the_checks_own_checkout(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        create, _, folder = self.text_forms()
+        body = 'A clean description.\n'
+        other = self.home / 'other'  # another repository
+        (other / '.git').mkdir(parents=True)
+        outside = (self.home / 'body.md', self.root / 'body.md', other / 'body.md')
+        for path in (*outside, folder / 'body.md'):
+            path.write_text(body)
+        for path in outside:
+            with self.subTest(path=path):
+                self.check(create + ['--body-file', str(path)], tier=3, code='unsafe')
+                self.check(['git', 'commit', '-F', str(path)], tier=3, code='unsafe')
+        self.check(create + ['--body-file', str(folder / 'body.md')])
+        self.check(create + ['--body-file', '.finolabs/body.md'])
+        self.check(['git', 'commit', '-F', str(folder / 'body.md')])
+        # A link on the way out of the checkout, or a `..` step, is refused.
+        (self.repo / 'linked').symlink_to(self.home, target_is_directory=True)
+        for name in ('linked/body.md', '.finolabs/../.finolabs/body.md'):
+            with self.subTest(name=name):
+                self.check(create + ['--body-file', name], tier=3, code='unsafe')
 
     def test_check_exits_three_on_tier_three_and_zero_on_tier_one(self):
         self.start()
@@ -2074,6 +2147,17 @@ class AwayFlowTest(AfkBase):
         repo, tree, git = self.worktree()
         git('branch', 'done')
         self.cwd = repo
+        # Only the worktree of a pull request this lease merged: its HEAD is a head a merge entry recorded.
+        self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='unknown')
+        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', 'b' * 40)[0], 0)
+        self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='unknown')
+        head = git('rev-parse', 'HEAD', cwd=tree)
+        for flags in (('--kind', 'merge', '--head', head.upper()), ('--kind', 'merge', '--head', head[:12]),
+                      ('--kind', 'action', '--head', head)):
+            with self.subTest(flags=flags):
+                self.assertEqual(self.invoke('log', *flags)[0], 3)
+        self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='unknown')
+        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 0)
         for argv in (['git', 'worktree', 'remove', str(tree)], ['git', 'worktree', 'remove', '--', str(tree)],
                      ['git', 'worktree', 'remove', '.claude/worktrees/wt'],
                      ['git', 'branch', '-d', 'done'], ['git', 'branch', '-d', '--', 'done']):
@@ -2140,21 +2224,56 @@ class AwayFlowTest(AfkBase):
         self.start(off)
         self.check(paths=['skills/example/SKILL.md'], tier=3, code='protected')
 
-    def test_this_installs_own_scripts_stay_protected_on_a_work_branch(self):
-        # A synthetic install that is itself this checkout, on a work branch: its running scripts stay protected.
+    def install_into(self, folder):
+        """Copy this plugin's scripts into `folder`, which then is the running install's plugin root."""
         import shutil
         for skill in ('delegate', 'review-gate'):
-            shutil.copytree(ROOT / 'skills' / skill / 'scripts', self.repo / 'skills' / skill / 'scripts')
+            shutil.copytree(ROOT / 'skills' / skill / 'scripts', folder / 'skills' / skill / 'scripts')
+        return folder / 'skills/delegate/scripts/afk.py'
+
+    def test_this_installs_own_scripts_stay_protected_on_a_work_branch(self):
+        # A real repository that is itself this install: every path in its checkout stays protected on every branch.
+        install, git = self.git_repo('install')
+        tree = install / '.claude/worktrees/wt'
+        git('worktree', 'add', '-q', str(tree), '-b', 'work')
         global SCRIPT
-        saved, SCRIPT = SCRIPT, self.repo / 'skills/delegate/scripts/afk.py'
+        saved, SCRIPT = SCRIPT, self.install_into(install)
         try:
-            self.start()
-            for path in ('skills/delegate/scripts/afk.py', 'skills/review-gate/scripts/merge_check.py',
-                         'skills/delegate/scripts/helper.py'):
-                with self.subTest(path=path):
-                    self.check(paths=[path], tier=3, code='protected')
-                    self.check(['git', 'add', '--', path], tier=3, code='protected')
-            self.check(paths=['skills/example/SKILL.md'])
+            self.start(SETUP + '- Max actions per hour: 1000\n')
+            self.cwd = install
+            for branch in ('topic', 'main'):
+                git('symbolic-ref', 'HEAD', 'refs/heads/' + branch)
+                for path in INSTALL_PATHS:
+                    with self.subTest(path=path, branch=branch):
+                        self.check(paths=[path], tier=3, code='protected')
+                        self.check(['git', 'add', '--', path], tier=3, code='protected')
+                        self.check(paths=[str(install / path)], tier=3, code='protected')
+            # An absolute operand from another checkout reaches the install too.
+            self.cwd = self.repo
+            self.check(['git', 'add', '--', str(install / 'scripts/session_start.py')], tier=3, code='protected')
+            # A linked worktree of the install's repository, under its .claude/worktrees, stays editable.
+            self.cwd = tree
+            for path in ('skills/example/SKILL.md', 'skills/afk/SKILL.md', 'scripts/session_start.py',
+                         'scripts/away_gate_hook.py', '.claude-plugin/hooks.json', 'src/example.py'):
+                with self.subTest(path=path, checkout='worktree'):
+                    self.check(paths=[path])
+                    self.check(['git', 'add', '--', path])
+            self.cwd = install
+            self.check(['git', '-C', str(tree), 'add', '--', 'skills/example/SKILL.md'])
+        finally:
+            SCRIPT = saved
+
+    def test_the_worktree_holding_this_install_is_never_removed(self):
+        repo, tree, git = self.worktree()
+        global SCRIPT
+        saved, SCRIPT = SCRIPT, self.install_into(tree)
+        try:
+            self.start(SETUP + '- Max actions per hour: 1000\n')
+            self.cwd = repo
+            self.assertEqual(self.invoke('log', '--kind', 'merge', '--head', git('rev-parse', 'HEAD', cwd=tree))[0], 0)
+            for operand in (str(tree), '.claude/worktrees/wt'):
+                with self.subTest(operand=operand):
+                    self.check(['git', 'worktree', 'remove', operand], tier=3, code='protected')
         finally:
             SCRIPT = saved
 

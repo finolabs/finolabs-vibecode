@@ -14,25 +14,25 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
 | Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
 | A precedent packet holds at most eight excerpts and 8 KB; a secret or machine path drops an excerpt; excerpts need the separate consent | packet_check |
-| Hard names (credentials/env/key names, .git, .github, .claude, .codex, git hook names, host/lease/log state) are Tier 3 anywhere in argv or paths; soft names (hooks, settings, config, setup, SKILL.md, CLAUDE.md, AGENTS.md) too, except in a source path; the one exact script path of this install's own trusted wrapper is spared (the install may lie under ~/.claude or ~/.codex) | protected, own_wrapper_index |
+| Hard names (credentials/env/key names, .git, .github, .claude, .codex, git hook names, host/lease/log state) are Tier 3 anywhere in argv or paths; soft names (hooks, settings, config, setup, SKILL.md, CLAUDE.md, AGENTS.md) too, except in a source path of this check's own checkout on a non-default work branch with Push and pull requests or Merge yes, and never inside this install; the one exact script path of this install's own trusted wrapper is spared (the install may lie under ~/.claude or ~/.codex) | protected, own_wrapper_index, source_mode |
 | An argv path operand inside a checkout of this repository (its own, the main checkout or a linked worktree `project_store.identity` validates; never a lexical .claude/worktrees allow) is judged by its path relative to that checkout's root; `git -C <folder>` is judged as the same command run in that folder | token_protected, checkout_of, check |
-| Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3 | classify_paths |
-| On a non-default work branch with Push and pull requests or Merge yes, a source path (skills/**, scripts/**, top-level CLAUDE.md and AGENTS.md, .<host>-plugin/*.json) of this check's own checkout is a known path, enforcer scripts included; the default branch, this install's own script folders and the hard names stay Tier 3 | source_mode, source_path, classify_paths |
+| Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper), and so is every path, read from the check's folder, in this install's own checkout on every branch (the checkout `project_store.identity` validates for it is the plugin root, so its linked worktrees stay editable); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3 | classify_paths, token_protected, install_owned |
+| On a non-default work branch with Push and pull requests or Merge yes, a source path (skills/**, scripts/**, top-level CLAUDE.md and AGENTS.md, .<host>-plugin/*.json) of this check's own checkout is a known path, enforcer scripts included; the default branch, this install's own checkout and the hard names stay Tier 3 | source_mode, source_path, classify_paths |
 | Read-only Git/gh queries use closed verbs and option sets; command/config overrides and unknown options deny | classify_argv, options |
 | Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and whose effective destination (origin's single pushurl, else its url) is the verified target, and merge origin/main into a work branch of a found repository (the synchronization exemption) are Tier 1 | classify_argv, branch_context |
 | A local branch merge ([--no-ff] [--no-edit], refs/heads/<b> or an unambiguous bare name that exists only as a branch) is Tier 1 only into a named non-default branch with effective Merge=yes | local_merge, local_branch |
 | One identity per check (found, absent or unknown; a rejected linked worktree is unknown) feeds settings, branch and remote reads | project_store.identity, effective, Context |
 | The five project values start strict; a positively absent approval gives user values; an approved valid `autopilot` object whose record carries this checkout's full identity digest and whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding, project_store.bound |
 | PR merge/create/edit/comment need exactly one `--repo github.com/OWNER/NAME` equal to the verified target; create needs one validated `--head`; implicit targets are Tier 3 | target_check, head_check, project_store.origin_target |
-| Title and body values of PR create/edit/comment, and `git commit -m` messages, are data: newlines, tabs, a leading `-` and backticks pass, other controls and `$(` deny, a secret, machine path or sensitive assignment is `unsafe`; one `--body-file` must be a regular file (no link) of at most 64 KiB passing the same screen, read only for that verdict; comments follow `Repository comments` | text_values, text_ok, body_file, pr_text |
-| With Merge yes: `git worktree remove [--] <path>` of a linked worktree of this repository (never forced, the main checkout or the current checkout) and `git branch -d [--] <branch>` (never -D, the current or a default branch) are Tier 1; `git rm [-r] [-q] [--] <paths>` on a work branch classifies each path like a change | worktree_remove, branch_delete, tracked_remove |
+| Title and body values of PR create/edit/comment, and `git commit -m` messages, are data: newlines, tabs and a leading `-` pass; other controls, a backtick, `$(` and `$` before a letter, `_` or `{` deny; a review gate marker (`<!--`, optional space, `fnl-`) is `forbidden`; a secret, machine path or sensitive assignment is `unsafe`; one `--body-file` (gh) or `-F` (git commit) must be a regular file of at most 64 KiB inside the check's own checkout, outside the data root, with no link from that root down, whose text passes the control, marker, secret and path screens, read only for that verdict; comments follow `Repository comments` | text_values, text_ok, file_place, body_file, pr_text, commit_text |
+| With Merge yes: `git worktree remove [--] <path>` of a linked worktree of this repository whose HEAD is a full SHA a `log --kind merge --head` entry of this lease recorded (never forced, the main checkout, the current checkout or a worktree holding this install) and `git branch -d [--] <branch>` (never -D, the current or a default branch) are Tier 1; `git rm [-r] [-q] [--] <paths>` on a work branch classifies each path like a change | worktree_remove, head_commit, merged_heads, branch_delete, tracked_remove |
 | `effective` prints the same context read-only for the advisory Task choice and Trusted authors | show_effective |
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
 | Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths; every path rule (roots, documents, protected names, links) applies to the operand's path relative to the checkout root of the check's validated identity, read from cwd, and with no identity no path is known | classify_paths, repository_path |
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
 | Only this install's ledger/record/heavy_run/merge_check script paths, with isolated Python, are allowed wrappers; nested heavy commands are classified too | script_command |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
-| Log kinds/tiers and ids are enumerated/validated; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
+| Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge kind only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
 | Trusted PR authors, full independent review/check/local-test gate, changed paths (including staged commit paths), quota readings and actually calling check before execution remain caller obligations in this slice | agent judgment, advisory; merge_check --independent enforces its review condition |
 
 A Tier 1 answer is a classification, not proof that a PR passed the full merge
@@ -112,6 +112,7 @@ PROJECT_KEYS = {'task-choice': 'Task choice', 'push-and-pull-requests': 'Push an
                 'trusted-authors': 'Trusted authors'}
 OFF = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', 'Trusted authors': 'own', 'Roots': []}
 CONTEXT = 'Repository context'  # the applied-settings entry holding the check's Context
+MERGED = 'Merged heads'  # the applied-settings entry holding the heads this lease's `log --kind merge` entries recorded
 EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yaml', '.yml'}
 MAX_LOG = 8 * 1024 * 1024
 ENFORCERS = {'afk.py','data_root.py', 'parallel_slots.py', 'secret_patterns.py', 'merge_check.py',
@@ -312,6 +313,50 @@ def plugin_code(name, base=None):
         return True
 
 
+def install_root():
+    """The running install's plugin root: the folder that holds `skills/delegate/scripts/afk.py`."""
+    return Path(__file__).resolve().parents[3]
+
+
+def install_owned(name, base=None):
+    """True when a path read from `base` lies in this install's own checkout, on every branch: the checkout
+    `project_store.identity` validates for it (by its nearest existing folder, lexical and resolved) is the install
+    root itself, so a linked worktree of the install's repository, even under its `.claude/worktrees`, is not. With
+    no validated identity, a path under the install root is owned. On doubt, True. Link and folder metadata only."""
+    try:
+        install = str(install_root()).casefold()  # a case-insensitive filesystem names one folder many ways
+        full = Path(os.path.abspath(os.path.join(base or os.getcwd(), name)))
+        folder = full
+        while not os.path.lexists(folder) and folder != folder.parent:
+            folder = folder.parent
+        for candidate in {folder, Path(os.path.realpath(folder))}:
+            if not candidate.is_dir() or candidate.is_symlink():
+                candidate = candidate.parent
+            found, ident = store.identity(str(candidate))
+            if found == 'found':
+                if os.path.realpath(ident.checkout).casefold() == install:
+                    return True
+            else:
+                real = os.path.realpath(candidate).casefold()
+                if real == install or real.startswith(install.rstrip(os.sep) + os.sep):
+                    return True
+        return False
+    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
+        return True
+
+
+def path_operand(token, base=None):
+    """True when an argv token reads as a path: absolute, existing from `base`, or a relative name with a slash whose
+    first component exists there. Revisions, branch names, numbers and placeholders are not paths."""
+    if not plain(token) or token.startswith('-') or len(token) > 4096:
+        return False
+    if os.path.isabs(token):
+        return True
+    base = base or os.getcwd()
+    return os.path.lexists(os.path.join(base, token)) or (
+        '/' in token and os.path.lexists(os.path.join(base, token.split('/')[0])))
+
+
 class Context(NamedTuple):
     """The policy context of one check: how the repository resolved, its validated identity, which values apply and
     the GitHub repository a mutation may name (None: no GitHub mutation or push qualifies)."""
@@ -431,13 +476,17 @@ def source_mode(applied):
 def token_protected(token, applied):
     """The argv protected check. A path operand inside a checkout of this check's repository (its own, its main
     checkout or a linked worktree) is judged by its path relative to that checkout's root, exactly as from inside it;
-    a source path in this check's own checkout on a work branch is spared the soft names. Everything else is lexical."""
+    a source path in this check's own checkout on a work branch is spared the soft names. Everything else is lexical.
+    A path operand inside this install's own checkout (`install_owned`) is protected on every branch."""
+    context = context_of(applied)
+    base = context.cwd or os.getcwd()
+    if path_operand(token, base) and install_owned(token, base):
+        return True
     if not protected(token):
         return False
-    context = context_of(applied)
     if context.ident is None:
         return True
-    found = checkout_of(token, context.cwd or os.getcwd())
+    found = checkout_of(token, base)
     if found is None or found[0].main != context.ident.main:
         return True
     ident, relative = found
@@ -461,11 +510,12 @@ def classify_paths(paths, roots=(), context=UNKNOWN, source=False):
     link rules apply to its path relative to the checkout root of the check's validated identity, never to the
     operand alone, so a descendant cwd neither widens a root nor hides a protected ancestor. No identity: unknown.
     With `source` (a work branch, `source_mode`), a `SOURCE` path is a known path spared the soft names, the
-    enforcer names and the top-level instruction files; this install's own script folders stay protected."""
+    enforcer names and the top-level instruction files; this install's own script folders, and every path in this
+    install's own checkout (`install_owned`), stay protected on every branch."""
     if not paths:
         return 'unknown'
     for name in paths:
-        if not isinstance(name, str):
+        if not isinstance(name, str) or install_owned(name, context.cwd):
             return 'protected'
         relative = repository_path(name, context)
         own = source and relative is not None and source_path(relative)
@@ -945,6 +995,10 @@ def release_command(argv, applied, categories, deploy):
 TEXT_FLAGS = {'--title', '-t', '--body', '-b'}
 COMMIT_TEXT_FLAGS = {'-m', '--message'}  # a commit message is data like a PR body
 TEXT_LIMIT = 65536
+# A review gate marker (`<!-- fnl-... -->`): only post_review.py posts one, so PR or commit text carrying it is refused.
+MARKER = re.compile(r'<!--\s*fnl-', re.I)
+# Inline argv text passes through a shell in many callers: command substitution and parameter expansion deny.
+EXPANSION = re.compile(r'\$\(|\$[A-Za-z_{]|`')
 
 
 def text_values(argv):
@@ -960,7 +1014,7 @@ def text_values(argv):
     while index < len(argv):
         token = argv[index]
         key, equal, value = token.partition('=')
-        if equal and key in flags and key.startswith('--'):
+        if equal and key in flags:  # `-b=value` and `-m=value` carry text too
             out.append(key + '=text')
             values.append(value)
         elif token in flags and index + 1 < len(argv):
@@ -973,22 +1027,45 @@ def text_values(argv):
     return out, values
 
 
-def text_ok(value):
-    """'allowed' for title or body data: newlines and tabs, a leading `-` and backticks are data; other controls and
-    `$(` are 'unknown'; a secret, machine path or sensitive assignment is 'unsafe'."""
-    if (not 0 < len(value) <= TEXT_LIMIT or '$(' in value
+def text_ok(value, inline=True):
+    """'allowed' for title, body or message data: newlines, tabs and a leading `-` are data; a review gate marker is
+    'forbidden'; other controls, and inline a backtick, `$(` or `$` before a letter, `_` or `{`, are 'unknown'; a
+    secret, machine path or sensitive assignment is 'unsafe'. File text (`inline` false) skips the shell screen."""
+    if MARKER.search(value):
+        return 'forbidden'
+    if (not 0 < len(value) <= TEXT_LIMIT or inline and EXPANSION.search(value)
             or any(unicodedata.category(c).startswith('C') and c not in '\n\t' for c in value)):
         return 'unknown'
     return 'unsafe' if screened(value) else 'allowed'
 
 
+def file_place(full, context):
+    """True when `full` lies inside the check's own checkout, outside the data root, with no link in any component
+    from that checkout root down (link metadata only)."""
+    if context.ident is None:
+        return False
+    try:
+        relative = full.relative_to(context.ident.checkout)
+        if not relative.parts or not no_links(relative, context):
+            return False
+        real = Path(os.path.realpath(full))
+        roots = {dr.default_root(), dr.data_root()[0]}
+        return not any(real == r or r in real.parents for r in {Path(os.path.realpath(r)) for r in roots})
+    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
+        return False
+
+
 def body_file(name, context):
-    """'allowed' for a regular file (never a link) of at most 64 KiB, read from the check's folder, whose UTF-8 text
-    passes `text_ok` (carriage returns also allowed); else 'unsafe'. Only the verdict leaves this function."""
-    if not plain(name) or name.startswith('-'):
+    """'allowed' for a regular file (never a link) of at most 64 KiB inside the check's own checkout (`file_place`),
+    read from the check's folder, whose UTF-8 text passes `text_ok` as file text (carriage returns also allowed);
+    a review gate marker is 'forbidden'; else 'unsafe'. Only the verdict leaves this function."""
+    if not plain(name) or name.startswith('-') or '..' in name.split('/'):
+        return 'unsafe'  # `..` after a link resolves elsewhere than the lexical path this check reads
+    full = Path(os.path.abspath(os.path.join(context.cwd or os.getcwd(), name)))
+    if not file_place(full, context):
         return 'unsafe'
     try:
-        fd = os.open(os.path.join(context.cwd or os.getcwd(), name), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        fd = os.open(full, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:
             info = os.fstat(fd)
             if not stat.S_ISREG(info.st_mode) or info.st_size > TEXT_LIMIT:
@@ -999,7 +1076,24 @@ def body_file(name, context):
         text = raw.decode('utf-8').replace('\r', '')
     except (OSError, ValueError, UnicodeError):
         return 'unsafe'
-    return 'allowed' if len(raw) <= TEXT_LIMIT and text and text_ok(text) == 'allowed' else 'unsafe'
+    if len(raw) > TEXT_LIMIT or not text:
+        return 'unsafe'
+    verdict = text_ok(text, inline=False)
+    return verdict if verdict in {'allowed', 'forbidden'} else 'unsafe'
+
+
+def commit_text(tail, context):
+    """`git commit` grammar: at most one message source, `-m`/`--message` (repeatable) or one `-F <file>` passing
+    `body_file`; any other option is 'unknown'."""
+    if any(t.startswith('-F') and t != '-F' for t in tail):
+        return 'unknown'  # git reads `-F=x` and `-Fx` as other file names
+    if not tail or options(tail, {'--amend', '--no-edit', '-q', '--quiet'}, {'-m', '--message', '-F'},
+                           positional=False) != []:
+        return 'unknown'
+    files = [tail[i + 1] for i, t in enumerate(tail) if t == '-F']
+    if files and (len(files) > 1 or any(t in COMMIT_TEXT_FLAGS or t.startswith(('-m=', '--message=')) for t in tail)):
+        return 'unknown'
+    return body_file(files[0], context) if files else 'allowed'
 
 
 def pr_text(tail, context):
@@ -1012,8 +1106,9 @@ def pr_text(tail, context):
 
 
 def worktree_remove(tail, applied):
-    """`git worktree remove [--] <path>`: a linked worktree of this repository, never its main checkout, the current
-    checkout or a forced removal; Merge must be yes."""
+    """`git worktree remove [--] <path>`: a linked worktree of this repository whose HEAD is a full SHA a
+    `log --kind merge --head` entry of this lease recorded, never its main checkout, the current checkout, a worktree
+    that is or contains this install, or a forced removal; Merge must be yes."""
     if tail[:1] != ['remove']:
         return 'unknown'
     if any(t in {'-f', '--force'} or t.startswith('--force') or re.fullmatch(r'-[a-zA-Z]*f[a-zA-Z]*', t) for t in tail):
@@ -1033,7 +1128,40 @@ def worktree_remove(tail, applied):
     ident = found[0]
     if ident.checkout == ident.main or ident.git == ident.common:
         return 'forbidden'  # the main checkout
-    return 'unknown' if ident.checkout == context.ident.checkout else 'allowed'
+    if ident.checkout == context.ident.checkout:
+        return 'unknown'
+    try:
+        tree = os.path.realpath(ident.checkout).casefold()
+        if install_owned(str(ident.checkout)) or str(install_root()).casefold().startswith(tree.rstrip(os.sep) + os.sep):
+            return 'forbidden'  # a worktree that is or contains this install
+        head = head_commit(ident)
+    except (OSError, ValueError, UnicodeError):
+        return 'unknown'
+    # Only the worktree of a pull request this lease merged: its HEAD is a head a `log --kind merge` entry recorded.
+    return 'allowed' if head and head in applied.get(MERGED, ()) else 'unknown'
+
+
+def head_commit(ident):
+    """The full commit id a checkout's HEAD names (detached, or through one local branch ref, loose or packed), else
+    None. Local metadata only, no Git process."""
+    with slots.open_dir(ident.git) as fd:
+        head = slots.read_metadata(fd, 'HEAD').strip()
+    if head.startswith('ref: refs/heads/'):
+        name = head.removeprefix('ref: ')
+        if not BRANCH.fullmatch(name.removeprefix('refs/heads/')) or '..' in name:
+            return None
+        try:
+            with slots.open_dir(ident.common / Path(name).parent) as fd:
+                head = slots.read_metadata(fd, Path(name).name).strip()
+        except FileNotFoundError:
+            try:
+                with slots.open_dir(ident.common) as fd:
+                    packed = slots.read_metadata(fd, 'packed-refs')
+            except FileNotFoundError:
+                return None
+            head = next((line.split(' ', 1)[0] for line in packed.splitlines()
+                         if line[:1] not in '#^' and line.split(' ', 1)[1:] == [name]), '')
+    return head if SHA.fullmatch(head) else None
 
 
 def branch_delete(tail, applied):
@@ -1164,7 +1292,7 @@ def classify_argv(argv, applied, coordinator=None):
         if verb == 'rm':
             return tracked_remove(tail, applied)
         if verb == 'commit':
-            return 'allowed' if tail and options(tail, {'--amend', '--no-edit', '-q', '--quiet'}, {'-m', '--message'}, positional=False) == [] else 'unknown'
+            return commit_text(tail, context_of(applied))
         query = {
             'status': ({'--short', '-s', '--porcelain', '--branch', '-b'}, set()),
             'log': ({'--oneline', '--stat', '--all', '--decorate', '--graph', '--no-decorate', '-N'}, {'-n', '--max-count', '--format', '--pretty'}),
@@ -1266,6 +1394,8 @@ def check(folder, args):
         if code is None:
             # The lease hash covers the user section only; the repository's project values are read on every check.
             applied = effective(applied, cwd)
+            if isinstance(argv, list) and argv[:3] == ['git', 'worktree', 'remove']:
+                applied[MERGED] = merged_heads(folder, lease, current)
             if args.argv_json is not None:
                 code = classify_argv(argv, applied, args.coordinator)
             else:
@@ -1281,6 +1411,22 @@ def check(folder, args):
     tier = 1 if code == 'allowed' else 3
     print(json.dumps({'tier': tier, 'code': code}, separators=(',', ':')))
     return tier
+
+
+def merged_heads(folder, lease, current):
+    """The full head SHAs that `log --kind merge --head` entries recorded during this lease; empty on any doubt."""
+    try:
+        raw = read_private(folder, 'log.jsonl', MAX_LOG) or b''
+        heads = set()
+        for line in raw.splitlines():
+            entry = json.loads(line)
+            if (isinstance(entry, dict) and entry.get('kind') == 'merge' and isinstance(entry.get('head'), str)
+                    and SHA.fullmatch(entry['head']) and finite(entry.get('time'))
+                    and lease['start'] <= entry['time'] <= current):
+                heads.add(entry['head'])
+        return heads
+    except (OSError, ValueError, UnicodeError, TypeError, KeyError):
+        return set()
 
 
 def show_effective(folder):
@@ -1457,6 +1603,11 @@ def log(folder, args):
         if not re.fullmatch(r'[1-9][0-9]{0,9}', args.pr):
             raise ValueError('afk pull request id is invalid')
         fields['pr'] = int(args.pr)
+    if args.head is not None:
+        # The merged pull request's full head SHA: the one worktree `git worktree remove` may then take away.
+        if args.kind != 'merge' or not SHA.fullmatch(args.head):
+            raise ValueError('afk head belongs to the merge kind and is a full lowercase SHA')
+        fields['head'] = args.head
     note = safe_note(args.note or '')
     raw = read_private(folder, 'log.jsonl', MAX_LOG)
     retained = []
@@ -1493,7 +1644,7 @@ def main(argv=None):
     inspect.add_argument('--coordinator', choices=sorted(PROGRAMS), help="the coordinator's own family")
     record = sub.add_parser('log', allow_abbrev=False)
     record.add_argument('--kind', required=True, choices=sorted(KINDS))
-    for key in ('task', 'pr', 'run', 'note', 'decision', 'rung', 'settled', 'precedents', 'topic', 'project', *FIELDS):
+    for key in ('task', 'pr', 'run', 'head', 'note', 'decision', 'rung', 'settled', 'precedents', 'topic', 'project', *FIELDS):
         record.add_argument('--' + key)
     reviewed = sub.add_parser('review', allow_abbrev=False)
     reviewed.add_argument('--decision', required=True)
