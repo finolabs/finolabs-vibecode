@@ -8,7 +8,7 @@
 <h1 align="center">finolabs-vibecode</h1>
 
 <p align="center"><strong>Make your coding agents work like a senior team, automatically.</strong><br>
-Automatic depth routing, cross-agent delegation and review gates for Claude Code, Codex and Antigravity.</p>
+Depth routing, cross-agent delegation and review gates for Claude Code, Codex and Antigravity. Scripts enforce the merge gate; the rest is guidance your agents follow.</p>
 
 <p align="center">
   <a href="https://github.com/finolabs/finolabs-vibecode/releases/latest"><img src="https://img.shields.io/github/v/release/finolabs/finolabs-vibecode" alt="Latest release"></a>
@@ -27,7 +27,7 @@ Automatic depth routing, cross-agent delegation and review gates for Claude Code
 
 - **The right depth for every task.** A typo fix stays quick; a risky change gets a plan, a failing test first and a security review. (`coding-router`)
 - **The right agent for each job.** Tasks go to Claude Code, Codex or Antigravity by the assignment matrix you set and the quota each has left. (`delegate`)
-- **No agent approves its own work.** A model family other than the author's posts a code review and a security review pinned to the exact commit, and `merge_check.py` blocks the merge until both approve. (`review-gate`, `security-review-gate`)
+- **No agent approves its own work.** A reviewer in a fresh context, from another model family whenever one is available (a same-family fallback is disclosed), posts a code review and a security review pinned to the exact commit, and `merge_check.py` blocks the merge until both approve that commit. (`review-gate`, `security-review-gate`)
 - **Proof, not "done".** Tests are rerun and a receipt is written before work counts as finished. (`checks`)
 
 Built with itself: from 2 to 13 November 2026, 255 pull requests merged in this repository, 249 of them with a posted code and security review, and 103 were sent back for rework at least once before they merged.
