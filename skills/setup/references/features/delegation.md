@@ -6,7 +6,7 @@ Every question follows [interview.md](../interview.md): native question tool, ne
 
 Reuse this run's scan answer if given; otherwise run the scan procedure with the running host passed explicitly, including its model confirmation, preview and clear yes before its section-only write. If it is unavailable, leave the inventory unverified and point to `/setup scan`; never guess which families exist.
 
-Then record what each helper takes with the assignment matrix in [matrix.md](../matrix.md): levels, types of work, model, roles and the judge in one pass. It is the only source of roles and the judge (`## Agent roles` is never read; `migrate` converts it), and with a valid matrix `## Agent levels` is ignored, so [levels.md](../levels.md) serves only a user who declines it.
+Then record what each helper takes with the assignment matrix in [matrix.md](../matrix.md): levels, types of work, model, roles and the judge in one pass. It is the only source of roles and the judge (`migrate` converts the unread `## Agent roles`) and overrides `## Agent levels`; [levels.md](../levels.md) serves users who decline it.
 
 Ask: "Save how this computer starts and shares work with other AI helpers?"
 Yes: Fill the shown local host.md from the delegate template; the saved helper list stays intact. Saving sends nothing; later helper work uses its provider.
