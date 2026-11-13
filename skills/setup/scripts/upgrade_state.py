@@ -90,6 +90,13 @@ def state(name):
         if old:
             return OPEN
         return DONE if "Assignment matrix" in titles else NOT_APPLICABLE
+    if name == "roles-retired":
+        # Since 0.2.6 only the assignment matrix sets roles and the judge; `## Agent roles` is never read.
+        if "Agent roles" not in titles:
+            return DONE
+        import assignments
+        matrix = assignments.parse(text)
+        return DONE if matrix.state == "valid" and matrix.consent == "yes" else OPEN
     if name == "levels":
         return DONE if {"Agent levels", "Assignment matrix"} & titles else OPEN
     # Since 0.2.5 the away settings live in `## afk`; an older `## Autopilot` section is no longer read.

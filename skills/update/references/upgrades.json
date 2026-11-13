@@ -249,6 +249,18 @@
           "text": "Session titles now start with one emoji for the kind of work, from the fixed set in tidy references/titles.md."
         }
       ]
+    },
+    {
+      "version": "0.2.6",
+      "items": [
+        {
+          "id": "0.2.6/agent-roles-retired",
+          "kind": "migration",
+          "text": "Breaking: ## Agent roles is no longer read; without a matrix no review roles are set and the judge is host (no Jev). Setup runs matrix_setup.py migrate and asks consent again.",
+          "setup": "/setup add delegation",
+          "check": ["skills/setup/scripts/upgrade_state.py", "roles-retired"]
+        }
+      ]
     }
   ]
 }

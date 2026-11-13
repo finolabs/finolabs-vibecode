@@ -71,6 +71,17 @@ class UpgradeStateTest(unittest.TestCase):
         self.assertEqual(self.state('afk', '## Autopilot\n- Merge: no\n'), us.OPEN)
         self.assertEqual(self.state('afk-decisions', '## Autopilot\n- Excerpts leave the machine: no\n'), us.OPEN)
 
+    def test_roles_retired_is_done_without_agent_roles_or_with_a_valid_matrix(self):
+        matrix = '## Assignment matrix\n\n- Consent: yes (2026-11-09)\n- Judge: host\n- codex: levels 1-5; roles code-review\n'
+        self.assertEqual(self.state('roles-retired'), us.DONE)
+        self.assertEqual(self.state('roles-retired', '## Routing\non\n'), us.DONE)
+        self.assertEqual(self.state('roles-retired', '## Agent roles\n- judge: jev\n'), us.OPEN)
+        self.assertEqual(self.state('roles-retired', '## Agent roles\n- judge: jev\n' + matrix), us.DONE)
+        # A matrix that is invalid or lacks its own consent does not hold the roles yet.
+        self.assertEqual(self.state('roles-retired', '## Agent roles\n- judge: jev\n'
+                                    + matrix.replace('yes (2026-11-09)', 'no')), us.OPEN)
+        self.assertEqual(self.state('roles-retired', '```\n## Agent roles\n```\n'), us.DONE)
+
     def test_afk_section_is_open_until_the_old_heading_is_gone(self):
         self.assertEqual(self.state('afk-section', '## Autopilot\n- Merge: no\n'), us.OPEN)
         self.assertEqual(self.state('afk-section', '## Autopilot\n- Merge: no\n\n## afk\n- Merge: no\n'), us.OPEN)

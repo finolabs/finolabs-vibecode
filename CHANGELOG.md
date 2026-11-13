@@ -6,6 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Breaking: `## Agent roles` in the host config is no longer read (owner decision, 13/11/2026). The assignment matrix is the only source of review roles (code review, security review, navigator, advisor) and the judge: a user with only `## Agent roles` loses those roles and the Jev judge (reviews follow the capability order, the judge is the host model) until running `/setup add delegation`, which converts the section with `matrix_setup.py migrate` and asks consent again. `/setup check` reports that case as `roles: missing`, names an `## Agent roles` left beside a matrix in `legacy host settings`, `/setup add roles` records roles and the judge in the matrix, and `/update` lists the step. The judge-call rule in `CLAUDE.md` and the judge section of `PRIVACY.md` now name only the matrix. `## Review posting` and `## Agent levels` are unchanged.
 - The README opens as a landing page: the icon, the tagline and subhead, badges for the release, licence and the three hosts, the banner, a "What you get" block, the install commands for each host and the request-to-merge diagram. "For engineers" (release notes, compaction steward, diagrams, Bricks) moves below the reference sections; nothing is removed. The banner (`assets/banner.png`) is also the new GitHub social preview, generated from `.github/social-preview.json`.
 
 ### Fixed
