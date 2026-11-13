@@ -1289,6 +1289,7 @@ class SecurityRoundOneTest(AfkBase):
             with patch.object(ap.store, 'identity', return_value=state):
                 result = ap.effective(dict(ap.DEFAULTS, Merge='yes', Roots=['x']), str(self.repo))
             self.assertEqual({k: result[k] for k in ap.OFF}, ap.OFF)
+            self.assertEqual(ap.context_of(result).cwd, str(self.repo))  # never the process's own cwd
 
     def test_a_dot_git_link_is_not_skipped_for_a_parent_repository(self):
         self.start(NO)
@@ -1954,6 +1955,29 @@ class AwayFlowTest(AfkBase):
         git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
         return repo, git
 
+    def merged(self, pr, head):
+        """An allowed `gh pr merge` check pins the number and head, then the merge entry records them."""
+        self.check(['gh', 'pr', 'merge', pr, '--merge', '--match-head-commit', head, '--repo', 'github.com/example/demo'])
+        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', pr, '--head', head)[0], 0)
+
+    def test_a_merge_entry_needs_an_allowed_merge_check_of_this_lease(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.cwd, _ = self.git_repo('pinned')
+        head, other = 'c' * 40, 'd' * 40
+        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)  # no check yet
+        self.check(['gh', 'pr', 'merge', '7', '--match-head-commit', other, '--repo', 'github.com/example/elsewhere'],
+                   tier=3, code='forbidden')  # a denied check pins nothing
+        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', other)[0], 3)
+        self.check(['gh', 'pr', 'merge', '7', '--squash', '--match-head-commit=' + head, '--repo', 'github.com/example/demo'])
+        for pr, sha in (('8', head), ('7', other)):
+            with self.subTest(pr=pr, sha=sha):
+                self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', pr, '--head', sha)[0], 3)
+        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 0)
+        self.invoke('stop')
+        self.clock += 60
+        self.start(SETUP + '- Max actions per hour: 1000\n')  # a new lease does not inherit the old pin
+        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)
+
     def worktree(self):
         """A main checkout on main and a registered linked worktree under its .claude/worktrees on branch work."""
         repo, git = self.git_repo('flow')
@@ -2149,7 +2173,7 @@ class AwayFlowTest(AfkBase):
         self.cwd = repo
         # Only the worktree of a pull request this lease merged: its HEAD is a head a merge entry recorded.
         self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='unknown')
-        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', 'b' * 40)[0], 0)
+        self.merged('7', 'b' * 40)
         self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='unknown')
         head = git('rev-parse', 'HEAD', cwd=tree)
         for flags in (('--kind', 'merge', '--head', head.upper()), ('--kind', 'merge', '--head', head[:12]),
@@ -2157,7 +2181,7 @@ class AwayFlowTest(AfkBase):
             with self.subTest(flags=flags):
                 self.assertEqual(self.invoke('log', *flags)[0], 3)
         self.check(['git', 'worktree', 'remove', str(tree)], tier=3, code='unknown')
-        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 0)
+        self.merged('7', head)
         for argv in (['git', 'worktree', 'remove', str(tree)], ['git', 'worktree', 'remove', '--', str(tree)],
                      ['git', 'worktree', 'remove', '.claude/worktrees/wt'],
                      ['git', 'branch', '-d', 'done'], ['git', 'branch', '-d', '--', 'done']):
@@ -2283,7 +2307,7 @@ class AwayFlowTest(AfkBase):
         try:
             self.start(SETUP + '- Max actions per hour: 1000\n')
             self.cwd = repo
-            self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', git('rev-parse', 'HEAD', cwd=tree))[0], 0)
+            self.merged('7', git('rev-parse', 'HEAD', cwd=tree))
             for argv in (['git', 'worktree', 'remove', str(tree)], ['git', 'worktree', 'remove', '--', '.claude/worktrees/wt']):
                 with self.subTest(argv=argv):
                     self.check(argv)
@@ -2291,9 +2315,17 @@ class AwayFlowTest(AfkBase):
                                (['git', 'worktree', 'remove', '.'], 'protected'),
                                (['git', 'worktree', 'add', str(repo / 'new')], 'protected'),
                                (['git', 'worktree', 'prune'], 'unknown'),
-                               (['git', 'commit', '-m', 'Example'], 'protected')):
+                               (['git', 'commit', '-m', 'Example'], 'protected'),
+                               (['git', 'stash'], 'protected'),
+                               (['git', 'reset', '--hard'], 'protected'),
+                               (['git', '-C', 'skills', 'commit', '-m', 'Example'], 'protected'),
+                               (['git', '-C', str(repo / 'skills'), 'restore', '.'], 'protected')):
                 with self.subTest(argv=argv):
                     self.check(argv, tier=3, code=code)
+            self.cwd = repo / 'skills/delegate'  # a subfolder of the install changes the install's own work tree too
+            for argv in (['git', 'commit', '-m', 'Example'], ['git', 'stash']):
+                with self.subTest(argv=argv, cwd='subfolder'):
+                    self.check(argv, tier=3, code='protected')
         finally:
             SCRIPT = saved
 
@@ -2304,7 +2336,7 @@ class AwayFlowTest(AfkBase):
         try:
             self.start(SETUP + '- Max actions per hour: 1000\n')
             self.cwd = repo
-            self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', git('rev-parse', 'HEAD', cwd=tree))[0], 0)
+            self.merged('7', git('rev-parse', 'HEAD', cwd=tree))
             for operand in (str(tree), '.claude/worktrees/wt'):
                 with self.subTest(operand=operand):
                     self.check(['git', 'worktree', 'remove', operand], tier=3, code='protected')
