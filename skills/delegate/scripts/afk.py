@@ -8,7 +8,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Setup is one canonical ## afk key/value section (an older ## Autopilot heading is not read); Merge has no default, hours are 1..24 | settings, start |
 | State stays outside Git, private (directories 0700/files 0600), no links, atomic and serialized | private_folder, read_private, write_private, data_root, flock |
 | One live lease for the machine; a second start reports it and changes nothing; stop removes it and leaves a stop marker; starting clears that marker | start, stop |
-| Missing/expired/stopped/changed setup or exhausted runs, wall/runtime minutes or rolling-hour actions denies every check | lease_guard |
+| Missing/expired/stopped/changed setup or exhausted runs, wall/runtime minutes or rolling-hour actions denies every check; a missing, expired or stopped lease adds one fixed `end` line telling the caller to stop its loop | lease_guard, check |
 | Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release and npm/pnpm publish forms whose every applicable category is `decide`, and a deploy matching a `Non-production targets` entry exactly with no production or live word; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
 | Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
 | The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
@@ -243,6 +243,10 @@ def stop(folder):
         os.unlink('lease.json', dir_fd=folder)
         os.fsync(folder)
     print('afk stopped: stop marker written; lease ' + ('removed' if removed else 'already absent'))
+
+
+ENDED = {'no-lease', 'expired', 'stopped'}
+ENDED_LINE = 'The away lease has ended: stop any loop or wakeup you started for it, then report to the user.'
 
 
 def lease_guard(folder, current):
@@ -1422,7 +1426,11 @@ def check(folder, args):
             if isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
                 append_log(folder, merge_pin(argv, current), current)
     tier = 1 if code == 'allowed' else 3
-    print(json.dumps({'tier': tier, 'code': code}, separators=(',', ':')))
+    result = {'tier': tier, 'code': code}
+    if code in ENDED:
+        # A host loop can outlive the lease; the answer itself tells the caller to end it.
+        result['end'] = ENDED_LINE
+    print(json.dumps(result, separators=(',', ':')))
     return tier
 
 
