@@ -41,5 +41,5 @@ The next user story starts only after the story's code review, and a security re
 
 ## Titles and archiving
 
-- Titles follow `<project> <scope>: <activity>` (`tidy` "Titles"): `Demo 003 search: coordinate US4` for the coordinator, `Demo 003 search: T044–T046 rebuild CLI` for a task session, `Demo 003 search: review US4` for a review session. The coordinator names each session it starts and renames itself and those sessions when a phase, story or task changes state. It renames no other session.
+- Titles follow `<emoji> <project> <scope>: <activity>` (`tidy` "Titles"): `🤝 Demo 003 search: coordinate US4` for the coordinator, `✨ Demo 003 search: T044–T046 rebuild CLI` for a task session, `🔍 Demo 003 search: review US4` for a review session. The coordinator names each session it starts and renames itself and those sessions when a phase, story or task changes state. It renames no other session.
 - Archive a task session once its tasks are verified and marked `[X]`, and a review session once its findings are disposed. The coordinator never archives itself.
