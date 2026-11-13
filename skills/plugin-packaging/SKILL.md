@@ -60,8 +60,7 @@ Run and read each one:
 - every host validator above, strict where available, on each rebuilt directory edition too; the portal's own validation uploads the package, so it waits for the owner's approval and stays pending in the report until then;
 - the trigger suite: one `claude plugin eval` case per model-invoked skill that must fire it, plus negative cases that must fire nothing (`--ablation none` keeps `Skill` graders scored). Run only the cases of skills whose `description` changed since the last release (`--case`), and the whole suite before a MINOR release; a patch release with no `description` change needs none;
 - after installing on Claude Code, `/skill-doctor` for each skill's listing cost, and from the second release on, whether it is ever used (an interactive check: where it cannot run, say so);
-- `open-source-review` for license, payload, leaks and community files;
-- the README checklist in [references/readme.md](references/readme.md) "Checklist": `scripts/readme_check.py` for the mechanical items (advisory: it reads files only), then the agent items; fix each failure in the release pull request or write there, per item, why not;
+- `open-source-review` for license, payload, leaks and community files, then the README checklist in [references/readme.md](references/readme.md) "Checklist": `scripts/readme_check.py` for the mechanical items (advisory: it reads files only) and the agent items; fix each failure in the release pull request or write there, per item, why not;
 - when the plugin is listed in a shared catalog, run the catalog check and, if the catalog pins SHAs, update it after the tag.
 
 A validator pass shows the package loads; only the trigger suite and real use show the skills help.
