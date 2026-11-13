@@ -25,12 +25,19 @@ The changelog's 0.2.6 section holds the user-facing wording; `update` carries th
 - Lease scope: direction 1 is chosen for 0.2.7.
 - Under a live away lease agents never wait for the user; questions go up the decision ladder (`afk` "Decide").
 
+Coordinator decision under the away mandate (14/11/2026, not the owner's; the owner reviews it on return): 0.2.6 stays a PATCH although it carries breaking entries, following the 0.2.5 precedent, because the upgrade notes are already keyed to 0.2.6 and 0.3.0 stays reserved for removing `## Agent levels`; the deprecation step for `## Agent roles` is waived, since the owner retired it outright on 13/11/2026.
+
 ## Breaking changes and the upgrade
 
-A user with only `## Agent roles` loses review roles and the Jev judge until running `/setup add delegation`; the `0.2.6/agent-roles-retired` note names the step and `upgrade_state.py roles-retired` checks it. Scripts that match `limit` from `afk.py check` for spent runs or runtime must match `exhausted`. On Codex the changed session-start and away question gate hooks need trust again (`0.2.6/codex-hook-trust`).
+A user with only `## Agent roles` loses review roles and the Jev judge until running `/setup add delegation`; the `0.2.6/agent-roles-retired` note names the step and `upgrade_state.py roles-retired` checks it. Scripts that match `limit` from `afk.py check` for spent runs or runtime must match `exhausted`. On Codex the changed session-start hook needs trust again (`0.2.6/codex-hook-trust`); the away question gate is a Claude Code hook only.
+
+## Evidence method
+
+The README's "Built with itself" counts come from `gh` over pull requests merged in this repository up to 13 November 2026 23:59 +07:00. A pull request counts as reviewed when it holds at least one `kind=code` and one `kind=security` review marker comment, and as sent back for rework when it holds at least one `verdict=REWORK` marker.
 
 ## Known follow-ups
 
+- Pull requests 268 and 271 merged with no posted reviews; they count among the merged ones but not the reviewed ones.
 - A lease scoped to one repository (direction 1, planned for 0.2.7).
 - `post_review.py` is not an allowed wrapper in `afk.py check`.
 - `skills/afk/SKILL.md` is over its size limit.

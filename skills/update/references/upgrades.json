@@ -263,7 +263,7 @@
         {
           "id": "0.2.6/codex-hook-trust",
           "kind": "hook",
-          "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; the session-start and away question gate hooks changed."
+          "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; the session-start hook changed."
         },
         {
           "id": "0.2.6/afk-end",
@@ -279,6 +279,11 @@
           "id": "0.2.6/afk-scope",
           "kind": "info",
           "text": "/setup add afk first asks whether the rules are for your account or only this repository, then for a repository asks only the rules you want different."
+        },
+        {
+          "id": "0.2.6/afk-worktree-cleanup",
+          "kind": "info",
+          "text": "Under a lease with Merge allowed, an install read from the main checkout may remove a merged linked worktree; never the main checkout, a forced removal or the install's own worktree."
         }
       ]
     }

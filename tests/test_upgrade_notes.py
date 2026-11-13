@@ -190,9 +190,9 @@ class NotesSchemaTest(unittest.TestCase):
             self.assertIn(phrase, retired['text'])
         hooks = items['0.2.6/codex-hook-trust']
         self.assertEqual(hooks['kind'], 'hook')
-        for phrase in ('/hooks', 'session-start', 'away question gate'):
+        for phrase in ('/hooks', 'session-start'):
             self.assertIn(phrase, hooks['text'])
-        for ident in ('0.2.6/afk-end', '0.2.6/setup-beginner', '0.2.6/afk-scope'):
+        for ident in ('0.2.6/afk-end', '0.2.6/setup-beginner', '0.2.6/afk-scope', '0.2.6/afk-worktree-cleanup'):
             self.assertEqual(items[ident]['kind'], 'info')
             self.assertNotIn('setup', items[ident])
             self.assertNotIn('check', items[ident])
