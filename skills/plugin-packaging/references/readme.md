@@ -13,7 +13,7 @@ Never write these from memory or from another repository's README. Read each fro
 | Name and display name | the `name` and display-name fields of the plugin manifests |
 | Description and one-liner | the manifests' `description`; the catalog entry; the forge's repository description |
 | License | `LICENSE` (its first lines) and the manifests' `license` field (SPDX) |
-| Hosts | which host manifest folders exist (see the `plugin-packaging` host table) |
+| Hosts | which host manifest folders exist (see the `plugin-packaging` host table), or the override's `hosts` when one manifest format serves another host (Claude Cowork reads `.claude-plugin`) |
 | Latest release | the forge's latest release or the newest `vX.Y.Z` tag; a badge reads it live, so prose never states it |
 | Install path | the manifests' `name` and `repository`, the catalog's marketplace name, each host's `--help` |
 | Counts | `skills/*/SKILL.md` (minus alias folders the repository excludes), `agents/*.md`, `commands/*.md` |
@@ -61,7 +61,7 @@ Run `python3 -I <this skill folder>/scripts/readme_check.py [repository root]`. 
 
 - **B1** (script) Every badge in the header has alt text, and each local or `#anchor` target resolves.
 - **B2** (script) Release, license and workflow badges name the repository from the manifests' `repository`, and a workflow badge names a file in `.github/workflows/`.
-- **B3** (script) One host badge per host manifest, and no host badge without its manifest.
+- **B3** (script) One host badge per host (each host manifest, or each host the override's `hosts` lists), and no host badge for a host the repository does not serve.
 - **B4** (agent) Each badge image renders on the forge (open the page, or the image URL).
 
 ### Counts and tables
@@ -72,7 +72,7 @@ Run `python3 -I <this skill folder>/scripts/readme_check.py [repository root]`. 
 
 ### Hosts and install
 
-- **H1** (script) Every host with a manifest is named in the header and has an `Install` subsection whose heading names it.
+- **H1** (script) Every host is named in the header and in the heading of `Install` or of one of its subsections, and every host the override's `hosts` lists has its manifest.
 - **H2** (script) Every `plugin install`, `plugin add`, `marketplace add`, `agy plugin install` and `skills add` command in Install at a glance, For AI agents and Install names the manifest `name`, the repository, its own marketplace or the catalog set in the override.
 - **H3** (agent) Each install command still matches the host's current `--help`, and the "For AI agents" host table matches the per-host install sections.
 - **H4** (agent) Since the last release tag, every added, removed or renamed skill, agent, command or host is reflected in the README tables, counts, badges and install sections: `git diff --name-status <last tag>..HEAD -- skills agents commands '.*-plugin'`.
@@ -108,7 +108,8 @@ A repository may keep `.github/readme-standard.json`. It adapts the standard to 
   "exclude_skills": ["old-*"],
   "badge_color": "1F6FEB",
   "catalog": {"repository": "example-org/plugins", "marketplace": "example"},
-  "banner_follow_up": "the skill or person that makes a missing banner"
+  "banner_follow_up": "the skill or person that makes a missing banner",
+  "hosts": ["Claude Cowork"]
 }
 ```
 
@@ -116,6 +117,7 @@ A repository may keep `.github/readme-standard.json`. It adapts the standard to 
 - `exclude_skills` lists folder-name patterns that are aliases or internal and are left out of the counts and tables.
 - `badge_color` makes every host badge use that colour (script).
 - `catalog` is the shared catalog the README installs from; H2 accepts it, and D2 compares with its entry.
+- `hosts` lists the hosts the README serves, from `Claude Code`, `Claude Cowork`, `Codex` and `Antigravity`, in place of the hosts read from the manifest folders. Use it when a manifest format serves a host other than its default, as a plugin for Claude Cowork only does with `.claude-plugin`; each listed host still needs its manifest (Claude Cowork's is `.claude-plugin/plugin.json`).
 - `banner_follow_up` names who makes the banner when the repository has none: record it as a follow-up and leave the banner out; never ship a placeholder image.
 
 A house style (colours, catalog, wording rules of an organization) belongs in that file or in the organization's own instructions, not in this skill.

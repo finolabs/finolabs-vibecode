@@ -18,6 +18,9 @@ from pathlib import Path
 from urllib.parse import unquote
 
 HOSTS = (("Claude Code", ".claude-plugin"), ("Codex", ".codex-plugin"), ("Antigravity", ".antigravity-plugin"))
+# Every host the override's `hosts` may name; Claude Cowork reads the Claude Code manifest format.
+KNOWN_HOSTS = dict(HOSTS) | {"Claude Cowork": ".claude-plugin"}
+INSTALL_NAMES = {"Claude Cowork": ("claude cowork", "cowork")}  # what an Install heading may call a host
 # id, default heading pattern, condition (None: required; "present": checked only when found)
 SECTIONS = (
     ("what-you-get", r"What you get", None),
@@ -76,11 +79,24 @@ def blank_comments(text):
     return re.sub(r"<!--.*?-->", lambda m: "\n" * m.group(0).count("\n"), text, flags=re.S)
 
 
+def opens_comment(line, open_comment):
+    """Whether an HTML comment is still open after this line (inline code already removed)."""
+    for token in re.findall(r"<!--|-->", line):
+        open_comment = token == "<!--"
+    return open_comment
+
+
 def strip_code(text):
-    """Blank fenced blocks and inline code, keeping line numbers."""
-    out, fence = [], None
+    """Blank fenced blocks and inline code, keeping line numbers.
+
+    A fence marker inside an open HTML comment opens no fence: the comment is blanked later."""
+    out, fence, comment = [], None, False
     for line in text.splitlines():
         mark = re.match(r"^\s*(```+|~~~+)", line)
+        if comment:
+            out.append(line)
+            comment = opens_comment(line, True)
+            continue
         if fence:
             out.append("")
             if mark and mark.group(1)[0] == fence[0] and len(mark.group(1)) >= len(fence):
@@ -90,15 +106,20 @@ def strip_code(text):
             fence = mark.group(1)
             out.append("")
             continue
-        out.append(re.sub(r"`[^`]*`", "``", line))
+        line = re.sub(r"`[^`]*`", "``", line)
+        out.append(line)
+        comment = opens_comment(line, False)
     return out
 
 
 def code_lines(text):
     """Lines inside fenced blocks, plus inline code spans, with their line index."""
-    found, fence = [], None
+    found, fence, comment = [], None, False
     for i, line in enumerate(text.splitlines()):
         mark = re.match(r"^\s*(```+|~~~+)", line)
+        if comment:
+            comment = opens_comment(line, True)
+            continue
         if fence:
             if mark and mark.group(1)[0] == fence[0]:
                 fence = None
@@ -109,6 +130,7 @@ def code_lines(text):
             fence = mark.group(1)
             continue
         found.extend((i, span) for span in re.findall(r"`([^`]+)`", line))
+        comment = opens_comment(re.sub(r"`[^`]*`", "``", line), False)
     return found
 
 
@@ -174,11 +196,14 @@ class Check:
         self.na = set()
         self.external = []
         self.config = self.read_config(root / ".github" / "readme-standard.json")
-        self.manifests = {}
-        for host, folder in HOSTS:
-            data = load_json(root / folder / "plugin.json")
+        self.manifests, self.missing_hosts = {}, []
+        hosts = self.config.get("hosts") or [h for h, _ in HOSTS]
+        for host in hosts:
+            data = load_json(root / KNOWN_HOSTS[host] / "plugin.json")
             if isinstance(data, dict):
                 self.manifests[host] = data
+            elif "hosts" in self.config:
+                self.missing_hosts.append(host)
         first = self.manifests.get("Claude Code") or next(iter(self.manifests.values()), {})
         self.name = first.get("name", "")
         interface = first.get("interface") if isinstance(first.get("interface"), dict) else {}
@@ -199,7 +224,8 @@ class Check:
         config = load_json(path)
         if not isinstance(config, dict):
             raise BadInput("readme-standard.json is not a JSON object")
-        kinds = {"sections": dict, "exclude_skills": list, "catalog": dict, "badge_color": str, "banner_follow_up": str}
+        kinds = {"sections": dict, "exclude_skills": list, "catalog": dict, "badge_color": str, "banner_follow_up": str,
+                 "hosts": list}
         for key, kind in kinds.items():
             if key in config and not isinstance(config[key], kind):
                 raise BadInput(f"readme-standard.json: {key} must be a {kind.__name__}")
@@ -211,6 +237,9 @@ class Check:
                 re.compile(pattern)
             except re.error:
                 raise BadInput(f"readme-standard.json: sections.{sid} is not a valid regular expression") from None
+        hosts = config.get("hosts", [])
+        if "hosts" in config and (not hosts or not all(h in KNOWN_HOSTS for h in hosts) or len(set(hosts)) != len(hosts)):
+            raise BadInput("readme-standard.json: hosts must list one or more of " + ", ".join(KNOWN_HOSTS))
         if not all(isinstance(p, str) for p in config.get("exclude_skills", [])):
             raise BadInput("readme-standard.json: exclude_skills must list strings")
         if not all(isinstance(v, str) for v in config.get("catalog", {}).values()):
@@ -305,7 +334,7 @@ class Check:
             label = re.search(r"shields\.io/badge/([^?]+)", src)
             if label:
                 parts = unquote(label.group(1)).split("-")
-                host = next((h for h, _ in HOSTS if parts[0].replace("_", " ") == h), None)
+                host = next((h for h in KNOWN_HOSTS if parts[0].replace("_", " ") == h), None)
                 if host:
                     hosts_badged.add(host)
                     if color and parts[-1].lower() != str(color).lower():
@@ -313,8 +342,11 @@ class Check:
         for host in self.manifests:
             if host not in hosts_badged:
                 self.fail("B3", f"no badge for {host}, which has a manifest")
-        for host in hosts_badged - set(self.manifests):
-            self.fail("B3", f"badge for {host}, which has no manifest")
+        for host in sorted(hosts_badged - set(self.manifests)):
+            if (self.root / KNOWN_HOSTS[host] / "plugin.json").is_file():
+                self.fail("B3", f"badge for {host}, which the hosts override does not list")
+            else:
+                self.fail("B3", f"badge for {host}, which has no manifest")
 
     # Counts and tables ---------------------------------------------------
     def check_counts(self, spans, shipped):
@@ -353,11 +385,13 @@ class Check:
     def check_hosts(self, spans):
         header_text = re.sub(r"<[^>]+>", " ", self.header)
         install = spans.get("install")
-        subheads = [h.lower() for i, lv, h in self.heads if install and install[0] < i < install[1] and lv >= 3]
+        subheads = [h.lower() for i, lv, h in self.heads if install and install[0] <= i < install[1]]
+        for host in self.missing_hosts:
+            self.fail("H1", f"the hosts override lists {host}, which has no manifest")
         for host in self.manifests:
             if host.lower() not in header_text.lower():
                 self.fail("H1", f"header does not name {host}")
-            if not any(host.lower() in h for h in subheads):
+            if not any(n in h for h in subheads for n in INSTALL_NAMES.get(host, (host.lower(),))):
                 self.fail("H1", f"Install has no subsection for {host}")
         own = {self.name.lower()} if self.name else set()
         markets = set()
