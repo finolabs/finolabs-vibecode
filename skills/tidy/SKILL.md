@@ -45,13 +45,15 @@ Read [references/handover.md](references/handover.md) for saving and continuing 
 
 ## Titles
 
-A title tells the user which session holds which work, without opening it: `<project> <scope>: <activity>`.
+A title tells the user which session holds which work, without opening it: `<emoji> <project> <scope>: <activity>`.
+
+- **emoji**: one emoji for the kind of work, so the session list scans at a glance (🐛 fix, ✨ feature, 🔍 review, 🔒 security, 🚀 release; the full set is in [references/titles.md](references/titles.md)). Change it with the activity.
 
 - **project**: the repository or product name the user knows, as short as stays unambiguous (`billing-api`).
 - **scope**, optional: the feature, spec or ticket the work belongs to (`003 search`, `PAY-142`, `US4`, `T044–T046`). Leave it out for work that has none.
 - **activity**: what the session is doing now, verb-led, a few words (`fix webhook retries`, `review PR 12`, `plan rate limits`). A review, advice or committee session says so in its activity.
 
-Keep the title near 50 characters, the activity in English unless the user asks otherwise, technical names intact. Examples: `billing-api: fix webhook retries`, `billing-api 003 search: T044–T046 rebuild CLI`, `docs-site: review PR 12`.
+Keep the title near 50 characters, the activity in English unless the user asks otherwise, technical names intact. Examples: `🐛 billing-api: fix webhook retries`, `✨ billing-api 003 search: T044–T046 rebuild CLI`, `🔍 docs-site: review PR 12`.
 
 When to name: at entry, on a resume whose title no longer matches the work, and when the task or phase changes materially (a new story, from planning to implementation, from implementation to review). Do not rename for every step. Check the title again after a compaction. Advisory (agent judgment): where the host's rename tool needs this session's own id, a session can read its id from the "started by" entry that the session list shows for a child session it started itself (an id that came from its own start call); with no such child, say so in one line and ask the user to
 rename, and do not guess ids or retry blind.

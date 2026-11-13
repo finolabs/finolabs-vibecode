@@ -9,6 +9,26 @@ How each host sets a session's title, as checked against each CLI's help and com
 | Codex | `/rename` in the TUI, which asks for the name | `codex exec` takes no name: identify the run by its ledger label and log file names | `codex resume`, `archive` and `delete` accept a session name or id. Archive or delete only sessions this agent started, by id, since titles can repeat; `delete` is permanent and needs the user's explicit go. |
 | Antigravity (`agy`) | no session title found in `agy --help` | group runs with `--project <name>`; identify each by its ledger label and log file names | Say that the host has no titles, and carry the name in the handover. |
 
+## Emoji
+
+A title starts with one emoji for the kind of work the session is doing now. Pick by the activity, not the project; when the activity changes kind, change the emoji with it.
+
+| Emoji | Work |
+| --- | --- |
+| 🐛 | bug fix, failing test, incident |
+| ✨ | new feature or capability |
+| 🔧 | refactor, chore, configuration, dependency update |
+| 🧭 | planning, spec, design, brainstorm |
+| 🔍 | code review, investigation, research |
+| 🔒 | security review or security fix |
+| 🧪 | tests and verification |
+| 📝 | docs, README, writing |
+| 🚀 | release, versioning, publishing |
+| 🤝 | coordinating delegated runs or sessions |
+| 🧹 | cleanup, wrap-up, handover |
+
+Use only these, so a user learns the set. Hosts without titles skip the emoji: the ledger label and log file names stay plain text, and a slug is ASCII only (below).
+
 Where a run's label goes (the full label that `ledger.py start` prints): Claude Code's Agent tool takes it in `description`, and a background Bash command in its `description`; a headless `claude -p` run takes `-n "<label>"`; `codex exec` takes no name, so the label is the Bash `description` and the log file names; Antigravity runs group with `--project <name>` and carry the label in the same two places. The ledger `--task` holds only the scope and activity, because `ledger.py start` adds the runner and project itself.
 
 Log and output files for a delegated run are named `<ledger id>-<slug>`; its brief, written before the ledger records the dispatch, is `<slug>.md`. The slug is a short form of the task label the agent writes itself: lowercase `a-z`, `0-9` and `-`, at most 40 characters, never copied from an issue or pull request title. The same name works on every host, with or without titles.
