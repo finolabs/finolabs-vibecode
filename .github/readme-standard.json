@@ -1,0 +1,7 @@
+{
+  "sections": {"how-it-works": "How a change flows"},
+  "exclude_skills": ["fnl-*"],
+  "badge_color": "7FE2CE",
+  "catalog": {"repository": "finolabs/plugins", "marketplace": "finolabs"},
+  "banner_follow_up": "finolabs-social-preview"
+}
