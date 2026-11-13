@@ -190,19 +190,29 @@ a tier; unknown commands and paths are Tier 3.
     `scripts/**`, top-level `CLAUDE.md` and `AGENTS.md`, `.<host>-plugin/*.json`) when the check's own checkout is on a
     non-default work branch and Push and pull requests or Merge is yes. That covers both editing and the merge gate's
     changed-path check, run in the pull request's worktree. A merge on the forge does not change the live install; a
-    later pull into the live checkout does and stays unclassified. This install's own script folders stay protected.
+    later pull into the live checkout does and stays unclassified.
+  - This install's own checkout stays protected on every branch: every path, read from the check's folder (argv
+    operands and `--paths`), whose validated checkout (`project_store.identity`) is the running install's plugin root
+    is Tier 3, which also covers its top-level `scripts/`. The match is by identity, not by path prefix, so a linked
+    worktree of the install's repository under its `.claude/worktrees` stays editable.
   - An argv path operand inside a checkout of this repository (its own, the main checkout or a linked worktree that
     `project_store.identity` validates) is judged by its path relative to that checkout's root, and `git -C <folder>`
     as the same command run in that folder; a folder under `.claude/` that is not a registered worktree stays Tier 3.
   - `gh pr comment <number>` follows `Repository comments` and the target binding. Title and body values of
-    `gh pr create|edit|comment` are data (newlines, tabs, a leading `-` and backticks pass; other controls and `$(`
-    deny; a secret, machine path or sensitive assignment is `unsafe`), and one `--body-file` must be a regular file,
-    not a link, of at most 64 KiB whose text passes the same screen.
-  - With Merge yes, the merge gate's cleanup is Tier 1: `git worktree remove [--] <path>` of a linked worktree (never
-    forced, the main checkout or the current checkout) and `git branch -d [--] <branch>` (never `-D`, the current or a
-    default branch). `git rm [-r] [-q] [--] <paths>` on a work branch classifies each path like a change.
-  - Only a Tier 1 answer reserves an action or a run, and `check` exits 0 on Tier 1 and 3 on Tier 3 with the same JSON,
-    so `check ... && command` never runs a denied command.
+    `gh pr create|edit|comment` and `git commit -m` messages are data: newlines, tabs and a leading `-` pass; other
+    controls, a backtick, `$(` and `$` before a letter, `_` or `{` deny (`unknown`), so Markdown and shell examples go
+    through a file; a secret, machine path or sensitive assignment is `unsafe`. Text carrying a review gate marker
+    (`<!--`, optional whitespace, `fnl-`, any case) is `forbidden`, inline or in a file, so only `post_review.py` posts
+    reviews. One `--body-file` (gh) or `-F` (`git commit`) must be a regular file of at most 64 KiB inside the check's
+    own checkout (for example its git-ignored `.finolabs/`), outside the data root, with no link from that checkout
+    root down and no `..` step; its text is screened only for controls, secrets, machine paths and the marker.
+  - With Merge yes, the merge gate's cleanup is Tier 1: `git worktree remove [--] <path>` of a linked worktree whose
+    HEAD is a full SHA that a `log --kind merge --head <sha>` entry of the current lease recorded (never forced, the
+    main checkout, the current checkout or a worktree that is or holds this install), and `git branch -d [--] <branch>`
+    (never `-D`, the current or a default branch). `git rm [-r] [-q] [--] <paths>` on a work branch classifies each
+    path like a change.
+  - `check` exits 0 on Tier 1 and 3 on Tier 3 with the same JSON, so `check ... && command` never runs a denied
+    command. As before, only a Tier 1 answer reserves an action or a run.
 
 ## Untrusted input
 
