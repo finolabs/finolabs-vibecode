@@ -11,7 +11,9 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 HOOK = ROOT / "scripts/precompact.py"
-REMINDER = b"Before compaction, write the handover (goal, decisions, work in progress, next action) with handover_state.py write, then write back decisions.\n"
+REMINDER = (b"The summary must keep the goal and acceptance criteria, settled decisions with their dates, "
+            b"work in progress, open background runs and pull requests, the next action, and whether a "
+            b"handover was saved with handover_state.py.\n")
 
 
 class PreCompactTest(unittest.TestCase):

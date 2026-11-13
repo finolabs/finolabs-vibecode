@@ -109,6 +109,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/brief_check.py` | Lints brief headings, the environment rule and secret patterns without quoting matches; standalone copy in `handoff`. |
 | `scripts/build-parity-plugins.sh` | Builds local evaluation plugins from this checkout and a supplied upstream skill checkout. |
 | `scripts/check-references.py` | Checks local links, headings, names, inventories, ledger flags and shared mode copies. |
+| `scripts/compact_nudge.py` | Claude Code `UserPromptSubmit` nudge: reads only the latest turn's token counts and compaction settings, and at 80% and 90% of the threshold prints one line to run `session-hygiene`; never blocks, always exits 0. |
 | `scripts/compact_setup.py` | Previews/applies an approved documented native compaction threshold. |
 | `scripts/compact_stop_hook.py` | Opt-in Antigravity transcript-size stop; no content read, live delivery unverified. |
 | `scripts/checks_list.py` | Reads a repository's `.finolabs/vibecode/checks.json` only while it matches its approved digest (never the host config), with its local-receipt mode, digests a list, and writes or matches the private local checks receipt; runs no command. |
@@ -129,7 +130,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/open_dispatch_nudge.py` | Claude Code prompt reminder: one fixed line, at most every 30 minutes per session, counting this session's dispatches with no ledger outcome that ended or passed their budget; reads only the ledger and its own mark, never denies, `FNL_DISPATCH_NUDGE=off` disables it. |
 | `scripts/parallel_slots.py` | Reads user-set total/per-family capacity; advisory snapshots, not reservations or a ledger-start gate. |
 | `scripts/post_review.py` | Posts a bounded marker-checked private draft to the checkout's repository only when authorized. |
-| `scripts/precompact.py` | Prints a nonblocking reminder; Claude stdout feeds summary instructions, Codex plain stdout does not reach the model. |
+| `scripts/precompact.py` | Prints constant summary instructions (what the summary must keep); Claude stdout feeds summary instructions, Codex plain stdout does not reach the model. |
 | `scripts/project_progress.py` | Reads bounded task/work-record/repository facts and manages consented per-repository settings, labels and registration. |
 | `scripts/project_store.py` | Resolves a validated repository identity (a linked worktree only when its metadata points back) and reads or writes the approved project settings file. |
 | `scripts/quota_limit_hook.py` | Records only Claude family/time on opt-in StopFailure `rate_limit`; starts no reading. |

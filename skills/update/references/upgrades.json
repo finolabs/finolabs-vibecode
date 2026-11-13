@@ -165,7 +165,7 @@
         {
           "id": "0.2.5/quota-repin",
           "kind": "setup",
-          "text": "After any Claude Code or Codex update, run the quota setup again: the probe refuses a program whose location changed, and /setup check names the family.",
+          "text": "After a Claude Code or Codex update, the probes and /setup check say \"program changed since setup\" and refuse that program until you re-confirm its new path with the quota setup.",
           "setup": "/setup add quota"
         },
         {

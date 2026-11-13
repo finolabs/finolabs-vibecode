@@ -1,6 +1,6 @@
 # Compaction nudge: tell the agent before the host compacts
 
-Status: accepted; rule recorded as the eighth scoped exception in `CLAUDE.md` (owner decision 2026-11-12); no code yet.
+Status: accepted; rule recorded as the eighth scoped exception in `CLAUDE.md` (owner decision 2026-11-12); code landed for 0.2.5 (`scripts/compact_nudge.py`, `tests/test_compact_nudge.py`; `precompact.py` reworded as the "During" row says).
 
 ## Why
 

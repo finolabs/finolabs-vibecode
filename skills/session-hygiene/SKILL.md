@@ -32,7 +32,7 @@ An agent reads its own context percentage only from a fresh snapshot or probe of
 
 Before a compaction, a fresh session or the end of the work, write back a decision or lesson that would change what an agent does next time, through the knowledge-base procedure below. A compaction with nothing new to keep carries only the handover.
 
-Read [references/context-settings.md](references/context-settings.md) before suggesting native settings, the Antigravity compaction stop or reminder-hook behavior.
+Read [references/context-settings.md](references/context-settings.md) before suggesting native settings, the Antigravity compaction stop, the compaction nudge or PreCompact.
 
 ## Remember or recall
 

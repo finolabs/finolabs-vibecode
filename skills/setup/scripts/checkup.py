@@ -999,11 +999,16 @@ def quota_config():
     agents = [name for name in values.get("Agents", "").split(", ") if name in qp.SOURCES]
     if not agents:
         return "config: no recorded program; run /setup add quota again", True
-    entries, rows = qp.canonical_config(), []
+    entries, rows, changed = qp.canonical_config(), [], False
     for agent in agents:
         problem = None
+        change = qp.program_change(entries[agent]) if agent in entries else None
         if agent not in entries:
             problem = "confirmation missing"
+        elif change:
+            rows.append(qp.changed_line(agent, change).split(";")[0])
+            changed = True
+            continue
         else:
             try:
                 qp.checked_executable(agent, entries[agent])  # path and owner checks only; nothing runs
@@ -1015,7 +1020,8 @@ def quota_config():
                 problem = "executable unreadable"
         rows.append(agent + " " + (problem or "ok"))
     broken = any(not row.endswith(" ok") for row in rows)
-    return "config: " + ", ".join(rows) + ("; run /setup add quota again" if broken else ""), broken
+    fix = "; run /setup add quota to re-confirm the new path" if changed else "; run /setup add quota again"
+    return "config: " + ", ".join(rows) + (fix if broken else ""), broken
 
 
 def compaction_evidence(claude_home, root):

@@ -457,6 +457,36 @@ class CheckupTest(unittest.TestCase):
         self.write(config, "## Quota probe\n- Quota probe: off\n")
         self.assertIsNone(checkup.quota_config())
 
+    def test_quota_config_names_a_changed_program_without_running_it(self):
+        import hashlib as h
+        import quota_probe
+        versions = self.home / "codex-install/versions"
+        versions.mkdir(parents=True)
+        current = versions / "0.58.0"
+        current.write_text("synthetic executable")
+        alias = self.home / "codex-install/codex"
+        alias.symlink_to(current)
+        config = self.home / ".finolabs/vibecode/host.md"
+        def record(resolved):
+            self.write(config, "## Quota probe\n- Quota probe: on\n- Date: 2026-11-01\n- Agents: codex\n"
+                               "- Executable codex: " + str(alias) + "\n- Resolved codex: " + resolved + "\n"
+                               "- Resolved digest codex: " + h.sha256(resolved.encode()).hexdigest() + "\n")
+        record(str(versions / "0.57.1"))
+        with mock.patch.object(quota_probe, "checked_executable", side_effect=AssertionError("not reached")) as checked, \
+                mock.patch.object(quota_probe.subprocess, "run") as run, \
+                mock.patch.object(quota_probe.subprocess, "Popen") as popen:
+            reason, broken = checkup.quota_config()
+        self.assertEqual((reason, broken), (
+            "config: codex: program changed since setup (0.57.1 to 0.58.0); "
+            "run /setup add quota to re-confirm the new path", True))
+        self.assertNotIn(str(self.home), reason)
+        checked.assert_not_called()
+        run.assert_not_called()
+        popen.assert_not_called()
+        record(str(current))
+        with mock.patch.object(quota_probe, "checked_executable", return_value=[str(current)]):
+            self.assertEqual(checkup.quota_config(), ("config: codex ok", False))
+
     def test_missing_host_config(self):
         self.assertEqual(self.setup_item("host config")["status"], "missing")
 
