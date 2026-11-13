@@ -218,6 +218,9 @@ a tier; unknown commands and paths are Tier 3.
     path like a change.
   - `check` exits 0 on Tier 1 and 3 on Tier 3 with the same JSON, so `check ... && command` never runs a denied
     command. As before, only a Tier 1 answer reserves an action or a run.
+  - Spent runs or runtime minutes answer `exhausted`; the rolling-hour action cap answers `limit`, since it frees up.
+    When the lease is missing, expired, stopped or exhausted, the JSON also carries one fixed `end` line telling the caller to stop
+    any loop or wakeup it started for the lease and report to the user, since a host loop can outlive the lease.
 
 ## Untrusted input
 
