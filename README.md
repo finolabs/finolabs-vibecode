@@ -264,7 +264,7 @@ The features `add` opens:
 | `delegation` | Which helpers take work, the parallel limit per project, and the assignment matrix: levels, types of work, model and roles per agent, plus the judge, written in one pass to `## Assignment matrix` |
 | `afk` | The away mandate: hosts, limits, the quota floor, which categories stop or are decided during a lease (two always stop), optional `Non-production targets`, a separate consent for precedent excerpts, and Merge; run inside a repository, also that repository's own task choice, push, merge, trusted authors and code folders |
 | `checks` | A repository's check list, read from its scripts and CI without running them, saved in its own folder after a yes, with an optional local receipt, pre-push hook and cheaper CI workflow |
-| `roles` | Review roles, the judge and review posting in `## Agent roles`; a valid matrix with its own consent decides instead |
+| `roles` | Review roles and the judge in `## Assignment matrix` (the only source; `## Agent roles` is no longer read), plus review posting |
 | `project` | Per-repository ledger and task-file settings and the dashboard label, in the repository's own settings file |
 | `quota` | The opt-in quota probe |
 | `metrics` | Usage-metrics consent and retention, then project progress, the process snapshot and the Antigravity usage hook |
@@ -362,7 +362,7 @@ Parallel capacity is user-set, advisory and shared across coordinators; [slot ch
 
 The orchestration skills keep machine facts (agent commands, allowed models, reachable delegates, the configured judge, allow-rules, heavy-job limits) in `host.md`; the parallel limit is a per-project setting in that repository's approved settings file, `.finolabs/vibecode/settings.json` of the main checkout. Start from `skills/delegate/references/host-template.md`. File-backed opt-ins and Routing come from that canonical file; `FNL_ROUTING` can override Routing, and opt-in environment switches can disable collection; `ORCHESTRATION_HOST_CONFIG` applies only to non-consent settings. Put the data root where every coordinator's sandbox can read and write it, using setup's relocation step when needed.
 
-The judge defaults to a small host model. Choose Jev through `setup` only with authorization and API budget: `Judge: jev` in `## Assignment matrix` (`add delegation`), which alone decides when it is present and valid with its own consent, or `judge: jev` in canonical `## Agent roles` (`add roles`) when there is no matrix; `judge.py` calls TypeSafe directly using `TYPESAFE_API_KEY` from the process environment. The call uses the scoped Jev network exception; the optional `typesafe-ai` skill supplies cookbooks and is not required for calls. Both judges inform bounded semantic decisions; the host fallback is reported when Jev is unavailable. Neither judge grants acceptance or authority.
+The judge defaults to a small host model. Choose Jev through `setup` only with authorization and API budget: `Judge: jev` in `## Assignment matrix` (`add delegation` or `add roles`), which alone decides and counts only when valid with its own consent (without one the judge is the host model); `judge.py` calls TypeSafe directly using `TYPESAFE_API_KEY` from the process environment. The call uses the scoped Jev network exception; the optional `typesafe-ai` skill supplies cookbooks and is not required for calls. Both judges inform bounded semantic decisions; the host fallback is reported when Jev is unavailable. Neither judge grants acceptance or authority.
 
 ## Layout
 
