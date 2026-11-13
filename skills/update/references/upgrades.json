@@ -283,7 +283,7 @@
         {
           "id": "0.2.6/afk-worktree-cleanup",
           "kind": "info",
-          "text": "Under a lease with Merge allowed, an install read from the main checkout may remove a merged linked worktree; never the main checkout, a forced removal or the install's own worktree."
+          "text": "With Merge allowed, an install read from the main checkout may remove the worktree of a pull request the lease merged; never the main or current checkout, a forced removal or the install's own."
         }
       ]
     }
