@@ -205,7 +205,7 @@ class ConsentInventoryTests(unittest.TestCase):
         self.assertIn("This is your own decision", text)
         self.assertIn("There is no default for Merge", text)
 
-    def test_afk_project_scope_asks_five_keys_previews_and_writes_after_a_yes(self):
+    def test_afk_project_scope_reads_current_asks_ticked_keys_and_writes_after_a_yes(self):
         text = (REFS / "features/afk.md").read_text()
         self.assertIn("## Project scope", text)
         self.assertIn("(../afk-project.md)", text.split("## Project scope")[1])
@@ -219,6 +219,8 @@ class ConsentInventoryTests(unittest.TestCase):
         self.assertLess(project.index("--clear autopilot --dry-run"),
                         project.index("Should this repository use different away rules than your account?"))
         self.assertIn("preview its removal and ask the save question", project)
+        self.assertIn("`current` field", project)
+        self.assertIn("`changed` keys", project)
         for key in ("task-choice", "push-and-pull-requests", "merge", "trusted-authors", "roots"):
             self.assertIn("`%s`" % key, project)
         # Only the keys the user ticks as different are asked; every other key inherits.
