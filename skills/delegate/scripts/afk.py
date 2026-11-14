@@ -289,7 +289,7 @@ SOFT_PREFIXES = ('settings.', 'config.', 'setup.', 'hooks.')
 # The plugin's own source in a repository, relative to its checkout root: editable on a work branch.
 SOURCE = re.compile(r'(?:skills|scripts)/[A-Za-z0-9_./-]+|\.[a-z0-9]+-plugin/[A-Za-z0-9_.-]+\.json|CLAUDE\.md|AGENTS\.md')
 # A Markdown skill repository the user approved (`skill-repository: yes`): its root SKILL.md and these folders.
-SKILL_SOURCE = re.compile(r'SKILL\.md|(?:references|evals)/[A-Za-z0-9_./-]+')
+SKILL_SOURCE = re.compile(r'SKILL\.md|(?:references|evals|scripts)/[A-Za-z0-9_./-]+')
 SKILL_REPO = 'Skill repository'  # the applied-settings entry set only by an approved project `skill-repository`
 
 
@@ -472,8 +472,11 @@ def source_path(relative, mode=True):
     """True for the plugin's own source (`SOURCE`), judged on the path relative to its checkout root; in an approved
     skill repository (`mode` 'skill') also its root SKILL.md, references/** and evals/** (`SKILL_SOURCE`)."""
     name = relative.as_posix()
-    if mode == 'skill' and SKILL_SOURCE.fullmatch(name):
-        return name == 'SKILL.md' or relative.name.casefold() != 'skill.md'  # only the root SKILL.md
+    if mode == 'skill':
+        if relative.name.casefold() == 'skill.md' and name != 'SKILL.md':
+            return False  # only the root SKILL.md of a skill repository, at any depth below it never
+        if SKILL_SOURCE.fullmatch(name):
+            return True
     return bool(SOURCE.fullmatch(name))
 
 
@@ -814,7 +817,7 @@ def review_post(tail, applied):
         number, body = tail[2], tail[1]
     else:
         return 'unknown'
-    if not re.fullmatch(r'[1-9][0-9]{0,6}', number):
+    if not re.fullmatch(r'[1-9][0-9]{0,9}', number):
         return 'unknown'
     return 'allowed' if body is None else review_body(body)
 

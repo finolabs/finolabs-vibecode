@@ -7,7 +7,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Fixed
 
 - afk no longer parks review posting: `afk.py check` allows `post_review.py <number>` and `post_review.py <number> --body-file <run body>` (either order) when the repository's target is verified and `Repository comments` is `decide`; the body must be post_review.py's own private run body, its first line one review marker and the rest free of secrets, machine paths and other gate markers.
-- afk works in a Markdown skill repository: a repository approved as one (`skill-repository: yes`, a new question in `/setup add afk` inside the repository) may edit its root `SKILL.md`, `references/**` and `evals/**` on a work branch.
+- afk works in a Markdown skill repository: a repository approved as one (`skill-repository: yes`, a new question in `/setup add afk` inside the repository) may edit its root `SKILL.md`, `references/**`, `scripts/**` and `evals/**` on a work branch; a `SKILL.md` below the root stays protected.
 
 ## [0.2.6] - 2026-11-14
 

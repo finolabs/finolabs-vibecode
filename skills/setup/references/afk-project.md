@@ -11,7 +11,7 @@ Trusted authors stays own (`trusted-authors`; no other choice yet). A project va
 Ask: "In this repository, may the agents choose new tasks from your task list?" Use my user setting / Yes / No (`task-choice`: choose or listed).
 Ask: "In this repository, may the agents push their branches and open pull requests?" Use my user setting / Yes / No (`push-and-pull-requests`).
 Ask: "Which other top-level folders hold this repository's code?" Use my user setting (none) or names such as packages (`roots`, at most 16, no leading dot; src's path rules apply).
-Ask: "Is this repository a skill repository, with its own SKILL.md, references/ and evals/ at the top?" Use my user setting (no) / Yes (`skill-repository`: yes); with yes the agents may edit those files on a work branch.
+Ask: "Is this repository a skill repository, with its own SKILL.md, references/, scripts/ and evals/ at the top?" Use my user setting (no) / Yes (`skill-repository`: yes); with yes the agents may edit those files on a work branch.
 Ask: "In this repository, may the agents merge pull requests and local branches while a lease is live?" Use my user setting / Yes / No (`merge`); ask it last; yes is your own decision.
 Answers, with the current values of unticked keys, become one object; "Use my user setting" leaves a key out. Preview: `python3 -I <this skill folder>/scripts/project_progress.py settings --set 'autopilot=<JSON>' --dry-run` (replaces the whole object), or `settings --clear autopilot --dry-run` when every answer inherits (keeps other settings). Report a refusal; on action `none`, stop. Else show the repository, `target`, action, object, effective values and the `changed` keys (each with its old value), then ask:
 "Save these away settings for this repository?"

@@ -1148,6 +1148,10 @@ class ProjectScopeTest(AfkBase):
             with self.subTest(text=text[:30]):
                 body = self.run_body(text, 'b' * 32)
                 self.check(post + ['7', '--body-file', str(body)], tier=3, code=code)
+        self.check(post + ['1234567890'])
+        (self.repo / '.git/config').write_text(ORIGIN_CONFIG.replace('github.com/example/demo', 'gitlab.com/example/demo'))
+        self.check(post + ['7'], tier=3, code='unknown')  # no verified GitHub target
+        (self.repo / '.git/config').write_text(ORIGIN_CONFIG)
         inside = self.repo / 'body.md'
         inside.write_text(marker + 'Reviewer: x\n')
         self.check(post + ['7', '--body-file', str(inside)], tier=3, code='unsafe')
@@ -1160,7 +1164,9 @@ class ProjectScopeTest(AfkBase):
         self.check(paths=['SKILL.md'], tier=3, code='protected')
         self.project({'skill-repository': 'yes'})
         self.check(paths=['SKILL.md', 'references/guide.md', 'evals/case.json', 'scripts/tool.py'])
-        self.check(paths=['references/nested/SKILL.md'], tier=3, code='protected')
+        for nested in ('references/nested/SKILL.md', 'scripts/SKILL.md', 'scripts/tool/SKILL.md', 'evals/SKILL.md'):
+            with self.subTest(path=nested):
+                self.check(paths=[nested], tier=3, code='protected')
         self.check(paths=['.github/workflows/ci.yml'], tier=3, code='protected')
         (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')  # the default branch stays protected
         self.check(paths=['SKILL.md'], tier=3, code='protected')
