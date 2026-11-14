@@ -2688,6 +2688,12 @@ class AwayFlowTest(AfkBase):
         elsewhere.mkdir()
         (repo / '.claude/worktrees/link').symlink_to(elsewhere)
         self.check(['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/link'], tier=3, code='protected')
+        self.check(['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/link/topic'], tier=3, code='protected')
+        bare, bare_git = self.git_repo('bare-link')
+        (bare / '.claude').mkdir()
+        (bare / '.claude/worktrees').symlink_to(elsewhere)
+        self.cwd = bare  # a linked .claude/worktrees itself
+        self.check(['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic'], tier=3, code='protected')
         linked, linked_git = self.git_repo('linked')
         (linked / '.claude').symlink_to(elsewhere)
         self.cwd = linked
@@ -2712,6 +2718,19 @@ class AwayFlowTest(AfkBase):
             with self.subTest(tail=tail):
                 self.check(checks + tail, tier=3, code='unknown')
         self.check(['python3', str(ROOT / 'skills/checks/scripts/checks.py'), 'run'], tier=3, code='protected')
+        for tail in (['run', '--changed', '--base', 'HEAD~1'], ['run', '--changed', '--base', 'HEAD^']):
+            with self.subTest(tail=tail):
+                self.check(checks + tail, tier=3, code='unknown')
+        # From inside an own linked worktree, where an away session works.
+        import subprocess
+        tree = self.cwd / '.claude/worktrees/wt'
+        subprocess.run(['git', 'worktree', 'add', '-q', str(tree), '-b', 'work'], cwd=self.cwd, check=True,
+                       capture_output=True, env={'HOME': str(self.home), 'PATH': os.defpath + ':/usr/local/bin:/opt/homebrew/bin',
+                                                 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': os.devnull})
+        self.cwd = tree
+        for tail in (['run'], ['run', '--changed'], ['show']):
+            with self.subTest(tree=tail):
+                self.check(checks + tail)
         outside = self.home / 'no-repository'
         outside.mkdir()
         self.cwd = outside
