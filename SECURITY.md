@@ -6,8 +6,8 @@ The plugin is in phase 0 (`0.y.z`). Security maintenance covers the following re
 
 | Version | Security support |
 | --- | --- |
-| 0.2.x | Supported; fixes ship in the latest 0.2.x release. |
-| 0.1.x | Not supported; upgrade to 0.2.x. |
+| 0.3.x | Supported; fixes ship in the latest 0.3.x release. |
+| 0.2.x and earlier | Not supported; upgrade to 0.3.x. |
 
 Development builds are not supported releases; reproduce against a supported release when possible.
 
