@@ -64,6 +64,13 @@ class ChooseModeTests(unittest.TestCase):
         self.assertLess(self.text.index("An agent the user named"), self.text.index("matrix role `advisor`"))
         self.assertLess(self.text.index("matrix role `advisor`"), self.text.index("Otherwise contrast"))
 
+    def test_the_run_count_the_program_record_and_the_judge_copy_are_stated(self):
+        self.assertIn("check that `ledger.py start` argv with `afk.py check` too", self.text)
+        self.assertIn("`/setup add quota` again", self.text)
+        decide = (ROOT / "skills/afk/references/decide.md").read_text()
+        self.assertIn("`<judge.py>` is `judge.py` from the same `delegate` scripts folder", decide)
+        self.assertTrue((ROOT / "skills/delegate/scripts/judge.py").is_file())
+
     def test_documented_records_match_the_attempt_schema(self):
         module = reader()
         chosen = attempt(module, record(self.text, "yes"))

@@ -2,7 +2,7 @@
 
 While a lease is live, a decision you would otherwise ask the user goes up this ladder and stops at the first rung that settles it. That is every hand-off to the user or owner, whatever its form: a question tool or text question, a wrap-up question, an open decision in a plan, or a skill step that says the owner decides, such as `review-gate`'s stop after two rework rounds. Never end a turn waiting for an answer: settle it here, or park only what the checks below park and carry on with other work. Do not ask the user: on Claude Code the away question gate denies the question tool during a lease (hook); on Codex and Antigravity this is advisory (agent judgment). Following the ladder is advisory (agent judgment): `afk.py` runs nothing, so it cannot climb it for you. It enforces the record, the packet caps and the command forms below.
 
-`<script>` is `afk.py` from `delegate`, as in `SKILL.md`.
+`<script>` is `afk.py` from `delegate`, as in `SKILL.md`. `<judge.py>` is `judge.py` from the same `delegate` scripts folder: `check` allows only that copy and answers `protected` for any other, such as the one in `checks`.
 
 ## Frame the question
 
@@ -54,6 +54,7 @@ The answer of a rung is the decision, not advice: apply it, and do not re-ask, o
 | The small model's table fails `check-table`, or its run fails | go to the advisor without a table | `table`, `unavailable`, `--by host-small` |
 | The lease's Hosts hold no other family, or no other family has a strong model | the host chooses | `advisor`, `unavailable` (no `--by`), then `host` |
 | The advisor is out of quota, unreachable or its run fails | the host chooses | `advisor`, `unavailable`, then `host` |
+| `check` denies the advisor's argv because its program changed since setup recorded it (a Claude Code or Codex update) | the host chooses; tell the user to run `/setup add quota` again | `advisor`, `unavailable`, `--by <agent>`, then `host` |
 | The advisor answers `none`, or names something outside the options | the host chooses | `advisor`, `no`, then `host` |
 | You find a fact the deciding rung lacked, and it changes which option fits | one new attempt at that rung with the fact, same decision id; if it does not hold, the host chooses | a further attempt, then `host` |
 | "Where it must stop" applies at either check | park | `park` |
