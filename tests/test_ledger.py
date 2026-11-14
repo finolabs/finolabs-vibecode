@@ -839,6 +839,16 @@ class AwayLedgerTest(unittest.TestCase):
         for word in ("schema", "naming"):
             self.assertNotIn(word, output)  # topic labels stay in the ledger file
 
+    def test_away_section_reads_a_legacy_jev_probability(self):
+        # Leases before 0.2.7 logged the top probability under rung `jev`; the table spread still counts it.
+        legacy = {"event": "decision", "id": "q20261110-020000-eeee", "ts": "2026-11-10T02:00:00+00:00",
+                  "project": "demo", "lease_start": 9000.0, "rung": "jev", "settled": "no", "by": "jev",
+                  "probability": 0.5, "precedents": 0, "topic": "legacy"}
+        self.write(self.DISPATCHES + self.AWAY + [legacy])
+        second = self.ledger.away_rows()[1]
+        self.assertEqual(second["table_p"], {"n": 1, "min": 0.5, "median": 0.5, "max": 0.5})
+        self.assertEqual(second["by_rung"], {"host": 1})
+
     def test_summary_with_only_away_lines_prints_both_sections_honestly(self):
         self.write(self.AWAY)
         args = self.ledger.build_parser().parse_args(["summary"])
