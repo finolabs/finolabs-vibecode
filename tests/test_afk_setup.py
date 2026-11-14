@@ -198,6 +198,7 @@ class AfkSetupTest(unittest.TestCase):
         writer, reader = self.writer(), self.reader()
         self.assertEqual(writer.CATEGORIES, reader.CATEGORIES)
         self.assertEqual((writer.CONSENT, writer.TARGETS), (reader.CONSENT, reader.TARGETS))
+        self.assertEqual(writer.LISTS, reader.LISTS)
 
     def test_fixed_rows_cannot_be_moved(self):
         before = self.snapshot()
@@ -207,7 +208,7 @@ class AfkSetupTest(unittest.TestCase):
                 self.assertEqual(self.snapshot(), before)
         writer = self.writer()
         values = {**writer.DEFAULTS, 'Merge': 'no', **{c: 'stop' for c in writer.CATEGORIES},
-                  writer.CONSENT: 'no', writer.TARGETS: []}
+                  writer.CONSENT: 'no', writer.TARGETS: [], **{key: [] for key in writer.LISTS}}
         writer.validate(values)
         for name in ('Production', 'Real users and customer data'):
             with self.subTest(name=name), self.assertRaises(ValueError):
@@ -247,6 +248,30 @@ class AfkSetupTest(unittest.TestCase):
                 self.assertEqual(self.snapshot(), before)
         self.assertEqual(self.cli('preview', '--merge', 'no', '--non-production-target', 'same',
                                   '--non-production-target', 'same')[0], 1)
+
+    def test_account_lists_round_trip_into_the_reader(self):
+        # Owner decision 15/11/2026: the account sets the default lists for every repository.
+        self.apply(self.preview('--test-command', 'npm test', '--test-command', 'python3 -m unittest',
+                                '--top-level-file', 'TASKS.md', '--release-target', 'git tag v1.2.0',
+                                '--production-target', 'npx wrangler deploy --env production'))
+        reader = self.reader()
+        applied = reader.settings()
+        self.assertEqual((applied['Test commands'], applied['Top-level files'], applied['Release targets'],
+                          applied['Production targets']),
+                         (['npm test', 'python3 -m unittest'], ['TASKS.md'], ['git tag v1.2.0'],
+                          ['npx wrangler deploy --env production']))
+        self.assertIn('- Test commands: npm test; python3 -m unittest\n', self.host.read_text())
+        self.apply(self.preview())
+        self.assertNotIn('Test commands', self.host.read_text())  # an empty list writes no line
+        self.assertEqual(self.reader().settings()['Test commands'], [])
+        before = self.snapshot()
+        for flag, bad in (('--test-command', 'git status'), ('--test-command', 'npm  test'),
+                          ('--test-command', 'a; b'), ('--top-level-file', 'CLAUDE.md'),
+                          ('--top-level-file', 'notes/x.md'), ('--release-target', 'make release'),
+                          ('--production-target', 'deploy $(x)')):
+            with self.subTest(flag=flag, bad=bad):
+                self.assertEqual(self.cli('preview', '--merge', 'no', flag, bad)[0], 1)
+                self.assertEqual(self.snapshot(), before)
 
     def test_excerpt_consent_is_separate_and_off_by_default(self):
         self.apply(self.preview('--merge', 'yes', '--decide', 'Publishing'))

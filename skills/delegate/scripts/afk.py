@@ -82,9 +82,14 @@ CATEGORIES = {'Production': True, 'Real users and customer data': True, 'Unrecov
               'Shared settings': False, 'Recoverable deletion': False, 'Repository comments': False}
 CONSENT = 'Excerpts leave the machine'
 TARGETS = 'Non-production targets'
-PRODUCTION_TARGETS = 'Production targets'  # project scope only (`production-targets`); never read from host.md
-TEST_COMMANDS = 'Test commands'  # project scope only (`test-commands`, docs/specs/afk-per-project.md F); never host.md
-FILES = 'Top-level files'  # project scope only (`top-level-files`): exact top-level file names that become known paths
+PRODUCTION_TARGETS = 'Production targets'  # exact production deploys; Production itself is decided only per repository
+TEST_COMMANDS = 'Test commands'  # exact test commands (docs/specs/afk-per-project.md F)
+FILES = 'Top-level files'  # exact top-level file names that become known paths
+RELEASE_TARGETS = 'Release targets'  # exact tag, release and publish commands (docs/specs/afk-per-project.md G)
+# The command and file lists load like environment variables (owner decision 15/11/2026): the host.md value is the
+# default for every repository, a repository's own value replaces it, and the strict and no-repository states use none.
+LISTS = {PRODUCTION_TARGETS: 'production-targets', TEST_COMMANDS: 'test-commands', FILES: 'top-level-files',
+         RELEASE_TARGETS: 'release-targets'}
 CLASSIFIED = {'git', 'gh', 'rm'}  # programs check classifies itself, so a test-command entry never names them
 # A repository's `decide` list names categories by these keys; every category it does not list is stop there.
 DECIDE_NAMES = {'production': 'Production', 'unrecoverable-deletion': 'Unrecoverable deletion',
@@ -123,7 +128,7 @@ PROJECT_KEYS = {'task-choice': 'Task choice', 'push-and-pull-requests': 'Push an
 MAX_PROJECTS = 64  # entries in the lease's per-project counter table
 OFF = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', 'Trusted authors': 'own', 'Roots': []}
 # The strict and no-repository states also reset every category to stop and both target lists to empty.
-CLOSED = {**{c: 'stop' for c in CATEGORIES}, TARGETS: [], PRODUCTION_TARGETS: [], TEST_COMMANDS: [], FILES: []}
+CLOSED = {**{c: 'stop' for c in CATEGORIES}, TARGETS: [], **{name: [] for name in LISTS}}
 CONTEXT = 'Repository context'  # the applied-settings entry holding the check's Context
 MERGED = 'Merged heads'  # the applied-settings entry holding the heads this lease's `log --kind merge` entries recorded
 EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yaml', '.yml'}
@@ -145,16 +150,22 @@ def settings():
     start, body, end = slots.host_section(text, 'afk')
     if start == body == end:
         raise ValueError('afk setup is missing')
-    result, seen = {**DEFAULTS, **{c: 'stop' for c in CATEGORIES}, CONSENT: 'no', TARGETS: []}, set()
+    result, seen = {**DEFAULTS, **{c: 'stop' for c in CATEGORIES}, CONSENT: 'no', TARGETS: [],
+                    **{name: [] for name in LISTS}}, set()
     for line in text[body:end].splitlines():
         if not line.strip():
             continue
         match = re.fullmatch(r'- ([A-Za-z -]+): (.+)', line)
-        if not match or match[1] not in {*DEFAULTS, 'Merge', *CATEGORIES, CONSENT, TARGETS} or match[1] in seen:
+        if not match or match[1] not in {*DEFAULTS, 'Merge', *CATEGORIES, CONSENT, TARGETS, *LISTS} or match[1] in seen:
             raise ValueError('afk setup is invalid')
         key, value = match.groups()
         seen.add(key)
-        if key in CATEGORIES:
+        if key in LISTS:
+            # The same closed grammar as a repository's list; an invalid line fails the setup, never half-read.
+            value = value.split('; ')
+            if not store.valid_autopilot({LISTS[key]: value}):
+                raise ValueError('afk setup has an invalid list')
+        elif key in CATEGORIES:
             value = 'decide' if value == 'decide' and not CATEGORIES[key] else 'stop'
         elif key == CONSENT:
             value = 'yes' if value == 'yes' else 'no'
@@ -244,7 +255,8 @@ def start(folder, args):
         os.unlink('stop', dir_fd=folder)
     except FileNotFoundError:
         pass
-    summary = {**applied, 'Lease hours': hours, TARGETS: '; '.join(applied[TARGETS]) or 'none'}
+    summary = {**applied, 'Lease hours': hours,
+               **{name: '; '.join(applied[name]) or 'none' for name in (TARGETS, *LISTS)}}
     print('afk started\n' + '\n'.join(f'- {key}: {value}' for key, value in summary.items()))
 
 
@@ -415,6 +427,16 @@ def context_of(applied):
     return found if isinstance(found, Context) else UNKNOWN
 
 
+def screened_lists(applied, project):
+    """The four command and file lists for one found repository: its own value when it has one, else the user's
+    (a list replaces, never merges), each screened as `check` reads it."""
+    lists = {name: list(project[key]) if key in project else list(applied.get(name, []))
+             for name, key in LISTS.items()}
+    lists[TEST_COMMANDS] = [c for c in lists[TEST_COMMANDS] if c.split(' ')[0] not in CLASSIFIED]
+    lists[FILES] = [f for f in lists[FILES] if '/' not in f and not protected(f)]
+    return lists
+
+
 def effective(applied, cwd):
     """The project-scoped values (five, plus the three limits, which keep the user values in the strict state) and the repository context of one check (docs/specs/autopilot.md "Project scope").
 
@@ -440,7 +462,7 @@ def effective(applied, cwd):
         state, values, _, record = store.autopilot_binding(ident)
         target = store.origin_target(ident)
         if state == 'unset' or state == 'approved' and 'autopilot' not in values:
-            return {**applied, 'Roots': [], PRODUCTION_TARGETS: [], TEST_COMMANDS: [], FILES: [],
+            return {**applied, 'Roots': [], **screened_lists(applied, {}),
                     CONTEXT: Context('found', ident, 'user', target, cwd)}
         project = values.get('autopilot') if state == 'approved' else None
         if (not store.valid_autopilot(project) or 'target' not in record or record['target'] != target
@@ -460,9 +482,7 @@ def effective(applied, cwd):
             result['Production'] = 'stop'  # the user scope never decides production
         if 'non-production-targets' in project:
             result[TARGETS] = list(project['non-production-targets'])
-        result[PRODUCTION_TARGETS] = list(project.get('production-targets', []))
-        result[TEST_COMMANDS] = [c for c in project.get('test-commands', []) if c.split(' ')[0] not in CLASSIFIED]
-        result[FILES] = [f for f in project.get('top-level-files', []) if '/' not in f and not protected(f)]
+        result.update(screened_lists(applied, project))
         result[CONTEXT] = Context('found', ident, 'project', target, cwd)
         return result
     except (OSError, ValueError, TypeError, UnicodeError, KeyError, RecursionError):
@@ -1106,9 +1126,13 @@ def release_command(argv, applied, categories, deploy):
         return 'forbidden'  # no verified repository settings: tags, releases, publishing and deploys wait for a person
     if categories and not permits(categories, applied):
         return 'forbidden'  # row 3: every applicable category must be decide
+    # Token lists, not joined text: a token holding a space must never equal two listed words.
+    listed = lambda key: [entry.split(' ') for entry in applied.get(key, [])]
+    reading = argv[:2] == ['git', 'tag'] and argv[2:] in ([], ['-l'], ['--list']) or argv[:3] in (
+        ['gh', 'release', 'view'], ['gh', 'release', 'list'])
+    if categories and not reading and argv not in listed(RELEASE_TARGETS):
+        return 'forbidden'  # a tag, release or publish runs only as an exact listed command (owner decision 15/11/2026)
     if deploy:
-        # Token lists, not joined text: a token holding a space must never equal two listed words.
-        listed = lambda key: [entry.split(' ') for entry in applied.get(key, [])]
         production = argv in listed(PRODUCTION_TARGETS) and applied.get('Production') == 'decide'
         if not production and any(re.search(r'prod|live', t, re.I) for t in argv):
             return 'forbidden'  # row 2: production or live, unless this repository listed it and decides Production
@@ -1416,8 +1440,8 @@ def classify_argv(argv, applied, coordinator=None):
     categories, deploy = command_categories(argv), is_deploy(argv)
     if categories or deploy:
         return release_command(argv, applied, categories, deploy)
-    # A repository's approved test command, exactly as listed (token lists); only after the rules above.
-    if (context_of(applied).state == 'project' and argv[0] not in CLASSIFIED
+    # A listed test command (the repository's list, else the user's), exactly (token lists); only after the rules above.
+    if (context_of(applied).state in ('user', 'project') and argv[0] not in CLASSIFIED
             and argv in [entry.split(' ') for entry in applied.get(TEST_COMMANDS, [])]):
         return 'allowed'
     if command == 'rm' and any(t.startswith('-') and ('r' in t[1:] or t == '--recursive') for t in argv[1:]):

@@ -1088,12 +1088,26 @@ class SettingsFileTest(unittest.TestCase):
         self.assertIn('Top-level files', shown['changed'])
         self.assertTrue(self.away(json.dumps({'test-commands': ['npm test'], 'top-level-files': ['TASKS.md']})))
         shown = self.pp.autopilot_preview(self.repo, json.dumps({'merge': 'no'}))
-        self.assertEqual((shown['effective']['Test commands'], shown['effective']['Top-level files']), ('none', 'none'))
+        # An omitted list inherits the user's (owner decision 15/11/2026).
+        self.assertEqual((shown['effective']['Test commands'], shown['effective']['Top-level files']),
+                         ('user list (user)', 'user list (user)'))
         self.assertIn('Test commands', shown['changed'])  # removing a list is a change of its own
         self.assertIn('Top-level files', shown['changed'])
         same = self.pp.autopilot_preview(self.repo, json.dumps({'test-commands': ['npm test'],
                                                                 'top-level-files': ['TASKS.md']}))
         self.assertEqual((same['action'], same['changed']), ('none', []))
+
+    def test_the_preview_shows_release_targets(self):
+        shown = self.pp.autopilot_preview(self.repo, json.dumps({'release-targets': ['git tag v1.2.0', 'npm publish'],
+                                                                 'decide': ['tags-and-releases', 'publishing']}))
+        self.assertEqual(shown['effective']['Release targets'], 'git tag v1.2.0; npm publish (repository)')
+        self.assertIn('Release targets', shown['changed'])
+        shown = self.pp.autopilot_preview(self.repo, json.dumps({'merge': 'no'}))
+        self.assertEqual(shown['effective']['Release targets'], 'user list (user)')
+        for bad in ({'release-targets': []}, {'release-targets': ['make release']}, {'release-targets': ['git push']},
+                    {'release-targets': ['git tag v1; rm -rf x']}, {'release-targets': ['npm publish', 'npm publish']}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                self.pp.autopilot_preview(self.repo, json.dumps(bad))
 
     def test_the_cli_previews_the_autopilot_object_and_writes_it_only_without_dry_run(self):
         import io

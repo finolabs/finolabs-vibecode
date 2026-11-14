@@ -158,12 +158,11 @@ def autopilot_preview(cwd, value):
         shown['Decide'] = (', '.join(obj['decide']) or 'none') + ' (repository)' if obj and 'decide' in obj else 'user answers (user)'
         shown['Non-production targets'] = ('; '.join(obj['non-production-targets']) or 'none') + ' (repository)' \
             if obj and 'non-production-targets' in obj else 'user list (user)'
-        shown['Production targets'] = ('; '.join(obj['production-targets']) + ' (repository)'
-                                       if obj and 'production-targets' in obj else 'none')
-        shown['Test commands'] = ('; '.join(obj['test-commands']) + ' (repository)'
-                                  if obj and 'test-commands' in obj else 'none')
-        shown['Top-level files'] = (', '.join(obj['top-level-files']) + ' (repository)'
-                                    if obj and 'top-level-files' in obj else 'none')
+        # The command and file lists load like environment variables: a repository list replaces the user's.
+        for key, name, joiner in (('production-targets', 'Production targets', '; '),
+                                  ('release-targets', 'Release targets', '; '), ('test-commands', 'Test commands', '; '),
+                                  ('top-level-files', 'Top-level files', ', ')):
+            shown[name] = (joiner.join(obj[key]) + ' (repository)' if obj and key in obj else 'user list (user)')
         return shown
     # The stored object and the keys whose effective value would move, so a change is never shown as a new state only.
     shown, before = effective(desired), effective(current)
