@@ -591,7 +591,9 @@ class SameFamilyFallbackTest(unittest.TestCase):
         self.present = patch.object(review_config, "present_families", return_value={"claude", "codex", "antigravity"})
         self.host = patch.object(review_config, "host_text", return_value="synthetic")
         self.status = patch.object(quota_probe, "status_lines", side_effect=lambda: self.out)
-        for p in (self.lease, self.present, self.host, self.status):
+        self.installs = {agent: {"configs": {"default": None}} for agent in ("agy", "claude", "codex")}
+        self.config = patch.object(quota_probe, "canonical_config", side_effect=lambda: self.installs)
+        for p in (self.lease, self.present, self.host, self.status, self.config):
             p.start()
             self.addCleanup(p.stop)
         self.files = [{"filename": "docs/notes.md"}]
@@ -650,6 +652,40 @@ class SameFamilyFallbackTest(unittest.TestCase):
                       ["Quota: unverified (no reading)."]):
             with self.subTest(lines=[line[:40] for line in lines]):
                 self.out = lines
+                self.assertFalse(self.evaluate()[0])
+
+    def test_the_fallback_runs_whatever_routing_picks(self):
+        # Routing picks codex because codex has no reading: the fallback still runs and refuses.
+        self.out = [self.out[1]]
+        ok, lines = self.evaluate(families=dict(author="claude", code="codex", security="codex"))
+        self.assertFalse(ok)
+        self.assertIn("BLOCK same-family review: no evidence that codex is out", lines)
+        self.assertFalse(any("different family" in line for line in lines), lines)
+
+    def test_a_fallback_marker_without_the_flag_blocks(self):
+        ok, lines = mc.evaluate(self.data(), lambda who: who in WRITERS, adopted=False, independent=True,
+                                families=dict(author="claude", code="codex", security="codex"))
+        self.assertFalse(ok)
+        self.assertIn("BLOCK independent code review: a same-family fallback marker needs --fallback-family", lines)
+
+    def test_partial_or_unknown_evidence_refuses(self):
+        from datetime import timedelta
+        iso = self.iso
+        # Two configured codex installs, only one reading: codex is not shown out.
+        self.installs["codex"] = {"configs": {"default": None, "work": None}}
+        self.assertFalse(self.evaluate()[0])
+        self.installs["codex"] = {"configs": {"default": None}}
+        # A pool segment that does not parse is no evidence.
+        self.out = [f"Quota codex/default: measured {iso(timedelta(hours=-1))}; week 7d: 2% remaining, resets "
+                    f"{iso(timedelta(days=1))}; garbled", self.out[1]]
+        self.assertFalse(self.evaluate()[0])
+        import review_config
+        for present in (set(), {"codex", "antigravity"}):
+            with self.subTest(present=present), patch.object(review_config, "present_families", return_value=present):
+                self.assertFalse(self.evaluate()[0])
+        for files in ([], [{"filename": ""}], ["docs/notes.md"], None):
+            with self.subTest(files=files):
+                self.files = files
                 self.assertFalse(self.evaluate()[0])
 
     def test_no_fallback_flag_keeps_the_same_family_block(self):

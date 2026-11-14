@@ -50,11 +50,14 @@ Tier 3 path eligibility; those are the afk caller's separate gates.
 With --fallback-family <family> as well, current-head markers from the author's
 own family count only when all of these hold (docs/specs/afk-per-project.md D):
 a live away lease; <family> is the author's family; every other present family
-has positive evidence of being out (a reading under 8 hours old with every pool
-below the routing floor, or a live rate-limit marker; no reading is no evidence);
+has positive evidence of being out (a reading under 8 hours old for every
+configured install, with every pool below the routing floor, or a live rate-limit
+marker; no reading or a partial one is no evidence);
 the router trigger is not security, permission or privacy and no enforcer script
 or instruction file changed; and each counted marker's second line starts with
-the exact fallback reviewer line. Anything unknown refuses.
+the exact fallback reviewer line. The flag runs these checks on both reviews
+whatever routing would pick now. Without the flag, a counted marker carrying a
+fallback reviewer line blocks. Anything unknown refuses.
 """
 
 import argparse
@@ -122,7 +125,7 @@ def login(node):
 
 
 def verdicts(pr, can_write):
-    """Latest counted verdict per kind for the head: {kind: (verdict, createdAt, lane)}."""
+    """Latest counted verdict per kind for the head: {kind: (verdict, createdAt, lane, second line)}."""
     head = pr["headRefOid"]
     latest = {}
     for comment in pr["comments"]:
@@ -288,13 +291,16 @@ def independent_families(pr):
         return None
 
 
-def out_families(lines, current=None):
-    """Families with positive evidence of being out: a live rate-limit marker, or every fresh install's every
-    relevant pool below the floor with a reset ahead. A missing, stale or unreadable reading is no evidence."""
+def out_families(lines, current=None, configured=None):
+    """Families with positive evidence of being out: a live rate-limit marker, or a fresh reading for every
+    configured install (`configured`: {agent: labels}, from the canonical quota config) with every pool below the
+    floor and a reset ahead. A missing, stale, partial or unreadable reading is no evidence."""
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import quota_probe
     current = current or datetime.now(timezone.utc)
+    if configured is None:
+        configured = {agent: set(entry["configs"]) for agent, entry in quota_probe.canonical_config().items()}
     out, installs = set(), {}
     for line in lines:
         marker = re.fullmatch(r"Quota (claude|codex|agy): rate-limit marker ([^;]+); out of quota until ([^ ]+) \(advisory\)", line)
@@ -305,16 +311,16 @@ def out_families(lines, current=None):
         match = re.fullmatch(r"Quota (claude|codex|agy)/([^:]+): measured ([^;]+); (.+)", line)
         if not match:
             continue
-        family = "antigravity" if match[1] == "agy" else match[1]
         age = (current - quota_probe.timestamp(match[3])).total_seconds()
-        if age < 0 or age > FRESH:
-            installs.setdefault(family, []).append(False)
-            continue
-        pools = re.findall(r"(?:^|; )([a-zA-Z0-9_-]+) ([^:;]+): (\d+)% remaining, resets ([^ ;]+)", match[4])
-        relevant = [pool for pool in pools if family != "claude" or pool[0] == "week-all"]
-        installs.setdefault(family, []).append(bool(relevant) and all(
-            int(p[2]) < FLOOR and quota_probe.timestamp(p[3]) > current for p in relevant))
-    out.update(f for f, depleted in installs.items() if depleted and all(depleted))
+        pools = [re.fullmatch(r"([a-zA-Z0-9_-]+) ([^:;]+): (\d+)% remaining, resets ([^ ;]+)", part)
+                 for part in match[4].split("; ")]
+        depleted = (0 <= age <= FRESH and all(pools)
+                    and all(int(p[3]) < FLOOR and quota_probe.timestamp(p[4]) > current for p in pools))
+        installs.setdefault(match[1], {})[match[2]] = installs.get(match[1], {}).get(match[2], True) and depleted
+    for agent, labels in installs.items():
+        expected = configured.get(agent)
+        if expected and set(labels) >= set(expected) and all(labels[label] for label in expected):
+            out.add("antigravity" if agent == "agy" else agent)
     return out
 
 
@@ -330,7 +336,10 @@ def fallback(pr, family, families, files, verdicts_found):
             return False, "no live away lease"
         if not isinstance(families, dict) or families.get("author") != family:
             return False, f"{family} is not the pull request author's family"
-        others = set(review_config.present_families(review_config.host_text())) - {family}
+        present = set(review_config.present_families(review_config.host_text()))
+        if family not in present:
+            return False, f"{family} is not a present family"
+        others = present - {family}
         reachable = sorted(others - out_families(quota_probe.status_lines()))
         if reachable:
             return False, f"no evidence that {', '.join(reachable)} is out"
@@ -338,8 +347,13 @@ def fallback(pr, family, families, files, verdicts_found):
         trigger = detail.rsplit("trigger=", 1)[-1] if marked else None
         if trigger is None or trigger in FALLBACK_TRIGGERS:
             return False, "router trigger is missing or needs the user"
-        names = [str((entry or {}).get("filename") or "") for entry in files()]
-        for name in names + [str((entry or {}).get("previous_filename") or "") for entry in files()]:
+        listed = files()
+        if not isinstance(listed, list) or not listed or any(
+                not isinstance(entry, dict) or not isinstance(entry.get("filename"), str) or not entry["filename"]
+                for entry in listed):
+            return False, "changed files could not be read"
+        names = [entry["filename"] for entry in listed] + [str(entry.get("previous_filename") or "") for entry in listed]
+        for name in names:
             base = name.rsplit("/", 1)[-1].casefold()
             if base in ENFORCERS or base in INSTRUCTION_FILES:
                 return False, "an enforcer script or instruction file changed"
@@ -455,12 +469,21 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
             ok = False
             lines.append("BLOCK independent reviews: author or reviewing family cannot be determined")
         else:
-            same = [kind for kind in ("code", "security") if families[kind] == families["author"]]
             granted = False
-            if same and fallback_family is not None:
+            if fallback_family is not None:
+                # A fallback request treats both reviews as same-family, whatever routing would pick now.
+                same = ["code", "security"]
                 granted, detail = fallback(pr, fallback_family, families, changed_files or (lambda: []), found)
                 lines.append(f"{'ok   ' if granted else 'BLOCK'} same-family review: {detail}")
                 ok = ok and granted
+            else:
+                same = [kind for kind in ("code", "security") if families[kind] == families["author"]]
+                for kind in ("code", "security"):
+                    second = (found.get(kind) or ("", "", None, ""))[3]
+                    if any(second == fallback_line(f) or second.startswith(fallback_line(f) + " ")
+                           for f in ("claude", "codex", "antigravity")):
+                        ok = False
+                        lines.append(f"BLOCK independent {kind} review: a same-family fallback marker needs --fallback-family")
             for kind in ("code", "security"):
                 if kind in same and granted:
                     lines.append(f"ok    independent {kind} review: same family, allowed by the fallback")
