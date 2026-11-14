@@ -7,6 +7,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Added
 
 - `merge_check.py --independent --fallback-family <family>` lets an away lease merge on reviews by the author's own family when no other family is reachable: it needs a live lease, the author's family, positive out-of-quota evidence (a fresh reading with every pool below the floor, or a live rate-limit marker) for every other present family, a router trigger other than security, permission or privacy, no changed enforcer script or instruction file, and the exact fallback reviewer line on each counted marker. `afk.py log --kind review-fallback --pr <n> --head <sha>` records it for the user's return.
+- `ledger.py finish --retro` marks a record written after the fact.
 
 ### Changed
 
@@ -14,10 +15,6 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - afk decisions take an evaluation table before the deciders: `judge.py ask --site away-evaluation` prints the probability of each option (`{"source", "of", "probabilities"}`), and without Jev the host's small fast model writes the same table, checked by the new `judge.py check-table --file <brief> --of <k>`. The table goes to the advisor and the host as data and never settles a decision. Breaking for away flows: the `away-decision` site and its 0.8 threshold are removed, `afk.py log --kind decision` replaces rung `jev` with `table` (`--settled yes --by jev|host-small --of <k> --probability <top p>`, or `--settled unavailable --by jev|host-small`), and the ledger's away summary and the dashboard show the table's top probability instead of a Jev spread.
 - `ledger.py summary` leaves `cancelled` records closed late (by `ledger stale` or the coordinator) out of the counts, acceptance rates and medians and prints them as a separate total, and leaves `finish --retro` records out of the medians (a group with only such records shows `-`). The text table gains the quota, error and cancelled columns that `--json` has, and below it flags accepted runs whose log scan had findings and review acceptances recorded without `--review-url`. `--json` rows gain `cancelled`, `closed_late`, `retro`, `accepted_findings` and `review_unposted`; `median_min` may be `null`. The status dashboard uses the same rows.
 - `ledger.py finish` refuses a negative `--rework-rounds`, more than 2 rework rounds without a `--reason`, and `accepted` with `--tests failed`; `start` warns, and still records, when the model is not in the assignment matrix or the project label differs from the repository's `ledger` project setting.
-
-### Added
-
-- `ledger.py finish --retro` marks a record written after the fact.
 
 ### Fixed
 
