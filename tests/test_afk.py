@@ -1264,8 +1264,13 @@ class ProjectScopeTest(AfkBase):
             with self.subTest(path=nested):
                 self.check(paths=[nested], tier=3, code='protected')
         self.check(paths=['.github/workflows/ci.yml'], tier=3, code='protected')
+        # The same paths as command operands: staging and removing them on the work branch.
+        self.check(['git', 'add', 'SKILL.md', 'references/guide.md'])
+        self.check(['git', 'rm', 'scripts/tool.py'])
+        self.check(['git', 'add', 'references/nested/SKILL.md'], tier=3, code='protected')
         (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')  # the default branch stays protected
         self.check(paths=['SKILL.md'], tier=3, code='protected')
+        self.check(['git', 'add', 'SKILL.md'], tier=3, code='protected')
         self.assertFalse(self.store.valid_autopilot({'skill-repository': 'no'}))
 
     def test_the_lease_hash_covers_the_user_section_only(self):
