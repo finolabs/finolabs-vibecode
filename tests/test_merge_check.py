@@ -262,6 +262,93 @@ class MergeCheckTest(unittest.TestCase):
             self.assertFalse(mc.lane_files(ok + [bad], read)[0], bad)
         self.assertFalse(mc.lane_files([], read)[0])
 
+    def release_texts(self, record_head=None, index_head=None):
+        record = "# Release 0.3.0: scope\n\nStatus: accepted; release prepared for 2026-11-15, not yet tagged.\n\nBody.\n"
+        index = ("| Spec | Status |\n|---|---|\n"
+                 "| [Release 0.2.6: scope](release-0.2.6.md) | released; tagged v0.2.6 on 2026-11-14. |\n"
+                 "| [Release 0.3.0: scope](release-0.3.0.md) | accepted; release prepared, not yet tagged. |\n")
+        released = "released; tagged v0.3.0 on 2026-11-15; a real upgrade remains unverified."
+        if record_head is None:
+            record_head = record.replace("accepted; release prepared for 2026-11-15, not yet tagged.", released)
+        if index_head is None:
+            index_head = index.replace("accepted; release prepared, not yet tagged.", released)
+        texts = {("docs/specs/release-0.3.0.md", "base"): record, ("docs/specs/release-0.3.0.md", "head"): record_head,
+                 ("docs/specs/index.md", "base"): index, ("docs/specs/index.md", "head"): index_head}
+        return record, index, (lambda path, side: texts[(path, side)])
+
+    RELEASE_FILES = [{"filename": "docs/specs/release-0.3.0.md", "status": "modified"},
+                     {"filename": "docs/specs/index.md", "status": "modified"}]
+
+    def test_a_release_status_change_qualifies(self):
+        _, _, read = self.release_texts()
+        self.assertTrue(mc.lane_files(self.RELEASE_FILES, read)[0], mc.lane_files(self.RELEASE_FILES, read))
+        changelog = [{"filename": "CHANGELOG.md", "status": "modified"}]
+        self.assertTrue(mc.lane_files(self.RELEASE_FILES + changelog, read)[0])
+        # Ending the released form at the date also qualifies.
+        record, _, _ = self.release_texts()
+        _, _, read = self.release_texts(
+            record_head=record.replace("accepted; release prepared for 2026-11-15, not yet tagged.",
+                                       "released; tagged v0.3.0 on 2026-11-15."))
+        self.assertTrue(mc.lane_files(self.RELEASE_FILES, read)[0])
+
+    def test_a_second_changed_line_disqualifies(self):
+        _, index, good = self.release_texts()
+        extra_record = good("docs/specs/release-0.3.0.md", "head").replace("Body.", "Body changed.")
+        _, _, read = self.release_texts(record_head=extra_record)
+        ok, reasons = mc.lane_files(self.RELEASE_FILES, read)
+        self.assertFalse(ok)
+        self.assertTrue(any("release-0.3.0.md" in reason for reason in reasons), reasons)
+        extra_index = good("docs/specs/index.md", "head").replace("released; tagged v0.2.6 on 2026-11-14.",
+                                                                  "released; tagged v0.2.6 on 2026-11-14; edited.")
+        _, _, read = self.release_texts(index_head=extra_index)
+        self.assertFalse(mc.lane_files(self.RELEASE_FILES, read)[0])
+        _, _, read = self.release_texts(record_head=good("docs/specs/release-0.3.0.md", "head") + "New line.\n")
+        self.assertFalse(mc.lane_files(self.RELEASE_FILES, read)[0])
+        # The record or the index alone does not qualify.
+        self.assertFalse(mc.lane_files(self.RELEASE_FILES[:1], good)[0])
+        self.assertFalse(mc.lane_files(self.RELEASE_FILES[1:], good)[0])
+        # The row's link cell may not change with its status.
+        renamed = index.replace("[Release 0.3.0: scope](release-0.3.0.md) | accepted; release prepared, not yet tagged.",
+                                "[Release 0.3.0: renamed](release-0.3.0.md) | released; tagged v0.3.0 on 2026-11-15.")
+        _, _, read = self.release_texts(index_head=renamed)
+        self.assertFalse(mc.lane_files(self.RELEASE_FILES, read)[0])
+
+    def test_a_non_release_spec_disqualifies(self):
+        texts = {"base": "# Merge guard\n\nStatus: deferred.\n",
+                 "head": "# Merge guard\n\nStatus: released; tagged v0.3.0 on 2026-11-15.\n"}
+        read = lambda path, side: texts[side]
+        for name in ("docs/specs/merge-guard.md", "docs/specs/release-0.3.md", "docs/release-0.3.0.md",
+                     "docs/specs/release-0.3.0.md.bak"):
+            self.assertFalse(mc.lane_files([{"filename": name, "status": "modified"}], read)[0], name)
+        _, _, read = self.release_texts()
+        for status in ("added", "renamed"):
+            files = [{"filename": "docs/specs/release-0.3.0.md", "status": status},
+                     {"filename": "docs/specs/index.md", "status": "modified"}]
+            self.assertFalse(mc.lane_files(files, read)[0], status)
+
+    def test_a_wrong_status_form_disqualifies(self):
+        record, index, _ = self.release_texts()
+        prepared = "accepted; release prepared for 2026-11-15, not yet tagged."
+        row = "accepted; release prepared, not yet tagged."
+        for released in ("released; tagged v0.2.9 on 2026-11-15.",       # another version
+                         "released; tagged 0.3.0 on 2026-11-15.",        # no v
+                         "released; tagged v0.3.0 on 15/11/2026.",       # wrong date form
+                         "released; tagged v0.3.0 on 2026-13-40.",       # not a date
+                         "released; tagged v0.3.0 on 2026-11-15 and more",
+                         "released on 2026-11-15.",
+                         "accepted; tagged v0.3.0 on 2026-11-15."):
+            _, _, read = self.release_texts(record_head=record.replace(prepared, released))
+            self.assertFalse(mc.lane_files(self.RELEASE_FILES, read)[0], released)
+            _, _, read = self.release_texts(index_head=index.replace(row, released))
+            self.assertFalse(mc.lane_files(self.RELEASE_FILES, read)[0], released)
+        # A record already in the released form does not qualify again.
+        done = record.replace(prepared, "released; tagged v0.3.0 on 2026-11-15.")
+        texts = {("docs/specs/release-0.3.0.md", "base"): done,
+                 ("docs/specs/release-0.3.0.md", "head"): done.replace("2026-11-15.", "2026-11-16."),
+                 ("docs/specs/index.md", "base"): index,
+                 ("docs/specs/index.md", "head"): index.replace(row, "released; tagged v0.3.0 on 2026-11-16.")}
+        self.assertFalse(mc.lane_files(self.RELEASE_FILES, lambda path, side: texts[(path, side)])[0])
+
     def test_a_manifest_qualifies_only_for_its_top_level_version(self):
         base = '{"name": "demo", "version": "0.1.2", "author": {"name": "x"}}'
         self.assertTrue(mc.version_only(base, base.replace("0.1.2", "0.1.3")))
