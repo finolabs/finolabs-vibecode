@@ -1430,6 +1430,21 @@ class LedgerReviewFixesTest(unittest.TestCase):
         self.assertNotIn("warning", listed.stderr)
         self.assertEqual(len(self.records()), 2)
 
+    def test_a_project_label_other_than_the_ledger_setting_warns_and_still_records(self):
+        import project_store
+        args = self.ledger.build_parser().parse_args(START)
+        found = ("found", mock.Mock(checkout=self.base))
+        for values, warned in (({"ledger": "lab"}, True), ({"ledger": "demo"}, False), ({}, False)):
+            with self.subTest(values=values), \
+                    mock.patch.object(project_store, "identity", return_value=found), \
+                    mock.patch.object(project_store, "settings_state", return_value=("approved", values)):
+                errors = io.StringIO()
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(errors):
+                    args.func(args)
+                self.assertEqual("ledger: warning: project label differs from this repository's ledger project (lab)"
+                                 in errors.getvalue().splitlines(), warned)
+        self.assertEqual(len(self.records()), 3)
+
     # 5. Acceptance flags.
     def test_summary_flags_accepted_findings_and_reviews_without_a_url(self):
         self.write(self.pair("d1", 10, log_scan="findings") + self.pair("d2", 10, kind="review")
