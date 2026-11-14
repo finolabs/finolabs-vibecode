@@ -476,11 +476,11 @@ JUDGE = ['python3', '-I', str(SCRIPT.parent / 'judge.py'), 'ask', '--site', 'awa
 BRIEF = 'Choose one option for the config question.\n1 Keep one schema\n2 Split it\nReply with the number and a reason.'
 ENV = ['python3', '-I', str(SCRIPT.parent / 'delegate_env.py')]
 # Each form ends its options with a literal `--` right before the brief where the program's parser takes one.
-CODEX = ENV + ['--family', 'codex', '--', 'codex', 'exec', '-m', 'gpt-5.5', '-c', 'model_reasoning_effort=high',
+CODEX = ENV + ['--family', 'codex', '--', 'codex', 'exec', '-m', 'gpt-6-astra', '-c', 'model_reasoning_effort=high',
                '-s', 'read-only', '--', BRIEF]
 CLAUDE = ENV + ['--family', 'claude', '--', 'claude', '-p', '--model', 'claude-opus-5-5',
                 '--output-format', 'json', '--permission-mode', 'plan', '--', BRIEF]
-AGY = ENV + ['--family', 'antigravity', '--', 'agy', '-p', BRIEF, '--model', 'gemini-4-argon', '--mode', 'plan',
+AGY = ENV + ['--family', 'antigravity', '--', 'agy', '-p', BRIEF, '--model', 'gemini-4-argon-high', '--mode', 'plan',
              '--output-format', 'json']
 SETUP_ALL = SETUP.replace('Claude Code', 'Claude Code, Codex, Antigravity') + '- Max actions per hour: 1000\n'
 DANGER = {'codex': '--dangerously-bypass-approvals-and-sandbox', 'claude': '--dangerously-skip-permissions',
@@ -930,24 +930,48 @@ class AwayDecisionTest(AfkBase):
 
     def test_the_advisor_model_is_frontier_else_strong(self):
         self.start_away(SETUP_ALL)
-        model, effort, gpt = AGY.index('gemini-4-argon'), CLAUDE.index('claude-opus-5-5'), CODEX.index('gpt-5.5')
-        def agy(name):
-            return AGY[:model] + [name] + AGY[model + 1:]
-        # The fast tier of models.md never decides, on any family.
-        for argv, coordinator in ((agy('gemini-3.8-flash-high'), 'claude'), (agy('Gemini-3.8-Flash-low'), 'codex'),
-                                  (CLAUDE[:effort] + ['claude-haiku-5-5'] + CLAUDE[effort + 1:], 'codex'),
-                                  (CLAUDE[:effort] + ['haiku'] + CLAUDE[effort + 1:], 'antigravity'),
-                                  (CODEX[:gpt] + ['gpt-6.1-terra'] + CODEX[gpt + 1:], 'claude'),
-                                  (CODEX[:gpt] + ['gpt-6-luna'] + CODEX[gpt + 1:], 'antigravity'),
-                                  # A Claude model served through Antigravity is Claude: not for a Claude coordinator.
-                                  (agy('claude-opus-5-5-high'), 'claude'), (agy('claude-sonnet-5-5-high'), 'claude')):
-            with self.subTest(argv=argv[6:], coordinator=coordinator):
-                self.check_as(argv, coordinator=coordinator, tier=3, code='unknown')
+        forms = {'antigravity': (AGY, AGY.index('gemini-4-argon-high')),
+                 'claude': (CLAUDE, CLAUDE.index('claude-opus-5-5')), 'codex': (CODEX, CODEX.index('gpt-6-astra'))}
+        def form(family, name):
+            argv, index = forms[family]
+            return argv[:index] + [name] + argv[index + 1:]
+        # Unknown names, the fast tier and a near miss deny on every family.
+        for family, name, coordinator in (
+                ('antigravity', 'gemini-3.8-flash-high', 'claude'), ('antigravity', 'gemini-4-argon', 'claude'),
+                ('antigravity', 'gemini-5-argon-high', 'codex'), ('antigravity', 'GEMINI-4-ARGON-HIGH', 'claude'),
+                ('claude', 'claude-haiku-5-5', 'codex'), ('claude', 'haiku', 'antigravity'), ('claude', 'opus', 'codex'),
+                ('claude', 'claude-opus-6-0', 'codex'), ('codex', 'gpt-6.1-terra', 'claude'),
+                ('codex', 'gpt-6-luna', 'antigravity'), ('codex', 'gpt-5.5', 'claude'), ('codex', 'gpt-7-astra', 'claude'),
+                # A Claude model served through Antigravity is Claude: not for a Claude coordinator.
+                ('antigravity', 'claude-opus-5-5-high', 'claude'), ('antigravity', 'claude-sonnet-5-5-low', 'claude')):
+            with self.subTest(family=family, model=name, coordinator=coordinator):
+                self.check_as(form(family, name), coordinator=coordinator, tier=3, code='unknown')
         self.assertEqual(self.counts()['actions'], 0)
-        self.check_as(agy('gemini-4-argon-high'))
-        self.check_as(agy('claude-opus-5-5-high'), coordinator='codex')
-        self.check_as(CODEX[:gpt] + ['gpt-6-astra'] + CODEX[gpt + 1:])
-        self.check_as(CODEX[:gpt] + ['gpt-6.1-sol'] + CODEX[gpt + 1:], coordinator='antigravity')
+        # Every listed frontier and strong model is accepted for a coordinator of another family.
+        module, accepted = self.load(), 0
+        for family, names in module.ADVISOR_MODELS.items():
+            for name in sorted(names):
+                coordinator = 'codex' if family != 'codex' else 'claude'
+                with self.subTest(family=family, model=name):
+                    self.check_as(form(family, name), coordinator=coordinator)
+                accepted += 1
+        self.assertEqual(self.counts()['actions'], accepted)
+
+    def test_the_advisor_models_match_the_frontier_and_strong_rows_of_models_md(self):
+        module = self.load()
+        text = (ROOT / 'skills/delegate/references/models.md').read_text()
+        listed = {'claude': set(), 'codex': set(), 'antigravity': set()}
+        for tier in ('frontier', 'strong'):
+            [row] = re.findall(r'^\| %s \|(.*)\|$' % tier, text, re.MULTILINE)
+            claude, codex, antigravity = [cell.strip() for cell in row.split('|')][:3]
+            listed['claude'] |= {'claude-%s-%s-%s' % (name.lower(), major, minor)
+                                 for name, major, minor in re.findall(r'\b(Opus|Fable|Sonnet) (\d+)\.(\d+)', claude)}
+            listed['codex'] |= set(re.findall(r'`([^`]+)`', codex))
+            for name in re.findall(r'`([^`]+)`', antigravity):
+                self.assertTrue(name.endswith('-*'), name)
+                listed['antigravity'] |= {name[:-1] + effort for effort in ('low', 'medium', 'high')}
+        self.assertEqual({family: set(names) for family, names in module.ADVISOR_MODELS.items()}, listed)
+        self.assertIn('`gemini-4-argon-{low,medium,high}`', text)  # the `*` suffixes models.md lists
 
     def test_the_zcode_advisor_form_denies_even_with_an_approved_program(self):
         ap = self.load()
