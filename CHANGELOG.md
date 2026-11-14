@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-15
+
+<!-- PR 290 (release targets, account-default afk lists, two-model fallback): its entries land under Unreleased when main is merged; move them into this section before the release pull request. -->
+
 ### Added
 
 - Models per kind of work in the assignment matrix: an agent line may carry `models <rule> | <rule> ...`, each `<model>[ then <fallback>] for <kind, type or levels>`, read in order with the first match winning (a rule naming no kind applies only to implementation). `route_pick.py pick` gains `--kind` (implement, code-review, security-review, navigator, advisor), makes `--type` optional and prints the model chosen for each dispatch, with `quota-fallback` when an Antigravity rule's `then` replaced a model whose quota pool (argon, gemini, claude-gpt, other) is out; an agent whose chosen model is out is dropped. `review_route.py` judges Antigravity's quota per review kind on the model its rules pick (`--level` for level-bound rules), `matrix_setup.py show` lists the rules, and `/setup add delegation` asks for them. Any malformed rule makes the whole matrix invalid.
@@ -609,7 +613,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.6...v0.3.0
 [0.2.6]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.3...v0.2.4
