@@ -789,6 +789,21 @@ class RefreshTest(unittest.TestCase):
             extra = ["--accept-unverified", "--reason", "Synthetic dashboard fixture"] if outcome == "accepted" else []
             subprocess.run([sys.executable, "-I", str(LEDGER), "finish", dispatch_id, "--outcome", outcome, *extra], check=True, env=env)
 
+    def test_closed_late_cancelled_runs_leave_the_weekly_first_pass_unchanged(self):
+        self.consent()
+        self.fixture_ledger()
+        self.refresh("run")
+        before = self.data()["kpi"]["spark"]["first_pass"]
+        start = ["start", "--project", "demo", "--task", "t", "--kind", "implement", "--grade", "medium",
+                 "--agent", "codex", "--model", "m1", "--budget", "40"]
+        late = subprocess.run([sys.executable, "-I", str(LEDGER), *start], capture_output=True, text=True,
+                              env=self.env).stdout.strip()
+        subprocess.run([sys.executable, "-I", str(LEDGER), "finish", late, "--outcome", "cancelled", "--note",
+                        "closed late by the coordinator: synthetic"], check=True, env=self.env)
+        self.refresh("run")
+        self.assertEqual(self.data()["kpi"]["spark"]["first_pass"], before)
+        self.assertEqual(self.data()["delegation"][0]["runs"], 2)
+
     def judge_ledger(self, rows):
         lines = []
         for i, (route_by, outcome, rework) in enumerate(rows):

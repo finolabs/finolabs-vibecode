@@ -11,7 +11,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Missing/expired/stopped/changed setup denies every check and adds one fixed `end` line telling the caller to stop its loop; limits are counted per project (the full identity digest, or one shared `unknown` entry, at most 64): spent runs or runtime minutes since the project's first reserved action say `spent`, the project's rolling-hour cap or a full project table says `limit`, and neither ends the lease for other projects | lease_guard, project_limit, check |
 | Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release and npm/pnpm publish forms whose every applicable category is `decide`, and a deploy matching a `Non-production targets` entry exactly with no production or live word; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
 | Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
-| The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
+| The ladder's two forms: this install's judge.py at the away-evaluation site with validated options or its check-table on a brief file, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, table_path, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
 | Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
 | A precedent packet holds at most eight excerpts and 8 KB; a secret or machine path drops an excerpt; excerpts need the separate consent | packet_check |
 | Hard names (credentials/env/key names, .git, .github, .claude, .codex, git hook names, host/lease/log state) are Tier 3 anywhere in argv or paths; soft names (hooks, settings, config, setup, SKILL.md, CLAUDE.md, AGENTS.md) too, except in a source path of this check's own checkout on a non-default work branch with Push and pull requests or Merge yes, and never inside this install; the one exact script path of this install's own trusted wrapper is spared (the install may lie under ~/.claude or ~/.codex) | protected, own_wrapper_index, source_mode |
@@ -30,7 +30,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
 | Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths; every path rule (roots, documents, protected names, links) applies to the operand's path relative to the checkout root of the check's validated identity, read from cwd, and with no identity no path is known | classify_paths, repository_path |
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
-| Only this install's ledger/record/heavy_run/merge_check script paths, with isolated Python, are allowed wrappers; nested heavy commands are classified too | script_command |
+| Only this install's ledger/record/heavy_run/merge_check/post_review script paths, with isolated Python, are allowed wrappers; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
 | Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge and review-fallback kinds only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
 | Trusted PR authors, full independent review/check/local-test gate, changed paths (including staged commit paths), quota readings and actually calling check before execution remain caller obligations in this slice | agent judgment, advisory; merge_check --independent enforces its review condition |
@@ -92,12 +92,12 @@ ADVISOR = re.compile(r'(?:claude|codex|antigravity|zcode)[a-z0-9]{0,24}')
 FIELDS = ('by', 'option', 'of', 'probability', 'dispatch', 'model')
 # The closed attempt schema of "Record for analysis": (rung, settled) -> (required, optional).
 ATTEMPTS = {('rule', 'yes'): ({'by', 'option', 'of'}, set()), ('rule', 'no'): ({'by'}, set()),
-            ('jev', 'yes'): ({'by', 'option', 'of', 'probability'}, set()), ('jev', 'no'): ({'by', 'probability'}, set()),
-            ('jev', 'unavailable'): ({'by'}, set()),
+            ('table', 'yes'): ({'by', 'of', 'probability'}, set()), ('table', 'unavailable'): ({'by'}, set()),
             ('advisor', 'yes'): ({'by', 'option', 'of', 'dispatch', 'model'}, set()),
             ('advisor', 'no'): ({'by', 'dispatch', 'model'}, set()),
             ('host', 'yes'): ({'by', 'option', 'of', 'model'}, set()), ('park', 'yes'): ({'by'}, set())}
-SETTLE = 0.8
+# Who made the evaluation table: Jev, or the host's small fast model when Jev is absent or failed.
+TABLE_SOURCES = ('jev', 'host-small')
 NUMBERS = {'Lease hours': (1, 24), 'Max runs': (1, 10000), 'Max runtime minutes': (1, 1440),
            'Max actions per hour': (1, 10000), 'Quota floor percent': (0, 100)}
 KINDS = {'start': 1, 'stop': 1, 'action': 1, 'decision': 2, 'parked': 3,
@@ -308,6 +308,9 @@ SOFT = {'claude.md', 'agents.md', 'skill.md', 'settings', 'config', 'hooks'}
 SOFT_PREFIXES = ('settings.', 'config.', 'setup.', 'hooks.')
 # The plugin's own source in a repository, relative to its checkout root: editable on a work branch.
 SOURCE = re.compile(r'(?:skills|scripts)/[A-Za-z0-9_./-]+|\.[a-z0-9]+-plugin/[A-Za-z0-9_.-]+\.json|CLAUDE\.md|AGENTS\.md')
+# A Markdown skill repository the user approved (`skill-repository: yes`): its root SKILL.md and these folders.
+SKILL_SOURCE = re.compile(r'SKILL\.md|(?:references|evals|scripts)/[A-Za-z0-9_./-]+')
+SKILL_REPO = 'Skill repository'  # the applied-settings entry set only by an approved project `skill-repository`
 
 
 def protected(value, source=False):
@@ -436,6 +439,7 @@ def effective(applied, cwd):
             if key in project:
                 result[name] = project[key]
         result['Roots'] = [r for r in project.get('roots', []) if not protected(r)]
+        result[SKILL_REPO] = project.get('skill-repository') == 'yes'
         result[CONTEXT] = Context('found', ident, 'project', target, cwd)
         return result
     except (OSError, ValueError, TypeError, UnicodeError, KeyError, RecursionError):
@@ -484,9 +488,17 @@ def checkout_of(token, base):
         return None
 
 
-def source_path(relative):
-    """True for the plugin's own source (`SOURCE`), judged on the path relative to its checkout root."""
-    return bool(SOURCE.fullmatch(relative.as_posix()))
+def source_path(relative, mode=True):
+    """True for the plugin's own source (`SOURCE`), judged on the path relative to its checkout root, on any work
+    branch `source_mode` allows; an approved skill repository (`mode` 'skill') adds its root SKILL.md, references/**,
+    evals/** and scripts/** (`SKILL_SOURCE`), and never a SKILL.md below the root."""
+    name = relative.as_posix()
+    if mode == 'skill':
+        if relative.name.casefold() == 'skill.md' and name != 'SKILL.md':
+            return False  # only the root SKILL.md of a skill repository, at any depth below it never
+        if SKILL_SOURCE.fullmatch(name):
+            return True
+    return bool(SOURCE.fullmatch(name))
 
 
 def source_mode(applied):
@@ -497,7 +509,9 @@ def source_mode(applied):
         current, default = branch_context(context_of(applied))
     except (OSError, ValueError, UnicodeError):
         return False
-    return bool(current and default) and current not in {default, 'main', 'master', 'trunk'}
+    if not (current and default) or current in {default, 'main', 'master', 'trunk'}:
+        return False
+    return 'skill' if applied.get(SKILL_REPO) is True else True
 
 
 def token_protected(token, applied):
@@ -517,7 +531,8 @@ def token_protected(token, applied):
     if found is None or found[0].main != context.ident.main:
         return True
     ident, relative = found
-    own = ident.checkout == context.ident.checkout and source_path(relative) and source_mode(applied)
+    mode = source_mode(applied)
+    own = ident.checkout == context.ident.checkout and bool(mode) and source_path(relative, mode)
     return protected(relative.as_posix(), own)
 
 
@@ -545,7 +560,7 @@ def classify_paths(paths, roots=(), context=UNKNOWN, source=False):
         if not isinstance(name, str) or install_owned(name, context.cwd):
             return 'protected'
         relative = repository_path(name, context)
-        own = source and relative is not None and source_path(relative)
+        own = bool(source) and relative is not None and source_path(relative, source)
         if protected(name, own):
             return 'protected'
         path = Path(name)
@@ -761,7 +776,7 @@ def own_wrapper_index(argv):
         return None
     own = Path(__file__).resolve().parent
     trusted = {own / name for name in ('ledger.py', 'record.py', 'heavy_run.py', 'judge.py', 'delegate_env.py')}
-    trusted.add(own.parent.parent / 'review-gate/scripts/merge_check.py')
+    trusted |= {own.parent.parent / 'review-gate/scripts' / name for name in ('merge_check.py', 'post_review.py')}
     path = Path(argv[index])
     if (path not in trusted or path.is_symlink() or not path.is_file()
             or any(parent.is_symlink() for parent in (path.parent, path.parent.parent))):
@@ -779,12 +794,15 @@ def script_command(argv, applied):
         return 'unknown'
     path = Path(argv[index])
     own = Path(__file__).resolve().parent
-    merge = own.parent.parent / 'review-gate/scripts/merge_check.py'
-    allowed = {own / name for name in ('ledger.py', 'record.py', 'heavy_run.py')} | {merge}
+    gate = own.parent.parent / 'review-gate/scripts'
+    allowed = {own / name for name in ('ledger.py', 'record.py', 'heavy_run.py')} | {gate / 'merge_check.py',
+                                                                                     gate / 'post_review.py'}
     if (path not in allowed or path.is_symlink() or not path.is_file()
             or any(parent.is_symlink() for parent in (path.parent, path.parent.parent))):
         return 'unknown'  # a linked skill folder could supply a different import namespace
     tail = argv[index + 1:]
+    if path.name == 'post_review.py':
+        return review_post(tail, applied)
     if path.name == 'heavy_run.py':
         if tail == ['status']:
             return 'allowed'
@@ -797,6 +815,67 @@ def script_command(argv, applied):
             return 'unknown'
         return classify_argv(command, applied)
     return 'allowed'
+
+
+REVIEW_RUN = re.compile(r'post-[0-9a-f]{32}')
+REVIEW_MARKER = re.compile(r'<!-- fnl-review kind=(code|security) head=[0-9a-f]{40} verdict=(APPROVE|REWORK)( lane=yes)? -->')
+REVIEW_POSTING = Path('state/review-posting')
+
+
+def review_post(tail, applied):
+    """`post_review.py <pr>` (creates the run body) or `<pr> --body-file <run body>` in either order: a verified
+    target and `Repository comments` at `decide` (docs/specs/afk-per-project.md "E")."""
+    context = context_of(applied)
+    if context.state not in {'user', 'project'} or context.target is None:
+        return 'unknown'
+    if not permits({'Repository comments'}, applied):
+        return 'forbidden'
+    if len(tail) == 1:
+        number, body = tail[0], None
+    elif len(tail) == 3 and tail[1] == '--body-file':
+        number, body = tail[0], tail[2]
+    elif len(tail) == 3 and tail[0] == '--body-file':
+        number, body = tail[2], tail[1]
+    else:
+        return 'unknown'
+    if not re.fullmatch(r'[1-9][0-9]{0,9}', number):
+        return 'unknown'
+    return 'allowed' if body is None else review_body(body)
+
+
+def review_body(name):
+    """'allowed' only for post_review.py's own run body `<data root>/state/review-posting/post-<32 hex>/body.md`:
+    a regular owner-only 0600 file of at most 64 KiB, no link on the way, whose first line is one review marker and
+    whose rest passes `text_ok` as file text; a second gate marker is 'forbidden'; anything else 'unsafe'."""
+    try:
+        root = dr.consent_root()
+        if root is None or not plain(name):
+            return 'unsafe'
+        path = Path(os.path.abspath(name))
+        relative = path.relative_to(root / REVIEW_POSTING)
+        if (len(relative.parts) != 2 or not REVIEW_RUN.fullmatch(relative.parts[0]) or relative.name != 'body.md'
+                or path.resolve(strict=True) != path):
+            return 'unsafe'
+        with dr.data_folder(REVIEW_POSTING, private=True) as parent:
+            with dr.descend(parent, relative.parts[0], private=True) as folder:
+                fd = os.open('body.md', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=folder)
+                try:
+                    info = os.fstat(fd)
+                    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                            or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > TEXT_LIMIT):
+                        return 'unsafe'
+                    raw = os.read(fd, TEXT_LIMIT + 1)
+                finally:
+                    os.close(fd)
+        if len(raw) > TEXT_LIMIT:
+            return 'unsafe'
+        first, _, rest = raw.decode('utf-8').partition('\n')
+    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
+        return 'unsafe'
+    if not REVIEW_MARKER.fullmatch(first) or not rest.strip():
+        return 'unsafe'
+    verdict = text_ok(rest.replace('\r', ''), inline=False)
+    return verdict if verdict in {'allowed', 'forbidden'} else 'unsafe'
 
 
 def plain(token):
@@ -845,12 +924,27 @@ def evidence_path(name, context):
     return no_links(path, context) and not (context.ident.checkout / path).is_dir()
 
 
+def table_path(name, context):
+    """An evaluation table the host's small model wrote: a JSON file under `.finolabs/briefs/` of this checkout only."""
+    path = repository_path(name, context)
+    if path is None or not re.fullmatch(r'\.finolabs/briefs/[A-Za-z0-9_.-]{1,80}\.json', path.as_posix()):
+        return False
+    return no_links(path, context) and not (context.ident.checkout / path).is_dir()
+
+
 def judge_command(tail, applied):
-    """`judge.py ask --site away-decision --question Q --option O (2 to 6) --evidence-file F [--judge jev]` only."""
+    """`judge.py ask --site away-evaluation --question Q --option O (2 to 6) --evidence-file F [--judge jev]`, or
+    `judge.py check-table --file F --of K` for a table under `.finolabs/briefs/`; nothing else."""
+    if tail[:1] == ['check-table']:
+        values = flag_values(tail[1:], {'--file', '--of'}, set())
+        if (values is None or set(values) != {'--file', '--of'} or not re.fullmatch(r'[2-6]', values['--of'])
+                or not table_path(values['--file'], context_of(applied))):
+            return 'unknown'
+        return 'allowed'
     if tail[:1] != ['ask']:
         return 'unknown'
     values = flag_values(tail[1:], {'--site', '--question', '--evidence-file', '--judge'}, {'--option'})
-    if (values is None or values.get('--site') != 'away-decision' or values.get('--judge', 'jev') != 'jev'
+    if (values is None or values.get('--site') != 'away-evaluation' or values.get('--judge', 'jev') != 'jev'
             or not {'--question', '--evidence-file', '--option'} <= set(values)):
         return 'unknown'
     question, options = values['--question'], values['--option']
@@ -859,7 +953,7 @@ def judge_command(tail, applied):
         return 'unknown'
     try:
         import judge
-        judge.choice_fields('away-decision', question, options, '')
+        judge.choice_fields('away-evaluation', question, options, '')
     except (ImportError, ValueError):
         return 'unknown'
     return 'allowed'
@@ -1542,24 +1636,26 @@ def attempt(args):
         raise ValueError('afk precedents count is invalid')
     fields = dict(rung=rung, settled=settled, precedents=int(args.precedents), topic=label(args.topic))
     if 'by' in given:
-        valid = {'rule': args.by == 'rule', 'jev': args.by == 'jev', 'advisor': bool(ADVISOR.fullmatch(args.by)),
+        valid = {'rule': args.by == 'rule', 'table': args.by in TABLE_SOURCES, 'advisor': bool(ADVISOR.fullmatch(args.by)),
                  'host': args.by in PROGRAMS, 'park': args.by in PROGRAMS}[rung]
         if not valid:
             raise ValueError('afk decider is invalid')
         fields['by'] = args.by
     if 'of' in given:
-        if not re.fullmatch(r'[2-6]', args.of) or not re.fullmatch(r'[1-6]', args.option) or int(args.option) > int(args.of):
+        if not re.fullmatch(r'[2-6]', args.of):
             raise ValueError('afk option is invalid')
-        fields.update(option=int(args.option), of=int(args.of))
+        fields['of'] = int(args.of)
+    if 'option' in given:
+        if not re.fullmatch(r'[1-6]', args.option) or int(args.option) > int(args.of):
+            raise ValueError('afk option is invalid')
+        fields['option'] = int(args.option)
     if 'probability' in given:
-        # A bounded plain decimal, so the value judge.ask_choice returns (up to 17 significant digits) round-trips.
+        # The top probability of the table, a bounded plain decimal (up to 17 significant digits round-trip).
         if not re.fullmatch(r'[01](?:\.[0-9]{1,20})?', args.probability):
             raise ValueError('afk probability is invalid')
         probability = float(args.probability)
         if not math.isfinite(probability) or not 0 <= probability <= 1:
             raise ValueError('afk probability is invalid')
-        if (settled == 'yes') != (probability >= SETTLE):
-            raise ValueError('afk probability does not match the result')
         fields['probability'] = probability
     if 'dispatch' in given:
         if not DISPATCH_ID.fullmatch(args.dispatch):

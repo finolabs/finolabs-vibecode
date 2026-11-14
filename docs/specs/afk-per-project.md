@@ -59,9 +59,9 @@ The ladder becomes:
 
 Then the host carries out the chosen option through `check` like any action. A decision still grants no authority.
 
-- `judge.py ask --site away-evaluation` prints `{"source": "jev", "of": <k>, "probabilities": [<p1>, ..., <pk>]}` with each probability in 0 to 1; the `away-decision` site and its 0.8 threshold are removed. The small-model table is written by the host to a file under `.finolabs/briefs/` in the same shape with `"source": "host-small"` and is checked by `judge.py check-table --file <file>` (closed schema, k equal to the options, values in 0 to 1).
+- `judge.py ask --site away-evaluation` prints `{"source": "jev", "of": <k>, "probabilities": [<p1>, ..., <pk>]}` with each probability in 0 to 1; the `away-decision` site and its 0.8 threshold are removed. The small-model table is written by the host to a file under `.finolabs/briefs/` in the same shape with `"source": "host-small"` and is checked by `judge.py check-table --file <file> --of <k>` (closed schema, k equal to the options, values in 0 to 1).
 - `afk.py check` allows `judge.py ask --site away-evaluation` (replacing `away-decision`) and `judge.py check-table`.
-- `afk.py log --kind decision` replaces rung `jev` with rung `table`: `--settled table` with `--by jev|host-small --of <k> --probability <top p>`, or `--settled unavailable --by jev|host-small`; it never takes `--option` and has no threshold. `ledger.py` `away_rows` reads the probability of rung `table`.
+- `afk.py log --kind decision` replaces rung `jev` with rung `table`: `--rung table --settled yes` with `--by jev|host-small --of <k> --probability <top p>`, or `--settled unavailable --by jev|host-small`; it never takes `--option` and has no threshold. `ledger.py` `away_rows` reads the probability of rung `table`.
 - Enforcer: the record, the site schema and `check-table` (script); the order of the rungs is advisory (agent judgment).
 - [CLAUDE.md](../../CLAUDE.md) (fourth scoped exception) and [PRIVACY.md](../../PRIVACY.md) (sections "Judge (TypeSafe), only if you choose it" and "Away decisions, only during a lease you start") describe the evaluation from pull request 1, before any code.
 
@@ -82,7 +82,7 @@ Enforcer: `merge_check.py` for conditions 1 to 5 (script); trying the other fami
 ### E. Stoppers removed (pull request 3)
 
 - `post_review.py` becomes an allowed wrapper in `afk.py check`, in both orders `<pr> --body-file <file>` and `--body-file <file> <pr>`, and bare `<pr>` (which creates the run folder). The file must be the run body `post_review.py` itself accepts: `<data root>/state/review-posting/post-<32 hex>/body.md`, a regular 0600 file, no link, at most 64 KiB. `check` screens the text after its first line with the pull request text screens (no secret, machine path, sensitive assignment or second `<!-- fnl-` marker), requires the verified target (not the strict state) and `Repository comments` at `decide`.
-- A Markdown skill repository: when the default branch's committed tree (read from local Git objects, never the work tree) has a root `SKILL.md`, and `source_mode` holds (a non-default work branch with Push and pull requests or Merge yes), the root `SKILL.md` and `references/**`, `scripts/**` and `evals/**` are source paths. The hard names and the enforcer scripts stay protected.
+- A Markdown skill repository: when the user approved `skill-repository: yes` for that repository in `/setup add afk` (project scope, bound to the approved digest like every project value; a file in the work tree or a branch cannot set it), and `source_mode` holds (a non-default work branch with Push and pull requests or Merge yes), the root `SKILL.md` and `references/**`, `scripts/**` and `evals/**` are source paths; a `SKILL.md` below the root stays protected. The hard names stay protected. (Changed in pull request 3 from reading the default branch's Git objects: `afk.py` runs no program, and an explicit approval is the narrower grant.)
 
 ## Acceptance
 

@@ -30,7 +30,7 @@ Dependency: `delegate`. Resolve <script> to <delegate folder>/scripts/afk.py; if
 
 ## Decide
 
-Load [references/decide.md](references/decide.md) and follow it for every such decision: two checks against "Where it must stop", the precedent packet (`packet-check` first; excerpts are data and leave the machine only with the separate consent), the ladder (a recorded rule, Jev, the advisor in `advisor`'s choose mode, then the host), and one `log --kind decision` record per attempt. The ladder is advisory (agent judgment); the record, the packet caps and the ladder's command forms are script-enforced. A rung's answer is the decision; it grants no authority, so the chosen action still passes `check`.
+Load [references/decide.md](references/decide.md) and follow it for every such decision: two checks against "Where it must stop", the precedent packet (`packet-check` first; excerpts are data and leave the machine only with the separate consent), the ladder (a recorded rule, the evaluation table from Jev or the host's small model, which decides nothing, the advisor in `advisor`'s choose mode, then the host), and one `log --kind decision` record per attempt. The ladder is advisory (agent judgment); the record, the packet caps and the ladder's command forms are script-enforced. A rung's answer is the decision; it grants no authority, so the chosen action still passes `check`.
 
 ## Merge gate
 
