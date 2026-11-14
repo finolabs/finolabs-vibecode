@@ -890,6 +890,27 @@ class AwayDecisionTest(AfkBase):
         self.check_as(AGY, coordinator='antigravity', tier=3, code='unknown')
         self.assertEqual(self.counts()['actions'], 3)
 
+    def test_the_advisor_model_is_frontier_else_strong(self):
+        self.start_away(SETUP_ALL)
+        model, effort, gpt = AGY.index('gemini-4-argon'), CLAUDE.index('claude-opus-5-5'), CODEX.index('gpt-5.5')
+        def agy(name):
+            return AGY[:model] + [name] + AGY[model + 1:]
+        # The fast tier of models.md never decides, on any family.
+        for argv, coordinator in ((agy('gemini-3.8-flash-high'), 'claude'), (agy('Gemini-3.8-Flash-low'), 'codex'),
+                                  (CLAUDE[:effort] + ['claude-haiku-5-5'] + CLAUDE[effort + 1:], 'codex'),
+                                  (CLAUDE[:effort] + ['haiku'] + CLAUDE[effort + 1:], 'antigravity'),
+                                  (CODEX[:gpt] + ['gpt-6.1-terra'] + CODEX[gpt + 1:], 'claude'),
+                                  (CODEX[:gpt] + ['gpt-6-luna'] + CODEX[gpt + 1:], 'antigravity'),
+                                  # A Claude model served through Antigravity is Claude: not for a Claude coordinator.
+                                  (agy('claude-opus-5-5-high'), 'claude'), (agy('claude-sonnet-5-5-high'), 'claude')):
+            with self.subTest(argv=argv[6:], coordinator=coordinator):
+                self.check_as(argv, coordinator=coordinator, tier=3, code='unknown')
+        self.assertEqual(self.counts()['actions'], 0)
+        self.check_as(agy('gemini-4-argon-high'))
+        self.check_as(agy('claude-opus-5-5-high'), coordinator='codex')
+        self.check_as(CODEX[:gpt] + ['gpt-6-astra'] + CODEX[gpt + 1:])
+        self.check_as(CODEX[:gpt] + ['gpt-6.1-sol'] + CODEX[gpt + 1:], coordinator='antigravity')
+
     def test_the_zcode_advisor_form_denies_even_with_an_approved_program(self):
         ap = self.load()
         tail = ['--family', 'zcode', '--', '/opt/synthetic/zcode', '-p', BRIEF, '--model', 'glm-synthetic',
