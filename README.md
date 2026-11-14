@@ -429,6 +429,14 @@ One engineering practice for AI coding agents, packaged as a single plugin with 
 
 The [0.2.0 changes](CHANGELOG.md#020---2026-11-08) include [review roles, the navigator and verification receipts](docs/specs/agent-roles.md), [setup modes and companions](docs/specs/setup-restructure.md), [run hygiene](docs/specs/run-hygiene.md), [work records](docs/specs/work-tracking.md), [quota on demand](docs/specs/quota-on-demand.md) and [parallel slots](docs/specs/parallel-instances.md). [`route_task.py`](scripts/route_task.py) prints the delegation matrix's tier, effort, budget and family order; the coordinator still selects an available allowed model.
 
+Release 0.3.0 ([release record](docs/specs/release-0.3.0.md)):
+
+- **Breaking: away rules per repository.** afk limits are counted per repository, and a repository may set its own limits, decided categories, deploy targets and production deploys in `/setup add afk`. Outside a repository and in the strict state every category stops. Start a lease again with `/afk` after the update.
+- **Breaking: only listed commands.** Under a lease, tags, releases and publishing run only when the exact command is a listed release target, tests only with a listed test command, and top-level files such as `TASKS.md` change only when listed. The account lists in `## afk` are every repository's default; a repository's own list replaces one whole. Run `/setup add afk` to list them.
+- **Breaking: an evaluation table before the deciders.** Jev, or the host's small model, gives each option a probability as data; the advisor runs only on a frontier or strong model the model table lists. `afk.py start` and `afk.py effective` show the rules that apply in the folder.
+- **Away merges and branches.** A lease creates its own work branch, posts reviews and, when every other family is out of quota, merges on same-family reviews (two different models for enforcer or instruction changes).
+- **Models per kind of work.** An assignment-matrix line may choose a model per kind of work and level, with a fallback when a quota pool is out (`/setup add delegation`).
+
 Release 0.2.6 ([release record](docs/specs/release-0.2.6.md)):
 
 - **Breaking: one place for roles and the judge.** `## Agent roles` in `host.md` is no longer read; review roles and the Jev judge come only from the assignment matrix. Run `/setup add delegation` to convert the section and give consent again; until then reviews follow the capability order and the judge is the host model.
@@ -497,7 +505,7 @@ Claude Code only, on by default: the compaction nudge, a `UserPromptSubmit` hook
 
 ### One delegated task, and a decision while you are away
 
-Two sequence diagrams follow the agents step by step. [One delegated task, dispatch to merge](docs/diagrams/delegation-sequence-light.html) ([dark](docs/diagrams/delegation-sequence-dark.html)): the coordinator records the dispatch with `ledger.py start`, which prints the run's name, the implementer runs in the background, the coordinator verifies and accepts against a receipt, reviewers of another family (when one is available) post their markers and `merge_check.py` passes before the merge. [A decision while you are away](docs/diagrams/away-decision-sequence-light.html) ([dark](docs/diagrams/away-decision-sequence-dark.html)): the question gate denies the question tool during a lease, `/afk start` prints a goal for `/goal` and may start a `/loop`, the host climbs the ladder (a recorded rule, an evaluation table from Jev or the host's small model that gives each option a probability and decides nothing, an advisor of another family in choose mode, its own choice), checks twice against what must stop, parks or records the attempt with `afk.py log`, and on return you mark each decision kept or reversed.
+Two sequence diagrams follow the agents step by step. [One delegated task, dispatch to merge](docs/diagrams/delegation-sequence-light.html) ([dark](docs/diagrams/delegation-sequence-dark.html)): the coordinator records the dispatch with `ledger.py start`, which prints the run's name, the implementer runs in the background, the coordinator verifies and accepts against a receipt, reviewers of another family (when one is available) post their markers and `merge_check.py` passes before the merge. [A decision while you are away](docs/diagrams/away-decision-sequence-light.html) ([dark](docs/diagrams/away-decision-sequence-dark.html)): the question gate denies the question tool during a lease, `/afk start` prints a goal for `/goal` and may start a `/loop` (which `afk.py check` tells to stop when the lease ends), each repository applies its own rules and runs production, release and test commands only when listed, the host climbs the four-rung ladder (a recorded rule, an evaluation table from Jev or the host's small model that gives each option a probability and decides nothing, an advisor of another family in choose mode, its own choice), checks twice against what must stop, parks or records the attempt with `afk.py log`, and on return you mark each decision kept or reversed.
 
 <p align="center">
   <picture>
@@ -509,11 +517,9 @@ Two sequence diagrams follow the agents step by step. [One delegated task, dispa
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/away-decision-sequence-dark.png">
-    <img src="assets/away-decision-sequence-light.png" alt="Sequence diagram of a decision during an away lease: /afk start prints a goal for /goal and may start /loop, the question gate denies AskUserQuestion, the host checks what must stop, climbs the ladder of recorded rule, an evaluation table from Jev or the host's small model given as data, an advisor of another family and its own choice, checks the chosen action again, records each attempt, and the user marks each decision kept or reversed on return." width="900">
+    <img src="assets/away-decision-sequence-light.png" alt="Sequence diagram of a decision during an away lease: /afk start prints a goal for /goal and may start /loop, and the question gate denies AskUserQuestion. afk.py check applies the rules of each repository, its own limits, decided categories and lists, else your account&#39;s; production, release and test commands run only when listed, and everything else parks. A question climbs the four-rung decide ladder: a recorded rule, an evaluation table from Jev or the host&#39;s small model given as data, an advisor of another family in choose mode, then the host. The chosen action is checked again, each attempt is recorded, and the user marks each decision kept or reversed on return." width="900">
   </picture>
 </p>
-
-_This diagram predates 0.2.6: roles and the judge now live only in the assignment matrix, and a lease end tells the loop to stop._
 
 The [afk mechanism](docs/diagrams/afk-mechanism-light.html) ([dark](docs/diagrams/afk-mechanism-dark.html)) puts the whole away flow on one page: setup for your account and for each repository (its own limits, decide list and deploy targets, production only where that repository lists the command), one lease, `afk.py check` before every action, the decide ladder fed by the evaluation table, reviews by another family with the same-family fallback only when none is reachable, merges on `MERGE OK`, deploys to listed targets, and the report when you are back.
 
@@ -562,7 +568,7 @@ Start any of them with `/setup` (on Codex, also `$setup instructions` right afte
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-It targets Claude Code, Codex and Antigravity from one `skills/` folder, and can hand tasks to ZCode. Release documented here: **0.2.6** (phase 0; see `versioning` and the [release record](docs/specs/release-0.2.6.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.2.7-dev`.
+It targets Claude Code, Codex and Antigravity from one `skills/` folder, and can hand tasks to ZCode. Release documented here: **0.3.0** (phase 0; see `versioning` and the [release record](docs/specs/release-0.3.0.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.3.1-dev`.
 
 <p align="center">
   <picture>
