@@ -9,9 +9,9 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | State stays outside Git, private (directories 0700/files 0600), no links, atomic and serialized | private_folder, read_private, write_private, data_root, flock |
 | One live lease for the machine; a second start reports it and changes nothing; stop removes it and leaves a stop marker; starting clears that marker | start, stop |
 | Missing/expired/stopped/changed setup denies every check and adds one fixed `end` line telling the caller to stop its loop; limits are counted per project (the full identity digest, or one shared `unknown` entry, at most 64): spent runs or runtime minutes since the project's first reserved action say `spent`, the project's rolling-hour cap or a full project table says `limit`, and neither ends the lease for other projects | lease_guard, project_limit, check |
-| Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release and npm/pnpm publish forms whose every applicable category is `decide`, and a deploy matching a `Non-production targets` entry exactly with no production or live word; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
+| Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release (with `--repo` equal to the verified target) and npm/pnpm publish forms whose every applicable category is `decide`, a deploy matching a non-production target exactly with no production or live word, and a deploy equal to this repository's `production-targets` entry with `production` in its `decide`; a project `decide` list replaces the user's categories, the strict and no-repository states close them all; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
 | Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
-| The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
+| The ladder's two forms: this install's judge.py at the away-evaluation site with validated options or its check-table on a brief file, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, table_path, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
 | Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
 | A precedent packet holds at most eight excerpts and 8 KB; a secret or machine path drops an excerpt; excerpts need the separate consent | packet_check |
 | Hard names (credentials/env/key names, .git, .github, .claude, .codex, git hook names, host/lease/log state) are Tier 3 anywhere in argv or paths; soft names (hooks, settings, config, setup, SKILL.md, CLAUDE.md, AGENTS.md) too, except in a source path of this check's own checkout on a non-default work branch with Push and pull requests or Merge yes, and never inside this install; the one exact script path of this install's own trusted wrapper is spared (the install may lie under ~/.claude or ~/.codex) | protected, own_wrapper_index, source_mode |
@@ -32,7 +32,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
 | Only this install's ledger/record/heavy_run/merge_check/post_review script paths, with isolated Python, are allowed wrappers; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
-| Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge kind only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
+| Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge and review-fallback kinds only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
 | Trusted PR authors, full independent review/check/local-test gate, changed paths (including staged commit paths), quota readings and actually calling check before execution remain caller obligations in this slice | agent judgment, advisory; merge_check --independent enforces its review condition |
 
 A Tier 1 answer is a classification, not proof that a PR passed the full merge
@@ -82,6 +82,12 @@ CATEGORIES = {'Production': True, 'Real users and customer data': True, 'Unrecov
               'Shared settings': False, 'Recoverable deletion': False, 'Repository comments': False}
 CONSENT = 'Excerpts leave the machine'
 TARGETS = 'Non-production targets'
+PRODUCTION_TARGETS = 'Production targets'  # project scope only (`production-targets`); never read from host.md
+# A repository's `decide` list names categories by these keys; every category it does not list is stop there.
+DECIDE_NAMES = {'production': 'Production', 'unrecoverable-deletion': 'Unrecoverable deletion',
+                'messages-outside-the-repository': 'Messages outside the repository',
+                'tags-and-releases': 'Tags and releases', 'publishing': 'Publishing', 'shared-settings': 'Shared settings',
+                'recoverable-deletion': 'Recoverable deletion', 'repository-comments': 'Repository comments'}
 HOST_FAMILIES = {'Claude Code': 'claude', 'Codex': 'codex', 'Antigravity': 'antigravity', 'ZCode': 'zcode'}
 PROGRAMS = {'claude': 'claude', 'codex': 'codex', 'antigravity': 'agy', 'zcode': 'zcode'}
 MODEL = re.compile(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,79}')
@@ -92,16 +98,16 @@ ADVISOR = re.compile(r'(?:claude|codex|antigravity|zcode)[a-z0-9]{0,24}')
 FIELDS = ('by', 'option', 'of', 'probability', 'dispatch', 'model')
 # The closed attempt schema of "Record for analysis": (rung, settled) -> (required, optional).
 ATTEMPTS = {('rule', 'yes'): ({'by', 'option', 'of'}, set()), ('rule', 'no'): ({'by'}, set()),
-            ('jev', 'yes'): ({'by', 'option', 'of', 'probability'}, set()), ('jev', 'no'): ({'by', 'probability'}, set()),
-            ('jev', 'unavailable'): ({'by'}, set()),
+            ('table', 'yes'): ({'by', 'of', 'probability'}, set()), ('table', 'unavailable'): ({'by'}, set()),
             ('advisor', 'yes'): ({'by', 'option', 'of', 'dispatch', 'model'}, set()),
             ('advisor', 'no'): ({'by', 'dispatch', 'model'}, set()),
             ('host', 'yes'): ({'by', 'option', 'of', 'model'}, set()), ('park', 'yes'): ({'by'}, set())}
-SETTLE = 0.8
+# Who made the evaluation table: Jev, or the host's small fast model when Jev is absent or failed.
+TABLE_SOURCES = ('jev', 'host-small')
 NUMBERS = {'Lease hours': (1, 24), 'Max runs': (1, 10000), 'Max runtime minutes': (1, 1440),
            'Max actions per hour': (1, 10000), 'Quota floor percent': (0, 100)}
 KINDS = {'start': 1, 'stop': 1, 'action': 1, 'decision': 2, 'parked': 3,
-         'run-start': 1, 'run-finish': 1, 'merge': 1, 'error': 3}
+         'run-start': 1, 'run-finish': 1, 'merge': 1, 'review-fallback': 1, 'error': 3}
 ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,39}')
 SHA = re.compile(r'[0-9a-f]{40}')
 BRANCH = re.compile(r'(?:refs/heads/)?[A-Za-z0-9][A-Za-z0-9._/-]{0,160}')
@@ -113,6 +119,8 @@ PROJECT_KEYS = {'task-choice': 'Task choice', 'push-and-pull-requests': 'Push an
                 'max-runtime-minutes': 'Max runtime minutes', 'max-actions-per-hour': 'Max actions per hour'}
 MAX_PROJECTS = 64  # entries in the lease's per-project counter table
 OFF = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', 'Trusted authors': 'own', 'Roots': []}
+# The strict and no-repository states also reset every category to stop and both target lists to empty.
+CLOSED = {**{c: 'stop' for c in CATEGORIES}, TARGETS: [], PRODUCTION_TARGETS: []}
 CONTEXT = 'Repository context'  # the applied-settings entry holding the check's Context
 MERGED = 'Merged heads'  # the applied-settings entry holding the heads this lease's `log --kind merge` entries recorded
 EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yaml', '.yml'}
@@ -418,18 +426,18 @@ def effective(applied, cwd):
     stored in the lease.
     """
     # A strict context keeps the check's folder, so the work-tree gate never falls back to the process's own cwd.
-    strict = {**applied, **OFF, CONTEXT: UNKNOWN._replace(cwd=cwd if isinstance(cwd, str) else None)}
+    strict = {**applied, **OFF, **CLOSED, CONTEXT: UNKNOWN._replace(cwd=cwd if isinstance(cwd, str) else None)}
     try:
         cwd = str(cwd)
         found, ident = store.identity(cwd)
         if found == 'absent':
-            return {**applied, 'Roots': [], CONTEXT: Context('absent', None, 'no-repository', None, cwd)}
+            return {**applied, **CLOSED, 'Roots': [], CONTEXT: Context('absent', None, 'no-repository', None, cwd)}
         if found != 'found':
             return strict
         state, values, _, record = store.autopilot_binding(ident)
         target = store.origin_target(ident)
         if state == 'unset' or state == 'approved' and 'autopilot' not in values:
-            return {**applied, 'Roots': [], CONTEXT: Context('found', ident, 'user', target, cwd)}
+            return {**applied, 'Roots': [], PRODUCTION_TARGETS: [], CONTEXT: Context('found', ident, 'user', target, cwd)}
         project = values.get('autopilot') if state == 'approved' else None
         if (not store.valid_autopilot(project) or 'target' not in record or record['target'] != target
                 or not store.bound(record, ident)):
@@ -440,6 +448,15 @@ def effective(applied, cwd):
                 result[name] = project[key]
         result['Roots'] = [r for r in project.get('roots', []) if not protected(r)]
         result[SKILL_REPO] = project.get('skill-repository') == 'yes'
+        if 'decide' in project:  # an explicit list, [] included, replaces the user's answers; the fixed rows stay stop
+            listed = {DECIDE_NAMES[k] for k in project['decide'] if k in DECIDE_NAMES}
+            result.update({c: 'decide' if c in listed else 'stop' for c in CATEGORIES})
+            result['Real users and customer data'] = 'stop'
+        else:
+            result['Production'] = 'stop'  # the user scope never decides production
+        if 'non-production-targets' in project:
+            result[TARGETS] = list(project['non-production-targets'])
+        result[PRODUCTION_TARGETS] = list(project.get('production-targets', []))
         result[CONTEXT] = Context('found', ident, 'project', target, cwd)
         return result
     except (OSError, ValueError, TypeError, UnicodeError, KeyError, RecursionError):
@@ -924,12 +941,27 @@ def evidence_path(name, context):
     return no_links(path, context) and not (context.ident.checkout / path).is_dir()
 
 
+def table_path(name, context):
+    """An evaluation table the host's small model wrote: a JSON file under `.finolabs/briefs/` of this checkout only."""
+    path = repository_path(name, context)
+    if path is None or not re.fullmatch(r'\.finolabs/briefs/[A-Za-z0-9_.-]{1,80}\.json', path.as_posix()):
+        return False
+    return no_links(path, context) and not (context.ident.checkout / path).is_dir()
+
+
 def judge_command(tail, applied):
-    """`judge.py ask --site away-decision --question Q --option O (2 to 6) --evidence-file F [--judge jev]` only."""
+    """`judge.py ask --site away-evaluation --question Q --option O (2 to 6) --evidence-file F [--judge jev]`, or
+    `judge.py check-table --file F --of K` for a table under `.finolabs/briefs/`; nothing else."""
+    if tail[:1] == ['check-table']:
+        values = flag_values(tail[1:], {'--file', '--of'}, set())
+        if (values is None or set(values) != {'--file', '--of'} or not re.fullmatch(r'[2-6]', values['--of'])
+                or not table_path(values['--file'], context_of(applied))):
+            return 'unknown'
+        return 'allowed'
     if tail[:1] != ['ask']:
         return 'unknown'
     values = flag_values(tail[1:], {'--site', '--question', '--evidence-file', '--judge'}, {'--option'})
-    if (values is None or values.get('--site') != 'away-decision' or values.get('--judge', 'jev') != 'jev'
+    if (values is None or values.get('--site') != 'away-evaluation' or values.get('--judge', 'jev') != 'jev'
             or not {'--question', '--evidence-file', '--option'} <= set(values)):
         return 'unknown'
     question, options = values['--question'], values['--option']
@@ -938,7 +970,7 @@ def judge_command(tail, applied):
         return 'unknown'
     try:
         import judge
-        judge.choice_fields('away-decision', question, options, '')
+        judge.choice_fields('away-evaluation', question, options, '')
     except (ImportError, ValueError):
         return 'unknown'
     return 'allowed'
@@ -1063,12 +1095,17 @@ def is_deploy(argv):
 
 def release_command(argv, applied, categories, deploy):
     """Precedence rows 2 to 5 for the command forms a script can read: tags, releases, publishing and deploys."""
+    if context_of(applied).state in ('strict', 'no-repository'):
+        return 'forbidden'  # no verified repository settings: tags, releases, publishing and deploys wait for a person
     if categories and not permits(categories, applied):
         return 'forbidden'  # row 3: every applicable category must be decide
     if deploy:
-        if any(re.search(r'prod|live', t, re.I) for t in argv):
-            return 'forbidden'  # row 2: production or live, even when listed by mistake
-        if ' '.join(argv) not in applied.get(TARGETS, []):
+        # Token lists, not joined text: a token holding a space must never equal two listed words.
+        listed = lambda key: [entry.split(' ') for entry in applied.get(key, [])]
+        production = argv in listed(PRODUCTION_TARGETS) and applied.get('Production') == 'decide'
+        if not production and any(re.search(r'prod|live', t, re.I) for t in argv):
+            return 'forbidden'  # row 2: production or live, unless this repository listed it and decides Production
+        if not production and argv not in listed(TARGETS):
             return 'forbidden'  # row 4
         if not categories:
             return 'allowed'  # row 5
@@ -1086,7 +1123,8 @@ def release_command(argv, applied, categories, deploy):
             operands = options(rest, {'--draft', '--verify-tag', '--prerelease'},
                                {'--title', '-t', '--notes', '-n', '--target', '--repo', '-R'})
             if operands is not None and len(operands) == 1 and TAG.fullmatch(operands[0]):
-                return 'allowed'
+                # Like a pull request merge: exactly one explicit --repo equal to the verified target.
+                return target_check(rest, context_of(applied))
         elif verb in (['view'], ['list']):
             operands = options(rest, set(), {'--repo', '-R', '--limit', '-L', '--json'})
             if operands is not None and len(operands) <= (verb == ['view']) and all(TAG.fullmatch(o) for o in operands):
@@ -1621,24 +1659,26 @@ def attempt(args):
         raise ValueError('afk precedents count is invalid')
     fields = dict(rung=rung, settled=settled, precedents=int(args.precedents), topic=label(args.topic))
     if 'by' in given:
-        valid = {'rule': args.by == 'rule', 'jev': args.by == 'jev', 'advisor': bool(ADVISOR.fullmatch(args.by)),
+        valid = {'rule': args.by == 'rule', 'table': args.by in TABLE_SOURCES, 'advisor': bool(ADVISOR.fullmatch(args.by)),
                  'host': args.by in PROGRAMS, 'park': args.by in PROGRAMS}[rung]
         if not valid:
             raise ValueError('afk decider is invalid')
         fields['by'] = args.by
     if 'of' in given:
-        if not re.fullmatch(r'[2-6]', args.of) or not re.fullmatch(r'[1-6]', args.option) or int(args.option) > int(args.of):
+        if not re.fullmatch(r'[2-6]', args.of):
             raise ValueError('afk option is invalid')
-        fields.update(option=int(args.option), of=int(args.of))
+        fields['of'] = int(args.of)
+    if 'option' in given:
+        if not re.fullmatch(r'[1-6]', args.option) or int(args.option) > int(args.of):
+            raise ValueError('afk option is invalid')
+        fields['option'] = int(args.option)
     if 'probability' in given:
-        # A bounded plain decimal, so the value judge.ask_choice returns (up to 17 significant digits) round-trips.
+        # The top probability of the table, a bounded plain decimal (up to 17 significant digits round-trip).
         if not re.fullmatch(r'[01](?:\.[0-9]{1,20})?', args.probability):
             raise ValueError('afk probability is invalid')
         probability = float(args.probability)
         if not math.isfinite(probability) or not 0 <= probability <= 1:
             raise ValueError('afk probability is invalid')
-        if (settled == 'yes') != (probability >= SETTLE):
-            raise ValueError('afk probability does not match the result')
         fields['probability'] = probability
     if 'dispatch' in given:
         if not DISPATCH_ID.fullmatch(args.dispatch):
@@ -1736,10 +1776,13 @@ def log(folder, args):
             raise ValueError('afk pull request id is invalid')
         fields['pr'] = int(args.pr)
     if args.head is not None:
-        # The merged pull request's full head SHA: the one worktree `git worktree remove` may then take away.
-        if args.kind != 'merge' or not SHA.fullmatch(args.head) or args.pr is None:
-            raise ValueError('afk head belongs to the merge kind with its --pr and is a full lowercase SHA')
+        # The merged pull request's full head SHA: the one worktree `git worktree remove` may then take away. A
+        # review-fallback line records the head whose same-family reviews counted, for the user's return; it pins nothing.
+        if args.kind not in ('merge', 'review-fallback') or not SHA.fullmatch(args.head) or args.pr is None:
+            raise ValueError('afk head belongs to the merge or review-fallback kind with its --pr and is a full lowercase SHA')
         fields['head'] = args.head
+    if args.kind == 'review-fallback' and (args.pr is None or args.head is None):
+        raise ValueError('afk review-fallback needs --pr and --head')
     if args.kind == 'merge' and args.head is not None and (fields['pr'], args.head) not in merge_pins(folder, current):
         raise ValueError('afk merge head matches no allowed `gh pr merge` check of this lease')
     note = safe_note(args.note or '')

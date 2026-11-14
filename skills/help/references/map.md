@@ -123,7 +123,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/git_metadata.py` | Reads bounded local Git metadata without starting Git. |
 | `scripts/handover_state.py` | Stores/reads private bounded handovers; compact SessionStart can re-inject them on Claude Code/Codex. |
 | `scripts/instructions_write.py` | Previews and writes one approved instruction file/block with digest and backups. |
-| `scripts/judge.py` | Screens bounded questions, validates supplied host answers or calls optional Jev, and discloses fallback; neither judge accepts work. |
+| `scripts/judge.py` | Screens bounded questions, validates supplied host answers or calls optional Jev, checks an away evaluation table (`check-table`), and discloses fallback; neither judge accepts work. |
 | `scripts/log_scan.py` | Scans logs, shows redacted views and applies digest-bound local redaction; never reads a raw log into a receipt. |
 | `scripts/merge_notice_hook.py` | Claude Code reminder after a successful `gh pr merge` that ends the command line: one fixed line pointing to `worktree_sweep.py list` and the git commands it prints; quoted excluded flags print nothing; stores nothing, always exits 0. |
 | `scripts/metrics_hook.py` | Records consented usage metadata and triggers local dashboard refreshes. |

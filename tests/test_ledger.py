@@ -99,7 +99,8 @@ class LedgerTest(unittest.TestCase):
         args = ledger.build_parser().parse_args(['finish', 'missing', '--outcome', 'error', '--log-path', str(alias)])
         with mock.patch.object(log_scan, 'run_log_folder', return_value=logs), self.assertRaises(SystemExit) as stopped:
             args.func(args)
-        self.assertEqual(stopped.exception.code, 'ledger: log refused')
+        self.assertEqual(stopped.exception.code, ledger.LOG_REFUSED)
+        self.assertNotIn(str(logs), stopped.exception.code)
 
     def test_log_path_refuses_outside_symlink_hardlink_and_scans_before_ledger_read(self):
         logs = Path(self.dir.name).resolve() / '.finolabs' / 'logs'
@@ -639,7 +640,7 @@ class LedgerTest(unittest.TestCase):
                 contextlib.redirect_stderr(warning):
             args.func(args)
         self.assertRegex(output.getvalue(), r"^d\d{8}-\d{6}-[0-9a-f]{4}\n$")
-        self.assertEqual(warning.getvalue(), "label: claude: demo add page\n")
+        self.assertEqual(warning.getvalue().splitlines()[0], "label: claude: demo add page")
         self.assertNotIn("pick_rank", self.records()[-1])
 
     def test_new_options_reject_values_outside_their_lists(self):
@@ -750,12 +751,13 @@ class AwayLedgerTest(unittest.TestCase):
     ]
     AWAY = [
         {"event": "decision", "id": "q20261109-010000-aaaa", "ts": "2026-11-09T01:00:00+00:00", "project": "demo",
-         "lease_start": 1000.0, "rung": "jev", "settled": "no", "by": "jev", "probability": 0.6, "precedents": 2, "topic": "schema"},
+         "lease_start": 1000.0, "rung": "table", "settled": "yes", "by": "jev", "of": 3, "probability": 0.6, "precedents": 2,
+         "topic": "schema"},
         {"event": "decision", "id": "q20261109-010000-aaaa", "ts": "2026-11-09T01:01:00+00:00", "project": "demo",
          "lease_start": 1000.0, "rung": "advisor", "settled": "yes", "by": "codex", "option": 2, "of": 3,
          "dispatch": "d20261109-010100-abcd", "model": "m1", "precedents": 2, "topic": "schema"},
         {"event": "decision", "id": "q20261109-020000-bbbb", "ts": "2026-11-09T02:00:00+00:00", "project": "demo",
-         "lease_start": 1000.0, "rung": "jev", "settled": "yes", "by": "jev", "option": 1, "of": 2, "probability": 0.9,
+         "lease_start": 1000.0, "rung": "table", "settled": "yes", "by": "host-small", "of": 2, "probability": 0.9,
          "precedents": 0, "topic": "naming"},
         {"event": "decision", "id": "q20261109-030000-cccc", "ts": "2026-11-09T03:00:00+00:00", "project": "demo",
          "lease_start": 1000.0, "rung": "park", "settled": "yes", "by": "claude", "precedents": 0, "topic": "deploy"},
@@ -819,9 +821,10 @@ class AwayLedgerTest(unittest.TestCase):
         self.assertEqual([lease["lease_start"] for lease in leases], [1000.0, 9000.0])
         first, second = leases
         self.assertEqual(first["decisions"], 3)
-        self.assertEqual(first["by_rung"], {"advisor": 1, "jev": 1, "park": 1})
+        # A table weighs the options and never decides: a decision with only a table has no deciding rung.
+        self.assertEqual(first["by_rung"], {"advisor": 1, "park": 1})
         self.assertEqual(first["by_advisor"], {"codex m1": 1})
-        self.assertEqual(first["jev_p"], {"n": 2, "min": 0.6, "median": 0.75, "max": 0.9})
+        self.assertEqual(first["table_p"], {"n": 2, "min": 0.6, "median": 0.75, "max": 0.9})
         self.assertEqual((first["parked"], first["denied"]), (1, 2))
         # The later review of one id replaces the earlier one: one reversed of two reviewed.
         self.assertEqual((first["reviewed"], first["reversed"]), (2, 1))
@@ -831,10 +834,21 @@ class AwayLedgerTest(unittest.TestCase):
         args = self.ledger.build_parser().parse_args(["summary"])
         _, output, _ = self.run_quiet(args.func, args)
         self.assertIn("away decisions per lease", output)
-        self.assertIn("advisor 1, jev 1, park 1", output)
+        self.assertIn("advisor 1, park 1", output)
+        self.assertIn("table top p: n 2", output)
         self.assertIn("reversed 1 of 2 reviewed", output)
         for word in ("schema", "naming"):
             self.assertNotIn(word, output)  # topic labels stay in the ledger file
+
+    def test_away_section_reads_a_legacy_jev_probability(self):
+        # Leases before 0.2.7 logged the top probability under rung `jev`; the table spread still counts it.
+        legacy = {"event": "decision", "id": "q20261110-020000-eeee", "ts": "2026-11-10T02:00:00+00:00",
+                  "project": "demo", "lease_start": 9000.0, "rung": "jev", "settled": "no", "by": "jev",
+                  "probability": 0.5, "precedents": 0, "topic": "legacy"}
+        self.write(self.DISPATCHES + self.AWAY + [legacy])
+        second = self.ledger.away_rows()[1]
+        self.assertEqual(second["table_p"], {"n": 1, "min": 0.5, "median": 0.5, "max": 0.5})
+        self.assertEqual(second["by_rung"], {"host": 1})
 
     def test_summary_with_only_away_lines_prints_both_sections_honestly(self):
         self.write(self.AWAY)
@@ -1278,6 +1292,196 @@ class StaleLedgerTest(unittest.TestCase):
         import pause
         rows = pause.open_dispatches()
         self.assertEqual([row[0] for row in rows], ["d20261101-000000-bbbb"])
+
+
+class LedgerReviewFixesTest(unittest.TestCase):
+    """Defects found in the 14/11/2026 ledger data review (backlog section P)."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.base = Path(self.dir.name).resolve()
+        self.home = account(self, self.base / "home")
+        self.path = self.home / ".finolabs/vibecode/ledger.jsonl"
+        self.path.parent.mkdir(parents=True)
+        self.env = {"HOME": str(self.home), "PATH": os.environ.get("PATH", "/usr/bin:/bin")}
+        spec = importlib.util.spec_from_file_location("review_fixes_ledger", LEDGER)
+        self.ledger = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.ledger)
+        patch = mock.patch.dict(os.environ, self.env)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def run_ledger(self, *args, cwd=None, check=True):
+        result = subprocess.run([sys.executable, "-I", str(LEDGER), *args], capture_output=True, text=True,
+                                env=self.env, cwd=cwd)
+        if check:
+            self.assertEqual(result.returncode, 0, result.stderr)
+        return result
+
+    def write(self, records):
+        self.path.write_text("".join(json.dumps(r) + "\n" for r in records))
+        self.path.chmod(0o600)
+
+    def records(self):
+        return [json.loads(line) for line in self.path.read_text().splitlines()]
+
+    def pair(self, ident, minutes, kind="implement", **finish):
+        start = {"event": "start", "id": ident, "ts": "2026-11-10T01:00:00+00:00", "project": "demo", "task": "t",
+                 "kind": kind, "grade": "medium", "agent": "codex", "model": "m1", "reason": "routing",
+                 "route_by": "table", "budget_min": 30}
+        done = {"event": "finish", "id": ident, "ts": "2026-11-10T01:%02d:00+00:00" % minutes, "outcome": "accepted",
+                "rework_rounds": 0, "tests": "passed", "note": "", "log_scan": "not_scanned", **finish}
+        return [start, done]
+
+    def git(self, *args, cwd):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args], cwd=cwd,
+                       check=True, capture_output=True)
+
+    # 1. Log location, refusal reason, empty log.
+    def test_finish_accepts_a_log_in_the_main_checkout_from_a_linked_worktree(self):
+        main, tree = self.base / "main", self.base / "tree"
+        main.mkdir()
+        self.git("init", "-q", cwd=main)
+        self.git("commit", "-q", "--allow-empty", "-m", "init", cwd=main)
+        self.git("worktree", "add", "-q", str(tree), cwd=main)
+        logs = main / ".finolabs" / "logs"
+        logs.mkdir(parents=True, mode=0o700)
+        (main / ".finolabs").chmod(0o700)
+        log = logs / "run.log"
+        log.write_text("ordinary output\n")
+        log.chmod(0o600)
+        for extra in ([], ["--checkout", str(tree)]):
+            with self.subTest(extra=extra):
+                ident = self.run_ledger(*START, cwd=tree).stdout.strip()
+                self.run_ledger("finish", ident, "--outcome", "rejected", "--log-path", str(log), *extra, cwd=tree)
+                self.assertEqual(self.records()[-1]["log_scan"], "no_findings")
+
+    def test_a_refused_log_gets_one_fixed_reason_line_without_the_path(self):
+        ident = self.run_ledger(*START, cwd=self.base).stdout.strip()
+        outside = self.base / "outside.log"
+        outside.write_text("ordinary\n")
+        result = self.run_ledger("finish", ident, "--outcome", "rejected", "--log-path", str(outside), cwd=self.base,
+                                 check=False)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, self.ledger.LOG_REFUSED + "\n")
+        self.assertNotIn(str(outside), result.stderr)
+        self.assertIn(".finolabs/logs", self.ledger.LOG_REFUSED)
+
+    def test_an_empty_log_is_not_scanned(self):
+        logs = self.base / ".finolabs" / "logs"
+        logs.mkdir(parents=True, mode=0o700)
+        log = logs / "run.log"
+        log.write_bytes(b"")
+        log.chmod(0o600)
+        ident = self.run_ledger(*START, cwd=self.base).stdout.strip()
+        result = self.run_ledger("finish", ident, "--outcome", "rejected", "--log-path", str(log), cwd=self.base)
+        self.assertEqual(self.records()[-1]["log_scan"], "not_scanned")
+        self.assertIn("ledger: log_scan: not_scanned", result.stderr)
+
+    # 2. Dispatch ids never repeat.
+    def test_two_starts_in_the_same_second_with_the_same_token_get_different_ids(self):
+        from datetime import datetime as real
+
+        class Fixed(real):
+            @classmethod
+            def now(cls, tz=None):
+                return real(2026, 11, 7, 17, 11, 43, tzinfo=tz)
+
+        args = self.ledger.build_parser().parse_args(START)
+        ids = []
+        with mock.patch.object(self.ledger, "datetime", Fixed), \
+                mock.patch.object(self.ledger.secrets, "token_hex", side_effect=["cf30", "cf30", "cf31"]):
+            for _ in range(2):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output), contextlib.redirect_stderr(io.StringIO()):
+                    args.func(args)
+                ids.append(output.getvalue().strip())
+        self.assertEqual(ids, ["d20261107-171143-cf30", "d20261107-171143-cf31"])
+        self.assertEqual([r["id"] for r in self.records()], ids)
+
+    # 3. Closed-late cancelled records and the text table.
+    def test_closed_late_cancelled_records_stay_out_of_the_rates_and_medians(self):
+        self.write(self.pair("d1", 10) + self.pair("d2", 50, outcome="quota") + self.pair("d3", 20, outcome="error")
+                   + self.pair("d4", 30, outcome="cancelled", note="stopped by the user")
+                   + self.pair("d5", 59, outcome="cancelled", note="closed late by ledger stale: no log")
+                   + self.pair("d6", 58, outcome="cancelled", note="closed late by the coordinator: timed out"))
+        [row] = self.ledger.summary_rows()
+        self.assertEqual((row["n"], row["closed_late"], row["cancelled"]), (4, 2, 1))
+        self.assertEqual(row["accepted"], 1 / 4)
+        self.assertEqual(row["median_min"], 25)
+        text = self.run_ledger("summary").stdout.splitlines()
+        self.assertEqual(text[0].split()[-3:], ["quota", "error", "cancelled"])
+        self.assertEqual(text[1].split()[-3:], ["1", "1", "1"])
+        self.assertIn("closed late as cancelled, left out of the rates and medians: 2", text)
+
+    # 4. Field validation.
+    def test_rework_rounds_above_two_need_a_reason(self):
+        ident = self.run_ledger(*START).stdout.strip()
+        refused = self.run_ledger("finish", ident, "--outcome", "rejected", "--rework-rounds", "6", check=False)
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn("--rework-rounds above 2 needs a --reason", refused.stderr)
+        negative = self.run_ledger("finish", ident, "--outcome", "rejected", "--rework-rounds", "-1", check=False)
+        self.assertEqual(negative.returncode, 1)
+        self.assertEqual(len(self.records()), 1)
+        self.run_ledger("finish", ident, "--outcome", "rejected", "--rework-rounds", "3", "--reason", "Synthetic loop")
+        self.assertEqual(self.records()[-1]["rework_rounds"], 3)
+
+    def test_accepted_with_failed_tests_is_refused(self):
+        ident = self.run_ledger(*START).stdout.strip()
+        refused = self.run_ledger("finish", ident, "--outcome", "accepted", "--tests", "failed",
+                                  "--accept-unverified", "--reason", "Synthetic fixture", check=False)
+        self.assertEqual(refused.returncode, 1)
+        self.assertIn("cannot have --tests failed", refused.stderr)
+        self.assertEqual(len(self.records()), 1)
+
+    def test_a_model_the_matrix_does_not_list_warns_and_still_records(self):
+        from tests.test_route_pick import host
+        (self.path.parent / "host.md").write_text(host())
+        warned = self.run_ledger(*START)
+        self.assertIn("ledger: warning: model label is not one the assignment matrix lists", warned.stderr)
+        listed = self.run_ledger(*[a if a != "m1" else "claude-opus-5-5" for a in START])
+        self.assertNotIn("warning", listed.stderr)
+        self.assertEqual(len(self.records()), 2)
+
+    def test_a_project_label_other_than_the_ledger_setting_warns_and_still_records(self):
+        import project_store
+        args = self.ledger.build_parser().parse_args(START)
+        found = ("found", mock.Mock(checkout=self.base))
+        for values, warned in (({"ledger": "lab"}, True), ({"ledger": "demo"}, False), ({}, False)):
+            with self.subTest(values=values), \
+                    mock.patch.object(project_store, "identity", return_value=found), \
+                    mock.patch.object(project_store, "settings_state", return_value=("approved", values)):
+                errors = io.StringIO()
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(errors):
+                    args.func(args)
+                self.assertEqual("ledger: warning: project label differs from this repository's ledger project (lab)"
+                                 in errors.getvalue().splitlines(), warned)
+        self.assertEqual(len(self.records()), 3)
+
+    # 5. Acceptance flags.
+    def test_summary_flags_accepted_findings_and_reviews_without_a_url(self):
+        self.write(self.pair("d1", 10, log_scan="findings") + self.pair("d2", 10, kind="review")
+                   + self.pair("d3", 10, kind="review", review_posted=True))
+        rows = self.ledger.summary_rows()
+        self.assertEqual(sum(r["accepted_findings"] for r in rows), 1)
+        self.assertEqual(sum(r["review_unposted"] for r in rows), 1)
+        text = self.run_ledger("summary").stdout
+        self.assertIn("flag: 1 accepted runs had log scan findings", text)
+        self.assertIn("flag: 1 review acceptances have no --review-url", text)
+
+    # 6. Retroactive records.
+    def test_retro_records_are_marked_and_left_out_of_medians(self):
+        ident = self.run_ledger(*START).stdout.strip()
+        self.run_ledger("finish", ident, "--outcome", "rejected", "--retro")
+        self.assertIs(self.records()[-1]["retro"], True)
+        self.write(self.pair("d1", 10) + self.pair("d2", 30) + self.pair("d3", 0, retro=True))
+        [row] = self.ledger.summary_rows()
+        self.assertEqual((row["n"], row["retro"], row["median_min"]), (3, 1, 20))
+        self.write(self.pair("d3", 0, retro=True))
+        [only] = self.ledger.summary_rows()
+        self.assertIsNone(only["median_min"])
+        self.assertIn("retroactive records, left out of the medians: 1", self.run_ledger("summary").stdout)
 
 
 if __name__ == "__main__":

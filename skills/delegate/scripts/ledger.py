@@ -191,6 +191,46 @@ def pick_fields(args):
     return fields, notice
 
 
+ID_TRIES = 64
+
+
+def new_id(starts):
+    """A dispatch id no start line holds yet. The format stays `d<date>-<time>-<4 hex>`, which checks, record and
+    afk validate; the check against the ledger, under the finish lock, is what makes it unique."""
+    for _ in range(ID_TRIES):
+        candidate = datetime.now().strftime("d%Y%m%d-%H%M%S-") + secrets.token_hex(2)
+        if candidate not in starts:
+            return candidate
+    raise ValueError("could not pick an unused dispatch id; retry")
+
+
+def matrix_models():
+    """The models the assignment matrix lists, or None when there is no usable matrix."""
+    try:
+        import assignments
+        import route_pick
+        matrix = assignments.parse(route_pick.host_text())
+    except Exception:
+        return None
+    if matrix.state != "valid":
+        return None
+    models = {entry.get("model") for entry in matrix.agents.values()} - {None}
+    return models or None
+
+
+def label_warnings(args):
+    """Warnings (never refusals) for a model or project label that the matrix or project settings do not know."""
+    warnings = []
+    models = matrix_models()
+    if models is not None and args.model not in models:
+        warnings.append("ledger: warning: model label is not one the assignment matrix lists; "
+                        "use the matrix's model name so summary rows do not split")
+    project = settings_project(args.checkout)
+    if project is not None and args.project != project:
+        warnings.append(f"ledger: warning: project label differs from this repository's ledger project ({project})")
+    return warnings
+
+
 def cmd_start(args):
     session = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session):
@@ -204,22 +244,25 @@ def cmd_start(args):
     family = "claude" if args.agent in ("claude", "claude-session", "subagent") else args.agent
     if manual and family != args.coordinator and args.route_by != "user":
         sys.exit("Delegation mode is manual: another agent family needs --route-by user")
-    dispatch_id = datetime.now().strftime("d%Y%m%d-%H%M%S-") + secrets.token_hex(2)
     try:
         from record import checkout_identity
         checkout_id = checkout_identity(args.checkout)
     except (ImportError, OSError, ValueError, subprocess.SubprocessError):
         checkout_id = None  # non-code tasks can still end through the explicit escape hatch
     picked, notice = pick_fields(args)
-    append({
-        "checkout_id": checkout_id,
-        "coord_session": coord_session,
-        "event": "start", "id": dispatch_id, "ts": now(),
-        "project": args.project, "task": args.task, "kind": args.kind,
-        "grade": args.grade, "coordinator": args.coordinator, "agent": args.agent,
-        "model": args.model, "reason": args.reason, "route_by": args.route_by,
-        "budget_min": args.budget, **picked,
-    })
+    warnings = label_warnings(args)
+    with finish_lock():  # the uniqueness check and the append happen under the finish writers' lock
+        starts, _ = load()
+        dispatch_id = new_id(starts)
+        append({
+            "checkout_id": checkout_id,
+            "coord_session": coord_session,
+            "event": "start", "id": dispatch_id, "ts": now(),
+            "project": args.project, "task": args.task, "kind": args.kind,
+            "grade": args.grade, "coordinator": args.coordinator, "agent": args.agent,
+            "model": args.model, "reason": args.reason, "route_by": args.route_by,
+            "budget_min": args.budget, **picked,
+        })
     if args.kind == "implement":
         try:
             sys.dont_write_bytecode = True
@@ -236,21 +279,39 @@ def cmd_start(args):
     if notice:
         print(notice, file=sys.stderr)
     print("label: " + run_label(args.agent, args.model, args.project, args.task), file=sys.stderr)
+    for warning in warnings:
+        print(warning, file=sys.stderr)
+
+
+LOG_REFUSED = ("ledger: log refused: --log-path must name a regular file you own, not a link, directly inside "
+               ".finolabs/logs of this checkout, of the --checkout checkout or of the main checkout")
+MAX_REWORK = 2  # the loop's limit; more rounds need a --reason
+
+
+def validate_finish(args):
+    """Field checks that need no ledger read; each refusal writes nothing."""
+    if args.rework_rounds < 0:
+        sys.exit("ledger: --rework-rounds cannot be negative")
+    if args.rework_rounds > MAX_REWORK and args.reason is None:
+        sys.exit(f"ledger: --rework-rounds above {MAX_REWORK} needs a --reason")
+    if args.outcome == "accepted" and args.tests == "failed":
+        sys.exit("ledger: an accepted run cannot have --tests failed; record rejected, or rerun the tests")
 
 
 def cmd_finish(args):
     # Scan before ledger reads can warn or anything about the run is stored.
     status = "not_scanned"
+    validate_finish(args)
     if args.log_path is not None:
         try:
             import log_scan
-            status = log_scan.scan(args.log_path)["status"]
+            status = log_scan.scan(args.log_path, log_scan.log_root(args.log_path, args.checkout))["status"]
         except (ImportError, OSError, ValueError) as error:
-            # Only the fixed folder message is shown; other refusals stay terse.
+            # Only fixed messages are shown, never a path.
             folder = getattr(sys.modules.get("log_scan"), "FolderRefused", None)
             if folder is not None and isinstance(error, folder):
                 sys.exit("ledger: log refused; " + str(error))
-            sys.exit("ledger: log refused")
+            sys.exit(LOG_REFUSED)
     with finish_lock():
         finish_locked(args, status)
 
@@ -318,7 +379,7 @@ def finish_locked(args, status):
         **bound,
         "event": "finish", "id": args.id, "ts": now(), "outcome": args.outcome,
         "rework_rounds": args.rework_rounds, "tests": args.tests, "note": args.note,
-        "log_scan": status,
+        "log_scan": status, **({"retro": True} if args.retro else {}),
     })
 
 
@@ -441,6 +502,20 @@ def this_project(cwd=None):
     if state == "broken":
         return None
     name = values.get("ledger", ident.checkout.name)
+    return name if isinstance(name, str) and 0 < len(name) <= MAX_PROJECT else None
+
+
+def settings_project(cwd):
+    """The `ledger` entry of the repository's approved project settings, or None (a folder-name fallback is no label)."""
+    try:
+        import project_store as store
+        found, ident = store.identity(cwd)
+        if found != "found":
+            return None
+        state, values = store.settings_state(ident.checkout)
+    except Exception:
+        return None
+    name = values.get("ledger") if state != "broken" and isinstance(values, dict) else None
     return name if isinstance(name, str) and 0 < len(name) <= MAX_PROJECT else None
 
 
@@ -645,9 +720,15 @@ def summary_rows(keys=SUMMARY_KEYS, since=None, project=None):
             continue  # older or malformed lines have no known routing source
         groups[tuple(s[k] for k in keys)].append((s, f))
     rows = []
-    for key, pairs in sorted(groups.items()):
+    for key, every in sorted(groups.items()):
+        # Records closed late as cancelled say nothing about the run: they stay out of the rates and medians.
+        pairs = [(s, f) for s, f in every if not closed_late(f)]
+        late = len(every) - len(pairs)
         n = len(pairs)
+        if not n:
+            continue
         accepted = [f for _, f in pairs if f["outcome"] == "accepted"]
+        timed = [minutes(s, f) for s, f in pairs if f.get("retro") is not True]
         rows.append({
             **dict(zip(keys, key)), "n": n,
             "first_pass": len([f for f in accepted if f["rework_rounds"] == 0]) / n,
@@ -657,10 +738,29 @@ def summary_rows(keys=SUMMARY_KEYS, since=None, project=None):
             "fallback": len([s for s, _ in pairs if s["reason"].startswith("fallback")]),
             "quota": len([f for _, f in pairs if f["outcome"] == "quota"]),
             "error": len([f for _, f in pairs if f["outcome"] == "error"]),
-            "median_min": statistics.median(minutes(s, f) for s, f in pairs),
+            "cancelled": len([f for _, f in pairs if f["outcome"] == "cancelled"]),
+            "closed_late": late,
+            "retro": len(pairs) - len(timed),
+            "accepted_findings": sum(f.get("log_scan") == "findings" for f in accepted),
+            "review_unposted": sum(s["kind"] == "review" and f.get("review_posted") is not True
+                                   for s, f in pairs if f["outcome"] == "accepted"),
+            "median_min": statistics.median(timed) if timed else None,
             "rework": statistics.mean(f["rework_rounds"] for _, f in pairs),
         })
     return rows
+
+
+def closed_late(finish):
+    """A cancelled record closed after the fact by `stale --close` or a coordinator: no verdict on the run."""
+    note = finish.get("note")
+    return (finish.get("outcome") == "cancelled" and isinstance(note, str)
+            and note.startswith(("closed late by ledger stale", "closed late by the coordinator")))
+
+
+def late_count(since=None, project=None):
+    starts, finishes = load()
+    return sum(1 for ident, s in starts.items() if ident in finishes and closed_late(finishes[ident])
+               and not (since and s["ts"][:10] < since) and not (project and s["project"] != project))
 
 
 def pick_rows(since=None, project=None):
@@ -696,7 +796,7 @@ def print_pick_rows(rows):
 
 
 def away_rows(since=None, project=None):
-    """Per lease: decisions by deciding rung, advisor attempts by agent and model, the Jev spread, parked, denied, reversed."""
+    """Per lease: decisions by deciding rung, advisor attempts by agent and model, the table spread, parked, denied, reversed."""
     leases = defaultdict(lambda: {"attempts": defaultdict(list), "denied": 0})
     reviews, lease_of = {}, {}
     for rec in load_away():
@@ -717,7 +817,8 @@ def away_rows(since=None, project=None):
         attempts, by_rung, by_advisor, probabilities = leases[start]["attempts"], defaultdict(int), defaultdict(int), []
         parked = no_precedent = reviewed = reversed_ = 0
         for decision_id, tries in attempts.items():
-            settled = [t for t in tries if t["settled"] == "yes"]
+            # A table weighs the options and never decides, so it is no deciding rung.
+            settled = [t for t in tries if t["settled"] == "yes" and t["rung"] != "table"]
             if settled:
                 by_rung[settled[-1]["rung"]] += 1
                 parked += settled[-1]["rung"] == "park"
@@ -726,7 +827,8 @@ def away_rows(since=None, project=None):
             for t in tries:
                 if t["rung"] == "advisor" and t.get("by"):
                     by_advisor[f"{t['by']} {t.get('model') or '-'}"] += 1
-                if t["rung"] == "jev" and isinstance(t.get("probability"), (int, float)):
+                # Leases before 0.2.7 logged the top probability under rung `jev`; it is the same number.
+                if t["rung"] in ("table", "jev") and isinstance(t.get("probability"), (int, float)):
                     probabilities.append(float(t["probability"]))
             if decision_id in reviews:
                 reviewed += 1
@@ -734,7 +836,7 @@ def away_rows(since=None, project=None):
         spread = ({"n": len(probabilities), "min": min(probabilities), "median": statistics.median(probabilities),
                    "max": max(probabilities)} if probabilities else {"n": 0})
         rows.append({"lease_start": start, "decisions": len(attempts), "by_rung": dict(sorted(by_rung.items())),
-                     "by_advisor": dict(sorted(by_advisor.items())), "jev_p": spread, "parked": parked,
+                     "by_advisor": dict(sorted(by_advisor.items())), "table_p": spread, "parked": parked,
                      "denied": leases[start]["denied"], "no_precedent": no_precedent,
                      "reviewed": reviewed, "reversed": reversed_})
     return rows
@@ -747,11 +849,11 @@ def print_away_rows(rows):
         started = datetime.fromtimestamp(r["lease_start"], timezone.utc).isoformat(timespec="minutes")
         rungs = ", ".join(f"{k} {v}" for k, v in r["by_rung"].items()) or "none settled"
         advisors = ", ".join(f"{k} {v}" for k, v in r["by_advisor"].items()) or "none"
-        p = r["jev_p"]
+        p = r["table_p"]
         spread = f"n {p['n']}, min {p['min']:.2f}, median {p['median']:.2f}, max {p['max']:.2f}" if p["n"] else "n 0"
         share = f"reversed {r['reversed']} of {r['reviewed']} reviewed" if r["reviewed"] else "none reviewed yet"
         print(f"lease {started}: {r['decisions']} decisions ({r['no_precedent']} without precedent); by rung: {rungs}; "
-              f"advisors: {advisors}; Jev p: {spread}; parked {r['parked']}; denied questions {r['denied']}; {share}")
+              f"advisors: {advisors}; table top p: {spread}; parked {r['parked']}; denied questions {r['denied']}; {share}")
 
 
 def cmd_summary(args):
@@ -761,18 +863,35 @@ def cmd_summary(args):
         return
     picks = pick_rows(since=args.since, project=args.project)
     away = away_rows(since=args.since, project=args.project)
+    late = late_count(since=args.since, project=args.project)
     if not rows:
         print("ledger: no finished dispatches match")
+        if late:
+            print(f"closed late as cancelled, left out of the rates and medians: {late}")
         if picks:
             print_pick_rows(picks)
         if away:
             print_away_rows(away)
         return
-    header = f"{'agent':<16}{'model':<24}{'kind':<10}{'grade':<10}{'n':>4}{'1st-pass':>10}{'accepted':>10}{'timeout':>9}{'fallback':>10}{'median min':>12}{'unverified':>12}"
+    header = (f"{'agent':<16}{'model':<24}{'kind':<10}{'grade':<10}{'n':>4}{'1st-pass':>10}{'accepted':>10}"
+              f"{'timeout':>9}{'fallback':>10}{'median min':>12}{'unverified':>12}{'quota':>7}{'error':>7}{'cancelled':>11}")
     print(header)
     for r in rows:
+        median = "-" if r["median_min"] is None else f"{r['median_min']:.0f}"
         print(f"{r['agent']:<16}{r['model']:<24}{r['kind']:<10}{r['grade']:<10}{r['n']:>4}{r['first_pass']:>10.0%}{r['accepted']:>10.0%}"
-              f"{r['timeout']:>9}{r['fallback']:>10}{r['median_min']:>12.0f}{r['accepted_unverified']:>12}")
+              f"{r['timeout']:>9}{r['fallback']:>10}{median:>12}{r['accepted_unverified']:>12}"
+              f"{r['quota']:>7}{r['error']:>7}{r['cancelled']:>11}")
+    if late:
+        print(f"closed late as cancelled, left out of the rates and medians: {late}")
+    retro = sum(r["retro"] for r in rows)
+    if retro:
+        print(f"retroactive records, left out of the medians: {retro}")
+    findings = sum(r["accepted_findings"] for r in rows)
+    if findings:
+        print(f"flag: {findings} accepted runs had log scan findings; check them for leaked secrets or false positives")
+    unposted = sum(r["review_unposted"] for r in rows)
+    if unposted:
+        print(f"flag: {unposted} review acceptances have no --review-url; the posted review is unrecorded")
     if picks:
         print_pick_rows(picks)
     if away:
@@ -815,6 +934,8 @@ def build_parser():
     f.add_argument("--accept-unverified", action="store_true")
     f.add_argument("--reason", help="reason for any outcome, retained only as a digest; keep text in the "
                                     "coordinator report")
+    f.add_argument("--retro", action="store_true", help="a record written after the fact; its duration is left "
+                                                        "out of summary medians")
     f.set_defaults(func=cmd_finish)
 
     o = sub.add_parser("open", help="list dispatches with no finish line")

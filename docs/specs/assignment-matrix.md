@@ -1,5 +1,7 @@
 # Assignment matrix: one section for levels, work types and roles (draft, scoped to release 0.2.3)
 
+> 0.2.7 (owner decision, 14/11/2026): [matrix-models.md](matrix-models.md) adds models per kind of work; where they disagree, it wins.
+
 Status: implemented; in release 0.2.3.
 
 ## Why
