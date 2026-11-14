@@ -19,6 +19,11 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `ledger.py finish --log-path` accepts a log directly in `.finolabs/logs/` of the `--checkout` checkout or of the main checkout, not only of the current one, so a coordinator in another worktree can close a run; a refused log gets one fixed reason line instead of a bare `ledger: log refused`. An empty log is now `not_scanned`, not `no_findings`. `delegate` "Where files go" names one place for logs.
 - Two `ledger.py start` calls in the same second can no longer share a dispatch id: the id is checked against the ledger under the finish lock.
 
+### Fixed
+
+- afk no longer parks review posting: `afk.py check` allows `post_review.py <number>` and `post_review.py <number> --body-file <run body>` (either order) when the repository's target is verified and `Repository comments` is `decide`; the body must be post_review.py's own private run body, its first line one review marker and the rest free of secrets, machine paths and other gate markers.
+- afk works in a Markdown skill repository: a repository approved as one (`skill-repository: yes`, a new question in `/setup add afk` inside the repository) may edit its root `SKILL.md`, `references/**`, `scripts/**` and `evals/**` on a work branch; a `SKILL.md` below the root stays protected.
+
 ## [0.2.6] - 2026-11-14
 
 ### Added
