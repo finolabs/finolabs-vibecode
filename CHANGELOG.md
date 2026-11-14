@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- Models per kind of work in the assignment matrix: an agent line may carry `models <rule> | <rule> ...`, each `<model>[ then <fallback>] for <kind, type or levels>`, read in order with the first match winning (a rule naming no kind applies only to implementation). `route_pick.py pick` gains `--kind` (implement, code-review, security-review, navigator, advisor), makes `--type` optional and prints the model chosen for each dispatch, with `quota-fallback` when an Antigravity rule's `then` replaced a model whose quota pool (argon, gemini, claude-gpt, other) is out; an agent whose chosen model is out is dropped. `review_route.py` judges Antigravity's quota per review kind on the model its rules pick (`--level` for level-bound rules), `matrix_setup.py show` lists the rules, and `/setup add delegation` asks for them. Any malformed rule makes the whole matrix invalid.
+
 ### Changed
 
 - afk limits are counted per repository: each repository under one lease has its own runs, runtime minutes (from its first allowed action) and actions an hour, and a repository may set its own `max-runs`, `max-runtime-minutes` and `max-actions-per-hour` in `/setup add afk` (wider or narrower than the user value). Breaking for away loops: a spent repository answers `spent` with no `end` line, so the loop goes on in other repositories, `exhausted` is no longer returned, and a changed setup now adds the `end` line like an ended lease; a lease started before the update reads as invalid, so start it again.

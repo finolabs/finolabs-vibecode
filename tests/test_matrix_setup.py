@@ -252,6 +252,44 @@ class MatrixSetupTest(unittest.TestCase):
         self.assertEqual(self.cli('validate', '--judge', 'host', '--consent', 'yes', '--line', 'claude: levels 1-5; roles advisor',
                                   '--line', 'codex: levels 1-5; roles advisor')[0], 1)
 
+    def test_show_lists_models_rules_in_order(self):
+        owner = ('antigravity: levels 1-5; works on design, video, image-generation, transcription; models '
+                 'gemini-4-argon-high then gemini-3.8-flash-high for security-review | gemini-4-hydrogen-high for design, '
+                 'video, three-d, image-generation, levels 4-5 | gemini-4-argon-high for implement, levels 4-5 | '
+                 'gemini-3.8-flash-high for code-review | gemini-3.8-flash-high for levels 3-4; roles security-review, '
+                 'navigator')
+        codex = 'codex: levels 1-5; models gpt-a then gpt-b for code-review; roles code-review'
+        code, out, err = self.cli('validate', '--judge', 'host', '--consent', 'yes', '--line', owner, '--line', codex)
+        self.assertEqual((code, err), (0, ''))
+        self.assertIn('- ' + owner + '\n', out)
+        self.assertEqual(self.cli('apply', '--digest', self.preview('--line', owner, '--line', codex))[0], 0)
+        code, out, _ = self.cli('show')
+        self.assertEqual(code, 0)
+        rules = [line for line in out.splitlines() if line.startswith(('Models ', 'Note: '))]
+        self.assertEqual(rules, [
+            'Models antigravity 1: gemini-4-argon-high then gemini-3.8-flash-high for security-review',
+            'Models antigravity 2: gemini-4-hydrogen-high for design, video, three-d, image-generation, levels 4-5',
+            'Models antigravity 3: gemini-4-argon-high for implement, levels 4-5',
+            'Models antigravity 4: gemini-3.8-flash-high for code-review',
+            'Models antigravity 5: gemini-3.8-flash-high for levels 3-4',
+            'Models codex 1: gpt-a then gpt-b for code-review',
+            'Note: codex has one quota reading for the whole install, so its then never applies'])
+        self.assertIn('Unverified: antigravity model gemini-4-hydrogen-high is not among the allowed models', out)
+        self.assertEqual(self.cli('validate', '--judge', 'host', '--consent', 'yes',
+                                  '--line', 'codex: levels 1-5; models gpt-a for reviewing')[0], 1)
+
+    def test_setup_reference_asks_for_rules_and_reads_them_back(self):
+        text = (ROOT / 'skills/setup/references/matrix.md').read_text()
+        self.assertIn('"Should <helper> use different models for different kinds of work?"', text)
+        self.assertIn('[; models <rule> | <rule> ...][; roles <role>, ...]', text)
+        self.assertIn('Never add a rule, selector or fallback the user did not give', text)
+        self.assertIn('Read the rules back to the user from the printed line', text)
+        example = text.split('Example: `', 1)[1].split('`', 1)[0]
+        writer = load('matrix_setup_example', SCRIPT)
+        writer.today = lambda: TODAY
+        rendered = writer.am.render(writer.build_values([example], 'host', 'yes'))
+        self.assertIn('- ' + example + '\n', rendered)
+
     def test_show_absent_says_legacy_applies(self):
         code, out, _ = self.cli('show')
         self.assertEqual(code, 0)
