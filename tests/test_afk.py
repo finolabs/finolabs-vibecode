@@ -1239,7 +1239,8 @@ class ProjectScopeTest(AfkBase):
         for text, code in (('Reviewer: no marker\n', 'unsafe'), (marker, 'unsafe'),
                            (marker + 'Reviewer: x\n<!-- fnl-review kind=security head=' + 'b' * 40
                             + ' verdict=APPROVE -->\n', 'forbidden'),
-                           (marker + 'Reviewer: x\n' + 'AKIA' + 'ABCDEFGHIJKLMNOP\n', 'unsafe')):
+                           (marker + 'Reviewer: x\n' + 'AKIA' + 'ABCDEFGHIJKLMNOP\n', 'unsafe'),
+                           (marker + 'Reviewer: x\n' + 'Fine words.\n' * 6000, 'unsafe')):  # over 64 KiB
             with self.subTest(text=text[:30]):
                 body = self.run_body(text, 'b' * 32)
                 self.check(post + ['7', '--body-file', str(body)], tier=3, code=code)

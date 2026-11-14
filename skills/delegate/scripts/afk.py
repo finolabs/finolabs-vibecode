@@ -489,8 +489,9 @@ def checkout_of(token, base):
 
 
 def source_path(relative, mode=True):
-    """True for the plugin's own source (`SOURCE`), judged on the path relative to its checkout root; in an approved
-    skill repository (`mode` 'skill') also its root SKILL.md, references/** and evals/** (`SKILL_SOURCE`)."""
+    """True for the plugin's own source (`SOURCE`), judged on the path relative to its checkout root, on any work
+    branch `source_mode` allows; an approved skill repository (`mode` 'skill') adds its root SKILL.md, references/**,
+    evals/** and scripts/** (`SKILL_SOURCE`), and never a SKILL.md below the root."""
     name = relative.as_posix()
     if mode == 'skill':
         if relative.name.casefold() == 'skill.md' and name != 'SKILL.md':
