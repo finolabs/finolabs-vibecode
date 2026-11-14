@@ -1362,6 +1362,27 @@ def tracked_remove(tail, applied):
 
 # git verbs that change a checkout's work tree, index or HEAD; never run inside this install's own checkout.
 # `worktree` is not one: its only Tier 1 form removes another linked worktree, and worktree_remove refuses the install.
+def new_branch(name, applied):
+    """`git switch -c <name>` or `git checkout -b <name>`: a new own work branch from HEAD, in a found repository with
+    user or project settings and Push and pull requests or Merge yes; never a default-branch name, a full ref name or a
+    reserved namespace. Git itself refuses a name that already exists (no `-C`/`-B`)."""
+    context = context_of(applied)
+    if context.repository != 'found' or context.state not in {'user', 'project'}:
+        return 'unknown'
+    if (not BRANCH.fullmatch(name) or name.startswith('refs/') or '..' in name or name.endswith(('/', '.lock'))
+            or name == 'HEAD' or name.split('/')[0] in {'tags', 'remotes', 'notes', 'replace', 'stash', 'changes'}):
+        return 'unknown'
+    try:
+        _, default = branch_context(context)
+    except (OSError, ValueError, UnicodeError):
+        return 'unknown'
+    if not default or name.casefold() in {'main', 'master', 'trunk', default.casefold()}:
+        return 'unknown'
+    if applied['Push and pull requests'] != 'yes' and applied['Merge'] != 'yes':
+        return 'push-disabled'
+    return 'allowed'
+
+
 WORK_TREE_VERBS = {'merge', 'commit', 'add', 'rm', 'mv', 'checkout', 'switch', 'restore', 'reset',
                    'pull', 'rebase', 'cherry-pick', 'revert', 'stash', 'apply', 'am'}
 
@@ -1433,6 +1454,8 @@ def classify_argv(argv, applied, coordinator=None):
             if context.target is None or store.push_target(context.ident) != context.target:
                 return 'unknown'
             return 'allowed'
+        if verb in {'switch', 'checkout'} and len(tail) == 2 and tail[0] == {'switch': '-c', 'checkout': '-b'}[verb]:
+            return new_branch(tail[1], applied)
         if verb == 'merge':
             if tail not in (['origin/main'], ['--no-edit', 'origin/main']):
                 return local_merge(tail, applied)

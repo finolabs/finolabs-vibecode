@@ -8,6 +8,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - `merge_check.py --independent --fallback-family <family>` lets an away lease merge on reviews by the author's own family when no other family is reachable: it needs a live lease, the author's family, positive out-of-quota evidence (a fresh reading with every pool below the floor, or a live rate-limit marker) for every other present family, a router trigger other than security, permission or privacy, no changed enforcer script or instruction file, and the exact fallback reviewer line on each counted marker. `afk.py log --kind review-fallback --pr <n> --head <sha>` records it for the user's return.
 - `ledger.py finish --retro` marks a record written after the fact.
+- `afk.py check` allows creating a new own work branch during a lease: `git switch -c <branch>` or `git checkout -b <branch>` (no start point) is Tier 1 in a found repository with Push and pull requests or Merge yes, never with a default-branch name; before, no branch could be created and the own-branch flow parked at its first step.
 
 ### Changed
 
