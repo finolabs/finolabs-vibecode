@@ -7,6 +7,17 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Changed
 
 - afk limits are counted per repository: each repository under one lease has its own runs, runtime minutes (from its first allowed action) and actions an hour, and a repository may set its own `max-runs`, `max-runtime-minutes` and `max-actions-per-hour` in `/setup add afk` (wider or narrower than the user value). Breaking for away loops: a spent repository answers `spent` with no `end` line, so the loop goes on in other repositories, `exhausted` is no longer returned, and a changed setup now adds the `end` line like an ended lease; a lease started before the update reads as invalid, so start it again.
+- `ledger.py summary` leaves `cancelled` records closed late (by `ledger stale` or the coordinator) out of the counts, acceptance rates and medians and prints them as a separate total, and leaves `finish --retro` records out of the medians (a group with only such records shows `-`). The text table gains the quota, error and cancelled columns that `--json` has, and below it flags accepted runs whose log scan had findings and review acceptances recorded without `--review-url`. `--json` rows gain `cancelled`, `closed_late`, `retro`, `accepted_findings` and `review_unposted`; `median_min` may be `null`. The status dashboard uses the same rows.
+- `ledger.py finish` refuses a negative `--rework-rounds`, more than 2 rework rounds without a `--reason`, and `accepted` with `--tests failed`; `start` warns, and still records, when the model is not in the assignment matrix or the project label differs from the repository's `ledger` project setting.
+
+### Added
+
+- `ledger.py finish --retro` marks a record written after the fact.
+
+### Fixed
+
+- `ledger.py finish --log-path` accepts a log directly in `.finolabs/logs/` of the `--checkout` checkout or of the main checkout, not only of the current one, so a coordinator in another worktree can close a run; a refused log gets one fixed reason line instead of a bare `ledger: log refused`. An empty log is now `not_scanned`, not `no_findings`. `delegate` "Where files go" names one place for logs.
+- Two `ledger.py start` calls in the same second can no longer share a dispatch id: the id is checked against the ledger under the finish lock.
 
 ### Fixed
 
