@@ -46,7 +46,8 @@ SETTING_KEYS = ('ledger', 'tasks', 'parallel', 'parallel-caps', 'label', 'autopi
 AUTOPILOT_KEYS = {'task-choice': ('choose', 'listed'), 'push-and-pull-requests': ('yes', 'no'),
                   'merge': ('yes', 'no'), 'trusted-authors': ('own',), 'roots': None,
                   'max-runs': range(1, 10001), 'max-runtime-minutes': range(1, 1441),
-                  'max-actions-per-hour': range(1, 10001)}
+                  'max-actions-per-hour': range(1, 10001),
+                  'skill-repository': ('yes',)}
 ROOT_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}')
 METADATA_LIMIT = 4096
 CODE = re.compile(r'[0-9a-f]{8}')
