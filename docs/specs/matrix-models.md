@@ -41,7 +41,7 @@ Example (the owner's rules):
 - `models` only chooses among the agent's own models; it never makes an agent a candidate. Which agents are candidates stays with `works on` (types), `levels` and `roles`, as today.
 - No rule matches: the line's `model`, else the agent's default.
 - At most 8 rules per line; each id follows the existing model rule (letters, digits, dot and dash, at most 64); at most one `then` per rule.
-- A kind, type or level range outside the closed lists, a ninth rule or a second `then` is a parse problem like any other: the matrix is invalid as a whole, as [assignment-matrix.md](assignment-matrix.md) "Precedence" says (roles and judge unset, `show` and `checkup.py` give the reason). There is no partly valid line.
+- A kind, type or level range outside the closed lists, a ninth rule or a second `then` is a parse problem like any other: the matrix is invalid as a whole, as [assignment-matrix.md](assignment-matrix.md) "Reading and migration" says (roles and judge unset, `show` and `checkup.py` give the reason). There is no partly valid line.
 - `assignments.py render` writes the field back in the same form, so a parsed line renders unchanged; `matrix_setup.py show` lists the rules under the agent's row, one per line, in order.
 - A model not among the allowed models of `## Agents on this machine` is shown as unverified, as today.
 
