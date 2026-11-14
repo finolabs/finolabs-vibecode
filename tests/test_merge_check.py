@@ -571,6 +571,147 @@ class RouterMarkerTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
 
 
+class SameFamilyFallbackTest(unittest.TestCase):
+    """docs/specs/afk-per-project.md D: same-family markers count only with all five conditions."""
+    FAMILIES = dict(author="claude", code="claude", security="claude")
+    LINE = "Reviewer: claude (same family as the author; no other family reachable)"
+
+    def setUp(self):
+        from datetime import datetime, timedelta, timezone
+        sys.path.insert(0, str(SCRIPT.parent))
+        import away_lease
+        import quota_probe
+        import review_config
+        now = datetime.now(timezone.utc)
+        iso = lambda delta: (now + delta).isoformat(timespec="seconds")
+        self.out = [f"Quota codex/default: measured {iso(timedelta(hours=-1))}; week 7d: 2% remaining, resets {iso(timedelta(days=1))}",
+                    f"Quota agy: rate-limit marker {iso(timedelta(minutes=-5))}; out of quota until {iso(timedelta(hours=1))} (advisory)"]
+        self.iso = iso
+        self.lease = patch.object(away_lease, "live_lease", return_value={"start": 1})
+        self.present = patch.object(review_config, "present_families", return_value={"claude", "codex", "antigravity"})
+        self.host = patch.object(review_config, "host_text", return_value="synthetic")
+        self.status = patch.object(quota_probe, "status_lines", side_effect=lambda: self.out)
+        self.installs = {agent: {"configs": {"default": None}} for agent in ("agy", "claude", "codex")}
+        self.config = patch.object(quota_probe, "canonical_config", side_effect=lambda: self.installs)
+        for p in (self.lease, self.present, self.host, self.status, self.config):
+            p.start()
+            self.addCleanup(p.stop)
+        self.files = [{"filename": "docs/notes.md"}]
+
+    def data(self, second=None, trigger="none"):
+        second = self.LINE + " relayed by the coordinator" if second is None else second
+        return pr(comments=[comment(marker("code", "APPROVE") + "\n" + second),
+                            comment(marker("security", "APPROVE") + "\n" + second)],
+                  body=f"Summary\n<!-- fnl-router depth=NORMAL trigger={trigger} -->\n")
+
+    def evaluate(self, data=None, family="claude", families=None):
+        return mc.evaluate(data or self.data(), lambda who: who in WRITERS, adopted=False, independent=True,
+                           families=families or self.FAMILIES, fallback_family=family, changed_files=lambda: self.files)
+
+    def test_all_five_conditions_pass(self):
+        ok, lines = self.evaluate()
+        self.assertTrue(ok, lines)
+        self.assertIn("ok    same-family review: no other family reachable (antigravity, codex)", lines)
+        self.assertTrue(mc.evaluate(self.data(self.LINE), lambda who: who in WRITERS, adopted=False, independent=True,
+                                    families=self.FAMILIES, fallback_family="claude", changed_files=lambda: self.files)[0])
+
+    def test_each_failed_condition_blocks(self):
+        import away_lease
+        with patch.object(away_lease, "live_lease", return_value=None):
+            self.assertFalse(self.evaluate()[0])
+        with patch.object(away_lease, "live_lease", side_effect=OSError):
+            self.assertFalse(self.evaluate()[0])
+        self.assertFalse(self.evaluate(family="codex")[0])  # not the author's family
+        for trigger in ("security", "permission", "privacy"):
+            with self.subTest(trigger=trigger):
+                self.assertFalse(self.evaluate(self.data(trigger=trigger))[0])
+        self.assertFalse(self.evaluate(pr(comments=self.data()["comments"], body="no marker"))[0])
+        for name in ("skills/delegate/scripts/afk.py", "skills/x/SKILL.md", "CLAUDE.md", "sub/AGENTS.md",
+                     "skills/review-gate/scripts/Merge_Check.py"):
+            with self.subTest(name=name):
+                self.files = [{"filename": "docs/notes.md"}, {"filename": name}]
+                self.assertFalse(self.evaluate()[0])
+        self.files = [{"filename": "docs/new.md", "previous_filename": "CLAUDE.md"}]
+        self.assertFalse(self.evaluate()[0])
+        self.files = [{"filename": "docs/notes.md"}]
+        for second in ("", "Reviewer: claude", "Reviewer: codex (same family as the author; no other family reachable)",
+                       self.LINE + "x", "x " + self.LINE):
+            with self.subTest(second=second):
+                self.assertFalse(self.evaluate(self.data(second))[0])
+
+    def test_only_positive_evidence_counts_as_out(self):
+        iso = self.iso
+        from datetime import timedelta
+        for lines in ([],  # no reading
+                      [self.out[0]],  # antigravity has no evidence
+                      [f"Quota codex/default: measured {iso(timedelta(hours=-9))}; week 7d: 2% remaining, resets {iso(timedelta(days=1))}", self.out[1]],
+                      [f"Quota codex/default: measured {iso(timedelta(hours=-1))}; week 7d: 2% remaining, resets {iso(timedelta(days=1))}; "
+                       f"5h 5h: 50% remaining, resets {iso(timedelta(hours=2))}", self.out[1]],  # one pool still has room
+                      [f"Quota codex/default: measured {iso(timedelta(hours=-1))}; week 7d: 2% remaining, resets {iso(timedelta(hours=-1))}", self.out[1]],
+                      [f"Quota agy: rate-limit marker {iso(timedelta(hours=-3))}; out of quota until {iso(timedelta(hours=-1))} (advisory)", self.out[0]],
+                      ["Quota: unverified (no reading)."]):
+            with self.subTest(lines=[line[:40] for line in lines]):
+                self.out = lines
+                self.assertFalse(self.evaluate()[0])
+
+    def test_the_fallback_runs_whatever_routing_picks(self):
+        # Routing picks codex because codex has no reading: the fallback still runs and refuses.
+        self.out = [self.out[1]]
+        ok, lines = self.evaluate(families=dict(author="claude", code="codex", security="codex"))
+        self.assertFalse(ok)
+        self.assertIn("BLOCK same-family review: no evidence that codex is out", lines)
+        self.assertFalse(any("different family" in line for line in lines), lines)
+
+    def test_a_fallback_marker_without_the_flag_blocks(self):
+        ok, lines = mc.evaluate(self.data(), lambda who: who in WRITERS, adopted=False, independent=True,
+                                families=dict(author="claude", code="codex", security="codex"))
+        self.assertFalse(ok)
+        self.assertIn("BLOCK independent code review: a same-family fallback marker needs --fallback-family", lines)
+
+    def test_partial_or_unknown_evidence_refuses(self):
+        from datetime import timedelta
+        iso = self.iso
+        # Two configured codex installs, only one reading: codex is not shown out.
+        self.installs["codex"] = {"configs": {"default": None, "work": None}}
+        self.assertFalse(self.evaluate()[0])
+        self.installs["codex"] = {"configs": {"default": None}}
+        # A pool segment that does not parse is no evidence.
+        self.out = [f"Quota codex/default: measured {iso(timedelta(hours=-1))}; week 7d: 2% remaining, resets "
+                    f"{iso(timedelta(days=1))}; garbled", self.out[1]]
+        self.assertFalse(self.evaluate()[0])
+        import review_config
+        for present in (set(), {"codex", "antigravity"}):
+            with self.subTest(present=present), patch.object(review_config, "present_families", return_value=present):
+                self.assertFalse(self.evaluate()[0])
+        for files in ([], [{"filename": ""}], ["docs/notes.md"], None):
+            with self.subTest(files=files):
+                self.files = files
+                self.assertFalse(self.evaluate()[0])
+
+    def test_no_fallback_flag_keeps_the_same_family_block(self):
+        ok, lines = mc.evaluate(self.data(), lambda who: who in WRITERS, adopted=False, independent=True,
+                                families=self.FAMILIES)
+        self.assertFalse(ok)
+        self.assertFalse(any("same-family review" in line for line in lines))
+
+    def test_the_fallback_never_replaces_head_reviews_or_checks(self):
+        self.assertFalse(self.evaluate(pr(comments=[], body=self.data()["body"]))[0])
+        self.assertFalse(self.evaluate(dict(self.data(), statusCheckRollup=[]))[0])
+
+    def test_the_enforcer_list_matches_afk(self):
+        source = (SCRIPT.parents[2] / "delegate/scripts/afk.py").read_text()
+        start = source.index("ENFORCERS = {")
+        names = set(__import__("re").findall(r"'([^']+)'", source[start:source.index("}", start)]))
+        self.assertEqual(mc.ENFORCERS, names)
+
+    def test_cli_needs_independent(self):
+        import contextlib
+        import io
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertEqual(mc.main(["7", "--repo", "acme/demo", "--fallback-family", "claude"]), 2)
+
+
 class IndependentMergeTest(unittest.TestCase):
     def evaluate(self, families, data=None):
         return mc.evaluate(data or pr(), lambda who: who in WRITERS, adopted=False,

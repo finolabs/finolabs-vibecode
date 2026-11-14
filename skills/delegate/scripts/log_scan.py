@@ -33,6 +33,41 @@ def run_log_folder():
     return Path.cwd() / '.finolabs' / 'logs'
 
 
+def main_checkout(base):
+    """The main checkout of the repository that holds `base` (the parent of git's common dir), or None.
+
+    Read from git's own files with owner and layout checks; no git command runs."""
+    try:
+        import git_metadata
+        _, _, common = git_metadata.checkout_dirs(base)
+    except Exception:
+        return None
+    return common.parent if common.name == '.git' else None
+
+
+def run_log_folders(checkout=None):
+    """The run-log folders a log may sit in directly: this checkout's, the named checkout's and the main checkout's."""
+    roots = [run_log_folder()]
+    bases = [Path(os.path.abspath(checkout))] if checkout is not None else []
+    for base in [*bases, Path.cwd()]:
+        main = main_checkout(base)
+        bases += [main] if main is not None else []
+    for base in bases:
+        root = base / '.finolabs' / 'logs'
+        if root not in roots:
+            roots.append(root)
+    return roots
+
+
+def log_root(path, checkout=None):
+    """The run-log folder that holds `path` directly, or a refusal; nothing is resolved through a symlink."""
+    parent = Path(os.path.abspath(path)).parent
+    for root in run_log_folders(checkout):
+        if parent == root:
+            return root
+    raise ValueError('refused')
+
+
 @contextmanager
 def folder_descriptor(root=None):
     root = Path(root) if root is not None else run_log_folder()
@@ -94,7 +129,8 @@ def opened_log(path, root=None):
 
 def scan_descriptor(fd):
     info = check_file(fd)
-    if info.st_size > sp.MAX_BYTES:
+    if info.st_size == 0 or info.st_size > sp.MAX_BYTES:
+        # An empty log holds nothing that was scanned: never a no_findings receipt.
         return dict(status='not_scanned', hits=[], text=None, digest=None)
     os.lseek(fd, 0, os.SEEK_SET)
     chunks, size = [], 0

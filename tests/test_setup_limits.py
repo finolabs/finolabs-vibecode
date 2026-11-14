@@ -214,7 +214,8 @@ class ConsentInventoryTests(unittest.TestCase):
         # Four tickable keys fit one native multi-select; trusted authors has no other choice yet; the
         # per-repository limits are one more question of their own.
         questions = re.findall(r'Ask: "([^"\n]+)"', project)
-        self.assertEqual(len(questions), 6, questions)  # skill repository and limits are asked every time
+        self.assertEqual(len(questions), 8, questions)  # skill repository, limits, decisions and targets are asked every time
+        self.assertIn('Only when Production was ticked, ask on its own: "Which production deploy commands', project)
         self.assertIn("one multi-select of four", project)
         # An existing repository object is read first and removed only through the previewed save question.
         self.assertLess(project.index("--clear autopilot --dry-run"),
@@ -223,7 +224,8 @@ class ConsentInventoryTests(unittest.TestCase):
         self.assertIn("`current` field", project)
         self.assertIn("`changed` keys", project)
         for key in ("task-choice", "push-and-pull-requests", "merge", "trusted-authors", "roots", "max-runs",
-                    "max-runtime-minutes", "max-actions-per-hour", "skill-repository"):
+                    "max-runtime-minutes", "max-actions-per-hour", "skill-repository", "decide",
+                    "non-production-targets", "production-targets"):
             self.assertIn("`%s`" % key, project)
         # Only the keys the user ticks as different are asked; every other key inherits.
         self.assertIn("Should this repository use different away rules than your account?", project)

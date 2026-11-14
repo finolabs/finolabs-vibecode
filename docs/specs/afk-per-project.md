@@ -59,9 +59,9 @@ The ladder becomes:
 
 Then the host carries out the chosen option through `check` like any action. A decision still grants no authority.
 
-- `judge.py ask --site away-evaluation` prints `{"source": "jev", "of": <k>, "probabilities": [<p1>, ..., <pk>]}` with each probability in 0 to 1; the `away-decision` site and its 0.8 threshold are removed. The small-model table is written by the host to a file under `.finolabs/briefs/` in the same shape with `"source": "host-small"` and is checked by `judge.py check-table --file <file>` (closed schema, k equal to the options, values in 0 to 1).
+- `judge.py ask --site away-evaluation` prints `{"source": "jev", "of": <k>, "probabilities": [<p1>, ..., <pk>]}` with each probability in 0 to 1; the `away-decision` site and its 0.8 threshold are removed. The small-model table is written by the host to a file under `.finolabs/briefs/` in the same shape with `"source": "host-small"` and is checked by `judge.py check-table --file <file> --of <k>` (closed schema, k equal to the options, values in 0 to 1).
 - `afk.py check` allows `judge.py ask --site away-evaluation` (replacing `away-decision`) and `judge.py check-table`.
-- `afk.py log --kind decision` replaces rung `jev` with rung `table`: `--settled table` with `--by jev|host-small --of <k> --probability <top p>`, or `--settled unavailable --by jev|host-small`; it never takes `--option` and has no threshold. `ledger.py` `away_rows` reads the probability of rung `table`.
+- `afk.py log --kind decision` replaces rung `jev` with rung `table`: `--rung table --settled yes` with `--by jev|host-small --of <k> --probability <top p>`, or `--settled unavailable --by jev|host-small`; it never takes `--option` and has no threshold. `ledger.py` `away_rows` reads the probability of rung `table`.
 - Enforcer: the record, the site schema and `check-table` (script); the order of the rungs is advisory (agent judgment).
 - [CLAUDE.md](../../CLAUDE.md) (fourth scoped exception) and [PRIVACY.md](../../PRIVACY.md) (sections "Judge (TypeSafe), only if you choose it" and "Away decisions, only during a lease you start") describe the evaluation from pull request 1, before any code.
 
