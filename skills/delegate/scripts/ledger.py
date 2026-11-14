@@ -696,7 +696,7 @@ def print_pick_rows(rows):
 
 
 def away_rows(since=None, project=None):
-    """Per lease: decisions by deciding rung, advisor attempts by agent and model, the Jev spread, parked, denied, reversed."""
+    """Per lease: decisions by deciding rung, advisor attempts by agent and model, the table spread, parked, denied, reversed."""
     leases = defaultdict(lambda: {"attempts": defaultdict(list), "denied": 0})
     reviews, lease_of = {}, {}
     for rec in load_away():
@@ -717,7 +717,8 @@ def away_rows(since=None, project=None):
         attempts, by_rung, by_advisor, probabilities = leases[start]["attempts"], defaultdict(int), defaultdict(int), []
         parked = no_precedent = reviewed = reversed_ = 0
         for decision_id, tries in attempts.items():
-            settled = [t for t in tries if t["settled"] == "yes"]
+            # A table weighs the options and never decides, so it is no deciding rung.
+            settled = [t for t in tries if t["settled"] == "yes" and t["rung"] != "table"]
             if settled:
                 by_rung[settled[-1]["rung"]] += 1
                 parked += settled[-1]["rung"] == "park"
@@ -726,7 +727,8 @@ def away_rows(since=None, project=None):
             for t in tries:
                 if t["rung"] == "advisor" and t.get("by"):
                     by_advisor[f"{t['by']} {t.get('model') or '-'}"] += 1
-                if t["rung"] == "jev" and isinstance(t.get("probability"), (int, float)):
+                # Leases before 0.2.7 logged the top probability under rung `jev`; it is the same number.
+                if t["rung"] in ("table", "jev") and isinstance(t.get("probability"), (int, float)):
                     probabilities.append(float(t["probability"]))
             if decision_id in reviews:
                 reviewed += 1
@@ -734,7 +736,7 @@ def away_rows(since=None, project=None):
         spread = ({"n": len(probabilities), "min": min(probabilities), "median": statistics.median(probabilities),
                    "max": max(probabilities)} if probabilities else {"n": 0})
         rows.append({"lease_start": start, "decisions": len(attempts), "by_rung": dict(sorted(by_rung.items())),
-                     "by_advisor": dict(sorted(by_advisor.items())), "jev_p": spread, "parked": parked,
+                     "by_advisor": dict(sorted(by_advisor.items())), "table_p": spread, "parked": parked,
                      "denied": leases[start]["denied"], "no_precedent": no_precedent,
                      "reviewed": reviewed, "reversed": reversed_})
     return rows
@@ -747,11 +749,11 @@ def print_away_rows(rows):
         started = datetime.fromtimestamp(r["lease_start"], timezone.utc).isoformat(timespec="minutes")
         rungs = ", ".join(f"{k} {v}" for k, v in r["by_rung"].items()) or "none settled"
         advisors = ", ".join(f"{k} {v}" for k, v in r["by_advisor"].items()) or "none"
-        p = r["jev_p"]
+        p = r["table_p"]
         spread = f"n {p['n']}, min {p['min']:.2f}, median {p['median']:.2f}, max {p['max']:.2f}" if p["n"] else "n 0"
         share = f"reversed {r['reversed']} of {r['reviewed']} reviewed" if r["reviewed"] else "none reviewed yet"
         print(f"lease {started}: {r['decisions']} decisions ({r['no_precedent']} without precedent); by rung: {rungs}; "
-              f"advisors: {advisors}; Jev p: {spread}; parked {r['parked']}; denied questions {r['denied']}; {share}")
+              f"advisors: {advisors}; table top p: {spread}; parked {r['parked']}; denied questions {r['denied']}; {share}")
 
 
 def cmd_summary(args):

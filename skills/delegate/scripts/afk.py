@@ -11,7 +11,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Missing/expired/stopped/changed setup denies every check and adds one fixed `end` line telling the caller to stop its loop; limits are counted per project (the full identity digest, or one shared `unknown` entry, at most 64): spent runs or runtime minutes since the project's first reserved action say `spent`, the project's rolling-hour cap or a full project table says `limit`, and neither ends the lease for other projects | lease_guard, project_limit, check |
 | Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release and npm/pnpm publish forms whose every applicable category is `decide`, and a deploy matching a `Non-production targets` entry exactly with no production or live word; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
 | Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
-| The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
+| The ladder's two forms: this install's judge.py at the away-evaluation site with validated options or its check-table on a brief file, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, table_path, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
 | Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
 | A precedent packet holds at most eight excerpts and 8 KB; a secret or machine path drops an excerpt; excerpts need the separate consent | packet_check |
 | Hard names (credentials/env/key names, .git, .github, .claude, .codex, git hook names, host/lease/log state) are Tier 3 anywhere in argv or paths; soft names (hooks, settings, config, setup, SKILL.md, CLAUDE.md, AGENTS.md) too, except in a source path of this check's own checkout on a non-default work branch with Push and pull requests or Merge yes, and never inside this install; the one exact script path of this install's own trusted wrapper is spared (the install may lie under ~/.claude or ~/.codex) | protected, own_wrapper_index, source_mode |
@@ -92,12 +92,12 @@ ADVISOR = re.compile(r'(?:claude|codex|antigravity|zcode)[a-z0-9]{0,24}')
 FIELDS = ('by', 'option', 'of', 'probability', 'dispatch', 'model')
 # The closed attempt schema of "Record for analysis": (rung, settled) -> (required, optional).
 ATTEMPTS = {('rule', 'yes'): ({'by', 'option', 'of'}, set()), ('rule', 'no'): ({'by'}, set()),
-            ('jev', 'yes'): ({'by', 'option', 'of', 'probability'}, set()), ('jev', 'no'): ({'by', 'probability'}, set()),
-            ('jev', 'unavailable'): ({'by'}, set()),
+            ('table', 'yes'): ({'by', 'of', 'probability'}, set()), ('table', 'unavailable'): ({'by'}, set()),
             ('advisor', 'yes'): ({'by', 'option', 'of', 'dispatch', 'model'}, set()),
             ('advisor', 'no'): ({'by', 'dispatch', 'model'}, set()),
             ('host', 'yes'): ({'by', 'option', 'of', 'model'}, set()), ('park', 'yes'): ({'by'}, set())}
-SETTLE = 0.8
+# Who made the evaluation table: Jev, or the host's small fast model when Jev is absent or failed.
+TABLE_SOURCES = ('jev', 'host-small')
 NUMBERS = {'Lease hours': (1, 24), 'Max runs': (1, 10000), 'Max runtime minutes': (1, 1440),
            'Max actions per hour': (1, 10000), 'Quota floor percent': (0, 100)}
 KINDS = {'start': 1, 'stop': 1, 'action': 1, 'decision': 2, 'parked': 3,
@@ -845,12 +845,27 @@ def evidence_path(name, context):
     return no_links(path, context) and not (context.ident.checkout / path).is_dir()
 
 
+def table_path(name, context):
+    """An evaluation table the host's small model wrote: a JSON file under `.finolabs/briefs/` of this checkout only."""
+    path = repository_path(name, context)
+    if path is None or not re.fullmatch(r'\.finolabs/briefs/[A-Za-z0-9_.-]{1,80}\.json', path.as_posix()):
+        return False
+    return no_links(path, context) and not (context.ident.checkout / path).is_dir()
+
+
 def judge_command(tail, applied):
-    """`judge.py ask --site away-decision --question Q --option O (2 to 6) --evidence-file F [--judge jev]` only."""
+    """`judge.py ask --site away-evaluation --question Q --option O (2 to 6) --evidence-file F [--judge jev]`, or
+    `judge.py check-table --file F --of K` for a table under `.finolabs/briefs/`; nothing else."""
+    if tail[:1] == ['check-table']:
+        values = flag_values(tail[1:], {'--file', '--of'}, set())
+        if (values is None or set(values) != {'--file', '--of'} or not re.fullmatch(r'[2-6]', values['--of'])
+                or not table_path(values['--file'], context_of(applied))):
+            return 'unknown'
+        return 'allowed'
     if tail[:1] != ['ask']:
         return 'unknown'
     values = flag_values(tail[1:], {'--site', '--question', '--evidence-file', '--judge'}, {'--option'})
-    if (values is None or values.get('--site') != 'away-decision' or values.get('--judge', 'jev') != 'jev'
+    if (values is None or values.get('--site') != 'away-evaluation' or values.get('--judge', 'jev') != 'jev'
             or not {'--question', '--evidence-file', '--option'} <= set(values)):
         return 'unknown'
     question, options = values['--question'], values['--option']
@@ -859,7 +874,7 @@ def judge_command(tail, applied):
         return 'unknown'
     try:
         import judge
-        judge.choice_fields('away-decision', question, options, '')
+        judge.choice_fields('away-evaluation', question, options, '')
     except (ImportError, ValueError):
         return 'unknown'
     return 'allowed'
@@ -1542,24 +1557,26 @@ def attempt(args):
         raise ValueError('afk precedents count is invalid')
     fields = dict(rung=rung, settled=settled, precedents=int(args.precedents), topic=label(args.topic))
     if 'by' in given:
-        valid = {'rule': args.by == 'rule', 'jev': args.by == 'jev', 'advisor': bool(ADVISOR.fullmatch(args.by)),
+        valid = {'rule': args.by == 'rule', 'table': args.by in TABLE_SOURCES, 'advisor': bool(ADVISOR.fullmatch(args.by)),
                  'host': args.by in PROGRAMS, 'park': args.by in PROGRAMS}[rung]
         if not valid:
             raise ValueError('afk decider is invalid')
         fields['by'] = args.by
     if 'of' in given:
-        if not re.fullmatch(r'[2-6]', args.of) or not re.fullmatch(r'[1-6]', args.option) or int(args.option) > int(args.of):
+        if not re.fullmatch(r'[2-6]', args.of):
             raise ValueError('afk option is invalid')
-        fields.update(option=int(args.option), of=int(args.of))
+        fields['of'] = int(args.of)
+    if 'option' in given:
+        if not re.fullmatch(r'[1-6]', args.option) or int(args.option) > int(args.of):
+            raise ValueError('afk option is invalid')
+        fields['option'] = int(args.option)
     if 'probability' in given:
-        # A bounded plain decimal, so the value judge.ask_choice returns (up to 17 significant digits) round-trips.
+        # The top probability of the table, a bounded plain decimal (up to 17 significant digits round-trip).
         if not re.fullmatch(r'[01](?:\.[0-9]{1,20})?', args.probability):
             raise ValueError('afk probability is invalid')
         probability = float(args.probability)
         if not math.isfinite(probability) or not 0 <= probability <= 1:
             raise ValueError('afk probability is invalid')
-        if (settled == 'yes') != (probability >= SETTLE):
-            raise ValueError('afk probability does not match the result')
         fields['probability'] = probability
     if 'dispatch' in given:
         if not DISPATCH_ID.fullmatch(args.dispatch):
