@@ -1369,8 +1369,8 @@ def new_branch(name, applied):
     context = context_of(applied)
     if context.repository != 'found' or context.state not in {'user', 'project'}:
         return 'unknown'
-    if (not BRANCH.fullmatch(name) or name.startswith('refs/') or '..' in name or name.endswith(('/', '.lock'))
-            or name == 'HEAD' or name.split('/')[0] in {'tags', 'remotes', 'notes', 'replace', 'stash', 'changes'}):
+    if (not BRANCH.fullmatch(name) or name.startswith('refs/') or '..' in name or '//' in name or '/.' in name
+            or name.endswith(('/', '.', '.lock')) or name == 'HEAD' or name.split('/')[0] in {'tags', 'remotes', 'notes', 'replace', 'stash', 'changes'}):
         return 'unknown'
     try:
         _, default = branch_context(context)
