@@ -831,7 +831,7 @@ def away_rows(since=None, project=None):
             for t in tries:
                 if t["rung"] == "advisor" and t.get("by"):
                     by_advisor[f"{t['by']} {t.get('model') or '-'}"] += 1
-                # Leases before 0.2.7 logged the top probability under rung `jev`; it is the same number.
+                # Leases before 0.3.0 logged the top probability under rung `jev`; it is the same number.
                 if t["rung"] in ("table", "jev") and isinstance(t.get("probability"), (int, float)):
                     probabilities.append(float(t["probability"]))
             if decision_id in reviews:

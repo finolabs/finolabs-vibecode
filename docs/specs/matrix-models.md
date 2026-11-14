@@ -1,6 +1,6 @@
 # Models per kind of work in the assignment matrix
 
-Status: implemented; in 0.2.7 (PR 285): `models` rules, `route_pick.py --kind`, `review_route.py --level`, per-pool quota; live-host routing remains unverified.
+Status: implemented; in 0.3.0 (PR 285): `models` rules, `route_pick.py --kind`, `review_route.py --level`, per-pool quota; live-host routing remains unverified.
 
 This document extends [assignment-matrix.md](assignment-matrix.md) ("The section", "Routing query"). Where they disagree, this document wins.
 

@@ -1,8 +1,8 @@
 # afk per project: limits per repository, an evaluation table before the deciders, no stops beyond setup
 
-Status: implemented; in 0.2.7 (PRs 277, 278, 280, 281, 282, 283; README diagram 284); live-host behaviour remains unverified.
+Status: implemented; in 0.3.0 (PRs 277, 278, 280, 281, 282, 283, 286, 287, 288, 289, 290; README diagram 284); live-host behaviour remains unverified.
 
-This document changes [autopilot.md](autopilot.md) ("Project scope", "Lease, state and what enforces what") and [away-decisions.md](away-decisions.md) ("The ladder", "Where it must stop"). Where they disagree, this document wins for 0.2.7 and the older text points here.
+This document changes [autopilot.md](autopilot.md) ("Project scope", "Lease, state and what enforces what") and [away-decisions.md](away-decisions.md) ("The ladder", "Where it must stop"). Where they disagree, this document wins from 0.3.0 and the older text points here.
 
 ## Owner decisions (14/11/2026)
 
@@ -86,7 +86,7 @@ Enforcer: `merge_check.py` for conditions 1 to 5 (script); trying the other fami
 
 ### F. Test commands and top-level files per project (pull request 7, after the UAT)
 
-The afk UAT of 14/11/2026 (`.finolabs/notes/afk-e2e-2026-11-14.md`, U1 and U2) found two stoppers. No Tier 1 form ran a repository's own tests, while the merge gate needs local tests of the touched modules green. And no top-level file other than `README.md`, `CHANGELOG.md` and `CONTRIBUTING.md` was editable, so the task list (`TASKS.md`) the agents work from parked. Owner decision (14/11/2026, "Fix first", relayed by the coordinator): fix both before 0.2.7.
+The afk UAT of 14/11/2026 (`.finolabs/notes/afk-e2e-2026-11-14.md`, U1 and U2) found two stoppers. No Tier 1 form ran a repository's own tests, while the merge gate needs local tests of the touched modules green. And no top-level file other than `README.md`, `CHANGELOG.md` and `CONTRIBUTING.md` was editable, so the task list (`TASKS.md`) the agents work from parked. Owner decision (14/11/2026, "Fix first", relayed by the coordinator): fix both before 0.2.7 (the release shipped as 0.3.0).
 
 - `test-commands` (project scope only, 1 to 16 entries): exact commands with the `production-targets` grammar (plain words joined by single spaces, no shell syntax), written only through its own setup question with the commands read back in the preview. In that repository, an argv whose token list equals an entry is Tier 1, bare or as the command of `heavy_run.py run [options] -- <command>` (the heavy-job gate still governs the bare form on hosts where it is on). Matching is on token lists, so a token holding a space never equals two listed words.
   - Never read from user scope, never inherited, and empty in the user, strict and no-repository states, so the same argv in another repository keeps its usual tier.
