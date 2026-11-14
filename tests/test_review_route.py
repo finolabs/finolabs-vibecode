@@ -489,6 +489,13 @@ class LocalEvidenceTest(unittest.TestCase):
              contextlib.redirect_stdout(output):
             self.assertEqual(route.main(["--base", self.first]), 0)
         self.assertEqual(output.getvalue().splitlines(), ["claude agent capability-one-run-two-comments"] * 2)
+        output = io.StringIO()
+        with mock.patch.object(route.Path, "cwd", return_value=self.checkout), contextlib.redirect_stdout(output):
+            self.assertEqual(route.main(["--base", self.first, "--level", "3"]), 0)
+        self.assertEqual(output.getvalue().splitlines(), ["claude agent capability-one-run-two-comments"] * 2)
+        with mock.patch.object(route.Path, "cwd", return_value=self.checkout), contextlib.redirect_stdout(io.StringIO()), \
+             contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            route.main(["--base", self.first, "--level", "9"])
 
     def test_invalid_lane_and_missing_config_fail_without_output(self):
         output = io.StringIO()

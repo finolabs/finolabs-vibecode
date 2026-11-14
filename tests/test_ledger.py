@@ -1444,6 +1444,14 @@ class LedgerReviewFixesTest(unittest.TestCase):
         self.assertNotIn("warning", listed.stderr)
         self.assertEqual(len(self.records()), 2)
 
+    def test_a_model_from_a_models_rule_or_its_then_is_listed(self):
+        from tests.test_route_pick import OWNER, host
+        (self.path.parent / "host.md").write_text(host(OWNER))
+        for model in ("gemini-4-hydrogen-high", "gemini-3.8-flash-high", "gpt-codex-9"):
+            with self.subTest(model=model):
+                listed = self.run_ledger(*[a if a != "m1" else model for a in START])
+                self.assertNotIn("warning", listed.stderr)
+
     def test_a_project_label_other_than_the_ledger_setting_warns_and_still_records(self):
         import project_store
         args = self.ledger.build_parser().parse_args(START)
