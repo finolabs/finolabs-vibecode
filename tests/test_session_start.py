@@ -469,7 +469,7 @@ class StateBlockTest(SyntheticStateTest):
     def write_lease(self, start, expiry):
         self.write("state/autopilot/lease.json", json.dumps({
             "id": "a" * 32, "start": start, "expiry": expiry, "settings_hash": "b" * 64,
-            "counters": {"runs": 0, "runtime_minutes": 0, "actions": 0, "hour_actions": []}}))
+            "counters": {}}))
         (self.root / "state/autopilot").chmod(0o700)
         (self.root / "state").chmod(0o700)
 

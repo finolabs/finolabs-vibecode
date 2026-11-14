@@ -44,7 +44,10 @@ SETTING_KEYS = ('ledger', 'tasks', 'parallel', 'parallel-caps', 'label', 'autopi
 # The project-scoped away keys (docs/specs/autopilot.md "Project scope"), in stored order; every other autopilot
 # key is user scope only, so a project file cannot carry it.
 AUTOPILOT_KEYS = {'task-choice': ('choose', 'listed'), 'push-and-pull-requests': ('yes', 'no'),
-                  'merge': ('yes', 'no'), 'trusted-authors': ('own',), 'roots': None}
+                  'merge': ('yes', 'no'), 'trusted-authors': ('own',), 'roots': None,
+                  'max-runs': range(1, 10001), 'max-runtime-minutes': range(1, 1441),
+                  'max-actions-per-hour': range(1, 10001),
+                  'skill-repository': ('yes',)}
 ROOT_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}')
 METADATA_LIMIT = 4096
 CODE = re.compile(r'[0-9a-f]{8}')
@@ -330,6 +333,9 @@ def valid_autopilot(value):
             if (not isinstance(item, list) or not 1 <= len(item) <= 16 or len(set(map(str, item))) != len(item)
                     or not all(isinstance(name, str) and ROOT_NAME.fullmatch(name)
                                and name.upper() not in INSTRUCTION_FILES for name in item)):
+                return False
+        elif isinstance(AUTOPILOT_KEYS[key], range):
+            if type(item) is not int or item not in AUTOPILOT_KEYS[key]:
                 return False
         elif not isinstance(item, str) or item not in AUTOPILOT_KEYS[key]:
             return False

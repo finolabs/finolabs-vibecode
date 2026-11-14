@@ -93,14 +93,17 @@ def project_label(root):
 
 
 AWAY_KEYS = (('task-choice', 'Task choice'), ('push-and-pull-requests', 'Push and pull requests'), ('merge', 'Merge'),
-             ('trusted-authors', 'Trusted authors'))
+             ('trusted-authors', 'Trusted authors'), ('max-runs', 'Max runs'),
+             ('max-runtime-minutes', 'Max runtime minutes'), ('max-actions-per-hour', 'Max actions per hour'))
+AWAY_NUMBERS = {'Max runs': (1, 10000), 'Max runtime minutes': (1, 1440), 'Max actions per hour': (1, 10000)}
 AWAY_USER = {'Task choice': ('choose', 'listed'), 'Push and pull requests': ('yes', 'no'), 'Merge': ('yes', 'no'),
              'Trusted authors': ('own',)}
-AWAY_DEFAULTS = {'Task choice': 'choose', 'Push and pull requests': 'yes', 'Trusted authors': 'own'}
+AWAY_DEFAULTS = {'Task choice': 'choose', 'Push and pull requests': 'yes', 'Trusted authors': 'own',
+                 'Max runs': '20', 'Max runtime minutes': '480', 'Max actions per hour': '30'}
 
 
 def user_away():
-    """The user-scope values of the four away keys in host.md `## afk`, for the setup preview only.
+    """The user-scope values of the away keys in host.md `## afk`, for the setup preview only.
 
     A missing section, an unreadable host file or an unknown value reads as not set; `afk.py` stays the reader
     that enforces them.
@@ -117,6 +120,10 @@ def user_away():
         match = re.fullmatch(r'- ([A-Za-z -]+): (.+)', line)
         if match and match[1] in AWAY_USER:
             found[match[1]] = match[2] if match[2] in AWAY_USER[match[1]] else 'not set'
+        elif match and match[1] in AWAY_NUMBERS:
+            low, high = AWAY_NUMBERS[match[1]]
+            ok = re.fullmatch(r'[0-9]{1,5}', match[2]) and low <= int(match[2]) <= high
+            found[match[1]] = match[2] if ok else 'not set'
     return found
 
 
@@ -147,6 +154,7 @@ def autopilot_preview(cwd, value):
             shown[name] = ('%s (repository)' % obj[key] if obj and key in obj
                            else '%s (user)' % user.get(name, 'not set'))
         shown['Roots'] = (', '.join(obj['roots']) + ' (repository)' if obj and 'roots' in obj else 'none (user)')
+        shown['Skill repository'] = ('yes (repository)' if obj and obj.get('skill-repository') == 'yes' else 'no (user)')
         return shown
     # The stored object and the keys whose effective value would move, so a change is never shown as a new state only.
     shown, before = effective(desired), effective(current)

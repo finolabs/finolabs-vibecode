@@ -24,7 +24,7 @@ ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
 
 
 # An ended or exhausted lease tells the caller, in one fixed line, to stop any loop it started for the lease.
-ENDED_CODES = {'no-lease', 'expired', 'stopped', 'exhausted'}
+ENDED_CODES = {'no-lease', 'expired', 'stopped', 'setup-changed'}
 ENDED_LINE = 'The away lease has ended: stop any loop or wakeup you started for it, then report to the user.'
 
 class AfkBase(unittest.TestCase):
@@ -67,6 +67,18 @@ class AfkBase(unittest.TestCase):
 
     def lease(self):
         return json.loads((self.state / 'lease.json').read_text())
+
+    def counts(self):
+        """The counters of the one project this test's checks ran in (zeros before any reserved action)."""
+        table = self.lease()['counters']
+        self.assertLessEqual(len(table), 1, table)
+        return next(iter(table.values()), dict(runs=0, actions=0, hour_actions=[], first=None))
+
+    def change_counts(self, **values):
+        """Set counters of the one project entry, creating it from a first reserved action when absent."""
+        if not self.lease()['counters']:
+            self.check(['git', 'status'])
+        self.change_lease(lambda v: next(iter(v['counters'].values())).update(values))
 
     def change_lease(self, change):
         value = self.lease()
@@ -184,20 +196,22 @@ class AfkTest(AfkBase):
         self.setup_config(SETUP.replace('choose', 'listed'))
         self.check(['git', 'status'], tier=3, code='setup-changed')
         self.setup_config()
-        self.change_lease(lambda v: v['counters'].update(runs=20))
-        self.check(['git', 'status'], tier=3, code='exhausted')
-        self.change_lease(lambda v: v['counters'].update(runs=0, runtime_minutes=480))
-        self.check(['git', 'status'], tier=3, code='exhausted')
-        self.change_lease(lambda v: v['counters'].update(runtime_minutes=0, hour_actions=[self.clock] * 30))
+        self.change_counts(runs=20)
+        self.check(['git', 'status'], tier=3, code='spent')
+        self.change_counts(runs=0, first=self.clock - 480 * 60)
+        self.check(['git', 'status'], tier=3, code='spent')
+        self.change_counts(first=self.clock, hour_actions=[self.clock] * 30)
         self.check(['git', 'status'], tier=3, code='limit')
         self.clock += 3601
         self.check(['git', 'status'])
-        self.assertEqual(self.lease()['counters']['actions'], 1)
+        self.assertEqual(self.counts()['actions'], 2)
 
-    def test_runtime_limit_uses_elapsed_time(self):
+    def test_runtime_limit_uses_elapsed_time_since_the_projects_first_action(self):
         self.start(SETUP + '- Max runtime minutes: 10\n')
         self.clock += 600
-        self.check(['git', 'status'], tier=3, code='exhausted')
+        self.check(['git', 'status'])  # the project's clock starts at its first reserved action
+        self.clock += 600
+        self.check(['git', 'status'], tier=3, code='spent')
 
     def test_tier_one_commands_and_paths(self):
         self.start(SETUP + '- Max actions per hour: 100\n')
@@ -221,7 +235,7 @@ class AfkTest(AfkBase):
         self.check(['python3', '-I', str(SCRIPT.parent / 'heavy_run.py'), 'run', '--label', 'tests', '--', 'gh', 'pr', 'view', '7'])
         self.check(['python3', '-I', str(ROOT / 'skills/review-gate/scripts/merge_check.py'), '7', '--independent'])
         self.check(paths=['src/example.py', 'tests/test_example.py', 'docs/guide.md'])
-        self.assertEqual(self.lease()['counters']['runs'], 1)
+        self.assertEqual(self.counts()['runs'], 1)
 
     def test_install_under_a_dot_claude_folder_keeps_its_own_wrappers(self):
         # Plugins install under ~/.claude/plugins or ~/.codex; the install path itself must not make
@@ -271,7 +285,7 @@ class AfkTest(AfkBase):
                            (['git', 'status', ';', 'bad'], 'unknown')):
             with self.subTest(argv=argv):
                 self.check(argv, tier=3, code=code)
-        self.assertEqual(self.lease()['counters']['actions'], 0)
+        self.assertEqual(self.counts()['actions'], 0)
 
     def test_paths_fail_closed(self):
         self.start()
@@ -811,8 +825,8 @@ class AwayDecisionTest(AfkBase):
         self.start(SETUP_AWAY)
         self.check_as(JUDGE)
         self.check_as(JUDGE + ['--option', 'Third', '--judge', 'jev'])
-        self.assertEqual(self.lease()['counters']['actions'], 2)
-        self.assertEqual(self.lease()['counters']['runs'], 0)
+        self.assertEqual(self.counts()['actions'], 2)
+        self.assertEqual(self.counts()['runs'], 0)
 
     def test_the_judge_form_denies_any_other_site_flag_shape_or_copy(self):
         self.start(SETUP_AWAY)
@@ -835,7 +849,7 @@ class AwayDecisionTest(AfkBase):
         # Another copy of judge.py or a call without isolated Python is not the ladder form.
         for argv in (JUDGE[:2] + [other] + JUDGE[3:], ['python3'] + JUDGE[2:]):
             self.check_as(argv, tier=3, code=None)
-        self.assertEqual(self.lease()['counters']['actions'], 0)
+        self.assertEqual(self.counts()['actions'], 0)
 
     def test_the_advisor_form_is_tier_one_for_another_family_in_hosts(self):
         self.start_away()
@@ -843,8 +857,8 @@ class AwayDecisionTest(AfkBase):
         self.check_as(CLAUDE, coordinator='codex')
         self.check_as(CLAUDE[:-2] + ['--effort', 'high', '--max-turns', '8', '--max-budget-usd', '2'] + CLAUDE[-2:],
                       coordinator='codex')
-        self.assertEqual(self.lease()['counters']['actions'], 3)
-        self.assertEqual(self.lease()['counters']['runs'], 0)  # the advisor's ledger start reserves its run, as today
+        self.assertEqual(self.counts()['actions'], 3)
+        self.assertEqual(self.counts()['runs'], 0)  # the advisor's ledger start reserves its run, as today
 
     def test_the_antigravity_advisor_form_is_tier_one_in_plan_mode(self):
         self.start_away(SETUP_ALL)
@@ -855,7 +869,7 @@ class AwayDecisionTest(AfkBase):
         for value in ('accept-edits', 'default', 'yolo'):
             self.check_as(AGY[:mode] + [value] + AGY[mode + 1:], tier=3, code='unknown')
         self.check_as(AGY, coordinator='antigravity', tier=3, code='unknown')
-        self.assertEqual(self.lease()['counters']['actions'], 3)
+        self.assertEqual(self.counts()['actions'], 3)
 
     def test_the_zcode_advisor_form_denies_even_with_an_approved_program(self):
         ap = self.load()
@@ -898,7 +912,7 @@ class AwayDecisionTest(AfkBase):
         links.mkdir()
         (links / 'codex').symlink_to(tools / 'codex')
         self.check_as(at(links / 'codex'), tier=3, code='unknown', real=False)
-        self.assertEqual(self.lease()['counters']['actions'], 1)
+        self.assertEqual(self.counts()['actions'], 1)
 
     def test_a_recorded_program_inside_a_repository_or_without_a_record_denies(self):
         tools = self.repo / 'tools'
@@ -961,7 +975,7 @@ class AwayDecisionTest(AfkBase):
                 self.check_as(argv, coordinator=coordinator, tier=3, code='unknown')
         # Another copy of the wrapper is not the form; inside this install's checkout it is also a protected path.
         self.check_as(['python3', '-I', str(ROOT / 'scripts/delegate_env.py')] + CODEX[3:], tier=3, code=None)
-        self.assertEqual(self.lease()['counters']['actions'], 0)
+        self.assertEqual(self.counts()['actions'], 0)
 
     def test_the_brief_position_never_accepts_an_option(self):
         self.start_away(SETUP_ALL)
@@ -992,7 +1006,7 @@ class AwayDecisionTest(AfkBase):
             for name, argv in shapes.items():
                 with self.subTest(family=family, shape=name):
                     self.check_as(argv, coordinator=coordinator, tier=3, code='unknown')
-        self.assertEqual(self.lease()['counters']['actions'], 0)
+        self.assertEqual(self.counts()['actions'], 0)
         for form, coordinator in forms.values():
             self.check_as(form, coordinator=coordinator)
 
@@ -1030,7 +1044,7 @@ class AwayDecisionTest(AfkBase):
                       'Open C:\\work\\x.txt.', BRIEF + '\nsession_cookie=abc'):
             with self.subTest(brief=brief):
                 self.check_as(CODEX[:-1] + [brief], tier=3, code='unknown')
-        self.assertEqual(self.lease()['counters']['actions'], 0)
+        self.assertEqual(self.counts()['actions'], 0)
         # Discussing configuration without an assigned value stays possible.
         for brief in ('Should the db password setting move to the vault, or stay in the env file?',
                       'Rotate the API key before the release, or after it?',
@@ -1115,6 +1129,149 @@ class ProjectScopeTest(AfkBase):
         self.check(['gh', 'pr', 'merge', '7'] + PIN, tier=3, code='merge-disabled')
         self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
         self.check(['git', 'status'])
+
+    def other_repo(self, name):
+        repo = self.home / name
+        (repo / '.git/refs/remotes/origin').mkdir(parents=True)
+        (repo / '.git/HEAD').write_text('ref: refs/heads/topic\n')
+        (repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/main\n')
+        (repo / '.git/config').write_text(ORIGIN_CONFIG)
+        return repo
+
+    def test_limits_are_counted_per_project(self):
+        self.start(SETUP + '- Max actions per hour: 2\n')
+        first, second = self.repo, self.other_repo('second')
+        self.check(['git', 'status'])
+        self.check(['git', 'status'])
+        self.check(['git', 'status'], tier=3, code='limit')
+        self.cwd = second
+        self.check(['git', 'status'])
+        self.check(['git', 'status'])
+        self.check(['git', 'status'], tier=3, code='limit')
+        self.cwd = first
+        self.check(['git', 'status'], tier=3, code='limit')
+        self.assertEqual(sorted(e['actions'] for e in self.lease()['counters'].values()), [2, 2])
+        self.clock += 3601
+        self.check(['git', 'status'])
+
+    def test_spent_runs_in_one_project_leave_the_others_working(self):
+        self.start(SETUP + '- Max runs: 1\n')
+        ledger = ['python3', '-I', str(SCRIPT.parent / 'ledger.py'), 'start']
+        self.check(ledger)
+        self.check(['git', 'status'], tier=3, code='spent')
+        self.cwd = self.other_repo('second')
+        self.check(ledger)
+
+    def test_a_project_limit_replaces_the_user_limit_both_ways(self):
+        self.start(SETUP + '- Max actions per hour: 2\n')
+        self.project({'max-actions-per-hour': 3})
+        for _ in range(3):
+            self.check(['git', 'status'])
+        self.check(['git', 'status'], tier=3, code='limit')
+        narrow = self.other_repo('narrow')
+        found, ident = self.store.identity(narrow)
+        self.store.write_setting(narrow, 'autopilot', {'max-actions-per-hour': 1}, ident=ident)
+        self.cwd = narrow
+        self.check(['git', 'status'])
+        self.check(['git', 'status'], tier=3, code='limit')
+
+    def test_unidentified_checks_share_one_unknown_entry(self):
+        self.start(SETUP + '- Max actions per hour: 2\n')
+        for name in ('plain-one', 'plain-two'):
+            folder = self.home / name
+            folder.mkdir()
+            self.cwd = folder
+            self.check(paths=['src/example.py'], tier=3, code='unknown')  # no identity: nothing is reserved
+        self.assertEqual(self.lease()['counters'], {})
+        ap = self.load()
+        lease = dict(counters={})
+        applied = {'Max runs': 20, 'Max runtime minutes': 480, 'Max actions per hour': 2, ap.CONTEXT: ap.UNKNOWN}
+        self.assertEqual(ap.project_limit(lease, applied, self.clock)[1], 'unknown')
+        absent = ap.Context('absent', None, 'no-repository', None)
+        self.assertEqual(ap.project_key(absent), 'unknown')
+
+    def test_a_full_project_table_answers_limit_and_keeps_its_entries(self):
+        self.start(SETUP + '- Max actions per hour: 100\n')
+        self.check(['git', 'status'])
+        own = next(iter(self.lease()['counters']))
+        fill = {('%064x' % n): dict(runs=0, actions=1, hour_actions=[self.clock], first=self.clock) for n in range(63)}
+        self.change_lease(lambda v: v['counters'].update(fill))
+        self.cwd = self.other_repo('sixty-fifth')
+        self.check(['git', 'status'], tier=3, code='limit')
+        table = self.lease()['counters']
+        self.assertEqual(len(table), 64)
+        self.assertIn(own, table)
+        self.cwd = self.repo
+        self.check(['git', 'status'])
+
+    def test_limit_values_outside_their_range_are_refused(self):
+        for value in ({'max-runs': 0}, {'max-runtime-minutes': 1441}, {'max-actions-per-hour': '5'},
+                      {'max-runs': True}):
+            with self.subTest(value=value):
+                self.assertFalse(self.store.valid_autopilot(value))
+        self.assertTrue(self.store.valid_autopilot({'max-runs': 5, 'max-runtime-minutes': 60}))
+
+    def run_body(self, text, name='a' * 32):
+        folder = self.root / 'state/review-posting' / ('post-' + name)
+        folder.mkdir(parents=True, exist_ok=True)
+        for part in (self.root / 'state', self.root / 'state/review-posting', folder):
+            part.chmod(0o700)
+        body = folder / 'body.md'
+        body.write_text(text)
+        body.chmod(0o600)
+        return body
+
+    def test_post_review_runs_with_its_own_run_body_and_the_comment_category(self):
+        post = ['python3', '-I', str(ROOT / 'skills/review-gate/scripts/post_review.py')]
+        marker = '<!-- fnl-review kind=code head=' + 'a' * 40 + ' verdict=APPROVE -->\n'
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.check(post + ['7'], tier=3, code='forbidden')  # Repository comments is stop
+        self.invoke('stop')
+        self.start(SETUP + '- Max actions per hour: 1000\n- Repository comments: decide\n')
+        self.check(post + ['7'])
+        body = self.run_body(marker + 'Reviewer: example\n\nNo findings.\n')
+        self.check(post + ['7', '--body-file', str(body)])
+        self.check(post + ['--body-file', str(body), '7'])
+        for argv, code in ((post + ['07'], 'unknown'), (post + ['7', '8'], 'unknown'),
+                           (post + ['7', '--repo', 'github.com/example/demo'], 'unknown')):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code=code)
+        for text, code in (('Reviewer: no marker\n', 'unsafe'), (marker, 'unsafe'),
+                           (marker + 'Reviewer: x\n<!-- fnl-review kind=security head=' + 'b' * 40
+                            + ' verdict=APPROVE -->\n', 'forbidden'),
+                           (marker + 'Reviewer: x\n' + 'AKIA' + 'ABCDEFGHIJKLMNOP\n', 'unsafe'),
+                           (marker + 'Reviewer: x\n' + 'Fine words.\n' * 6000, 'unsafe')):  # over 64 KiB
+            with self.subTest(text=text[:30]):
+                body = self.run_body(text, 'b' * 32)
+                self.check(post + ['7', '--body-file', str(body)], tier=3, code=code)
+        self.check(post + ['1234567890'])
+        (self.repo / '.git/config').write_text(ORIGIN_CONFIG.replace('github.com/example/demo', 'gitlab.com/example/demo'))
+        self.check(post + ['7'], tier=3, code='unknown')  # no verified GitHub target
+        (self.repo / '.git/config').write_text(ORIGIN_CONFIG)
+        inside = self.repo / 'body.md'
+        inside.write_text(marker + 'Reviewer: x\n')
+        self.check(post + ['7', '--body-file', str(inside)], tier=3, code='unsafe')
+        loose = self.run_body(marker + 'Reviewer: x\n', 'c' * 32)
+        loose.chmod(0o644)
+        self.check(post + ['7', '--body-file', str(loose)], tier=3, code='unsafe')
+
+    def test_an_approved_skill_repository_edits_its_root_skill_and_references(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.check(paths=['SKILL.md'], tier=3, code='protected')
+        self.project({'skill-repository': 'yes'})
+        self.check(paths=['SKILL.md', 'references/guide.md', 'evals/case.json', 'scripts/tool.py'])
+        for nested in ('references/nested/SKILL.md', 'scripts/SKILL.md', 'scripts/tool/SKILL.md', 'evals/SKILL.md'):
+            with self.subTest(path=nested):
+                self.check(paths=[nested], tier=3, code='protected')
+        self.check(paths=['.github/workflows/ci.yml'], tier=3, code='protected')
+        # The same paths as command operands: staging and removing them on the work branch.
+        self.check(['git', 'add', 'SKILL.md', 'references/guide.md'])
+        self.check(['git', 'rm', 'scripts/tool.py'])
+        self.check(['git', 'add', 'references/nested/SKILL.md'], tier=3, code='protected')
+        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')  # the default branch stays protected
+        self.check(paths=['SKILL.md'], tier=3, code='protected')
+        self.check(['git', 'add', 'SKILL.md'], tier=3, code='protected')
+        self.assertFalse(self.store.valid_autopilot({'skill-repository': 'no'}))
 
     def test_the_lease_hash_covers_the_user_section_only(self):
         self.start()
@@ -1258,7 +1415,7 @@ class ProjectScopeTest(AfkBase):
                      CLAUDE[:CLAUDE.index('plan')] + ['acceptEdits'] + CLAUDE[CLAUDE.index('plan') + 1:]):
             with self.subTest(argv=argv[:6]):
                 self.check(argv, tier=3, code='unknown')
-        self.assertEqual(self.lease()['counters']['actions'], 0)
+        self.assertEqual(self.counts()['actions'], 0)
 
 
 class SecurityRoundOneTest(AfkBase):
@@ -2032,7 +2189,7 @@ class AwayFlowTest(AfkBase):
         git('worktree', 'add', '-q', str(foreign), '-b', 'x')
         self.check(ledger + [str(foreign)], tier=3, code='protected')
         self.check(['git', '-C', str(foreign), 'status'], tier=3, code='unknown')
-        self.assertEqual(self.lease()['counters']['actions'], 7)
+        self.assertEqual(self.counts()['actions'], 7)
 
     def test_pull_request_text_is_data_and_a_body_file_is_screened(self):
         self.start(SETUP + '- Max actions per hour: 1000\n- Repository comments: decide\n')
@@ -2087,10 +2244,10 @@ class AwayFlowTest(AfkBase):
         for _ in range(5):
             self.check(ledger + ['--checkout', '.claude/settings.json'], tier=3, code='protected')
             self.check(['git', 'push', 'origin', 'main'], tier=3, code='forbidden')
-        self.assertEqual(self.lease()['counters'], dict(runs=0, runtime_minutes=0, actions=0, hour_actions=[]))
+        self.assertEqual(self.lease()['counters'], {})
         self.check(ledger)
         self.check(['git', 'status'])
-        self.assertEqual((self.lease()['counters']['runs'], self.lease()['counters']['actions']), (1, 2))
+        self.assertEqual((self.counts()['runs'], self.counts()['actions']), (1, 2))
         self.check(['git', 'status'], tier=3, code='limit')
 
     def test_a_commit_message_is_data(self):

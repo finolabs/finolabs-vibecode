@@ -1117,6 +1117,20 @@ class SettingsFileTest(unittest.TestCase):
             narrowed = json.loads(out.getvalue())
             self.assertEqual((narrowed['current'], narrowed['changed']), ({'merge': 'no', 'roots': ['packages']}, ['Merge']))
             self.assertEqual(self.pp.main(['settings', '--clear', 'autopilot', '--expect', cleared['token']]), 0)
+            out.seek(0)
+            out.truncate()
+            # Repository limits are shown and counted as changes like the other keys.
+            self.assertEqual(self.pp.main(['settings', '--set', 'autopilot={"max-runs": 5}', '--dry-run']), 0)
+            limited = json.loads(out.getvalue())
+            self.assertEqual(limited['changed'], ['Max runs'])
+            self.assertEqual(limited['effective']['Max runs'], '5 (repository)')
+            out.seek(0)
+            out.truncate()
+            # Approving a skill repository alone is a visible change.
+            self.assertEqual(self.pp.main(['settings', '--set', 'autopilot={"skill-repository": "yes"}', '--dry-run']), 0)
+            skill = json.loads(out.getvalue())
+            self.assertEqual(skill['changed'], ['Skill repository'])
+            self.assertEqual(skill['effective']['Skill repository'], 'yes (repository)')
         self.assertFalse(self.file().exists())
 
     def test_the_cli_writes_the_file_and_never_echoes_values(self):

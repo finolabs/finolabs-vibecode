@@ -8,7 +8,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Setup is one canonical ## afk key/value section (an older ## Autopilot heading is not read); Merge has no default, hours are 1..24 | settings, start |
 | State stays outside Git, private (directories 0700/files 0600), no links, atomic and serialized | private_folder, read_private, write_private, data_root, flock |
 | One live lease for the machine; a second start reports it and changes nothing; stop removes it and leaves a stop marker; starting clears that marker | start, stop |
-| Missing/expired/stopped/changed setup or exhausted runs, wall/runtime minutes or rolling-hour actions denies every check; spent runs or runtime say `exhausted`, the rolling-hour cap says `limit`; a missing, expired, stopped or exhausted lease adds one fixed `end` line telling the caller to stop its loop | lease_guard, check |
+| Missing/expired/stopped/changed setup denies every check and adds one fixed `end` line telling the caller to stop its loop; limits are counted per project (the full identity digest, or one shared `unknown` entry, at most 64): spent runs or runtime minutes since the project's first reserved action say `spent`, the project's rolling-hour cap or a full project table says `limit`, and neither ends the lease for other projects | lease_guard, project_limit, check |
 | Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release and npm/pnpm publish forms whose every applicable category is `decide`, and a deploy matching a `Non-production targets` entry exactly with no production or live word; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
 | Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
 | The ladder's two forms: this install's judge.py at the away-decision site with validated options, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
@@ -22,7 +22,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and whose effective destination (origin's single pushurl, else its url) is the verified target, and merge origin/main into a work branch of a found repository (the synchronization exemption) are Tier 1 | classify_argv, branch_context |
 | A local branch merge ([--no-ff] [--no-edit], refs/heads/<b> or an unambiguous bare name that exists only as a branch) is Tier 1 only into a named non-default branch with effective Merge=yes | local_merge, local_branch |
 | One identity per check (found, absent or unknown; a rejected linked worktree is unknown) feeds settings, branch and remote reads | project_store.identity, effective, Context |
-| The five project values start strict; a positively absent approval gives user values; an approved valid `autopilot` object whose record carries this checkout's full identity digest and whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding, project_store.bound |
+| The project values (five, plus the three limits) start strict, where the user limits apply; a positively absent approval gives user values; an approved valid `autopilot` object whose record carries this checkout's full identity digest and whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding, project_store.bound |
 | PR merge/create/edit/comment need exactly one `--repo github.com/OWNER/NAME` equal to the verified target; create needs one validated `--head`; implicit targets are Tier 3 | target_check, head_check, project_store.origin_target |
 | Title and body values of PR create/edit/comment, and `git commit -m` messages, are data (one exact `fnl-router` line included): newlines, tabs and a leading `-` pass; other controls, a backtick, `$(` and `$` before a letter, `_` or `{` deny; a review gate marker (`<!--`, optional space, `fnl-`) is `forbidden`; a secret, machine path or sensitive assignment is `unsafe`; one `--body-file` (gh) or `-F` (git commit) must be a regular file of at most 64 KiB inside the check's own checkout, outside the data root, with no link from that root down, whose text passes the control, marker, secret and path screens, read only for that verdict; comments follow `Repository comments` | text_values, text_ok, file_place, body_file, pr_text, commit_text |
 | With Merge yes: `git worktree remove [--] <path>` of a linked worktree of this repository whose HEAD is a full SHA a `log --kind merge --pr <number> --head` entry of this lease recorded, itself refused unless an allowed `gh pr merge` check of this lease pinned that number and head (never forced, the main checkout, the current checkout or a worktree holding this install) and `git branch -d [--] <branch>` (never -D, the current or a default branch) are Tier 1; `git rm [-r] [-q] [--] <paths>` on a work branch classifies each path like a change | worktree_remove, head_commit, merged_heads, branch_delete, tracked_remove |
@@ -30,7 +30,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
 | Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths; every path rule (roots, documents, protected names, links) applies to the operand's path relative to the checkout root of the check's validated identity, read from cwd, and with no identity no path is known | classify_paths, repository_path |
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
-| Only this install's ledger/record/heavy_run/merge_check script paths, with isolated Python, are allowed wrappers; nested heavy commands are classified too | script_command |
+| Only this install's ledger/record/heavy_run/merge_check/post_review script paths, with isolated Python, are allowed wrappers; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
 | Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge kind only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
 | Trusted PR authors, full independent review/check/local-test gate, changed paths (including staged commit paths), quota readings and actually calling check before execution remain caller obligations in this slice | agent judgment, advisory; merge_check --independent enforces its review condition |
@@ -109,7 +109,9 @@ ROOTS = {'src', 'lib', 'app', 'tests', 'docs', 'scripts', 'skills'}
 DOCUMENTS = {'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md'}  # top-level documentation files that are known paths
 # The project-scoped keys of settings.json `autopilot` and their host.md names; broken project settings turn them off.
 PROJECT_KEYS = {'task-choice': 'Task choice', 'push-and-pull-requests': 'Push and pull requests', 'merge': 'Merge',
-                'trusted-authors': 'Trusted authors'}
+                'trusted-authors': 'Trusted authors', 'max-runs': 'Max runs',
+                'max-runtime-minutes': 'Max runtime minutes', 'max-actions-per-hour': 'Max actions per hour'}
+MAX_PROJECTS = 64  # entries in the lease's per-project counter table
 OFF = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', 'Trusted authors': 'own', 'Roots': []}
 CONTEXT = 'Repository context'  # the applied-settings entry holding the check's Context
 MERGED = 'Merged heads'  # the applied-settings entry holding the heads this lease's `log --kind merge` entries recorded
@@ -225,7 +227,7 @@ def start(folder, args):
               'Nothing was changed: work under it (check before each action, Decide for every question).')
         return
     lease = dict(id=uuid.uuid4().hex, start=current, expiry=current + hours * 3600,
-                 settings_hash=digest(applied), counters=dict(runs=0, runtime_minutes=0, actions=0, hour_actions=[]))
+                 settings_hash=digest(applied), counters={})
     save_lease(folder, lease)
     try:
         os.unlink('stop', dir_fd=folder)
@@ -245,7 +247,7 @@ def stop(folder):
     print('afk stopped: stop marker written; lease ' + ('removed' if removed else 'already absent'))
 
 
-ENDED = {'no-lease', 'expired', 'stopped', 'exhausted'}
+ENDED = {'no-lease', 'expired', 'stopped', 'setup-changed'}
 ENDED_LINE = 'The away lease has ended: stop any loop or wakeup you started for it, then report to the user.'
 
 
@@ -265,17 +267,35 @@ def lease_guard(folder, current):
         return 'setup-changed', lease, None
     if digest(applied) != lease['settings_hash']:
         return 'setup-changed', lease, applied
-    counters = lease['counters']
-    if any(t > current for t in counters['hour_actions']):
-        return 'limit', lease, applied
-    counters['hour_actions'] = [t for t in counters['hour_actions'] if current - 3600 < t <= current]
-    # Spent runs or runtime never come back before the lease ends; the rolling-hour cap does.
-    if (counters['runs'] >= applied['Max runs']
-            or max(counters['runtime_minutes'], (current - lease['start']) / 60) >= applied['Max runtime minutes']):
-        return 'exhausted', lease, applied
-    if len(counters['hour_actions']) >= applied['Max actions per hour']:
-        return 'limit', lease, applied
     return None, lease, applied
+
+
+def project_key(context):
+    """The lease counter key of a check's context: the full identity digest of its main checkout, else `unknown`."""
+    if context.repository == 'found' and context.ident is not None:
+        return store.identity_digest(context.ident.main)
+    return 'unknown'
+
+
+def project_limit(lease, applied, current):
+    """(code, key, entry) for the project of `applied`'s context: code is None while its limits allow an action.
+
+    Spent runs or runtime minutes never come back before the lease ends (`spent`); the rolling-hour cap does
+    (`limit`). A new project beyond the table's size is `limit`. The entry is a copy; `check` stores it on Tier 1."""
+    key = project_key(context_of(applied))
+    table = lease['counters']
+    entry = dict(table.get(key) or dict(runs=0, actions=0, hour_actions=[], first=None))
+    if key not in table and len(table) >= MAX_PROJECTS:
+        return 'limit', key, entry
+    if any(t > current for t in entry['hour_actions']) or entry['first'] is not None and entry['first'] > current:
+        return 'limit', key, entry
+    entry['hour_actions'] = [t for t in entry['hour_actions'] if current - 3600 < t <= current]
+    if (entry['runs'] >= applied['Max runs']
+            or entry['first'] is not None and (current - entry['first']) / 60 >= applied['Max runtime minutes']):
+        return 'spent', key, entry
+    if len(entry['hour_actions']) >= applied['Max actions per hour']:
+        return 'limit', key, entry
+    return None, key, entry
 
 
 # Protected names that live config, state, credentials or Git internals use: Tier 3 everywhere.
@@ -288,6 +308,9 @@ SOFT = {'claude.md', 'agents.md', 'skill.md', 'settings', 'config', 'hooks'}
 SOFT_PREFIXES = ('settings.', 'config.', 'setup.', 'hooks.')
 # The plugin's own source in a repository, relative to its checkout root: editable on a work branch.
 SOURCE = re.compile(r'(?:skills|scripts)/[A-Za-z0-9_./-]+|\.[a-z0-9]+-plugin/[A-Za-z0-9_.-]+\.json|CLAUDE\.md|AGENTS\.md')
+# A Markdown skill repository the user approved (`skill-repository: yes`): its root SKILL.md and these folders.
+SKILL_SOURCE = re.compile(r'SKILL\.md|(?:references|evals|scripts)/[A-Za-z0-9_./-]+')
+SKILL_REPO = 'Skill repository'  # the applied-settings entry set only by an approved project `skill-repository`
 
 
 def protected(value, source=False):
@@ -382,7 +405,7 @@ def context_of(applied):
 
 
 def effective(applied, cwd):
-    """The five project-scoped values and the repository context of one check (docs/specs/autopilot.md "Project scope").
+    """The project-scoped values (five, plus the three limits, which keep the user values in the strict state) and the repository context of one check (docs/specs/autopilot.md "Project scope").
 
     Starts from the strict vector and leaves it only once each prerequisite holds: a validated identity
     (`project_store.identity`), then either a positively absent approval (user values, no extra roots) or approved
@@ -416,6 +439,7 @@ def effective(applied, cwd):
             if key in project:
                 result[name] = project[key]
         result['Roots'] = [r for r in project.get('roots', []) if not protected(r)]
+        result[SKILL_REPO] = project.get('skill-repository') == 'yes'
         result[CONTEXT] = Context('found', ident, 'project', target, cwd)
         return result
     except (OSError, ValueError, TypeError, UnicodeError, KeyError, RecursionError):
@@ -464,9 +488,17 @@ def checkout_of(token, base):
         return None
 
 
-def source_path(relative):
-    """True for the plugin's own source (`SOURCE`), judged on the path relative to its checkout root."""
-    return bool(SOURCE.fullmatch(relative.as_posix()))
+def source_path(relative, mode=True):
+    """True for the plugin's own source (`SOURCE`), judged on the path relative to its checkout root, on any work
+    branch `source_mode` allows; an approved skill repository (`mode` 'skill') adds its root SKILL.md, references/**,
+    evals/** and scripts/** (`SKILL_SOURCE`), and never a SKILL.md below the root."""
+    name = relative.as_posix()
+    if mode == 'skill':
+        if relative.name.casefold() == 'skill.md' and name != 'SKILL.md':
+            return False  # only the root SKILL.md of a skill repository, at any depth below it never
+        if SKILL_SOURCE.fullmatch(name):
+            return True
+    return bool(SOURCE.fullmatch(name))
 
 
 def source_mode(applied):
@@ -477,7 +509,9 @@ def source_mode(applied):
         current, default = branch_context(context_of(applied))
     except (OSError, ValueError, UnicodeError):
         return False
-    return bool(current and default) and current not in {default, 'main', 'master', 'trunk'}
+    if not (current and default) or current in {default, 'main', 'master', 'trunk'}:
+        return False
+    return 'skill' if applied.get(SKILL_REPO) is True else True
 
 
 def token_protected(token, applied):
@@ -497,7 +531,8 @@ def token_protected(token, applied):
     if found is None or found[0].main != context.ident.main:
         return True
     ident, relative = found
-    own = ident.checkout == context.ident.checkout and source_path(relative) and source_mode(applied)
+    mode = source_mode(applied)
+    own = ident.checkout == context.ident.checkout and bool(mode) and source_path(relative, mode)
     return protected(relative.as_posix(), own)
 
 
@@ -525,7 +560,7 @@ def classify_paths(paths, roots=(), context=UNKNOWN, source=False):
         if not isinstance(name, str) or install_owned(name, context.cwd):
             return 'protected'
         relative = repository_path(name, context)
-        own = source and relative is not None and source_path(relative)
+        own = bool(source) and relative is not None and source_path(relative, source)
         if protected(name, own):
             return 'protected'
         path = Path(name)
@@ -741,7 +776,7 @@ def own_wrapper_index(argv):
         return None
     own = Path(__file__).resolve().parent
     trusted = {own / name for name in ('ledger.py', 'record.py', 'heavy_run.py', 'judge.py', 'delegate_env.py')}
-    trusted.add(own.parent.parent / 'review-gate/scripts/merge_check.py')
+    trusted |= {own.parent.parent / 'review-gate/scripts' / name for name in ('merge_check.py', 'post_review.py')}
     path = Path(argv[index])
     if (path not in trusted or path.is_symlink() or not path.is_file()
             or any(parent.is_symlink() for parent in (path.parent, path.parent.parent))):
@@ -759,12 +794,15 @@ def script_command(argv, applied):
         return 'unknown'
     path = Path(argv[index])
     own = Path(__file__).resolve().parent
-    merge = own.parent.parent / 'review-gate/scripts/merge_check.py'
-    allowed = {own / name for name in ('ledger.py', 'record.py', 'heavy_run.py')} | {merge}
+    gate = own.parent.parent / 'review-gate/scripts'
+    allowed = {own / name for name in ('ledger.py', 'record.py', 'heavy_run.py')} | {gate / 'merge_check.py',
+                                                                                     gate / 'post_review.py'}
     if (path not in allowed or path.is_symlink() or not path.is_file()
             or any(parent.is_symlink() for parent in (path.parent, path.parent.parent))):
         return 'unknown'  # a linked skill folder could supply a different import namespace
     tail = argv[index + 1:]
+    if path.name == 'post_review.py':
+        return review_post(tail, applied)
     if path.name == 'heavy_run.py':
         if tail == ['status']:
             return 'allowed'
@@ -777,6 +815,67 @@ def script_command(argv, applied):
             return 'unknown'
         return classify_argv(command, applied)
     return 'allowed'
+
+
+REVIEW_RUN = re.compile(r'post-[0-9a-f]{32}')
+REVIEW_MARKER = re.compile(r'<!-- fnl-review kind=(code|security) head=[0-9a-f]{40} verdict=(APPROVE|REWORK)( lane=yes)? -->')
+REVIEW_POSTING = Path('state/review-posting')
+
+
+def review_post(tail, applied):
+    """`post_review.py <pr>` (creates the run body) or `<pr> --body-file <run body>` in either order: a verified
+    target and `Repository comments` at `decide` (docs/specs/afk-per-project.md "E")."""
+    context = context_of(applied)
+    if context.state not in {'user', 'project'} or context.target is None:
+        return 'unknown'
+    if not permits({'Repository comments'}, applied):
+        return 'forbidden'
+    if len(tail) == 1:
+        number, body = tail[0], None
+    elif len(tail) == 3 and tail[1] == '--body-file':
+        number, body = tail[0], tail[2]
+    elif len(tail) == 3 and tail[0] == '--body-file':
+        number, body = tail[2], tail[1]
+    else:
+        return 'unknown'
+    if not re.fullmatch(r'[1-9][0-9]{0,9}', number):
+        return 'unknown'
+    return 'allowed' if body is None else review_body(body)
+
+
+def review_body(name):
+    """'allowed' only for post_review.py's own run body `<data root>/state/review-posting/post-<32 hex>/body.md`:
+    a regular owner-only 0600 file of at most 64 KiB, no link on the way, whose first line is one review marker and
+    whose rest passes `text_ok` as file text; a second gate marker is 'forbidden'; anything else 'unsafe'."""
+    try:
+        root = dr.consent_root()
+        if root is None or not plain(name):
+            return 'unsafe'
+        path = Path(os.path.abspath(name))
+        relative = path.relative_to(root / REVIEW_POSTING)
+        if (len(relative.parts) != 2 or not REVIEW_RUN.fullmatch(relative.parts[0]) or relative.name != 'body.md'
+                or path.resolve(strict=True) != path):
+            return 'unsafe'
+        with dr.data_folder(REVIEW_POSTING, private=True) as parent:
+            with dr.descend(parent, relative.parts[0], private=True) as folder:
+                fd = os.open('body.md', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=folder)
+                try:
+                    info = os.fstat(fd)
+                    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                            or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > TEXT_LIMIT):
+                        return 'unsafe'
+                    raw = os.read(fd, TEXT_LIMIT + 1)
+                finally:
+                    os.close(fd)
+        if len(raw) > TEXT_LIMIT:
+            return 'unsafe'
+        first, _, rest = raw.decode('utf-8').partition('\n')
+    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
+        return 'unsafe'
+    if not REVIEW_MARKER.fullmatch(first) or not rest.strip():
+        return 'unsafe'
+    verdict = text_ok(rest.replace('\r', ''), inline=False)
+    return verdict if verdict in {'allowed', 'forbidden'} else 'unsafe'
 
 
 def plain(token):
@@ -1417,6 +1516,8 @@ def check(folder, args):
         if code is None:
             # The lease hash covers the user section only; the repository's project values are read on every check.
             applied = effective(applied, cwd)
+            code, key, entry = project_limit(lease, applied, current)
+        if code is None:
             if isinstance(argv, list) and argv[:3] == ['git', 'worktree', 'remove']:
                 applied[MERGED] = merged_heads(folder, lease, current)
             if args.argv_json is not None:
@@ -1425,11 +1526,13 @@ def check(folder, args):
                 code = classify_paths(args.paths, applied['Roots'], context_of(applied), source_mode(applied))
         # Only a Tier 1 answer reserves an action (and, for a ledger start, a run); a denied check costs nothing.
         if code == 'allowed':
-            counters = lease['counters']
-            counters['actions'] += 1
-            counters['hour_actions'].append(current)
+            entry['actions'] += 1
+            entry['hour_actions'].append(current)
+            if entry['first'] is None:
+                entry['first'] = current
             if argv and any(Path(t).name == 'ledger.py' for t in argv) and 'start' in argv:
-                counters['runs'] += 1
+                entry['runs'] += 1
+            lease['counters'][key] = entry
             save_lease(folder, lease)
             if isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
                 append_log(folder, merge_pin(argv, current), current)
