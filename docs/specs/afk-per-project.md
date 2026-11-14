@@ -63,7 +63,7 @@ Then the host carries out the chosen option through `check` like any action. A d
 - `afk.py check` allows `judge.py ask --site away-evaluation` (replacing `away-decision`) and `judge.py check-table`.
 - `afk.py log --kind decision` replaces rung `jev` with rung `table`: `--settled table` with `--by jev|host-small --of <k> --probability <top p>`, or `--settled unavailable --by jev|host-small`; it never takes `--option` and has no threshold. `ledger.py` `away_rows` reads the probability of rung `table`.
 - Enforcer: the record, the site schema and `check-table` (script); the order of the rungs is advisory (agent judgment).
-- [CLAUDE.md](../../CLAUDE.md) (fourth scoped exception) and [PRIVACY.md](../../PRIVACY.md) ("Judge", "Away decisions") describe the evaluation from pull request 1, before any code.
+- [CLAUDE.md](../../CLAUDE.md) (fourth scoped exception) and [PRIVACY.md](../../PRIVACY.md) (sections "Judge (TypeSafe), only if you choose it" and "Away decisions, only during a lease you start") describe the evaluation from pull request 1, before any code.
 
 ### D. Same-family review fallback (pull request 5)
 
