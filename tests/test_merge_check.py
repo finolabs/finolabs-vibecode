@@ -639,6 +639,60 @@ class SameFamilyFallbackTest(unittest.TestCase):
             with self.subTest(second=second):
                 self.assertFalse(self.evaluate(self.data(second))[0])
 
+    def models(self, *reviews):
+        """Code and security markers per (model, verdict, time); a None model leaves the model out of the line."""
+        comments = []
+        for model, verdict, at in reviews:
+            second = self.LINE + (f" model={model}" if model else "") + " relayed by the coordinator"
+            for kind in ("code", "security"):
+                comments.append(comment(marker(kind, verdict) + "\n" + second, at=at))
+        return pr(comments=comments, body="Summary\n<!-- fnl-router depth=NORMAL trigger=none -->\n")
+
+    def test_an_enforcer_or_instruction_change_needs_two_models_of_each_kind(self):
+        # Owner decision 15/11/2026: two different models of the author's family, both APPROVE at the head.
+        first, later = "2026-11-02T01:00:00Z", "2026-11-02T02:00:00Z"
+        for name in ("skills/delegate/scripts/afk.py", "CLAUDE.md", "skills/x/SKILL.md"):
+            with self.subTest(name=name):
+                self.files = [{"filename": "docs/notes.md"}, {"filename": name}]
+                ok, lines = self.evaluate(self.models(("opus-5", "APPROVE", first), ("Sonnet-5", "APPROVE", first)))
+                self.assertTrue(ok, lines)
+                self.assertIn("ok    same-family review: no other family reachable (antigravity, codex); "
+                              "two models approved each kind", lines)
+        cases = {
+            "one model only": self.models(("opus-5", "APPROVE", first)),
+            "same model twice": self.models(("opus-5", "APPROVE", first), ("OPUS-5", "APPROVE", later)),
+            "one of two rework": self.models(("opus-5", "APPROVE", first), ("sonnet-5", "REWORK", later)),
+            # The latest marker of the kind is an approval, but the other model's own latest verdict is REWORK.
+            "an earlier rework of the other model": self.models(("sonnet-5", "REWORK", first), ("opus-5", "APPROVE", later)),
+            "a missing model name": self.models(("opus-5", "APPROVE", first), (None, "APPROVE", later)),
+            "the model is not right after the line": pr(comments=[
+                comment(marker(kind, "APPROVE") + "\n" + self.LINE + " note model=" + model, at=first)
+                for kind in ("code", "security") for model in ("opus-5", "sonnet-5")],
+                body="Summary\n<!-- fnl-router depth=NORMAL trigger=none -->\n"),
+        }
+        for case, data in cases.items():
+            with self.subTest(case=case):
+                ok, lines = self.evaluate(data)
+                self.assertFalse(ok, lines)
+        # Two models in one kind only: the other kind still needs its own two.
+        data = self.models(("opus-5", "APPROVE", first), ("sonnet-5", "APPROVE", first))
+        data["comments"] = [c for c in data["comments"] if "kind=code" in c["body"] or "model=opus-5" in c["body"]]
+        self.assertFalse(self.evaluate(data)[0])
+        # The other conditions still hold: the router trigger and the out-of-quota evidence.
+        data = self.models(("opus-5", "APPROVE", first), ("sonnet-5", "APPROVE", first))
+        data["body"] = "Summary\n<!-- fnl-router depth=NORMAL trigger=permission -->\n"
+        self.assertFalse(self.evaluate(data)[0])
+        self.out = [self.out[1]]
+        self.assertFalse(self.evaluate(self.models(("opus-5", "APPROVE", first), ("sonnet-5", "APPROVE", first)))[0])
+
+    def test_fallback_model_reads_only_the_token_after_the_exact_line(self):
+        self.assertEqual(mc.fallback_model(self.LINE + " model=Opus-5.5", "claude"), "opus-5.5")
+        self.assertEqual(mc.fallback_model(self.LINE + " model=opus-5 note", "claude"), "opus-5")
+        for second in (self.LINE, self.LINE + " model=", self.LINE + " model=-x", self.LINE + "model=opus",
+                       self.LINE + " model=opus;x", self.LINE.replace("claude", "codex") + " model=opus", None):
+            with self.subTest(second=second):
+                self.assertIsNone(mc.fallback_model(second, "claude"))
+
     def test_only_positive_evidence_counts_as_out(self):
         iso = self.iso
         from datetime import timedelta

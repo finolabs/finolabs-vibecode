@@ -53,9 +53,12 @@ a live away lease; <family> is the author's family; every other present family
 has positive evidence of being out (a reading under 8 hours old for every
 configured install, with every pool below the routing floor, or a live rate-limit
 marker; no reading or a partial one is no evidence);
-the router trigger is not security, permission or privacy and no enforcer script
-or instruction file changed; and each counted marker's second line starts with
-the exact fallback reviewer line. The flag runs these checks on both reviews
+the router trigger is not security, permission or privacy; and each counted
+marker's second line starts with the exact fallback reviewer line. When an
+enforcer script or instruction file changed, each kind also needs approvals at
+the head from two different models, each named as ` model=<name>` right after
+the fallback reviewer line; every counted marker of that kind must name its
+model, and the latest marker of each model must be APPROVE. The flag runs these checks on both reviews
 whatever routing would pick now. Without the flag, a counted marker carrying a
 fallback reviewer line blocks. Anything unknown refuses.
 """
@@ -104,6 +107,54 @@ FRESH = 8 * 3600
 
 def fallback_line(family):
     return f"Reviewer: {family} (same family as the author; no other family reachable)"
+
+
+# The model a fallback marker names: ` model=<name>` right after the exact fallback line (owner decision 15/11/2026).
+FALLBACK_MODEL = re.compile(r" model=([A-Za-z0-9][A-Za-z0-9._:-]{0,79})(?: |$)")
+
+
+def fallback_model(second, family):
+    """The model named on a fallback reviewer line, in lower case, or None when the line or the model is missing."""
+    expected = fallback_line(family)
+    if not isinstance(second, str) or not second.startswith(expected):
+        return None
+    match = FALLBACK_MODEL.match(second, len(expected))
+    return match[1].casefold() if match else None
+
+
+def head_markers(pr, can_write):
+    """Every counted marker for the head, by kind: [(verdict, createdAt, second line)], read like `verdicts`."""
+    found = {"code": [], "security": []}
+    for comment in pr["comments"]:
+        first = (comment.get("body") or "").split("\n", 1)[0].strip()
+        match = MARKER.fullmatch(first)
+        if not match or comment.get("includesCreatedEdit") is not False:
+            continue
+        kind, sha, verdict, _ = match.groups()
+        if sha != pr["headRefOid"] or not can_write(login(comment)):
+            continue
+        second = ((comment.get("body") or "").split("\n") + ["", ""])[1].rstrip("\r")
+        found[kind].append((verdict, comment.get("createdAt") or "", second))
+    return found
+
+
+def two_models(markers, family):
+    """(granted, detail): each kind has head approvals from two different models, every counted marker of the kind
+    names its model on the fallback line, and the latest marker of each model is APPROVE (on a tie, REWORK wins)."""
+    for kind in ("code", "security"):
+        latest = {}
+        for verdict, created, second in markers.get(kind, []):
+            model = fallback_model(second, family)
+            if model is None:
+                return False, f"a {kind} fallback marker names no model"
+            current = latest.get(model)
+            if current is None or created > current[1] or (created == current[1] and verdict == "REWORK"):
+                latest[model] = (verdict, created)
+        if any(verdict != "APPROVE" for verdict, _ in latest.values()):
+            return False, f"a {kind} model's latest verdict is not APPROVE"
+        if len(latest) < 2:
+            return False, f"an enforcer script or instruction file changed; {kind} needs approvals from two models"
+    return True, "two models approved each kind"
 
 TIMEOUT = 60  # seconds for each gh call
 
@@ -324,8 +375,9 @@ def out_families(lines, current=None, configured=None):
     return out
 
 
-def fallback(pr, family, families, files, verdicts_found):
-    """(granted, detail) for the same-family fallback; every unknown refuses and the detail never echoes text."""
+def fallback(pr, family, families, files, verdicts_found, markers=None):
+    """(granted, detail) for the same-family fallback; every unknown refuses and the detail never echoes text.
+    `markers` is `head_markers` of the pull request; without it a changed enforcer or instruction file refuses."""
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     try:
@@ -353,17 +405,22 @@ def fallback(pr, family, families, files, verdicts_found):
                 for entry in listed):
             return False, "changed files could not be read"
         names = [entry["filename"] for entry in listed] + [str(entry.get("previous_filename") or "") for entry in listed]
-        for name in names:
-            base = name.rsplit("/", 1)[-1].casefold()
-            if base in ENFORCERS or base in INSTRUCTION_FILES:
-                return False, "an enforcer script or instruction file changed"
+        sensitive = any(name.rsplit("/", 1)[-1].casefold() in ENFORCERS | INSTRUCTION_FILES for name in names)
         expected = fallback_line(family)
         for kind in ("code", "security"):
             found = verdicts_found.get(kind)
             second = found[3] if found and len(found) > 3 else ""
             if not (second == expected or second.startswith(expected + " ")):
                 return False, f"{kind} marker lacks the fallback reviewer line"
-        return True, f"no other family reachable ({', '.join(sorted(others)) or 'none present'})"
+        reachable = f"no other family reachable ({', '.join(sorted(others)) or 'none present'})"
+        if sensitive:
+            # An enforcer script or instruction file changed: two different models of the family must approve each
+            # kind at the head (owner decision 15/11/2026, docs/specs/afk-per-project.md D).
+            if markers is None:
+                return False, "an enforcer script or instruction file changed"
+            granted, detail = two_models(markers, family)
+            return (True, f"{reachable}; {detail}") if granted else (False, detail)
+        return True, reachable
     except (ImportError, OSError, ValueError, KeyError, TypeError, AttributeError, Unknown):
         return False, "fallback evidence cannot be read"
 
@@ -473,7 +530,8 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
             if fallback_family is not None:
                 # A fallback request treats both reviews as same-family, whatever routing would pick now.
                 same = ["code", "security"]
-                granted, detail = fallback(pr, fallback_family, families, changed_files or (lambda: []), found)
+                granted, detail = fallback(pr, fallback_family, families, changed_files or (lambda: []), found,
+                                           head_markers(pr, can_write))
                 lines.append(f"{'ok   ' if granted else 'BLOCK'} same-family review: {detail}")
                 ok = ok and granted
             else:

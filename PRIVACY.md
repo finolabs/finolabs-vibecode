@@ -46,9 +46,10 @@ usage events; purge removes them. The refresh builders enforce these bounds and 
 Since 0.2.5 a repository's settings (`ledger`, `tasks`, `parallel`, `parallel-caps`, the display
 `label` and the optional `autopilot` object: the repository's own away choices for task choice, push and pull
 requests, merge, trusted authors, extra top-level code folders, editable top-level files, exact test commands, `max-runs`, `max-runtime-minutes`,
-`max-actions-per-hour`, `decide`, `non-production-targets`, `production-targets` and `skill-repository`, which
-`afk.py check` reads in memory and never stores; the two target lists are deploy command text, stored in that
-settings file) live in that repository's own folder: `settings.json` in `.finolabs/vibecode/` of the main
+`max-actions-per-hour`, `decide`, `non-production-targets`, `production-targets`, `release-targets` and `skill-repository`,
+which `afk.py check` reads in memory and never stores; the target lists are deploy, release and publish command text,
+stored in that settings file, and each list replaces the default the user may set for every repository in `## afk` of
+the canonical host config) live in that repository's own folder: `settings.json` in `.finolabs/vibecode/` of the main
 checkout (a linked worktree shares it only in the canonical, reciprocal, owner-checked layout
 `<main>/.git/worktrees/<name>`). The file never leaves
 the machine; the setter adds `.finolabs/` to the repository's `.git/info/exclude`, never to a tracked
