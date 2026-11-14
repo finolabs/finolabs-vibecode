@@ -84,6 +84,18 @@ Enforcer: `merge_check.py` for conditions 1 to 5 (script); trying the other fami
 - `post_review.py` becomes an allowed wrapper in `afk.py check`, in both orders `<pr> --body-file <file>` and `--body-file <file> <pr>`, and bare `<pr>` (which creates the run folder). The file must be the run body `post_review.py` itself accepts: `<data root>/state/review-posting/post-<32 hex>/body.md`, a regular 0600 file, no link, at most 64 KiB. `check` screens the text after its first line with the pull request text screens (no secret, machine path, sensitive assignment or second `<!-- fnl-` marker), requires the verified target (not the strict state) and `Repository comments` at `decide`.
 - A Markdown skill repository: when the user approved `skill-repository: yes` for that repository in `/setup add afk` (project scope, bound to the approved digest like every project value; a file in the work tree or a branch cannot set it), and `source_mode` holds (a non-default work branch with Push and pull requests or Merge yes), the root `SKILL.md` and `references/**`, `scripts/**` and `evals/**` are source paths; a `SKILL.md` below the root stays protected. The hard names stay protected. (Changed in pull request 3 from reading the default branch's Git objects: `afk.py` runs no program, and an explicit approval is the narrower grant.)
 
+### F. Test commands and top-level files per project (pull request 7, after the UAT)
+
+The afk UAT of 14/11/2026 (`.finolabs/notes/afk-e2e-2026-11-14.md`, U1 and U2) found two stoppers. No Tier 1 form ran a repository's own tests, while the merge gate needs local tests of the touched modules green. And no top-level file other than `README.md`, `CHANGELOG.md` and `CONTRIBUTING.md` was editable, so the task list (`TASKS.md`) the agents work from parked. Owner decision (14/11/2026, "Fix first", relayed by the coordinator): fix both before 0.2.7.
+
+- `test-commands` (project scope only, 1 to 16 entries): exact commands with the `production-targets` grammar (plain words joined by single spaces, no shell syntax), written only through its own setup question with the commands read back in the preview. In that repository, an argv whose token list equals an entry is Tier 1, bare or as the command of `heavy_run.py run [options] -- <command>` (the heavy-job gate still governs the bare form on hosts where it is on). Matching is on token lists, so a token holding a space never equals two listed words.
+  - Never read from user scope, never inherited, and empty in the user, strict and no-repository states, so the same argv in another repository keeps its usual tier.
+  - Order: the protected-token check and the tag, release, publish and deploy rules run first, so a listed entry never relaxes them. An entry whose first word is `git`, `gh` or `rm` is refused by setup and ignored by `check`, because `check` classifies those commands itself.
+  - A listed command runs whatever code the repository's tests contain, including code the agent edited under the lease. That is the grant the owner makes by listing it; the setup question says so.
+- `top-level-files` (project scope only, 1 to 16 entries): exact top-level file names (`ROOT_NAME` grammar, no `/`, no leading dot, no instruction-file name, an extension from the known list). Each becomes a known single-file path in that repository, like `README.md`. The protected names, the link check (no symlink on the path), the directory refusal and the install-checkout rule still apply. Empty in every state but `project`.
+  - A separate key, not an extension of `roots`: a `roots` entry is a folder whose descendants become known paths, while a file entry names one exact path. Keeping them apart leaves `roots` unchanged, makes each preview line say what it opens, and stops a name such as `docs.md` from reading as a folder.
+- `project_progress.py settings --dry-run` shows both keys in its `effective` values and `changed` list (this pull request); `afk.py effective` shows them in its `rules` field from the follow-up pull request for afk UAT U3 (GitHub 288), not here. Enforcer: `afk.py check` (script) and the closed `valid_autopilot` schema in `project_store.py` (script).
+
 ## Acceptance
 
 1. Two repositories under one lease: actions in one never consume the other's hourly, run or runtime limit (test).
@@ -93,6 +105,7 @@ Enforcer: `merge_check.py` for conditions 1 to 5 (script); trying the other fami
 5. `merge_check.py --independent --fallback-family claude` passes on same-family markers only with a live lease, the author's family, fresh out-of-quota evidence for every other present family, no security trigger or enforcer or instruction file change, and the exact second line; it blocks in each other case (tests).
 6. `post_review.py` with a valid run body, and a skill repository's paths, are Tier 1 on a work branch with the needed settings; a body file elsewhere, a body with a secret, or a skill repository whose default branch has no root `SKILL.md`, is Tier 3 (tests).
 7. `PRIVACY.md`, `setup` (`references/features/afk.md`, `afk-project.md`, `afk-decisions.md`), the afk skill and `upgrades.json` describe the new keys; the upgrade note tells users to start the lease again and to run `/setup add afk` inside each repository that wants its own limits or production targets.
+8. A listed `test-commands` entry is Tier 1 bare and through `heavy_run.py run --` only in the repository that listed it; an unlisted command, the same argv in another repository, in the user, strict or no-repository state, a space-holding token, and an entry starting with `git`, `gh` or `rm` keep their usual tier (tests). A listed `top-level-files` name is a known path in that repository only; a nested path, a symlink, a directory, a protected or instruction-file name and every other repository refuse (tests).
 
 ## Order of pull requests
 
@@ -102,6 +115,7 @@ Enforcer: `merge_check.py` for conditions 1 to 5 (script); trying the other fami
 4. C: the evaluation table and the new ladder.
 5. D: same-family fallback in `merge_check.py`.
 6. B: per-project categories and production targets, last, because it widens what an unattended agent may reach.
+7. F: test commands and top-level files (after the UAT).
 
 ## Open
 

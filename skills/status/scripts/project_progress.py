@@ -160,6 +160,10 @@ def autopilot_preview(cwd, value):
             if obj and 'non-production-targets' in obj else 'user list (user)'
         shown['Production targets'] = ('; '.join(obj['production-targets']) + ' (repository)'
                                        if obj and 'production-targets' in obj else 'none')
+        shown['Test commands'] = ('; '.join(obj['test-commands']) + ' (repository)'
+                                  if obj and 'test-commands' in obj else 'none')
+        shown['Top-level files'] = (', '.join(obj['top-level-files']) + ' (repository)'
+                                    if obj and 'top-level-files' in obj else 'none')
         return shown
     # The stored object and the keys whose effective value would move, so a change is never shown as a new state only.
     shown, before = effective(desired), effective(current)

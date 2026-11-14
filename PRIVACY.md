@@ -45,7 +45,7 @@ usage events; purge removes them. The refresh builders enforce these bounds and 
 
 Since 0.2.5 a repository's settings (`ledger`, `tasks`, `parallel`, `parallel-caps`, the display
 `label` and the optional `autopilot` object: the repository's own away choices for task choice, push and pull
-requests, merge, trusted authors and extra top-level code folders, which `afk.py check` reads in memory and never
+requests, merge, trusted authors, extra top-level code folders, editable top-level files and exact test commands, which `afk.py check` reads in memory and never
 stores) live in that repository's own folder: `settings.json` in `.finolabs/vibecode/` of the main
 checkout (a linked worktree shares it only in the canonical, reciprocal, owner-checked layout
 `<main>/.git/worktrees/<name>`). The file never leaves
