@@ -9,7 +9,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | State stays outside Git, private (directories 0700/files 0600), no links, atomic and serialized | private_folder, read_private, write_private, data_root, flock |
 | One live lease for the machine; a second start reports it and changes nothing; stop removes it and leaves a stop marker; starting clears that marker | start, stop |
 | Missing/expired/stopped/changed setup denies every check and adds one fixed `end` line telling the caller to stop its loop; limits are counted per project (the full identity digest, or one shared `unknown` entry, at most 64): spent runs or runtime minutes since the project's first reserved action say `spent`, the project's rolling-hour cap or a full project table says `limit`, and neither ends the lease for other projects | lease_guard, project_limit, check |
-| Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release and npm/pnpm publish forms whose every applicable category is `decide`, and a deploy matching a `Non-production targets` entry exactly with no production or live word; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
+| Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release (with `--repo` equal to the verified target) and npm/pnpm publish forms whose every applicable category is `decide`, a deploy matching a non-production target exactly with no production or live word, and a deploy equal to this repository's `production-targets` entry with `production` in its `decide`; a project `decide` list replaces the user's categories, the strict and no-repository states close them all; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
 | Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
 | The ladder's two forms: this install's judge.py at the away-evaluation site with validated options or its check-table on a brief file, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, table_path, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
 | Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
@@ -82,6 +82,12 @@ CATEGORIES = {'Production': True, 'Real users and customer data': True, 'Unrecov
               'Shared settings': False, 'Recoverable deletion': False, 'Repository comments': False}
 CONSENT = 'Excerpts leave the machine'
 TARGETS = 'Non-production targets'
+PRODUCTION_TARGETS = 'Production targets'  # project scope only (`production-targets`); never read from host.md
+# A repository's `decide` list names categories by these keys; every category it does not list is stop there.
+DECIDE_NAMES = {'production': 'Production', 'unrecoverable-deletion': 'Unrecoverable deletion',
+                'messages-outside-the-repository': 'Messages outside the repository',
+                'tags-and-releases': 'Tags and releases', 'publishing': 'Publishing', 'shared-settings': 'Shared settings',
+                'recoverable-deletion': 'Recoverable deletion', 'repository-comments': 'Repository comments'}
 HOST_FAMILIES = {'Claude Code': 'claude', 'Codex': 'codex', 'Antigravity': 'antigravity', 'ZCode': 'zcode'}
 PROGRAMS = {'claude': 'claude', 'codex': 'codex', 'antigravity': 'agy', 'zcode': 'zcode'}
 MODEL = re.compile(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,79}')
@@ -113,6 +119,8 @@ PROJECT_KEYS = {'task-choice': 'Task choice', 'push-and-pull-requests': 'Push an
                 'max-runtime-minutes': 'Max runtime minutes', 'max-actions-per-hour': 'Max actions per hour'}
 MAX_PROJECTS = 64  # entries in the lease's per-project counter table
 OFF = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', 'Trusted authors': 'own', 'Roots': []}
+# The strict and no-repository states also reset every category to stop and both target lists to empty.
+CLOSED = {**{c: 'stop' for c in CATEGORIES}, TARGETS: [], PRODUCTION_TARGETS: []}
 CONTEXT = 'Repository context'  # the applied-settings entry holding the check's Context
 MERGED = 'Merged heads'  # the applied-settings entry holding the heads this lease's `log --kind merge` entries recorded
 EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yaml', '.yml'}
@@ -418,18 +426,18 @@ def effective(applied, cwd):
     stored in the lease.
     """
     # A strict context keeps the check's folder, so the work-tree gate never falls back to the process's own cwd.
-    strict = {**applied, **OFF, CONTEXT: UNKNOWN._replace(cwd=cwd if isinstance(cwd, str) else None)}
+    strict = {**applied, **OFF, **CLOSED, CONTEXT: UNKNOWN._replace(cwd=cwd if isinstance(cwd, str) else None)}
     try:
         cwd = str(cwd)
         found, ident = store.identity(cwd)
         if found == 'absent':
-            return {**applied, 'Roots': [], CONTEXT: Context('absent', None, 'no-repository', None, cwd)}
+            return {**applied, **CLOSED, 'Roots': [], CONTEXT: Context('absent', None, 'no-repository', None, cwd)}
         if found != 'found':
             return strict
         state, values, _, record = store.autopilot_binding(ident)
         target = store.origin_target(ident)
         if state == 'unset' or state == 'approved' and 'autopilot' not in values:
-            return {**applied, 'Roots': [], CONTEXT: Context('found', ident, 'user', target, cwd)}
+            return {**applied, 'Roots': [], PRODUCTION_TARGETS: [], CONTEXT: Context('found', ident, 'user', target, cwd)}
         project = values.get('autopilot') if state == 'approved' else None
         if (not store.valid_autopilot(project) or 'target' not in record or record['target'] != target
                 or not store.bound(record, ident)):
@@ -440,6 +448,15 @@ def effective(applied, cwd):
                 result[name] = project[key]
         result['Roots'] = [r for r in project.get('roots', []) if not protected(r)]
         result[SKILL_REPO] = project.get('skill-repository') == 'yes'
+        if 'decide' in project:  # an explicit list, [] included, replaces the user's answers; the fixed rows stay stop
+            listed = {DECIDE_NAMES[k] for k in project['decide'] if k in DECIDE_NAMES}
+            result.update({c: 'decide' if c in listed else 'stop' for c in CATEGORIES})
+            result['Real users and customer data'] = 'stop'
+        else:
+            result['Production'] = 'stop'  # the user scope never decides production
+        if 'non-production-targets' in project:
+            result[TARGETS] = list(project['non-production-targets'])
+        result[PRODUCTION_TARGETS] = list(project.get('production-targets', []))
         result[CONTEXT] = Context('found', ident, 'project', target, cwd)
         return result
     except (OSError, ValueError, TypeError, UnicodeError, KeyError, RecursionError):
@@ -1078,12 +1095,17 @@ def is_deploy(argv):
 
 def release_command(argv, applied, categories, deploy):
     """Precedence rows 2 to 5 for the command forms a script can read: tags, releases, publishing and deploys."""
+    if context_of(applied).state in ('strict', 'no-repository'):
+        return 'forbidden'  # no verified repository settings: tags, releases, publishing and deploys wait for a person
     if categories and not permits(categories, applied):
         return 'forbidden'  # row 3: every applicable category must be decide
     if deploy:
-        if any(re.search(r'prod|live', t, re.I) for t in argv):
-            return 'forbidden'  # row 2: production or live, even when listed by mistake
-        if ' '.join(argv) not in applied.get(TARGETS, []):
+        # Token lists, not joined text: a token holding a space must never equal two listed words.
+        listed = lambda key: [entry.split(' ') for entry in applied.get(key, [])]
+        production = argv in listed(PRODUCTION_TARGETS) and applied.get('Production') == 'decide'
+        if not production and any(re.search(r'prod|live', t, re.I) for t in argv):
+            return 'forbidden'  # row 2: production or live, unless this repository listed it and decides Production
+        if not production and argv not in listed(TARGETS):
             return 'forbidden'  # row 4
         if not categories:
             return 'allowed'  # row 5
@@ -1101,7 +1123,8 @@ def release_command(argv, applied, categories, deploy):
             operands = options(rest, {'--draft', '--verify-tag', '--prerelease'},
                                {'--title', '-t', '--notes', '-n', '--target', '--repo', '-R'})
             if operands is not None and len(operands) == 1 and TAG.fullmatch(operands[0]):
-                return 'allowed'
+                # Like a pull request merge: exactly one explicit --repo equal to the verified target.
+                return target_check(rest, context_of(applied))
         elif verb in (['view'], ['list']):
             operands = options(rest, set(), {'--repo', '-R', '--limit', '-L', '--json'})
             if operands is not None and len(operands) <= (verb == ['view']) and all(TAG.fullmatch(o) for o in operands):

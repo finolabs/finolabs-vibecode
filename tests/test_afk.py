@@ -776,7 +776,7 @@ class AwayDecisionTest(AfkBase):
         self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n- Publishing: decide\n')
         for argv in (['git', 'tag', 'v1.2.0'], ['git', 'tag', '-a', 'v1.2.0', '-m', 'Release 1.2.0'],
                      ['git', 'tag', 'v1.2.0', 'a' * 40], ['gh', 'release', 'create', 'v1.2.0', '--title', 'v1.2.0',
-                                                          '--notes', 'Changes', '--verify-tag'],
+                                                          '--notes', 'Changes', '--verify-tag', '--repo', 'github.com/example/demo'],
                      ['gh', 'release', 'view', 'v1.2.0'], ['gh', 'release', 'list'], ['npm', 'publish'],
                      ['npm', 'publish', '--access', 'public'], ['pnpm', 'publish', '--tag', 'next']):
             with self.subTest(argv=argv):
@@ -791,10 +791,20 @@ class AwayDecisionTest(AfkBase):
         # Recursive deletion keeps its Tier 3 classification in this slice.
         self.check(['rm', '-rf', 'build'], tier=3, code='forbidden')
 
+    def test_a_release_names_the_verified_target_like_a_merge(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n')
+        create = ['gh', 'release', 'create', 'v1.2.0']
+        self.check(create + ['--repo', 'github.com/example/demo'])
+        self.check(create, tier=3, code='unknown')
+        self.check(create + ['-R', 'example/demo'], tier=3, code='unknown')
+        self.check(create + ['--repo', 'github.com/example/elsewhere'], tier=3, code='forbidden')
+        self.check(create + ['--repo', 'github.com/example/demo', '--repo', 'github.com/example/demo'], tier=3, code='unknown')
+
     def test_categories_come_from_the_command_not_from_its_free_text(self):
         base = SETUP + '- Max actions per hour: 1000\n'
-        tag = (['gh', 'release', 'create', 'v1', '--notes', 'publish'], ['git', 'tag', '-a', 'v1', '-m', 'publish'],
-               ['git', 'tag', '-a', 'v1', '-m', 'deploy'], ['gh', 'release', 'create', 'v1', '--title', 'deploy:uat'])
+        repo = ['--repo', 'github.com/example/demo']
+        tag = (['gh', 'release', 'create', 'v1', '--notes', 'publish'] + repo, ['git', 'tag', '-a', 'v1', '-m', 'publish'],
+               ['git', 'tag', '-a', 'v1', '-m', 'deploy'], ['gh', 'release', 'create', 'v1', '--title', 'deploy:uat'] + repo)
         publish = (['npm', 'publish', '--tag', 'next'], ['pnpm', 'publish', '--access', 'public'])
         local = (['git', 'commit', '-m', 'publish'], ['gh', 'pr', 'create', '--title', 'deploy', '--body', 'publish', '--head', 'topic',
                   '--repo', 'github.com/example/demo'], ['git', 'commit', '-m', 'deploy'])
@@ -1146,6 +1156,67 @@ class ProjectScopeTest(AfkBase):
         (repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/main\n')
         (repo / '.git/config').write_text(ORIGIN_CONFIG)
         return repo
+
+    def test_production_targets_are_tier_one_only_where_the_repository_listed_and_decides_them(self):
+        targets = '- Non-production targets: npx wrangler deploy --env uat\n'
+        self.start(SETUP + '- Max actions per hour: 1000\n' + targets)
+        production = ['npx', 'wrangler', 'deploy', '--env', 'production']
+        self.check(production, tier=3, code='forbidden')  # the user scope never decides production
+        self.project({'production-targets': ['npx wrangler deploy --env production']})
+        self.check(production, tier=3, code='forbidden')  # listed, but Production is not in this repository's decide
+        self.project({'production-targets': ['npx wrangler deploy --env production'], 'decide': ['production']})
+        self.check(production)
+        self.check(['npx', 'wrangler', 'deploy', '--env', 'uat'])  # the user's non-production list is inherited
+        # A token holding a space never matches two listed words, though the joined text is the same.
+        for argv in (['npx', 'wrangler', 'deploy', '--env production'], ['npx', 'wrangler', 'deploy', '--env uat']):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code='forbidden')
+        for argv in (production + ['--minify'], ['npx', 'wrangler', 'deploy', '--env', 'live'],
+                     ['npx', 'wrangler', 'deploy', '--env', 'production-eu']):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code='forbidden')  # an unlisted production deploy parks
+        # An explicit decide list replaces the user's answers: tags were not listed, so they stop here.
+        self.check(['git', 'tag', 'v1.2.0'], tier=3, code='forbidden')
+        # The same argv in another repository, where nothing lists it, parks.
+        self.cwd = self.other_repo('second')
+        self.check(production, tier=3, code='forbidden')
+
+    def test_project_decide_and_target_lists_replace_the_user_values(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n'
+                   '- Non-production targets: npx wrangler deploy --env uat\n')
+        self.check(['git', 'tag', 'v1.2.0'])
+        self.project({'decide': [], 'non-production-targets': ['npx wrangler deploy --env qa']})
+        self.check(['git', 'tag', 'v1.2.0'], tier=3, code='forbidden')
+        self.check(['npx', 'wrangler', 'deploy', '--env', 'uat'], tier=3, code='forbidden')
+        self.check(['npx', 'wrangler', 'deploy', '--env', 'qa'])
+        self.project({'decide': ['tags-and-releases']})
+        self.check(['git', 'tag', 'v1.2.0'])
+        self.check(['npx', 'wrangler', 'deploy', '--env', 'uat'])  # an omitted target list inherits the user's
+        for bad in ({'decide': ['real-users-and-customer-data']}, {'decide': ['credentials']}, {'decide': 'production'},
+                    {'decide': ['production', 'production']}, {'production-targets': []},
+                    {'production-targets': ['npx wrangler deploy; rm -rf /']}, {'production-targets': ['a  b']},
+                    {'non-production-targets': ['$(whoami) deploy']}, {'production-targets': ['x'] * 17}):
+            with self.subTest(bad=bad):
+                self.assertFalse(self.store.valid_autopilot(bad))
+
+    def test_strict_and_no_repository_states_close_every_category_and_target(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n'
+                   '- Non-production targets: npx wrangler deploy --env uat\n')
+        outside = self.home / 'no-repository'
+        outside.mkdir(exist_ok=True)
+        self.cwd = outside
+        for argv in (['git', 'tag', 'v1.2.0'], ['npx', 'wrangler', 'deploy', '--env', 'uat']):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code='forbidden')
+        # The strict state: a repository whose ancestors cannot be read.
+        locked = self.repo / 'locked'
+        (locked / 'inner').mkdir(parents=True)
+        locked.chmod(0o311)
+        self.addCleanup(locked.chmod, 0o755)
+        self.cwd = locked / 'inner'
+        for argv in (['git', 'tag', 'v1.2.0'], ['npx', 'wrangler', 'deploy', '--env', 'uat']):
+            with self.subTest(strict=argv):
+                self.check(argv, tier=3, code='forbidden')
 
     def test_limits_are_counted_per_project(self):
         self.start(SETUP + '- Max actions per hour: 2\n')
