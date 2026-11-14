@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Answer the routing query from the assignment matrix and local state only.
 
-`pick --type <type> --level <1-5> [--author <family>] [--coordinator <family>]` prints at most five lines: each surviving agent as
-`<agent> <model or default>` in preference order, then one `drop <agent>: <reason>` line per dropped agent.
+`pick [--kind <kind>] [--type <type>] --level <1-5> [--author <family>] [--coordinator <family>]` prints at most five
+lines: each surviving agent as `<agent> <model or default>[ quota-fallback]` in preference order, then one
+`drop <agent>: <reason>` line per dropped agent. `--kind` (default `implement`) never filters candidates: it only
+chooses, through the line's `models` rules, the model each candidate would use; without `--type` every line is a
+candidate.
 With no survivor, or no usable matrix, the first line is `no preference: use the strength table`.
 It reads the canonical host config and the cached quota status, runs no program, reads no repository,
 makes no network call and prints no path. A preference never blocks and never grants anything.
@@ -23,12 +26,14 @@ DISPLAY = {"Claude Code": "claude", "Codex": "codex", "Antigravity": "antigravit
 
 
 class Pick:
-    def __init__(self, state, work_type, level):
+    def __init__(self, state, work_type, level, kind="implement"):
         self.state = state
         self.work_type = work_type
         self.level = level
+        self.kind = kind
         self.listed = []
         self.survivors = []
+        self.fallbacks = set()  # survivors whose model is a rule's `then`, chosen because the first was out of quota
         self.drops = []
 
 
@@ -69,6 +74,24 @@ def unreachable(text, own=None):
     return own, blocked
 
 
+def install_lines(lines, agent):
+    """The status lines that speak for one install: a Claude install reads only its own label, plus markers."""
+    if family(agent) != "claude":
+        return list(lines)
+    labels = ("default", "claude") if agent == "claude" else (agent[len("claude"):], agent)
+    return [line for line in lines if "rate-limit marker" in line
+            or any(line.startswith(f"Quota claude/{label}:") for label in labels)]
+
+
+def chosen_model(lines, agent, entry, kind, work_type, level):
+    """(model, fell_back) for this dispatch, or None when the model it would use is out of quota."""
+    import review_route
+    try:
+        return review_route.model_for(install_lines(lines, agent), family(agent), entry, kind, work_type, level)
+    except (ValueError, TypeError):
+        return am.choose_model(entry, kind, work_type, level)[0], False
+
+
 def out_of_quota(lines, agent):
     """Reuse review routing's reading of the cached status; an unreadable status excludes nothing.
 
@@ -76,26 +99,23 @@ def out_of_quota(lines, agent):
     label `<suffix>` or the full name. A family-wide rate-limit marker covers all of them; an install with no
     reading is unverified, never excluded by another install's quota."""
     import review_route
-    name = family(agent)
-    if name == "claude":
-        labels = ("default", "claude") if agent == "claude" else (agent[len("claude"):], agent)
-        lines = [line for line in lines if "rate-limit marker" in line
-                 or any(line.startswith(f"Quota claude/{label}:") for label in labels)]
     try:
-        return name in review_route.blocked_families(lines)
+        return family(agent) in review_route.blocked_families(install_lines(lines, agent))
     except (ValueError, TypeError):
         return False
 
 
-def pick(text, work_type, level, author=None, quota_lines=(), dispatcher=None):
+def pick(text, work_type, level, author=None, quota_lines=(), dispatcher=None, kind="implement"):
+    if kind not in am.KINDS:
+        raise ValueError("kind")
     matrix = am.parse(text)
     state = "absent" if matrix.state == "absent" else "valid" if config.usable(matrix) else "invalid"
-    result = Pick(state, work_type, level)
+    result = Pick(state, work_type, level, kind)
     if state != "valid":
         return result
     own, unreached = unreachable(text, dispatcher)
     for agent, entry in matrix.agents.items():
-        if work_type not in entry["works"]:
+        if work_type is not None and work_type not in entry["works"]:
             continue
         result.listed.append(agent)
         low, high = entry["levels"]
@@ -103,19 +123,22 @@ def pick(text, work_type, level, author=None, quota_lines=(), dispatcher=None):
             reason = f"level {level} outside {low}-{high}"
         elif family(agent) in unreached:
             reason = f"unreachable from {own}"
-        elif out_of_quota(quota_lines, agent):
+        elif (chosen := chosen_model(quota_lines, agent, entry, kind, work_type, level)) is None:
             reason = "out of quota"
         elif author is not None and family(agent) == author:
             reason = "author family"
         else:
-            result.survivors.append((agent, entry["model"]))
+            result.survivors.append((agent, chosen[0]))
+            if chosen[1]:
+                result.fallbacks.add(agent)
             continue
         result.drops.append((agent, reason))
     return result
 
 
 def lines(result):
-    answer = [f"{agent} {model or 'default'}" for agent, model in result.survivors] or [NO_PREFERENCE]
+    answer = [f"{agent} {model or 'default'}" + (" quota-fallback" if agent in result.fallbacks else "")
+              for agent, model in result.survivors] or [NO_PREFERENCE]
     if result.state == "invalid":
         answer.append("matrix invalid")
     answer += [f"drop {agent}: {reason}" for agent, reason in result.drops]
@@ -134,7 +157,7 @@ def rank(result, name, model):
     for agent, reason in result.drops:
         if agent == name:
             return 0, f"{name}: {reason}"
-    return 0, f"{name} not listed for {result.work_type}"
+    return 0, f"{name} not listed for {result.work_type or result.kind}"
 
 
 def host_text():
@@ -146,15 +169,18 @@ def quota_lines():
     return quota_probe.status_lines()
 
 
-def answer(work_type, level, author=None, dispatcher=None):
-    return pick(host_text(), work_type, level, author=author, quota_lines=quota_lines(), dispatcher=dispatcher)
+def answer(work_type, level, author=None, dispatcher=None, kind="implement"):
+    return pick(host_text(), work_type, level, author=author, quota_lines=quota_lines(), dispatcher=dispatcher,
+                kind=kind)
 
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0], allow_abbrev=False)
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("pick", help="ordered candidates for one task", allow_abbrev=False)
-    p.add_argument("--type", required=True, choices=am.TYPES)
+    p.add_argument("--kind", default="implement", choices=am.KINDS,
+                   help="the kind of work; chooses the model through `models` rules, never the candidates")
+    p.add_argument("--type", choices=am.TYPES, help="the work type; default: every agent line is a candidate")
     p.add_argument("--level", required=True, type=int, choices=range(1, 6))
     p.add_argument("--author", choices=config.FAMILIES)
     p.add_argument("--coordinator", choices=config.FAMILIES, help="the agent dispatching; default: the one recorded on this machine")
@@ -163,7 +189,7 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    for line in lines(answer(args.type, args.level, args.author, args.coordinator)):
+    for line in lines(answer(args.type, args.level, args.author, args.coordinator, args.kind)):
         print(line)
     return 0
 

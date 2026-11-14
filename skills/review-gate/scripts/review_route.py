@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
+import assignments as am
 import quota_probe
 import review_config as config
 import git_metadata as metadata
@@ -279,15 +280,17 @@ Legacy ledger records without an exact head never establish authorship.
     return author
 
 
-def blocked_families(lines, current=None):
-    """Consume status output only; stale cache is unverified, never exclusion."""
+def quota_view(lines, current=None):
+    """(families under a live rate-limit marker, {family: [depleted pool names per fresh install]}).
+
+    Consumes status output only; a stale or future reading is unverified and counts as no install."""
     current = current or datetime.now(timezone.utc)
-    blocked, installs = set(), {}
+    marked, installs = set(), {}
     for line in lines:
         marker = re.fullmatch(r"Quota (claude|codex|agy): rate-limit marker ([^;]+); out of quota until ([^ ]+) \(advisory\)", line)
         if marker:
             if quota_probe.timestamp(marker[2]) <= current < quota_probe.timestamp(marker[3]):
-                blocked.add("antigravity" if marker[1] == "agy" else marker[1])
+                marked.add("antigravity" if marker[1] == "agy" else marker[1])
             continue
         match = re.fullmatch(r"Quota (claude|codex|agy)/([^:]+): measured ([^;]+); (.+)", line)
         if not match:
@@ -298,13 +301,62 @@ def blocked_families(lines, current=None):
             continue
         pools = re.findall(r"(?:^|; )([a-zA-Z0-9_-]+) ([^:;]+): (\d+)% remaining, resets ([^ ;]+)", match[4])
         relevant = [pool for pool in pools if family != "claude" or pool[0] == "week-all"]
-        depleted = any(int(p[2]) < 10 and quota_probe.timestamp(p[3]) > current for p in relevant)
+        depleted = {p[0] for p in relevant if int(p[2]) < 10 and quota_probe.timestamp(p[3]) > current}
         installs.setdefault(family, []).append(depleted)
-    blocked.update(f for f, depleted in installs.items() if depleted and all(depleted))
+    return marked, installs
+
+
+def blocked_families(lines, current=None):
+    """Consume status output only; stale cache is unverified, never exclusion."""
+    marked, installs = quota_view(lines, current)
+    return marked | {f for f, depleted in installs.items() if depleted and all(depleted)}
+
+
+def model_blocked(lines, family, model, current=None):
+    """Whether `model` of `family` is out of quota; None (the default model) needs every pool, as for the family.
+
+    Only Antigravity has a reading per model pool (`assignments.pool`); every other family is judged as a whole."""
+    if family != "antigravity" or model is None:
+        return family in blocked_families(lines, current)
+    marked, installs = quota_view(lines, current)
+    if family in marked:
+        return True
+    readings = installs.get(family, [])
+    return bool(readings) and all(am.pool(model) in depleted for depleted in readings)
+
+
+def model_for(lines, family, entry, kind, work_type=None, level=None, current=None):
+    """(model, fell_back) the matrix line chooses for one dispatch, or None when that model is out of quota.
+
+    A line without `models` rules keeps today's whole-family check; `then` applies to Antigravity only."""
+    if not entry.get("models"):
+        return None if family in blocked_families(lines, current) else (entry["model"], False)
+    first, fallback, _ = am.choose_model(entry, kind, work_type, level)
+    if not model_blocked(lines, family, first, current):
+        return first, False
+    if fallback and family == "antigravity" and not model_blocked(lines, family, fallback, current):
+        return fallback, True
+    return None
+
+
+def review_blocked(text, lines, kind, level=None, current=None):
+    """Families out of quota for one review kind (`code-review` or `security-review`).
+
+    Antigravity with `models` rules on a usable matrix is judged on the model its line chooses for that kind at
+    `level`, after `then`; every other case is the whole-family reading."""
+    blocked = blocked_families(lines, current)
+    matrix = am.parse(text)
+    if not config.usable(matrix):
+        return blocked
+    lines_for = [entry for agent, entry in matrix.agents.items() if agent == "antigravity" and entry.get("models")]
+    if lines_for:
+        blocked.discard("antigravity")
+        if model_for(lines, "antigravity", lines_for[0], kind, level=level, current=current) is None:
+            blocked.add("antigravity")
     return blocked
 
 
-def route(author, text, quota_lines, *, lane=False, kinds=("code", "security")):
+def route(author, text, quota_lines, *, lane=False, kinds=("code", "security"), level=None):
     if author not in ORDER:
         raise ValueError("unverified author")
     matrix = config.matrix_state(text)
@@ -314,11 +366,11 @@ def route(author, text, quota_lines, *, lane=False, kinds=("code", "security")):
     if not present:
         raise ValueError("no present family")
     roles, posting = config.read_roles(text), config.read_posting(text)
-    blocked = blocked_families(quota_lines)
-    other = [f for f in ORDER if f in present and f != author and f not in blocked]
-    # Posting is only a tie-break between otherwise valid independent fallbacks.
-    other.sort(key=lambda f: posting.get(f) != "yes")
     def choose(kind):
+        blocked = review_blocked(text, quota_lines, kind + "-review", level)
+        other = [f for f in ORDER if f in present and f != author and f not in blocked]
+        # Posting is only a tie-break between otherwise valid independent fallbacks.
+        other.sort(key=lambda f: posting.get(f) != "yes")
         assigned = roles.get(kind + " review")
         if matrix == "valid" and assigned is None:
             raise ValueError("review role unassigned")
@@ -404,12 +456,15 @@ def main(argv=None):
     parser.add_argument("--base", help="reviewed base ref; missing base cannot route")
     parser.add_argument("--lane", action="store_true", help="coordinator must first pass merge_check.py --lane")
     parser.add_argument("--security-trigger", action="store_true")
+    parser.add_argument("--level", type=int, choices=range(1, 6),
+                        help="the reviewed work's level; picks the model of a level-bound `models` rule")
     args = parser.parse_args(argv)
     if args.lane and args.security_trigger:
         return 2
     try:
         rows = route(author_family(Path.cwd(), base=args.base), config.host_text(), quota_probe.status_lines(),
-                     lane=args.lane, kinds=("code", "security") if args.kind == "both" else (args.kind,))
+                     lane=args.lane, kinds=("code", "security") if args.kind == "both" else (args.kind,),
+                     level=args.level)
         for row in rows:
             print(" ".join(row))
         return 1 if args.security_trigger and any("same-family" in row[2] for row in rows) else 0

@@ -244,6 +244,68 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(route.blocked_families([line("default", 10)], now), set())
 
 
+OWNER_LINE = ("- antigravity: levels 1-5; works on design, video, image-generation, transcription; models "
+              "gemini-4-argon-high then gemini-3.8-flash-high for security-review | gemini-4-hydrogen-high for design, "
+              "video, three-d, image-generation, levels 4-5 | gemini-4-argon-high for implement, levels 4-5 | "
+              "gemini-3.8-flash-high for code-review | gemini-3.8-flash-high for levels 3-4; roles {roles}")
+
+
+def owner(roles="code-review, security-review"):
+    return ("## Assignment matrix\n\n- Consent: yes (2026-11-14)\n- Judge: host\n"
+            "- codex: levels 1-5; roles navigator\n" + OWNER_LINE.format(roles=roles) + "\n")
+
+
+class ModelQuotaTest(unittest.TestCase):
+    """docs/specs/matrix-models.md: Antigravity's quota judged per review kind on the model its rules choose."""
+
+    def agy(self, **pools):
+        now = qp.now()
+        body = "; ".join(f"{name.replace('_', '-')} 5h: {p}% remaining, resets {qp.stamp(now + timedelta(hours=1))}"
+                         for name, p in pools.items())
+        return [f"Quota agy/default: measured {qp.stamp(now)}; {body}"]
+
+    def families(self, lines, text=None):
+        rows = route.route("claude", host() + (text or owner()), lines)
+        return rows[0][0], rows[1][0]
+
+    def test_argon_alone_depleted_keeps_both_reviews(self):
+        self.assertEqual(self.families(self.agy(argon=3, gemini=60)), ("antigravity", "antigravity"))
+        self.assertNotIn("antigravity", route.review_blocked(host() + owner(), self.agy(argon=3, gemini=60), "security-review"))
+
+    def test_gemini_alone_depleted_moves_code_review_only(self):
+        self.assertEqual(self.families(self.agy(argon=60, gemini=3)), ("codex", "antigravity"))
+
+    def test_both_depleted_or_a_marker_drops_it(self):
+        self.assertEqual(self.families(self.agy(argon=3, gemini=3)), ("codex", "codex"))
+        now = qp.now()
+        marker = (f"Quota agy: rate-limit marker {qp.stamp(now - timedelta(minutes=5))}; "
+                  f"out of quota until {qp.stamp(now + timedelta(hours=1))} (advisory)")
+        self.assertEqual(self.families([marker] + self.agy(argon=60, gemini=60)), ("codex", "codex"))
+
+    def test_default_choice_needs_every_pool(self):
+        text = ("## Assignment matrix\n\n- Consent: yes (2026-11-14)\n- Judge: host\n- codex: levels 1-5; roles navigator\n"
+                "- antigravity: levels 1-5; models gemini-4-argon-high for implement; roles code-review, security-review\n")
+        self.assertEqual(self.families(self.agy(argon=60, gemini=60, other=3), text), ("codex", "codex"))
+        self.assertEqual(self.families(self.agy(argon=60, gemini=60), text), ("antigravity", "antigravity"))
+
+    def test_level_bound_rule_needs_the_level(self):
+        text = ("## Assignment matrix\n\n- Consent: yes (2026-11-14)\n- Judge: host\n- codex: levels 1-5; roles navigator\n"
+                "- antigravity: levels 1-5; models gemini-3.8-flash-high for code-review, levels 3-4; roles code-review\n")
+        lines = self.agy(argon=3, gemini=60)
+        self.assertEqual(route.route("claude", host() + text, lines, kinds=("code",), level=3)[0][0], "antigravity")
+        # Without a level the rule cannot match, so the default needs every pool.
+        self.assertEqual(route.route("claude", host() + text, lines, kinds=("code",))[0][0], "codex")
+
+    def test_without_rules_behavior_is_unchanged(self):
+        text = matrix(code="antigravity", security="antigravity", navigator="codex")
+        self.assertEqual(self.families(self.agy(argon=3, gemini=60), text), ("codex", "codex"))
+        self.assertEqual(route.blocked_families(self.agy(argon=3, gemini=60)), {"antigravity"})
+
+    def test_invalid_rule_routes_nothing(self):
+        with self.assertRaises(ValueError):
+            route.route("claude", host() + owner().replace("for code-review", "for reviewing"), [])
+
+
 class LocalEvidenceTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
