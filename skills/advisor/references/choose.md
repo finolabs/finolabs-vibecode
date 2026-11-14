@@ -11,13 +11,14 @@ Use this mode only for rung 3 of `afk` "Decide", while an away lease is live. He
 Every pick must also fit these limits; a pick that does not is skipped, and the next step is tried (advisory, agent judgment; `afk.py check` denies a run whose family is outside the lease's Hosts or is your own):
 
 - Its family is among the lease's recorded Hosts and is not yours. It runs through that family's own command-line program. Never a subagent of your own host; a Claude model served through another host counts as Claude.
-- Its model is the family's frontier tier in `delegate` `references/models.md`, else its strong tier. Nothing below strong.
+- Its model is the family's frontier tier in `delegate` `references/models.md`, else its strong tier. Nothing below strong: on Antigravity that is Argon, or a Claude model when you are not Claude; Flash is the fast tier. `afk.py check` accepts only the model names that table lists as the family's frontier or strong tier (an unknown or fast-tier model denies) and, for a Claude coordinator, denies a Claude model through Antigravity (script); preferring frontier over strong is advisory (agent judgment).
+- Its program is still the one setup recorded for the quota probe. After a Claude Code or Codex update moves the program, `check` answers `unknown` for that family until the user runs `/setup add quota` again (`/setup check` shows `target changed`); treat the family as unavailable and say so in your report (script for the denial; the report is advisory, agent judgment).
 
 With no eligible advisor, start no run: record `advisor unavailable` with no `--by`, and the host chooses, as `afk` `references/decide.md` says. An advisor out of quota, unreachable or failing is `advisor unavailable` with its `--by`; do not try a same-family substitute.
 
 ## Dispatch
 
-One read-only run through this install's `delegate_env.py` wrapper with that family's read-only arguments from the host config, checked first with `afk.py check --coordinator <your own family> --argv-json '<the real argv>'`, naming the family you run in, not the advisor's (without it the script denies the form); act only on Tier 1. Record it in the ledger with `--kind advise`; it counts against the lease's run limit. The brief goes after a literal `--` (Codex, Claude) or as the value of `-p` (Antigravity) and never starts with `-` (script: `afk.py check`).
+One read-only run through this install's `delegate_env.py` wrapper with that family's read-only arguments from the host config, checked first with `afk.py check --coordinator <your own family> --argv-json '<the real argv>'`, naming the family you run in, not the advisor's (without it the script denies the form); act only on Tier 1. Record it in the ledger with `--kind advise`, and check that `ledger.py start` argv with `afk.py check` too before you run it: only a Tier 1 check of a ledger start counts a run against the lease's run limit, so a start run unchecked leaves the run uncounted (script for the count; checking it is advisory, agent judgment). The `delegate_env.py` check reserves an action, not a run, so every dispatch kind counts once, at its ledger start. The brief goes after a literal `--` (Codex, Claude) or as the value of `-p` (Antigravity) and never starts with `-` (script: `afk.py check`).
 
 ## The briefing
 
