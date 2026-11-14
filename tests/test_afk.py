@@ -1158,6 +1158,10 @@ class ProjectScopeTest(AfkBase):
         self.project({'production-targets': ['npx wrangler deploy --env production'], 'decide': ['production']})
         self.check(production)
         self.check(['npx', 'wrangler', 'deploy', '--env', 'uat'])  # the user's non-production list is inherited
+        # A token holding a space never matches two listed words, though the joined text is the same.
+        for argv in (['npx', 'wrangler', 'deploy', '--env production'], ['npx', 'wrangler', 'deploy --env', 'uat']):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code='forbidden')
         for argv in (production + ['--minify'], ['npx', 'wrangler', 'deploy', '--env', 'live'],
                      ['npx', 'wrangler', 'deploy', '--env', 'production-eu']):
             with self.subTest(argv=argv):
@@ -1194,6 +1198,15 @@ class ProjectScopeTest(AfkBase):
         self.cwd = outside
         for argv in (['git', 'tag', 'v1.2.0'], ['npx', 'wrangler', 'deploy', '--env', 'uat']):
             with self.subTest(argv=argv):
+                self.check(argv, tier=3, code='forbidden')
+        # The strict state: a repository whose ancestors cannot be read.
+        locked = self.repo / 'locked'
+        (locked / 'inner').mkdir(parents=True)
+        locked.chmod(0o311)
+        self.addCleanup(locked.chmod, 0o755)
+        self.cwd = locked / 'inner'
+        for argv in (['git', 'tag', 'v1.2.0'], ['npx', 'wrangler', 'deploy', '--env', 'uat']):
+            with self.subTest(strict=argv):
                 self.check(argv, tier=3, code='forbidden')
 
     def test_limits_are_counted_per_project(self):

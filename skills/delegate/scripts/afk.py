@@ -1085,11 +1085,12 @@ def release_command(argv, applied, categories, deploy):
     if categories and not permits(categories, applied):
         return 'forbidden'  # row 3: every applicable category must be decide
     if deploy:
-        joined = ' '.join(argv)
-        production = joined in applied.get(PRODUCTION_TARGETS, []) and applied.get('Production') == 'decide'
+        # Token lists, not joined text: a token holding a space must never equal two listed words.
+        listed = lambda key: [entry.split(' ') for entry in applied.get(key, [])]
+        production = argv in listed(PRODUCTION_TARGETS) and applied.get('Production') == 'decide'
         if not production and any(re.search(r'prod|live', t, re.I) for t in argv):
             return 'forbidden'  # row 2: production or live, unless this repository listed it and decides Production
-        if not production and joined not in applied.get(TARGETS, []):
+        if not production and argv not in listed(TARGETS):
             return 'forbidden'  # row 4
         if not categories:
             return 'allowed'  # row 5
