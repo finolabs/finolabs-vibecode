@@ -24,7 +24,7 @@ ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
 
 
 # An ended or exhausted lease tells the caller, in one fixed line, to stop any loop it started for the lease.
-ENDED_CODES = {'no-lease', 'expired', 'stopped'}
+ENDED_CODES = {'no-lease', 'expired', 'stopped', 'setup-changed'}
 ENDED_LINE = 'The away lease has ended: stop any loop or wakeup you started for it, then report to the user.'
 
 class AfkBase(unittest.TestCase):
@@ -1174,6 +1174,35 @@ class ProjectScopeTest(AfkBase):
         self.cwd = narrow
         self.check(['git', 'status'])
         self.check(['git', 'status'], tier=3, code='limit')
+
+    def test_unidentified_checks_share_one_unknown_entry(self):
+        self.start(SETUP + '- Max actions per hour: 2\n')
+        for name in ('plain-one', 'plain-two'):
+            folder = self.home / name
+            folder.mkdir()
+            self.cwd = folder
+            self.check(paths=['src/example.py'], tier=3, code='unknown')  # no identity: nothing is reserved
+        self.assertEqual(self.lease()['counters'], {})
+        ap = self.load()
+        lease = dict(counters={})
+        applied = {'Max runs': 20, 'Max runtime minutes': 480, 'Max actions per hour': 2, ap.CONTEXT: ap.UNKNOWN}
+        self.assertEqual(ap.project_limit(lease, applied, self.clock)[1], 'unknown')
+        absent = ap.Context('absent', None, 'no-repository', None)
+        self.assertEqual(ap.project_key(absent), 'unknown')
+
+    def test_a_full_project_table_answers_limit_and_keeps_its_entries(self):
+        self.start(SETUP + '- Max actions per hour: 100\n')
+        self.check(['git', 'status'])
+        own = next(iter(self.lease()['counters']))
+        fill = {('%064x' % n): dict(runs=0, actions=1, hour_actions=[self.clock], first=self.clock) for n in range(63)}
+        self.change_lease(lambda v: v['counters'].update(fill))
+        self.cwd = self.other_repo('sixty-fifth')
+        self.check(['git', 'status'], tier=3, code='limit')
+        table = self.lease()['counters']
+        self.assertEqual(len(table), 64)
+        self.assertIn(own, table)
+        self.cwd = self.repo
+        self.check(['git', 'status'])
 
     def test_limit_values_outside_their_range_are_refused(self):
         for value in ({'max-runs': 0}, {'max-runtime-minutes': 1441}, {'max-actions-per-hour': '5'},

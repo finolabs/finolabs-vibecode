@@ -22,7 +22,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and whose effective destination (origin's single pushurl, else its url) is the verified target, and merge origin/main into a work branch of a found repository (the synchronization exemption) are Tier 1 | classify_argv, branch_context |
 | A local branch merge ([--no-ff] [--no-edit], refs/heads/<b> or an unambiguous bare name that exists only as a branch) is Tier 1 only into a named non-default branch with effective Merge=yes | local_merge, local_branch |
 | One identity per check (found, absent or unknown; a rejected linked worktree is unknown) feeds settings, branch and remote reads | project_store.identity, effective, Context |
-| The five project values start strict; a positively absent approval gives user values; an approved valid `autopilot` object whose record carries this checkout's full identity digest and whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding, project_store.bound |
+| The project values (five, plus the three limits) start strict, where the user limits apply; a positively absent approval gives user values; an approved valid `autopilot` object whose record carries this checkout's full identity digest and whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding, project_store.bound |
 | PR merge/create/edit/comment need exactly one `--repo github.com/OWNER/NAME` equal to the verified target; create needs one validated `--head`; implicit targets are Tier 3 | target_check, head_check, project_store.origin_target |
 | Title and body values of PR create/edit/comment, and `git commit -m` messages, are data (one exact `fnl-router` line included): newlines, tabs and a leading `-` pass; other controls, a backtick, `$(` and `$` before a letter, `_` or `{` deny; a review gate marker (`<!--`, optional space, `fnl-`) is `forbidden`; a secret, machine path or sensitive assignment is `unsafe`; one `--body-file` (gh) or `-F` (git commit) must be a regular file of at most 64 KiB inside the check's own checkout, outside the data root, with no link from that root down, whose text passes the control, marker, secret and path screens, read only for that verdict; comments follow `Repository comments` | text_values, text_ok, file_place, body_file, pr_text, commit_text |
 | With Merge yes: `git worktree remove [--] <path>` of a linked worktree of this repository whose HEAD is a full SHA a `log --kind merge --pr <number> --head` entry of this lease recorded, itself refused unless an allowed `gh pr merge` check of this lease pinned that number and head (never forced, the main checkout, the current checkout or a worktree holding this install) and `git branch -d [--] <branch>` (never -D, the current or a default branch) are Tier 1; `git rm [-r] [-q] [--] <paths>` on a work branch classifies each path like a change | worktree_remove, head_commit, merged_heads, branch_delete, tracked_remove |
@@ -247,7 +247,7 @@ def stop(folder):
     print('afk stopped: stop marker written; lease ' + ('removed' if removed else 'already absent'))
 
 
-ENDED = {'no-lease', 'expired', 'stopped'}
+ENDED = {'no-lease', 'expired', 'stopped', 'setup-changed'}
 ENDED_LINE = 'The away lease has ended: stop any loop or wakeup you started for it, then report to the user.'
 
 
@@ -402,7 +402,7 @@ def context_of(applied):
 
 
 def effective(applied, cwd):
-    """The five project-scoped values and the repository context of one check (docs/specs/autopilot.md "Project scope").
+    """The project-scoped values (five, plus the three limits, which keep the user values in the strict state) and the repository context of one check (docs/specs/autopilot.md "Project scope").
 
     Starts from the strict vector and leaves it only once each prerequisite holds: a validated identity
     (`project_store.identity`), then either a positively absent approval (user values, no extra roots) or approved
