@@ -82,7 +82,7 @@ jobs:
                     ['skills/delegate/scripts/heavy_run.py', 'skills/checks/scripts/heavy_run.py'],
                     ['skills/delegate/scripts/pause.py', 'skills/checks/scripts/pause.py'],
                     ['scripts/delegate_env.py', 'skills/delegate/scripts/delegate_env.py'],
-                    ['scripts/away_lease.py', 'skills/delegate/scripts/away_lease.py'],
+                    ['scripts/away_lease.py', 'skills/delegate/scripts/away_lease.py', 'skills/review-gate/scripts/away_lease.py'],
                     ['scripts/log_scan.py', 'skills/delegate/scripts/log_scan.py'],
                     ['scripts/secret_patterns.py', 'skills/delegate/scripts/secret_patterns.py', 'skills/handoff/scripts/secret_patterns.py'],
                     ['scripts/brief_check.py', 'skills/handoff/scripts/brief_check.py'],

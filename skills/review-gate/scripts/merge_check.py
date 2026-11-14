@@ -17,6 +17,8 @@ Usage:
   merge_check.py <number> --repo owner/name          the merge check
   merge_check.py <number> --repo owner/name --lane   whether the low-risk lane applies
   merge_check.py <number> --repo owner/name --independent  require other-family reviews
+  merge_check.py <number> --repo owner/name --independent --fallback-family <family>
+                                                       same-family reviews while away, no other family reachable
 
 Comment bodies are data: only their first line is read, and only as a marker.
 The pull request body is data too: only whole lines are matched as a marker.
@@ -44,6 +46,18 @@ route evidence, not proof that the assigned agent actually posted: following the
 route and associating each posted marker with that run remain agent judgment,
 advisory. This flag does not establish trusted authors, local test results or
 Tier 3 path eligibility; those are the afk caller's separate gates.
+
+With --fallback-family <family> as well, current-head markers from the author's
+own family count only when all of these hold (docs/specs/afk-per-project.md D):
+a live away lease; <family> is the author's family; every other present family
+has positive evidence of being out (a reading under 8 hours old for every
+configured install, with every pool below the routing floor, or a live rate-limit
+marker; no reading or a partial one is no evidence);
+the router trigger is not security, permission or privacy and no enforcer script
+or instruction file changed; and each counted marker's second line starts with
+the exact fallback reviewer line. The flag runs these checks on both reviews
+whatever routing would pick now. Without the flag, a counted marker carrying a
+fallback reviewer line blocks. Anything unknown refuses.
 """
 
 import argparse
@@ -52,6 +66,8 @@ import json
 import re
 import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 
 MARKER = re.compile(
     r"<!-- fnl-review kind=(code|security) head=([0-9a-f]{40}) verdict=(APPROVE|REWORK)( lane=yes)? -->"
@@ -73,6 +89,22 @@ ADOPTION_TOKEN = re.compile(r"(?<![\w-])(?:fnl-)?review-gate(?![\w-])")  # the o
 ADOPTION_CAP = 256 * 1024  # maximum size in bytes of one adoption file
 SHA = re.compile(r"[0-9a-f]{40}")
 
+# Same-family fallback (docs/specs/afk-per-project.md D). ENFORCERS is the list of `afk.py` in `delegate`; a test
+# keeps the two equal, since each skill folder stands alone.
+FALLBACK_TRIGGERS = ("security", "permission", "privacy")
+ENFORCERS = {'afk.py', 'data_root.py', 'parallel_slots.py', 'secret_patterns.py', 'merge_check.py',
+             'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
+             'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py', 'heavy_run.py', 'delegate_env.py',
+             'auto_gate.py', 'mode.py', 'judge.py', 'log_scan.py', 'route_task.py', 'brief_check.py', 'assignments.py',
+             'away_lease.py', 'away_gate_hook.py', 'project_store.py', 'project_progress.py'}
+INSTRUCTION_FILES = {'claude.md', 'agents.md', 'skill.md'}
+FLOOR = 10  # percent remaining below which a pool is out, as review_route.blocked_families reads it
+FRESH = 8 * 3600
+
+
+def fallback_line(family):
+    return f"Reviewer: {family} (same family as the author; no other family reachable)"
+
 TIMEOUT = 60  # seconds for each gh call
 
 # The low-risk lane: files a pull request may change and still take one review
@@ -93,7 +125,7 @@ def login(node):
 
 
 def verdicts(pr, can_write):
-    """Latest counted verdict per kind for the head: {kind: (verdict, createdAt, lane)}."""
+    """Latest counted verdict per kind for the head: {kind: (verdict, createdAt, lane, second line)}."""
     head = pr["headRefOid"]
     latest = {}
     for comment in pr["comments"]:
@@ -108,7 +140,8 @@ def verdicts(pr, can_write):
         current = latest.get(kind)
         # On a tie the REWORK wins, so the check never passes on ordering luck.
         if current is None or created > current[1] or (created == current[1] and verdict == "REWORK"):
-            latest[kind] = (verdict, created, bool(lane))
+            second = ((comment.get("body") or "").split("\n") + ["", ""])[1].rstrip("\r")
+            latest[kind] = (verdict, created, bool(lane), second)
     return latest
 
 
@@ -258,6 +291,83 @@ def independent_families(pr):
         return None
 
 
+def out_families(lines, current=None, configured=None):
+    """Families with positive evidence of being out: a live rate-limit marker, or a fresh reading for every
+    configured install (`configured`: {agent: labels}, from the canonical quota config) with every pool below the
+    floor and a reset ahead. A missing, stale, partial or unreadable reading is no evidence."""
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import quota_probe
+    current = current or datetime.now(timezone.utc)
+    if configured is None:
+        configured = {agent: set(entry["configs"]) for agent, entry in quota_probe.canonical_config().items()}
+    out, installs = set(), {}
+    for line in lines:
+        marker = re.fullmatch(r"Quota (claude|codex|agy): rate-limit marker ([^;]+); out of quota until ([^ ]+) \(advisory\)", line)
+        if marker:
+            if quota_probe.timestamp(marker[2]) <= current < quota_probe.timestamp(marker[3]):
+                out.add("antigravity" if marker[1] == "agy" else marker[1])
+            continue
+        match = re.fullmatch(r"Quota (claude|codex|agy)/([^:]+): measured ([^;]+); (.+)", line)
+        if not match:
+            continue
+        age = (current - quota_probe.timestamp(match[3])).total_seconds()
+        pools = [re.fullmatch(r"([a-zA-Z0-9_-]+) ([^:;]+): (\d+)% remaining, resets ([^ ;]+)", part)
+                 for part in match[4].split("; ")]
+        depleted = (0 <= age <= FRESH and all(pools)
+                    and all(int(p[3]) < FLOOR and quota_probe.timestamp(p[4]) > current for p in pools))
+        installs.setdefault(match[1], {})[match[2]] = installs.get(match[1], {}).get(match[2], True) and depleted
+    for agent, labels in installs.items():
+        expected = configured.get(agent)
+        if expected and set(labels) >= set(expected) and all(labels[label] for label in expected):
+            out.add("antigravity" if agent == "agy" else agent)
+    return out
+
+
+def fallback(pr, family, families, files, verdicts_found):
+    """(granted, detail) for the same-family fallback; every unknown refuses and the detail never echoes text."""
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import away_lease
+        import quota_probe
+        import review_config
+        if away_lease.live_lease(time.time()) is None:
+            return False, "no live away lease"
+        if not isinstance(families, dict) or families.get("author") != family:
+            return False, f"{family} is not the pull request author's family"
+        present = set(review_config.present_families(review_config.host_text()))
+        if family not in present:
+            return False, f"{family} is not a present family"
+        others = present - {family}
+        reachable = sorted(others - out_families(quota_probe.status_lines()))
+        if reachable:
+            return False, f"no evidence that {', '.join(reachable)} is out"
+        marked, detail = router_marker(pr.get("body"))
+        trigger = detail.rsplit("trigger=", 1)[-1] if marked else None
+        if trigger is None or trigger in FALLBACK_TRIGGERS:
+            return False, "router trigger is missing or needs the user"
+        listed = files()
+        if not isinstance(listed, list) or not listed or any(
+                not isinstance(entry, dict) or not isinstance(entry.get("filename"), str) or not entry["filename"]
+                for entry in listed):
+            return False, "changed files could not be read"
+        names = [entry["filename"] for entry in listed] + [str(entry.get("previous_filename") or "") for entry in listed]
+        for name in names:
+            base = name.rsplit("/", 1)[-1].casefold()
+            if base in ENFORCERS or base in INSTRUCTION_FILES:
+                return False, "an enforcer script or instruction file changed"
+        expected = fallback_line(family)
+        for kind in ("code", "security"):
+            found = verdicts_found.get(kind)
+            second = found[3] if found and len(found) > 3 else ""
+            if not (second == expected or second.startswith(expected + " ")):
+                return False, f"{kind} marker lacks the fallback reviewer line"
+        return True, f"no other family reachable ({', '.join(sorted(others)) or 'none present'})"
+    except (ImportError, OSError, ValueError, KeyError, TypeError, AttributeError, Unknown):
+        return False, "fallback evidence cannot be read"
+
+
 GITHUB_REMOTE = re.compile(
     r"(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)"
     r"([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/([A-Za-z0-9._-]{1,100}?)(?:\.git)?/?", re.IGNORECASE)
@@ -320,7 +430,7 @@ def local_receipt(head, repo):
 
 
 def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, families=None, local_receipt=None,
-             repo=None):
+             repo=None, fallback_family=None, changed_files=None):
     """Return (ok, lines). `can_write(login)` answers write access; `lane_ok()` the lane;
     `adopted` whether the base commit adopted the gate, which makes the router marker required.
     The marker is checked beside the review markers and never relaxes them.
@@ -359,8 +469,25 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
             ok = False
             lines.append("BLOCK independent reviews: author or reviewing family cannot be determined")
         else:
+            granted = False
+            if fallback_family is not None:
+                # A fallback request treats both reviews as same-family, whatever routing would pick now.
+                same = ["code", "security"]
+                granted, detail = fallback(pr, fallback_family, families, changed_files or (lambda: []), found)
+                lines.append(f"{'ok   ' if granted else 'BLOCK'} same-family review: {detail}")
+                ok = ok and granted
+            else:
+                same = [kind for kind in ("code", "security") if families[kind] == families["author"]]
+                for kind in ("code", "security"):
+                    second = (found.get(kind) or ("", "", None, ""))[3]
+                    if any(second == fallback_line(f) or second.startswith(fallback_line(f) + " ")
+                           for f in ("claude", "codex", "antigravity")):
+                        ok = False
+                        lines.append(f"BLOCK independent {kind} review: a same-family fallback marker needs --fallback-family")
             for kind in ("code", "security"):
-                if families[kind] == families["author"]:
+                if kind in same and granted:
+                    lines.append(f"ok    independent {kind} review: same family, allowed by the fallback")
+                elif kind in same:
                     ok = False
                     lines.append(f"BLOCK independent {kind} review: same family as the pull request author")
                 else:
@@ -489,9 +616,14 @@ def main(argv=None):
     parser.add_argument("--repo", required=True, help="owner/name of the repository the pull request belongs to")
     parser.add_argument("--lane", action="store_true", help="only report whether the low-risk lane applies")
     parser.add_argument("--independent", action="store_true", help="require both reviewing families to differ from the author")
+    parser.add_argument("--fallback-family", choices=("claude", "codex", "antigravity"),
+                        help="with --independent, during an away lease: accept the author's own family when no other is reachable")
     args = parser.parse_args(argv)
     if args.lane and args.independent:
         print("UNKNOWN --lane cannot verify independent merge reviews")
+        return 2
+    if args.fallback_family and not args.independent:
+        print("UNKNOWN --fallback-family needs --independent")
         return 2
     if not args.number.isdigit() or not re.fullmatch(r"[\w.-]+/[\w.-]+", args.repo):
         print("UNKNOWN expected a pull request number and --repo owner/name")
@@ -528,9 +660,16 @@ def main(argv=None):
             raise Unknown("the pull request body could not be read")
         adopted = adopted_at(args.repo, pr.get("baseRefOid"))
         families = independent_families(pr) if args.independent else None
+        files_cache = []
+
+        def changed_files():
+            if not files_cache:
+                files_cache.append(compare(args.repo, pr["baseRefOid"], pr["headRefOid"])[0])
+            return files_cache[0]
+
         ok, lines = evaluate(pr, can_write, lane_ok, adopted=adopted,
                              independent=args.independent, families=families, local_receipt=local_receipt,
-                             repo=args.repo)
+                             repo=args.repo, fallback_family=args.fallback_family, changed_files=changed_files)
     except (Unknown, ValueError, KeyError, TypeError, AttributeError) as error:
         print(f"UNKNOWN {error}")
         return 2

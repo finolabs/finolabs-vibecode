@@ -2158,6 +2158,19 @@ class AwayFlowTest(AfkBase):
         self.start(SETUP + '- Max actions per hour: 1000\n')  # a new lease does not inherit the old pin
         self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)
 
+    def test_a_review_fallback_entry_records_the_head_and_pins_nothing(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        head = 'e' * 40
+        self.assertEqual(self.invoke('log', '--kind', 'review-fallback', '--pr', '7', '--head', head)[0], 0)
+        for flags in (('--pr', '7'), ('--head', head), ('--pr', '7', '--head', 'E' * 40), ('--pr', '07', '--head', head)):
+            with self.subTest(flags=flags):
+                self.assertEqual(self.invoke('log', '--kind', 'review-fallback', *flags)[0], 3)
+        # It is not a merge: the merge entry still needs its own allowed merge check.
+        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)
+        merge = ['python3', '-I', str(ROOT / 'skills/review-gate/scripts/merge_check.py'), '7', '--repo', 'example/demo',
+                 '--independent', '--fallback-family', 'claude']
+        self.check(merge)
+
     def worktree(self):
         """A main checkout on main and a registered linked worktree under its .claude/worktrees on branch work."""
         repo, git = self.git_repo('flow')

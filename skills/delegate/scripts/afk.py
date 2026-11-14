@@ -32,7 +32,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
 | Only this install's ledger/record/heavy_run/merge_check/post_review script paths, with isolated Python, are allowed wrappers; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
-| Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge kind only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
+| Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge and review-fallback kinds only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
 | Trusted PR authors, full independent review/check/local-test gate, changed paths (including staged commit paths), quota readings and actually calling check before execution remain caller obligations in this slice | agent judgment, advisory; merge_check --independent enforces its review condition |
 
 A Tier 1 answer is a classification, not proof that a PR passed the full merge
@@ -101,7 +101,7 @@ TABLE_SOURCES = ('jev', 'host-small')
 NUMBERS = {'Lease hours': (1, 24), 'Max runs': (1, 10000), 'Max runtime minutes': (1, 1440),
            'Max actions per hour': (1, 10000), 'Quota floor percent': (0, 100)}
 KINDS = {'start': 1, 'stop': 1, 'action': 1, 'decision': 2, 'parked': 3,
-         'run-start': 1, 'run-finish': 1, 'merge': 1, 'error': 3}
+         'run-start': 1, 'run-finish': 1, 'merge': 1, 'review-fallback': 1, 'error': 3}
 ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,39}')
 SHA = re.compile(r'[0-9a-f]{40}')
 BRANCH = re.compile(r'(?:refs/heads/)?[A-Za-z0-9][A-Za-z0-9._/-]{0,160}')
@@ -1753,10 +1753,13 @@ def log(folder, args):
             raise ValueError('afk pull request id is invalid')
         fields['pr'] = int(args.pr)
     if args.head is not None:
-        # The merged pull request's full head SHA: the one worktree `git worktree remove` may then take away.
-        if args.kind != 'merge' or not SHA.fullmatch(args.head) or args.pr is None:
-            raise ValueError('afk head belongs to the merge kind with its --pr and is a full lowercase SHA')
+        # The merged pull request's full head SHA: the one worktree `git worktree remove` may then take away. A
+        # review-fallback line records the head whose same-family reviews counted, for the user's return; it pins nothing.
+        if args.kind not in ('merge', 'review-fallback') or not SHA.fullmatch(args.head) or args.pr is None:
+            raise ValueError('afk head belongs to the merge or review-fallback kind with its --pr and is a full lowercase SHA')
         fields['head'] = args.head
+    if args.kind == 'review-fallback' and (args.pr is None or args.head is None):
+        raise ValueError('afk review-fallback needs --pr and --head')
     if args.kind == 'merge' and args.head is not None and (fields['pr'], args.head) not in merge_pins(folder, current):
         raise ValueError('afk merge head matches no allowed `gh pr merge` check of this lease')
     note = safe_note(args.note or '')
