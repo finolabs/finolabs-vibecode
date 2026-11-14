@@ -1,6 +1,6 @@
 # Release 0.2.6: scope
 
-Status: in progress; the release pull request moves the changelog under 0.2.6; pull requests 270 and 272 merged before it; a real upgrade from 0.2.5 on a user's machine remains unverified.
+Status: released; tagged v0.2.6 on 2026-11-14; a real upgrade from 0.2.5 on a user's machine remains unverified.
 
 ## What shipped
 

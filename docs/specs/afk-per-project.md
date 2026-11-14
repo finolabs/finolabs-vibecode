@@ -1,8 +1,8 @@
 # afk per project: limits per repository, an evaluation table before the deciders, no stops beyond setup
 
-Status: accepted; owner decisions recorded and draft accepted on 14/11/2026; for 0.2.7, built in the six pull requests listed under "Order of pull requests"; no code has landed yet.
+Status: implemented; in 0.3.0 (PRs 277, 278, 280, 281, 282, 283, 286, 287, 288, 289, 290; README diagram 284); live-host behaviour remains unverified.
 
-This document changes [autopilot.md](autopilot.md) ("Project scope", "Lease, state and what enforces what") and [away-decisions.md](away-decisions.md) ("The ladder", "Where it must stop"). Where they disagree, this document wins for 0.2.7 and the older text points here.
+This document changes [autopilot.md](autopilot.md) ("Project scope", "Lease, state and what enforces what") and [away-decisions.md](away-decisions.md) ("The ladder", "Where it must stop"). Where they disagree, this document wins from 0.3.0 and the older text points here.
 
 ## Owner decisions (14/11/2026)
 
@@ -94,7 +94,7 @@ Enforcer: `merge_check.py` for conditions 1 to 6 (script); trying the other fami
 
 ### F. Test commands and top-level files per project (pull request 7, after the UAT)
 
-The afk UAT of 14/11/2026 (`.finolabs/notes/afk-e2e-2026-11-14.md`, U1 and U2) found two stoppers. No Tier 1 form ran a repository's own tests, while the merge gate needs local tests of the touched modules green. And no top-level file other than `README.md`, `CHANGELOG.md` and `CONTRIBUTING.md` was editable, so the task list (`TASKS.md`) the agents work from parked. Owner decision (14/11/2026, "Fix first", relayed by the coordinator): fix both before 0.2.7.
+The afk UAT of 14/11/2026 (`.finolabs/notes/afk-e2e-2026-11-14.md`, U1 and U2) found two stoppers. No Tier 1 form ran a repository's own tests, while the merge gate needs local tests of the touched modules green. And no top-level file other than `README.md`, `CHANGELOG.md` and `CONTRIBUTING.md` was editable, so the task list (`TASKS.md`) the agents work from parked. Owner decision (14/11/2026, "Fix first", relayed by the coordinator): fix both before 0.2.7 (the release shipped as 0.3.0).
 
 Since decision 10 (15/11/2026) both keys, like `production-targets` and `release-targets`, have an account default (`Test commands` and `Top-level files` in `## afk`, entries joined by `; `, validated with the same grammar; an invalid line fails `start`) that a repository's own list replaces whole. Pull request 7 shipped them project only.
 

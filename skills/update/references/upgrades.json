@@ -97,8 +97,7 @@
         {
           "id": "0.2.4/checks-rename",
           "kind": "rename",
-          "text": "The verification skill is now called checks, and /verification keeps working as an alias until 0.3.0.",
-          "until": "0.3.0"
+          "text": "The verification skill is now called checks, and /verification keeps working as an alias until a later release removes it."
         },
         {
           "id": "0.2.4/checks-setup",
@@ -284,6 +283,87 @@
           "id": "0.2.6/afk-worktree-cleanup",
           "kind": "info",
           "text": "With Merge allowed, an install read from the main checkout may remove the worktree of a pull request the lease merged; never the main or current checkout, a forced removal or the install's own."
+        }
+      ]
+    },
+    {
+      "version": "0.3.0",
+      "items": [
+        {
+          "id": "0.3.0/afk-lease-restart",
+          "kind": "info",
+          "text": "Breaking for away loops: afk limits are now counted per repository, so a lease started before the update reads as invalid; start it again with /afk."
+        },
+        {
+          "id": "0.3.0/afk-project-rules",
+          "kind": "setup",
+          "text": "A repository can now set its own afk categories, deploy targets, production deploys and limits; run /setup add afk inside each repository that needs rules different from yours.",
+          "setup": "/setup add afk"
+        },
+        {
+          "id": "0.3.0/afk-table",
+          "kind": "info",
+          "text": "Breaking for away flows: the away-decision judge site is gone; afk decisions take an evaluation table (Jev or the small host model) as data, and the ledger logs rung table, not jev."
+        },
+        {
+          "id": "0.3.0/afk-release-repo",
+          "kind": "info",
+          "text": "Under a lease, gh release create must name --repo github.com/OWNER/NAME equal to the verified repository, like a merge."
+        },
+        {
+          "id": "0.3.0/same-family-fallback",
+          "kind": "info",
+          "text": "Under a lease, the author's own family may review only when every other family shows out of quota; merge_check.py --independent --fallback-family checks that and refuses on anything unknown."
+        },
+        {
+          "id": "0.3.0/matrix-models",
+          "kind": "setup",
+          "text": "An agent line in the assignment matrix may now choose a model per kind of work and level (models rules, with a then fallback when a pool is out of quota); add rules only if you want them.",
+          "setup": "/setup add delegation"
+        },
+        {
+          "id": "0.3.0/afk-new-branch",
+          "kind": "info",
+          "text": "Under a lease, git switch -c <branch> or git checkout -b <branch> with no start point creates an own work branch when Push and pull requests or Merge is yes; never a default-branch name."
+        },
+        {
+          "id": "0.3.0/afk-test-commands",
+          "kind": "setup",
+          "text": "Under a lease, tests run only with a listed test command and a top-level file such as TASKS.md is edited only when listed; run /setup add afk to list them.",
+          "setup": "/setup add afk"
+        },
+        {
+          "id": "0.3.0/afk-rules-view",
+          "kind": "info",
+          "text": "/afk start adds a This folder line and afk.py effective a rules field with the rules check applies in that repository; re-running /setup add afk offers your saved values."
+        },
+        {
+          "id": "0.3.0/advisor-tier",
+          "kind": "info",
+          "text": "Under a lease the advisor runs only on a frontier or strong model listed in delegate references/models.md; a fast-tier or unknown model is denied until the table lists it."
+        },
+        {
+          "id": "0.3.0/advisor-repin",
+          "kind": "setup",
+          "text": "When an update moves a host program, the quota probe and the afk advisor treat that family as unavailable; run /setup add quota to confirm the program again.",
+          "setup": "/setup add quota"
+        },
+        {
+          "id": "0.3.0/afk-release-targets",
+          "kind": "setup",
+          "text": "Breaking for away flows: git tag, gh release, npm publish and pnpm publish run under a lease only when the exact command is listed; run /setup add afk to list release targets.",
+          "setup": "/setup add afk"
+        },
+        {
+          "id": "0.3.0/afk-account-lists",
+          "kind": "setup",
+          "text": "Production, release and test command lists and top-level files in ## afk are now every repository's default; a repository's own list replaces it whole. A changed list ends a live lease.",
+          "setup": "/setup add afk"
+        },
+        {
+          "id": "0.3.0/two-model-fallback",
+          "kind": "info",
+          "text": "The same-family fallback may merge a change to an enforcer script or instruction file when each review kind has approvals from two different models, each marker naming model=<name>."
         }
       ]
     }

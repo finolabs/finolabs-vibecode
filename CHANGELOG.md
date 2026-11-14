@@ -4,19 +4,21 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-15
+
 ### Added
 
 - Models per kind of work in the assignment matrix: an agent line may carry `models <rule> | <rule> ...`, each `<model>[ then <fallback>] for <kind, type or levels>`, read in order with the first match winning (a rule naming no kind applies only to implementation). `route_pick.py pick` gains `--kind` (implement, code-review, security-review, navigator, advisor), makes `--type` optional and prints the model chosen for each dispatch, with `quota-fallback` when an Antigravity rule's `then` replaced a model whose quota pool (argon, gemini, claude-gpt, other) is out; an agent whose chosen model is out is dropped. `review_route.py` judges Antigravity's quota per review kind on the model its rules pick (`--level` for level-bound rules), `matrix_setup.py show` lists the rules, and `/setup add delegation` asks for them. Any malformed rule makes the whole matrix invalid.
 - `merge_check.py --independent --fallback-family <family>` lets an away lease merge on reviews by the author's own family when no other family is reachable: it needs a live lease, the author's family, positive out-of-quota evidence (a fresh reading with every pool below the floor, or a live rate-limit marker) for every other present family, a router trigger other than security, permission or privacy, no changed enforcer script or instruction file, and the exact fallback reviewer line on each counted marker. `afk.py log --kind review-fallback --pr <n> --head <sha>` records it for the user's return.
 - `ledger.py finish --retro` marks a record written after the fact.
-- `/setup add afk` inside a repository can list its own `test-commands` (exact commands, never starting with `git`, `gh` or `rm`) and `top-level-files` (exact top-level file names such as `TASKS.md`). During a lease, `afk.py check` answers Tier 1 for a listed test command, bare or through `heavy_run.py run --`, and treats a listed file as a known path, in that repository only; the user, strict and no-repository states list none. Before, a lease could not run a repository's tests, which its own merge gate needs, or tick its task list.
+- `/setup add afk` inside a repository can list its own `test-commands` (exact commands, never starting with `git`, `gh` or `rm`) and `top-level-files` (exact top-level file names such as `TASKS.md`). During a lease, `afk.py check` answers Tier 1 for a listed test command, bare or through `heavy_run.py run --`, and treats a listed file as a known path, in that repository only; the strict and no-repository states list none, and a repository without its own lists uses the account defaults in `## afk` (see the account-default lists below). Before, a lease could not run a repository's tests, which its own merge gate needs, or tick its task list.
 - `afk.py start` adds a `This folder` line with the rules of the repository it ran in (limits, decided categories, deploy targets, test commands, top-level files), and `afk.py effective` adds them as `rules`; before, both showed only the account values, so a user saw rules that did not apply in the repository. Re-running `/setup add afk` now offers the saved limits and table answers instead of the defaults.
 - `afk.py check` allows creating a new own work branch during a lease: `git switch -c <branch>` or `git checkout -b <branch>` (no start point) is Tier 1 in a found repository with Push and pull requests or Merge yes, never with a default-branch name; before, no branch could be created and the own-branch flow parked at its first step.
-
 - afk release targets: a tag, GitHub release or publish (`git tag`, `gh release`, `npm publish`, `pnpm publish`) runs under a lease only when the exact command is listed (`Release targets` in `## afk`, or a repository's own `release-targets`), in addition to `Tags and releases` or `Publishing` at `decide`; `/setup add afk` asks for the list in its own question with the commands read back in the preview. Reading tags and releases (`git tag -l`, `gh release view` or `list`) needs no entry.
 
 ### Changed
 
+- The README's afk mechanism diagram shows the whole away flow on one page, and the away decision diagram shows the evaluation table instead of Jev at 0.8.
 - Breaking: afk tags, releases and publishing that were Tier 1 with their category at `decide` alone now park until the exact command is listed as a release target (owner decision, 15/11/2026).
 - afk command and file lists load like environment variables (owner decision, 15/11/2026): `Production targets`, `Test commands`, `Top-level files` and `Release targets` in `## afk` (`afk_setup.py preview --production-target`, `--test-command`, `--top-level-file`, `--release-target`) are the default for every repository, and a repository's own list replaces the whole list there. The strict and no-repository states use none, and an invalid `## afk` list line fails `start`. Before, the three older lists were read only from a repository's settings. Production stays decidable only in a repository's own `decide` list.
 - The same-family review fallback (`merge_check.py --fallback-family`) may now merge a pull request that changes an enforcer script or instruction file when each kind of review has approvals at the head from two different models of the author's family, each marker naming its model as ` model=<name>` right after the fallback reviewer line; one model, the same model twice, a REWORK from either, or a missing model name still refuses (owner decision, 15/11/2026). Every other fallback condition stays.
@@ -613,7 +615,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.6...v0.3.0
 [0.2.6]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.3...v0.2.4

@@ -1,6 +1,6 @@
 # Assignment matrix: one section for levels, work types and roles (draft, scoped to release 0.2.3)
 
-> 0.2.7 (owner decision, 14/11/2026): [matrix-models.md](matrix-models.md) adds models per kind of work; where they disagree, it wins.
+> 0.3.0 (owner decision, 14/11/2026): [matrix-models.md](matrix-models.md) adds models per kind of work; where they disagree, it wins.
 
 Status: implemented; in release 0.2.3.
 
@@ -84,8 +84,8 @@ answer and makes deviation visible, without turning a preference into a block.
   for a new yes, and a matrix without a valid `Consent:` line is treated as absent for writing and as invalid for roles
   and judge. The judge call's opt-in in `CLAUDE.md` (fourth scoped exception) and `PRIVACY.md` name only the matrix's
   `Judge: jev` with its own valid `Consent: yes (<date>)` line; an absent, invalid or unconsented matrix means no call.
-- `## Agent levels` stays readable through release 0.2.x and is removed in 0.3.0, the same schedule as the old global
-  ledger lines; `## Agent roles` is no longer read from 0.2.6, and `/setup check` reports one without a matrix as
+- `## Agent levels` stays readable while no matrix exists until a later release removes it (the old global ledger
+  lines were removed in 0.2.5); `## Agent roles` is no longer read from 0.2.6, and `/setup check` reports one without a matrix as
   `roles: missing` with the fix `/setup add delegation`. `matrix_setup.py migrate` previews the matrix built from the old sections and, after a yes, writes
   it with a backup and removes the old two in one atomic write. The mapping is explicit, not "lossless by backup":
   each `- code review|security review|navigator: <agent>` line becomes `roles code-review|security-review|navigator` on that agent's line (an agent

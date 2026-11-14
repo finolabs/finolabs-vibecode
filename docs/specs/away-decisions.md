@@ -1,6 +1,6 @@
 # Away decisions: who decides while the user is away (draft, scoped to release 0.2.3)
 
-> 0.2.7 (owner decisions, 14/11/2026): [afk-per-project.md](afk-per-project.md) changes this document; where they disagree, it wins.
+> 0.3.0 (owner decisions, 14/11/2026): [afk-per-project.md](afk-per-project.md) changes this document; where they disagree, it wins.
 
 Status: implemented; in release 0.2.3.
 

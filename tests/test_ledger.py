@@ -841,7 +841,7 @@ class AwayLedgerTest(unittest.TestCase):
             self.assertNotIn(word, output)  # topic labels stay in the ledger file
 
     def test_away_section_reads_a_legacy_jev_probability(self):
-        # Leases before 0.2.7 logged the top probability under rung `jev`; the table spread still counts it.
+        # Leases before 0.3.0 logged the top probability under rung `jev`; the table spread still counts it.
         legacy = {"event": "decision", "id": "q20261110-020000-eeee", "ts": "2026-11-10T02:00:00+00:00",
                   "project": "demo", "lease_start": 9000.0, "rung": "jev", "settled": "no", "by": "jev",
                   "probability": 0.5, "precedents": 0, "topic": "legacy"}
