@@ -120,6 +120,8 @@ agent for levels, types, model and roles in one pass, shows the preview and writ
 
 ## Routing query
 
+Models per kind of work (the `models` field, `route_pick.py pick --kind`, and quota judged per Antigravity model pool) are specified in `docs/specs/matrix-models.md` (pull request 279), which wins where the two disagree.
+
 `route_pick.py pick --type <type> --level <1-5> [--author <family>] [--coordinator <family>]` in `skills/delegate/scripts/` prints the ordered
 candidates for a task, at most five lines, from the matrix and local state only: an agent whose levels do not contain the
 level is dropped, an agent the host config marks unreachable from this coordinator is dropped, one whose cached quota

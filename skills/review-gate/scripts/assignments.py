@@ -10,6 +10,8 @@ import re
 HEADING = '## Assignment matrix'
 TYPES = ('frontend', 'design', 'video', 'three-d', 'image-generation', 'transcription')
 ROLES = ('code-review', 'security-review', 'navigator', 'advisor')
+# Kinds of work a `models` rule can name: the role names plus `implement` (docs/specs/matrix-models.md).
+KINDS = ('implement',) + ROLES
 NAME = re.compile(r'claude|codex|antigravity|zcode|claude[a-z0-9]{1,24}|zcode[a-z0-9]{1,24}')
 MODEL = re.compile(r'[A-Za-z0-9][A-Za-z0-9.-]{0,63}')
 DATE = re.compile(r'\d{4}-\d{2}-\d{2}')
@@ -19,6 +21,7 @@ WORD = re.compile(r'[a-z][a-z0-9-]{0,31}')
 MAX_AGENTS = 8
 MAX_TYPES = 4
 MAX_LINES = 200
+MAX_RULES = 8
 
 
 def real_date(text):
@@ -48,6 +51,28 @@ def headings(text):
     return found, fence is not None
 
 
+def selector_ok(selector):
+    if selector in KINDS or selector in TYPES:
+        return True
+    match = LEVELS.fullmatch(selector) if isinstance(selector, str) else None
+    return bool(match) and int(match[1]) <= int(match[2])
+
+
+def check_rules(rules):
+    if not isinstance(rules, list) or len(rules) > MAX_RULES:
+        raise ValueError
+    for rule in rules:
+        if not isinstance(rule, dict) or set(rule) != {'model', 'then', 'for'}:
+            raise ValueError
+        if not isinstance(rule['model'], str) or not MODEL.fullmatch(rule['model']):
+            raise ValueError
+        if rule['then'] is not None and (not isinstance(rule['then'], str) or not MODEL.fullmatch(rule['then'])):
+            raise ValueError
+        selectors = rule['for']
+        if not isinstance(selectors, list) or not selectors or any(not selector_ok(s) for s in selectors):
+            raise ValueError
+
+
 def check_values(values):
     if not isinstance(values, dict) or set(values) != {'consent', 'date', 'judge', 'agents'}:
         raise ValueError
@@ -65,8 +90,9 @@ def check_values(values):
     for name, entry in agents.items():
         if not isinstance(name, str) or not NAME.fullmatch(name):
             raise ValueError
-        if not isinstance(entry, dict) or set(entry) != {'levels', 'works', 'model', 'roles'}:
+        if not isinstance(entry, dict) or set(entry) - {'models'} != {'levels', 'works', 'model', 'roles'}:
             raise ValueError
+        check_rules(entry.get('models', []))
         levels = entry['levels']
         if (not isinstance(levels, (list, tuple)) or len(levels) != 2 or any(type(n) is not int for n in levels)
                 or not 1 <= levels[0] <= levels[1] <= 5):
@@ -91,6 +117,11 @@ def validate(values):
         raise ValueError('values') from None
 
 
+def render_rule(rule):
+    head = rule['model'] + (' then ' + rule['then'] if rule['then'] else '')
+    return head + ' for ' + ', '.join(rule['for'])
+
+
 def render(values):
     validate(values)
     first = f"- Consent: yes ({values['date']})" if values['consent'] == 'yes' else '- Consent: no'
@@ -102,6 +133,8 @@ def render(values):
             parts.append('works on ' + ', '.join(entry['works']))
         if entry['model'] is not None:
             parts.append('model ' + entry['model'])
+        if entry.get('models'):
+            parts.append('models ' + ' | '.join(render_rule(rule) for rule in entry['models']))
         if entry['roles']:
             parts.append('roles ' + ', '.join(entry['roles']))
         lines.append(f'- {name}: ' + '; '.join(parts))
@@ -123,12 +156,84 @@ class Matrix:
     def to_values(self):
         return {'consent': self.consent, 'date': self.date, 'judge': self.judge,
                 'agents': {name: {'levels': tuple(entry['levels']), 'works': list(entry['works']),
-                                  'model': entry['model'], 'roles': list(entry['roles'])}
+                                  'model': entry['model'], 'models': [dict(rule, **{'for': list(rule['for'])})
+                                                                      for rule in entry.get('models', [])],
+                                  'roles': list(entry['roles'])}
                            for name, entry in self.agents.items()}}
 
 
+def parse_rules(text, problem):
+    """Rules of one `models` field; every problem invalidates the whole matrix."""
+    rules = []
+    items = text.split(' | ')
+    if len(items) > MAX_RULES:
+        problem('too many rules')
+    for item in items:
+        if not item.strip():
+            problem('empty rule')
+            continue
+        head, sep, tail = item.partition(' for ')
+        if not sep:
+            problem('rule without for')
+            continue
+        names = head.split(' then ')
+        if len(names) > 2:
+            problem('second then')
+            continue
+        if any(not MODEL.fullmatch(name) for name in names):
+            problem('bad model')
+            continue
+        selectors = tail.split(', ')
+        good = True
+        for selector in selectors:
+            if not selector.strip():
+                problem('empty selector')
+                good = False
+            elif selector.startswith('levels ') and LEVELS.fullmatch(selector):
+                if not selector_ok(selector):
+                    problem('bad levels')
+                    good = False
+            elif not selector_ok(selector):
+                problem('unknown selector')
+                good = False
+        if good:
+            rules.append({'model': names[0], 'then': names[1] if len(names) == 2 else None, 'for': selectors})
+    return rules
+
+
+def choose_model(entry, kind='implement', work_type=None, level=None):
+    """(model, fallback, rule_matched) for one dispatch; model None means the agent's default.
+
+    First match wins. Selectors of different sorts must all match, several of one sort match any of them. A rule with
+    a type selector never matches a dispatch without a type, one with a level selector never matches without a level,
+    and a rule with no kind selector matches only `implement`."""
+    for rule in entry.get('models', []):
+        kinds = [s for s in rule['for'] if s in KINDS]
+        types = [s for s in rule['for'] if s in TYPES]
+        ranges = [LEVELS.fullmatch(s) for s in rule['for'] if s.startswith('levels ')]
+        if kind not in (kinds or ['implement']):
+            continue
+        if types and work_type not in types:
+            continue
+        if ranges and (level is None or not any(int(r[1]) <= level <= int(r[2]) for r in ranges if r)):
+            continue
+        return rule['model'], rule['then'], True
+    return entry['model'], None, False
+
+
+def pool(model):
+    """The cached Antigravity quota pool (`quota_probe.parse_agy`) a model id reads."""
+    if model.startswith('gemini-4-argon-'):
+        return 'argon'
+    if model.startswith('gemini-'):
+        return 'gemini'
+    if model.startswith(('claude-', 'gpt-')):
+        return 'claude-gpt'
+    return 'other'
+
+
 def agent_fields(rest, problem):
-    entry = {'levels': (1, 5), 'works': [], 'model': None, 'roles': []}
+    entry = {'levels': (1, 5), 'works': [], 'model': None, 'models': [], 'roles': []}
     parts = rest.split('; ')
     match = LEVELS.fullmatch(parts[0])
     if match and int(match[1]) <= int(match[2]):
@@ -141,13 +246,15 @@ def agent_fields(rest, problem):
             number = 1
         elif part.startswith('model '):
             number = 2
-        elif part.startswith('roles '):
+        elif part.startswith('models '):
             number = 3
+        elif part.startswith('roles '):
+            number = 4
         else:
             problem('unknown key')
             continue
         if number <= stage:
-            problem('unknown key')
+            problem('duplicate models' if number == stage == 3 else 'unknown key')
             continue
         stage = number
         if number == 1:
@@ -166,6 +273,8 @@ def agent_fields(rest, problem):
                 entry['model'] = model
             else:
                 problem('bad model')
+        elif number == 3:
+            entry['models'] = parse_rules(part[7:], problem)
         else:
             items = [] if part[6:] == 'none' else part[6:].split(', ')
             for item in items:

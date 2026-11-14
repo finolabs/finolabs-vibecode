@@ -103,7 +103,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | Path | Purpose |
 | --- | --- |
 | `scripts/agent_processes.py` | Opt-in bounded process-name/elapsed-time snapshot for the dashboard; no repository attribution. |
-| `scripts/assignments.py` | Parses, validates and renders the host config's `## Assignment matrix`; pure, reads no file and runs nothing. |
+| `scripts/assignments.py` | Parses, validates and renders the host config's `## Assignment matrix`, including each agent's `models` rules (which model for which kind, type or level, with a quota fallback); pure, reads no file and runs nothing. |
 | `scripts/auto_gate.py` | Stores local repository-window handoff/keep decisions for the opt-in auto gate. |
 | `scripts/auto_gate_hook.py` | Claude Code first-write nudge; allows on errors, never covers shell writes. |
 | `scripts/away_gate_hook.py` | Claude Code question gate: denies `AskUserQuestion` only while a valid away lease exists, never reads the question, allows on every error. |
@@ -161,7 +161,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `skills/delegate/scripts/heavy_run.py` | Runs one heavy command at a time per machine under a kernel lock, with load and memory gates, a wait cap and a maximum run time. |
 | `skills/delegate/scripts/ledger.py` | Records runs; accepted finishes need a current-head receipt or explicit reason-digested exception, except a review dispatch, accepted on its posted review (`--review-url`). `stale [--older-than-hours <n>]` previews this repository's open records past twice their budget and 24 hours (id, age, label); `--all-projects` widens it with a warning; `stale --close --digest <digest>` appends one closing `finish` line per previewed record, never `accepted`. |
 | `skills/delegate/scripts/pause.py` | `pause` marker: start, status (open dispatches, heavy jobs, checkpoints) and resume; stops no process and runs nothing. |
-| `skills/delegate/scripts/route_pick.py` | Answers which agent takes a work type at a level from the assignment matrix and cached quota, with the dropped agents and why; a preference that never blocks. |
+| `skills/delegate/scripts/route_pick.py` | Answers which agent takes a work type at a level from the assignment matrix and cached quota, with the dropped agents and why, and with `--kind` the model each agent would use for that kind of work (its `models` rules, falling back when an Antigravity model pool is out of quota); a preference that never blocks. |
 | `skills/restore-point/scripts/restore_point.py` | Saves/lists/previews/restores private git snapshots; captures non-ignored untracked files and keeps extra current files on restore. |
 | `skills/review-gate/scripts/merge_check.py` | Checks posted reviews, the low-risk lane and router marker when the base adopted the gate; with the local-receipt mode on, a matching local checks receipt stands in for missing or failing hosted checks and is named as such. |
 | `skills/setup/scripts/agent_scan.py` | Previews fixed local `--version` inventory; writes only after confirmation. |

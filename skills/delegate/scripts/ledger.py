@@ -214,7 +214,11 @@ def matrix_models():
         return None
     if matrix.state != "valid":
         return None
-    models = {entry.get("model") for entry in matrix.agents.values()} - {None}
+    models = {entry.get("model") for entry in matrix.agents.values()}
+    # A `models` rule's model and its `then` are matrix models too.
+    models |= {m for entry in matrix.agents.values() for rule in entry.get("models") or []
+               for m in (rule.get("model"), rule.get("then"))}
+    models -= {None}
     return models or None
 
 

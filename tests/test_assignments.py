@@ -50,8 +50,8 @@ class ParseValidTest(unittest.TestCase):
         self.assertEqual((m.consent, m.date, m.judge), ('yes', '2026-11-09', 'jev'))
         self.assertEqual(list(m.agents), ['claude', 'claudework', 'codex', 'antigravity'])
         self.assertEqual(m.agents['claude'], {'levels': (1, 5), 'works': ['frontend', 'design', 'video', 'three-d'],
-                                              'model': 'claude-opus-5-5', 'roles': []})
-        self.assertEqual(m.agents['antigravity'], {'levels': (1, 3), 'works': [], 'model': None,
+                                              'model': 'claude-opus-5-5', 'models': [], 'roles': []})
+        self.assertEqual(m.agents['antigravity'], {'levels': (1, 3), 'works': [], 'model': None, 'models': [],
                                                    'roles': ['code-review', 'navigator']})
         self.assertEqual(m.roles, {'security-review': 'codex', 'code-review': 'antigravity', 'navigator': 'antigravity'})
 
@@ -274,6 +274,88 @@ class ValidateRenderTest(unittest.TestCase):
     def test_round_trip_of_full_example(self):
         m = A.parse(FULL)
         self.assertEqual(A.parse(A.render(m.to_values())).to_values(), m.to_values())
+
+
+OWNER_LINE = ('- antigravity: levels 1-5; works on design, video, image-generation, transcription; models '
+              'gemini-4-argon-high then gemini-3.8-flash-high for security-review | gemini-4-hydrogen-high for design, '
+              'video, three-d, image-generation, levels 4-5 | gemini-4-argon-high for implement, levels 4-5 | '
+              'gemini-3.8-flash-high for code-review | gemini-3.8-flash-high for levels 3-4; roles security-review, '
+              'navigator')
+OWNER = '## Assignment matrix\n\n- Consent: yes (2026-11-14)\n- Judge: host\n' + OWNER_LINE + '\n\n'
+
+
+def with_models(field):
+    return HEAD + '- antigravity: levels 1-5; model m1; ' + field + '\n'
+
+
+class ModelsFieldTest(unittest.TestCase):
+    """docs/specs/matrix-models.md: the `models` field."""
+
+    def test_owner_example_parses_and_renders_unchanged(self):
+        m = A.parse(OWNER)
+        self.assertEqual(m.state, 'valid', m.problems)
+        rules = m.agents['antigravity']['models']
+        self.assertEqual([(r['model'], r['then']) for r in rules], [
+            ('gemini-4-argon-high', 'gemini-3.8-flash-high'), ('gemini-4-hydrogen-high', None),
+            ('gemini-4-argon-high', None), ('gemini-3.8-flash-high', None), ('gemini-3.8-flash-high', None)])
+        self.assertEqual(rules[1]['for'], ['design', 'video', 'three-d', 'image-generation', 'levels 4-5'])
+        self.assertEqual(A.render(m.to_values()), OWNER)
+        A.validate(m.to_values())
+
+    def test_each_parse_problem_invalidates_the_whole_matrix(self):
+        nine = ' | '.join(f'm{n} for code-review' for n in range(9))
+        cases = {
+            'models m2 for reviewing': 'unknown selector',
+            'models m2 for levels 0-6': 'unknown selector',
+            'models m2 for levels 5-3': 'bad levels',
+            'models m_2 for implement': 'bad model',
+            'models m2 then m_3 for implement': 'bad model',
+            'models m2 implement': 'rule without for',
+            'models m2 for implement |  | m3 for advisor': 'empty rule',
+            'models m2 for implement, ': 'empty selector',
+            'models m2 for implement; models m3 for advisor': 'duplicate models',
+            'models ' + nine: 'too many rules',
+            'models m2 then m3 then m4 for implement': 'second then',
+        }
+        for field, reason in cases.items():
+            with self.subTest(field=field):
+                m = A.parse(with_models(field))
+                self.assertEqual(m.state, 'invalid')
+                self.assertIn(reason, m.problems)
+                self.assertEqual(m.roles, {})
+                self.assertIsNone(m.judge)
+
+    def test_models_field_order(self):
+        self.assertIn('unknown key', A.parse(HEAD + '- codex: levels 1-5; roles navigator; models m for advisor\n').problems)
+        self.assertEqual(A.parse(HEAD + '- codex: levels 1-5; models m for advisor; roles navigator\n').state, 'valid')
+
+    def test_values_refuse_bad_rules(self):
+        def entry(rules):
+            v = good()
+            v['agents']['codex']['models'] = rules
+            return v
+        A.validate(entry([{'model': 'm', 'then': None, 'for': ['advisor']}]))
+        for rules in ([{'model': 'm', 'then': None, 'for': []}], [{'model': 'm', 'then': None, 'for': ['x']}],
+                      [{'model': 'm', 'for': ['advisor']}], [{'model': 'm', 'then': None, 'for': ['advisor']}] * 9):
+            with self.assertRaises(ValueError):
+                A.validate(entry(rules))
+
+    def test_choose_model_first_match_and_kindless_rules(self):
+        entry = A.parse(OWNER).agents['antigravity']
+        choose = A.choose_model
+        self.assertEqual(choose(entry, 'security-review', None, 3)[:2], ('gemini-4-argon-high', 'gemini-3.8-flash-high'))
+        self.assertEqual(choose(entry, 'implement', None, 4)[0], 'gemini-4-argon-high')
+        self.assertEqual(choose(entry, 'implement', 'design', 4)[0], 'gemini-4-hydrogen-high')
+        self.assertEqual(choose(entry, 'code-review', None, 2)[0], 'gemini-3.8-flash-high')
+        self.assertEqual(choose(entry, 'implement', None, 3)[0], 'gemini-3.8-flash-high')
+        self.assertEqual(choose(entry, 'advisor', None, 3), (None, None, False))
+        self.assertEqual(choose(entry, 'implement', None, 2), (None, None, False))
+        self.assertEqual(choose(entry, 'implement', None, None), (None, None, False))
+
+    def test_pools(self):
+        self.assertEqual([A.pool(m) for m in ('gemini-4-argon-high', 'gemini-4-hydrogen-high', 'gemini-3.8-flash-high',
+                                              'claude-sonnet-5', 'gpt-6', 'other-model')],
+                         ['argon', 'gemini', 'gemini', 'claude-gpt', 'claude-gpt', 'other'])
 
 
 class PureModuleTest(unittest.TestCase):
