@@ -450,10 +450,11 @@ ROWS = {
     'rule yes': (('--rung', 'rule', '--settled', 'yes', '--by', 'rule', '--option', '1', '--of', '2'),
                  dict(by='rule', option=1, of=2)),
     'rule no': (('--rung', 'rule', '--settled', 'no', '--by', 'rule'), dict(by='rule')),
-    'jev yes': (('--rung', 'jev', '--settled', 'yes', '--by', 'jev', '--option', '1', '--of', '2', '--probability', '0.9'),
-                dict(by='jev', option=1, of=2, probability=0.9)),
-    'jev no': (('--rung', 'jev', '--settled', 'no', '--by', 'jev', '--probability', '0.5'), dict(by='jev', probability=0.5)),
-    'jev unavailable': (('--rung', 'jev', '--settled', 'unavailable', '--by', 'jev'), dict(by='jev')),
+    'table yes, jev': (('--rung', 'table', '--settled', 'yes', '--by', 'jev', '--of', '2', '--probability', '0.9'),
+                       dict(by='jev', of=2, probability=0.9)),
+    'table yes, host-small': (('--rung', 'table', '--settled', 'yes', '--by', 'host-small', '--of', '3', '--probability', '0.4'),
+                              dict(by='host-small', of=3, probability=0.4)),
+    'table unavailable': (('--rung', 'table', '--settled', 'unavailable', '--by', 'jev'), dict(by='jev')),
     'advisor yes': (('--rung', 'advisor', '--settled', 'yes', '--by', 'codex', '--option', '2', '--of', '3',
                      '--dispatch', DISPATCH, '--model', 'gpt-5.5'),
                     dict(by='codex', option=2, of=3, dispatch=DISPATCH, model='gpt-5.5')),
@@ -469,7 +470,7 @@ ROWS = {
 }
 EXTRA = {'--by': 'codex', '--option': '1', '--of': '2', '--probability': '0.9', '--dispatch': DISPATCH, '--model': 'gpt-5.5'}
 SETUP_AWAY = SETUP.replace('Claude Code', 'Claude Code, Codex') + '- Max actions per hour: 1000\n'
-JUDGE = ['python3', '-I', str(SCRIPT.parent / 'judge.py'), 'ask', '--site', 'away-decision',
+JUDGE = ['python3', '-I', str(SCRIPT.parent / 'judge.py'), 'ask', '--site', 'away-evaluation',
          '--question', 'Which schema fits the spec settings?', '--option', 'Keep one schema', '--option', 'Split it',
          '--evidence-file', '.finolabs/briefs/packet.json']
 BRIEF = 'Choose one option for the config question.\n1 Keep one schema\n2 Split it\nReply with the number and a reason.'
@@ -607,10 +608,13 @@ class AwayDecisionTest(AfkBase):
                       ('--rung', 'park', '--settled', 'no', '--by', 'claude'),
                       ('--rung', 'user', '--settled', 'yes', '--by', 'claude'),
                       ('--rung', 'rule', '--settled', 'yes', '--by', 'jev', '--option', '1', '--of', '2'),
-                      ('--rung', 'jev', '--settled', 'yes', '--by', 'jev', '--option', '1', '--of', '2', '--probability', '0.5'),
-                      ('--rung', 'jev', '--settled', 'no', '--by', 'jev', '--probability', '0.9'),
-                      ('--rung', 'jev', '--settled', 'no', '--by', 'jev', '--probability', 'nan'),
-                      ('--rung', 'jev', '--settled', 'no', '--by', 'jev', '--probability', '1.5'),
+                      ('--rung', 'jev', '--settled', 'yes', '--by', 'jev', '--option', '1', '--of', '2', '--probability', '0.9'),
+                      ('--rung', 'table', '--settled', 'yes', '--by', 'jev', '--option', '1', '--of', '2', '--probability', '0.9'),
+                      ('--rung', 'table', '--settled', 'no', '--by', 'jev', '--probability', '0.5'),
+                      ('--rung', 'table', '--settled', 'yes', '--by', 'codex', '--of', '2', '--probability', '0.5'),
+                      ('--rung', 'table', '--settled', 'yes', '--by', 'jev', '--of', '7', '--probability', '0.5'),
+                      ('--rung', 'table', '--settled', 'yes', '--by', 'jev', '--of', '2', '--probability', 'nan'),
+                      ('--rung', 'table', '--settled', 'yes', '--by', 'jev', '--of', '2', '--probability', '1.5'),
                       ('--rung', 'rule', '--settled', 'yes', '--by', 'rule', '--option', '3', '--of', '2'),
                       ('--rung', 'rule', '--settled', 'yes', '--by', 'rule', '--option', '1', '--of', '7'),
                       ('--rung', 'rule', '--settled', 'yes', '--by', 'rule', '--option', '1', '--of', '1'),
@@ -633,41 +637,34 @@ class AwayDecisionTest(AfkBase):
         self.assertEqual(self.invoke('log', '--kind', 'action', '--rung', 'park')[0], 3)
         self.assertEqual(self.invoke('log', '--kind', 'decision', *park)[0], 3)
 
-    def test_a_judge_probability_round_trips_unchanged_and_the_threshold_holds(self):
+    def test_a_table_probability_round_trips_unchanged_with_no_threshold(self):
         self.start()
-        # The value judge.ask_choice returns, passed on as Python prints it, is stored as that same number.
-        for p, settled in ((0.823456789, 'yes'), (0.8, 'yes'), (1.0, 'yes'), (0.7999999999999999, 'no'),
-                           (1 / 3, 'no'), (0.5, 'no')):
+        # Any top probability in 0..1 records as a table: the table decides nothing, so no value settles or blocks.
+        for p in (0.823456789, 0.8, 1.0, 0.7999999999999999, 1 / 3, 0.0):
             with self.subTest(p=p):
-                flags = (('--rung', 'jev', '--settled', settled, '--by', 'jev', '--probability', str(p))
-                         + (('--option', '1', '--of', '2') if settled == 'yes' else ()))
-                _, line = self.recorded(*flags)
+                _, line = self.recorded('--rung', 'table', '--settled', 'yes', '--by', 'jev', '--of', '2', '--probability', str(p))
                 self.assertEqual(line['probability'], p)
                 self.assertIs(type(line['probability']), float)
-        # The judge's own output, with the provider call stubbed (no network), reaches the record unchanged.
+        # The judge's own table, with the provider call stubbed (no network), reaches the record unchanged.
         self.load()
         import judge
         spread = {'1': 0.823456789, '2': 0.176543211}
         with patch.object(judge, 'configured_judge', return_value='jev'), patch.object(judge, 'post', return_value=spread), \
                 patch.dict(os.environ, {'FNL_JUDGE': 'on'}):
-            answer = judge.ask_choice('Which schema fits the spec?', ['Keep one schema', 'Split it'], 'Goal: one schema.')
-        self.assertTrue(answer['settled'])
-        _, line = self.recorded('--rung', 'jev', '--settled', 'yes', '--by', 'jev', '--option', str(answer['option']),
-                                '--of', str(answer['of']), '--probability', str(answer['p']))
-        self.assertEqual((line['option'], line['of'], line['probability']), (1, 2, answer['p']))
-        # Just below 0.8 cannot settle, and 0.8 or above cannot be recorded as not settling.
-        for p, settled in (('0.7999999999999999', 'yes'), ('0.79999', 'yes'), ('0.823456789', 'no')):
-            with self.subTest(p=p, settled=settled):
-                self.refused('--rung', 'jev', '--settled', settled, '--by', 'jev', '--probability', p,
-                             *(('--option', '1', '--of', '2') if settled == 'yes' else ()))
+            table = judge.ask_choice('Which schema fits the spec?', ['Keep one schema', 'Split it'], 'Goal: one schema.')
+        self.assertEqual(table, {'source': 'jev', 'of': 2, 'probabilities': [0.823456789, 0.176543211]})
+        _, line = self.recorded('--rung', 'table', '--settled', 'yes', '--by', table['source'], '--of', str(table['of']),
+                                '--probability', str(max(table['probabilities'])))
+        self.assertEqual((line['of'], line['probability']), (2, 0.823456789))
+        self.assertNotIn('option', line)
         # Anything that is not a bounded plain number in 0..1 is refused.
         for p in ('nan', 'inf', '-0.1', '1.0000001', '1e400', '0x1', '0.5 ', ' 0.5', '0.' + '5' * 40, '', '.5', '1_0', '8e-1'):
             with self.subTest(p=p):
-                self.refused('--rung', 'jev', '--settled', 'no', '--by', 'jev', '--probability', p)
+                self.refused('--rung', 'table', '--settled', 'yes', '--by', 'jev', '--of', '2', '--probability', p)
 
     def test_the_id_is_generated_once_and_later_attempts_must_pass_an_existing_one(self):
         self.start()
-        first, line = self.recorded(*ROWS['jev unavailable'][0])
+        first, line = self.recorded(*ROWS['table unavailable'][0])
         second, line = self.recorded(*ROWS['advisor yes'][0], '--decision', first)
         self.assertEqual((second, line['id']), (first, first))
         self.refused(*ROWS['host yes'][0], '--decision', 'q20261110-010203-ffff')  # unknown id
@@ -688,10 +685,10 @@ class AwayDecisionTest(AfkBase):
     def test_outcomes_table_and_ladder_cases_share_one_decision_id(self):
         self.start()
         cases = {
-            'jev not configured or options open': ['advisor yes'],
-            'jev refuses, times out or fails': ['jev unavailable', 'advisor yes'],
-            'jev below 0.8': ['jev no', 'advisor yes'],
-            'host-only hosts, no advisor': ['jev unavailable', 'advisor unavailable, no candidate', 'host yes'],
+            'options not closed': ['advisor yes'],
+            'jev refuses, times out or fails': ['table unavailable', 'table yes, host-small', 'advisor yes'],
+            'a table, then the advisor': ['table yes, jev', 'advisor yes'],
+            'host-only hosts, no advisor': ['table yes, jev', 'advisor unavailable, no candidate', 'host yes'],
             'advisor out of quota or failed': ['advisor unavailable, selected and started', 'host yes'],
             'advisor answers none': ['advisor no', 'host yes'],
             'advisor names an option outside the list': ['advisor no', 'host yes'],
@@ -699,7 +696,7 @@ class AwayDecisionTest(AfkBase):
             'a new fact and the answer does not hold': ['advisor yes', 'advisor no', 'host yes'],
             'a rule invalidated by new evidence': ['rule yes', 'rule no', 'host yes'],
             'where it must stop': ['park yes'],
-            'a rung answered, then the check parked it': ['jev yes', 'park yes'],
+            'a rung answered, then the check parked it': ['advisor yes', 'park yes'],
         }
         for name, rows in cases.items():
             with self.subTest(case=name):
@@ -840,7 +837,7 @@ class AwayDecisionTest(AfkBase):
 
     def test_the_judge_form_denies_any_other_site_flag_shape_or_copy(self):
         self.start(SETUP_AWAY)
-        site = JUDGE.index('away-decision')
+        site = JUDGE.index('away-evaluation')
         other = str(ROOT / 'skills/checks/scripts/judge.py')
         option = JUDGE.index('Split it')
         for argv in (JUDGE[:site] + ['navigator'] + JUDGE[site + 1:], JUDGE + ['--base-url', 'http://127.0.0.1:9'],
@@ -850,7 +847,7 @@ class AwayDecisionTest(AfkBase):
                      JUDGE[:option] + ['ghp_' + 'x' * 30] + JUDGE[option + 1:],
                      JUDGE[:option] + ['Keep one schema'] + JUDGE[option + 1:],  # duplicate option
                      JUDGE[:7] + ['Which file under /Us' + 'ers/synthetic/private?'] + JUDGE[8:],
-                     JUDGE + ['--judge', 'host'], JUDGE + ['--site', 'away-decision'],
+                     JUDGE + ['--judge', 'host'], JUDGE + ['--site', 'away-decision'], JUDGE[:site] + ['away-decision'] + JUDGE[site + 1:],
                      JUDGE[:-1] + ['../packet.json'], JUDGE[:-1] + ['.env'], JUDGE[:-1] + ['/tmp/packet.json'],
                      JUDGE[:-1] + ['.finolabs/briefs/packet.sh'],
                      JUDGE[:3] + ['check-host'] + JUDGE[4:], JUDGE[:3] + JUDGE[5:]):
@@ -860,6 +857,18 @@ class AwayDecisionTest(AfkBase):
         for argv in (JUDGE[:2] + [other] + JUDGE[3:], ['python3'] + JUDGE[2:]):
             self.check_as(argv, tier=3, code=None)
         self.assertEqual(self.counts()['actions'], 0)
+
+    def test_the_table_check_form_is_tier_one_only_for_a_brief_file(self):
+        self.start(SETUP_AWAY)
+        table = JUDGE[:3] + ['check-table', '--file', '.finolabs/briefs/table.json', '--of', '2']
+        self.check_as(table)
+        self.check_as(table[:4] + ['--of', '6', '--file', '.finolabs/briefs/table.json'])
+        for argv in (table[:-1] + ['1'], table[:-1] + ['7'], table[:-1] + ['two'], table[:-2],
+                     table[:5] + ['.finolabs/briefs/table.md'] + table[6:], table[:5] + ['../table.json'] + table[6:],
+                     table[:5] + ['/tmp/table.json'] + table[6:], table[:5] + ['docs/table.json'] + table[6:],
+                     table + ['--judge', 'jev'], table + ['--of', '3']):
+            with self.subTest(argv=argv[3:]):
+                self.check_as(argv, tier=3, code='unknown')
 
     def test_the_advisor_form_is_tier_one_for_another_family_in_hosts(self):
         self.start_away()

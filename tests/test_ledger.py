@@ -751,12 +751,13 @@ class AwayLedgerTest(unittest.TestCase):
     ]
     AWAY = [
         {"event": "decision", "id": "q20261109-010000-aaaa", "ts": "2026-11-09T01:00:00+00:00", "project": "demo",
-         "lease_start": 1000.0, "rung": "jev", "settled": "no", "by": "jev", "probability": 0.6, "precedents": 2, "topic": "schema"},
+         "lease_start": 1000.0, "rung": "table", "settled": "yes", "by": "jev", "of": 3, "probability": 0.6, "precedents": 2,
+         "topic": "schema"},
         {"event": "decision", "id": "q20261109-010000-aaaa", "ts": "2026-11-09T01:01:00+00:00", "project": "demo",
          "lease_start": 1000.0, "rung": "advisor", "settled": "yes", "by": "codex", "option": 2, "of": 3,
          "dispatch": "d20261109-010100-abcd", "model": "m1", "precedents": 2, "topic": "schema"},
         {"event": "decision", "id": "q20261109-020000-bbbb", "ts": "2026-11-09T02:00:00+00:00", "project": "demo",
-         "lease_start": 1000.0, "rung": "jev", "settled": "yes", "by": "jev", "option": 1, "of": 2, "probability": 0.9,
+         "lease_start": 1000.0, "rung": "table", "settled": "yes", "by": "host-small", "of": 2, "probability": 0.9,
          "precedents": 0, "topic": "naming"},
         {"event": "decision", "id": "q20261109-030000-cccc", "ts": "2026-11-09T03:00:00+00:00", "project": "demo",
          "lease_start": 1000.0, "rung": "park", "settled": "yes", "by": "claude", "precedents": 0, "topic": "deploy"},
@@ -820,9 +821,10 @@ class AwayLedgerTest(unittest.TestCase):
         self.assertEqual([lease["lease_start"] for lease in leases], [1000.0, 9000.0])
         first, second = leases
         self.assertEqual(first["decisions"], 3)
-        self.assertEqual(first["by_rung"], {"advisor": 1, "jev": 1, "park": 1})
+        # A table weighs the options and never decides: a decision with only a table has no deciding rung.
+        self.assertEqual(first["by_rung"], {"advisor": 1, "park": 1})
         self.assertEqual(first["by_advisor"], {"codex m1": 1})
-        self.assertEqual(first["jev_p"], {"n": 2, "min": 0.6, "median": 0.75, "max": 0.9})
+        self.assertEqual(first["table_p"], {"n": 2, "min": 0.6, "median": 0.75, "max": 0.9})
         self.assertEqual((first["parked"], first["denied"]), (1, 2))
         # The later review of one id replaces the earlier one: one reversed of two reviewed.
         self.assertEqual((first["reviewed"], first["reversed"]), (2, 1))
@@ -832,10 +834,21 @@ class AwayLedgerTest(unittest.TestCase):
         args = self.ledger.build_parser().parse_args(["summary"])
         _, output, _ = self.run_quiet(args.func, args)
         self.assertIn("away decisions per lease", output)
-        self.assertIn("advisor 1, jev 1, park 1", output)
+        self.assertIn("advisor 1, park 1", output)
+        self.assertIn("table top p: n 2", output)
         self.assertIn("reversed 1 of 2 reviewed", output)
         for word in ("schema", "naming"):
             self.assertNotIn(word, output)  # topic labels stay in the ledger file
+
+    def test_away_section_reads_a_legacy_jev_probability(self):
+        # Leases before 0.2.7 logged the top probability under rung `jev`; the table spread still counts it.
+        legacy = {"event": "decision", "id": "q20261110-020000-eeee", "ts": "2026-11-10T02:00:00+00:00",
+                  "project": "demo", "lease_start": 9000.0, "rung": "jev", "settled": "no", "by": "jev",
+                  "probability": 0.5, "precedents": 0, "topic": "legacy"}
+        self.write(self.DISPATCHES + self.AWAY + [legacy])
+        second = self.ledger.away_rows()[1]
+        self.assertEqual(second["table_p"], {"n": 1, "min": 0.5, "median": 0.5, "max": 0.5})
+        self.assertEqual(second["by_rung"], {"host": 1})
 
     def test_summary_with_only_away_lines_prints_both_sections_honestly(self):
         self.write(self.AWAY)
