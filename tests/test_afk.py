@@ -476,11 +476,11 @@ JUDGE = ['python3', '-I', str(SCRIPT.parent / 'judge.py'), 'ask', '--site', 'awa
 BRIEF = 'Choose one option for the config question.\n1 Keep one schema\n2 Split it\nReply with the number and a reason.'
 ENV = ['python3', '-I', str(SCRIPT.parent / 'delegate_env.py')]
 # Each form ends its options with a literal `--` right before the brief where the program's parser takes one.
-CODEX = ENV + ['--family', 'codex', '--', 'codex', 'exec', '-m', 'gpt-5.5', '-c', 'model_reasoning_effort=high',
+CODEX = ENV + ['--family', 'codex', '--', 'codex', 'exec', '-m', 'gpt-6-astra', '-c', 'model_reasoning_effort=high',
                '-s', 'read-only', '--', BRIEF]
 CLAUDE = ENV + ['--family', 'claude', '--', 'claude', '-p', '--model', 'claude-opus-5-5',
                 '--output-format', 'json', '--permission-mode', 'plan', '--', BRIEF]
-AGY = ENV + ['--family', 'antigravity', '--', 'agy', '-p', BRIEF, '--model', 'gemini-4-argon', '--mode', 'plan',
+AGY = ENV + ['--family', 'antigravity', '--', 'agy', '-p', BRIEF, '--model', 'gemini-4-argon-high', '--mode', 'plan',
              '--output-format', 'json']
 SETUP_ALL = SETUP.replace('Claude Code', 'Claude Code, Codex, Antigravity') + '- Max actions per hour: 1000\n'
 DANGER = {'codex': '--dangerously-bypass-approvals-and-sandbox', 'claude': '--dangerously-skip-permissions',
@@ -636,6 +636,44 @@ class AwayDecisionTest(AfkBase):
         # Decision fields belong to the decision kind only, and a decision needs its common fields.
         self.assertEqual(self.invoke('log', '--kind', 'action', '--rung', 'park')[0], 3)
         self.assertEqual(self.invoke('log', '--kind', 'decision', *park)[0], 3)
+
+    def test_a_schema_refusal_names_the_field_and_a_state_failure_stays_generic(self):
+        self.start()
+        generic = 'afk refused: setup or private state is missing, invalid, unsafe or already active\n'
+        advisor_no = ROWS['advisor no'][0]
+        for flags, kwargs, message in (
+                (advisor_no + ('--option', '1', '--of', '3'), {}, 'the advisor no row takes no --of, --option'),
+                (('--rung', 'advisor', '--settled', 'yes', '--by', 'codex'), {},
+                 'the advisor yes row needs --dispatch, --model, --of, --option'),
+                (ROWS['park yes'][0] + ('--decision', 'q20261115-000000-abcd'), {}, '--decision names no recorded decision id'),
+                (ROWS['park yes'][0], dict(precedents='9'), '--precedents is a whole number from 0 to 8'),
+                (ROWS['park yes'][0], dict(topic='src/private.py'), '--topic and --project are short labels'),
+                (('--rung', 'user', '--settled', 'yes'), {}, '--rung and --settled name no row of the decision schema'),
+                (('--rung', 'rule', '--settled', 'yes', '--by', 'rule', '--option', '3', '--of', '2'), {},
+                 '--option is a whole number from 1 to --of'),
+                (('--rung', 'rule', '--settled', 'yes', '--by', 'rule', '--option', '1', '--of', '7'), {},
+                 '--of is a whole number from 2 to 6'),
+                (('--rung', 'advisor', '--settled', 'no', '--by', 'codex', '--dispatch', 'bad', '--model', 'm'), {},
+                 '--dispatch is a ledger dispatch id')):
+            with self.subTest(message=message):
+                status, output = self.decide(*flags, **kwargs)
+                self.assertEqual(status, 3, output)
+                self.assertTrue(output.startswith('afk refused: ' + message), output)
+                self.assertNotIn('private state', output)
+        # The message never echoes a value the caller passed.
+        status, output = self.decide(*ROWS['park yes'][0], topic='ghp_' + 'x' * 30)
+        self.assertNotIn('ghp_', output)
+        status, output = self.invoke('log', '--kind', 'action', '--rung', 'park')
+        self.assertEqual(status, 3)
+        self.assertIn('belong to --kind decision only', output)
+        status, output = self.invoke('review', '--decision', 'q20261115-000000-abcd', 'kept')
+        self.assertEqual((status, output), (3, 'afk refused: --decision names no recorded decision id\n'))
+        # Without a live lease, or with unreadable private state, the refusal stays generic.
+        self.assertEqual(self.invoke('stop')[0], 0)
+        self.assertEqual(self.decide(*ROWS['park yes'][0]), (3, 'afk refused: --kind decision needs a live lease\n'))
+        self.state.chmod(0o755)
+        self.addCleanup(self.state.chmod, 0o700)
+        self.assertEqual(self.decide(*ROWS['park yes'][0]), (3, generic))
 
     def test_a_table_probability_round_trips_unchanged_with_no_threshold(self):
         self.start()
@@ -900,6 +938,51 @@ class AwayDecisionTest(AfkBase):
             self.check_as(AGY[:mode] + [value] + AGY[mode + 1:], tier=3, code='unknown')
         self.check_as(AGY, coordinator='antigravity', tier=3, code='unknown')
         self.assertEqual(self.counts()['actions'], 3)
+
+    def test_the_advisor_model_is_frontier_else_strong(self):
+        self.start_away(SETUP_ALL)
+        forms = {'antigravity': (AGY, AGY.index('gemini-4-argon-high')),
+                 'claude': (CLAUDE, CLAUDE.index('claude-opus-5-5')), 'codex': (CODEX, CODEX.index('gpt-6-astra'))}
+        def form(family, name):
+            argv, index = forms[family]
+            return argv[:index] + [name] + argv[index + 1:]
+        # Unknown names, the fast tier and a near miss deny on every family.
+        for family, name, coordinator in (
+                ('antigravity', 'gemini-3.8-flash-high', 'claude'), ('antigravity', 'gemini-4-argon', 'claude'),
+                ('antigravity', 'gemini-5-argon-high', 'codex'), ('antigravity', 'GEMINI-4-ARGON-HIGH', 'claude'),
+                ('claude', 'claude-haiku-5-5', 'codex'), ('claude', 'haiku', 'antigravity'), ('claude', 'opus', 'codex'),
+                ('claude', 'claude-opus-6-0', 'codex'), ('codex', 'gpt-6.1-terra', 'claude'),
+                ('codex', 'gpt-6-luna', 'antigravity'), ('codex', 'gpt-5.5', 'claude'), ('codex', 'gpt-7-astra', 'claude'),
+                # A Claude model served through Antigravity is Claude: not for a Claude coordinator.
+                ('antigravity', 'claude-opus-5-5-high', 'claude'), ('antigravity', 'claude-sonnet-5-5-low', 'claude')):
+            with self.subTest(family=family, model=name, coordinator=coordinator):
+                self.check_as(form(family, name), coordinator=coordinator, tier=3, code='unknown')
+        self.assertEqual(self.counts()['actions'], 0)
+        # Every listed frontier and strong model is accepted for a coordinator of another family.
+        module, accepted = self.load(), 0
+        for family, names in module.ADVISOR_MODELS.items():
+            for name in sorted(names):
+                coordinator = 'codex' if family != 'codex' else 'claude'
+                with self.subTest(family=family, model=name):
+                    self.check_as(form(family, name), coordinator=coordinator)
+                accepted += 1
+        self.assertEqual(self.counts()['actions'], accepted)
+
+    def test_the_advisor_models_match_the_frontier_and_strong_rows_of_models_md(self):
+        module = self.load()
+        text = (ROOT / 'skills/delegate/references/models.md').read_text()
+        listed = {'claude': set(), 'codex': set(), 'antigravity': set()}
+        for tier in ('frontier', 'strong'):
+            [row] = re.findall(r'^\| %s \|(.*)\|$' % tier, text, re.MULTILINE)
+            claude, codex, antigravity = [cell.strip() for cell in row.split('|')][:3]
+            listed['claude'] |= {'claude-%s-%s-%s' % (name.lower(), major, minor)
+                                 for name, major, minor in re.findall(r'\b(Opus|Fable|Sonnet) (\d+)\.(\d+)', claude)}
+            listed['codex'] |= set(re.findall(r'`([^`]+)`', codex))
+            for name in re.findall(r'`([^`]+)`', antigravity):
+                self.assertTrue(name.endswith('-*'), name)
+                listed['antigravity'] |= {name[:-1] + effort for effort in ('low', 'medium', 'high')}
+        self.assertEqual({family: set(names) for family, names in module.ADVISOR_MODELS.items()}, listed)
+        self.assertIn('`gemini-4-argon-{low,medium,high}`', text)  # the `*` suffixes models.md lists
 
     def test_the_zcode_advisor_form_denies_even_with_an_approved_program(self):
         ap = self.load()

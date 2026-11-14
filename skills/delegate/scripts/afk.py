@@ -11,7 +11,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | Missing/expired/stopped/changed setup denies every check and adds one fixed `end` line telling the caller to stop its loop; limits are counted per project (the full identity digest, or one shared `unknown` entry, at most 64): spent runs or runtime minutes since the project's first reserved action say `spent`, the project's rolling-hour cap or a full project table says `limit`, and neither ends the lease for other projects | lease_guard, project_limit, check |
 | Tags, releases, publish/deploy, recursive deletion, force/default-branch pushes are Tier 3, except: closed tag, release (with `--repo` equal to the verified target) and npm/pnpm publish forms whose every applicable category is `decide`, a deploy matching a non-production target exactly with no production or live word, and a deploy equal to this repository's `production-targets` entry with `production` in its `decide`; a project `decide` list replaces the user's categories, the strict and no-repository states close them all; categories come from the program and subcommand, never from free-text data | classify_argv, command_categories, is_deploy, release_command, permits |
 | Categories are `stop` or `decide`; missing, unknown and the two fixed rows are `stop`; excerpt consent is its own key | settings |
-| The ladder's two forms: this install's judge.py at the away-evaluation site with validated options or its check-table on a brief file, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper); the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, table_path, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
+| The ladder's two forms: this install's judge.py at the away-evaluation site with validated options or its check-table on a brief file, and delegate_env.py with one closed read-only argv per family, in Hosts and not the coordinator's, whose program is the family's owner-approved executable recorded for the quota probe and re-checked at check time (no bare name, PATH lookup, other path or time-cap wrapper), and whose model is one models.md lists as that family's frontier or strong tier and, for a Claude coordinator, not a Claude model through Antigravity; the brief follows a literal `--` (Codex, Claude) or is the value of -p (Antigravity), never starts with `-`, and passes the secret and machine-path screens, and no sensitive name in it has an assigned value | ladder_command, judge_command, table_path, advisor_command, approved_program, quota_probe.checked_executable, brief_ok |
 | Decision attempts follow a closed schema and reach the ledger with no question or option text; reviews need a recorded id | attempt, decide, review |
 | A precedent packet holds at most eight excerpts and 8 KB; a secret or machine path drops an excerpt; excerpts need the separate consent | packet_check |
 | Hard names (credentials/env/key names, .git, .github, .claude, .codex, git hook names, host/lease/log state) are Tier 3 anywhere in argv or paths; soft names (hooks, settings, config, setup, SKILL.md, CLAUDE.md, AGENTS.md) too, except in a source path of this check's own checkout on a non-default work branch with Push and pull requests or Merge yes, and never inside this install; the one exact script path of this install's own trusted wrapper is spared (the install may lie under ~/.claude or ~/.codex) | protected, own_wrapper_index, source_mode |
@@ -99,6 +99,15 @@ DECIDE_NAMES = {'production': 'Production', 'unrecoverable-deletion': 'Unrecover
 HOST_FAMILIES = {'Claude Code': 'claude', 'Codex': 'codex', 'Antigravity': 'antigravity', 'ZCode': 'zcode'}
 PROGRAMS = {'claude': 'claude', 'codex': 'codex', 'antigravity': 'agy', 'zcode': 'zcode'}
 MODEL = re.compile(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,79}')
+# The frontier and strong rows of `delegate` references/models.md, the only advisor models (a test keeps them equal);
+# an unknown or fast-tier model is denied. Antigravity's `*` is its low, medium and high suffixes.
+_EFFORTS = ('low', 'medium', 'high')
+ADVISOR_MODELS = {
+    'claude': frozenset({'claude-opus-5-5', 'claude-fable-5-1', 'claude-sonnet-5-5'}),
+    'codex': frozenset({'gpt-6-astra', 'gpt-6.1-sol'}),
+    'antigravity': frozenset(f'{base}-{effort}' for base in ('claude-opus-5-5', 'gemini-4-argon', 'claude-sonnet-5-5')
+                             for effort in _EFFORTS),
+}
 LABEL = re.compile(r'[A-Za-z0-9._-](?:[A-Za-z0-9 ._-]{0,58}[A-Za-z0-9._-])?')
 DECISION_ID = re.compile(r'q[0-9]{8}-[0-9]{6}-[0-9a-f]{4}')
 DISPATCH_ID = re.compile(r'd[0-9]{8}-[0-9]{6}-[0-9a-f]{4}')
@@ -1090,6 +1099,11 @@ def advisor_command(tail, applied, coordinator):
             return 'unknown'
         model = values['--model']
     others = [t for t in rest if t is not brief]
+    # Frontier, else strong: only the names ADVISOR_MODELS lists; a Claude model served through Antigravity counts
+    # as Claude, so it is the coordinator's own family when that is Claude.
+    if (model not in ADVISOR_MODELS[family]
+            or (coordinator == 'claude' and model.startswith('claude'))):
+        return 'unknown'
     if (not isinstance(brief, str) or brief.startswith('-') or not MODEL.fullmatch(model) or not brief_ok(brief)
             or not all(plain(t) and not protected(t) for t in others)):
         return 'unknown'
@@ -1684,9 +1698,13 @@ def show_effective(folder):
                      separators=(',', ':')))
 
 
+class Refusal(ValueError):
+    """A `log` or `review` input outside the closed schema; its message names the flag and why, never a value."""
+
+
 def safe_note(note):
     if len(note) > 8192:
-        raise ValueError('afk note is too large')
+        raise Refusal('--note is longer than 8192 characters')
     note = ''.join(c for c in note if not unicodedata.category(c).startswith('C'))
     note = secret_patterns.redacted(note, secret_patterns.findings(note)).replace('\\', '/')
     # All assignments, even short values, may contain environment values.
@@ -1699,7 +1717,7 @@ def safe_note(note):
 
 def label(value):
     if not isinstance(value, str) or not LABEL.fullmatch(value) or secret_patterns.findings(value):
-        raise ValueError('afk label is invalid')
+        raise Refusal('--topic and --project are short labels (letters, digits, space, dot, dash, underscore; 1 to 60) without a secret')
     return value
 
 
@@ -1719,48 +1737,51 @@ def attempt(args):
     """Validate one attempt against the closed schema; return the fields stored in the ledger."""
     rung, settled = args.rung, args.settled
     if rung is None or settled is None or args.project is None or args.topic is None or args.precedents is None:
-        raise ValueError('afk decision needs rung, settled, project, topic and precedents')
+        raise Refusal('--kind decision needs --rung, --settled, --project, --topic and --precedents')
     given = {f for f in FIELDS if getattr(args, f) is not None}
     if (rung, settled) == ('advisor', 'unavailable'):
         required, optional = ({'by'}, {'dispatch'}) if 'by' in given else (set(), set())
     elif (rung, settled) in ATTEMPTS:
         required, optional = ATTEMPTS[rung, settled]
     else:
-        raise ValueError('afk decision rung and result do not match')
+        raise Refusal('--rung and --settled name no row of the decision schema')
     if not required <= given <= required | optional:
-        raise ValueError('afk decision fields do not match the schema')
+        missing, extra = sorted(required - given), sorted(given - required - optional)
+        raise Refusal('the %s %s row %s' % (rung, settled, '; '.join(
+            ([] if not missing else ['needs ' + ', '.join('--' + f for f in missing)])
+            + ([] if not extra else ['takes no ' + ', '.join('--' + f for f in extra)]))))
     if not re.fullmatch(r'[0-8]', args.precedents):
-        raise ValueError('afk precedents count is invalid')
+        raise Refusal('--precedents is a whole number from 0 to 8')
     fields = dict(rung=rung, settled=settled, precedents=int(args.precedents), topic=label(args.topic))
     if 'by' in given:
         valid = {'rule': args.by == 'rule', 'table': args.by in TABLE_SOURCES, 'advisor': bool(ADVISOR.fullmatch(args.by)),
                  'host': args.by in PROGRAMS, 'park': args.by in PROGRAMS}[rung]
         if not valid:
-            raise ValueError('afk decider is invalid')
+            raise Refusal('--by is not a valid decider for this rung')
         fields['by'] = args.by
     if 'of' in given:
         if not re.fullmatch(r'[2-6]', args.of):
-            raise ValueError('afk option is invalid')
+            raise Refusal('--of is a whole number from 2 to 6')
         fields['of'] = int(args.of)
     if 'option' in given:
         if not re.fullmatch(r'[1-6]', args.option) or int(args.option) > int(args.of):
-            raise ValueError('afk option is invalid')
+            raise Refusal('--option is a whole number from 1 to --of')
         fields['option'] = int(args.option)
     if 'probability' in given:
         # The top probability of the table, a bounded plain decimal (up to 17 significant digits round-trip).
         if not re.fullmatch(r'[01](?:\.[0-9]{1,20})?', args.probability):
-            raise ValueError('afk probability is invalid')
+            raise Refusal('--probability is a plain decimal from 0 to 1')
         probability = float(args.probability)
         if not math.isfinite(probability) or not 0 <= probability <= 1:
-            raise ValueError('afk probability is invalid')
+            raise Refusal('--probability is a plain decimal from 0 to 1')
         fields['probability'] = probability
     if 'dispatch' in given:
         if not DISPATCH_ID.fullmatch(args.dispatch):
-            raise ValueError('afk dispatch id is invalid')
+            raise Refusal('--dispatch is a ledger dispatch id (d<date>-<time>-<4 hex>)')
         fields['dispatch'] = args.dispatch
     if 'model' in given:
         if not MODEL.fullmatch(args.model):
-            raise ValueError('afk model is invalid')
+            raise Refusal('--model is not a model name (letters, digits, dot, dash, colon, underscore; at most 80)')
         fields['model'] = args.model
     return fields
 
@@ -1771,13 +1792,13 @@ def decide(folder, args, current):
     project = label(args.project)
     lease = None if read_private(folder, 'stop') is not None else read_lease(folder)
     if lease is None or not lease['start'] <= current < lease['expiry']:
-        raise ValueError('afk decision needs a live lease')
+        raise Refusal('--kind decision needs a live lease')
     if args.decision is None:
         identifier = time.strftime('q%Y%m%d-%H%M%S-', time.localtime(current)) + os.urandom(2).hex()
     elif recorded_decision(args.decision):
         identifier = args.decision
     else:
-        raise ValueError('afk decision id is unknown')
+        raise Refusal('--decision names no recorded decision id')
     import away_lease
     away_lease.append_ledger(dict(event='decision', id=identifier, ts=iso(current), project=project,
                                   lease_start=lease['start'], **fields))
@@ -1786,7 +1807,7 @@ def decide(folder, args, current):
 
 def review(folder, args):
     if not recorded_decision(args.decision):
-        raise ValueError('afk decision id is unknown')
+        raise Refusal('--decision names no recorded decision id')
     import away_lease
     away_lease.append_ledger(dict(event='decision_review', id=args.decision, ts=iso(now()), verdict=args.verdict))
     print('Decision review recorded')
@@ -1836,29 +1857,29 @@ def packet_check(args):
 def log(folder, args):
     decision_flags = ('rung', 'settled', 'precedents', 'topic', 'project', 'decision', *FIELDS)
     if args.kind != 'decision' and any(getattr(args, key) is not None for key in decision_flags):
-        raise ValueError('Decision fields belong to the decision kind')
+        raise Refusal('decision fields (--rung, --settled, --precedents, --topic, --project, --decision and the row fields) belong to --kind decision only')
     current = now()
     fields = {}
     for key in ('task', 'run'):
         value = getattr(args, key)
         if value is not None:
             if not ID.fullmatch(value) or secret_patterns.findings(value):
-                raise ValueError('afk id is invalid')
+                raise Refusal('--task and --run are plain ids without a secret')
             fields[key] = value
     if args.pr is not None:
         if not re.fullmatch(r'[1-9][0-9]{0,9}', args.pr):
-            raise ValueError('afk pull request id is invalid')
+            raise Refusal('--pr is a pull request number')
         fields['pr'] = int(args.pr)
     if args.head is not None:
         # The merged pull request's full head SHA: the one worktree `git worktree remove` may then take away. A
         # review-fallback line records the head whose same-family reviews counted, for the user's return; it pins nothing.
         if args.kind not in ('merge', 'review-fallback') or not SHA.fullmatch(args.head) or args.pr is None:
-            raise ValueError('afk head belongs to the merge or review-fallback kind with its --pr and is a full lowercase SHA')
+            raise Refusal('--head belongs to --kind merge or review-fallback with its --pr and is a full lowercase SHA')
         fields['head'] = args.head
     if args.kind == 'review-fallback' and (args.pr is None or args.head is None):
-        raise ValueError('afk review-fallback needs --pr and --head')
+        raise Refusal('--kind review-fallback needs --pr and --head')
     if args.kind == 'merge' and args.head is not None and (fields['pr'], args.head) not in merge_pins(folder, current):
-        raise ValueError('afk merge head matches no allowed `gh pr merge` check of this lease')
+        raise Refusal('--head matches no allowed `gh pr merge` check of this lease')
     note = safe_note(args.note or '')
     # Every other check passes before the decision line reaches the ledger.
     identifier = decide(folder, args, current) if args.kind == 'decision' else None
@@ -1954,9 +1975,12 @@ def main(argv=None):
             else:
                 log(folder, args)
         return 0
-    except (OSError, ValueError, UnicodeError, TypeError, KeyError):
+    except (OSError, ValueError, UnicodeError, TypeError, KeyError) as error:
         if args.command == 'check':
             print(json.dumps({'tier': 3, 'code': 'unsafe'}, separators=(',', ':')))
+            return 3
+        if isinstance(error, Refusal):
+            print('afk refused: ' + str(error))
             return 3
         print('afk refused: setup or private state is missing, invalid, unsafe or already active')
         return 3
