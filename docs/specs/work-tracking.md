@@ -64,7 +64,7 @@ reach `data.js`, tooltips, events or `checkup.py` output.
 
 Lookup order: this repository's entry; then the old global `Ledger project:` and `Task file:` lines; then the folder
 name for the ledger and nothing for tasks. A per-repository entry always wins over a global line. The global lines are
-deprecated: still read in 0.2.0 and 0.2.1, reported by `checkup.py` with the one-line conversion, removed in 0.3.0
+deprecated: still read in 0.2.0 and 0.2.1, reported by `checkup.py` with the one-line conversion, removed in 0.2.5
 (no automatic migration; `setup` offers to convert them for the current repository only, after a yes).
 
 The pipeline strip's ledger source uses the entry. With no entry and no ledger runs under the folder name it uses no

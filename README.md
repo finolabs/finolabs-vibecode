@@ -158,7 +158,7 @@ The agent loads `handoff` directly through `delegate`, proposes `advisor` for on
 | `update` | Showing installed and cached available versions, updating through the host after a clear yes, then walking a checklist of what the new version adds; `whats-new` only shows that list. Also targets or pins a chosen version, skips a release, or stops update notices. |
 | `help` | Plugin help: you are new and do not know where to start, want to know what the plugin holds, or have a question about a skill, agent or script; it gives the first steps, lists the contents, explains the piece you name, or maps your situation to the next command, including companion skills from other packs. It answers questions; it does not ask another agent. |
 | `ask` | Older name for `help`, kept as an alias; follows the same procedure and arguments. |
-| `verification` | Older name for `checks`, kept as an alias through 0.2.x; follows the same procedure. |
+| `verification` | Older name for `checks`, kept as an alias until a later release removes it; follows the same procedure. |
 | `session-hygiene` | Older name for `tidy`, kept as an alias; follows the same procedure and arguments. |
 | `open-source-review` | Before a repository goes public, and after: license, secrets in tree and history, internal leaks, clean payload, community files, repository settings, identity, data flow, plugin checks. |
 

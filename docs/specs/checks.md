@@ -13,7 +13,7 @@ The plugin already proves work locally (`verification`, now checks: targeted tes
 
 - No CI system of our own and no runner. Running CI is what hosted CI, `act` (runs GitHub Actions workflows locally in containers) and hook managers such as `pre-commit` and `lefthook` already do; the plugin points to them and owns the decision: which checks, where they run, and what the merge gate may trust. A self-hosted runner is never set up by the plugin: on a public repository a pull request from a fork could run code on the user's machine.
 - Extend the existing skill rather than add one: a new skill would put one more description into every session and compete for the same triggers ("run the tests", "CI is red", "CI minutes").
-- The skill `verification` is renamed checks, the name the user meets in `/setup add checks` and `checks.py`. `verification` stays as a thin alias through 0.2.x, user-invoked only so it never competes for model triggers, and is removed in 0.3.0.
+- The skill `verification` is renamed checks, the name the user meets in `/setup add checks` and `checks.py`. `verification` stays as a thin alias, user-invoked only so it never competes for model triggers, until a later release removes it.
 
 ## What ships
 

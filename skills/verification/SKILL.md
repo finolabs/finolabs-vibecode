@@ -1,6 +1,6 @@
 ---
 name: verification
-description: Older name for checks, which proves work before it is claimed or accepted and decides which checks run locally or in CI; kept through release 0.2.x and follows checks' procedure.
+description: Older name for checks, which proves work before it is claimed or accepted and decides which checks run locally or in CI; kept until a later release removes it and follows checks' procedure.
 disable-model-invocation: true
 ---
 
