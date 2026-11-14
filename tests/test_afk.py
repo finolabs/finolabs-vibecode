@@ -1234,6 +1234,17 @@ class ProjectScopeTest(AfkBase):
         self.setup_config(SETUP + '- Test commands: npm test\n')
         self.assertNotEqual(self.invoke('start')[0], 0)
 
+    def test_top_level_files_are_never_read_from_the_user_scope(self):
+        self.setup_config(SETUP + '- Top-level files: TASKS.md\n')
+        self.assertNotEqual(self.invoke('start')[0], 0)
+
+    def test_a_listed_test_command_with_a_protected_token_stays_protected(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.project({'test-commands': ['npm test -- .env', 'pytest tests/credentials_test.py']})
+        for argv in (['npm', 'test', '--', '.env'], ['pytest', 'tests/credentials_test.py']):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code='protected')
+
     def test_listed_top_level_files_are_known_paths_only_in_that_repository(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
         (self.repo / 'TASKS.md').write_text('- [ ] one\n')

@@ -94,7 +94,7 @@ The afk UAT of 14/11/2026 (`.finolabs/notes/afk-e2e-2026-11-14.md`, U1 and U2) f
   - A listed command runs whatever code the repository's tests contain, including code the agent edited under the lease. That is the grant the owner makes by listing it; the setup question says so.
 - `top-level-files` (project scope only, 1 to 16 entries): exact top-level file names (`ROOT_NAME` grammar, no `/`, no leading dot, no instruction-file name, an extension from the known list). Each becomes a known single-file path in that repository, like `README.md`. The protected names, the link check (no symlink on the path), the directory refusal and the install-checkout rule still apply. Empty in every state but `project`.
   - A separate key, not an extension of `roots`: a `roots` entry is a folder whose descendants become known paths, while a file entry names one exact path. Keeping them apart leaves `roots` unchanged, makes each preview line say what it opens, and stops a name such as `docs.md` from reading as a folder.
-- `afk.py effective` and `project_progress.py settings --dry-run` show both keys. Enforcer: `afk.py check` (script) and the closed `valid_autopilot` schema in `project_store.py` (script).
+- `project_progress.py settings --dry-run` shows both keys in its `effective` values and `changed` list (this pull request); `afk.py effective` shows them in its `rules` field from the follow-up pull request for afk UAT U3 (GitHub 288), not here. Enforcer: `afk.py check` (script) and the closed `valid_autopilot` schema in `project_store.py` (script).
 
 ## Acceptance
 
