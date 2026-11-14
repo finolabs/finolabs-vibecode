@@ -2229,6 +2229,57 @@ class AwayFlowTest(AfkBase):
         self.start(SETUP + '- Max actions per hour: 1000\n')  # a new lease does not inherit the old pin
         self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)
 
+    def test_a_new_work_branch_is_created_with_switch_or_checkout(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.cwd, _ = self.git_repo('branching')
+        for verb, flag in (('switch', '-c'), ('checkout', '-b')):
+            with self.subTest(verb=verb):
+                self.check(['git', verb, flag, 'afk/subtract'])
+                for name in ('main', 'MAIN', 'master', 'trunk', 'refs/heads/topic', '-f', 'tags/v1', 'remotes/x',
+                             'HEAD', 'a..b', 'topic/', 'top~1', 'topic.', 'topic//sub', 'topic/.hidden'):
+                    with self.subTest(name=name):
+                        self.check(['git', verb, flag, name], tier=3, code='unknown')
+                # Only the plain form: no start point, no force or reset, no other option.
+                for tail in ((flag, 'topic', 'origin/main'), (flag.upper(), 'topic'), ('topic',),
+                             (flag, 'topic', '--force'), ('--orphan', 'topic'), (flag,)):
+                    with self.subTest(tail=tail):
+                        self.check(['git', verb, *tail], tier=3, code='unknown')
+        self.invoke('stop')
+        self.clock += 60
+        self.start(SETUP.replace('Push and pull requests: yes', 'Push and pull requests: no')
+                   .replace('Merge: yes', 'Merge: no') + '- Max actions per hour: 1000\n')
+        self.check(['git', 'switch', '-c', 'afk/subtract'], tier=3, code='push-disabled')
+        # Either permission alone is enough.
+        for push, merge in (('yes', 'no'), ('no', 'yes')):
+            with self.subTest(push=push, merge=merge):
+                self.invoke('stop')
+                self.clock += 60
+                self.start(SETUP.replace('Push and pull requests: yes', f'Push and pull requests: {push}')
+                           .replace('Merge: yes', f'Merge: {merge}') + '- Max actions per hour: 1000\n')
+                self.check(['git', 'switch', '-c', 'afk/subtract'])
+        # Origin's own default branch is refused in any case, even when it is not main, master or trunk.
+        (self.cwd / '.git/refs/remotes/origin').mkdir(parents=True, exist_ok=True)
+        (self.cwd / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/develop\n')
+        for name in ('develop', 'Develop', 'DEVELOP'):
+            with self.subTest(default=name):
+                self.check(['git', 'switch', '-c', name], tier=3, code='unknown')
+        self.check(['git', 'switch', '-c', 'afk/subtract'])
+        # The strict state: an ancestor that cannot be listed.
+        locked = self.cwd / 'locked'
+        (locked / 'inner').mkdir(parents=True)
+        locked.chmod(0o311)
+        self.addCleanup(locked.chmod, 0o755)
+        repo, self.cwd = self.cwd, locked / 'inner'
+        self.check(['git', 'switch', '-c', 'afk/subtract'], tier=3, code='unknown')
+        self.cwd = repo
+        outside = self.home / 'no-repository'
+        outside.mkdir()
+        self.cwd = outside
+        self.invoke('stop')
+        self.clock += 60
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.check(['git', 'switch', '-c', 'afk/subtract'], tier=3, code='unknown')
+
     def test_a_review_fallback_entry_records_the_head_and_pins_nothing(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
         head = 'e' * 40
@@ -2595,6 +2646,8 @@ class AwayFlowTest(AfkBase):
                                (['git', 'worktree', 'add', str(repo / 'new')], 'protected'),
                                (['git', 'worktree', 'prune'], 'unknown'),
                                (['git', 'commit', '-m', 'Example'], 'protected'),
+                               (['git', 'switch', '-c', 'afk/topic'], 'protected'),
+                               (['git', 'checkout', '-b', 'afk/topic'], 'protected'),
                                (['git', 'stash'], 'protected'),
                                (['git', 'reset', '--hard'], 'protected'),
                                (['git', '-C', 'skills', 'commit', '-m', 'Example'], 'protected'),

@@ -126,6 +126,12 @@ floor and the stop/decide categories stay user scope only, because one lease cov
   URL or an unrecognized line leaves no verified target. Advisory limit: global and system Git config are not read.
 - Synchronization exemption: `git merge [--no-edit] origin/main` into a named work branch of a found repository needs
   no Merge setting; it stays Tier 3 into the default branch, a detached head or without a validated identity.
+- New work branch (14/11/2026, found by the afk end-to-end test; the own-branch flow of 13/11 starts here): `git switch
+  -c <branch>` or `git checkout -b <branch>`, with no start point and no other option, is Tier 1 in a found repository
+  with user or project settings when Push and pull requests or Merge is yes; the branch is a plain name, never a
+  default-branch name (`main`, `master`, `trunk` or origin's default, compared case-insensitively), a `refs/` name, `HEAD`
+  or a reserved namespace (`tags/`, `remotes/` and the like). Push and Merge both no answers `push-disabled`; the strict
+  and no-repository states, and this install's own checkout (`protected`), stay Tier 3. Git refuses an existing name.
 - Setup: the five answers become one desired object, omitted keys meaning inheritance. A non-empty object replaces the
   whole previous `autopilot` object; when every answer inherits, the object is cleared (`--clear autopilot`) and every
   other project setting stays; cancelling changes nothing. The preview prints the repository identity (main checkout,
