@@ -1317,6 +1317,49 @@ class ProjectScopeTest(AfkBase):
         self.setup_config(SETUP + '- Test commands: npm test\n')
         self.assertNotEqual(self.invoke('start')[0], 0)
 
+    def test_start_and_effective_show_the_repository_rules(self):
+        self.project({'decide': ['repository-comments'], 'non-production-targets': ['npm run deploy:staging'],
+                      'test-commands': ['npm test'], 'top-level-files': ['TASKS.md'], 'max-actions-per-hour': 7})
+        self.setup_config(SETUP + '- Tags and releases: decide\n')
+        status, output = self.invoke('start')
+        self.assertEqual(status, 0, output)
+        self.assertIn('- Tags and releases: decide', output)  # the account summary
+        self.assertIn('This folder (project): Max runs: 20; Max runtime minutes: 480; Max actions per hour: 7; '
+                      'Decide: Repository comments; Non-production targets: npm run deploy:staging; '
+                      'Production targets: none; Test commands: npm test; Top-level files: TASKS.md.', output)
+        status, output = self.invoke('effective')
+        rules = json.loads(output)['rules']
+        self.assertEqual((rules['Decide'], rules['Test commands'], rules['Top-level files'], rules['Max actions per hour']),
+                         (['Repository comments'], ['npm test'], ['TASKS.md'], 7))
+        self.cwd = self.other_repo('second')
+        rules = json.loads(self.invoke('effective')[1])['rules']
+        # Another repository shows the account's rules, never this repository's lists.
+        self.assertEqual((rules['Test commands'], rules['Top-level files'], rules['Max actions per hour']), ([], [], 30))
+        self.assertIn('Tags and releases', rules['Decide'])
+        # The `This folder` line and the `rules` field in the user, strict and no-repository states.
+        account = ('Max runs: 20; Max runtime minutes: 480; Max actions per hour: 30; Decide: %s; '
+                   'Non-production targets: none; Production targets: none; Test commands: none; Top-level files: none.')
+        empty = {'Max runs': 20, 'Max runtime minutes': 480, 'Max actions per hour': 30, 'Decide': [],
+                 'Non-production targets': [], 'Production targets': [], 'Test commands': [], 'Top-level files': []}
+        outside = self.home / 'no-repository'
+        outside.mkdir()
+        for state, folder, decide in (('user', self.cwd, 'Tags and releases'), ('no-repository', outside, 'none'),
+                                      ('strict', self.repo, 'none')):
+            with self.subTest(state=state):
+                if state == 'strict':  # settings changed in the work tree: no longer the approved bytes
+                    self.settings_file().write_text(self.settings_file().read_text().replace('npm test', 'npm run x'))
+                self.cwd = folder
+                self.invoke('stop')
+                self.clock += 60
+                status, output = self.invoke('start')
+                self.assertEqual(status, 0, output)
+                self.assertIn('This folder (%s): ' % state + account % decide, output)
+                rules = json.loads(self.invoke('effective')[1])['rules']
+                if state == 'user':
+                    self.assertEqual(rules['Decide'], ['Tags and releases'])
+                else:
+                    self.assertEqual(rules, empty)
+
     def test_top_level_files_are_never_read_from_the_user_scope(self):
         self.setup_config(SETUP + '- Top-level files: TASKS.md\n')
         self.assertNotEqual(self.invoke('start')[0], 0)
