@@ -235,5 +235,94 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(result.stdout, "no preference: use the strength table\n")
 
 
+OWNER_LINE = ("- antigravity: levels 1-5; works on design, video, image-generation, transcription; models "
+              "gemini-4-argon-high then gemini-3.8-flash-high for security-review | gemini-4-hydrogen-high for design, "
+              "video, three-d, image-generation, levels 4-5 | gemini-4-argon-high for implement, levels 4-5 | "
+              "gemini-3.8-flash-high for code-review | gemini-3.8-flash-high for levels 3-4; roles security-review, "
+              "navigator")
+OWNER = ("## Assignment matrix\n\n- Consent: yes (2026-11-14)\n- Judge: host\n"
+         "- codex: levels 1-5; model gpt-codex-9; roles code-review\n" + OWNER_LINE + "\n\n")
+
+
+def agy(**pools):
+    """One fresh Antigravity reading; each keyword is a pool and its remaining percent."""
+    current = datetime.now(timezone.utc)
+    reset = stamp(current + timedelta(hours=2))
+    body = "; ".join(f"{name.replace('_', '-')} 5h: {percent}% remaining, resets {reset}" for name, percent in pools.items())
+    return [f"Quota agy/default: measured {stamp(current - timedelta(minutes=5))}; {body}"]
+
+
+class ModelsTest(unittest.TestCase):
+    """docs/specs/matrix-models.md: `--kind`, optional `--type`, the model per dispatch and the quota fallback."""
+
+    def setUp(self):
+        self.rp = load()
+
+    def lines(self, kind="implement", work_type=None, level=3, quota=(), matrix=OWNER):
+        return self.rp.lines(self.rp.pick(host(matrix), work_type, level, quota_lines=list(quota), kind=kind))
+
+    def test_security_review_uses_argon_then_flash_when_argon_is_out(self):
+        self.assertEqual(self.lines("security-review"), ["codex gpt-codex-9", "antigravity gemini-4-argon-high"])
+        self.assertEqual(self.lines("security-review", quota=agy(argon=3, gemini=60)),
+                         ["codex gpt-codex-9", "antigravity gemini-3.8-flash-high quota-fallback"])
+
+    def test_model_chosen_per_kind_type_and_level(self):
+        self.assertIn("antigravity gemini-4-argon-high", self.lines("implement", level=4))
+        self.assertIn("antigravity gemini-3.8-flash-high", self.lines("code-review", level=2))
+        self.assertEqual(self.lines("implement", "design", 4), ["antigravity gemini-4-hydrogen-high"])
+        self.assertIn("antigravity default", self.lines("implement", level=2))
+
+    def test_kindless_rules_never_pick_for_another_kind(self):
+        self.assertIn("antigravity default", self.lines("advisor", level=3))
+        self.assertIn("antigravity default", self.lines("navigator", level=4))
+        with_model = OWNER.replace("transcription; models", "transcription; model gemini-base; models")
+        self.assertIn("antigravity gemini-base", self.lines("advisor", level=3, matrix=with_model))
+
+    def test_kind_never_filters_candidates(self):
+        # codex holds code-review, antigravity none: both are printed, in line order.
+        self.assertEqual(self.lines("code-review"), ["codex gpt-codex-9", "antigravity gemini-3.8-flash-high"])
+        self.assertEqual(self.lines("advisor"), ["codex gpt-codex-9", "antigravity default"])
+
+    def test_pick_without_type_runs_from_the_command_line(self):
+        with mock.patch.object(self.rp, "host_text", return_value=host(OWNER)), \
+                mock.patch.object(self.rp, "quota_lines", return_value=agy(argon=3, gemini=60)):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = self.rp.main(["pick", "--kind", "security-review", "--level", "3"])
+        self.assertEqual(code, 0)
+        self.assertEqual(output.getvalue(), "codex gpt-codex-9\nantigravity gemini-3.8-flash-high quota-fallback\n")
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            self.rp.main(["pick", "--kind", "reviewing", "--level", "3"])
+
+    def test_final_model_out_of_quota_drops_the_agent(self):
+        self.assertIn("drop antigravity: out of quota", self.lines("security-review", quota=agy(argon=3, gemini=2)))
+        self.assertIn("drop antigravity: out of quota", self.lines("code-review", quota=agy(argon=60, gemini=2)))
+        self.assertIn("antigravity gemini-3.8-flash-high", self.lines("code-review", quota=agy(argon=3, gemini=60)))
+        self.assertIn("antigravity gemini-4-argon-high", self.lines("security-review", quota=agy(argon=60, gemini=2)))
+        # A default choice needs every pool.
+        self.assertIn("drop antigravity: out of quota", self.lines("advisor", quota=agy(argon=60, claude_gpt=2)))
+
+    def test_rate_limit_marker_drops_whatever_the_pools_say(self):
+        now = datetime.now(timezone.utc)
+        marker = (f"Quota agy: rate-limit marker {stamp(now - timedelta(minutes=5))}; "
+                  f"out of quota until {stamp(now + timedelta(hours=1))} (advisory)")
+        self.assertIn("drop antigravity: out of quota", self.lines("security-review", quota=[marker] + agy(argon=60, gemini=60)))
+
+    def test_then_never_applies_to_other_families(self):
+        matrix = ("## Assignment matrix\n\n- Consent: yes (2026-11-14)\n- Judge: host\n"
+                  "- codex: levels 1-5; models gpt-a then gpt-b for code-review\n\n")
+        self.assertEqual(self.lines("code-review", matrix=matrix), ["codex gpt-a"])
+        self.assertEqual(self.lines("code-review", quota=depleted("codex"), matrix=matrix),
+                         ["no preference: use the strength table", "drop codex: out of quota"])
+
+    def test_without_rules_behavior_is_unchanged(self):
+        self.assertEqual(self.rp.lines(self.rp.pick(host(), "frontend", 3, kind="security-review")),
+                         ["claude default", "claudework claude-opus-5-5", "codex default"])
+
+    def test_invalid_rule_means_no_route(self):
+        broken = OWNER.replace("for code-review", "for reviewing")
+        self.assertEqual(self.lines("code-review", matrix=broken), ["no preference: use the strength table", "matrix invalid"])
+
+
 if __name__ == "__main__":
     unittest.main()

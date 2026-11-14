@@ -288,6 +288,17 @@ def table(matrix):
     return lines
 
 
+def rules(matrix):
+    """The `models` rules of each agent, one per line in order (first match wins), and where `then` cannot apply."""
+    lines = []
+    for name, entry in matrix.agents.items():
+        for number, rule in enumerate(entry['models'], 1):
+            lines.append(f'Models {name} {number}: {am.render_rule(rule)}')
+        if name != 'antigravity' and any(rule['then'] for rule in entry['models']):
+            lines.append(f'Note: {name} has one quota reading for the whole install, so its then never applies')
+    return lines
+
+
 def show():
     try:
         try:
@@ -305,13 +316,16 @@ def show():
         for reason in matrix.problems:
             print(f'Problem: {reason}')
         return 3
-    print('\n'.join(table(matrix)))
+    print('\n'.join(table(matrix) + rules(matrix)))
     print(f'Judge: {matrix.judge}')
     print(f'Review posting: {posting_summary(text)}')
     allowed = allowed_models(text)
     for name, entry in matrix.agents.items():
-        if entry['model'] and not any(fnmatch.fnmatchcase(entry['model'], item) for item in allowed):
-            print(f"Unverified: {name} model {entry['model']} is not among the allowed models on this machine")
+        models = [entry['model']] if entry['model'] else []
+        models += [m for rule in entry['models'] for m in (rule['model'], rule['then']) if m]
+        for model in dict.fromkeys(models):
+            if not any(fnmatch.fnmatchcase(model, item) for item in allowed):
+                print(f"Unverified: {name} model {model} is not among the allowed models on this machine")
     return 0
 
 
