@@ -1,6 +1,6 @@
 # Release 0.3.0: scope
 
-Status: accepted; release prepared on branch release/0.2.7 for 2026-11-15, not yet tagged; pull request 290 merges before the release pull request, and a real upgrade from 0.2.6 on a user's machine remains unverified.
+Status: accepted; release prepared on branch release/0.2.7 for 2026-11-15, not yet tagged; a real upgrade from 0.2.6 on a user's machine remains unverified.
 
 ## What shipped
 
