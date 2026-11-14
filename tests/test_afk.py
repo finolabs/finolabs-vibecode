@@ -1116,6 +1116,56 @@ class ProjectScopeTest(AfkBase):
         self.check(['git', 'push', 'origin', 'HEAD:refs/heads/topic'], tier=3, code='push-disabled')
         self.check(['git', 'status'])
 
+    def run_body(self, text, name='a' * 32):
+        folder = self.root / 'state/review-posting' / ('post-' + name)
+        folder.mkdir(parents=True, exist_ok=True)
+        for part in (self.root / 'state', self.root / 'state/review-posting', folder):
+            part.chmod(0o700)
+        body = folder / 'body.md'
+        body.write_text(text)
+        body.chmod(0o600)
+        return body
+
+    def test_post_review_runs_with_its_own_run_body_and_the_comment_category(self):
+        post = ['python3', '-I', str(ROOT / 'skills/review-gate/scripts/post_review.py')]
+        marker = '<!-- fnl-review kind=code head=' + 'a' * 40 + ' verdict=APPROVE -->\n'
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.check(post + ['7'], tier=3, code='forbidden')  # Repository comments is stop
+        self.invoke('stop')
+        self.start(SETUP + '- Max actions per hour: 1000\n- Repository comments: decide\n')
+        self.check(post + ['7'])
+        body = self.run_body(marker + 'Reviewer: example\n\nNo findings.\n')
+        self.check(post + ['7', '--body-file', str(body)])
+        self.check(post + ['--body-file', str(body), '7'])
+        for argv, code in ((post + ['07'], 'unknown'), (post + ['7', '8'], 'unknown'),
+                           (post + ['7', '--repo', 'github.com/example/demo'], 'unknown')):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code=code)
+        for text, code in (('Reviewer: no marker\n', 'unsafe'), (marker, 'unsafe'),
+                           (marker + 'Reviewer: x\n<!-- fnl-review kind=security head=' + 'b' * 40
+                            + ' verdict=APPROVE -->\n', 'forbidden'),
+                           (marker + 'Reviewer: x\n' + 'AKIA' + 'ABCDEFGHIJKLMNOP\n', 'unsafe')):
+            with self.subTest(text=text[:30]):
+                body = self.run_body(text, 'b' * 32)
+                self.check(post + ['7', '--body-file', str(body)], tier=3, code=code)
+        inside = self.repo / 'body.md'
+        inside.write_text(marker + 'Reviewer: x\n')
+        self.check(post + ['7', '--body-file', str(inside)], tier=3, code='unsafe')
+        loose = self.run_body(marker + 'Reviewer: x\n', 'c' * 32)
+        loose.chmod(0o644)
+        self.check(post + ['7', '--body-file', str(loose)], tier=3, code='unsafe')
+
+    def test_an_approved_skill_repository_edits_its_root_skill_and_references(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.check(paths=['SKILL.md'], tier=3, code='protected')
+        self.project({'skill-repository': 'yes'})
+        self.check(paths=['SKILL.md', 'references/guide.md', 'evals/case.json', 'scripts/tool.py'])
+        self.check(paths=['references/nested/SKILL.md'], tier=3, code='protected')
+        self.check(paths=['.github/workflows/ci.yml'], tier=3, code='protected')
+        (self.repo / '.git/HEAD').write_text('ref: refs/heads/main\n')  # the default branch stays protected
+        self.check(paths=['SKILL.md'], tier=3, code='protected')
+        self.assertFalse(self.store.valid_autopilot({'skill-repository': 'no'}))
+
     def test_the_lease_hash_covers_the_user_section_only(self):
         self.start()
         before = self.lease()['settings_hash']

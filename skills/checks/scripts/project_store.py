@@ -44,7 +44,8 @@ SETTING_KEYS = ('ledger', 'tasks', 'parallel', 'parallel-caps', 'label', 'autopi
 # The project-scoped away keys (docs/specs/autopilot.md "Project scope"), in stored order; every other autopilot
 # key is user scope only, so a project file cannot carry it.
 AUTOPILOT_KEYS = {'task-choice': ('choose', 'listed'), 'push-and-pull-requests': ('yes', 'no'),
-                  'merge': ('yes', 'no'), 'trusted-authors': ('own',), 'roots': None}
+                  'merge': ('yes', 'no'), 'trusted-authors': ('own',), 'roots': None,
+                  'skill-repository': ('yes',)}
 ROOT_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}')
 METADATA_LIMIT = 4096
 CODE = re.compile(r'[0-9a-f]{8}')
