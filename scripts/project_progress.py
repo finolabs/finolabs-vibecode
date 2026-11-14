@@ -155,6 +155,11 @@ def autopilot_preview(cwd, value):
                            else '%s (user)' % user.get(name, 'not set'))
         shown['Roots'] = (', '.join(obj['roots']) + ' (repository)' if obj and 'roots' in obj else 'none (user)')
         shown['Skill repository'] = ('yes (repository)' if obj and obj.get('skill-repository') == 'yes' else 'no (user)')
+        shown['Decide'] = (', '.join(obj['decide']) or 'none') + ' (repository)' if obj and 'decide' in obj else 'user answers (user)'
+        shown['Non-production targets'] = ('; '.join(obj['non-production-targets']) or 'none') + ' (repository)' \
+            if obj and 'non-production-targets' in obj else 'user list (user)'
+        shown['Production targets'] = ('; '.join(obj['production-targets']) + ' (repository)'
+                                       if obj and 'production-targets' in obj else 'none')
         return shown
     # The stored object and the keys whose effective value would move, so a change is never shown as a new state only.
     shown, before = effective(desired), effective(current)

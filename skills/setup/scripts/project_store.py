@@ -47,7 +47,15 @@ AUTOPILOT_KEYS = {'task-choice': ('choose', 'listed'), 'push-and-pull-requests':
                   'merge': ('yes', 'no'), 'trusted-authors': ('own',), 'roots': None,
                   'max-runs': range(1, 10001), 'max-runtime-minutes': range(1, 1441),
                   'max-actions-per-hour': range(1, 10001),
-                  'skill-repository': ('yes',)}
+                  'skill-repository': ('yes',), 'decide': None, 'non-production-targets': None,
+                  'production-targets': None}
+# Categories a repository may let the agent decide (docs/specs/afk-per-project.md B); real users and customer data, and
+# credentials, are never among them. `production` only here: the user scope never decides production.
+DECIDE_KEYS = ('production', 'unrecoverable-deletion', 'messages-outside-the-repository', 'tags-and-releases',
+               'publishing', 'shared-settings', 'recoverable-deletion', 'repository-comments')
+# One exact deploy command: plain words joined by single spaces, no shell syntax.
+TARGET_COMMAND = re.compile(r'[A-Za-z0-9@%+=:,./_-]+(?: [A-Za-z0-9@%+=:,./_-]+){0,31}')
+MAX_TARGETS = 16
 ROOT_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}')
 METADATA_LIMIT = 4096
 CODE = re.compile(r'[0-9a-f]{8}')
@@ -333,6 +341,15 @@ def valid_autopilot(value):
             if (not isinstance(item, list) or not 1 <= len(item) <= 16 or len(set(map(str, item))) != len(item)
                     or not all(isinstance(name, str) and ROOT_NAME.fullmatch(name)
                                and name.upper() not in INSTRUCTION_FILES for name in item)):
+                return False
+        elif key == 'decide':
+            if (not isinstance(item, list) or len(set(map(str, item))) != len(item)
+                    or not all(isinstance(name, str) and name in DECIDE_KEYS for name in item)):
+                return False
+        elif key in ('non-production-targets', 'production-targets'):
+            fewest = 1 if key == 'production-targets' else 0
+            if (not isinstance(item, list) or not fewest <= len(item) <= MAX_TARGETS or len(set(map(str, item))) != len(item)
+                    or not all(isinstance(c, str) and len(c) <= 240 and TARGET_COMMAND.fullmatch(c) for c in item)):
                 return False
         elif isinstance(AUTOPILOT_KEYS[key], range):
             if type(item) is not int or item not in AUTOPILOT_KEYS[key]:

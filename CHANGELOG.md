@@ -7,6 +7,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 ### Changed
 
 - afk limits are counted per repository: each repository under one lease has its own runs, runtime minutes (from its first allowed action) and actions an hour, and a repository may set its own `max-runs`, `max-runtime-minutes` and `max-actions-per-hour` in `/setup add afk` (wider or narrower than the user value). Breaking for away loops: a spent repository answers `spent` with no `end` line, so the loop goes on in other repositories, `exhausted` is no longer returned, and a changed setup now adds the `end` line like an ended lease; a lease started before the update reads as invalid, so start it again.
+- afk categories and deploy targets can differ per repository: `/setup add afk` inside a repository may set its own `decide` list (an explicit list replaces your account's table there; every unlisted category stops), its own `non-production-targets`, and, only there, `production-targets`: exact production deploy commands that run while you are away only when `production` is in that repository's `decide`. Breaking for away flows: outside a repository and in the strict state every category stops and no deploy target applies, and `gh release create` now needs `--repo github.com/OWNER/NAME` equal to the verified target, like a merge.
 
 ### Fixed
 
