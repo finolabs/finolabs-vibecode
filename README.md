@@ -356,11 +356,9 @@ Optional quota probing is configured in `/setup add quota`, off by default and i
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/settings-scopes-dark.png">
-    <img src="assets/settings-scopes-light.png" alt="Two scopes of settings: user scope in ~/.finolabs/vibecode/ holds host.md (roles, judge, assignment matrix, afk choices and lease limits, delegation mode) and the approved digests; project scope in the repository's .finolabs/vibecode/ holds checks.json and settings.json (ledger, tasks, parallel limit, label and optional afk choices). A project file counts only while its bytes match the digest you approved, so a branch or pull request cannot change it." width="920">
+    <img src="assets/settings-scopes-light.png" alt="Two scopes of settings: user scope in ~/.finolabs/vibecode/ holds host.md (roles, judge, assignment matrix, afk choices and lease limits, delegation mode) and the approved digests; project scope in the repository's .finolabs/vibecode/ holds checks.json and settings.json (ledger, tasks, parallel limit, label and optional afk choices: task choice, push and pull requests, merge, trusted authors, folders, limits, decide list, deploy targets and skill repository). A project file counts only while its bytes match the digest you approved, so a branch or pull request cannot change it. Hosts and lease hours stay in user scope; a repository may set its own limits." width="920">
   </picture>
 </p>
-
-_This diagram predates 0.2.6: roles and the judge now live only in the assignment matrix._
 
 Project progress uses per-repository ledger and task-file settings confirmed in `/setup add project`, while `/setup instructions` writes the project work convention and dated Outcome anchors. These settings, the parallel limit and the dashboard label live in each repository's own settings file, `.finolabs/vibecode/settings.json` in the main checkout (kept out of git through `.git/info/exclude`, and read only while it matches the digest approved in the data root). Since 0.2.5 the `## Project settings` and `## Project labels` sections and the global `Ledger project:` and `Task file:` lines of `host.md` are no longer read: set them again per repository, then delete them by hand.
 

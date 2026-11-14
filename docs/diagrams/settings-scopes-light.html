@@ -17,7 +17,7 @@ svg{width:100%;min-width:900px;display:block}
 <p class="sub">Your own choices live in your home folder; a repository&#x27;s check list and settings live in that repository, and count only while they match what you approved.</p>
 <svg viewBox="0 0 1280 808" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="settings-scopes-light-title settings-scopes-light-desc">
 <title id="settings-scopes-light-title">Where your settings live: user scope and project scope</title>
-<desc id="settings-scopes-light-desc">Two scopes of settings: user scope in ~/.finolabs/vibecode/ holds host.md (roles, judge, assignment matrix, afk choices and lease limits, delegation mode) and the approved digests; project scope in the repository&#x27;s .finolabs/vibecode/ holds checks.json and settings.json (ledger, tasks, parallel limit, label and optional afk overrides). Setup writes host.md and, after your yes, the digest of each project file; a project file counts only while its bytes match that digest, so a branch or pull request cannot change it or widen what you approved.</desc>
+<desc id="settings-scopes-light-desc">Two scopes of settings: user scope in ~/.finolabs/vibecode/ holds host.md (roles, judge, assignment matrix, afk choices and lease limits, delegation mode) and the approved digests; project scope in the repository&#x27;s .finolabs/vibecode/ holds checks.json and settings.json (ledger, tasks, parallel limit, label and optional afk overrides: task choice, push and pull requests, merge, trusted authors, folders, limits, decide list, deploy targets and skill repository). Setup writes host.md and, after your yes, the digest of each project file; a project file counts only while its bytes match that digest, so a branch or pull request cannot change it or widen what you approved.</desc>
 <defs><marker id="settings-scopes-light-default" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5B5B79"/></marker><marker id="settings-scopes-light-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4B1E73"/></marker><marker id="settings-scopes-light-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#14627A"/></marker></defs>
 <rect width="100%" height="100%" fill="#F7F7FB"/>
 <rect x="40" y="160" width="520" height="416" rx="12" fill="rgba(11,11,23,0.02)" stroke="rgba(11,11,23,0.14)" stroke-width="1"/>
@@ -66,16 +66,18 @@ svg{width:100%;min-width:900px;display:block}
 <text x="980" y="292" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">the repository&#x27;s check list</text>
 </g>
 <g class="node">
-<rect x="752" y="352" width="456" height="144" rx="8" fill="#F7F7FB"/>
-<rect x="752" y="352" width="456" height="144" rx="8" fill="#DCF3E8" stroke="#156B58" stroke-width="1"/>
+<rect x="752" y="352" width="456" height="164" rx="8" fill="#F7F7FB"/>
+<rect x="752" y="352" width="456" height="164" rx="8" fill="#DCF3E8" stroke="#156B58" stroke-width="1"/>
 <text x="980" y="388" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">settings.json</text>
 <text x="980" y="412" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">ledger · tasks · parallel · label</text>
 <text x="980" y="432" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">afk overrides, if you set them:</text>
 <text x="980" y="452" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">task choice · push and pull requests</text>
 <text x="980" y="472" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">merge · trusted authors · folders</text>
+<text x="980" y="492" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">limits · decide · deploy targets · skill repository</text>
 </g>
-<text x="64" y="668" fill="#0B0B17" font-size="16" font-weight="400" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="start">A project file counts only while its exact bytes match the digest you approved, so a branch or pull request cannot change it.</text>
-<text x="64" y="696" fill="#0B0B17" font-size="16" font-weight="400" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="start">Unapproved, edited, missing or broken: it stops counting and nothing widens. Lease limits and hosts stay in user scope.</text>
+<text x="64" y="660" fill="#0B0B17" font-size="16" font-weight="400" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="start">A project file counts only while its exact bytes match the digest you approved, so a branch or pull request cannot change it.</text>
+<text x="64" y="684" fill="#0B0B17" font-size="16" font-weight="400" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="start">Unapproved, edited, missing or broken: it stops counting and nothing widens.</text>
+<text x="64" y="708" fill="#0B0B17" font-size="16" font-weight="400" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="start">Hosts and lease hours stay in user scope; a repository may set its own limits.</text>
 <line x1="40" y1="744" x2="1240" y2="744" stroke="rgba(11,11,23,0.12)" stroke-width="0.8"/>
 <text x="40" y="776" fill="#5B5B79" font-size="12" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" letter-spacing="0.14em" text-anchor="start">LEGEND</text>
 <rect x="160" y="764" width="32" height="16" rx="4" fill="rgba(91,91,121,0.10)" stroke="#8B8BA6" stroke-width="1" stroke-dasharray="4,3"/>
