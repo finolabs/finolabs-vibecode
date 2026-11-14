@@ -26,11 +26,12 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | PR merge/create/edit/comment need exactly one `--repo github.com/OWNER/NAME` equal to the verified target; create needs one validated `--head`; implicit targets are Tier 3 | target_check, head_check, project_store.origin_target |
 | Title and body values of PR create/edit/comment, and `git commit -m` messages, are data (one exact `fnl-router` line included): newlines, tabs and a leading `-` pass; other controls, a backtick, `$(` and `$` before a letter, `_` or `{` deny; a review gate marker (`<!--`, optional space, `fnl-`) is `forbidden`; a secret, machine path or sensitive assignment is `unsafe`; one `--body-file` (gh) or `-F` (git commit) must be a regular file of at most 64 KiB inside the check's own checkout, outside the data root, with no link from that root down, whose text passes the control, marker, secret and path screens, read only for that verdict; comments follow `Repository comments` | text_values, text_ok, file_place, body_file, pr_text, commit_text |
 | With Merge yes: `git worktree remove [--] <path>` of a linked worktree of this repository whose HEAD is a full SHA a `log --kind merge --pr <number> --head` entry of this lease recorded, itself refused unless an allowed `gh pr merge` check of this lease pinned that number and head (never forced, the main checkout, the current checkout or a worktree holding this install) and `git branch -d [--] <branch>` (never -D, the current or a default branch) are Tier 1; `git rm [-r] [-q] [--] <paths>` on a work branch classifies each path like a change | worktree_remove, head_commit, merged_heads, branch_delete, tracked_remove |
+| `git worktree add -b <branch> <path> [origin/<default>]` is Tier 1 when the path is a new folder directly under the main checkout's `.claude/worktrees` (a plain, unprotected name; no link at `.claude` or `.claude/worktrees`), the one token spared the lexical check, and the branch passes `new_branch` | own_worktree_path, own_worktree_index, worktree_add |
 | `effective` prints the same context read-only for the advisory Task choice and Trusted authors | show_effective |
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
 | Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths; every path rule (roots, documents, protected names, links) applies to the operand's path relative to the checkout root of the check's validated identity, read from cwd, and with no identity no path is known | classify_paths, repository_path |
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
-| Only this install's ledger/record/heavy_run/merge_check/post_review script paths, with isolated Python, are allowed wrappers; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, review_post, review_body |
+| Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run` or `run --changed [--base <ref>]` with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
 | Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge and review-fallback kinds only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
 | Trusted PR authors, full independent review/check/local-test gate, changed paths (including staged commit paths), quota readings and actually calling check before execution remain caller obligations in this slice | agent judgment, advisory; merge_check --independent enforces its review condition |
@@ -836,6 +837,7 @@ def own_wrapper_index(argv):
     own = Path(__file__).resolve().parent
     trusted = {own / name for name in ('ledger.py', 'record.py', 'heavy_run.py', 'judge.py', 'delegate_env.py')}
     trusted |= {own.parent.parent / 'review-gate/scripts' / name for name in ('merge_check.py', 'post_review.py')}
+    trusted.add(own.parent.parent / 'checks/scripts/checks.py')
     path = Path(argv[index])
     if (path not in trusted or path.is_symlink() or not path.is_file()
             or any(parent.is_symlink() for parent in (path.parent, path.parent.parent))):
@@ -856,12 +858,15 @@ def script_command(argv, applied):
     gate = own.parent.parent / 'review-gate/scripts'
     allowed = {own / name for name in ('ledger.py', 'record.py', 'heavy_run.py')} | {gate / 'merge_check.py',
                                                                                      gate / 'post_review.py'}
+    allowed.add(own.parent.parent / 'checks/scripts/checks.py')
     if (path not in allowed or path.is_symlink() or not path.is_file()
             or any(parent.is_symlink() for parent in (path.parent, path.parent.parent))):
         return 'unknown'  # a linked skill folder could supply a different import namespace
     tail = argv[index + 1:]
     if path.name == 'post_review.py':
         return review_post(tail, applied)
+    if path.name == 'checks.py':
+        return checks_command(tail, applied)
     if path.name == 'heavy_run.py':
         if tail == ['status']:
             return 'allowed'
@@ -874,6 +879,20 @@ def script_command(argv, applied):
             return 'unknown'
         return classify_argv(command, applied)
     return 'allowed'
+
+
+def checks_command(tail, applied):
+    """This install's checks.py on the repository's approved check list (written only by setup): `show`, `run`, or
+    `run --changed [--base <ref>]`, in a found repository with user or project settings; never `--dispatch` (a
+    verification receipt) or `usage`."""
+    if context_of(applied).state not in ('user', 'project'):
+        return 'unknown'
+    if tail in (['show'], ['run'], ['run', '--changed']):
+        return 'allowed'
+    if (len(tail) == 4 and tail[:3] == ['run', '--changed', '--base'] and BRANCH.fullmatch(tail[3])
+            and not tail[3].startswith('-') and '..' not in tail[3]):
+        return 'allowed'
+    return 'unknown'
 
 
 REVIEW_RUN = re.compile(r'post-[0-9a-f]{32}')
@@ -1342,6 +1361,54 @@ def worktree_remove(tail, applied):
     return 'allowed' if head and head in applied.get(MERGED, ()) else 'unknown'
 
 
+WORKTREE_LEAF = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,63}')
+
+
+def own_worktree_path(token, applied):
+    """True when `token`, read from the check's folder, names a new folder directly under the main checkout's
+    .claude/worktrees: a plain leaf that is not a protected name and does not exist yet, with no link at .claude or
+    .claude/worktrees. Link and folder metadata only; on doubt, False."""
+    context = context_of(applied)
+    if (context.repository != 'found' or context.ident is None or not plain(token) or len(token) > 4096
+            or any(c in token for c in ':=\\') or token.startswith(('~', '-')) or '..' in token.split('/')):
+        return False
+    try:
+        full = Path(os.path.abspath(os.path.join(context.cwd or os.getcwd(), token)))
+        folder = Path(context.ident.main) / '.claude' / 'worktrees'
+        if not WORKTREE_LEAF.fullmatch(full.name) or protected(full.name) or os.path.lexists(full):
+            return False
+        for part in (folder.parent, folder):
+            if os.path.islink(part) or (os.path.lexists(part) and not os.path.isdir(part)):
+                return False
+        return os.path.realpath(full.parent) == os.path.realpath(folder)
+    except (OSError, ValueError):
+        return False
+
+
+def own_worktree_index(argv, applied):
+    """Index of the path token of `git worktree add -b <branch> <path> [<start>]` when it names a new own worktree
+    folder (`own_worktree_path`): the one token spared the lexical protected check; every other token is checked."""
+    if argv[:4] == ['git', 'worktree', 'add', '-b'] and len(argv) in (6, 7) and own_worktree_path(argv[5], applied):
+        return 5
+    return None
+
+
+def worktree_add(tail, applied):
+    """`git worktree add -b <branch> <path> [origin/<default>]`: a new own work branch (`new_branch`) checked out in
+    a new folder directly under the main checkout's .claude/worktrees (`own_worktree_path`); no other option or
+    start point."""
+    if tail[:2] != ['add', '-b'] or len(tail) not in (4, 5) or not own_worktree_path(tail[3], applied):
+        return 'unknown'
+    verdict = new_branch(tail[2], applied)
+    if verdict != 'allowed' or len(tail) == 4:
+        return verdict
+    try:
+        _, default = branch_context(context_of(applied))
+    except (OSError, ValueError, UnicodeError):
+        return 'unknown'
+    return 'allowed' if default and tail[4] == 'origin/' + default else 'unknown'
+
+
 def head_commit(ident):
     """The full commit id a checkout's HEAD names (detached, or through one local branch ref, loose or packed), else
     None. Local metadata only, no Git process."""
@@ -1453,8 +1520,8 @@ def classify_argv(argv, applied, coordinator=None):
         return 'unknown'
     if any(t in {';', '&&', '||', '|', '>', '>>', '<'} or '$(' in t or '`' in t for t in argv):
         return 'unknown'
-    wrapper = own_wrapper_index(argv)
-    if any(token_protected(t, applied) for i, t in enumerate(argv) if i != wrapper):
+    spared = {own_wrapper_index(argv), own_worktree_index(argv, applied)}
+    if any(token_protected(t, applied) for i, t in enumerate(argv) if i not in spared):
         return 'protected'
     command = argv[0]
     categories, deploy = command_categories(argv), is_deploy(argv)
@@ -1524,7 +1591,7 @@ def classify_argv(argv, applied, coordinator=None):
             return classify_paths(tail[1:] if tail[:1] == ['--'] else tail, applied.get('Roots', ()),
                                   context_of(applied), source_mode(applied), applied.get(FILES, ()))
         if verb == 'worktree':
-            return worktree_remove(tail, applied)
+            return worktree_add(tail, applied) if tail[:1] == ['add'] else worktree_remove(tail, applied)
         if verb == 'branch' and tail[:1] == ['-d']:
             return branch_delete(tail, applied)
         if verb == 'rm':

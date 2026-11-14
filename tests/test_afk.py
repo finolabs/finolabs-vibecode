@@ -2646,6 +2646,77 @@ class AwayFlowTest(AfkBase):
         self.check(['git', '-C', str(foreign), 'status'], tier=3, code='unknown')
         self.assertEqual(self.counts()['actions'], 7)
 
+    def test_an_own_worktree_is_added_under_the_main_checkouts_claude_worktrees(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        repo, tree, git = self.worktree()
+        self.cwd = repo
+        for argv in (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic'],
+                     ['git', 'worktree', 'add', '-b', 'afk/topic', str(repo / '.claude/worktrees/topic')],
+                     ['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic', 'origin/main'],
+                     ['git', '-C', str(repo), 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic']):
+            with self.subTest(argv=argv):
+                self.check(argv)
+        self.cwd = tree  # from a linked worktree, still into the main checkout's folder
+        self.check(['git', 'worktree', 'add', '-b', 'afk/topic', str(repo / '.claude/worktrees/topic')])
+        self.cwd = repo
+        (repo / '.claude/worktrees/taken').mkdir()
+        other, other_git = self.git_repo('other')
+        for argv, code in ((['git', 'worktree', 'add', '-b', 'main', '.claude/worktrees/topic'], 'unknown'),
+                           (['git', 'worktree', 'add', '-b', 'tags/v1', '.claude/worktrees/topic'], 'unknown'),
+                           (['git', 'worktree', 'add', '-B', 'afk/topic', '.claude/worktrees/topic'], 'protected'),
+                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/settings.json'], 'protected'),
+                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees'], 'protected'),
+                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/a/b'], 'protected'),
+                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/.hidden'], 'protected'),
+                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/hooks'], 'protected'),
+                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/taken'], 'protected'),
+                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/wt'], 'unknown'),  # a registered worktree
+                           (['git', 'worktree', 'add', '-b', 'afk/topic', str(tree / '.claude/worktrees/x')], 'protected'),
+                           (['git', 'worktree', 'add', '-b', 'afk/topic', str(other / '.claude/worktrees/x')], 'protected'),
+                           (['git', 'worktree', 'add', '-b', 'afk/topic', '../elsewhere'], 'unknown'),
+                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic', 'HEAD~1'], 'unknown'),
+                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic', 'origin/other'], 'unknown'),
+                           (['git', 'worktree', 'add', '-f', '-b', 'afk/topic', '.claude/worktrees/topic'], 'protected'),
+                           (['git', 'worktree', 'add', '.claude/worktrees/topic', '-b', 'afk/topic'], 'protected'),
+                           (['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic', 'origin/main', 'x'], 'protected')):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code=code)
+        # A linked folder on the way could point the new worktree anywhere.
+        import shutil
+        shutil.rmtree(repo / '.claude/worktrees/taken')
+        elsewhere = self.home / 'elsewhere'
+        elsewhere.mkdir()
+        (repo / '.claude/worktrees/link').symlink_to(elsewhere)
+        self.check(['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/link'], tier=3, code='protected')
+        linked, linked_git = self.git_repo('linked')
+        (linked / '.claude').symlink_to(elsewhere)
+        self.cwd = linked
+        self.check(['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic'], tier=3, code='protected')
+        # The branch needs Push and pull requests or Merge, like any new work branch.
+        self.cwd = repo
+        self.invoke('stop')
+        self.clock += 60
+        self.start(SETUP.replace('Push and pull requests: yes', 'Push and pull requests: no')
+                   .replace('Merge: yes', 'Merge: no') + '- Max actions per hour: 1000\n')
+        self.check(['git', 'worktree', 'add', '-b', 'afk/topic', '.claude/worktrees/topic'], tier=3, code='push-disabled')
+
+    def test_the_installs_checks_runner_runs_the_approved_check_list(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.cwd, _ = self.git_repo('checking')
+        checks = ['python3', '-I', str(ROOT / 'skills/checks/scripts/checks.py')]
+        for tail in (['run'], ['run', '--changed'], ['run', '--changed', '--base', 'origin/main'], ['show']):
+            with self.subTest(tail=tail):
+                self.check(checks + tail)
+        for tail in (['run', '--dispatch', 'abc'], ['run', '--base', 'origin/main'], ['run', '--changed', '--base', '-x'],
+                     ['run', '--changed', '--base', 'a..b'], ['usage', '--from', 'runs.json'], [], ['run', 'extra']):
+            with self.subTest(tail=tail):
+                self.check(checks + tail, tier=3, code='unknown')
+        self.check(['python3', str(ROOT / 'skills/checks/scripts/checks.py'), 'run'], tier=3, code='protected')
+        outside = self.home / 'no-repository'
+        outside.mkdir()
+        self.cwd = outside
+        self.check(checks + ['run'], tier=3, code='unknown')
+
     def test_pull_request_text_is_data_and_a_body_file_is_screened(self):
         self.start(SETUP + '- Max actions per hour: 1000\n- Repository comments: decide\n')
         repo = '--repo', 'github.com/example/demo'
