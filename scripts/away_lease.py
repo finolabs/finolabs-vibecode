@@ -52,11 +52,15 @@ def read_lease(folder):
             or not isinstance(value['settings_hash'], str) or not re.fullmatch(r'[0-9a-f]{64}', value['settings_hash'])):
         raise ValueError('afk lease is invalid')
     counters = value['counters']
-    if (not isinstance(counters, dict) or set(counters) != {'runs', 'runtime_minutes', 'actions', 'hour_actions'}
-            or any(type(counters[k]) is not int or counters[k] < 0 for k in ('runs', 'actions'))
-            or not finite(counters['runtime_minutes']) or not isinstance(counters['hour_actions'], list)
-            or len(counters['hour_actions']) > 10000
-            or not all(finite(t) for t in counters['hour_actions'])):
+    # Per-project counters (docs/specs/afk-per-project.md "A"): full identity digest or `unknown` -> entry.
+    if not isinstance(counters, dict) or len(counters) > 64 or not all(
+            isinstance(key, str) and re.fullmatch(r'[0-9a-f]{64}|unknown', key) and isinstance(entry, dict)
+            and set(entry) == {'runs', 'actions', 'hour_actions', 'first'}
+            and all(type(entry[k]) is int and entry[k] >= 0 for k in ('runs', 'actions'))
+            and (entry['first'] is None or finite(entry['first']))
+            and isinstance(entry['hour_actions'], list) and len(entry['hour_actions']) <= 10000
+            and all(finite(t) for t in entry['hour_actions'])
+            for key, entry in counters.items()):
         raise ValueError('afk counters are invalid')
     return value
 

@@ -26,7 +26,7 @@ Ask: "Whose pull requests may the agents check out and test?"
 Choices: Your own account, including agents using that login, and afk's own branches (Trusted authors: own). This slice offers no other authors; declining leaves setup pending.
 Undo: Stop afk to stop handling them.
 
-Ask: "Use these limits for one away session: 8 hours, 20 helper runs, 480 runtime minutes, 30 actions an hour, and stop when 15% of AI usage is left?"
+Ask: "Use these limits for one away session: 8 hours, and in each repository 20 helper runs, 480 runtime minutes, 30 actions an hour, and stop when 15% of AI usage is left?"
 Yes: Save Lease hours 8, Max runs 20, Max runtime minutes 480, Max actions per hour 30, Quota floor percent 15.
 No: Ask each in one round as a whole number (one left unanswered stays open; ask it again): hours 1-24 (a start can shorten it), runs 1-10000, runtime minutes 1-1440, actions an hour 1-10000, quota floor 0-100.
 Undo: Stop the lease; repeat setup to change future limits.
