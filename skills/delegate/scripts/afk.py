@@ -1652,9 +1652,13 @@ def show_effective(folder):
                      separators=(',', ':')))
 
 
+class Refusal(ValueError):
+    """A `log` or `review` input outside the closed schema; its message names the flag and why, never a value."""
+
+
 def safe_note(note):
     if len(note) > 8192:
-        raise ValueError('afk note is too large')
+        raise Refusal('--note is longer than 8192 characters')
     note = ''.join(c for c in note if not unicodedata.category(c).startswith('C'))
     note = secret_patterns.redacted(note, secret_patterns.findings(note)).replace('\\', '/')
     # All assignments, even short values, may contain environment values.
@@ -1667,7 +1671,7 @@ def safe_note(note):
 
 def label(value):
     if not isinstance(value, str) or not LABEL.fullmatch(value) or secret_patterns.findings(value):
-        raise ValueError('afk label is invalid')
+        raise Refusal('--topic and --project are short labels (letters, digits, space, dot, dash, underscore; 1 to 60) without a secret')
     return value
 
 
@@ -1687,48 +1691,51 @@ def attempt(args):
     """Validate one attempt against the closed schema; return the fields stored in the ledger."""
     rung, settled = args.rung, args.settled
     if rung is None or settled is None or args.project is None or args.topic is None or args.precedents is None:
-        raise ValueError('afk decision needs rung, settled, project, topic and precedents')
+        raise Refusal('--kind decision needs --rung, --settled, --project, --topic and --precedents')
     given = {f for f in FIELDS if getattr(args, f) is not None}
     if (rung, settled) == ('advisor', 'unavailable'):
         required, optional = ({'by'}, {'dispatch'}) if 'by' in given else (set(), set())
     elif (rung, settled) in ATTEMPTS:
         required, optional = ATTEMPTS[rung, settled]
     else:
-        raise ValueError('afk decision rung and result do not match')
+        raise Refusal('--rung and --settled name no row of the decision schema')
     if not required <= given <= required | optional:
-        raise ValueError('afk decision fields do not match the schema')
+        missing, extra = sorted(required - given), sorted(given - required - optional)
+        raise Refusal('the %s %s row %s' % (rung, settled, '; '.join(
+            ([] if not missing else ['needs ' + ', '.join('--' + f for f in missing)])
+            + ([] if not extra else ['takes no ' + ', '.join('--' + f for f in extra)]))))
     if not re.fullmatch(r'[0-8]', args.precedents):
-        raise ValueError('afk precedents count is invalid')
+        raise Refusal('--precedents is a whole number from 0 to 8')
     fields = dict(rung=rung, settled=settled, precedents=int(args.precedents), topic=label(args.topic))
     if 'by' in given:
         valid = {'rule': args.by == 'rule', 'table': args.by in TABLE_SOURCES, 'advisor': bool(ADVISOR.fullmatch(args.by)),
                  'host': args.by in PROGRAMS, 'park': args.by in PROGRAMS}[rung]
         if not valid:
-            raise ValueError('afk decider is invalid')
+            raise Refusal('--by is not a valid decider for this rung')
         fields['by'] = args.by
     if 'of' in given:
         if not re.fullmatch(r'[2-6]', args.of):
-            raise ValueError('afk option is invalid')
+            raise Refusal('--of is a whole number from 2 to 6')
         fields['of'] = int(args.of)
     if 'option' in given:
         if not re.fullmatch(r'[1-6]', args.option) or int(args.option) > int(args.of):
-            raise ValueError('afk option is invalid')
+            raise Refusal('--option is a whole number from 1 to --of')
         fields['option'] = int(args.option)
     if 'probability' in given:
         # The top probability of the table, a bounded plain decimal (up to 17 significant digits round-trip).
         if not re.fullmatch(r'[01](?:\.[0-9]{1,20})?', args.probability):
-            raise ValueError('afk probability is invalid')
+            raise Refusal('--probability is a plain decimal from 0 to 1')
         probability = float(args.probability)
         if not math.isfinite(probability) or not 0 <= probability <= 1:
-            raise ValueError('afk probability is invalid')
+            raise Refusal('--probability is a plain decimal from 0 to 1')
         fields['probability'] = probability
     if 'dispatch' in given:
         if not DISPATCH_ID.fullmatch(args.dispatch):
-            raise ValueError('afk dispatch id is invalid')
+            raise Refusal('--dispatch is a ledger dispatch id (d<date>-<time>-<4 hex>)')
         fields['dispatch'] = args.dispatch
     if 'model' in given:
         if not MODEL.fullmatch(args.model):
-            raise ValueError('afk model is invalid')
+            raise Refusal('--model is not a model name (letters, digits, dot, dash, colon, underscore; at most 80)')
         fields['model'] = args.model
     return fields
 
@@ -1739,13 +1746,13 @@ def decide(folder, args, current):
     project = label(args.project)
     lease = None if read_private(folder, 'stop') is not None else read_lease(folder)
     if lease is None or not lease['start'] <= current < lease['expiry']:
-        raise ValueError('afk decision needs a live lease')
+        raise Refusal('--kind decision needs a live lease')
     if args.decision is None:
         identifier = time.strftime('q%Y%m%d-%H%M%S-', time.localtime(current)) + os.urandom(2).hex()
     elif recorded_decision(args.decision):
         identifier = args.decision
     else:
-        raise ValueError('afk decision id is unknown')
+        raise Refusal('--decision names no recorded decision id')
     import away_lease
     away_lease.append_ledger(dict(event='decision', id=identifier, ts=iso(current), project=project,
                                   lease_start=lease['start'], **fields))
@@ -1754,7 +1761,7 @@ def decide(folder, args, current):
 
 def review(folder, args):
     if not recorded_decision(args.decision):
-        raise ValueError('afk decision id is unknown')
+        raise Refusal('--decision names no recorded decision id')
     import away_lease
     away_lease.append_ledger(dict(event='decision_review', id=args.decision, ts=iso(now()), verdict=args.verdict))
     print('Decision review recorded')
@@ -1804,29 +1811,29 @@ def packet_check(args):
 def log(folder, args):
     decision_flags = ('rung', 'settled', 'precedents', 'topic', 'project', 'decision', *FIELDS)
     if args.kind != 'decision' and any(getattr(args, key) is not None for key in decision_flags):
-        raise ValueError('Decision fields belong to the decision kind')
+        raise Refusal('decision fields (--rung, --settled, --precedents, --topic, --project, --decision and the row fields) belong to --kind decision only')
     current = now()
     fields = {}
     for key in ('task', 'run'):
         value = getattr(args, key)
         if value is not None:
             if not ID.fullmatch(value) or secret_patterns.findings(value):
-                raise ValueError('afk id is invalid')
+                raise Refusal('--task and --run are plain ids without a secret')
             fields[key] = value
     if args.pr is not None:
         if not re.fullmatch(r'[1-9][0-9]{0,9}', args.pr):
-            raise ValueError('afk pull request id is invalid')
+            raise Refusal('--pr is a pull request number')
         fields['pr'] = int(args.pr)
     if args.head is not None:
         # The merged pull request's full head SHA: the one worktree `git worktree remove` may then take away. A
         # review-fallback line records the head whose same-family reviews counted, for the user's return; it pins nothing.
         if args.kind not in ('merge', 'review-fallback') or not SHA.fullmatch(args.head) or args.pr is None:
-            raise ValueError('afk head belongs to the merge or review-fallback kind with its --pr and is a full lowercase SHA')
+            raise Refusal('--head belongs to --kind merge or review-fallback with its --pr and is a full lowercase SHA')
         fields['head'] = args.head
     if args.kind == 'review-fallback' and (args.pr is None or args.head is None):
-        raise ValueError('afk review-fallback needs --pr and --head')
+        raise Refusal('--kind review-fallback needs --pr and --head')
     if args.kind == 'merge' and args.head is not None and (fields['pr'], args.head) not in merge_pins(folder, current):
-        raise ValueError('afk merge head matches no allowed `gh pr merge` check of this lease')
+        raise Refusal('--head matches no allowed `gh pr merge` check of this lease')
     note = safe_note(args.note or '')
     # Every other check passes before the decision line reaches the ledger.
     identifier = decide(folder, args, current) if args.kind == 'decision' else None
@@ -1922,9 +1929,12 @@ def main(argv=None):
             else:
                 log(folder, args)
         return 0
-    except (OSError, ValueError, UnicodeError, TypeError, KeyError):
+    except (OSError, ValueError, UnicodeError, TypeError, KeyError) as error:
         if args.command == 'check':
             print(json.dumps({'tier': 3, 'code': 'unsafe'}, separators=(',', ':')))
+            return 3
+        if isinstance(error, Refusal):
+            print('afk refused: ' + str(error))
             return 3
         print('afk refused: setup or private state is missing, invalid, unsafe or already active')
         return 3

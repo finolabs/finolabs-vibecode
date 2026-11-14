@@ -637,6 +637,44 @@ class AwayDecisionTest(AfkBase):
         self.assertEqual(self.invoke('log', '--kind', 'action', '--rung', 'park')[0], 3)
         self.assertEqual(self.invoke('log', '--kind', 'decision', *park)[0], 3)
 
+    def test_a_schema_refusal_names_the_field_and_a_state_failure_stays_generic(self):
+        self.start()
+        generic = 'afk refused: setup or private state is missing, invalid, unsafe or already active\n'
+        advisor_no = ROWS['advisor no'][0]
+        for flags, kwargs, message in (
+                (advisor_no + ('--option', '1', '--of', '3'), {}, 'the advisor no row takes no --of, --option'),
+                (('--rung', 'advisor', '--settled', 'yes', '--by', 'codex'), {},
+                 'the advisor yes row needs --dispatch, --model, --of, --option'),
+                (ROWS['park yes'][0] + ('--decision', 'q20261115-000000-abcd'), {}, '--decision names no recorded decision id'),
+                (ROWS['park yes'][0], dict(precedents='9'), '--precedents is a whole number from 0 to 8'),
+                (ROWS['park yes'][0], dict(topic='src/private.py'), '--topic and --project are short labels'),
+                (('--rung', 'user', '--settled', 'yes'), {}, '--rung and --settled name no row of the decision schema'),
+                (('--rung', 'rule', '--settled', 'yes', '--by', 'rule', '--option', '3', '--of', '2'), {},
+                 '--option is a whole number from 1 to --of'),
+                (('--rung', 'rule', '--settled', 'yes', '--by', 'rule', '--option', '1', '--of', '7'), {},
+                 '--of is a whole number from 2 to 6'),
+                (('--rung', 'advisor', '--settled', 'no', '--by', 'codex', '--dispatch', 'bad', '--model', 'm'), {},
+                 '--dispatch is a ledger dispatch id')):
+            with self.subTest(message=message):
+                status, output = self.decide(*flags, **kwargs)
+                self.assertEqual(status, 3, output)
+                self.assertTrue(output.startswith('afk refused: ' + message), output)
+                self.assertNotIn('private state', output)
+        # The message never echoes a value the caller passed.
+        status, output = self.decide(*ROWS['park yes'][0], topic='ghp_' + 'x' * 30)
+        self.assertNotIn('ghp_', output)
+        status, output = self.invoke('log', '--kind', 'action', '--rung', 'park')
+        self.assertEqual(status, 3)
+        self.assertIn('belong to --kind decision only', output)
+        status, output = self.invoke('review', '--decision', 'q20261115-000000-abcd', 'kept')
+        self.assertEqual((status, output), (3, 'afk refused: --decision names no recorded decision id\n'))
+        # Without a live lease, or with unreadable private state, the refusal stays generic.
+        self.assertEqual(self.invoke('stop')[0], 0)
+        self.assertEqual(self.decide(*ROWS['park yes'][0]), (3, 'afk refused: --kind decision needs a live lease\n'))
+        self.state.chmod(0o755)
+        self.addCleanup(self.state.chmod, 0o700)
+        self.assertEqual(self.decide(*ROWS['park yes'][0]), (3, generic))
+
     def test_a_table_probability_round_trips_unchanged_with_no_threshold(self):
         self.start()
         # Any top probability in 0..1 records as a table: the table decides nothing, so no value settles or blocks.
