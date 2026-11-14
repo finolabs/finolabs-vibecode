@@ -82,7 +82,7 @@ Enforcer: `merge_check.py` for conditions 1 to 5 (script); trying the other fami
 ### E. Stoppers removed (pull request 3)
 
 - `post_review.py` becomes an allowed wrapper in `afk.py check`, in both orders `<pr> --body-file <file>` and `--body-file <file> <pr>`, and bare `<pr>` (which creates the run folder). The file must be the run body `post_review.py` itself accepts: `<data root>/state/review-posting/post-<32 hex>/body.md`, a regular 0600 file, no link, at most 64 KiB. `check` screens the text after its first line with the pull request text screens (no secret, machine path, sensitive assignment or second `<!-- fnl-` marker), requires the verified target (not the strict state) and `Repository comments` at `decide`.
-- A Markdown skill repository: when the default branch's committed tree (read from local Git objects, never the work tree) has a root `SKILL.md`, and `source_mode` holds (a non-default work branch with Push and pull requests or Merge yes), the root `SKILL.md` and `references/**`, `scripts/**` and `evals/**` are source paths. The hard names and the enforcer scripts stay protected.
+- A Markdown skill repository: when the user approved `skill-repository: yes` for that repository in `/setup add afk` (project scope, bound to the approved digest like every project value; a file in the work tree or a branch cannot set it), and `source_mode` holds (a non-default work branch with Push and pull requests or Merge yes), the root `SKILL.md` and `references/**`, `scripts/**` and `evals/**` are source paths; a `SKILL.md` below the root stays protected. The hard names stay protected. (Changed in pull request 3 from reading the default branch's Git objects: `afk.py` runs no program, and an explicit approval is the narrower grant.)
 
 ## Acceptance
 
