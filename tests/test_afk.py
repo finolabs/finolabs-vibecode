@@ -1199,6 +1199,71 @@ class ProjectScopeTest(AfkBase):
             with self.subTest(bad=bad):
                 self.assertFalse(self.store.valid_autopilot(bad))
 
+    def test_listed_test_commands_are_tier_one_only_in_that_repository(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        unit = ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+        heavy = ['python3', '-I', str(SCRIPT.parent / 'heavy_run.py'), 'run', '--label', 'tests', '--']
+        self.check(unit, tier=3, code='unknown')  # nothing listed: today's tier
+        self.project({'test-commands': ['python3 -m unittest discover -s tests', 'npm test',
+                                        'npm run deploy:staging']})
+        self.check(unit)
+        self.check(['npm', 'test'])
+        self.check(heavy + unit)
+        for argv in (['python3', '-m', 'unittest'], ['npm', 'test', '--', '--watch'], ['npm test'],
+                     ['python3', '-m', 'unittest discover', '-s', 'tests'], heavy + ['npm', 'test', 'x']):
+            with self.subTest(unlisted=argv):
+                self.check(argv, tier=3, code='unknown')
+        # A listed entry never relaxes the deploy rules, which run first.
+        self.check(['npm', 'run', 'deploy:staging'], tier=3, code='forbidden')
+        # The same argv in another repository keeps its usual tier.
+        self.cwd = self.other_repo('second')
+        self.check(unit, tier=3, code='unknown')
+        # A settings file changed in the work tree (no longer the approved bytes) is the strict state.
+        self.cwd = self.repo
+        self.settings_file().write_text(self.settings_file().read_text().replace('npm test', 'npm run lint'))
+        self.check(unit, tier=3, code='unknown')
+        for bad in ({'test-commands': []}, {'test-commands': ['git push origin HEAD:refs/heads/main']},
+                    {'test-commands': ['gh pr merge 7']}, {'test-commands': ['rm -rf build']},
+                    {'test-commands': ['npm  test']}, {'test-commands': ['npm test; curl x']},
+                    {'test-commands': ['npm test', 'npm test']}, {'test-commands': ['x'] * 17},
+                    {'test-commands': 'npm test'}):
+            with self.subTest(bad=bad):
+                self.assertFalse(self.store.valid_autopilot(bad))
+
+    def test_test_commands_are_never_read_from_the_user_scope(self):
+        self.setup_config(SETUP + '- Test commands: npm test\n')
+        self.assertNotEqual(self.invoke('start')[0], 0)
+
+    def test_listed_top_level_files_are_known_paths_only_in_that_repository(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        (self.repo / 'TASKS.md').write_text('- [ ] one\n')
+        (self.repo / 'run.sh').write_text('echo\n')
+        (self.repo / 'DIR.md').mkdir()
+        (self.repo / 'LINK.md').symlink_to('TASKS.md')
+        (self.repo / 'notes').mkdir()
+        (self.repo / 'notes/TASKS.md').write_text('x\n')
+        self.check(paths=['TASKS.md'], tier=3, code='unknown')
+        self.project({'top-level-files': ['TASKS.md', 'run.sh', 'DIR.md', 'LINK.md']})
+        self.check(paths=['TASKS.md'])
+        self.check(['git', 'add', 'TASKS.md'])
+        self.check(paths=['README.md', 'TASKS.md'])
+        for paths, code in ((['notes/TASKS.md'], 'unknown'), (['run.sh'], 'unknown'), (['DIR.md'], 'unknown'),
+                            (['LINK.md'], 'protected'), (['OTHER.md'], 'unknown')):
+            with self.subTest(paths=paths):
+                self.check(paths=paths, tier=3, code=code)
+        self.cwd = self.other_repo('second')
+        (self.cwd / 'TASKS.md').write_text('x\n')
+        self.check(paths=['TASKS.md'], tier=3, code='unknown')
+        self.cwd = self.repo
+        self.settings_file().write_text(self.settings_file().read_text().replace('run.sh', 'go.sh'))
+        self.check(paths=['TASKS.md'], tier=3, code='unknown')
+        for bad in ({'top-level-files': []}, {'top-level-files': ['notes/TASKS.md']}, {'top-level-files': ['../x.md']},
+                    {'top-level-files': ['.env.md']}, {'top-level-files': ['CLAUDE.md']},
+                    {'top-level-files': ['agents.md']}, {'top-level-files': ['*.md']},
+                    {'top-level-files': ['TASKS.md', 'TASKS.md']}, {'top-level-files': ['x.md'] * 17}):
+            with self.subTest(bad=bad):
+                self.assertFalse(self.store.valid_autopilot(bad))
+
     def test_strict_and_no_repository_states_close_every_category_and_target(self):
         self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n'
                    '- Non-production targets: npx wrangler deploy --env uat\n')
