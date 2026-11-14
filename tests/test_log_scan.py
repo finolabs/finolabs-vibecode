@@ -30,6 +30,10 @@ class LogScanTest(unittest.TestCase):
         self.write('AUTHOR' + '_NAME=' + value)
         self.assertEqual(log_scan.scan(self.log)['status'], 'no_findings')
 
+    def test_an_empty_log_is_not_scanned(self):
+        self.write(b'')
+        self.assertEqual(log_scan.scan(self.log)['status'], 'not_scanned')
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
