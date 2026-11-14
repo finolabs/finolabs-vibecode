@@ -1159,7 +1159,7 @@ class ProjectScopeTest(AfkBase):
         self.check(production)
         self.check(['npx', 'wrangler', 'deploy', '--env', 'uat'])  # the user's non-production list is inherited
         # A token holding a space never matches two listed words, though the joined text is the same.
-        for argv in (['npx', 'wrangler', 'deploy', '--env production'], ['npx', 'wrangler', 'deploy --env', 'uat']):
+        for argv in (['npx', 'wrangler', 'deploy', '--env production'], ['npx', 'wrangler', 'deploy', '--env uat']):
             with self.subTest(argv=argv):
                 self.check(argv, tier=3, code='forbidden')
         for argv in (production + ['--minify'], ['npx', 'wrangler', 'deploy', '--env', 'live'],
