@@ -30,6 +30,34 @@ class LogScanTest(unittest.TestCase):
         self.write('AUTHOR' + '_NAME=' + value)
         self.assertEqual(log_scan.scan(self.log)['status'], 'no_findings')
 
+    def test_log_root_accepts_only_direct_children_of_a_known_run_log_folder(self):
+        other = Path(self.tmp.name).resolve() / 'task'
+        named = other / '.finolabs' / 'logs'
+        self.assertEqual(log_scan.log_root(self.root / 'run.log'), self.root)
+        self.assertEqual(log_scan.log_root(named / 'run.log', checkout=other), named)
+        for bad, checkout in ((named / 'run.log', None), (self.root / 'sub' / 'run.log', None),
+                              (Path(self.tmp.name) / 'run.log', other)):
+            with self.subTest(path=bad), self.assertRaises(ValueError):
+                log_scan.log_root(bad, checkout=checkout)
+
+    def test_main_checkout_is_the_parent_of_the_common_git_folder(self):
+        import subprocess
+        main = Path(self.tmp.name).resolve() / 'main'
+        tree = Path(self.tmp.name).resolve() / 'tree'
+        main.mkdir()
+        git = ['git', '-c', 'user.name=t', '-c', 'user.email=t@example.com']
+        subprocess.run([*git, 'init', '-q'], cwd=main, check=True)
+        subprocess.run([*git, 'commit', '-q', '--allow-empty', '-m', 'init'], cwd=main, check=True)
+        subprocess.run([*git, 'worktree', 'add', '-q', str(tree)], cwd=main, check=True)
+        self.assertEqual(log_scan.main_checkout(tree), main)
+        self.assertEqual(log_scan.main_checkout(main), main)
+        self.assertIn(main / '.finolabs' / 'logs', log_scan.run_log_folders(tree))
+        self.assertIsNone(log_scan.main_checkout(Path(self.tmp.name).resolve() / 'logs'))
+
+    def test_an_empty_log_is_not_scanned(self):
+        self.write(b'')
+        self.assertEqual(log_scan.scan(self.log)['status'], 'not_scanned')
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

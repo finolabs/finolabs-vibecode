@@ -79,14 +79,15 @@ def ledger_metrics(ledger, start, usage_start=None):
     """(delegation rows, overall first pass, weekly first pass with None for empty weeks, finished runs, runs handed off)."""
     rows = ledger.summary_rows(keys=("agent", "model", "grade"), since=start.isoformat())
     delegation = [{"agent": r["agent"], "model": r["model"], "grade": r["grade"], "runs": r["n"], "first_pass": r["first_pass"],
-                   "quota": r["quota"], "error": r["error"], "median_min": round(r["median_min"]), "rework": round(r["rework"], 1), "accepted_unverified": r["accepted_unverified"]}
+                   "quota": r["quota"], "error": r["error"], "median_min": round(r["median_min"]) if r["median_min"] is not None else "-", "rework": round(r["rework"], 1), "accepted_unverified": r["accepted_unverified"]}
                   for r in rows]
     runs = sum(r["n"] for r in rows)
     starts, finishes = ledger.load()
     done, good = [0] * WEEKS, [0] * WEEKS
+    late = getattr(ledger, "closed_late", lambda finish: False)  # closed late as cancelled: no verdict on the run
     for dispatch_id, s in starts.items():
         f = finishes.get(dispatch_id)
-        w = week_of(local_date(s["ts"]), start) if f else None
+        w = week_of(local_date(s["ts"]), start) if f and not late(f) else None
         if w is not None:
             done[w] += 1
             good[w] += f["outcome"] == "accepted" and f["rework_rounds"] == 0
