@@ -398,7 +398,7 @@ evals/                            trigger, behavior and parity cases for `claude
 scripts/                          repository/shared helpers and checks: routing, reviews, receipts, judge, context, hygiene, slots, quota, metrics and setup; shared helpers have byte-identical copies in consuming skills
 skills/*/scripts/                 self-contained copies plus skill-only helpers; the full inventory is in help/references/map.md
 docs/specs/                       design specs (index.md) and one-file work records; work-tracking.md defines their contract
-docs/diagrams/                    HTML sources of the architecture, task-lifecycle, request-to-merge, delegation sequence, away decision sequence, session health and settings scopes diagrams
+docs/diagrams/                    HTML sources of the architecture, task-lifecycle, request-to-merge, delegation sequence, away decision sequence, afk mechanism, session health and settings scopes diagrams
 docs/how-it-compares.md           how the plugin relates to the hosts' own subagents, agent teams, /loop, /goal and scheduled runs
 tests/                            unit tests for the repository scripts, the ledger, the metrics hook and the dashboard page (the page script runs in node when it is installed)
 CHANGELOG.md                      Keep a Changelog
@@ -499,7 +499,7 @@ Claude Code only, on by default: the compaction nudge, a `UserPromptSubmit` hook
 
 ### One delegated task, and a decision while you are away
 
-Two sequence diagrams follow the agents step by step. [One delegated task, dispatch to merge](docs/diagrams/delegation-sequence-light.html) ([dark](docs/diagrams/delegation-sequence-dark.html)): the coordinator records the dispatch with `ledger.py start`, which prints the run's name, the implementer runs in the background, the coordinator verifies and accepts against a receipt, reviewers of another family (when one is available) post their markers and `merge_check.py` passes before the merge. [A decision while you are away](docs/diagrams/away-decision-sequence-light.html) ([dark](docs/diagrams/away-decision-sequence-dark.html)): the question gate denies the question tool during a lease, `/afk start` prints a goal for `/goal` and may start a `/loop`, the host climbs the ladder (a recorded rule, Jev at 0.8, an advisor of another family in choose mode, its own choice), checks twice against what must stop, parks or records the attempt with `afk.py log`, and on return you mark each decision kept or reversed.
+Two sequence diagrams follow the agents step by step. [One delegated task, dispatch to merge](docs/diagrams/delegation-sequence-light.html) ([dark](docs/diagrams/delegation-sequence-dark.html)): the coordinator records the dispatch with `ledger.py start`, which prints the run's name, the implementer runs in the background, the coordinator verifies and accepts against a receipt, reviewers of another family (when one is available) post their markers and `merge_check.py` passes before the merge. [A decision while you are away](docs/diagrams/away-decision-sequence-light.html) ([dark](docs/diagrams/away-decision-sequence-dark.html)): the question gate denies the question tool during a lease, `/afk start` prints a goal for `/goal` and may start a `/loop`, the host climbs the ladder (a recorded rule, an evaluation table from Jev or the host's small model that gives each option a probability and decides nothing, an advisor of another family in choose mode, its own choice), checks twice against what must stop, parks or records the attempt with `afk.py log`, and on return you mark each decision kept or reversed.
 
 <p align="center">
   <picture>
@@ -511,13 +511,22 @@ Two sequence diagrams follow the agents step by step. [One delegated task, dispa
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/away-decision-sequence-dark.png">
-    <img src="assets/away-decision-sequence-light.png" alt="Sequence diagram of a decision during an away lease: /afk start prints a goal for /goal and may start /loop, the question gate denies AskUserQuestion, the host checks what must stop, climbs the ladder of recorded rule, Jev, an advisor of another family and its own choice, checks the chosen action again, records each attempt, and the user marks each decision kept or reversed on return." width="900">
+    <img src="assets/away-decision-sequence-light.png" alt="Sequence diagram of a decision during an away lease: /afk start prints a goal for /goal and may start /loop, the question gate denies AskUserQuestion, the host checks what must stop, climbs the ladder of recorded rule, an evaluation table from Jev or the host's small model given as data, an advisor of another family and its own choice, checks the chosen action again, records each attempt, and the user marks each decision kept or reversed on return." width="900">
   </picture>
 </p>
 
 _This diagram predates 0.2.6: roles and the judge now live only in the assignment matrix, and a lease end tells the loop to stop._
 
-The sources of all seven diagrams are in [`docs/diagrams/`](docs/diagrams/).
+The [afk mechanism](docs/diagrams/afk-mechanism-light.html) ([dark](docs/diagrams/afk-mechanism-dark.html)) puts the whole away flow on one page: setup for your account and for each repository (its own limits, decide list and deploy targets, production only where that repository lists the command), one lease, `afk.py check` before every action, the decide ladder fed by the evaluation table, reviews by another family with the same-family fallback only when none is reachable, merges on `MERGE OK`, deploys to listed targets, and the report when you are back.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/afk-mechanism-dark.png">
+    <img src="assets/afk-mechanism-light.png" alt="Flow diagram of afk: setup for your account and for each repository feeds /afk start and one lease; before each action afk.py check sends Tier 1 work to act and log and parks Tier 3 work; a question goes up the decide ladder (recorded rule, evaluation table from Jev or the host's small model given as data, an advisor in choose mode, the host) and the choice returns through check; pull requests are reviewed by another family, by the same family only when no other is reachable, merged on MERGE OK and deployed only to listed targets, production only where that repository lists and decides it; /afk stop or a spent repository, the hourly limit or the end line ends the loop, and you review the report and each decision." width="900">
+  </picture>
+</p>
+
+The sources of all eight diagrams are in [`docs/diagrams/`](docs/diagrams/).
 
 ### Bricks, not a framework
 
