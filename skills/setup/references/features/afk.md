@@ -33,7 +33,7 @@ Undo: Stop the lease; repeat setup to change future limits.
 Choices: "Yes, use these limits" / "No, set each limit".
 Missing or stale usage readings also stop routing (advisory, agent judgment).
 
-Then follow [../afk-decisions.md](../afk-decisions.md): what must wait for you, optional deploy targets and the separate excerpt consent.
+Then follow [../afk-decisions.md](../afk-decisions.md): what must wait for you, optional deploy targets, the default test commands, top-level files, release and production commands for every repository, and the separate excerpt consent.
 
 Ask Merge last among the settings: "May the agents merge pull requests while a lease is live?"
 Yes: Save Merge: yes. This lets the agents merge eligible pull requests while a lease is live when both independent reviews and all checks pass at the current head, including local tests of touched modules and MERGE OK from merge_check.py. Only your own account and afk's own branches qualify; protected changes remain forbidden. This is your own decision and grants merge authority.
@@ -42,7 +42,7 @@ Undo: Stop the current lease and repeat setup with Merge: no to withdraw this au
 Choices: "Yes, allow merges during a live lease" / "No, keep merges off".
 There is no default for Merge. Starting a lease applies this answer; it does not grant any further authority (advisory, agent judgment; the script denies merge when the setting is no).
 
-Translate the answers into `python3 -I <this skill folder>/scripts/afk_setup.py preview --hosts <names> --task-choice <choose|listed> --push-and-pull-requests <yes|no> --trusted-authors own --lease-hours <n> --max-runs <n> --max-runtime-minutes <n> --max-actions-per-hour <n> --quota-floor-percent <n> --merge <yes|no> [--decide <key>]... [--non-production-target '<command>']... --excerpts-leave-the-machine <yes|no>`.
+Translate the answers into `python3 -I <this skill folder>/scripts/afk_setup.py preview --hosts <names> --task-choice <choose|listed> --push-and-pull-requests <yes|no> --trusted-authors own --lease-hours <n> --max-runs <n> --max-runtime-minutes <n> --max-actions-per-hour <n> --quota-floor-percent <n> --merge <yes|no> [--decide <key>]... [--non-production-target '<command>']... [--test-command '<command>']... [--top-level-file <name>]... [--release-target '<command>']... [--production-target '<command>']... --excerpts-leave-the-machine <yes|no>`.
 Quote "Claude Code" as one name. Pass every answer explicitly. Show the target, entire section, backup and SHA-256 digest before asking the separate write approval:
 "Save the shown away-session settings?"
 Yes: Apply only the previewed afk section in local host.md, keeping a backup of an existing file. No lease starts and no permission beyond the answered settings is granted.

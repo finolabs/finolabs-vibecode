@@ -36,6 +36,13 @@ No move has a default. Pass `--decide <key>` for each row ending at decide, the 
 
 Optionally collect `Non-production targets` as free text: the exact deploy commands that reach only a development or test environment, one `--non-production-target '<command>'` each, default none. An entry matches a deploy command only when it equals its words joined by single spaces; a production or live word still parks, and every other deploy waits for you (script-enforced). Agents never add an entry during a lease.
 
+The account also sets the default command and file lists for every repository; a repository's own list, set in [afk-project.md](afk-project.md), replaces the whole list there, and a repository whose settings cannot be verified, or no repository at all, uses none (script-enforced). Ask each on its own, default none, entries one per line, words joined by single spaces, and read each entry back word for word in the preview:
+- "Which test commands may the agents run in your repositories while you are away?" Say first: a listed command runs a repository's own test code, including code the agents changed during the lease. One `--test-command '<command>'` each (1 to 16; never one starting with git, gh or rm).
+- "Which top-level files besides README.md, CHANGELOG.md and CONTRIBUTING.md may the agents edit, such as TASKS.md?" One `--top-level-file <name>` each (1 to 16; no folder, no leading dot, not CLAUDE.md or AGENTS.md).
+- Only when Tags and releases or Publishing ends at decide: "Which exact tag, release and publish commands may the agents run while you are away?" One `--release-target '<command>'` each (1 to 16; starting with `git tag`, `gh release`, `npm publish` or `pnpm publish`). Say first: without a listed command every tag, release and publish waits for you, even at decide.
+- "Which production deploy commands may the agents run, in a repository that lets them decide production?" One `--production-target '<command>'` each (1 to 16). Say first: production is never decided in your account rules, so these run only in a repository whose own rules tick Production.
+Setup refuses an entry outside these rules (script-enforced). Agents never add an entry during a lease.
+
 Ask separately, never combined with another question: "Let excerpts of your past decisions go to the judge or another AI provider when agents decide for you?"
 Yes: Save Excerpts leave the machine: yes; at most eight excerpts (decision, date, source), 8 KB in all, screened for secrets and machine paths, go with an away question to Jev or the advisor's provider.
 No: Save Excerpts leave the machine: no; nothing leaves, and decisions rest on the project's goal alone.
