@@ -226,7 +226,7 @@ class ConsentInventoryTests(unittest.TestCase):
         self.assertIn("`changed` keys", project)
         for key in ("task-choice", "push-and-pull-requests", "merge", "trusted-authors", "roots", "max-runs",
                     "max-runtime-minutes", "max-actions-per-hour", "skill-repository", "decide",
-                    "non-production-targets", "production-targets", "test-commands", "top-level-files"):
+                    "non-production-targets", "production-targets", "test-commands", "top-level-files", "release-targets"):
             self.assertIn("`%s`" % key, project)
         # Only the keys the user ticks as different are asked; every other key inherits.
         self.assertIn("Should this repository use different away rules than your account?", project)

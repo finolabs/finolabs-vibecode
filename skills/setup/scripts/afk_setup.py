@@ -17,6 +17,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data_root as dr
 import compact_setup as cs
+import project_store as store
 import setup_features as sf
 
 # Kept local so setup remains independently installable. Round-trip tests
@@ -35,15 +36,24 @@ MOVABLE = tuple(name for name, fixed in CATEGORIES.items() if not fixed)
 CONSENT = 'Excerpts leave the machine'
 TARGETS = 'Non-production targets'
 MAX_TARGETS = 20
+# Account defaults of the command and file lists; a repository's own list replaces each (owner decision 15/11/2026).
+# They are checked with the repository grammar of `project_store.valid_autopilot`; an empty list writes no line.
+LISTS = {'Production targets': 'production-targets', 'Release targets': 'release-targets',
+         'Test commands': 'test-commands', 'Top-level files': 'top-level-files'}
 CAP = sf.CAP
 STATE = 'state/autopilot-setup'
 
 
 def validate(values):
-    if not isinstance(values, dict) or set(values) != {*DEFAULTS, 'Merge', *CATEGORIES, CONSENT, TARGETS}:
+    if not isinstance(values, dict) or set(values) != {*DEFAULTS, 'Merge', *CATEGORIES, CONSENT, TARGETS, *LISTS}:
         raise ValueError('explicit Merge answer and all settings required')
     for key, value in values.items():
-        if key in CATEGORIES:
+        if key in LISTS:
+            # The reader splits on '; ', so an entry holding it would read as two.
+            if not isinstance(value, list) or (value and (any(not isinstance(e, str) or ';' in e for e in value)
+                                                          or not store.valid_autopilot({LISTS[key]: value}))):
+                raise ValueError('invalid list')
+        elif key in CATEGORIES:
             if value not in (('stop',) if CATEGORIES[key] else ('stop', 'decide')):
                 raise ValueError('invalid category choice')
         elif key == CONSENT:
@@ -76,6 +86,9 @@ def render(values):
     lines = ''.join(f'- {key}: {values[key]}\n' for key in keys)
     if values[TARGETS]:  # an empty list is no line: the reader's default is empty
         lines += f'- {TARGETS}: ' + '; '.join(values[TARGETS]) + '\n'
+    for key in LISTS:
+        if values[key]:
+            lines += f'- {key}: ' + '; '.join(values[key]) + '\n'
     return '## afk\n\n' + lines + '\n'
 
 
@@ -188,6 +201,8 @@ def main(argv=None):
             pre.add_argument('--' + key.lower().replace(' ', '-'), type=int, default=DEFAULTS[key])
         pre.add_argument('--decide', action='append', choices=MOVABLE, default=[])
         pre.add_argument('--non-production-target', action='append', default=[])
+        for key in LISTS:  # --production-target, --release-target, --test-command, --top-level-file
+            pre.add_argument('--' + LISTS[key][:-1], action='append', default=[])
         pre.add_argument('--excerpts-leave-the-machine', choices=('yes', 'no'), default='no')
         app = commands.add_parser('apply')
         app.add_argument('--yes', action='store_true')
@@ -199,6 +214,7 @@ def main(argv=None):
             values.update({c: 'decide' if c in args.decide else 'stop' for c in CATEGORIES})
             values[CONSENT] = args.excerpts_leave_the_machine
             values[TARGETS] = args.non_production_target
+            values.update({key: getattr(args, LISTS[key][:-1].replace('-', '_')) for key in LISTS})
             preview(values)
         else:
             apply(args.digest, args.yes)

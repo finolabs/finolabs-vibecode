@@ -811,8 +811,14 @@ class AwayDecisionTest(AfkBase):
         self.check(['git', 'status'])
 
     def test_decide_categories_open_only_the_closed_tag_release_and_publish_forms(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n- Publishing: decide\n')
-        for argv in (['git', 'tag', 'v1.2.0'], ['git', 'tag', '-a', 'v1.2.0', '-m', 'Release 1.2.0'],
+        # Every form below is listed, so only the category and the closed grammar decide (the list is in addition).
+        releases = ('git tag v1.2.0; git tag -a v1.2.0 -m Release; git tag v1.2.0 ' + 'a' * 40 + '; '
+                    'gh release create v1.2.0 --title v1.2.0 --notes Changes --verify-tag --repo github.com/example/demo; '
+                    'npm publish; npm publish --access public; pnpm publish --tag next; git tag -d v1.2.0; '
+                    'git tag -f v1.2.0; gh release delete v1.2.0; npm publish --registry https://example.invalid')
+        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n- Publishing: decide\n'
+                   '- Release targets: ' + releases + '\n')
+        for argv in (['git', 'tag', 'v1.2.0'], ['git', 'tag', '-a', 'v1.2.0', '-m', 'Release'],
                      ['git', 'tag', 'v1.2.0', 'a' * 40], ['gh', 'release', 'create', 'v1.2.0', '--title', 'v1.2.0',
                                                           '--notes', 'Changes', '--verify-tag', '--repo', 'github.com/example/demo'],
                      ['gh', 'release', 'view', 'v1.2.0'], ['gh', 'release', 'list'], ['npm', 'publish'],
@@ -830,7 +836,10 @@ class AwayDecisionTest(AfkBase):
         self.check(['rm', '-rf', 'build'], tier=3, code='forbidden')
 
     def test_a_release_names_the_verified_target_like_a_merge(self):
-        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n')
+        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n- Release targets: '
+                   'gh release create v1.2.0 --repo github.com/example/demo; gh release create v1.2.0; '
+                   'gh release create v1.2.0 -R example/demo; gh release create v1.2.0 --repo github.com/example/elsewhere; '
+                   'gh release create v1.2.0 --repo github.com/example/demo --repo github.com/example/demo\n')
         create = ['gh', 'release', 'create', 'v1.2.0']
         self.check(create + ['--repo', 'github.com/example/demo'])
         self.check(create, tier=3, code='unknown')
@@ -839,7 +848,9 @@ class AwayDecisionTest(AfkBase):
         self.check(create + ['--repo', 'github.com/example/demo', '--repo', 'github.com/example/demo'], tier=3, code='unknown')
 
     def test_categories_come_from_the_command_not_from_its_free_text(self):
-        base = SETUP + '- Max actions per hour: 1000\n'
+        base = SETUP + '- Max actions per hour: 1000\n- Release targets: gh release create v1 --notes publish --repo ' \
+            'github.com/example/demo; git tag -a v1 -m publish; git tag -a v1 -m deploy; gh release create v1 --title ' \
+            'deploy:uat --repo github.com/example/demo; npm publish --tag next; pnpm publish --access public\n'
         repo = ['--repo', 'github.com/example/demo']
         tag = (['gh', 'release', 'create', 'v1', '--notes', 'publish'] + repo, ['git', 'tag', '-a', 'v1', '-m', 'publish'],
                ['git', 'tag', '-a', 'v1', '-m', 'deploy'], ['gh', 'release', 'create', 'v1', '--title', 'deploy:uat'] + repo)
@@ -1266,7 +1277,7 @@ class ProjectScopeTest(AfkBase):
 
     def test_project_decide_and_target_lists_replace_the_user_values(self):
         self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n'
-                   '- Non-production targets: npx wrangler deploy --env uat\n')
+                   '- Non-production targets: npx wrangler deploy --env uat\n- Release targets: git tag v1.2.0\n')
         self.check(['git', 'tag', 'v1.2.0'])
         self.project({'decide': [], 'non-production-targets': ['npx wrangler deploy --env qa']})
         self.check(['git', 'tag', 'v1.2.0'], tier=3, code='forbidden')
@@ -1313,9 +1324,98 @@ class ProjectScopeTest(AfkBase):
             with self.subTest(bad=bad):
                 self.assertFalse(self.store.valid_autopilot(bad))
 
-    def test_test_commands_are_never_read_from_the_user_scope(self):
-        self.setup_config(SETUP + '- Test commands: npm test\n')
-        self.assertNotEqual(self.invoke('start')[0], 0)
+    def test_user_lists_are_the_default_and_a_repository_list_replaces_them(self):
+        # Owner decision 15/11/2026: the lists load like environment variables.
+        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n- Test commands: npm test\n'
+                   '- Top-level files: TASKS.md\n- Release targets: git tag v1.2.0\n')
+        (self.repo / 'TASKS.md').write_text('- [ ] one\n')
+        (self.repo / 'NOTES.md').write_text('x\n')
+        second = self.other_repo('second')
+        (second / 'TASKS.md').write_text('x\n')
+        for cwd in (self.repo, second):  # the user lists apply in every repository without its own value
+            self.cwd = cwd
+            with self.subTest(inherited=cwd.name):
+                self.check(['npm', 'test'])
+                self.check(paths=['TASKS.md'])
+                self.check(['git', 'tag', 'v1.2.0'])
+        # A repository's own list replaces the user's whole list, never merges with it.
+        self.cwd = self.repo
+        self.project({'test-commands': ['npm run unit'], 'top-level-files': ['NOTES.md'],
+                      'release-targets': ['git tag v1.3.0']})
+        self.check(['npm', 'run', 'unit'])
+        self.check(paths=['NOTES.md'])
+        self.check(['git', 'tag', 'v1.3.0'])
+        self.check(['npm', 'test'], tier=3, code='unknown')
+        self.check(paths=['TASKS.md'], tier=3, code='unknown')
+        self.check(['git', 'tag', 'v1.2.0'], tier=3, code='forbidden')
+        # The repository's own value never leaks into another repository, which keeps the user's.
+        self.cwd = second
+        self.check(['npm', 'run', 'unit'], tier=3, code='unknown')
+        self.check(['git', 'tag', 'v1.3.0'], tier=3, code='forbidden')
+        self.check(['npm', 'test'])
+
+    def test_user_lists_are_never_used_in_the_strict_or_no_repository_state(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n- Test commands: npm test\n'
+                   '- Top-level files: TASKS.md\n- Release targets: git tag v1.2.0\n')
+        outside = self.home / 'no-repository'
+        outside.mkdir()
+        (outside / 'TASKS.md').write_text('x\n')
+        self.cwd = outside
+        self.check(['npm', 'test'], tier=3, code='unknown')
+        self.check(['git', 'tag', 'v1.2.0'], tier=3, code='forbidden')
+        self.check(paths=['TASKS.md'], tier=3, code='unknown')
+        # A settings file changed in the work tree is the strict state: none of the lists apply.
+        self.cwd = self.repo
+        self.project({'merge': 'yes'})
+        self.settings_file().write_text(self.settings_file().read_text().replace('"yes"', '"no"'))
+        (self.repo / 'TASKS.md').write_text('x\n')
+        self.check(['npm', 'test'], tier=3, code='unknown')
+        self.check(['git', 'tag', 'v1.2.0'], tier=3, code='forbidden')
+        self.check(paths=['TASKS.md'], tier=3, code='unknown')
+
+    def test_an_invalid_user_list_fails_the_start(self):
+        for line in ('- Test commands: git status', '- Test commands: npm  test', '- Top-level files: CLAUDE.md',
+                     '- Top-level files: notes/TASKS.md', '- Release targets: make release',
+                     '- Release targets: git tag v1; rm -rf x', '- Production targets: npx deploy $(x)'):
+            with self.subTest(line=line):
+                self.setup_config(SETUP + line + '\n')
+                self.assertNotEqual(self.invoke('start')[0], 0)
+
+    def test_release_targets_are_needed_beside_the_category(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        repo = ['--repo', 'github.com/example/demo']
+        tag, release, publish = ['git', 'tag', 'v1.2.0'], ['gh', 'release', 'create', 'v1.2.0'] + repo, ['npm', 'publish']
+        # The category decides, but no command is listed: every tag, release and publish parks.
+        self.project({'decide': ['tags-and-releases', 'publishing']})
+        for argv in (tag, release, publish):
+            with self.subTest(unlisted=argv):
+                self.check(argv, tier=3, code='forbidden')
+        # Reading tags and releases needs no list; it still needs the category.
+        for argv in (['git', 'tag'], ['git', 'tag', '-l'], ['gh', 'release', 'list'], ['gh', 'release', 'view', 'v1.2.0']):
+            with self.subTest(reading=argv):
+                self.check(argv)
+        # Listed, but the category stops: still parks.
+        self.project({'release-targets': ['git tag v1.2.0', 'gh release create v1.2.0 --repo github.com/example/demo',
+                                          'npm publish'], 'decide': []})
+        for argv in (tag, release, publish, ['git', 'tag', '-l']):
+            with self.subTest(stopped=argv):
+                self.check(argv, tier=3, code='forbidden')
+        # Listed with the category at decide: Tier 1 for the exact token list only.
+        self.project({'release-targets': ['git tag v1.2.0', 'gh release create v1.2.0 --repo github.com/example/demo',
+                                          'npm publish'], 'decide': ['tags-and-releases', 'publishing']})
+        for argv in (tag, release, publish):
+            with self.subTest(listed=argv):
+                self.check(argv)
+        for argv in (['git', 'tag', 'v1.2.1'], ['git', 'tag', 'v1.2.0 '], ['git', 'tag', '-a', 'v1.2.0', '-m', 'x'],
+                     ['npm', 'publish', '--access', 'public'], ['npm', 'publish', '--access public']):
+            with self.subTest(unlisted=argv):
+                self.check(argv, tier=3, code='forbidden')
+        for bad in ({'release-targets': []}, {'release-targets': ['make release']}, {'release-targets': ['git push']},
+                    {'release-targets': ['npm  publish']}, {'release-targets': ['npm publish', 'npm publish']},
+                    {'release-targets': ['git tag v1; rm -rf x']}, {'release-targets': ['git tag v%d' % n for n in range(17)]},
+                    {'release-targets': 'npm publish'}):
+            with self.subTest(bad=bad):
+                self.assertFalse(self.store.valid_autopilot(bad))
 
     def test_start_and_effective_show_the_repository_rules(self):
         self.project({'decide': ['repository-comments'], 'non-production-targets': ['npm run deploy:staging'],
@@ -1326,7 +1426,7 @@ class ProjectScopeTest(AfkBase):
         self.assertIn('- Tags and releases: decide', output)  # the account summary
         self.assertIn('This folder (project): Max runs: 20; Max runtime minutes: 480; Max actions per hour: 7; '
                       'Decide: Repository comments; Non-production targets: npm run deploy:staging; '
-                      'Production targets: none; Test commands: npm test; Top-level files: TASKS.md.', output)
+                      'Production targets: none; Test commands: npm test; Top-level files: TASKS.md; Release targets: none.', output)
         status, output = self.invoke('effective')
         rules = json.loads(output)['rules']
         self.assertEqual((rules['Decide'], rules['Test commands'], rules['Top-level files'], rules['Max actions per hour']),
@@ -1338,9 +1438,9 @@ class ProjectScopeTest(AfkBase):
         self.assertIn('Tags and releases', rules['Decide'])
         # The `This folder` line and the `rules` field in the user, strict and no-repository states.
         account = ('Max runs: 20; Max runtime minutes: 480; Max actions per hour: 30; Decide: %s; '
-                   'Non-production targets: none; Production targets: none; Test commands: none; Top-level files: none.')
+                   'Non-production targets: none; Production targets: none; Test commands: none; Top-level files: none; Release targets: none.')
         empty = {'Max runs': 20, 'Max runtime minutes': 480, 'Max actions per hour': 30, 'Decide': [],
-                 'Non-production targets': [], 'Production targets': [], 'Test commands': [], 'Top-level files': []}
+                 'Non-production targets': [], 'Production targets': [], 'Test commands': [], 'Top-level files': [], 'Release targets': []}
         outside = self.home / 'no-repository'
         outside.mkdir()
         for state, folder, decide in (('user', self.cwd, 'Tags and releases'), ('no-repository', outside, 'none'),
@@ -1359,10 +1459,6 @@ class ProjectScopeTest(AfkBase):
                     self.assertEqual(rules['Decide'], ['Tags and releases'])
                 else:
                     self.assertEqual(rules, empty)
-
-    def test_top_level_files_are_never_read_from_the_user_scope(self):
-        self.setup_config(SETUP + '- Top-level files: TASKS.md\n')
-        self.assertNotEqual(self.invoke('start')[0], 0)
 
     def test_a_listed_test_command_with_a_protected_token_stays_protected(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
@@ -1435,6 +1531,19 @@ class ProjectScopeTest(AfkBase):
         self.assertEqual(sorted(e['actions'] for e in self.lease()['counters'].values()), [2, 2])
         self.clock += 3601
         self.check(['git', 'status'])
+
+    def test_repositories_without_limits_each_get_the_account_limits(self):
+        # Owner decision 15/11/2026: no repository limit means the account's limits (here the default 30 actions an
+        # hour), counted separately per repository, never summed across them.
+        self.start()
+        self.project({'merge': 'yes'})  # project settings that set no limit
+        plain = self.other_repo('plain')  # no project settings at all
+        for cwd in (self.repo, plain):
+            self.cwd = cwd
+            for _ in range(30):
+                self.check(['git', 'status'])
+            self.check(['git', 'status'], tier=3, code='limit')
+        self.assertEqual(sorted(e['actions'] for e in self.lease()['counters'].values()), [30, 30])
 
     def test_spent_runs_in_one_project_leave_the_others_working(self):
         self.start(SETUP + '- Max runs: 1\n')

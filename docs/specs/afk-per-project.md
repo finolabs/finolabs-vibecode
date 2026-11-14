@@ -14,6 +14,13 @@ This document changes [autopilot.md](autopilot.md) ("Project scope", "Lease, sta
 6. When no other model family is reachable for a review, a same-family review is allowed under afk. Its marker names the family, the lease log records the fallback, and the merge goes on.
 7. Carried forward (PR 243): a project value may be wider or narrower than the user value (two-way override).
 
+## Owner decisions (15/11/2026)
+
+8. A repository that sets no afk limits uses the account's limits (the `## afk` values, else their defaults), counted separately per repository, never summed across repositories. This is the behavior of section A; it settles the first open item.
+9. Tags, GitHub releases and publishing under a lease run only when the exact command is listed (`release-targets`, section G), in addition to `Tags and releases` or `Publishing` being `decide`. An unlisted command parks. It settles the second open item.
+10. Every afk setting loads like an environment variable: the user scope (`## afk` in host.md) sets the default for every repository, and a repository's own value replaces it when present. This now covers the command and file lists that were project only: `production-targets`, `test-commands`, `top-level-files` and `release-targets`. A repository's list replaces the user's whole list (no merging). The strict and no-repository states use none of them. This replaces the earlier rule that these lists are never read from the user scope (sections B and F). `Production` itself stays decidable only in a repository's own `decide` list (decision 5), so a user-scope `Production targets` entry takes effect only in a repository that decides `production`.
+11. The same-family review fallback (section D) may merge a pull request that changes an enforcer script or instruction file when each kind of review (code and security) has approvals at the head from two different models of the author's family. Every other condition of D stays. It settles the third open item for that case; a `security`, `permission` or `privacy` router trigger still parks.
+
 ## What main does today, and the gap
 
 | Topic | Main (0.2.6) | Gap to the decisions |
@@ -42,7 +49,7 @@ This document changes [autopilot.md](autopilot.md) ("Project scope", "Lease, sta
 ### B. Categories and deploy targets per project (pull request 6)
 
 - Project-scope keys: `decide` (a list of category keys) and `non-production-targets` (a list of exact commands). An explicit `decide` list, `[]` included, replaces the user's category answers for that project, and every category not listed is `stop`; an omitted `decide` inherits the user's answers. An explicit `non-production-targets` replaces the user's list; an omitted one inherits it.
-- New project-only key `production-targets`: a list of exact deploy commands, matched like `Non-production targets` (words joined by single spaces), written only through its own setup question with a preview, inside that repository; it is never read from user scope. `Production` may appear in a project's `decide` list and never in the user's.
+- New key `production-targets`: a list of exact deploy commands, matched like `Non-production targets` (words joined by single spaces), written only through its own setup question with a preview. Since decision 10 (15/11/2026) the account's `Production targets` line is its default and a repository's own list replaces it; before, it was never read from user scope. `Production` may appear in a project's `decide` list and never in the user's.
 - A deploy argv is Tier 1 only when it equals a `production-targets` entry of this project and `Production` is in this project's `decide`, or equals a `non-production-targets` entry and has no production or live word. Every other deploy parks.
 - The strict state and the no-repository state reset every category to `stop` and both target lists to empty. `release_command` (tags, releases, publishing, deploys) denies in those states, and `gh release create` needs exactly one `--repo github.com/OWNER/NAME` equal to the verified target, like a pull request merge.
 - `Real users and customer data` and credentials stay fixed `stop`.
@@ -72,12 +79,13 @@ Then the host carries out the chosen option through `check` like any action. A d
 1. A live, valid away lease exists (`away_lease.live_lease`).
 2. `<family>` is the pull request author's family (`review_route.author_family`).
 3. Every other family that `review_config.present_families` reports for this machine has positive evidence of being out: a reading younger than 8 hours in `state/quota/quota.json` with every pool below the routing floor, or a live rate-limit marker in `limits.json`. A missing, stale, failed or backed-off reading is not evidence; the family counts as reachable and the fallback is refused.
-4. The pull request's `fnl-router` trigger is not `security`, `permission` or `privacy`, and the pull request changes no enforcer script (the `ENFORCERS` list of `afk.py`) and no instruction file (`CLAUDE.md`, `AGENTS.md`, `SKILL.md`); those park for the user.
+4. The pull request's `fnl-router` trigger is not `security`, `permission` or `privacy`; those park for the user.
 5. Each counted marker's second line is exactly `Reviewer: <family> (same family as the author; no other family reachable)` followed by free text.
+6. When the pull request changes an enforcer script (the `ENFORCERS` list of `afk.py`) or an instruction file (`CLAUDE.md`, `AGENTS.md`, `SKILL.md`, by base name, old names of renames included), each kind needs approvals from two different models (decision 11, 15/11/2026). The model is read from the marker's second line: right after the exact fallback line comes ` model=<name>`, where `<name>` is a letter or digit followed by up to 79 letters, digits, `.`, `_`, `:` or `-`, ended by a space or the end of the line, for example `Reviewer: claude (same family as the author; no other family reachable) model=claude-opus-5-5 relayed by the coordinator`. Names compare case-insensitively. For each kind, every counted current-head marker (unedited, from a writer) must name a model; the latest marker of each model must be `APPROVE` (on a tie, `REWORK` wins); and at least two models must remain. One model only, the same model twice, a model whose latest verdict is `REWORK`, and a marker without a model name all refuse. The model name is the reviewer's own statement: who ran which model stays a caller duty (advisory, agent judgment), like the family. Before decision 11 every such change parked.
 
-It prints `ok    same-family review: no other family reachable (<families>)`. `afk.py check` allows `--fallback-family <family>` on `merge_check.py`. `afk.py log --kind review-fallback --pr <n> --head <full sha>` (Tier 1, same `--pr`/`--head` rules as `merge`) records it for the user's return.
+It prints `ok    same-family review: no other family reachable (<families>)`, followed by `; two models approved each kind` under condition 6. `afk.py check` allows `--fallback-family <family>` on `merge_check.py`. `afk.py log --kind review-fallback --pr <n> --head <full sha>` (Tier 1, same `--pr`/`--head` rules as `merge`) records it for the user's return.
 
-Enforcer: `merge_check.py` for conditions 1 to 5 (script); trying the other families first is advisory (agent judgment).
+Enforcer: `merge_check.py` for conditions 1 to 6 (script); trying the other families first is advisory (agent judgment).
 
 ### E. Stoppers removed (pull request 3)
 
@@ -88,13 +96,25 @@ Enforcer: `merge_check.py` for conditions 1 to 5 (script); trying the other fami
 
 The afk UAT of 14/11/2026 (`.finolabs/notes/afk-e2e-2026-11-14.md`, U1 and U2) found two stoppers. No Tier 1 form ran a repository's own tests, while the merge gate needs local tests of the touched modules green. And no top-level file other than `README.md`, `CHANGELOG.md` and `CONTRIBUTING.md` was editable, so the task list (`TASKS.md`) the agents work from parked. Owner decision (14/11/2026, "Fix first", relayed by the coordinator): fix both before 0.2.7.
 
-- `test-commands` (project scope only, 1 to 16 entries): exact commands with the `production-targets` grammar (plain words joined by single spaces, no shell syntax), written only through its own setup question with the commands read back in the preview. In that repository, an argv whose token list equals an entry is Tier 1, bare or as the command of `heavy_run.py run [options] -- <command>` (the heavy-job gate still governs the bare form on hosts where it is on). Matching is on token lists, so a token holding a space never equals two listed words.
-  - Never read from user scope, never inherited, and empty in the user, strict and no-repository states, so the same argv in another repository keeps its usual tier.
+Since decision 10 (15/11/2026) both keys, like `production-targets` and `release-targets`, have an account default (`Test commands` and `Top-level files` in `## afk`, entries joined by `; `, validated with the same grammar; an invalid line fails `start`) that a repository's own list replaces whole. Pull request 7 shipped them project only.
+
+- `test-commands` (1 to 16 entries): exact commands with the `production-targets` grammar (plain words joined by single spaces, no shell syntax), written only through its own setup question with the commands read back in the preview. In that repository, an argv whose token list equals an entry is Tier 1, bare or as the command of `heavy_run.py run [options] -- <command>` (the heavy-job gate still governs the bare form on hosts where it is on). Matching is on token lists, so a token holding a space never equals two listed words.
+  - In a repository without its own list the account's list applies; a repository's own list never applies in another repository; both are empty in the strict and no-repository states.
   - Order: the protected-token check and the tag, release, publish and deploy rules run first, so a listed entry never relaxes them. An entry whose first word is `git`, `gh` or `rm` is refused by setup and ignored by `check`, because `check` classifies those commands itself.
   - A listed command runs whatever code the repository's tests contain, including code the agent edited under the lease. That is the grant the owner makes by listing it; the setup question says so.
-- `top-level-files` (project scope only, 1 to 16 entries): exact top-level file names (`ROOT_NAME` grammar, no `/`, no leading dot, no instruction-file name, an extension from the known list). Each becomes a known single-file path in that repository, like `README.md`. The protected names, the link check (no symlink on the path), the directory refusal and the install-checkout rule still apply. Empty in every state but `project`.
+- `top-level-files` (1 to 16 entries): exact top-level file names (`ROOT_NAME` grammar, no `/`, no leading dot, no instruction-file name, an extension from the known list). Each becomes a known single-file path in that repository, like `README.md`. The protected names, the link check (no symlink on the path), the directory refusal and the install-checkout rule still apply. Empty in the strict and no-repository states.
   - A separate key, not an extension of `roots`: a `roots` entry is a folder whose descendants become known paths, while a file entry names one exact path. Keeping them apart leaves `roots` unchanged, makes each preview line say what it opens, and stops a name such as `docs.md` from reading as a folder.
 - `project_progress.py settings --dry-run` shows both keys in its `effective` values and `changed` list (this pull request); `afk.py effective` shows them in its `rules` field from the follow-up pull request for afk UAT U3 (GitHub 288), not here. Enforcer: `afk.py check` (script) and the closed `valid_autopilot` schema in `project_store.py` (script).
+
+### G. Release targets, and lists that load like environment variables (pull request 8, owner decisions 8 to 11)
+
+- `release-targets` (1 to 16 entries; the account's `Release targets` line, entries joined by `; `, is the default and a repository's own list replaces it): exact commands with the `production-targets` grammar whose first two words are `git tag`, `gh release`, `npm publish` or `pnpm publish`, the forms `afk.py check` files under `Tags and releases` or `Publishing`. Setup refuses any other entry, and an invalid `## afk` line fails `start`.
+- In `release_command`, after the strict and no-repository denial and the category check (row 3), a command with a tag, release or publish category is Tier 1 only when its token list equals a listed entry; otherwise `forbidden`. The closed grammar after it (tag names, revisions, `gh release create` with exactly one `--repo` equal to the verified target, the publish options) still applies, so a listed entry never widens a form `check` refuses. Matching is on token lists, so a token holding a space never equals two listed words, and a message with spaces (`git tag -a v1 -m "Release 1"`) cannot be listed.
+- Reading needs no list: `git tag`, `git tag -l`, `git tag --list`, `gh release view ...` and `gh release list` keep today's rule (their category must still be `decide`). They create, change or publish nothing, and listing every read would only add friction. Implementation choice in this pull request, not an owner decision.
+- The four lists (`Production targets`, `Release targets`, `Test commands`, `Top-level files`) resolve per check like the other keys: in a repository with approved settings that set a list, that list; else the account's list (the user state included); in the strict and no-repository states, none. `afk.py start` prints them; the lease hash covers them, so changing one in `## afk` ends a live lease (`setup-changed`).
+- Setup: the account rules (`features/afk.md` through `afk-decisions.md`) ask each list in a question of its own with the entries read back in the preview (`afk_setup.py preview --release-target ... --test-command ... --top-level-file ... --production-target ...`); the repository rules (`afk-project.md`) ask the repository's own lists, with "Use my user setting" as the default answer. `project_progress.py settings --dry-run` shows `user list (user)` for a list the repository does not set.
+- Decision 8 needs no code: section A already keys the counters by repository and applies the user values where a repository sets no limit. A test pins it for the default limits and for project settings without limit keys.
+- Enforcer: `afk.py check` and `settings()` (script), `project_store.valid_autopilot` (script, shared by `afk_setup.py` for the account lines) and `merge_check.py` for decision 11 (script).
 
 ## Acceptance
 
@@ -102,10 +122,15 @@ The afk UAT of 14/11/2026 (`.finolabs/notes/afk-e2e-2026-11-14.md`, U1 and U2) f
 2. A project limit wider or narrower than the user limit applies in that repository only (test).
 3. A deploy equal to a listed `production-targets` entry is Tier 1 only in the repository that listed it with `Production` in its `decide`; the same argv elsewhere, in the strict state or any unlisted production deploy parks (tests).
 4. Every decision record shows a `table` attempt (from `jev` or `host-small`, or `unavailable`) before the decider's record (test of the record schema; the order is advisory).
-5. `merge_check.py --independent --fallback-family claude` passes on same-family markers only with a live lease, the author's family, fresh out-of-quota evidence for every other present family, no security trigger or enforcer or instruction file change, and the exact second line; it blocks in each other case (tests).
+5. `merge_check.py --independent --fallback-family claude` passes on same-family markers only with a live lease, the author's family, fresh out-of-quota evidence for every other present family, no security trigger, and the exact second line, plus two models per kind when an enforcer or instruction file changed; it blocks in each other case (tests).
 6. `post_review.py` with a valid run body, and a skill repository's paths, are Tier 1 on a work branch with the needed settings; a body file elsewhere, a body with a secret, or a skill repository whose default branch has no root `SKILL.md`, is Tier 3 (tests).
 7. `PRIVACY.md`, `setup` (`references/features/afk.md`, `afk-project.md`, `afk-decisions.md`), the afk skill and `upgrades.json` describe the new keys; the upgrade note tells users to start the lease again and to run `/setup add afk` inside each repository that wants its own limits or production targets.
 8. A listed `test-commands` entry is Tier 1 bare and through `heavy_run.py run --` only in the repository that listed it; an unlisted command, the same argv in another repository, in the user, strict or no-repository state, a space-holding token, and an entry starting with `git`, `gh` or `rm` keep their usual tier (tests). A listed `top-level-files` name is a known path in that repository only; a nested path, a symlink, a directory, a protected or instruction-file name and every other repository refuse (tests).
+
+9. Two repositories without their own limits each get the account's limits, counted separately (test).
+10. A tag, release or publish command is Tier 1 only when it equals a listed `release-targets` entry and its category is `decide`; an unlisted command, a listed one whose category stops, and a token holding a space park; reading tags and releases needs no list (tests).
+11. The account's lists apply in every repository without its own list; a repository's list replaces the account's whole list and never applies in another repository; the strict and no-repository states use none; an invalid account line fails `start`; `afk_setup.py` writes the account lines and refuses invalid entries (tests).
+12. Under the fallback, a change to an enforcer script or instruction file passes with two models approving each kind and refuses with one model only, the same model twice, one of two models at `REWORK`, or a marker without a model name; the other conditions still refuse (tests).
 
 ## Order of pull requests
 
@@ -116,9 +141,8 @@ The afk UAT of 14/11/2026 (`.finolabs/notes/afk-e2e-2026-11-14.md`, U1 and U2) f
 5. D: same-family fallback in `merge_check.py`.
 6. B: per-project categories and production targets, last, because it widens what an unattended agent may reach.
 7. F: test commands and top-level files (after the UAT).
+8. G: release targets, lists with account defaults, and the two-model fallback (owner decisions of 15/11/2026).
 
 ## Open
 
-- Default per-project limits when neither scope sets one: keep today's user defaults (20 runs, 480 minutes, 30 actions an hour) per project. Owner to confirm.
-- Whether `Tags and releases` and `Publishing` at `decide` in a project should also need their own exact-command list like production. Owner to decide; until then they follow today's rule.
-- Condition 4 of D parks same-family merges of security-sensitive changes even under decision 6 (reviewer finding on pull request 276). Owner to confirm or lift.
+None. The three items open on 14/11/2026 were settled by decisions 8, 9 and 11 (15/11/2026). Condition 4 of D still parks a `security`, `permission` or `privacy` trigger; decision 11 lifted only the enforcer and instruction file part.
