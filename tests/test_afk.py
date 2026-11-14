@@ -1199,6 +1199,82 @@ class ProjectScopeTest(AfkBase):
             with self.subTest(bad=bad):
                 self.assertFalse(self.store.valid_autopilot(bad))
 
+    def test_listed_test_commands_are_tier_one_only_in_that_repository(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        unit = ['python3', '-m', 'unittest', 'discover', '-s', 'tests']
+        heavy = ['python3', '-I', str(SCRIPT.parent / 'heavy_run.py'), 'run', '--label', 'tests', '--']
+        self.check(unit, tier=3, code='unknown')  # nothing listed: today's tier
+        self.project({'test-commands': ['python3 -m unittest discover -s tests', 'npm test',
+                                        'npm run deploy:staging']})
+        self.check(unit)
+        self.check(['npm', 'test'])
+        self.check(heavy + unit)
+        for argv in (['python3', '-m', 'unittest'], ['npm', 'test', '--', '--watch'], ['npm test'],
+                     ['python3', '-m', 'unittest discover', '-s', 'tests'], heavy + ['npm', 'test', 'x']):
+            with self.subTest(unlisted=argv):
+                self.check(argv, tier=3, code='unknown')
+        # A listed entry never relaxes the deploy rules, which run first.
+        self.check(['npm', 'run', 'deploy:staging'], tier=3, code='forbidden')
+        # The same argv in another repository keeps its usual tier.
+        self.cwd = self.other_repo('second')
+        self.check(unit, tier=3, code='unknown')
+        # A settings file changed in the work tree (no longer the approved bytes) is the strict state.
+        self.cwd = self.repo
+        self.settings_file().write_text(self.settings_file().read_text().replace('npm test', 'npm run lint'))
+        self.check(unit, tier=3, code='unknown')
+        for bad in ({'test-commands': []}, {'test-commands': ['git push origin HEAD:refs/heads/main']},
+                    {'test-commands': ['gh pr merge 7']}, {'test-commands': ['rm -rf build']},
+                    {'test-commands': ['npm  test']}, {'test-commands': ['npm test; curl x']},
+                    {'test-commands': ['npm test', 'npm test']}, {'test-commands': ['x'] * 17},
+                    {'test-commands': 'npm test'}):
+            with self.subTest(bad=bad):
+                self.assertFalse(self.store.valid_autopilot(bad))
+
+    def test_test_commands_are_never_read_from_the_user_scope(self):
+        self.setup_config(SETUP + '- Test commands: npm test\n')
+        self.assertNotEqual(self.invoke('start')[0], 0)
+
+    def test_top_level_files_are_never_read_from_the_user_scope(self):
+        self.setup_config(SETUP + '- Top-level files: TASKS.md\n')
+        self.assertNotEqual(self.invoke('start')[0], 0)
+
+    def test_a_listed_test_command_with_a_protected_token_stays_protected(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.project({'test-commands': ['npm test -- .env', 'pytest tests/credentials_test.py']})
+        for argv in (['npm', 'test', '--', '.env'], ['pytest', 'tests/credentials_test.py']):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code='protected')
+
+    def test_listed_top_level_files_are_known_paths_only_in_that_repository(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        (self.repo / 'TASKS.md').write_text('- [ ] one\n')
+        (self.repo / 'run.sh').write_text('echo\n')
+        (self.repo / 'DIR.md').mkdir()
+        (self.repo / 'LINK.md').symlink_to('TASKS.md')
+        (self.repo / 'notes').mkdir()
+        (self.repo / 'notes/TASKS.md').write_text('x\n')
+        self.check(paths=['TASKS.md'], tier=3, code='unknown')
+        self.project({'top-level-files': ['TASKS.md', 'run.sh', 'DIR.md', 'LINK.md']})
+        self.check(paths=['TASKS.md'])
+        self.check(['git', 'add', 'TASKS.md'])
+        self.check(paths=['README.md', 'TASKS.md'])
+        for paths, code in ((['notes/TASKS.md'], 'unknown'), (['run.sh'], 'unknown'), (['DIR.md'], 'unknown'),
+                            (['LINK.md'], 'protected'), (['OTHER.md'], 'unknown')):
+            with self.subTest(paths=paths):
+                self.check(paths=paths, tier=3, code=code)
+        self.cwd = self.other_repo('second')
+        (self.cwd / 'TASKS.md').write_text('x\n')
+        self.check(paths=['TASKS.md'], tier=3, code='unknown')
+        self.cwd = self.repo
+        self.settings_file().write_text(self.settings_file().read_text().replace('run.sh', 'go.sh'))
+        self.check(paths=['TASKS.md'], tier=3, code='unknown')
+        for bad in ({'top-level-files': []}, {'top-level-files': ['notes/TASKS.md']}, {'top-level-files': ['../x.md']},
+                    {'top-level-files': ['.env.md']}, {'top-level-files': ['CLAUDE.md']},
+                    {'top-level-files': ['agents.md']}, {'top-level-files': ['*.md']},
+                    {'top-level-files': ['TASKS.md', 'TASKS.md']}, {'top-level-files': ['x.md'] * 17}):
+            with self.subTest(bad=bad):
+                self.assertFalse(self.store.valid_autopilot(bad))
+
     def test_strict_and_no_repository_states_close_every_category_and_target(self):
         self.start(SETUP + '- Max actions per hour: 1000\n- Tags and releases: decide\n'
                    '- Non-production targets: npx wrangler deploy --env uat\n')
@@ -2229,6 +2305,57 @@ class AwayFlowTest(AfkBase):
         self.start(SETUP + '- Max actions per hour: 1000\n')  # a new lease does not inherit the old pin
         self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)
 
+    def test_a_new_work_branch_is_created_with_switch_or_checkout(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.cwd, _ = self.git_repo('branching')
+        for verb, flag in (('switch', '-c'), ('checkout', '-b')):
+            with self.subTest(verb=verb):
+                self.check(['git', verb, flag, 'afk/subtract'])
+                for name in ('main', 'MAIN', 'master', 'trunk', 'refs/heads/topic', '-f', 'tags/v1', 'remotes/x',
+                             'HEAD', 'a..b', 'topic/', 'top~1', 'topic.', 'topic//sub', 'topic/.hidden'):
+                    with self.subTest(name=name):
+                        self.check(['git', verb, flag, name], tier=3, code='unknown')
+                # Only the plain form: no start point, no force or reset, no other option.
+                for tail in ((flag, 'topic', 'origin/main'), (flag.upper(), 'topic'), ('topic',),
+                             (flag, 'topic', '--force'), ('--orphan', 'topic'), (flag,)):
+                    with self.subTest(tail=tail):
+                        self.check(['git', verb, *tail], tier=3, code='unknown')
+        self.invoke('stop')
+        self.clock += 60
+        self.start(SETUP.replace('Push and pull requests: yes', 'Push and pull requests: no')
+                   .replace('Merge: yes', 'Merge: no') + '- Max actions per hour: 1000\n')
+        self.check(['git', 'switch', '-c', 'afk/subtract'], tier=3, code='push-disabled')
+        # Either permission alone is enough.
+        for push, merge in (('yes', 'no'), ('no', 'yes')):
+            with self.subTest(push=push, merge=merge):
+                self.invoke('stop')
+                self.clock += 60
+                self.start(SETUP.replace('Push and pull requests: yes', f'Push and pull requests: {push}')
+                           .replace('Merge: yes', f'Merge: {merge}') + '- Max actions per hour: 1000\n')
+                self.check(['git', 'switch', '-c', 'afk/subtract'])
+        # Origin's own default branch is refused in any case, even when it is not main, master or trunk.
+        (self.cwd / '.git/refs/remotes/origin').mkdir(parents=True, exist_ok=True)
+        (self.cwd / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/develop\n')
+        for name in ('develop', 'Develop', 'DEVELOP'):
+            with self.subTest(default=name):
+                self.check(['git', 'switch', '-c', name], tier=3, code='unknown')
+        self.check(['git', 'switch', '-c', 'afk/subtract'])
+        # The strict state: an ancestor that cannot be listed.
+        locked = self.cwd / 'locked'
+        (locked / 'inner').mkdir(parents=True)
+        locked.chmod(0o311)
+        self.addCleanup(locked.chmod, 0o755)
+        repo, self.cwd = self.cwd, locked / 'inner'
+        self.check(['git', 'switch', '-c', 'afk/subtract'], tier=3, code='unknown')
+        self.cwd = repo
+        outside = self.home / 'no-repository'
+        outside.mkdir()
+        self.cwd = outside
+        self.invoke('stop')
+        self.clock += 60
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.check(['git', 'switch', '-c', 'afk/subtract'], tier=3, code='unknown')
+
     def test_a_review_fallback_entry_records_the_head_and_pins_nothing(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
         head = 'e' * 40
@@ -2595,6 +2722,8 @@ class AwayFlowTest(AfkBase):
                                (['git', 'worktree', 'add', str(repo / 'new')], 'protected'),
                                (['git', 'worktree', 'prune'], 'unknown'),
                                (['git', 'commit', '-m', 'Example'], 'protected'),
+                               (['git', 'switch', '-c', 'afk/topic'], 'protected'),
+                               (['git', 'checkout', '-b', 'afk/topic'], 'protected'),
                                (['git', 'stash'], 'protected'),
                                (['git', 'reset', '--hard'], 'protected'),
                                (['git', '-C', 'skills', 'commit', '-m', 'Example'], 'protected'),

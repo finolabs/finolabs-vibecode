@@ -48,7 +48,7 @@ AUTOPILOT_KEYS = {'task-choice': ('choose', 'listed'), 'push-and-pull-requests':
                   'max-runs': range(1, 10001), 'max-runtime-minutes': range(1, 1441),
                   'max-actions-per-hour': range(1, 10001),
                   'skill-repository': ('yes',), 'decide': None, 'non-production-targets': None,
-                  'production-targets': None}
+                  'production-targets': None, 'test-commands': None, 'top-level-files': None}
 # Categories a repository may let the agent decide (docs/specs/afk-per-project.md B); real users and customer data, and
 # credentials, are never among them. `production` only here: the user scope never decides production.
 DECIDE_KEYS = ('production', 'unrecoverable-deletion', 'messages-outside-the-repository', 'tags-and-releases',
@@ -333,7 +333,7 @@ def read_project_file(folder, name, limit):
 # Settings values, validated exactly as the host.md entries were
 
 def valid_autopilot(value):
-    """The closed `autopilot` object: at least one project-scoped key, each with a fixed value or a roots list."""
+    """The closed `autopilot` object: at least one project-scoped key, each with a fixed value or a list."""
     if not isinstance(value, dict) or not value or not set(value) <= set(AUTOPILOT_KEYS):
         return False
     for key, item in value.items():
@@ -345,6 +345,18 @@ def valid_autopilot(value):
         elif key == 'decide':
             if (not isinstance(item, list) or len(set(map(str, item))) != len(item)
                     or not all(isinstance(name, str) and name in DECIDE_KEYS for name in item)):
+                return False
+        elif key == 'test-commands':
+            # Exact test commands (docs/specs/afk-per-project.md F); git, gh and rm are classified by check itself.
+            if (not isinstance(item, list) or not 1 <= len(item) <= MAX_TARGETS or len(set(map(str, item))) != len(item)
+                    or not all(isinstance(c, str) and len(c) <= 240 and TARGET_COMMAND.fullmatch(c)
+                               and c.split(' ')[0] not in {'git', 'gh', 'rm'} for c in item)):
+                return False
+        elif key == 'top-level-files':
+            # Exact top-level file names; a folder belongs in `roots`.
+            if (not isinstance(item, list) or not 1 <= len(item) <= 16 or len(set(map(str, item))) != len(item)
+                    or not all(isinstance(name, str) and ROOT_NAME.fullmatch(name)
+                               and name.upper() not in INSTRUCTION_FILES for name in item)):
                 return False
         elif key in ('non-production-targets', 'production-targets'):
             fewest = 1 if key == 'production-targets' else 0
