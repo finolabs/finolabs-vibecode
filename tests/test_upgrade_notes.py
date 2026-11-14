@@ -77,7 +77,7 @@ class NotesSchemaTest(unittest.TestCase):
 
     def test_shipped_notes_backfill_020_to_023_with_setup_steps_and_checks(self):
         parsed = u.parse_notes(json.loads(NOTES.read_text()))
-        self.assertEqual([entry['version'] for entry in parsed], ['0.2.0', '0.2.1', '0.2.2', '0.2.3', '0.2.4', '0.2.5', '0.2.6'])
+        self.assertEqual([entry['version'] for entry in parsed], ['0.2.0', '0.2.1', '0.2.2', '0.2.3', '0.2.4', '0.2.5', '0.2.6', '0.2.7'])
         items = {item['id']: item for entry in parsed for item in entry['items']}
         state = 'skills/setup/scripts/upgrade_state.py'
         expected = {
@@ -143,7 +143,8 @@ class NotesSchemaTest(unittest.TestCase):
         self.assertFalse([i for i in items if i.startswith('0.2.0/') and ('roles' in i or 'limits' in i)])
 
     def test_shipped_notes_are_valid_and_hold_the_024_and_025_entries(self):
-        parsed = u.parse_notes(json.loads(NOTES.read_text()))[-3:-1]
+        parsed = [entry for entry in u.parse_notes(json.loads(NOTES.read_text()))
+                  if entry['version'] in ('0.2.4', '0.2.5')]
         self.assertEqual([entry['version'] for entry in parsed], ['0.2.4', '0.2.5'])
         ids = [item['id'] for item in parsed[0]['items']]
         self.assertIn('0.2.4/checks-rename', ids)
@@ -203,6 +204,25 @@ class NotesSchemaTest(unittest.TestCase):
         for phrase in ('/setup add afk', 'account', 'this repository', 'want different'):
             self.assertIn(phrase, items['0.2.6/afk-scope']['text'])
 
+    def test_027_names_the_afk_setup_steps_and_the_breaking_away_changes(self):
+        items = {item['id']: item for entry in u.parse_notes(json.loads(NOTES.read_text()))
+                 for item in entry['items']}
+        steps = {'0.2.7/afk-project-rules': '/setup add afk', '0.2.7/afk-test-commands': '/setup add afk',
+                 '0.2.7/afk-release-targets': '/setup add afk', '0.2.7/afk-account-lists': '/setup add afk',
+                 '0.2.7/advisor-repin': '/setup add quota', '0.2.7/matrix-models': '/setup add delegation'}
+        for ident, step in steps.items():
+            self.assertEqual((items[ident]['kind'], items[ident]['setup']), ('setup', step))
+        for ident in ('0.2.7/afk-lease-restart', '0.2.7/afk-table', '0.2.7/afk-release-repo',
+                      '0.2.7/same-family-fallback', '0.2.7/afk-new-branch', '0.2.7/afk-rules-view',
+                      '0.2.7/advisor-tier', '0.2.7/two-model-fallback'):
+            self.assertEqual(items[ident]['kind'], 'info')
+            self.assertNotIn('setup', items[ident])
+        for phrase in ('Breaking', 'git tag', 'gh release', 'npm publish', 'listed'):
+            self.assertIn(phrase, items['0.2.7/afk-release-targets']['text'])
+        for phrase in ('## afk', 'replaces it whole', 'ends a live lease'):
+            self.assertIn(phrase, items['0.2.7/afk-account-lists']['text'])
+        self.assertIn('/afk', items['0.2.7/afk-lease-restart']['text'])
+
     def test_025_names_the_afk_section_step_and_the_tidy_rename(self):
         items = {item['id']: item for entry in u.parse_notes(json.loads(NOTES.read_text()))
                  for item in entry['items']}
@@ -226,7 +246,8 @@ class NotesSchemaTest(unittest.TestCase):
         self.assertFalse(u.missing_release_entry('0.2.4', released))
         self.assertFalse(u.missing_release_entry('0.2.5', released))
         self.assertFalse(u.missing_release_entry('0.2.6', released))
-        self.assertTrue(u.missing_release_entry('0.2.7', released))
+        self.assertFalse(u.missing_release_entry('0.2.7', released))
+        self.assertTrue(u.missing_release_entry('0.2.8', released))
         self.assertFalse(u.missing_release_entry('0.2.5-dev', released))
         manifest = json.loads((ROOT / '.claude-plugin/plugin.json').read_text())['version']
         self.assertFalse(u.missing_release_entry(manifest, released),
