@@ -1,6 +1,6 @@
 # Models per kind of work in the assignment matrix
 
-Status: accepted; owner decisions 14/11/2026 (review round 1 addressed); for 0.2.7, one pull request after the afk-per-project series; no code has landed yet.
+Status: accepted; owner decisions 14/11/2026 (review rounds addressed); for 0.2.7, one pull request after the afk-per-project series; no code has landed yet.
 
 This document extends [assignment-matrix.md](assignment-matrix.md) ("The section", "Routing query"). Where they disagree, this document wins.
 
@@ -37,11 +37,11 @@ Example (the owner's rules):
 - antigravity: levels 1-5; works on design, video, image-generation, transcription; models gemini-4-argon-high then gemini-3.8-flash-high for security-review | gemini-4-hydrogen-high for design, video, three-d, image-generation, levels 4-5 | gemini-4-argon-high for implement, levels 4-5 | gemini-3.8-flash-high for code-review | gemini-3.8-flash-high for levels 3-4; roles security-review, navigator
 ```
 
-- Rules are read in order and the first rule whose selectors all match the dispatch wins. Selectors of different sorts in one rule must all match (`implement, levels 4-5` = implement at level 4 or 5); several selectors of the same sort match any of them (`design, video` = either type). A rule with a type selector never matches a dispatch that has no type.
+- Rules are read in order and the first rule whose selectors all match the dispatch wins. Selectors of different sorts in one rule must all match (`implement, levels 4-5` = implement at level 4 or 5); several selectors of the same sort match any of them (`design, video` = either type). A rule with a type selector never matches a dispatch that has no type, and a rule with no kind selector matches only `implement`, so a level-only rule never picks a model for a review, a navigator or an advisor run.
 - `models` only chooses among the agent's own models; it never makes an agent a candidate. Which agents are candidates stays with `works on` (types), `levels` and `roles`, as today.
 - No rule matches: the line's `model`, else the agent's default.
 - At most 8 rules per line; each id follows the existing model rule (letters, digits, dot and dash, at most 64); at most one `then` per rule.
-- A kind, type or level range outside the closed lists, a ninth rule or a second `then` is a parse problem like any other: the matrix is invalid as a whole, as [assignment-matrix.md](assignment-matrix.md) "Reading and migration" says (roles and judge unset, `show` and `checkup.py` give the reason). There is no partly valid line.
+- A kind, type or level range outside the closed lists, a bad model id, a rule without `for`, an empty rule or selector, a second `models` field, a ninth rule or a second `then` is a parse problem like any other: the matrix is invalid as a whole, as [assignment-matrix.md](assignment-matrix.md) "Reading and migration" says (roles and judge unset, `show` and `checkup.py` give the reason). There is no partly valid line: the other fields of that line are kept only in memory for `show`'s reason, never for routing.
 - `assignments.py render` writes the field back in the same form, so a parsed line renders unchanged; `matrix_setup.py show` lists the rules under the agent's row, one per line, in order.
 - A model not among the allowed models of `## Agents on this machine` is shown as unverified, as today.
 
@@ -49,7 +49,8 @@ Example (the owner's rules):
 
 `then` names a fallback used only when the first model's pool is out of quota in the cached reading.
 
-- Pools come from the cached Antigravity reading (`quota_probe.py` `parse_agy`): an id starting `gemini-4-argon-` reads the `argon` pool, any other `gemini-` id the `gemini` pool, a `claude-` or `gpt-` id the `claude-gpt` pool. A pool is out of quota by the rule `review_route.py` `blocked_families` uses today (under 10% remaining with a reset still ahead, reading at most 8 hours old); a missing or stale reading is unverified and keeps the first model.
+- Pools come from the cached Antigravity reading (`quota_probe.py` `parse_agy`): an id starting `gemini-4-argon-` reads the `argon` pool, any other `gemini-` id (Hydrogen and Flash included) the `gemini` pool, a `claude-` or `gpt-` id the `claude-gpt` pool, and any other id the `other` pool. A pool is out of quota by the rule `review_route.py` `blocked_families` uses today (under 10% remaining with a reset still ahead, reading at most 8 hours old); a missing or stale reading is unverified and keeps the first model.
+- The model finally chosen must pass the same check: when the winning rule's model is out of quota and it has no `then`, or its `then` model is out of quota too, or the line's `model` chosen when no rule matched is out of quota, the agent is dropped as `out of quota`. A live family rate-limit marker drops the agent whatever its pools say.
 - Other families have one reading for the whole install, so `then` on their lines never applies (the agent is dropped as out of quota instead); `show` notes this.
 - An Antigravity line with `models` rules is out of quota as a whole only when every pool its rules and `model` name is out of quota; one depleted pool no longer drops it. `review_route.py` `blocked_families` applies the same reading to Antigravity when the matrix gives it `models` rules, and is unchanged otherwise.
 
@@ -68,9 +69,9 @@ Example (the owner's rules):
 
 1. The owner's example parses, and `assignments.py render` writes it back unchanged; `matrix_setup.py show` lists its five rules in order (tests).
 2. `route_pick.py pick --kind security-review --level 3` prints `antigravity gemini-4-argon-high`, and `antigravity gemini-3.8-flash-high quota-fallback` when the cached `argon` pool is out of quota while `gemini` is not (tests).
-3. `--kind implement --level 4` gives Argon; `--type design --level 4` gives Hydrogen; `--kind code-review --level 2` gives Flash; `--level 2` with no type and no matching rule gives the line's `model` or `default`; `pick` without `--type` runs (tests).
-4. A bad kind, type, level range, ninth rule or second `then` makes the matrix invalid with that reason (tests).
-5. With `models` rules on the Antigravity line, a depleted `argon` pool alone leaves Antigravity routable in `review_route.py` and `route_pick.py`; without rules, behavior is unchanged (tests).
+3. `--kind implement --level 4` gives Argon; `--kind advisor --level 3` on a line with the `advisor` role and only level or type rules gives the line's `model` or `default`, never a rule's model; `--type design --level 4` gives Hydrogen; `--kind code-review --level 2` gives Flash; `--level 2` with no type and no matching rule gives the line's `model` or `default`; `pick` without `--type` runs (tests).
+4. A bad kind, type, level range or model id, a rule without `for`, an empty rule or selector, a second `models` field, a ninth rule or a second `then` makes the matrix invalid with that reason, and `route_pick.py` and `review_route.py` then do not route (tests).
+5. With `models` rules on the Antigravity line, a depleted `argon` pool alone leaves Antigravity routable in `review_route.py` and `route_pick.py`; with both `argon` and `gemini` depleted, or a live rate-limit marker, it is dropped as out of quota; without rules, behavior is unchanged (tests).
 6. `/setup add delegation` asks the new question and its read-back matches the written line (test of the reference text).
 7. `docs/specs/assignment-matrix.md` points here; `help`'s map and `CHANGELOG.md` describe the field.
 
