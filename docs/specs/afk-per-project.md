@@ -1,6 +1,6 @@
 # afk per project: limits per repository, an evaluation table before the deciders, no stops beyond setup
 
-Status: accepted; owner decisions recorded and draft accepted on 14/11/2026; for 0.2.7, built in the six pull requests listed under "Order of pull requests"; no code has landed yet.
+Status: implemented; in 0.2.7 (PRs 277, 278, 280, 281, 282, 283; README diagram 284); live-host behaviour remains unverified.
 
 This document changes [autopilot.md](autopilot.md) ("Project scope", "Lease, state and what enforces what") and [away-decisions.md](away-decisions.md) ("The ladder", "Where it must stop"). Where they disagree, this document wins for 0.2.7 and the older text points here.
 
