@@ -83,6 +83,9 @@ CATEGORIES = {'Production': True, 'Real users and customer data': True, 'Unrecov
 CONSENT = 'Excerpts leave the machine'
 TARGETS = 'Non-production targets'
 PRODUCTION_TARGETS = 'Production targets'  # project scope only (`production-targets`); never read from host.md
+TEST_COMMANDS = 'Test commands'  # project scope only (`test-commands`, docs/specs/afk-per-project.md F); never host.md
+FILES = 'Top-level files'  # project scope only (`top-level-files`): exact top-level file names that become known paths
+CLASSIFIED = {'git', 'gh', 'rm'}  # programs check classifies itself, so a test-command entry never names them
 # A repository's `decide` list names categories by these keys; every category it does not list is stop there.
 DECIDE_NAMES = {'production': 'Production', 'unrecoverable-deletion': 'Unrecoverable deletion',
                 'messages-outside-the-repository': 'Messages outside the repository',
@@ -120,7 +123,7 @@ PROJECT_KEYS = {'task-choice': 'Task choice', 'push-and-pull-requests': 'Push an
 MAX_PROJECTS = 64  # entries in the lease's per-project counter table
 OFF = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', 'Trusted authors': 'own', 'Roots': []}
 # The strict and no-repository states also reset every category to stop and both target lists to empty.
-CLOSED = {**{c: 'stop' for c in CATEGORIES}, TARGETS: [], PRODUCTION_TARGETS: []}
+CLOSED = {**{c: 'stop' for c in CATEGORIES}, TARGETS: [], PRODUCTION_TARGETS: [], TEST_COMMANDS: [], FILES: []}
 CONTEXT = 'Repository context'  # the applied-settings entry holding the check's Context
 MERGED = 'Merged heads'  # the applied-settings entry holding the heads this lease's `log --kind merge` entries recorded
 EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yaml', '.yml'}
@@ -437,7 +440,8 @@ def effective(applied, cwd):
         state, values, _, record = store.autopilot_binding(ident)
         target = store.origin_target(ident)
         if state == 'unset' or state == 'approved' and 'autopilot' not in values:
-            return {**applied, 'Roots': [], PRODUCTION_TARGETS: [], CONTEXT: Context('found', ident, 'user', target, cwd)}
+            return {**applied, 'Roots': [], PRODUCTION_TARGETS: [], TEST_COMMANDS: [], FILES: [],
+                    CONTEXT: Context('found', ident, 'user', target, cwd)}
         project = values.get('autopilot') if state == 'approved' else None
         if (not store.valid_autopilot(project) or 'target' not in record or record['target'] != target
                 or not store.bound(record, ident)):
@@ -457,6 +461,8 @@ def effective(applied, cwd):
         if 'non-production-targets' in project:
             result[TARGETS] = list(project['non-production-targets'])
         result[PRODUCTION_TARGETS] = list(project.get('production-targets', []))
+        result[TEST_COMMANDS] = [c for c in project.get('test-commands', []) if c.split(' ')[0] not in CLASSIFIED]
+        result[FILES] = [f for f in project.get('top-level-files', []) if '/' not in f and not protected(f)]
         result[CONTEXT] = Context('found', ident, 'project', target, cwd)
         return result
     except (OSError, ValueError, TypeError, UnicodeError, KeyError, RecursionError):
@@ -564,7 +570,7 @@ def no_links(path, context):
     return True
 
 
-def classify_paths(paths, roots=(), context=UNKNOWN, source=False):
+def classify_paths(paths, roots=(), context=UNKNOWN, source=False, files=()):
     """Known single-file paths only. Each operand is read from cwd, then the protected, enforcer, root, document and
     link rules apply to its path relative to the checkout root of the check's validated identity, never to the
     operand alone, so a descendant cwd neither widens a root nor hides a protected ancestor. No identity: unknown.
@@ -598,7 +604,8 @@ def classify_paths(paths, roots=(), context=UNKNOWN, source=False):
             if path.suffix not in EXTENSIONS:
                 return 'unknown'
         elif len(path.parts) < 2:
-            if path.as_posix() not in DOCUMENTS:
+            # A repository's approved `top-level-files` name is a known path there, like the documents.
+            if path.as_posix() not in DOCUMENTS and (path.as_posix() not in files or path.suffix not in EXTENSIONS):
                 return 'unknown'
         elif path.parts[0] not in ROOTS and path.parts[0] not in roots or path.suffix not in EXTENSIONS:
             return 'unknown'
@@ -1357,7 +1364,7 @@ def tracked_remove(tail, applied):
         return 'unknown'
     if not current or not default or current in {default, 'main', 'master', 'trunk'}:
         return 'forbidden'
-    return classify_paths(rest, applied.get('Roots', ()), context, source_mode(applied))
+    return classify_paths(rest, applied.get('Roots', ()), context, source_mode(applied), applied.get(FILES, ()))
 
 
 # git verbs that change a checkout's work tree, index or HEAD; never run inside this install's own checkout.
@@ -1409,6 +1416,10 @@ def classify_argv(argv, applied, coordinator=None):
     categories, deploy = command_categories(argv), is_deploy(argv)
     if categories or deploy:
         return release_command(argv, applied, categories, deploy)
+    # A repository's approved test command, exactly as listed (token lists); only after the rules above.
+    if (context_of(applied).state == 'project' and argv[0] not in CLASSIFIED
+            and argv in [entry.split(' ') for entry in applied.get(TEST_COMMANDS, [])]):
+        return 'allowed'
     if command == 'rm' and any(t.startswith('-') and ('r' in t[1:] or t == '--recursive') for t in argv[1:]):
         return 'forbidden'
     if command in {'python3', sys.executable}:
@@ -1467,7 +1478,7 @@ def classify_argv(argv, applied, coordinator=None):
             return 'allowed' if current and default and current not in {default, 'main', 'master', 'trunk'} else 'forbidden'
         if verb == 'add':
             return classify_paths(tail[1:] if tail[:1] == ['--'] else tail, applied.get('Roots', ()),
-                                  context_of(applied), source_mode(applied))
+                                  context_of(applied), source_mode(applied), applied.get(FILES, ()))
         if verb == 'worktree':
             return worktree_remove(tail, applied)
         if verb == 'branch' and tail[:1] == ['-d']:
@@ -1498,7 +1509,7 @@ def classify_argv(argv, applied, coordinator=None):
                     if re.fullmatch(revision + r'(?:\.\.\.?' + revision + r')?', operand):
                         continue
                     if classify_paths([operand], applied.get('Roots', ()), context_of(applied),
-                                      source_mode(applied)) != 'allowed':
+                                      source_mode(applied), applied.get(FILES, ())) != 'allowed':
                         return 'unknown'
                 return 'allowed'
         return 'unknown'
@@ -1584,7 +1595,8 @@ def check(folder, args):
             if args.argv_json is not None:
                 code = classify_argv(argv, applied, args.coordinator)
             else:
-                code = classify_paths(args.paths, applied['Roots'], context_of(applied), source_mode(applied))
+                code = classify_paths(args.paths, applied['Roots'], context_of(applied), source_mode(applied),
+                                      applied.get(FILES, ()))
         # Only a Tier 1 answer reserves an action (and, for a ledger start, a run); a denied check costs nothing.
         if code == 'allowed':
             entry['actions'] += 1

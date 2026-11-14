@@ -1079,6 +1079,22 @@ class SettingsFileTest(unittest.TestCase):
         self.approval().write_text(json.dumps({'sha256': hashlib.sha256(raw).hexdigest(), 'approved': 1}))
         self.assertEqual(store.settings_state(self.repo), ('broken', {}))
 
+    def test_the_preview_shows_test_commands_and_top_level_files(self):
+        shown = self.pp.autopilot_preview(self.repo, json.dumps({'test-commands': ['npm test', 'npm run lint'],
+                                                                 'top-level-files': ['TASKS.md']}))
+        self.assertEqual((shown['effective']['Test commands'], shown['effective']['Top-level files']),
+                         ('npm test; npm run lint (repository)', 'TASKS.md (repository)'))
+        self.assertIn('Test commands', shown['changed'])
+        self.assertIn('Top-level files', shown['changed'])
+        self.assertTrue(self.away(json.dumps({'test-commands': ['npm test'], 'top-level-files': ['TASKS.md']})))
+        shown = self.pp.autopilot_preview(self.repo, json.dumps({'merge': 'no'}))
+        self.assertEqual((shown['effective']['Test commands'], shown['effective']['Top-level files']), ('none', 'none'))
+        self.assertIn('Test commands', shown['changed'])  # removing a list is a change of its own
+        self.assertIn('Top-level files', shown['changed'])
+        same = self.pp.autopilot_preview(self.repo, json.dumps({'test-commands': ['npm test'],
+                                                                'top-level-files': ['TASKS.md']}))
+        self.assertEqual((same['action'], same['changed']), ('none', []))
+
     def test_the_cli_previews_the_autopilot_object_and_writes_it_only_without_dry_run(self):
         import io
         value = 'autopilot=' + json.dumps({'merge': 'no', 'roots': ['packages']})
