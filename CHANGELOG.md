@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- afk limits are counted per repository: each repository under one lease has its own runs, runtime minutes (from its first allowed action) and actions an hour, and a repository may set its own `max-runs`, `max-runtime-minutes` and `max-actions-per-hour` in `/setup add afk` (wider or narrower than the user value). Breaking for away loops: a spent repository answers `spent` with no `end` line, so the loop goes on in other repositories, `exhausted` is no longer returned, and a changed setup now adds the `end` line like an ended lease; a lease started before the update reads as invalid, so start it again.
+
 ## [0.2.6] - 2026-11-14
 
 ### Added
