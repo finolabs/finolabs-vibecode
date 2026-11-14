@@ -246,6 +246,12 @@ def start(folder, args):
         pass
     summary = {**applied, 'Lease hours': hours, TARGETS: '; '.join(applied[TARGETS]) or 'none'}
     print('afk started\n' + '\n'.join(f'- {key}: {value}' for key, value in summary.items()))
+    # The summary above is the account's; the repository of this folder may apply other rules (U3 of the afk UAT).
+    here = effective(applied, os.getcwd())
+    rules = repository_rules(here)
+    print(f'This folder ({here[CONTEXT].state}): ' + '; '.join(
+        f'{key}: {", ".join(map(str, value)) or "none"}' if isinstance(value, list) else f'{key}: {value}'
+        for key, value in rules.items()) + '. Run `effective` in each repository you work in.')
 
 
 def stop(folder):
@@ -1634,6 +1640,14 @@ def merged_heads(folder, lease, current):
         return set()
 
 
+def repository_rules(result):
+    """The rules `check` applies in this repository beyond the five values: limits, decided categories and the lists."""
+    return {'Max runs': result['Max runs'], 'Max runtime minutes': result['Max runtime minutes'],
+            'Max actions per hour': result['Max actions per hour'],
+            'Decide': [c for c in CATEGORIES if result.get(c) == 'decide'],
+            **{key: list(result.get(key, [])) for key in (TARGETS, PRODUCTION_TARGETS, TEST_COMMANDS, FILES)}}
+
+
 def show_effective(folder):
     """Read-only: the five values `check` would apply in this working directory now, for advisory consumers (Task
     choice, Trusted authors). Reserves nothing and changes no counter; prints no path."""
@@ -1641,7 +1655,8 @@ def show_effective(folder):
     result = effective(applied if applied is not None else settings(), os.getcwd())
     context = result[CONTEXT]
     print(json.dumps({'lease': code or 'live', 'repository': context.repository, 'state': context.state,
-                      'target': context.target, 'values': {name: result[name] for name in OFF}},
+                      'target': context.target, 'values': {name: result[name] for name in OFF},
+                      'rules': repository_rules(result)},
                      separators=(',', ':')))
 
 

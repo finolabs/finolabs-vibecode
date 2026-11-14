@@ -31,6 +31,7 @@ Yes: Save Lease hours 8, Max runs 20, Max runtime minutes 480, Max actions per h
 No: Ask each in one round as a whole number (one left unanswered stays open; ask it again): hours 1-24 (a start can shorten it), runs 1-10000, runtime minutes 1-1440, actions an hour 1-10000, quota floor 0-100.
 Undo: Stop the lease; repeat setup to change future limits.
 Choices: "Yes, use these limits" / "No, set each limit".
+When host.md already has a valid `## afk` section, this question offers its saved Lease hours, Max runs, Max runtime minutes, Max actions per hour and Quota floor percent instead of the defaults above, and Yes keeps them; the table question in afk-decisions.md likewise starts from the saved answers, not the Starts column (advisory, agent judgment).
 Missing or stale usage readings also stop routing (advisory, agent judgment).
 
 Then follow [../afk-decisions.md](../afk-decisions.md): what must wait for you, optional deploy targets and the separate excerpt consent.
@@ -49,6 +50,8 @@ Yes: Apply only the previewed afk section in local host.md, keeping a backup of 
 No: Leave host.md unchanged; discard or replace the preview later.
 Undo: Stop any live lease; preview and approve changed settings, or restore the shown backup after checking later edits.
 Choices: "Yes, save these settings" / "No, leave settings unchanged".
+
+These writes widen what agents may do while the user is away, so the user starts them by typing `/setup add afk`. On Claude Code in auto mode the host may deny an agent's own `apply` or `--expect` save as oversight-sensitive; report the denial and leave the step to the user, never work around it (advisory, agent judgment; the host enforces the denial).
 
 Apply with `python3 -I <this skill folder>/scripts/afk_setup.py apply --yes --digest <prefix>`; use at least the first 12 hex digits of the shown Digest (the full digest also works). Preview state is private in `<data root>/state/autopilot-setup/preview.json`, expires after 60 minutes and is consumed on success.
 Apply enforces the digest, unchanged host bytes and mode, canonical root, safe files and section bounds; it refuses links and ambiguity. Only the `## afk` section changes; other host content stays byte for byte (script-enforced). An older `## Autopilot` section is not read and not changed; tell the user to delete it by hand. Backups and preview state are local writer records, not lease changes.

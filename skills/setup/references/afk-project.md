@@ -21,7 +21,7 @@ Only when Production was ticked, ask on its own: "Which production deploy comman
 Ask: "In this repository, may the agents merge pull requests and local branches while a lease is live?" Use my user setting / Yes / No (`merge`); ask it last; yes is your own decision.
 Answers, with the current values of unticked keys, become one object; "Use my user setting" leaves a key out. Preview: `python3 -I <this skill folder>/scripts/project_progress.py settings --set 'autopilot=<JSON>' --dry-run` (replaces the whole object), or `settings --clear autopilot --dry-run` when every answer inherits (keeps other settings). Report a refusal; on action `none`, stop. Else show the repository, `target`, action, object, effective values and the `changed` keys (each with its old value), then ask:
 "Save these away settings for this repository?"
-Yes: Rerun it with `--expect <token>` instead of `--dry-run`; a changed repository, settings or origin refuses (script), so preview again. PR commands then need `--repo github.com/OWNER/NAME` (create also `--head <branch>`); a changed origin turns these permissions off.
+Yes: Rerun it with `--expect <token>` instead of `--dry-run`; it prints `autopilot changed` (or `autopilot not changed` when that object was already stored) and exits 0, so report that line as the confirmation; a changed repository, settings or origin refuses (script), so preview again. PR commands then need `--repo github.com/OWNER/NAME` (create also `--head <branch>`); a changed origin turns these permissions off.
 No: Keep the current settings.
 Undo: Repeat this, answer No to the differ question and save the removal.
 Choices: "Yes, save them for this repository" / "No, keep the current settings".
