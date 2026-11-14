@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- `merge_check.py --independent --fallback-family <family>` lets an away lease merge on reviews by the author's own family when no other family is reachable: it needs a live lease, the author's family, positive out-of-quota evidence (a fresh reading with every pool below the floor, or a live rate-limit marker) for every other present family, a router trigger other than security, permission or privacy, no changed enforcer script or instruction file, and the exact fallback reviewer line on each counted marker. `afk.py log --kind review-fallback --pr <n> --head <sha>` records it for the user's return.
+
 ### Changed
 
 - afk limits are counted per repository: each repository under one lease has its own runs, runtime minutes (from its first allowed action) and actions an hour, and a repository may set its own `max-runs`, `max-runtime-minutes` and `max-actions-per-hour` in `/setup add afk` (wider or narrower than the user value). Breaking for away loops: a spent repository answers `spent` with no `end` line, so the loop goes on in other repositories, `exhausted` is no longer returned, and a changed setup now adds the `end` line like an ended lease; a lease started before the update reads as invalid, so start it again.
