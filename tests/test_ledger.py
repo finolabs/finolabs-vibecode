@@ -1391,15 +1391,16 @@ class LedgerReviewFixesTest(unittest.TestCase):
     def test_closed_late_cancelled_records_stay_out_of_the_rates_and_medians(self):
         self.write(self.pair("d1", 10) + self.pair("d2", 50, outcome="quota") + self.pair("d3", 20, outcome="error")
                    + self.pair("d4", 30, outcome="cancelled", note="stopped by the user")
-                   + self.pair("d5", 59, outcome="cancelled", note="closed late by ledger stale: no log"))
+                   + self.pair("d5", 59, outcome="cancelled", note="closed late by ledger stale: no log")
+                   + self.pair("d6", 58, outcome="cancelled", note="closed late by the coordinator: timed out"))
         [row] = self.ledger.summary_rows()
-        self.assertEqual((row["n"], row["closed_late"], row["cancelled"]), (4, 1, 1))
+        self.assertEqual((row["n"], row["closed_late"], row["cancelled"]), (4, 2, 1))
         self.assertEqual(row["accepted"], 1 / 4)
         self.assertEqual(row["median_min"], 25)
         text = self.run_ledger("summary").stdout.splitlines()
         self.assertEqual(text[0].split()[-3:], ["quota", "error", "cancelled"])
         self.assertEqual(text[1].split()[-3:], ["1", "1", "1"])
-        self.assertIn("closed late as cancelled, left out of the rates and medians: 1", text)
+        self.assertIn("closed late as cancelled, left out of the rates and medians: 2", text)
 
     # 4. Field validation.
     def test_rework_rounds_above_two_need_a_reason(self):

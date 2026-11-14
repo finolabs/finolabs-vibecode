@@ -84,9 +84,10 @@ def ledger_metrics(ledger, start, usage_start=None):
     runs = sum(r["n"] for r in rows)
     starts, finishes = ledger.load()
     done, good = [0] * WEEKS, [0] * WEEKS
+    late = getattr(ledger, "closed_late", lambda finish: False)  # closed late as cancelled: no verdict on the run
     for dispatch_id, s in starts.items():
         f = finishes.get(dispatch_id)
-        w = week_of(local_date(s["ts"]), start) if f else None
+        w = week_of(local_date(s["ts"]), start) if f and not late(f) else None
         if w is not None:
             done[w] += 1
             good[w] += f["outcome"] == "accepted" and f["rework_rounds"] == 0
