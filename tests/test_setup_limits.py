@@ -211,9 +211,10 @@ class ConsentInventoryTests(unittest.TestCase):
         self.assertIn("(../afk-project.md)", text.split("## Project scope")[1])
         project = (REFS / "afk-project.md").read_text()
         self.assertIn("inside a repository", project)
-        # Four tickable keys fit one native multi-select; trusted authors has no other choice yet.
+        # Four tickable keys fit one native multi-select; trusted authors has no other choice yet; the
+        # per-repository limits are one more question of their own.
         questions = re.findall(r'Ask: "([^"\n]+)"', project)
-        self.assertEqual(len(questions), 5, questions)  # the skill repository question is asked every time
+        self.assertEqual(len(questions), 6, questions)  # skill repository and limits are asked every time
         self.assertIn("one multi-select of four", project)
         # An existing repository object is read first and removed only through the previewed save question.
         self.assertLess(project.index("--clear autopilot --dry-run"),
@@ -221,7 +222,8 @@ class ConsentInventoryTests(unittest.TestCase):
         self.assertIn("preview its removal and ask the save question", project)
         self.assertIn("`current` field", project)
         self.assertIn("`changed` keys", project)
-        for key in ("task-choice", "push-and-pull-requests", "merge", "trusted-authors", "roots", "skill-repository"):
+        for key in ("task-choice", "push-and-pull-requests", "merge", "trusted-authors", "roots", "max-runs",
+                    "max-runtime-minutes", "max-actions-per-hour", "skill-repository"):
             self.assertIn("`%s`" % key, project)
         # Only the keys the user ticks as different are asked; every other key inherits.
         self.assertIn("Should this repository use different away rules than your account?", project)

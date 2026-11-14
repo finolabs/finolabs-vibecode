@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- afk limits are counted per repository: each repository under one lease has its own runs, runtime minutes (from its first allowed action) and actions an hour, and a repository may set its own `max-runs`, `max-runtime-minutes` and `max-actions-per-hour` in `/setup add afk` (wider or narrower than the user value). Breaking for away loops: a spent repository answers `spent` with no `end` line, so the loop goes on in other repositories, `exhausted` is no longer returned, and a changed setup now adds the `end` line like an ended lease; a lease started before the update reads as invalid, so start it again.
+
 ### Fixed
 
 - afk no longer parks review posting: `afk.py check` allows `post_review.py <number>` and `post_review.py <number> --body-file <run body>` (either order) when the repository's target is verified and `Repository comments` is `decide`; the body must be post_review.py's own private run body, its first line one review marker and the rest free of secrets, machine paths and other gate markers.
