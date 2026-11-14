@@ -1322,7 +1322,7 @@ class LedgerReviewFixesTest(unittest.TestCase):
         return [start, done]
 
     def git(self, *args, cwd):
-        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args], cwd=cwd,
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args], cwd=cwd,
                        check=True, capture_output=True)
 
     # 1. Log location, refusal reason, empty log.
