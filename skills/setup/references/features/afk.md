@@ -31,6 +31,7 @@ Yes: Save Lease hours 8, Max runs 20, Max runtime minutes 480, Max actions per h
 No: Ask each in one round as a whole number (one left unanswered stays open; ask it again): hours 1-24 (a start can shorten it), runs 1-10000, runtime minutes 1-1440, actions an hour 1-10000, quota floor 0-100.
 Undo: Stop the lease; repeat setup to change future limits.
 Choices: "Yes, use these limits" / "No, set each limit".
+When host.md already has a valid `## afk` section, this question offers its saved Lease hours, Max runs, Max runtime minutes, Max actions per hour and Quota floor percent instead of the defaults above, and Yes keeps them; the table question in afk-decisions.md likewise starts from the saved answers, not the Starts column (advisory, agent judgment).
 Missing or stale usage readings also stop routing (advisory, agent judgment).
 
 Then follow [../afk-decisions.md](../afk-decisions.md): what must wait for you, optional deploy targets and the separate excerpt consent.

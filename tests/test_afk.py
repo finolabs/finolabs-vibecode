@@ -1234,6 +1234,26 @@ class ProjectScopeTest(AfkBase):
         self.setup_config(SETUP + '- Test commands: npm test\n')
         self.assertNotEqual(self.invoke('start')[0], 0)
 
+    def test_start_and_effective_show_the_repository_rules(self):
+        self.project({'decide': ['repository-comments'], 'non-production-targets': ['npm run deploy:staging'],
+                      'test-commands': ['npm test'], 'top-level-files': ['TASKS.md'], 'max-actions-per-hour': 7})
+        self.setup_config(SETUP + '- Tags and releases: decide\n')
+        status, output = self.invoke('start')
+        self.assertEqual(status, 0, output)
+        self.assertIn('- Tags and releases: decide', output)  # the account summary
+        self.assertIn('This folder (project): Max runs: 20; Max runtime minutes: 480; Max actions per hour: 7; '
+                      'Decide: Repository comments; Non-production targets: npm run deploy:staging; '
+                      'Production targets: none; Test commands: npm test; Top-level files: TASKS.md.', output)
+        status, output = self.invoke('effective')
+        rules = json.loads(output)['rules']
+        self.assertEqual((rules['Decide'], rules['Test commands'], rules['Top-level files'], rules['Max actions per hour']),
+                         (['Repository comments'], ['npm test'], ['TASKS.md'], 7))
+        self.cwd = self.other_repo('second')
+        rules = json.loads(self.invoke('effective')[1])['rules']
+        # Another repository shows the account's rules, never this repository's lists.
+        self.assertEqual((rules['Test commands'], rules['Top-level files'], rules['Max actions per hour']), ([], [], 30))
+        self.assertIn('Tags and releases', rules['Decide'])
+
     def test_listed_top_level_files_are_known_paths_only_in_that_repository(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
         (self.repo / 'TASKS.md').write_text('- [ ] one\n')
