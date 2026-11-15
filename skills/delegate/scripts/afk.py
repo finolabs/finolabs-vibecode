@@ -33,7 +33,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
 | Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run` or `run --changed [--base <branch or commit>]` (no relative revision) with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
-| An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, no NEVER_DECIDED program, git or gh form that changes settings, credentials or the repository, merges, reviews, rewrites history or discards work, interpreters and package tools only in their closed forms) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, git_decidable, interpreter_decidable, declared_install, decidable_paths, request_subject, open_approvals |
+| An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, one of the allowlisted shapes: a script of this checkout, make, npm/pnpm/yarn/bun test, run and declared installs, python scripts and listed -m modules, cargo and go verbs without -exec or @version, declared pip, uv, poetry and bundle installs, listed git verbs and flags, listed gh group and verb pairs, or this install's delegated run) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, shape_decidable, dispatch_prefix, decidable_paths, request_subject, open_approvals |
 | Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge and review-fallback kinds only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
 | Trusted PR authors, full independent review/check/local-test gate, changed paths (including staged commit paths), quota readings and actually calling check before execution remain caller obligations in this slice | agent judgment, advisory; merge_check --independent enforces its review condition |
 
@@ -2027,56 +2027,35 @@ def merge_pins(folder, current):
 
 
 
-# Programs whose effect no argv screen can bound: shells and command runners, privilege changes, network clients,
-# system and process control, permission, link and disk tools, deletion (a destructive category of its own), global
-# package runners and the agent programs. A request through one of them is never decidable.
-NEVER_DECIDED = frozenset({
-    'sh', 'bash', 'zsh', 'fish', 'dash', 'ksh', 'csh', 'tcsh', 'env', 'exec', 'eval', 'xargs', 'nohup', 'time',
-    'timeout', 'watch', 'script', 'expect', 'sudo', 'su', 'doas', 'curl', 'wget', 'ssh', 'scp', 'sftp', 'rsync', 'nc',
-    'ncat', 'netcat', 'socat', 'telnet', 'ftp', 'http', 'https', 'security', 'launchctl', 'defaults', 'osascript',
-    'open', 'kill', 'pkill', 'killall', 'shutdown', 'reboot', 'halt', 'chmod', 'chown', 'chgrp', 'chflags', 'xattr',
-    'crontab', 'at', 'dd', 'mkfs', 'diskutil', 'mount', 'umount', 'ln', 'docker', 'kubectl', 'terraform',
-    'npx', 'pnpx', 'bunx', 'pipx', 'brew', 'apt', 'apt-get', 'gem', 'awk', 'gawk', 'sed', 'perl', 'tclsh', 'pwsh',
-    'powershell', 'rm', 'rmdir', 'unlink', 'shred', 'srm', 'truncate', 'claude', 'codex', 'agy', 'gemini', 'zcode'})
-# Interpreters run only a script file inside this checkout, or for Python `-m` one of PY_MODULES; options are a
-# closed list, so no inline code, REPL or code-running module gets through (owner decision, 15/11/2026).
-INTERPRETERS = frozenset({'python', 'node', 'ruby', 'php', 'deno', 'lua', 'R', 'Rscript'})
+# Decidable commands are an allowlist of fixed shapes (owner decision, 15/11/2026, after two review rounds showed a
+# deny list cannot be complete): a script of this checkout, the repository's own test, run, build and lint entry
+# points, installs of what the repository declares, listed git and gh verbs, and this install's delegated runs.
+# Every other program, form, option or verb stays parked.
 PY_OPTIONS = frozenset({'-I', '-B', '-u', '-O', '-OO', '-s', '-E', '-S', '-q', '-v', '-b', '-bb'})
 PY_MODULES = frozenset({'unittest', 'pytest', 'doctest', 'py_compile', 'compileall', 'mypy', 'ruff', 'black', 'flake8',
-                        'pyflakes', 'pylint', 'coverage', 'tox', 'nox', 'build', 'pip'})
-NODE_OPTIONS = frozenset({'--test', '--no-warnings', '--enable-source-maps'})
-DENO_SUBCOMMANDS = frozenset({'test', 'check', 'fmt', 'lint', 'task'})
-# git and gh may be decided for code, review and workflow work (owner decision, 15/11/2026); never for settings,
-# credentials, creating, forking, deleting or renaming a repository, merging outside the pinned `gh pr merge`, reviews
-# outside `post_review.py`, or rewriting history and discarding work, which the owner's own rules forbid. No option may
-# come before the subcommand (`git -C` is judged by `classified` before this point).
-GIT_NEVER = frozenset({'config', 'remote', 'credential', 'filter-branch', 'filter-repo', 'replace', 'update-ref',
-                       'symbolic-ref', 'reflog', 'gc', 'prune', 'clean', 'push', 'pull', 'clone', 'merge', 'rebase',
-                       'reset', 'restore', 'checkout', 'switch', 'rm', 'stash', 'submodule', 'worktree', 'branch', 'tag',
-                       'notes', 'lfs', 'daemon', 'send-email', 'request-pull', 'archive', 'init'})
-GH_NEVER = {'repo': {'delete', 'edit', 'rename', 'archive', 'unarchive', 'set-default', 'deploy-key', 'autolink',
-                     'gitignore', 'license', 'sync', 'create', 'fork'},
-            'pr': {'merge', 'review'}, 'issue': {'delete', 'transfer'}, 'run': {'delete'},
-            'workflow': {'enable', 'disable'}, 'cache': {'delete'}, 'release': None, 'secret': None,
-            'variable': None, 'auth': None, 'ssh-key': None, 'gpg-key': None, 'ruleset': None, 'config': None,
-            'extension': None, 'alias': None, 'org': None, 'api': None, 'codespace': None, 'attestation': None,
-            'label': {'delete', 'edit', 'clone'}, 'project': {'delete', 'close', 'copy'}, 'gist': None}
-
-
-def git_decidable(name, args):
-    """False for the git and gh forms that change settings, credentials or the repository itself, merge, review,
-    rewrite history or discard work; True for every other program, which still passes the other screens."""
-    if name == 'git':
-        if not args or args[0].startswith('-') or args[0] in GIT_NEVER:
-            return False
-        return not (args[0] == 'commit' and any(t.startswith('--amend') for t in args[1:]))
-    if name == 'gh':
-        if not args or args[0].startswith('-'):
-            return False
-        group = GH_NEVER.get(args[0], ())
-        verb = next((t for t in args[1:] if not t.startswith('-')), None)
-        return not (group is None or (group and verb in group))
-    return True
+                        'pyflakes', 'pylint', 'coverage', 'tox', 'nox', 'build'})
+WORD = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.:/-]{0,120}')
+MAKE_VAR = re.compile(r'[A-Z][A-Z0-9_]{0,40}=[A-Za-z0-9_.,/-]{0,120}')
+JS_TOOLS = frozenset({'npm', 'pnpm', 'yarn', 'bun'})
+JS_INSTALL_FLAGS = frozenset({'--frozen-lockfile', '--immutable', '--no-audit', '--no-fund', '--prefer-offline',
+                              '--ignore-scripts', '--silent', '-s'})
+CARGO_VERBS = frozenset({'test', 'build', 'check', 'clippy', 'fmt', 'bench', 'fetch', 'run', 'doc'})
+GO_VERBS = frozenset({'test', 'build', 'vet', 'fmt', 'run'})
+GO_DENIED = re.compile(r'-(?:exec|toolexec|overlay|modfile|pgo|ldflags|gcflags|asmflags)(?:=.*)?')
+# git: verbs that change only this checkout's commits and index in ways the owner allows, or read; options from a
+# closed list, so no option runs a program (`--ext-diff`, `-x` of difftool, `--exec`) or writes a file (`--output`).
+GIT_VERBS = frozenset({'fetch', 'cherry-pick', 'revert', 'add', 'mv', 'log', 'show', 'diff', 'status', 'blame',
+                       'grep', 'ls-files', 'shortlog', 'describe', 'rev-parse', 'merge-base'})
+GIT_FLAGS = frozenset({'--no-edit', '-x', '--continue', '--abort', '--skip', '--quiet', '-q', '--prune', '--oneline',
+                       '--stat', '--name-only', '--name-status', '--cached', '--staged', '-p', '--no-color',
+                       '--porcelain', '-s', '--short', '-b', '-n', '--all', '-A', '-u', '--update', '--', '-i', '-l',
+                       '--no-ext-diff', '--no-textconv', '--abbrev-ref', '--show-toplevel', '-v'})
+GIT_NUMBER = re.compile(r'-n?[0-9]{1,4}|--max-count=[0-9]{1,4}')
+# gh: (group, verb) pairs at fixed positions, then data; another repository than the verified one denies.
+GH_VERBS = {'pr': {'view', 'list', 'checks', 'diff', 'status'},
+            'issue': {'create', 'view', 'list', 'comment', 'edit', 'close', 'reopen'},
+            'run': {'view', 'list', 'watch', 'rerun'}, 'workflow': {'run', 'view', 'list'},
+            'repo': {'view'}, 'release': {'view', 'list'}, 'label': {'list', 'create'}}
 
 
 def script_inside(token, context):
@@ -2086,64 +2065,79 @@ def script_inside(token, context):
     return os.path.isfile(os.path.join(context.cwd or os.getcwd(), token))
 
 
-def interpreter_decidable(name, args, context):
-    """An interpreter runs a script of this checkout, or Python `-m` a listed module (`pip` only as a declared
-    install); any other option, inline code, a bare interpreter (a REPL) or a module like `code` or `timeit` denies."""
+def pip_declared(args, context):
+    """`pip install` of declared requirements only: every operand follows `-r`, `-c` or `-e` and is an existing path
+    inside this checkout; at least one such pair; no other option."""
+    pairs, i = 0, 0
+    while i < len(args):
+        if args[i] not in {'-r', '--requirement', '-e', '--editable', '-c', '--constraint'} or i + 1 >= len(args):
+            return False
+        operand = args[i + 1]
+        if (operand.startswith('-') or any(c in operand for c in '@+:')
+                or not os.path.lexists(os.path.join(context.cwd or os.getcwd(), operand)) or not inside(operand, context)):
+            return False
+        pairs, i = pairs + 1, i + 2
+    return pairs > 0
+
+
+def shape_decidable(name, first, args, context):
+    """True when the command has one of the allowlisted shapes."""
+    if '/' in first or first.startswith('.'):
+        return script_inside(first, context)  # a script of this checkout, with data arguments
+    if name == 'make':
+        return all(WORD.fullmatch(t) or MAKE_VAR.fullmatch(t) or t in {'-k', '-s', '-n'} or re.fullmatch(r'-j[0-9]{0,2}', t)
+                   for t in args)
+    if name in JS_TOOLS:
+        if not args:
+            return name == 'yarn'
+        verb, rest = args[0], args[1:]
+        if verb in {'test', 't'}:
+            return True
+        if verb in {'run', 'run-script'}:
+            return bool(rest) and WORD.fullmatch(rest[0]) is not None
+        if verb in {'install', 'i', 'ci'}:
+            return all(t in JS_INSTALL_FLAGS for t in rest)  # no package named: install what the lockfile declares
+        return False
     if name == 'python':
         i = 0
         while i < len(args) and args[i] in PY_OPTIONS:
             i += 1
-        if i < len(args) and args[i] == '-m':
-            module = args[i + 1] if i + 1 < len(args) else ''
-            if module not in PY_MODULES:
-                return False
-            return module != 'pip' or (args[i + 2:i + 3] == ['install'] and declared_install('pip', args[i + 3:], context))
+        if args[i:i + 1] == ['-m']:
+            module = args[i + 1] if i + 2 <= len(args) else ''
+            if module == 'pip':
+                return args[i + 2:i + 3] == ['install'] and pip_declared(args[i + 3:], context)
+            return module in PY_MODULES
         return i < len(args) and script_inside(args[i], context)
-    if name == 'node':
-        i = 0
-        while i < len(args) and args[i] in NODE_OPTIONS:
-            i += 1
-        return ('--test' in args[:i] and all(not t.startswith('-') and inside(t, context) for t in args[i:])) or (
-            i < len(args) and script_inside(args[i], context))
-    if name == 'deno':
-        return bool(args) and args[0] in DENO_SUBCOMMANDS
-    return bool(args) and script_inside(args[0], context)
-
-
-# Package and build tools: only the subcommands that run this repository's own scripts, tests and builds, never a
-# wrapper that runs another program (`uv run`, `poetry run`, `bundle exec`, `npm exec`). `install`-like subcommands
-# install only what the repository declares (owner decision, 15/11/2026): see declared_install.
-SUBCOMMANDS = {'npm': {'test', 't', 'run', 'run-script', 'install', 'i', 'ci'},
-               'pnpm': {'test', 't', 'run', 'install', 'i'}, 'yarn': {'test', 'run', 'install'},
-               'bun': {'test', 'run', 'install', 'i'}, 'cargo': {'test', 'build', 'check', 'clippy', 'fmt', 'run', 'bench', 'fetch'},
-               'go': {'test', 'build', 'vet', 'run', 'fmt', 'generate', 'mod'}, 'pip': {'install'},
-               'uv': {'sync'}, 'poetry': {'install'}, 'bundle': {'install'}}
-INSTALLS = {'install', 'i', 'ci', 'sync', 'fetch', 'mod'}
-REGISTRY_FLAGS = re.compile(r'--(?:registry|index-url|extra-index-url|trusted-host|find-links|index|global|location|prefix|target|user|root|config|userconfig|globalconfig)(?:=.*)?|-g|-i|-f')
-
-
-def declared_install(name, args, context):
-    """True when an install takes only what the repository declares: no package named on the command line, no other
-    registry or index, nothing global. pip may name only `-r`, `-c` and `-e` operands and paths, each an existing
-    path inside this checkout and never a VCS or remote form; `go mod` takes only `download`, `tidy` or `verify`
-    without an operand."""
-    if any(REGISTRY_FLAGS.fullmatch(t) for t in args):
-        return False
-    if name == 'go':
-        return args[:1] in (['download'], ['tidy'], ['verify']) and all(t.startswith('-') for t in args[1:])
     if name == 'pip':
-        for i, token in enumerate(args):
-            if token in {'-r', '--requirement', '-e', '--editable', '-c', '--constraint'}:
-                continue
-            if token.startswith('-') and not (i and args[i - 1] in {'-r', '--requirement', '-e', '--editable', '-c', '--constraint'}):
-                if '=' in token:
-                    return False  # `--requirement=x` and the like: pass operands separately
-                continue
-            if any(c in token for c in '@+:') or not os.path.lexists(os.path.join(context.cwd or os.getcwd(), token)) \
-                    or not inside(token, context):
-                return False  # a bare name or remote form is a package from the network
+        return args[:1] == ['install'] and pip_declared(args[1:], context)
+    if name == 'node':
+        if args[:1] == ['--test']:
+            return all(not t.startswith('-') and inside(t, context) for t in args[1:])
+        return bool(args) and script_inside(args[0], context)
+    if name == 'cargo':
+        return bool(args) and args[0] in CARGO_VERBS and not any(t.startswith(('--config', '-Z')) for t in args)
+    if name == 'go':
+        if any('@' in t or GO_DENIED.fullmatch(t) for t in args):
+            return False
+        if args[:1] == ['mod']:
+            return args[1:2] in (['download'], ['tidy'], ['verify']) and all(t.startswith('-') for t in args[2:])
+        return bool(args) and args[0] in GO_VERBS
+    if name in {'uv', 'poetry', 'bundle'}:
+        verb = {'uv': 'sync', 'poetry': 'install', 'bundle': 'install'}[name]
+        return args[:1] == [verb] and all(t in {'--frozen', '--locked', '--no-root', '--quiet'} for t in args[1:])
+    if name == 'git':
+        return (bool(args) and args[0] in GIT_VERBS
+                and all(not t.startswith('-') or t in GIT_FLAGS or GIT_NUMBER.fullmatch(t) for t in args[1:]))
+    if name == 'gh':
+        if len(args) < 2 or args[1] not in GH_VERBS.get(args[0], ()):
+            return False
+        for i, t in enumerate(args):
+            if t in {'-R', '--repo'} or t.startswith('--repo='):
+                value = t.split('=', 1)[1] if '=' in t else (args[i + 1] if i + 1 < len(args) else '')
+                if context.target is None or value.removeprefix('github.com/').lower() != context.target.removeprefix('github.com/'):
+                    return False
         return True
-    return not any(not t.startswith('-') for t in args)
+    return False
 
 
 def program_name(token):
@@ -2152,12 +2146,17 @@ def program_name(token):
 
 
 def inside(token, context):
-    """True when a path token resolves, through every link, inside the checkout the request runs in."""
+    """True when a path token resolves, through every link, inside the checkout the request runs in and outside its
+    protected paths (`.git/`, `.github/`, `.claude/`, credential and key names), so a link cannot lead there."""
     if token.startswith('~') or context.ident is None:
         return False
     root = os.path.realpath(context.ident.checkout)
     full = os.path.realpath(os.path.join(context.cwd or os.getcwd(), token))
-    return full == root or full.startswith(root + os.sep)
+    if full == root:
+        return True
+    if not full.startswith(root + os.sep):
+        return False
+    return not protected(os.path.relpath(full, root))
 
 
 REMOTE = re.compile(r'[^\s/]*@[^\s/]+:')  # an scp-like remote, `user@host:path`
@@ -2165,9 +2164,9 @@ REMOTE = re.compile(r'[^\s/]*@[^\s/]+:')  # an scp-like remote, `user@host:path`
 
 def decidable_argv(argv, context, hosts=frozenset()):
     """True when an `unknown` command may enter the away ladder for approval: a found repository with user or project
-    settings, one plain program outside NEVER_DECIDED, git and gh forms outside their never lists, interpreters and
-    package tools in their closed forms, no shell syntax, URL, remote, secret or machine path, and every path operand
-    inside this checkout. Everything else stays parked."""
+    settings, one of the allowlisted shapes (shape_decidable) or this install's delegated run (dispatch_prefix), no
+    shell syntax, URL, remote, secret or machine path, and every path operand inside this checkout, outside its
+    protected paths. Everything else stays parked."""
     if context.repository != 'found' or context.state not in {'user', 'project'} or not argv:
         return False
     # Without a shell, a newline or tab inside one argument is data (a multi-line brief); other controls deny.
@@ -2179,24 +2178,10 @@ def decidable_argv(argv, context, hosts=frozenset()):
     first = argv[0]
     if '=' in first or first.startswith('-') or not re.fullmatch(r'[A-Za-z0-9_./+-]{1,240}', first):
         return False
-    name, args = program_name(first), argv[1:]
-    if name in NEVER_DECIDED or Path(first).name in NEVER_DECIDED:
-        return False
-    if ('/' in first or first.startswith('.')) and not inside(first, context) and not os.path.isabs(first):
-        return False
     skip = dispatch_prefix(argv, hosts)
-    if skip == 1:
-        # A delegated run's launcher is checked by dispatch_prefix; everything else gets the closed forms.
-        if any(REMOTE.match(t) for t in args) or not git_decidable(name, args):
-            return False
-        if name in INTERPRETERS and not interpreter_decidable(name, args, context):
-            return False
-        if SUBCOMMANDS.get(name) is not None and args[:1] and args[0] not in SUBCOMMANDS[name]:
-            return False
-        if name in SUBCOMMANDS and args[:1] and args[0] in INSTALLS and not declared_install(name, args[1:], context):
-            return False
-        if name == 'go' and any('@' in t for t in args):
-            return False  # `go run pkg@version` and the like fetch code from the network
+    if skip == 1 and (any(REMOTE.match(t) for t in argv[1:])
+                      or not shape_decidable(program_name(first), first, argv[1:], context)):
+        return False
     for token in argv[skip:]:
         value = token.split('=', 1)[1] if token.startswith('-') and '=' in token else token
         if not value:
@@ -2224,10 +2209,16 @@ def dispatch_prefix(argv, hosts):
 
 
 def decidable_paths(paths, context):
-    """True when every path of an `unknown` change is a plain relative path inside this checkout."""
+    """True when every path of an `unknown` change is a plain relative file path inside this checkout, outside its
+    protected paths, with no link on the way."""
     if context.repository != 'found' or context.state not in {'user', 'project'} or not paths:
         return False
-    return all(repository_path(p, context) is not None and inside(p, context) for p in paths)
+    for p in paths:
+        relative = repository_path(p, context)
+        if (relative is None or not inside(p, context) or not no_links(relative, context)
+                or (context.ident.checkout / relative).is_dir()):
+            return False
+    return True
 
 
 def request_subject(applied, cwd, argv, paths):
@@ -2273,7 +2264,8 @@ def approval_subject(folder, args, current):
     code, lease, applied, key, entry, argv, cwd = classified(
         folder, args.approve_argv_json, args.approve_paths, None, current)
     if code != 'unknown' or entry is None:
-        raise Refusal('only an unknown request may be approved; this one is %s' % (code or 'unknown'))
+        # entry is None when `git -C` named a folder outside this repository or under a protected path
+        raise Refusal('only an unknown request in a checked folder may be approved')
     subject = request_subject(applied, cwd, argv if args.approve_argv_json is not None else None, args.approve_paths)
     if subject is None:
         raise Refusal('this request is never decidable: park it')

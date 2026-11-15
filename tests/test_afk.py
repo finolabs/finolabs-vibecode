@@ -1321,6 +1321,7 @@ class ProjectScopeTest(AfkBase):
 
     def test_an_approval_is_refused_for_known_protected_or_unbounded_requests(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
+        (self.repo / 'tests').mkdir(exist_ok=True)
         outside = self.home / 'outside.txt'
         outside.write_text('x\n')
         for argv in (['curl', '-o', 'x', 'https://example.com'], ['bash', '-c', 'make'], ['sh', 'run.sh'],
@@ -1344,13 +1345,23 @@ class ProjectScopeTest(AfkBase):
                      ['poetry', 'run', 'sh'], ['bundle', 'exec', 'sh'], ['go', 'mod', 'download', 'x@v1'],
                      ['go', 'run', 'example.com/x@latest'], ['pip', 'install', 'git+git@example.com:a/b.git'],
                      ['gh', 'pr', 'review', '7', '--approve'], ['gh', 'issue', 'delete', '7'],
-                     ['gh', 'repo', 'create', 'x'], ['zcode', '-p', 'x'], ['cat', 'git@example.com:a/b']):
+                     ['gh', 'repo', 'create', 'x'], ['zcode', '-p', 'x'], ['cat', 'git@example.com:a/b'],
+                     # Review round two (PR 295), closed by the allowlist.
+                     ['go', 'test', '-exec', 'sh', './...'], ['git', 'difftool', '-x', 'sh'], ['git', 'bisect', 'run', 'sh'],
+                     ['gh', 'pr', '-R', 'example/demo', 'merge', '7'], ['pip', 'install', 'tests'], ['nodejs', '-e', '1'],
+                     ['pythonw', '-c', '1'], ['git', 'commit'], ['gh', 'pr', 'checkout', '7'], ['gh', 'repo', 'clone', 'x'],
+                     ['git', 'apply', '--unsafe-paths', 'x.patch'], ['git', 'log', '--output=x'], ['git', 'diff', '--ext-diff'],
+                     ['gh', 'issue', 'create', '--repo', 'other/repo', '--title', 'x'], [str(outside)], ['cargo', '--config', 'x', 'test']):
             with self.subTest(argv=argv):
                 self.approve('--approve-argv-json', json.dumps(argv), status=3)
                 self.check(argv, tier=3, code=json.loads(self.invoke('check', '--argv-json', json.dumps(argv))[1])['code'])
         self.check(['git', 'status'])
         self.approve('--approve-argv-json', json.dumps(['git', 'status']), status=3)  # already allowed: no approval
         self.approve('--approve-paths', '.github/workflows/x.yml', status=3)  # protected never enters the ladder
+        (self.repo / '.git/hooks').mkdir(parents=True, exist_ok=True)
+        (self.repo / 'notes-link').symlink_to(self.repo / '.git/hooks')
+        self.approve('--approve-paths', 'notes-link/pre-commit', status=3)  # a link into a protected folder
+        self.approve('--approve-argv-json', json.dumps(['make', 'notes-link/pre-commit']), status=3)
         argv = json.dumps(['make', 'ci-local'])
         for rung in (('--rung', 'host', '--settled', 'yes', '--by', 'claude', '--option', '2', '--of', '2',
                       '--model', 'claude-opus-5-5'),
