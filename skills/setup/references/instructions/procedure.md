@@ -6,7 +6,7 @@ Ask one scope question, recommendation first: user for a bare invocation or pref
 
 ## 1. Explore
 
-- Which hosts the user runs (`claude`, `codex`, `agy` on `PATH`) and which instruction files already exist in the chosen scope (`hosts.md`). Read them as the starting draft; read the user contract for comparison in project-only mode without changing it. Note any text copied into several files (a drift risk to offer to remove).
+- Which hosts the user runs (`claude`, `codex`, `agy` on `PATH`) and which instruction files already exist in the chosen scope (`hosts.md`). Read them as the starting draft; read the user contract for comparison in project-only mode without changing it. Note any text copied into several files (a drift risk to offer to remove), and lines that restate what a setup feature now owns: away rules (`afk` and its lease), model routing (the assignment matrix), machine and heavy-job limits (`## Machine rules`, `## Heavy jobs`), review relay (the project's `## Reviews` line); offer to replace each with a one-line pointer.
 - Project scope: the repository root, documented build and test commands and conventions, existing context files and overrides, and the `## Agent skills` block written by the core path. Read and preserve those entries; if missing, point to `/setup` and leave adoption pending. Run the look-first procedure in [../work-tracking.md](../work-tracking.md) before the work tracking interview.
 - Something that cannot be checked here is listed as unverified in one line, with a request that the user paste its contents; missing permissions are not a reason to stop.
 
