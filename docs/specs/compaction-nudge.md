@@ -1,6 +1,6 @@
 # Compaction nudge: tell the agent before the host compacts
 
-Status: accepted; rule recorded as the eighth scoped exception in `CLAUDE.md` (owner decision 2026-11-12); code landed for 0.2.5 (`scripts/compact_nudge.py`, `tests/test_compact_nudge.py`; `precompact.py` reworded as the "During" row says).
+Status: accepted; rule recorded as the eighth scoped exception in `CLAUDE.md` (owner decision 2026-11-12, Codex clause 2026-11-15); code landed for 0.2.5 (`scripts/compact_nudge.py`, `tests/test_compact_nudge.py`; `precompact.py` reworded as the "During" row says).
 
 ## Why
 
@@ -27,7 +27,18 @@ A long session reaches the host's compaction threshold with no handover saved, s
 - Message, fixed text with one integer: "Context is at <n>% of this session's compaction threshold. Before the host compacts, run tidy now: save the handover, write back decisions and lessons, note background runs and open pull requests, then offer to compact or start a fresh session." The skill was `session-hygiene` until its rename to `tidy` in 0.2.5.
 - Mark: one integer, written atomically with mode 0600 in `<data root>/state/compaction-nudge/<sha256(session id)[:16]>`, at most 200 files, oldest removed first. The mark is written before printing; if it cannot be written, print nothing.
 - Failure: any error, a missing or unsafe file, an unparsable count or an unresolved threshold prints nothing and exits 0. `FNL_COMPACT_NUDGE=off` disables it.
-- Not covered: Codex (check whether its `UserPromptSubmit` delivers `additionalContext` before adding it) and Antigravity (keeps the opt-in compaction stop).
+- Not covered: Antigravity (keeps the opt-in compaction stop). Codex: section "Codex" below.
+
+## Codex
+
+Owner decision 2026-11-15; the rule is the Codex clause of the eighth scoped exception in `CLAUDE.md`.
+
+- Delivery: Codex 0.167's hook documentation lists `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `turn_id` and `prompt` on stdin for `UserPromptSubmit`, and adds plain stdout of an exit-0 hook to the model's context as developer text. Exit 2 or `"decision": "block"` would block the prompt; the hook never uses either and always exits 0.
+- Hook: `UserPromptSubmit` in its own group of `.codex-plugin/hooks.json`, `python3 -I scripts/compact_nudge.py --host codex; exit 0`. Never in the metrics group.
+- Used tokens: open `transcript_path` only when it is a regular file, not a symlink, and its resolved path lies inside `<Codex home>/sessions/` (`CODEX_HOME`, else `~/.codex`). Read at most the last 256 KiB, parse each complete line as JSON, and take the latest entry whose `payload.type` is `token_count` with a non-null `payload.info`. Used tokens are `info.last_token_usage.total_tokens`, the window is `info.model_context_window`, each a positive integer within the existing bounds; nothing else is kept.
+- Threshold: the top-level integer `model_auto_compact_token_limit` of `<Codex home>/config.toml`, read with the bounded safe reader and parsed with `tomllib`, the only key taken; a value above 90% of the window, or none, gives 90% of the window, which is how Codex resolves it (`ModelInfo::auto_compact_token_limit` in `codex-rs/protocol/src/openai_models.rs` on openai/codex main, read 2026-11-15: the smaller of the configured limit and 9/10 of the resolved context window; unverified on each installed version, and the transcript's `model_context_window` may differ from the resolved window). A value under a `[profiles.*]` table is not read. A file that cannot be parsed gives nothing (print nothing).
+- Bands, message, mark (same folder, keyed by a hash of the Codex session id), failure and `FNL_COMPACT_NUDGE=off`: as for Claude Code.
+- Unverified: live delivery in the Codex CLI and app; the `token_count` shape on later Codex versions (a changed shape prints nothing); whether a profile or project config changes the effective limit.
 
 ## Tests to write with the code
 
