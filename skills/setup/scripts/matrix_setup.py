@@ -17,7 +17,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import assignments as am
 import data_root as dr
 import compact_setup as cs
-import levels_setup as ls
 import setup_features as sf
 
 CAP = sf.CAP
@@ -29,6 +28,10 @@ LEGACY_ROLE = {'code review': 'code-review', 'security review': 'security-review
 ROLE_LINE = re.compile(r'- (code review|security review|navigator): (.*)')
 JUDGE_LINE = re.compile(r'- judge: (.*)')
 PLAN_KEYS = {'kind', 'values', 'dropped', 'root', 'created', 'sha256', 'mode', 'backup'}
+# `## Agent levels` is no longer read for routing (0.3.1); only `migrate` reads it, to carry the levels over.
+LEVELS_ENTRY = re.compile(r'- (claude|codex|antigravity|claude[a-z0-9]{1,24}): levels ([1-5])-([1-5])')
+LEVELS_CONSENT = re.compile(r'- Consent: (?:yes \((\d{4}-\d{2}-\d{2})\)|(no))')
+LEVELS_MAX = 8
 
 
 class Dropped(ValueError):
@@ -110,6 +113,40 @@ def legacy_section_lines(text, title):
     return [line for line in text[spans[0][0]:spans[0][1]].splitlines()[1:] if line.strip()]
 
 
+def legacy_levels(text):
+    """Strictly read the legacy Agent levels entries for `migrate`; None when absent, ValueError when unreadable."""
+    headings, fence = sf.split(text)
+    indexes = [i for i, (_, title) in enumerate(headings) if title == LEVELS_HEADING]
+    if fence is not None or len(indexes) > 1:
+        raise ValueError('ambiguous section')
+    if not indexes:
+        return None
+    index = indexes[0]
+    end = headings[index + 1][0] if index + 1 < len(headings) else len(text)
+    consent, installs = None, []
+    for line in text[headings[index][0]:end].splitlines()[1:]:
+        if not line.strip():
+            continue
+        match = LEVELS_CONSENT.fullmatch(line)
+        if match:
+            if consent is not None:
+                raise ValueError('duplicate consent')
+            consent = 'yes' if match[1] else 'no'
+            if match[1]:
+                time.strptime(match[1], '%Y-%m-%d')
+            continue
+        match = LEVELS_ENTRY.fullmatch(line)
+        if not match:
+            raise ValueError('unknown line')
+        name, low, high = match[1], int(match[2]), int(match[3])
+        if not low <= high or any(name == item[0] for item in installs):
+            raise ValueError('levels')
+        installs.append((name, low, high))
+    if consent is None or len(installs) > LEVELS_MAX or (consent == 'yes') != bool(installs):
+        raise ValueError('consent')
+    return installs
+
+
 def build_migration(text):
     """Map the legacy sections to matrix values (consent left for a new yes); return values, dropped lines and notes."""
     roles = legacy_section_lines(text, ROLES_HEADING)
@@ -119,11 +156,11 @@ def build_migration(text):
     dropped, notes, agents, judge = [], [], {}, None
     if levels_lines is not None:
         try:
-            legacy = ls.parse(text)
+            legacy = legacy_levels(text) or []
         except ValueError:
-            legacy = None
+            legacy = []
             dropped.append('dropped: Agent levels section unreadable')
-        for name, low, high in (legacy or {'installs': []})['installs']:
+        for name, low, high in legacy:
             agents[name] = {'levels': (low, high), 'works': [], 'model': None, 'roles': []}
     assigned = set()
     for number, line in enumerate(roles or [], 1):
@@ -329,6 +366,37 @@ def show():
     return 0
 
 
+CANDIDATE = re.compile(r'claude[a-z0-9]{1,24}')
+FOLDER = re.compile(r'\.claude-([a-z0-9]{1,24})')
+LISTED = 20
+
+
+def candidates():
+    """Names only: claude* programs on an absolute PATH and ~/.claude-* folders; runs nothing."""
+    commands = []
+    for entry in os.get_exec_path():
+        if not os.path.isabs(entry) or len(commands) >= LISTED:
+            continue
+        try:
+            with os.scandir(entry) as items:
+                for item in items:
+                    if (item.name != 'claude' and CANDIDATE.fullmatch(item.name) and item.name not in commands
+                            and item.is_file() and os.access(item.path, os.X_OK)):
+                        commands.append(item.name)
+        except OSError:
+            continue
+    folders = []
+    try:
+        with os.scandir(dr.account_home()) as items:
+            for item in items:
+                match = FOLDER.fullmatch(item.name)
+                if match and item.is_dir(follow_symlinks=False) and match[1] not in folders:
+                    folders.append(match[1])
+    except OSError:
+        pass
+    return {'commands': sorted(commands)[:LISTED], 'folders': sorted(folders)[:LISTED]}
+
+
 def main(argv=None):
     try:
         parser = cs.Parser(description=__doc__)
@@ -349,7 +417,7 @@ def main(argv=None):
         if args.action == 'show':
             return show()
         if args.action == 'candidates':
-            print(json.dumps(ls.candidates(), separators=(',', ':')))
+            print(json.dumps(candidates(), separators=(',', ':')))
             return 0
         if args.action == 'validate':
             print(am.render(build_values(args.line, args.judge, args.consent)), end='')
