@@ -24,7 +24,7 @@
 | [Release 0.2.5: scope](release-0.2.5.md) | released; tagged v0.2.5 on 2026-11-13; a real upgrade from 0.2.4 on a user's machine remains unverified. |
 | [Release 0.2.6: scope](release-0.2.6.md) | released; tagged v0.2.6 on 2026-11-14; a real upgrade from 0.2.5 on a user's machine remains unverified. |
 | [Release 0.3.0: scope](release-0.3.0.md) | released; tagged v0.3.0 on 2026-11-15; a real upgrade from 0.2.6 on a user's machine remains unverified. |
-| [Release 0.3.1: scope](release-0.3.1.md) | accepted; prepared, to be tagged v0.3.1 after the owner's yes. |
+| [Release 0.3.1: scope](release-0.3.1.md) | released; tagged v0.3.1 on 2026-11-15; live delivery of the Codex nudge and a real upgrade from 0.3.0 on a user's machine remain unverified. |
 | [Checks](checks.md) | implemented; in 0.2.4: `verification` became checks (alias removed in 0.3.1), a per-repository check list from `/setup add checks`, `checks.py run`, an optional pre-push hook, a cheaper cloud workflow and a labelled local receipt when cloud CI cannot run. |
 | [Update onboarding](update-onboarding.md) | implemented; in 0.2.4: per-release upgrade notes; `/update` updates and then walks the checklist (done, open, not applicable, skipped or unknown; the 0.2.4 items have no automatic check and show as unknown) through `setup`, and `/update whats-new` only shows it; the verified Codex refresh, latest by default or a chosen and pinnable version, and a release test that requires an entry. |
 | [Release 0.1.10: spec and plan](release-0.1.10.md) | released; the package table lists the pull request behind each package. |
