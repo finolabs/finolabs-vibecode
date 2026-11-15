@@ -206,7 +206,8 @@ a tier; unknown commands and paths are Tier 3.
   - An argv path operand inside a checkout of this repository (its own, the main checkout or a linked worktree that
     `project_store.identity` validates) is judged by its path relative to that checkout's root, and `git -C <folder>`
     as the same command run in that folder; a folder under `.claude/` that is not a registered worktree stays Tier 3.
-  - `gh pr comment <number>` follows `Repository comments` and the target binding. Title and body values of
+  - `gh pr comment <number>` follows `Repository comments` and the target binding. `git commit` is Tier 1 only on a work branch: on the default branch (by name, `main`, `master` or `trunk`, through
+    any symref) it is `protected`, and an unreadable branch is `unknown` (owner decision, 15/11/2026). Title and body values of
     `gh pr create|edit|comment` and `git commit -m` messages are data: newlines, tabs and a leading `-` pass; other
     controls, a backtick, `$(` and `$` before a letter, `_` or `{` deny (`unknown`), so Markdown and shell examples go
     through a file; a secret, machine path or sensitive assignment is `unsafe`. Text carrying a review gate marker

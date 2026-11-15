@@ -20,7 +20,7 @@ request, row `decided` below):
 | Any path inside this install's own skill script folders is protected (a new module could shadow an import of a trusted wrapper), and so is every path, read from the check's folder, in this install's own checkout on every branch (the checkout `project_store.identity` validates for it is the plugin root, so its linked worktrees stay editable); only relative source/test/docs/script files in enumerated roots/extensions are known paths; security enforcer scripts deny edits; everything else is Tier 3; a git verb that changes a work tree, index or HEAD (not `worktree add` of a new own worktree or `worktree remove` of another worktree) is protected when it would run in that checkout, by its folder or `git -C` | classify_paths, token_protected, install_owned, WORK_TREE_VERBS |
 | On a non-default work branch with Push and pull requests or Merge yes, a source path (skills/**, scripts/**, top-level CLAUDE.md and AGENTS.md, .<host>-plugin/*.json) of this check's own checkout is a known path, enforcer scripts included; the default branch, this install's own checkout and the hard names stay Tier 3 | source_mode, source_path, classify_paths |
 | Read-only Git/gh queries use closed verbs and option sets; command/config overrides and unknown options deny | classify_argv, options |
-| Git add of allowed paths, commit, origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and whose effective destination (origin's single pushurl, else its url) is the verified target, and merge origin/main into a work branch of a found repository (the synchronization exemption) are Tier 1 | classify_argv, branch_context |
+| Git add of allowed paths, commit on a work branch (a commit on the default branch, a detached head or an unreadable branch is protected or unknown), origin push whose destination is an explicit refs/heads/<non-default branch> (a bare or abbreviated destination could resolve to a tag) and whose effective destination (origin's single pushurl, else its url) is the verified target, and merge origin/main into a work branch of a found repository (the synchronization exemption) are Tier 1 | classify_argv, branch_context |
 | A local branch merge ([--no-ff] [--no-edit], refs/heads/<b> or an unambiguous bare name that exists only as a branch) is Tier 1 only into a named non-default branch with effective Merge=yes | local_merge, local_branch |
 | One identity per check (found, absent or unknown; a rejected linked worktree is unknown) feeds settings, branch and remote reads | project_store.identity, effective, Context |
 | The project values (five, plus the three limits) start strict, where the user limits apply; a positively absent approval gives user values; an approved valid `autopilot` object whose record carries this checkout's full identity digest and whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding, project_store.bound |
@@ -1607,7 +1607,15 @@ def classify_argv(argv, applied, coordinator=None):
         if verb == 'rm':
             return tracked_remove(tail, applied)
         if verb == 'commit':
-            return commit_text(tail, context_of(applied))
+            verdict = commit_text(tail, context_of(applied))
+            if verdict != 'allowed':
+                return verdict
+            # A lease commits only on its own work branch, never on the local default branch (owner, 15/11/2026).
+            try:
+                current, default = branch_context(context_of(applied))
+            except (OSError, ValueError, UnicodeError):
+                return 'unknown'
+            return 'allowed' if current and default and current not in {default, 'main', 'master', 'trunk'} else 'protected'
         query = {
             'status': ({'--short', '-s', '--porcelain', '--branch', '-b'}, set()),
             'log': ({'--oneline', '--stat', '--all', '--decorate', '--graph', '--no-decorate', '-N'}, {'-n', '--max-count', '--format', '--pretty'}),

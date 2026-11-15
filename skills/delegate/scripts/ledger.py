@@ -346,9 +346,15 @@ def finish_locked(args, status):
             if args.reason is None:
                 sys.exit("ledger: --accept-unverified requires a bounded nonempty --reason")
             extra = {"accept_unverified": True}
+            # P5 (owner, 15/11/2026): accepted anyway, but said out loud each time.
+            print("ledger: warning: accepted without a verify receipt; run checks.py run --dispatch " + args.id
+                  + " on the run's head to record one next time", file=sys.stderr)
         elif kind == "review":
             # A review produces a posted review, not a test receipt; the URL is checked by pattern, never stored.
             extra = {"review_posted": True} if args.review_url is not None else {}
+            if args.review_url is None:
+                print("ledger: warning: review accepted without --review-url; the posted review is not recorded",
+                      file=sys.stderr)
         else:
             try:
                 from record import checkout_identity, current_head, git, read_verification
