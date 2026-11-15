@@ -577,7 +577,7 @@ Start any of them with `/setup` (on Codex, also `$setup instructions` right afte
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-It targets Claude Code, Codex and Antigravity from one `skills/` folder, and can hand tasks to ZCode. Release documented here: **0.3.1** (phase 0; see `versioning` and the [release record](docs/specs/release-0.3.1.md)). Published releases are listed on [GitHub](https://github.com/finolabs/vibecode/releases); after this release, `main` moves to `0.3.1-dev`.
+It targets Claude Code, Codex and Antigravity from one `skills/` folder, and can hand tasks to ZCode. Release documented here: **0.3.1** (phase 0; see `versioning` and the [release record](docs/specs/release-0.3.1.md)). Published releases are listed on [GitHub](https://github.com/finolabs/vibecode/releases); after this release, `main` moves to `0.3.2-dev`.
 
 <p align="center">
   <picture>
