@@ -17,7 +17,10 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import data_root as dr
+try:
+    import data_root as dr
+except ImportError as error:  # native Windows: one plain line, no traceback (issue 193)
+    sys.exit(str(error))
 
 MAX_BYTES = 262144
 AGENTS = {"claude": "Claude Code", "codex": "Codex", "antigravity": "Antigravity", "zcode": "ZCode"}
