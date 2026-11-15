@@ -375,7 +375,7 @@ The judge defaults to a small host model. Choose Jev through `setup` only with a
 .claude-plugin/hooks.json         Claude Code hooks: the session reminder, the update notice, usage metrics, the compaction nudge, the dispatch nudge, the merge notice, the PreCompact summary instructions, the opt-in auto gate, the away question gate and the advisory StopFailure hook
 .claude-plugin/marketplace.json   Claude Code marketplace listing this repository
 .codex-plugin/plugin.json         Codex manifest, version kept equal
-.codex-plugin/hooks.json          Codex hooks for the session reminder, update notices, usage metrics and PreCompact (named by the manifest)
+.codex-plugin/hooks.json          Codex hooks for the session reminder, update notices, usage metrics, the compaction nudge and PreCompact (named by the manifest)
 .antigravity-plugin/plugin.json   Antigravity manifest, version kept equal
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 .github/readme-standard.json      this repository's README headings, alias folders and house style for plugin-packaging's readme_check.py
@@ -472,7 +472,7 @@ Claude Code and Antigravity (not Codex): when you opt in through `setup`, your s
 
 Claude Code and Codex, on request: where no status line runs, `context_snapshot.py probe` reads the session's context size from Claude Code's `/context` on a forked, unsaved copy of the session, or from Codex's app-server for an idle thread. It runs only the program you confirmed in `/setup add quota`, never from a hook; `FNL_CONTEXT_PROBE=off` turns it off. See the [design](docs/specs/context-probe.md).
 
-Claude Code only, on by default: the compaction nudge, a `UserPromptSubmit` hook, reads only the token counts of the session's latest turn and the compaction settings. At 80% and again at 90% of the threshold it prints one line asking the agent to run `tidy` now: save the handover, write back decisions and lessons, note background runs and open pull requests, then offer to compact. It prints nothing when auto-compaction is off or no window is set, never blocks, and sends nothing; `FNL_COMPACT_NUDGE=off` turns it off. PreCompact output now tells the summarizer what the summary must keep. See the [design](docs/specs/compaction-nudge.md) and [privacy details](PRIVACY.md#compaction-nudge).
+Claude Code and Codex, on by default: the compaction nudge, a `UserPromptSubmit` hook, reads only the token counts of the session's latest turn and the compaction settings (on Codex, the smaller of `model_auto_compact_token_limit` and 90% of the context window). At 80% and again at 90% of the threshold it prints one line asking the agent to run `tidy` now: save the handover, write back decisions and lessons, note background runs and open pull requests, then offer to compact. It prints nothing when auto-compaction is off or no window is set, never blocks, and sends nothing; `FNL_COMPACT_NUDGE=off` turns it off. PreCompact output now tells the summarizer what the summary must keep. See the [design](docs/specs/compaction-nudge.md) and [privacy details](PRIVACY.md#compaction-nudge).
 
 <p align="center">
   <picture>
