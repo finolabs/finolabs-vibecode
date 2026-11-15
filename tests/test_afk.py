@@ -1297,6 +1297,7 @@ class ProjectScopeTest(AfkBase):
         self.check(argv, tier=3, code='unknown')  # and to the repository and folder
         self.cwd = self.repo
         self.check(argv, code='decided')
+        (self.repo / 'requirements.txt').write_text('x\n')
         for test in (['npm', 'test', '--', 'unit'], ['python3', '-m', 'unittest', 'tests.test_x'], ['make', 'ci-local'],
                      ['go', 'test', './...'], ['python3', '-I', 'scripts/ci-local.sh'],
                      # git and gh for code, review and workflow work (owner decision, 15/11/2026).
@@ -1306,6 +1307,7 @@ class ProjectScopeTest(AfkBase):
                      # Installing what the repository declares (owner decision, 15/11/2026).
                      ['npm', 'ci'], ['npm', 'install'], ['pnpm', 'install', '--frozen-lockfile'], ['uv', 'sync'],
                      ['pip', 'install', '-r', 'requirements.txt'], ['python3', '-m', 'pip', 'install', '-e', '.'],
+                     ['python3', '-I', '-m', 'pytest', '-q'], ['python3', '-u', '-m', 'pip', 'install', '-r', 'requirements.txt'],
                      ['go', 'mod', 'download']):
             with self.subTest(test=test):
                 self.approve('--approve-argv-json', json.dumps(test))
@@ -1332,7 +1334,17 @@ class ProjectScopeTest(AfkBase):
                      ['gh', 'repo', 'delete', 'example/demo'], ['gh', 'repo', 'edit', '--visibility', 'public'],
                      ['gh', 'secret', 'set', 'NAME'], ['git', 'config', 'user.name', 'x'], ['git', '-c', 'a=b', 'log'],
                      ['git', 'push', '--force'], ['git', 'filter-branch', 'HEAD'], ['git', 'rebase', 'main'],
-                     ['git', 'clean', '-fdx'], ['gh', 'pr', 'merge', '7'], ['gh', 'workflow', 'disable', 'ci']):
+                     ['git', 'clean', '-fdx'], ['gh', 'pr', 'merge', '7'], ['gh', 'workflow', 'disable', 'ci'],
+                     # Review round one (PR 295): each of these slipped through the first screen.
+                     ['git', 'restore', 'NOTES.md'], ['git', 'checkout', 'NOTES.md'], ['git', 'merge', 'topic'],
+                     ['git', '-Csub', 'log'], ['git', '--config-env=core.pager=X', 'log'], ['git', 'pull'],
+                     ['python3', '-u', '-m', 'pip', 'install', 'requests'], ['python3', '-c"print(1)"'],
+                     ['python3', '-m', 'timeit', '1'], ['python3', '-m', 'code'], ['python3'], ['node'],
+                     ['node', '-e"1"'], ['deno', 'eval', '1'], ['pwsh', '-Command', 'x'], ['uv', 'run', 'bash'],
+                     ['poetry', 'run', 'sh'], ['bundle', 'exec', 'sh'], ['go', 'mod', 'download', 'x@v1'],
+                     ['go', 'run', 'example.com/x@latest'], ['pip', 'install', 'git+git@github.com:a/b.git'],
+                     ['gh', 'pr', 'review', '7', '--approve'], ['gh', 'issue', 'delete', '7'],
+                     ['gh', 'repo', 'create', 'x'], ['zcode', '-p', 'x'], ['cat', 'git@example.com:a/b']):
             with self.subTest(argv=argv):
                 self.approve('--approve-argv-json', json.dumps(argv), status=3)
                 self.check(argv, tier=3, code=json.loads(self.invoke('check', '--argv-json', json.dumps(argv))[1])['code'])
