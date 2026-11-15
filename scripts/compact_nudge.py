@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Compaction nudge (Claude Code UserPromptSubmit): one fixed line at 80% and 90% of the threshold.
+"""Compaction nudge (UserPromptSubmit): one fixed line at 80% and 90% of the threshold.
 
-Reads only the integer `usage` counts of the latest assistant entry in the session's
-transcript tail and the two compaction settings; never blocks, always exits 0, sends nothing.
-See docs/specs/compaction-nudge.md and the eighth scoped exception in CLAUDE.md.
+Claude Code: reads only the integer `usage` counts of the latest assistant entry in the
+session's transcript tail and the two compaction settings. Codex (`--host codex`): reads
+only `last_token_usage.total_tokens` and `model_context_window` of the latest `token_count`
+event and the top-level `model_auto_compact_token_limit` of the Codex home's config.toml.
+Never blocks, always exits 0, sends nothing. See docs/specs/compaction-nudge.md and the
+eighth scoped exception in CLAUDE.md.
 """
 try:
     import fcntl
@@ -71,6 +74,65 @@ def transcript_tail(value, projects):
         return bytes(data)
     finally:
         os.close(fd)
+
+
+def codex_home(environ):
+    selected = environ.get("CODEX_HOME", "")
+    if os.path.isabs(selected):
+        return Path(selected)
+    import data_root as dr
+    return dr.account_home() / ".codex"
+
+
+def codex_usage(tail):
+    """(used, window) from the latest `token_count` event with info; no other field is kept."""
+    lines = tail.split(b"\n")
+    if not tail.endswith(b"\n"):
+        lines = lines[:-1]  # only complete lines
+    for line in reversed(lines):
+        if b'"token_count"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except (ValueError, UnicodeError, RecursionError):
+            continue
+        payload = entry.get("payload") if isinstance(entry, dict) else None
+        if not isinstance(payload, dict) or payload.get("type") != "token_count":
+            continue
+        info = payload.get("info")
+        if not isinstance(info, dict):
+            continue
+        last = info.get("last_token_usage")
+        used = last.get("total_tokens") if isinstance(last, dict) else None
+        window = integer(info.get("model_context_window"))
+        if type(used) is int and 0 < used <= 100000000 and window is not None:
+            return used, window
+        return None
+    return None
+
+
+def codex_threshold(home, window):
+    """min(top-level model_auto_compact_token_limit, 9/10 of the window), as Codex resolves it; None when unreadable."""
+    from compact_setup import read_settings
+    default = window * 9 // 10
+    path = home / "config.toml"
+    if not os.path.lexists(path):
+        return default
+    raw = read_settings(path)
+    if raw is None:
+        return None
+    try:
+        import tomllib
+        data = tomllib.loads(raw.decode("utf-8"))
+    except (ImportError, ValueError, UnicodeError, RecursionError):
+        return None
+    configured = data.get("model_auto_compact_token_limit")
+    if configured is None:
+        return default
+    configured = integer(configured) if type(configured) is int else None
+    if configured is None:
+        return None
+    return min(configured, default)
 
 
 def used_tokens(tail):
@@ -202,8 +264,12 @@ def decide(session, used, limit):
     return used * 100 // limit if current > stored else None
 
 
-def main():
+def main(argv=()):
     try:
+        argv = list(argv)
+        if argv not in ([], ["--host", "codex"]):
+            return 0
+        host = "codex" if argv else "claude"
         environ = os.environ
         if environ.get("FNL_COMPACT_NUDGE", "").strip().lower() == "off":
             return 0
@@ -217,13 +283,24 @@ def main():
         if (not isinstance(session, str) or not 0 < len(session) <= 128
                 or not isinstance(event.get("transcript_path"), str)):
             return 0
-        limit = threshold(environ, settings_values(settings_files(environ, event.get("cwd"))))
-        if limit is None:
-            return 0
-        tail = transcript_tail(event.get("transcript_path"), config_dir(environ) / "projects")
-        used = used_tokens(tail) if tail is not None else None
-        if used is None:
-            return 0
+        if host == "codex":
+            home = codex_home(environ)
+            tail = transcript_tail(event.get("transcript_path"), home / "sessions")
+            found = codex_usage(tail) if tail is not None else None
+            if found is None:
+                return 0
+            used, window = found
+            limit = codex_threshold(home, window)
+            if limit is None or limit <= 0:
+                return 0
+        else:
+            limit = threshold(environ, settings_values(settings_files(environ, event.get("cwd"))))
+            if limit is None:
+                return 0
+            tail = transcript_tail(event.get("transcript_path"), config_dir(environ) / "projects")
+            used = used_tokens(tail) if tail is not None else None
+            if used is None:
+                return 0
         percent = decide(session, used, limit)
         if percent is not None:
             os.write(1, MESSAGE.format(percent).encode("ascii"))
@@ -234,7 +311,7 @@ def main():
 
 if __name__ == "__main__":
     try:
-        main()
+        main(sys.argv[1:])
     except BaseException:
         pass
     raise SystemExit(0)

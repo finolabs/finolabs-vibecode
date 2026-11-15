@@ -322,10 +322,19 @@ class ManifestTest(unittest.TestCase):
         for group in groups:
             if group is not mine[0]:
                 self.assertFalse(any("compact_nudge.py" in h["command"] for h in group["hooks"]))
-        for host in ("codex", "antigravity"):
-            path = ROOT / f".{host}-plugin/hooks.json"
-            if path.exists():
-                self.assertNotIn("compact_nudge.py", path.read_text())
+        path = ROOT / ".antigravity-plugin/hooks.json"
+        if path.exists():
+            self.assertNotIn("compact_nudge.py", path.read_text())
+        codex = json.loads((ROOT / ".codex-plugin/hooks.json").read_text())["hooks"]
+        mine = [(event, g) for event, groups in codex.items() for g in groups
+                if any("compact_nudge.py" in h["command"] for h in g["hooks"])]
+        self.assertEqual([event for event, _ in mine], ["UserPromptSubmit"])
+        group = mine[0][1]
+        self.assertEqual(len(group["hooks"]), 1)
+        self.assertNotIn("matcher", group)
+        self.assertIn("compact_nudge.py\" --host codex", group["hooks"][0]["command"])
+        self.assertTrue(group["hooks"][0]["command"].endswith("; exit 0"))
+        self.assertFalse(group["hooks"][0].get("async", False))
 
     def test_script_exits_zero_silently_on_any_input(self):
         command = json.loads((ROOT / ".claude-plugin/hooks.json").read_text())["hooks"]["UserPromptSubmit"][-1]["hooks"][0]["command"]
@@ -346,6 +355,117 @@ class ManifestTest(unittest.TestCase):
                 mock.patch.dict(os.environ, {}, clear=True), \
                 mock.patch.object(cn, "settings_files", return_value=[]):
             self.assertEqual(cn.main(), 0)
+
+
+
+class CodexNudgeTest(unittest.TestCase):
+    """--host codex: two integers of the latest token_count event, one config.toml key."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.base = Path(tmp.name).resolve()
+        self.home = account(self, self.base / "home")
+        self.codex = self.home / ".codex"
+        day = self.codex / "sessions" / "2026" / "11" / "15"
+        day.mkdir(parents=True)
+        self.transcript = day / ("rollout-2026-11-15T00-00-00-" + SESSION + ".jsonl")
+        patch = mock.patch.dict(os.environ, {}, clear=True)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def turn(self, used, window=WINDOW, path=None, text=SECRET):
+        usage = {"input_tokens": used - 10, "cached_input_tokens": 3, "output_tokens": 10,
+                 "reasoning_output_tokens": 2, "total_tokens": used}
+        with open(path or self.transcript, "a") as stream:
+            stream.write(json.dumps({"type": "response_item", "payload": {"type": "message", "content": text}}) + "\n")
+            stream.write(json.dumps({"type": "event_msg", "payload": {"type": "token_count", "info": {
+                "total_token_usage": usage, "last_token_usage": usage, "model_context_window": window},
+                "rate_limits": {"note": text}}}) + "\n")
+            stream.write(json.dumps({"type": "event_msg", "payload": {"type": "token_count", "info": None}}) + "\n")
+
+    def config(self, text):
+        (self.codex / "config.toml").write_text(text)
+
+    def run_hook(self, transcript=None, env=None, argv=("--host", "codex")):
+        event = {"hook_event_name": "UserPromptSubmit", "session_id": SESSION, "cwd": str(self.base),
+                 "transcript_path": str(transcript or self.transcript), "prompt": SECRET, "turn_id": "t1"}
+        out = []
+        real_write = os.write
+
+        def write(fd, data):
+            if fd == 1:
+                out.append(data)
+                return len(data)
+            return real_write(fd, data)
+
+        stdin = io.TextIOWrapper(io.BytesIO(json.dumps(event).encode()))
+        with mock.patch.dict(os.environ, env or {}), mock.patch.object(sys, "stdin", stdin), \
+                mock.patch.object(os, "write", side_effect=write):
+            self.assertEqual(cn.main(argv), 0)
+        return b"".join(out).decode()
+
+    def test_default_threshold_is_nine_tenths_of_the_window(self):
+        # threshold 900000: 80% = 720000, 90% = 810000
+        for used, expected in ((719999, ""), (720000, message(80)), (800000, ""), (810000, message(90)),
+                               (100000, ""), (720000, message(80))):
+            with self.subTest(used=used):
+                self.turn(used)
+                self.assertEqual(self.run_hook(), expected)
+
+    def test_configured_limit_wins_only_below_the_default(self):
+        self.config('model_auto_compact_token_limit = 500000\n[profiles.big]\nmodel_auto_compact_token_limit = 10000\n')
+        self.turn(400000)
+        self.assertEqual(self.run_hook(), message(80))
+        self.config("model_auto_compact_token_limit = 5000000\n")
+        self.turn(810000)
+        self.assertEqual(self.run_hook(), message(90))
+
+    def test_bad_config_prints_nothing(self):
+        for text in ("model_auto_compact_token_limit = 'x'\n", "not = = toml\n", "model_auto_compact_token_limit = 5\n"):
+            with self.subTest(text=text):
+                self.config(text)
+                self.turn(890000)
+                self.assertEqual(self.run_hook(), "")
+
+    def test_codex_home_variable_and_paths_outside_sessions(self):
+        other = self.base / "other-codex"
+        (other / "sessions").mkdir(parents=True)
+        moved = other / "sessions" / "rollout.jsonl"
+        self.turn(720000, path=moved)
+        self.assertEqual(self.run_hook(transcript=moved), "")
+        self.assertEqual(self.run_hook(transcript=moved, env={"CODEX_HOME": str(other)}), message(80))
+        claude = self.home / ".claude" / "projects"
+        claude.mkdir(parents=True)
+        self.turn(720000, path=claude / "x.jsonl")
+        self.assertEqual(self.run_hook(transcript=claude / "x.jsonl"), "")
+
+    def test_symlink_content_and_off_switch(self):
+        self.turn(720000)
+        link = self.transcript.parent / "link.jsonl"
+        link.symlink_to(self.transcript)
+        self.assertEqual(self.run_hook(transcript=link), "")
+        self.assertEqual(self.run_hook(env={"FNL_COMPACT_NUDGE": "off"}), "")
+        out = self.run_hook()
+        self.assertEqual(out, message(80))
+        self.assertNotIn(SECRET, out)
+        mark = self.home / ".finolabs/vibecode/state/compaction-nudge" / cn.hashlib.sha256(SESSION.encode()).hexdigest()[:16]
+        self.assertEqual(mark.read_text(), "80")
+
+    def test_unknown_arguments_and_claude_shape_print_nothing(self):
+        self.turn(720000)
+        self.assertEqual(self.run_hook(argv=("--host", "antigravity")), "")
+        self.assertEqual(self.run_hook(argv=("--host",)), "")
+        self.transcript.write_text(json.dumps({"type": "assistant", "message": {"usage": {"input_tokens": 720000}}}) + "\n")
+        self.assertEqual(self.run_hook(), "")
+
+    def test_hook_command_exits_zero_silently(self):
+        command = json.loads((ROOT / ".codex-plugin/hooks.json").read_text())["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+        for raw in (b"", b"{bad\xff", b"[]", json.dumps({"session_id": SESSION, "transcript_path": 5}).encode()):
+            with self.subTest(raw=raw[:10]):
+                result = subprocess.run(["sh", "-c", command], input=raw, capture_output=True, timeout=10,
+                                        env={"PATH": os.defpath, "PLUGIN_ROOT": str(ROOT), "HOME": str(self.home)})
+                self.assertEqual((result.returncode, result.stdout, result.stderr), (0, b"", b""))
 
 
 if __name__ == "__main__":

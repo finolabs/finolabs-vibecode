@@ -66,6 +66,17 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "r=\"${PLUGIN_ROOT:-$CODEX_PLUGIN_ROOT}\"; [ -n \"$r\" ] && python3 -I \"$r/scripts/compact_nudge.py\" --host codex 2>/dev/null; exit 0",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }
