@@ -66,7 +66,7 @@ The skill folders and their purposes match the README.
 | A query on live data, an infrastructure change, a dashboard or a forecast | `coding-router`, which reads `references/non-code-work.md` | |
 | Coordinating a spec across desktop app sessions | `delegate` | |
 | Remembering a decision or lesson, or finding what was decided before | `tidy` | `obsidian-cli` from kepano/obsidian-skills for an Obsidian vault |
-| Project drift or a milestone course check | `delegate`, then the `fnl-navigator` agent | |
+| Project drift or a milestone course check | `delegate`, then the `navigator` agent | |
 | Confirm outcome anchors, work records or dashboard project settings | `/setup instructions` for conventions/anchors; `/setup add project` for settings | |
 | Save which checks a repository runs before a push (read from its CI, `package.json`, `pyproject.toml` or `Makefile`) | `/setup add checks` (reads the files, runs nothing, saves after a yes) | |
 | Assign review families, judge or posting setup | `/setup add roles` | |
@@ -93,9 +93,9 @@ Paths below are relative to the full plugin root. There are three agent definiti
 
 | Agent | Purpose | Procedure |
 | --- | --- | --- |
-| `fnl-reviewer` | Reads changed hunks and their impact set, or reports native-engine coverage; no project edits. Authorized posting uses a private draft. | `review-gate` |
-| `fnl-security-reviewer` | Traces the change and trust paths; no project edits. Authorized posting uses a private draft. | `security-review-gate` |
-| `fnl-navigator` | Compares confirmed anchors with bounded evidence and proposes up to three corrections without editing; independent validation remains pending. | `delegate` |
+| `reviewer` | Reads changed hunks and their impact set, or reports native-engine coverage; no project edits. Authorized posting uses a private draft. | `review-gate` |
+| `security-reviewer` | Traces the change and trust paths; no project edits. Authorized posting uses a private draft. | `security-review-gate` |
+| `navigator` | Compares confirmed anchors with bounded evidence and proposes up to three corrections without editing; independent validation remains pending. | `delegate` |
 
 ### Shared and repository scripts
 

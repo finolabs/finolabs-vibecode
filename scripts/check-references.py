@@ -4,12 +4,12 @@
 - README and the help map list exactly the skill folders (tests/test_manifests.py checks the count).
 - Retired names occur only in dated releases, Unreleased migration mappings or
   the explicitly listed historical setup specs.
-- Every `fnl-<name>` in backticks names an agent, an alias folder or the review marker,
+- Every `fnl-<name>` in backticks names the review or router marker (agents lost the prefix in 0.3.2),
   except explicitly retired setup names in the historical specs listed below.
-- The older `fnl-<name>` of a renamed skill appears only where the alias is meant: the changelog,
-  the release spec that renamed the skills, or a line that says "alias" or "older name".
-- Every `<skill>` or `fnl-<agent>` "Heading" names a heading in that skill or agent.
-- Every `skills/fnl-<name>/` folder is a thin alias holding only SKILL.md, beside a `<name>` folder.
+- The older `fnl-<name>` of a renamed skill (its alias was removed in 0.3.2) appears only in the
+  changelog, the release spec that renamed the skills, or a line that says "alias" or "older name".
+- Every `<skill>` or `<agent>` "Heading" names a heading in that skill or agent.
+- No `skills/fnl-<name>/` folder exists: the fnl- aliases were removed in 0.3.2.
 - Every `file.md` "Heading" or [file.md](file.md) "Heading" names a heading in that file, in the same skill.
 - Every relative Markdown link points to an existing file.
 - Every ledger subcommand a skill cites exists in ledger.py, with its own flags and allowed values.
@@ -33,7 +33,9 @@ RETIRED = {"fnl-" + old: new for old, new in (
     ("knowledge", "tidy"))}
 # Historical specs and released entries retain these names; current callers use the replacements.
 RETIRED_AGENTS = {"fnl-" + old: new for old, new in (
-    ("verifier", "verification"), ("steward", "tidy"))}
+    ("verifier", "verification"), ("steward", "tidy"),
+    # Renamed without the prefix in 0.3.2 (owner decision, 16/11/2026).
+    ("reviewer", "reviewer"), ("security-reviewer", "security-reviewer"), ("navigator", "navigator"))}
 # Setup commands were folded into one skill in 0.2.0. Keep the original
 # decisions in these specs; current surfaces must use the replacement commands.
 SETUP_RETIRED = {"fnl-" + old: "/setup " + new for old, new in (
@@ -53,7 +55,7 @@ LEDGER_PROSE = ["skills/delegate/SKILL.md", "skills/delegate/references/dispatch
 
 NAME = re.compile(r"`(fnl-[a-z-]+)`")
 SECTION = re.compile(r"`((?:fnl-)?[a-z][a-z-]*)`(?:'s)? \(?\"([^\"]+)\"")
-# Files that may name a renamed skill by its older fnl- name; elsewhere only a line about the alias may.
+# Files that may name a renamed skill by its older fnl- name; elsewhere only a line about the old name may.
 OLD_NAME_FILES = {"CHANGELOG.md", "docs/specs/release-0.2.5.md"}
 OLD_NAME_LINE = re.compile(r"\balias|\bolder name", re.I)
 FILE_SECTION = re.compile(r"(?:`([A-Za-z0-9_-][A-Za-z0-9_/-]*\.md)`|\[[^\]]+\]\(([A-Za-z0-9_/.-]+\.md)\))(?:'s)? \(?\"([^\"]+)\"")
@@ -102,7 +104,7 @@ def targets(root):
     found = {}
     for skill in root.glob("skills/*/SKILL.md"):
         found[skill.parent.name] = skill
-    for agent in root.glob("agents/fnl-*.md"):
+    for agent in root.glob("agents/*.md"):
         found[agent.stem] = agent
     return found
 
@@ -114,9 +116,10 @@ def check_names_and_sections(root, docs, problems):
         for n, line in lines(path):
             for name in NAME.findall(line):
                 current = name[len("fnl-"):]
-                if (name in known and (root / "skills" / current / "SKILL.md").is_file()
-                        and rel.as_posix() not in OLD_NAME_FILES and not OLD_NAME_LINE.search(line)):
-                    problems.append(f"{rel}:{n}: older name `{name}`; use `{current}`")
+                if name not in known and (root / "skills" / current / "SKILL.md").is_file():
+                    if rel.as_posix() not in OLD_NAME_FILES and not OLD_NAME_LINE.search(line):
+                        problems.append(f"{rel}:{n}: older name `{name}`; use `{current}`")
+                    continue
                 if name not in known and name not in OTHER_NAMES:
                     if name in RETIRED_AGENTS:
                         if rel.parts[:2] == ("docs", "specs"):
@@ -277,29 +280,12 @@ def check_mode_copies(root, problems):
             problems.append(f"{relative}: mode.py copies differ or are missing")
 
 
-def alias_target(root, name):
-    """The skill a thin alias named `name` loads, or None when `name` is not an alias."""
-    path = root / "skills" / name / "SKILL.md"
-    text = path.read_text() if path.is_file() else ""
-    found = re.search(r"Dependency: `([a-z][a-z-]*)`\.", text)
-    return found.group(1) if found and "This alias holds no rules of its own." in text else None
-
-
 def check_skill_inventory(root, problems):
     every = {p.name for p in (root / "skills").iterdir() if p.is_dir()}
-    # An fnl- folder is the older name of a renamed skill: a thin alias, not listed in the tables.
+    # The fnl- aliases of the renamed skills were removed in 0.3.2 (owner decision, 16/11/2026).
     folders = {name for name in every if not name.startswith("fnl-")}
     for name in sorted(every - folders):
-        alias = root / "skills" / name
-        target = name[len("fnl-"):]
-        if target not in folders:
-            problems.append(f"skills/{name}: alias of missing skill {target}")
-        # An alias of a short name (`fnl-ask` of `ask`) loads that name's own final target directly.
-        final = alias_target(root, target) or target
-        if sorted(p.name for p in alias.iterdir()) != ["SKILL.md"]:
-            problems.append(f"skills/{name}: an alias folder holds only SKILL.md")
-        elif f"Dependency: `{final}`." not in (alias / "SKILL.md").read_text():
-            problems.append(f"skills/{name}: alias does not load `{final}`")
+        problems.append(f"skills/{name}: the fnl- aliases were removed in 0.3.2; name the skill without the prefix")
     for relative in ("README.md", "skills/help/references/map.md"):
         path = root / relative
         # The canonical skill table lives under Skills, before the next heading.

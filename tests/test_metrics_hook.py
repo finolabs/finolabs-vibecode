@@ -70,14 +70,20 @@ class HookTest(unittest.TestCase):
         self.post("Skill", {"skill": "coding-router"})
         self.assertFalse(self.dir.exists())
 
-    def test_a_skill_and_an_agent_are_recorded_by_their_fnl_name(self):
+    def test_a_skill_and_an_agent_are_recorded_by_their_current_name(self):
         self.consent()
         self.post("Skill", {"skill": "finolabs-vibecode:coding-router"})
-        self.post("Agent", {"subagent_type": "finolabs-vibecode:fnl-reviewer", "prompt": "secret task text"})
+        self.post("Agent", {"subagent_type": "finolabs-vibecode:reviewer", "prompt": "secret task text"})
+        self.post("Agent", {"subagent_type": "finolabs-vibecode:fnl-security-reviewer"})
         self.post("Skill", {"skill": "grilling"})
         self.post("Agent", {"subagent_type": "Explore"})
+        self.post("Agent", {"subagent_type": "fnl-navigator"})
+        # Another plugin's agent and a bare common name (a user's or project's own agent) are not this plugin's.
+        for other in ("other-plugin:reviewer", "other-plugin:fnl-reviewer", "reviewer", "navigator"):
+            self.post("Agent", {"subagent_type": other})
         got = [(e["event"], e["name"]) for e in self.events()]
-        self.assertEqual(got, [("skill", "coding-router"), ("agent", "fnl-reviewer")])
+        self.assertEqual(got, [("skill", "coding-router"), ("agent", "reviewer"), ("agent", "security-reviewer"),
+                               ("agent", "navigator")])
 
     def test_only_the_first_edit_of_a_session_is_recorded(self):
         self.consent()

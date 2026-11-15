@@ -6,11 +6,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFESTS = [ROOT / d / "plugin.json" for d in (".claude-plugin", ".codex-plugin", ".antigravity-plugin")]
-# Skills added after the 0.2.5 rename never had an fnl- name, so they have no alias folder; tidy took
-# session-hygiene's place, whose fnl- alias loads tidy.
-NO_OLDER_NAME = {"shape", "tidy"}
-
-
 def user_only(name):
     return "\ndisable-model-invocation: true\n" in (ROOT / "skills" / name / "SKILL.md").read_text().split("---", 2)[1]
 
@@ -46,10 +41,7 @@ class ManifestTest(unittest.TestCase):
     def test_skill_counts_are_computed_from_the_folders(self):
         # The one place a skill count is checked: the manifests' descriptions and README state it,
         # every other text names no number, so adding a skill folder changes only those files.
-        # The fnl- folders are the older names of the renamed skills (thin aliases) and are counted apart.
-        every = sorted((ROOT / "skills").glob("*/SKILL.md"))
-        skills = [path for path in every if not path.parent.name.startswith("fnl-")]
-        aliases = len(every) - len(skills)
+        skills = sorted((ROOT / "skills").glob("*/SKILL.md"))
         user_only = sum(1 for path in skills
                         if "\ndisable-model-invocation: true\n" in path.read_text().split("---", 2)[1])
         total, model = len(skills), len(skills) - user_only
@@ -60,32 +52,16 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(re.findall(r"\b(\d+) skill folders\b", readme), [str(total)])
         self.assertIn(f"**{total} skill folders**: {model} model-invoked skills and {user_only} marked user-only",
                       readme)
-        self.assertEqual(re.findall(r"\b(\d+) alias folders\b", readme), [str(aliases)])
+        self.assertEqual(re.findall(r"\b(\d+) alias folders\b", readme), [])
 
-    def test_every_older_fnl_name_is_a_user_only_thin_alias(self):
-        skills = sorted(p.parent for p in (ROOT / "skills").glob("*/SKILL.md")
-                        if not p.parent.name.startswith("fnl-") and p.parent.name not in NO_OLDER_NAME)
-        aliases = sorted(p.parent.name for p in (ROOT / "skills").glob("fnl-*/SKILL.md"))
-        for name in NO_OLDER_NAME:
-            self.assertFalse((ROOT / "skills" / ("fnl-" + name)).exists(), name)
-        self.assertEqual(aliases, ["fnl-" + p.name for p in skills])
-        for skill in skills:
-            alias = ROOT / "skills" / ("fnl-" + skill.name)
-            _, frontmatter, body = (alias / "SKILL.md").read_text().split("---", 2)
-            fields = dict(line.split(": ", 1) for line in frontmatter.strip().splitlines())
-            target = dict(line.split(": ", 1) for line in
-                          (skill / "SKILL.md").read_text().split("---", 2)[1].strip().splitlines() if ": " in line)
-            self.assertEqual(fields["name"], alias.name)
-            self.assertEqual(fields["disable-model-invocation"], "true")
-            self.assertEqual(fields.get("argument-hint"), target.get("argument-hint"), alias.name)
-            self.assertIn(f"Dependency: `{final_target(skill.name)}`.", body)
-            self.assertIn("This alias holds no rules of its own.", body)
-            self.assertEqual(sorted(p.name for p in alias.iterdir()), ["SKILL.md"])
+    def test_older_fnl_names_are_removed(self):
+        # The fnl- aliases of the renamed skills were removed in 0.3.2 (owner decision, 16/11/2026).
+        self.assertEqual(sorted(p.name for p in (ROOT / "skills").glob("fnl-*")), [])
 
     def test_aliases_load_their_final_target_and_never_call_a_user_only_one_through_the_skill_tool(self):
         # The Skill tool refuses a skill with disable-model-invocation, so an alias of one tells the agent to read it.
         aliases = [p.parent.name for p in (ROOT / "skills").glob("*/SKILL.md") if alias_target(p.parent.name)]
-        self.assertTrue({"fnl-help", "ask", "brb", "gtg", "session-hygiene"} <= set(aliases))
+        self.assertTrue({"ask", "brb", "gtg", "session-hygiene"} == set(aliases))
         for name in aliases:
             target = alias_target(name)
             body = (ROOT / "skills" / name / "SKILL.md").read_text().split("---", 2)[2]
@@ -102,8 +78,8 @@ class ManifestTest(unittest.TestCase):
                     self.assertNotIn("user-only", body)
 
     def test_agents_match_the_folders(self):
-        agents = {p.stem for p in (ROOT / "agents").glob("fnl-*.md")}
-        self.assertEqual(agents, {"fnl-reviewer", "fnl-security-reviewer", "fnl-navigator"})
+        agents = {p.stem for p in (ROOT / "agents").glob("*.md")}
+        self.assertEqual(agents, {"reviewer", "security-reviewer", "navigator"})
         readme = (ROOT / "README.md").read_text()
         ask = (ROOT / "skills/help/references/map.md").read_text()
         display = (ROOT / "agents/openai.yaml").read_text()
@@ -122,17 +98,16 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(fields["argument-hint"], '"[start|stop]"')
         self.assertIsNone(alias_target("afk"))
         self.assertIn("scripts/afk.py", body)
-        # The old name is dropped, with no alias; brb, fnl-afk and fnl-brb load afk.
-        for gone in ("autopilot", "fnl-autopilot"):
+        # The old name is dropped, with no alias; brb loads afk.
+        for gone in ("autopilot", "fnl-autopilot", "fnl-afk", "fnl-brb"):
             self.assertFalse((ROOT / "skills" / gone / "SKILL.md").exists(), gone)
-        for alias in ("brb", "fnl-afk", "fnl-brb"):
-            self.assertEqual(alias_target(alias), "afk", alias)
+        self.assertEqual(alias_target("brb"), "afk")
 
     def test_session_hygiene_is_a_user_only_thin_alias_of_tidy(self):
         main = (ROOT / "skills/tidy/SKILL.md").read_text().split("---", 2)[1]
         self.assertIn("\nname: tidy\n", main)
         self.assertNotIn("disable-model-invocation", main)
-        for alias in ("session-hygiene", "fnl-session-hygiene"):
+        for alias in ("session-hygiene",):
             with self.subTest(alias=alias):
                 self.assertTrue(user_only(alias))
                 self.assertEqual(alias_target(alias), "tidy")
@@ -179,8 +154,7 @@ class ManifestTest(unittest.TestCase):
 
     def test_new_alias_and_pause_descriptions_are_valid_yaml_scalars(self):
         # A plain YAML scalar cannot contain ": "; the unquoted descriptions that already ship are older.
-        older = [p.parent.name for p in (ROOT / "skills").glob("fnl-*/SKILL.md")]
-        for name in ("afk", "gtg", "pause", "help", "ask", *older):
+        for name in ("afk", "gtg", "pause", "help", "ask"):
             text = (ROOT / "skills" / name / "SKILL.md").read_text()
             line = next(l for l in text.split("---", 2)[1].splitlines() if l.startswith("description: "))
             value = line[len("description: "):]

@@ -65,10 +65,9 @@ jobs:
           bad = []
           for p in sorted(pathlib.Path("skills").glob("*/SKILL.md")):
               m = re.search(r"^name: (.+)$", p.read_text(), re.M)
-              # A skill name has no prefix; an fnl- folder is the alias of the skill beside it.
+              # A skill name has no prefix; the older fnl- aliases were removed in 0.3.2.
               name = p.parent.name
-              target = name[len("fnl-"):] if name.startswith("fnl-") else name
-              if not m or m.group(1).strip() != name or not re.fullmatch(r"[a-z][a-z0-9-]*", target) or not (p.parent.parent / target / "SKILL.md").is_file():
+              if not m or m.group(1).strip() != name or name.startswith("fnl-") or not re.fullmatch(r"[a-z][a-z0-9-]*", name):
                   bad.append(str(p))
           print("\n".join(bad) or "all skills ok")
           sys.exit(bool(bad))

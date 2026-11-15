@@ -414,6 +414,16 @@
           "text": "The repository moved to github.com/finolabs/vibecode; the plugin keeps its name finolabs-vibecode. Installs of 0.3.0 and earlier stop seeing update notices, so update those once by hand."
         }
       ]
+    },
+    {
+      "version": "0.3.2",
+      "items": [
+        {
+          "id": "0.3.2/fnl-aliases-removed",
+          "kind": "removed",
+          "text": "Breaking: fnl- skill names are removed (fnl-setup is now setup) and the agents are reviewer, security-reviewer and navigator; use the new names. /setup check lists the old names it finds."
+        }
+      ]
     }
   ]
 }

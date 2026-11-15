@@ -107,11 +107,13 @@ def skill_name(value):
 
 
 def agent_name(value):
-    """The `fnl-` agent name inside "plugin:fnl-name" or "fnl-name", else None."""
+    """This plugin's agent name inside "finolabs-vibecode:name", or a bare older "fnl-name", else None."""
     if not isinstance(value, str):
         return None
-    name = value.rsplit(":", 1)[-1]
-    return name if fm.NAME.match(name) else None
+    plugin, _, name = value.rpartition(":")
+    if plugin != PLUGIN and (plugin or not name.startswith("fnl-")):
+        return None  # another plugin's agent, or a bare common name that a user or project agent may carry
+    return fm.agent_name(name)
 
 
 def first_line(path):

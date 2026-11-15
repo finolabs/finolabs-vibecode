@@ -41,15 +41,17 @@ NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 
 ID = re.compile(r"^[A-Za-z0-9_-]{1,64}\Z")
 TASK_ID = re.compile(r"^T[0-9]{1,4}\Z")
-NAME = re.compile(r"^fnl-[a-z][a-z-]{0,39}\Z")  # agent names, and skill names stored before 0.2.5
+NAME = re.compile(r"^fnl-[a-z][a-z-]{0,39}\Z")  # skill names stored before 0.2.5, agent names stored before 0.3.2
 # The plugin's skill names: a closed set, so a name from another plugin is never recorded.
-# Each also answers to its older `fnl-` name, which is recorded under the name here.
+# An older `fnl-` name (an alias until 0.3.2), typed or in a stored line, is recorded under the name here.
 SKILLS = ("advisor", "afk", "ask", "brb", "checks", "coding-router", "commit-messages",
           "delegate", "gtg", "handoff", "help", "open-source-review", "pause", "plugin-packaging",
           "restore-point", "review-gate", "security-review-gate", "setup", "shape", "status", "tidy",
           "update", "versioning")
 # Skills renamed in 0.2.5 after the prefix drop (and the verification alias removed in 0.3.1): the older name, typed, called or in a stored line, counts as the new one.
 RENAMED = {"autopilot": "afk", "session-hygiene": "tidy", "verification": "checks"}
+# The plugin's agent names: a closed set. They lost the `fnl-` prefix in 0.3.2; a stored older name counts as the new one.
+AGENTS = ("navigator", "reviewer", "security-reviewer")
 REPO = re.compile(r"^[0-9a-f]{8}\Z")
 TS = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+00:00\Z")
 EVENT_FILE = re.compile(r"^events-(\d{4})-(\d{2})\.jsonl\Z")
@@ -64,12 +66,25 @@ def _name(v):
 
 
 def skill_name(v):
-    """The current name of one of the plugin's skills, given that name, a renamed one or its older `fnl-` alias; else None."""
+    """The current name of one of the plugin's skills, given that name, a renamed one or its older `fnl-` name; else None."""
     if not isinstance(v, str):
         return None
     name = v[len("fnl-"):] if v.startswith("fnl-") else v
     name = RENAMED.get(name, name)
     return name if name in SKILLS else None
+
+
+def agent_name(v):
+    """The current name of one of the plugin's agents, given that name or its older `fnl-` name; else None."""
+    if not isinstance(v, str):
+        return None
+    name = v[len("fnl-"):] if v.startswith("fnl-") else v
+    return name if name in AGENTS else None
+
+
+def _agent(v):
+    # A current agent name, or an older `fnl-` agent name in a line stored before 0.3.2.
+    return agent_name(v) == v or _name(v)
 
 
 def _skill(v):
@@ -90,7 +105,7 @@ SCHEMA = {
     "session_start": {"host": lambda v: v in HOSTS, "dispatch": lambda v: v is None or valid_id(v),
                       "source": lambda v: v in SOURCES},
     "skill": {"name": _skill},
-    "agent": {"name": _name},
+    "agent": {"name": _agent},
     "first_edit": {},
     "commit": {},
     "review": {"kind": lambda v: v in KINDS, "verdict": lambda v: v in VERDICTS, "pr": _pr},
@@ -245,6 +260,12 @@ def build_event(event, sid, repo, fields):
     if event == "skill":
         # A new line holds the current name of one of the plugin's skills; an older `fnl-` name maps to it.
         name = skill_name(fields["name"])
+        if name is None:
+            raise ValueError("bad value for name")
+        fields = {**fields, "name": name}
+    if event == "agent":
+        # A new line holds the current name of one of the plugin's agents.
+        name = agent_name(fields["name"])
         if name is None:
             raise ValueError("bad value for name")
         fields = {**fields, "name": name}

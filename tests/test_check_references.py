@@ -21,10 +21,6 @@ BREAKS = [
      "unknown skill or agent `fnl-handof`"),
     ("skills/delegate/SKILL.md", "`handoff`: write", "`fnl-handoff`: write",
      "older name `fnl-handoff`; use `handoff`"),
-    ("skills/fnl-pause/SKILL.md", "Dependency: `pause`.", "Dependency: `gtg`.",
-     "skills/fnl-pause: alias does not load `pause`"),
-    ("skills/fnl-ask/SKILL.md", "Dependency: `help`.", "Dependency: `ask`.",
-     "skills/fnl-ask: alias does not load `help`"),
     ("skills/delegate/references/host-template.md", '"When an agent coordinates"', '"When coordinating"',
      '`agents.md` has no section "When coordinating"'),
     ("skills/tidy/SKILL.md", "(references/titles.md)", "(references/title.md)",
@@ -165,6 +161,14 @@ class CheckReferencesTest(unittest.TestCase):
         path.write_text(path.read_text().replace(old, new, 1))
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_an_fnl_alias_folder_is_refused(self):
+        alias = self.root / "skills/fnl-pause"
+        alias.mkdir()
+        (alias / "SKILL.md").write_text("---\nname: fnl-pause\n---\nDependency: `pause`.\n")
+        result = self.check()
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("skills/fnl-pause: the fnl- aliases were removed in 0.3.2", result.stdout)
 
     def test_skill_lists_match_folders(self):
         for relative in ("README.md", "skills/help/references/map.md"):

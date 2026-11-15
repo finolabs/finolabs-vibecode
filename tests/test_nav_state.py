@@ -385,12 +385,12 @@ class NavStateTest(unittest.TestCase):
                 self.assertIn('Navigator state refused:', err)
 
     def test_agent_frontmatter_has_structural_host_restrictions(self):
-        text = (ROOT / 'agents/fnl-navigator.md').read_text()
+        text = (ROOT / 'agents/navigator.md').read_text()
         self.assertTrue(text.startswith('---\n'))
         front, body = text[4:].split('\n---\n', 1)
         fields = dict(line.split(': ', 1) for line in front.splitlines())
         self.assertEqual(set(fields), {'name', 'description', 'model', 'disallowedTools'})
-        self.assertEqual(fields['name'], 'fnl-navigator')
+        self.assertEqual(fields['name'], 'navigator')
         self.assertEqual(fields['model'], 'inherit')
         self.assertEqual([s.strip() for s in fields['disallowedTools'].strip('[]').split(',')],
                          ['Write', 'Edit', 'NotebookEdit'])

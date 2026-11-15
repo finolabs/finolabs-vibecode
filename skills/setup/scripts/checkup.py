@@ -24,8 +24,8 @@ HEADINGS = {"Briefs folder", "Coordinators and reach", "Route judgment",
             "Dispatch marker", "Claude Code", "Codex", "Antigravity",
             "Review posting", "Delegate environment"}
 MAX_BYTES = 262144
-# Skills that lost the fnl- prefix in 0.2.5. The old names are user-only aliases: typed, they still load the
-# skill, but a file that tells the model to invoke one no longer does. Each maps to the name files must use.
+# Skills that lost the fnl- prefix in 0.2.5; the old names were removed in 0.3.2 and no longer load at all.
+# Each maps to the name files must use.
 RENAMED = {"fnl-" + name: target for name, target in (
     ("advisor", "advisor"), ("afk", "afk"), ("ask", "help"), ("autopilot", "afk"), ("brb", "afk"),
     ("checks", "checks"), ("coding-router", "coding-router"), ("commit-messages", "commit-messages"),
@@ -37,9 +37,11 @@ RENAMED = {"fnl-" + name: target for name, target in (
 # Skills renamed again in 0.2.5: session-hygiene stays a user-only alias of tidy; autopilot was dropped for afk,
 # so it and its fnl- name no longer load at all.
 RENAMED.update({"session-hygiene": "tidy", "autopilot": "afk"})
+# The agents lost the prefix in 0.3.2; a brief or instruction file naming an old one points at nothing.
+RENAMED.update({"fnl-" + name: name for name in ("reviewer", "security-reviewer", "navigator")})
 # The plain older names `verification` and `ask` stay out: they are ordinary words in prose, so matching them would
 # flag most instruction files; their fnl- forms above are mapped.
-DROPPED = {"autopilot", "fnl-autopilot"}
+TYPED_ONLY = {"session-hygiene"}  # the one old name above that still loads, when the user types it
 
 
 def renamed_in(line):
@@ -376,8 +378,9 @@ def renamed_evidence(paths, reader=read):
     if not found:
         return []
     return [item("old skill names", "missing", ", ".join(name + " -> " + RENAMED[name] for name in found) +
-                 "; instruction files must use the new names (old names load only when typed" +
-                 ("; autopilot no longer loads at all" if DROPPED & set(found) else "") + ")")]
+                 "; instruction files must use the new names (" +
+                 "; ".join((["the other old names no longer load"] if set(found) - TYPED_ONLY else []) +
+                           (["session-hygiene loads only when typed"] if TYPED_ONLY & set(found) else [])) + ")")]
 
 
 # The instruction scan has its own bounded, in-memory evidence set. Reports contain

@@ -168,11 +168,23 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(len(self.events()), accepted)
         self.assertEqual(set(self.events()[0]), {"ts", "sid", "repo", "event", *good})
 
+    def test_an_agent_is_recorded_under_its_current_name(self):
+        # The agents lost the fnl- prefix in 0.3.2; an older name maps, any other name is refused.
+        self.consent()
+        for name in ("fnl-security-reviewer", "security-reviewer", "navigator"):
+            self.assertTrue(m.record("agent", SID, self.repo, name=name))
+        self.assertEqual([e["name"] for e in self.events()], ["security-reviewer", "security-reviewer", "navigator"])
+        for name in ("Explore", "fnl-x", "fnl-fnl-reviewer", "Reviewer"):
+            with self.subTest(name=name):
+                self.assertFalse(m.record("agent", SID, self.repo, name=name))
+        self.assertTrue(m.valid_event({"ts": "2026-11-01T00:00:00.000+00:00", "sid": SID, "repo": "0123abcd",
+                                       "event": "agent", "name": "fnl-reviewer"}))
+
     def test_every_event_kind_validates(self):
         self.consent()
         cases = [("session_start", {"host": "claude", "dispatch": None, "source": "startup"}),
                  ("session_start", {"host": "codex", "dispatch": "abc123", "source": "resume"}),
-                 ("agent", {"name": "fnl-reviewer"}), ("first_edit", {}), ("commit", {}),
+                 ("agent", {"name": "reviewer"}), ("agent", {"name": "fnl-reviewer"}), ("first_edit", {}), ("commit", {}),
                  ("review", {"kind": "security", "verdict": "REWORK", "pr": 31}),
                  ("router", {"depth": "DEEP", "trigger": "security"})]
         for event, fields in cases:

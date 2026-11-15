@@ -1149,12 +1149,12 @@
       "count": 49
     },
     {
-      "name": "fnl-reviewer",
+      "name": "reviewer",
       "kind": "agent",
       "count": 48
     },
     {
-      "name": "fnl-security-reviewer",
+      "name": "security-reviewer",
       "kind": "agent",
       "count": 29
     },

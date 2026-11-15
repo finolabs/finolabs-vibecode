@@ -1,5 +1,5 @@
 ---
-name: fnl-navigator
+name: navigator
 description: Checks whether a project or spec is on course, drifting or abandoned against confirmed anchors, with evidence and up to three steering options and their costs. Use when a user story closes, before a release is cut, when a spec status changes, or on request.
 model: inherit
 disallowedTools: [Write, Edit, NotebookEdit]
