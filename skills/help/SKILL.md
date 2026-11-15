@@ -16,6 +16,10 @@ Read [references/plain-language.md](references/plain-language.md) first to decid
 | Contents | What the plugin contains or what exists for a purpose | [references/contents.md](references/contents.md) |
 | Explain | How a named skill, agent or script works | [references/explain.md](references/explain.md) |
 | Route | Which skill fits a situation, or which agent takes which work | [references/map.md](references/map.md) |
+| Tips | Practical tips for everyday use | [references/tips.md](references/tips.md) |
+| Troubleshoot | Something does not work as expected | [references/troubleshooting.md](references/troubleshooting.md) |
+
+For one skill at a glance, read its page from the "Skill pages" list in [references/contents.md](references/contents.md), then its `SKILL.md`.
 
 Read the target file before describing it so the answer is current.
 The map lists every skill, including `setup` (with `add <feature>`, `instructions`, `check`, `scan` and `mode` subcommands) and the user-only `restore-point` save-and-restore command, plus `afk` for a time-boxed away mandate and `brb` as an older alias, `pause` (short name `gtg`) for draining work before a restart or shutdown, and `ask`, the older name of this skill.
