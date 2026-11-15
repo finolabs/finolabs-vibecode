@@ -34,6 +34,8 @@ RENAMED = {"fnl-" + name: target for name, target in (
 # Skills renamed again in 0.2.5: session-hygiene stays a user-only alias of tidy; autopilot was dropped for afk,
 # so it and its fnl- name no longer load at all.
 RENAMED.update({"session-hygiene": "tidy", "autopilot": "afk"})
+# The plain older names `verification` and `ask` stay out: they are ordinary words in prose, so matching them would
+# flag most instruction files; their fnl- forms above are mapped.
 DROPPED = {"autopilot", "fnl-autopilot"}
 
 

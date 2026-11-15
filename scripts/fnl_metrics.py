@@ -46,7 +46,7 @@ NAME = re.compile(r"^fnl-[a-z][a-z-]{0,39}\Z")  # agent names, and skill names s
 # Each also answers to its older `fnl-` name, which is recorded under the name here.
 SKILLS = ("advisor", "afk", "ask", "brb", "checks", "coding-router", "commit-messages",
           "delegate", "gtg", "handoff", "help", "open-source-review", "pause", "plugin-packaging",
-          "restore-point", "review-gate", "security-review-gate", "setup", "status", "tidy",
+          "restore-point", "review-gate", "security-review-gate", "setup", "shape", "status", "tidy",
           "update", "verification", "versioning")
 # Skills renamed in 0.2.5 after the prefix drop: the older name, typed, called or in a stored line, counts as the new one.
 RENAMED = {"autopilot": "afk", "session-hygiene": "tidy"}
