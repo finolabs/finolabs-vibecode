@@ -3,6 +3,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -284,6 +285,20 @@ class ReadmeCheckTest(unittest.TestCase):
         self.assertEqual(code, 2, err.getvalue())
         return err.getvalue()
 
+    def test_a_fifo_a_link_out_and_an_oversize_file_are_bad_input(self):
+        (self.root / ".claude-plugin/plugin.json").unlink()
+        os.mkfifo(self.root / ".claude-plugin/plugin.json")  # read before: the check hung here
+        self.assertIn("not a regular file", self.bad_input())
+        self.setUp()
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        (Path(outside.name) / "agent.md").write_text("---\nname: outside\n---\n", encoding="utf-8")
+        (self.root / "agents/linked.md").symlink_to(Path(outside.name) / "agent.md")
+        self.assertIn("outside the repository", self.bad_input())
+        self.setUp()
+        self.write("README.md", README + "x" * readme_check.MAX_READ)
+        self.assertIn("larger than", self.bad_input())
+
     def test_malformed_overrides_are_bad_input_naming_the_key(self):
         for config, key in (({"sections": ["x"]}, "sections"),
                             ({"sections": {"install": "Install("}}, "sections.install"),
@@ -384,6 +399,10 @@ class ReadmeCheckTest(unittest.TestCase):
         self.setUp()
         self.write(".github/readme-standard.json", json.dumps({"hosts": ["Claude Code", "Antigravity"]}))
         self.assertTrue(any("Antigravity" in l and "no manifest" in l for l in self.fails("H1")))
+
+    def test_a_shipped_manifest_the_hosts_override_leaves_out_fails(self):
+        self.write(".github/readme-standard.json", json.dumps({"hosts": ["Claude Code"]}))
+        self.assertIn("FAIL H1 .codex-plugin/plugin.json ships, but the hosts override leaves out Codex", self.fails("H1"))
 
     def test_an_unknown_host_is_bad_input(self):
         for hosts in (["Cursor"], [["Codex"]], []):
