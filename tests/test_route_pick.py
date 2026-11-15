@@ -159,6 +159,14 @@ class PickTest(unittest.TestCase):
         self.assertEqual(result.state, "absent")
         self.assertEqual(self.rp.lines(result), ["no preference: use the strength table"])
 
+    def test_legacy_agent_levels_without_matrix_means_no_preference(self):
+        # Retired in 0.3.1: `## Agent levels` sets no levels for routing; only `matrix_setup.py migrate` reads it.
+        legacy = "## Agent levels\n\n- Consent: yes (2026-10-01)\n- claudework: levels 3-5\n- codex: levels 1-4\n"
+        result = self.pick(text=MACHINE + REACH.format(agy="yes") + legacy)
+        self.assertEqual(result.state, "absent")
+        self.assertEqual(result.survivors, [])
+        self.assertEqual(self.rp.lines(result), ["no preference: use the strength table"])
+
     def test_invalid_matrix_means_no_preference(self):
         broken = MATRIX.replace("works on frontend, design", "works on frontend, cooking")
         result = self.pick(text=host(matrix=broken))

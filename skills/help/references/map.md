@@ -28,7 +28,6 @@ The skill folders and their purposes match the README.
 | `update` | Showing installed and cached available versions, updating through the host after a clear yes and walking the new version's setup checklist, showing what is new, targeting a chosen or pinned version, skipping a release, or stopping update notices. |
 | `help` | Plugin help: you are new and do not know where to start, want to know what the plugin holds, or have a question about a skill, agent or script; it gives the first steps, lists the contents, explains the piece you name, or maps your situation to the next command, including companion skills from other packs. It answers questions; it does not ask another agent. |
 | `ask` | Older name for `help`, kept as an alias; follows the same procedure and arguments. |
-| `verification` | Older name for `checks`, kept as an alias until a later release removes it; follows the same procedure. |
 | `session-hygiene` | Older name for `tidy`, kept as an alias; follows the same procedure and arguments. |
 | `open-source-review` | Before a repository goes public, and after: license, secrets in tree and history, internal leaks, clean payload, community files, repository settings, identity, data flow, plugin checks. |
 
@@ -170,8 +169,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `skills/setup/scripts/checkup.py` | Read-only setup/instruction evidence; no host commands or credentials. |
 | `skills/setup/scripts/compact_stop_setup.py` | Previews/installs/removes the separately consented Antigravity size-stop hook. |
 | `skills/setup/scripts/data_location.py` | Previews/copies plugin data into an empty approved folder and publishes the pointer last. |
-| `skills/setup/scripts/levels_setup.py` | Previews and applies only the host config's `## Agent levels` section after a digest-bound yes; runs no command. |
-| `skills/setup/scripts/matrix_setup.py` | Previews, validates, migrates and applies only the host config's `## Assignment matrix` after a digest-bound yes; runs no command and makes no network call. |
+| `skills/setup/scripts/matrix_setup.py` | Previews, validates, migrates and applies only the host config's `## Assignment matrix` after a digest-bound yes; `migrate` is the only reader left of the retired `## Agent levels` and `## Agent roles`; runs no command and makes no network call. |
 | `skills/setup/scripts/quota_setup.py` | Previews exact quota executable paths and applies only the approved digest-bound plan. |
 | `skills/setup/scripts/setup_features.py` | Shows/records/clears declined features; a decline is not a consent. |
 | `skills/status/scripts/refresh.py` | Rebuilds/opens local dashboard data; manages metrics consent/purge and the separately approved Antigravity metrics hook. |

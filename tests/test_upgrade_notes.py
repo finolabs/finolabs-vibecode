@@ -205,6 +205,18 @@ class NotesSchemaTest(unittest.TestCase):
         for phrase in ('/setup add afk', 'account', 'this repository', 'want different'):
             self.assertIn(phrase, items['0.2.6/afk-scope']['text'])
 
+    def test_031_names_the_agent_levels_retirement_and_its_conversion(self):
+        items = {item['id']: item for entry in u.parse_notes(json.loads(NOTES.read_text()))
+                 for item in entry['items']}
+        retired = items['0.3.1/agent-levels-retired']
+        self.assertEqual((retired['kind'], retired['setup'], retired['check']),
+                         ('migration', '/setup add delegation', ['skills/setup/scripts/upgrade_state.py', 'levels-retired']))
+        self.assertTrue((ROOT / retired['check'][0]).is_file())
+        self.assertTrue(retired['text'].startswith('Breaking:'))
+        self.assertTrue(retired['text'].isascii() and len(retired['text']) <= 200)
+        for phrase in ('## Agent levels', 'no longer read', 'migrate', 'consent'):
+            self.assertIn(phrase, retired['text'])
+
     def test_030_names_the_afk_setup_steps_and_the_breaking_away_changes(self):
         items = {item['id']: item for entry in u.parse_notes(json.loads(NOTES.read_text()))
                  for item in entry['items']}

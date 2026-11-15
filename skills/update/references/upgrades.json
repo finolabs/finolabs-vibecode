@@ -395,6 +395,23 @@
           "id": "0.3.1/checks-identity",
           "kind": "info",
           "text": "An approved check list is now bound to its checkout's full identity; one saved before 0.3.1 still counts until /setup add checks writes it again."
+        },
+        {
+          "id": "0.3.1/agent-levels-retired",
+          "kind": "migration",
+          "text": "Breaking: ## Agent levels is no longer read; without a matrix no levels are set. Setup runs matrix_setup.py migrate to move them into the matrix and asks consent again.",
+          "setup": "/setup add delegation",
+          "check": ["skills/setup/scripts/upgrade_state.py", "levels-retired"]
+        },
+        {
+          "id": "0.3.1/verification-alias-removed",
+          "kind": "removed",
+          "text": "Breaking: the verification and fnl-verification skill names are removed; type checks instead. Usage metrics recorded under verification count as checks."
+        },
+        {
+          "id": "0.3.1/repository-moved",
+          "kind": "info",
+          "text": "The repository moved to github.com/finolabs/vibecode; the plugin keeps its name finolabs-vibecode. Installs of 0.3.0 and earlier stop seeing update notices, so update those once by hand."
         }
       ]
     }

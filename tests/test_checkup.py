@@ -365,11 +365,11 @@ class CheckupTest(unittest.TestCase):
 
     def test_old_fnl_skill_names_are_listed_with_their_new_names(self):
         # The aliases are user-only, so a file telling the model to invoke an old name no longer loads it.
-        self.write(self.repo / "AGENTS.md", "Use fnl-coding-router, then fnl-verification.\nfnl-reviewer stays.\n")
+        self.write(self.repo / "AGENTS.md", "Use fnl-coding-router, then fnl-ask.\nfnl-reviewer stays.\n")
         self.write(self.home / ".claude/CLAUDE.md", "Help: fnl-ask.\n")
         row = self.setup_item("old skill names")
         self.assertEqual(row["status"], "missing")
-        for pair in ("fnl-coding-router -> coding-router", "fnl-verification -> checks", "fnl-ask -> help"):
+        for pair in ("fnl-coding-router -> coding-router", "fnl-ask -> help"):
             self.assertIn(pair, row["reason"])
         self.assertIn("instruction files must use the new names", row["reason"])
         self.assertNotIn("fnl-reviewer", row["reason"])
@@ -443,6 +443,21 @@ class CheckupTest(unittest.TestCase):
         self.assertNotIn("zq-", json.dumps(self.data()))
         # Without a matrix the host config row reports it with the conversion, not this row.
         self.write(config, "## Agent roles\n- judge: jev\n")
+        self.assertFalse([r for r in self.data()["setup"] if r["check"] == "legacy host settings"])
+
+    def test_agent_levels_beside_a_matrix_is_named_in_the_legacy_row(self):
+        config = self.home / ".finolabs/vibecode/host.md"
+        matrix = "## Assignment matrix\n\n- Consent: yes (2026-11-09)\n- Judge: host\n- codex: levels 1-5; roles code-review\n"
+        self.write(config, "## Agent levels\n- Consent: yes (2026-10-01)\n- zqagent: levels 1-2\n\n" + matrix)
+        row = self.setup_item("legacy host settings")
+        self.assertEqual(row, {"check": "legacy host settings", "status": "missing", "reason":
+                               "no longer read: ## Agent levels beside the matrix; the matrix holds levels, "
+                               "so delete Agent levels by hand"})
+        self.assertNotIn("zqagent", json.dumps(self.data()))
+        # A fenced example is not a section; without a matrix the host config row reports it instead.
+        self.write(config, "```\n## Agent levels\n```\n\n" + matrix)
+        self.assertFalse([r for r in self.data()["setup"] if r["check"] == "legacy host settings"])
+        self.write(config, "## Agent levels\n- Consent: no\n")
         self.assertFalse([r for r in self.data()["setup"] if r["check"] == "legacy host settings"])
 
     def test_contradictory_compaction_settings_get_a_row_with_names_only(self):
@@ -577,9 +592,17 @@ class CheckupTest(unittest.TestCase):
         self.write(config, legacy + matrix)
         self.assertEqual(self.setup_item("host config"), {"check": "host config", "status": "ok", "reason": present +
                          "matrix valid; 2 agents; judge jev; roles assigned: code-review, navigator"})
+        # Retired 15/11/2026 (0.3.1): a legacy levels section sets no levels; beside a matrix the legacy row names it.
         self.write(config, legacy + "## Agent levels\n" + matrix)
-        self.assertTrue(self.setup_item("host config")["reason"].endswith(
-            "; legacy Agent levels present and ignored"))
+        self.assertEqual(self.setup_item("host config")["reason"],
+                         present + "matrix valid; 2 agents; judge jev; roles assigned: code-review, navigator")
+        self.write(config, legacy + "## Agent levels\n- Consent: yes (2026-10-01)\n- codex: levels 1-4\n")
+        self.assertEqual(self.setup_item("host config"), {"check": "host config", "status": "missing", "reason": present +
+                         "levels: missing; matrix absent and Agent levels no longer read, so levels are unset and the "
+                         "judge is host; /setup add delegation (migrate) converts it"})
+        self.write(config, legacy + "## Agent roles\n- judge: jev\n## Agent levels\n- Consent: no\n")
+        self.assertIn("matrix absent and Agent roles and Agent levels no longer read, so roles and levels are unset",
+                      self.setup_item("host config")["reason"])
         # Invalid, even with a valid legacy section: unset, with each fixed reason and never the offending text.
         self.write(config, legacy + matrix + "- gemini: levels 1-2\n- codex: levels 1-5\n")
         row = self.setup_item("host config")

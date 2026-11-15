@@ -130,8 +130,8 @@ Done when the plugin is listed by your host and the user knows the order: `/fino
 
 ## Skills
 
-The plugin has **25 skill folders**: 13 model-invoked skills and 12 marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Skill names carry no prefix since 0.2.5. Each skill that existed before 0.2.5 also answers to its older `fnl-` name through 23 alias folders: thin, user-only aliases that load the skill with the same arguments and that the model does not see, so typed old names and files that name them keep working; `shape` is newer and has none. `session-hygiene` is now `tidy`, and both of its older names load `tidy`; `autopilot` is now `afk`, and its old names are gone.
-On Claude Code, `/finolabs-vibecode:<name>` names a skill exactly; type `/finolabs-vibecode:help` and `/finolabs-vibecode:status` in full, because the host has its own `/help` and `/status`. The user types the user-only ones, `afk`, `brb`, `pause`, `gtg`, `restore-point`, `setup`, `status`, `update`, `help` and its older name `ask`, `verification`, the older name of `checks`, and `session-hygiene`, the older name of `tidy` (`/setup` on Claude Code and Antigravity, `$setup` on Codex); `handoff` and `advisor` can be typed too.
+The plugin has **24 skill folders**: 13 model-invoked skills and 11 marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Skill names carry no prefix since 0.2.5. Each skill that existed before 0.2.5 also answers to its older `fnl-` name through 22 alias folders: thin, user-only aliases that load the skill with the same arguments and that the model does not see, so typed old names and files that name them keep working; `shape` is newer and has none. `session-hygiene` is now `tidy`, and both of its older names load `tidy`; `autopilot` is now `afk`, and its old names are gone; the verification aliases were removed in 0.3.1, so type `checks`.
+On Claude Code, `/finolabs-vibecode:<name>` names a skill exactly; type `/finolabs-vibecode:help` and `/finolabs-vibecode:status` in full, because the host has its own `/help` and `/status`. The user types the user-only ones, `afk`, `brb`, `pause`, `gtg`, `restore-point`, `setup`, `status`, `update`, `help` and its older name `ask`, and `session-hygiene`, the older name of `tidy` (`/setup` on Claude Code and Antigravity, `$setup` on Codex); `handoff` and `advisor` can be typed too.
 The agent loads `handoff` directly through `delegate`, proposes `advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
 
 | Skill | Use it when |
@@ -158,7 +158,6 @@ The agent loads `handoff` directly through `delegate`, proposes `advisor` for on
 | `update` | Showing installed and cached available versions, updating through the host after a clear yes, then walking a checklist of what the new version adds; `whats-new` only shows that list. Also targets or pins a chosen version, skips a release, or stops update notices. |
 | `help` | Plugin help: you are new and do not know where to start, want to know what the plugin holds, or have a question about a skill, agent or script; it gives the first steps, lists the contents, explains the piece you name, or maps your situation to the next command, including companion skills from other packs. It answers questions; it does not ask another agent. |
 | `ask` | Older name for `help`, kept as an alias; follows the same procedure and arguments. |
-| `verification` | Older name for `checks`, kept as an alias until a later release removes it; follows the same procedure. |
 | `session-hygiene` | Older name for `tidy`, kept as an alias; follows the same procedure and arguments. |
 | `open-source-review` | Before a repository goes public, and after: license, secrets in tree and history, internal leaks, clean payload, community files, repository settings, identity, data flow, plugin checks. |
 
@@ -431,6 +430,9 @@ The [0.2.0 changes](CHANGELOG.md#020---2026-11-08) include [review roles, the na
 
 Release 0.3.1 ([release record](docs/specs/release-0.3.1.md)):
 
+- **Breaking: `## Agent levels` retired.** The assignment matrix is the only source of levels; `/setup add delegation` moves old levels into it.
+- **Breaking: the `verification` aliases are removed.** Type `checks`.
+- **New repository path.** The repository is now `finolabs/vibecode`; the plugin keeps its name. Installs of 0.3.0 and earlier stop seeing update notices, so update those once by hand.
 - **Compaction nudge on Codex.** The nudge that asks the agent to save a handover before compaction now runs on Codex too, at 80% and 90% of `model_auto_compact_token_limit` (else 90% of the window). Trust the plugin's hooks again with `/hooks` after the update.
 - **Away leases decide more, merge safer.** Under a lease, an unknown request of an allowlisted shape (a repository's CI script, `make` target, module test run) goes up the decision ladder and runs once if approved, instead of parking; a merge needs a recent MERGE OK receipt from `merge_check.py --independent`, bound to the repository it verified.
 - **Help for every skill.** `help` gains a page per skill, tips and troubleshooting.
@@ -533,7 +535,7 @@ The [afk mechanism](docs/diagrams/afk-mechanism-light.html) ([dark](docs/diagram
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/afk-mechanism-dark.png">
-    <img src="assets/afk-mechanism-light.png" alt="Flow diagram of afk: setup for your account and for each repository feeds /afk start and one lease; before each action afk.py check sends Tier 1 work to act and log and parks Tier 3 work; a question goes up the decide ladder (recorded rule, evaluation table from Jev or the host's small model given as data, an advisor in choose mode, the host) and the choice returns through check; pull requests are reviewed by another family, by the same family only when no other is reachable, merged on MERGE OK and deployed only to listed targets, production only where that repository lists and decides it; /afk stop or a spent repository, the hourly limit or the end line ends the loop, and you review the report and each decision." width="900">
+    <img src="assets/afk-mechanism-light.png" alt="Flow diagram of afk: setup for your account and for each repository feeds /afk start and one lease; before each action afk.py check sends Tier 1 work to act and log and parks Tier 3 work, and an unknown request of an allowlisted shape goes up the decide ladder and, when approved, the next check answers decided (Tier 1) once; a question goes up the decide ladder (recorded rule, evaluation table from Jev or the host's small model given as data, an advisor in choose mode, the host) and the choice returns through check; pull requests are reviewed by another family, by the same family only when no other is reachable, merged only after a recorded MERGE OK and deployed only to listed targets, production only where that repository lists and decides it; /afk stop or a spent repository, the hourly limit or the end line ends the loop, and you review the report and each decision." width="900">
   </picture>
 </p>
 
@@ -575,7 +577,7 @@ Start any of them with `/setup` (on Codex, also `$setup instructions` right afte
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-It targets Claude Code, Codex and Antigravity from one `skills/` folder, and can hand tasks to ZCode. Release documented here: **0.3.0** (phase 0; see `versioning` and the [release record](docs/specs/release-0.3.0.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.3.1-dev`.
+It targets Claude Code, Codex and Antigravity from one `skills/` folder, and can hand tasks to ZCode. Release documented here: **0.3.1** (phase 0; see `versioning` and the [release record](docs/specs/release-0.3.1.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.3.1-dev`.
 
 <p align="center">
   <picture>

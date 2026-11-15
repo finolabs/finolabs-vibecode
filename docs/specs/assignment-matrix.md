@@ -2,7 +2,7 @@
 
 > 0.3.0 (owner decision, 14/11/2026): [matrix-models.md](matrix-models.md) adds models per kind of work; where they disagree, it wins.
 
-Status: implemented; in release 0.2.3.
+Status: implemented; in release 0.2.3. Since 0.3.1 (owner decision, 15/11/2026) `## Agent levels` is no longer read either: the matrix is the only source of levels, and `matrix_setup.py migrate` is the only reader of both old sections.
 
 ## Why
 
@@ -50,7 +50,7 @@ answer and makes deviation visible, without turning a preference into a block.
 - <agent>: levels L-H[; works on <type>[, <type>]...][; model <id>][; roles <role>[, <role>]... | roles none]
 ```
 
-- Agents: `claude`, `codex`, `antigravity` and extra Claude Code commands (the names `levels_setup.py` accepts today).
+- Agents: `claude`, `codex`, `antigravity` and extra Claude Code commands (the names the former `levels_setup.py` accepted).
 - Levels: 1 to 5, low to high, `L` not above `H`, as in `agent-levels.md`.
 - Types of work (closed list; a new type is a spec change): `frontend`, `design`, `video`, `three-d`, `image-generation`,
   `transcription`. When several agents list the same type, the earlier line is preferred.
@@ -72,7 +72,7 @@ answer and makes deviation visible, without turning a preference into a block.
   through `assignments.py`.
 - Precedence, with three distinct states and no line-by-line fallback:
   1. The matrix section is **absent**: no role is set and the judge is the host model; `## Agent roles` is never read
-     (owner decision, 13/11/2026: legacy `## Agent roles` retired), and readers of `## Agent levels` use it as before.
+     (owner decision, 13/11/2026: legacy `## Agent roles` retired), and no level is set either: `## Agent levels` is never read for routing since 0.3.1 (owner decision, 15/11/2026).
   2. The matrix section is **present and valid**: it alone decides roles and judge. A role no agent line names is
      **unassigned** (no routed review for it); that is the way to clear an assignment, and a legacy line never
      resurrects it.
@@ -84,9 +84,9 @@ answer and makes deviation visible, without turning a preference into a block.
   for a new yes, and a matrix without a valid `Consent:` line is treated as absent for writing and as invalid for roles
   and judge. The judge call's opt-in in `CLAUDE.md` (fourth scoped exception) and `PRIVACY.md` name only the matrix's
   `Judge: jev` with its own valid `Consent: yes (<date>)` line; an absent, invalid or unconsented matrix means no call.
-- `## Agent levels` stays readable while no matrix exists until a later release removes it (the old global ledger
-  lines were removed in 0.2.5); `## Agent roles` is no longer read from 0.2.6, and `/setup check` reports one without a matrix as
-  `roles: missing` with the fix `/setup add delegation`. `matrix_setup.py migrate` previews the matrix built from the old sections and, after a yes, writes
+- `## Agent levels` is no longer read from 0.3.1 (it stayed readable without a matrix until then; the old global ledger
+  lines were removed in 0.2.5), and `## Agent roles` is no longer read from 0.2.6; `/setup check` reports either one without a matrix as
+  `roles: missing` or `levels: missing`, and one beside a matrix in its legacy host settings row, with the fix `/setup add delegation`. `matrix_setup.py migrate` previews the matrix built from the old sections and, after a yes, writes
   it with a backup and removes the old two in one atomic write. The mapping is explicit, not "lossless by backup":
   each `- code review|security review|navigator: <agent>` line becomes `roles code-review|security-review|navigator` on that agent's line (an agent
   named only in roles gets a line with the levels it had or, with none recorded, `levels 1-5` shown in the preview for the user to
@@ -113,7 +113,7 @@ the same table. The session-start line keeps its current summary of roles.
 
 ## Writer
 
-`matrix_setup.py` in `skills/setup/scripts/`, built like `levels_setup.py`: `validate`, `preview`, `apply` (backup,
+`matrix_setup.py` in `skills/setup/scripts/`, built like the former `levels_setup.py` (removed in 0.3.1): `validate`, `preview`, `apply` (backup,
 SHA-256 digest, 60-minute expiry, section-only atomic write, symlink refusal), `show`, `migrate`, `candidates` (the
 existing command listing extra Claude Code commands). It runs no command. `/setup add delegation` asks once per
 agent for levels, types, model and roles in one pass, shows the preview and writes only after a neutral yes.
