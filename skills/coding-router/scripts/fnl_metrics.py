@@ -43,7 +43,7 @@ ID = re.compile(r"^[A-Za-z0-9_-]{1,64}\Z")
 TASK_ID = re.compile(r"^T[0-9]{1,4}\Z")
 NAME = re.compile(r"^fnl-[a-z][a-z-]{0,39}\Z")  # agent names, and skill names stored before 0.2.5
 # The plugin's skill names: a closed set, so a name from another plugin is never recorded.
-# Each also answers to its older `fnl-` name, which is recorded under the name here.
+# An older `fnl-` name (an alias until 0.3.2), typed or in a stored line, is recorded under the name here.
 SKILLS = ("advisor", "afk", "ask", "brb", "checks", "coding-router", "commit-messages",
           "delegate", "gtg", "handoff", "help", "open-source-review", "pause", "plugin-packaging",
           "restore-point", "review-gate", "security-review-gate", "setup", "shape", "status", "tidy",
@@ -64,7 +64,7 @@ def _name(v):
 
 
 def skill_name(v):
-    """The current name of one of the plugin's skills, given that name, a renamed one or its older `fnl-` alias; else None."""
+    """The current name of one of the plugin's skills, given that name, a renamed one or its older `fnl-` name; else None."""
     if not isinstance(v, str):
         return None
     name = v[len("fnl-"):] if v.startswith("fnl-") else v

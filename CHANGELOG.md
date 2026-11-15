@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Removed
+
+- Breaking: the 22 `fnl-` skill aliases (`skills/fnl-<name>/`) are removed (owner decision, 16/11/2026); type the current name instead: `/fnl-advisor` → `/advisor`, `/fnl-afk` → `/afk`, `/fnl-ask` → `/help`, `/fnl-brb` → `/afk`, `/fnl-checks` → `/checks`, `/fnl-coding-router` → `/coding-router`, `/fnl-commit-messages` → `/commit-messages`, `/fnl-delegate` → `/delegate`, `/fnl-gtg` → `/pause`, `/fnl-handoff` → `/handoff`, `/fnl-help` → `/help`, `/fnl-open-source-review` → `/open-source-review`, `/fnl-pause` → `/pause`, `/fnl-plugin-packaging` → `/plugin-packaging`, `/fnl-restore-point` → `/restore-point`, `/fnl-review-gate` → `/review-gate`, `/fnl-security-review-gate` → `/security-review-gate`, `/fnl-session-hygiene` → `/tidy`, `/fnl-setup` → `/setup`, `/fnl-status` → `/status`, `/fnl-update` → `/update`, `/fnl-versioning` → `/versioning`. Instruction files that still name an old `fnl-` skill point at nothing: `/setup check` lists each one with its new name. The `fnl-reviewer`, `fnl-security-reviewer` and `fnl-navigator` agents and the `fnl-review` and `fnl-router` markers keep their names; usage metrics recorded under an old name still count under the new one. On Claude Code and Antigravity the aliases go away with the update; on Codex they stay until the plugin is refreshed.
+
 ## [0.3.1] - 2026-11-15
 
 ### Added

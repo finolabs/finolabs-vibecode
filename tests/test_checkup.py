@@ -364,14 +364,14 @@ class CheckupTest(unittest.TestCase):
 
 
     def test_old_fnl_skill_names_are_listed_with_their_new_names(self):
-        # The aliases are user-only, so a file telling the model to invoke an old name no longer loads it.
+        # The fnl- names were removed in 0.3.2, so a file that names one points at nothing.
         self.write(self.repo / "AGENTS.md", "Use fnl-coding-router, then fnl-ask.\nfnl-reviewer stays.\n")
         self.write(self.home / ".claude/CLAUDE.md", "Help: fnl-ask.\n")
         row = self.setup_item("old skill names")
         self.assertEqual(row["status"], "missing")
         for pair in ("fnl-coding-router -> coding-router", "fnl-ask -> help"):
             self.assertIn(pair, row["reason"])
-        self.assertIn("instruction files must use the new names", row["reason"])
+        self.assertIn("instruction files must use the new names (the other old names no longer load)", row["reason"])
         self.assertNotIn("fnl-reviewer", row["reason"])
         rows = [r for r in self.instruction_rows("I14") if r["pattern"] == "old-skill-name"]
         self.assertEqual(sorted((r["file"], r["line"], r["status"]) for r in rows),
@@ -381,10 +381,11 @@ class CheckupTest(unittest.TestCase):
         (self.home / ".claude/CLAUDE.md").unlink()
         self.assertFalse([r for r in self.data()["setup"] if r["check"] == "old skill names"])
 
-    def test_renamed_names_match_the_shipped_alias_folders(self):
-        aliases = {p.parent.name for p in (ROOT / "skills").glob("fnl-*/SKILL.md")}
-        # The 0.2.5 renames add session-hygiene and autopilot; autopilot and fnl-autopilot ship no folder.
-        self.assertEqual(set(checkup.RENAMED), aliases | {"fnl-autopilot", "session-hygiene", "autopilot"})
+    def test_renamed_names_cover_every_removed_alias(self):
+        # The fnl- aliases were removed in 0.3.2; every older name still maps to the skill files must use.
+        self.assertEqual(list((ROOT / "skills").glob("fnl-*")), [])
+        self.assertEqual(len(checkup.RENAMED), 25)
+        self.assertTrue({"fnl-setup", "fnl-ask", "fnl-gtg", "session-hygiene", "autopilot"} <= set(checkup.RENAMED))
         self.assertEqual((checkup.RENAMED["session-hygiene"], checkup.RENAMED["fnl-session-hygiene"]), ("tidy", "tidy"))
         self.assertEqual((checkup.RENAMED["autopilot"], checkup.RENAMED["fnl-autopilot"]), ("afk", "afk"))
         for old, new in checkup.RENAMED.items():
@@ -396,7 +397,7 @@ class CheckupTest(unittest.TestCase):
         self.assertEqual(row["status"], "missing")
         for pair in ("session-hygiene -> tidy", "fnl-session-hygiene -> tidy", "autopilot -> afk"):
             self.assertIn(pair, row["reason"])
-        self.assertIn("autopilot no longer loads at all", row["reason"])
+        self.assertIn("the other old names no longer load; session-hygiene loads only when typed", row["reason"])
         rows = {r["reason"] for r in self.instruction_rows("I14") if r["pattern"] == "old-skill-name"}
         self.assertEqual(rows, {"session-hygiene: use tidy", "fnl-session-hygiene: use tidy", "autopilot: use afk"})
         # tidy and afk themselves are not old names.

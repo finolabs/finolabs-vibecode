@@ -31,7 +31,7 @@ OPEN_CAP = 99
 USER_ONLY = ("help", "ask", "setup", "status", "afk", "brb", "pause", "gtg", "update", "restore-point",
              "session-hygiene")
 USER_ONLY_LINE = (
-    "User-only skills (" + ", ".join(USER_ONLY) + " and every fnl- alias) are for the user to type; never call them "
+    "User-only skills (" + ", ".join(USER_ONLY) + ") are for the user to type; never call them "
     "with the Skill tool. Answer questions about this plugin by reading the help skill's references{route}; "
     "when a user-only skill is needed, tell the user the command to type (advisory, agent judgment).\n")
 ROUTE_CLAUSE = ", route coding work through coding-router and second opinions through advisor"

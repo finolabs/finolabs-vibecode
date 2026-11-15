@@ -130,7 +130,7 @@ Done when the plugin is listed by your host and the user knows the order: `/fino
 
 ## Skills
 
-The plugin has **24 skill folders**: 13 model-invoked skills and 11 marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Skill names carry no prefix since 0.2.5. Each skill that existed before 0.2.5 also answers to its older `fnl-` name through 22 alias folders: thin, user-only aliases that load the skill with the same arguments and that the model does not see, so typed old names and files that name them keep working; `shape` is newer and has none. `session-hygiene` is now `tidy`, and both of its older names load `tidy`; `autopilot` is now `afk`, and its old names are gone; the verification aliases were removed in 0.3.1, so type `checks`.
+The plugin has **24 skill folders**: 13 model-invoked skills and 11 marked user-only on Claude Code. Invocation-policy parity on Codex and Antigravity remains unverified. Skill names carry no prefix since 0.2.5, and the older `fnl-` names were removed in 0.3.2: type `/setup`, not `/fnl-setup` (`/setup check` lists any old name left in your instruction files with its new one). `session-hygiene` is now `tidy` and still loads it; `autopilot` is now `afk`, and its old names are gone; the verification aliases were removed in 0.3.1, so type `checks`.
 On Claude Code, `/finolabs-vibecode:<name>` names a skill exactly; type `/finolabs-vibecode:help` and `/finolabs-vibecode:status` in full, because the host has its own `/help` and `/status`. The user types the user-only ones, `afk`, `brb`, `pause`, `gtg`, `restore-point`, `setup`, `status`, `update`, `help` and its older name `ask`, and `session-hygiene`, the older name of `tidy` (`/setup` on Claude Code and Antigravity, `$setup` on Codex); `handoff` and `advisor` can be typed too.
 The agent loads `handoff` directly through `delegate`, proposes `advisor` for one opinion or a committee for the user to approve, and loads the rest when the situation calls for them.
 
@@ -377,11 +377,10 @@ The judge defaults to a small host model. Choose Jev through `setup` only with a
 .codex-plugin/hooks.json          Codex hooks for the session reminder, update notices, usage metrics, the compaction nudge and PreCompact (named by the manifest)
 .antigravity-plugin/plugin.json   Antigravity manifest, version kept equal
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
-.github/readme-standard.json      this repository's README headings, alias folders and house style for plugin-packaging's readme_check.py
+.github/readme-standard.json      this repository's README headings and house style for plugin-packaging's readme_check.py
 agents/fnl-*.md                   code reviewer, security reviewer and navigator definitions (no project edits; authorized posting uses a private draft)
 agents/openai.yaml                Codex skill-list display metadata
 skills/*/SKILL.md                 self-contained skills, model-invoked or flagged user-only on Claude Code
-skills/fnl-*/SKILL.md             alias folders: the older fnl- name of each skill, user-only, loading the skill it names
 skills/advisor/references/committee.md       committee procedure, loaded only for a committee
 skills/advisor/references/choose.md          choose mode: one option or none during an away lease
 skills/afk/references/decide.md              the away decision ladder, its two checks and the record of each attempt
