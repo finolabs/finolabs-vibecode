@@ -8,6 +8,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - The `review-gate` low-risk lane also takes a post-release record: `merge_check.py --lane` qualifies a pull request that changes only the `Status:` line of a `docs/specs/release-X.Y.Z.md` record from its prepared form to `released; tagged vX.Y.Z on YYYY-MM-DD; ...` and that release's row in `docs/specs/index.md` the same way, beside the changelog and the manifest version bumps. A second changed line in either file, a record without its row, a wrong version or date form, or any other spec still takes both reviewers.
 
+### Fixed
+
+- `afk.py check` lets an away lease follow the plugin's own branch rule and run its checks. `git worktree add -b <branch> <path> [origin/<default>]` is Tier 1 when the path is a new folder directly under the main checkout's `.claude/worktrees` (a plain name that is not protected, with no link at `.claude` or `.claude/worktrees`) and the branch passes the new-work-branch rule. This install's `checks.py` runs as a trusted wrapper with `show`, `run` or `run --changed [--base <branch or commit>]` (never `--dispatch` or `usage`) in a repository with user or project settings. Before, the `.claude` name made every worktree path Tier 3, `git worktree add` had no rule at all, and `checks.py` was not an allowed script, so an away session could neither cut a worktree nor run the approved check list.
+
 ## [0.3.0] - 2026-11-15
 
 ### Added
