@@ -1,6 +1,6 @@
 # Compaction nudge: tell the agent before the host compacts
 
-Status: accepted; rule recorded as the eighth scoped exception in `CLAUDE.md` (owner decision 2026-11-12, Codex clause 2026-11-15); code landed for 0.2.5 (`scripts/compact_nudge.py`, `tests/test_compact_nudge.py`; `precompact.py` reworded as the "During" row says).
+Status: accepted; rule recorded as the eighth scoped exception in `CLAUDE.md` (owner decision 2026-11-12, Codex clause 2026-11-15); code landed for 0.2.5, the Codex hook for 0.3.1 (`--host codex`) (`scripts/compact_nudge.py`, `tests/test_compact_nudge.py`; `precompact.py` reworded as the "During" row says).
 
 ## Why
 
