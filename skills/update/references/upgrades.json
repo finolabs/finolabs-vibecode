@@ -372,6 +372,18 @@
           "text": "The same-family fallback may merge a change to an enforcer script or instruction file when each review kind has approvals from two different models, each marker naming model=<name>."
         }
       ]
+    },
+    {
+      "version": "0.3.1",
+      "items": [
+        {
+          "id": "0.3.1/agent-levels-retired",
+          "kind": "migration",
+          "text": "Breaking: ## Agent levels is no longer read; without a matrix no levels are set. Setup runs matrix_setup.py migrate to move them into the matrix and asks consent again.",
+          "setup": "/setup add delegation",
+          "check": ["skills/setup/scripts/upgrade_state.py", "levels-retired"]
+        }
+      ]
     }
   ]
 }

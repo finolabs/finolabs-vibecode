@@ -97,8 +97,16 @@ def state(name):
         import assignments
         matrix = assignments.parse(text)
         return DONE if matrix.state == "valid" and matrix.consent == "yes" else OPEN
+    if name == "levels-retired":
+        # Since 0.3.1 only the assignment matrix sets levels; `## Agent levels` is read only by `matrix_setup.py migrate`.
+        if "Agent levels" not in titles:
+            return DONE
+        import assignments
+        matrix = assignments.parse(text)
+        return DONE if matrix.state == "valid" and matrix.consent == "yes" else OPEN
     if name == "levels":
-        return DONE if {"Agent levels", "Assignment matrix"} & titles else OPEN
+        # `## Agent levels` no longer counts (0.3.1): levels are recorded only in the assignment matrix.
+        return DONE if "Assignment matrix" in titles else OPEN
     # Since 0.2.5 the away settings live in `## afk`; an older `## Autopilot` section is no longer read.
     if name == "afk":
         return DONE if "afk" in titles else OPEN

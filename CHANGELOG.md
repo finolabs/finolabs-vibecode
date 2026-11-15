@@ -16,6 +16,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Breaking: `## Agent levels` in the host config is no longer read (owner decision, 15/11/2026). The assignment matrix is the only source of levels; without a valid matrix no levels are set and routing falls to the strength table. `levels_setup.py` and the setup reference `levels.md` are removed; `matrix_setup.py migrate` is the only reader left, so `/setup add delegation` still moves the levels into the matrix. `/setup check` reports a leftover section as no longer read with that fix, and the update checklist gains the `0.3.1/agent-levels-retired` note.
 - Breaking: the verification aliases (`verification` and its older `fnl-` name) are removed; type `checks` (owner decision, 15/11/2026).
 - afk: `git commit` under a lease is Tier 1 only on a work branch; on the default branch it answers `protected` (owner decision, 15/11/2026).
 - `ledger.py finish` prints a warning when it accepts a run with `--accept-unverified`, or a review without `--review-url`; the acceptance is still recorded.
