@@ -15,8 +15,9 @@ import data_root as dr
 
 PLUGIN = "finolabs-vibecode"
 PRINCIPLE = "A file that says something is on is not proof that it runs."
-# Required sections; Effort preference, Delegation mode, Routing and ZCode are optional.
-HEADINGS = {"Limits", "Briefs folder", "Coordinators and reach", "Route judgment",
+# Required sections; Effort preference, Delegation mode, Routing and ZCode are optional, and the `## Limits` section
+# retired in 0.2.5 (nothing reads it) is optional too, so a host config that dropped it stays complete.
+HEADINGS = {"Briefs folder", "Coordinators and reach", "Route judgment",
             "Dispatch marker", "Claude Code", "Codex", "Antigravity",
             "Review posting", "Delegate environment"}
 MAX_BYTES = 262144
