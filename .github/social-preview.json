@@ -1,5 +1,5 @@
 {
-  "name": "Vibecode",
+  "name": "vibecode",
   "tagline": "Make your coding agents work\nlike a senior team, automatically",
   "mark": "../assets/icon-dark.svg",
   "input": "Add rate limiting to the\nlogin endpoint.",
