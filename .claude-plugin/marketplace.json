@@ -11,8 +11,8 @@
       "name": "finolabs-vibecode",
       "source": "./",
       "description": "25 skills and 3 agents (fnl-reviewer, fnl-security-reviewer, fnl-navigator) for review routing, verification, setup, run hygiene and quota on demand.",
-      "homepage": "https://github.com/finolabs/finolabs-vibecode",
-      "repository": "https://github.com/finolabs/finolabs-vibecode",
+      "homepage": "https://github.com/finolabs/vibecode",
+      "repository": "https://github.com/finolabs/vibecode",
       "license": "MIT",
       "category": "development",
       "keywords": [

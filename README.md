@@ -11,9 +11,9 @@
 Depth routing, cross-agent delegation and review gates for Claude Code, Codex and Antigravity. Scripts enforce the merge gate; the rest is guidance your agents follow.</p>
 
 <p align="center">
-  <a href="https://github.com/finolabs/finolabs-vibecode/releases/latest"><img src="https://img.shields.io/github/v/release/finolabs/finolabs-vibecode" alt="Latest release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/finolabs/finolabs-vibecode" alt="License: MIT"></a>
-  <a href="https://github.com/finolabs/finolabs-vibecode/actions/workflows/validate.yml"><img src="https://github.com/finolabs/finolabs-vibecode/actions/workflows/validate.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/finolabs/vibecode/releases/latest"><img src="https://img.shields.io/github/v/release/finolabs/vibecode" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/finolabs/vibecode" alt="License: MIT"></a>
+  <a href="https://github.com/finolabs/vibecode/actions/workflows/validate.yml"><img src="https://github.com/finolabs/vibecode/actions/workflows/validate.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="#claude-code"><img src="https://img.shields.io/badge/Claude%20Code-plugin-7FE2CE" alt="Claude Code plugin"></a>
   <a href="#codex"><img src="https://img.shields.io/badge/Codex-plugin-7FE2CE" alt="Codex plugin"></a>
   <a href="#antigravity"><img src="https://img.shields.io/badge/Antigravity-plugin-7FE2CE" alt="Antigravity plugin"></a>
@@ -53,7 +53,7 @@ codex plugin add finolabs-vibecode@finolabs
 **Antigravity** (in a terminal):
 
 ```bash
-agy plugin install https://github.com/finolabs/finolabs-vibecode
+agy plugin install https://github.com/finolabs/vibecode
 ```
 
 ## How a change flows
@@ -77,7 +77,7 @@ One request, from your words to a merged pull request: the router picks depth an
 
 On Codex, use `$` instead of `/` for every skill command below. Claude Code and Antigravity use `/`.
 
-1. **Ask your AI assistant to install it.** Paste this into your assistant's chat: "Install https://github.com/finolabs/finolabs-vibecode for me, and explain each step before you do it."
+1. **Ask your AI assistant to install it.** Paste this into your assistant's chat: "Install https://github.com/finolabs/vibecode for me, and explain each step before you do it."
 2. **Open a new chat.** Plugins load when a chat starts.
 3. **Type `/finolabs-vibecode:help`** (`$help` on Codex). On Claude Code type it in full, because `/help` is the host's own command. It tells you in plain words where to start, and you can ask it anything about the plugin.
 4. **Type `/setup`, choose user scope, project scope or both, then Quick.** It asks a few plain questions and changes nothing without your yes.
@@ -112,8 +112,8 @@ You were given this repository's link to install it for the user. Follow these s
    | --- | --- |
    | Claude Code | `claude plugin marketplace add finolabs/plugins`, then `claude plugin install finolabs-vibecode@finolabs` |
    | Codex | `codex plugin marketplace add finolabs/plugins`, then `codex plugin add finolabs-vibecode@finolabs` |
-   | Antigravity | `agy plugin install https://github.com/finolabs/finolabs-vibecode` |
-   | Other agents | `npx skills add finolabs/finolabs-vibecode -a <agent>` |
+   | Antigravity | `agy plugin install https://github.com/finolabs/vibecode` |
+   | Other agents | `npx skills add finolabs/vibecode -a <agent>` |
 
 5. **Verify** that `claude plugin list`, `codex plugin list` or `agy plugin list` shows `finolabs-vibecode`. Report the command output to the user, and report any failure as it is.
 6. **Hand over to the user.** Plugins load when a session starts. Tell the user, in one message and in this order: open a new session; type `/finolabs-vibecode:help` (`$help` on Codex); then `/setup` and choose Quick (`$setup` on Codex). Only the user can start these, because setup interviews them before it writes host config and instructions. Tell them `/setup instructions` (choose user scope for their working contract) comes after their first result, except on Codex, where it comes right after setup.
@@ -222,7 +222,7 @@ Codex runs a plugin's hooks only after you trust them: open `/hooks` once in a n
 ### Antigravity
 
 ```bash
-agy plugin install https://github.com/finolabs/finolabs-vibecode
+agy plugin install https://github.com/finolabs/vibecode
 ```
 
 The following distinguishes shipped support from live delivery; local tests do not prove a host ran a hook.
@@ -245,7 +245,7 @@ See [context snapshot](docs/specs/context-snapshot.md), [compaction delivery](do
 ### Single skills, any agent
 
 ```bash
-npx skills add finolabs/finolabs-vibecode
+npx skills add finolabs/vibecode
 ```
 
 The installer lists the skills to choose from; `--skill <name>` takes one directly and `-a <agent>` picks the agent. It copies editable files into your project (or, with `-g`, for every project); update them with `npx skills update`. The plugin path also carries the agents, the session hook and the Antigravity rule, which single-skill installs leave out.
@@ -324,7 +324,7 @@ Events are best effort: they are read from tool calls and command text, so they 
 
 ## Update check
 
-On by default, independently of usage metrics consent. The check and startup notice are verified on Claude Code and unverified on Codex and Antigravity; Codex ships a hook, while Antigravity has no automatic update hook. A startup hook reads a local cache and starts a detached worker when it is missing or at least 24 hours old. The update worker makes one network call: one HTTPS GET to `https://api.github.com/repos/finolabs/finolabs-vibecode/releases/latest` with generic User-Agent `finolabs-vibecode-update-check`. It sends nothing about the user, repository, session or installed version. GitHub sees the connection's source IP. Only a timestamp and validated stable release tag are cached; no response text is displayed. Failures stay silent and the session continues.
+On by default, independently of usage metrics consent. The check and startup notice are verified on Claude Code and unverified on Codex and Antigravity; Codex ships a hook, while Antigravity has no automatic update hook. A startup hook reads a local cache and starts a detached worker when it is missing or at least 24 hours old. The update worker makes one network call: one HTTPS GET to `https://api.github.com/repos/finolabs/vibecode/releases/latest` with generic User-Agent `finolabs-vibecode-update-check`. It sends nothing about the user, repository, session or installed version. GitHub sees the connection's source IP. Only a timestamp and validated stable release tag are cached; no response text is displayed. Failures stay silent and the session continues.
 
 A newer stable version prompts the agent to let the user know they can type `/update` (on Codex `$update`), at most once per session. That skill shows the installed and cached available versions, asks for a clear yes before a native update, and records “skip this version” or “never ask” when requested. Claude Code needs a restart after updating; Codex hooks may require renewed trust through `/hooks`, including after bundled script changes (0.167.0 vendor source, 07/11/2026). The Codex refresh (catalog upgrade, remove and add the plugin, then trust its hooks again) was verified on 2026-11-09; the Antigravity procedure is still unverified, and the skill explains that limit. After an update, `/update` walks a checklist of what the new version adds; `/update whats-new` only shows it. The first carrying stable release gives no notice of itself. Set `FNL_UPDATE_CHECK=off` to stop requests and notices; “never ask” suppresses notices only. Antigravity has the skill but no automatic update hook. See [PRIVACY.md](PRIVACY.md) and the [spec](docs/specs/update-check.md).
 
@@ -577,7 +577,7 @@ Start any of them with `/setup` (on Codex, also `$setup instructions` right afte
 
 Published by [FINOLABS](https://github.com/finolabs) and listed in its plugin catalog, [finolabs/plugins](https://github.com/finolabs/plugins). Maintained by [Fioenix](https://github.com/fioenix).
 
-It targets Claude Code, Codex and Antigravity from one `skills/` folder, and can hand tasks to ZCode. Release documented here: **0.3.1** (phase 0; see `versioning` and the [release record](docs/specs/release-0.3.1.md)). Published releases are listed on [GitHub](https://github.com/finolabs/finolabs-vibecode/releases); after this release, `main` moves to `0.3.1-dev`.
+It targets Claude Code, Codex and Antigravity from one `skills/` folder, and can hand tasks to ZCode. Release documented here: **0.3.1** (phase 0; see `versioning` and the [release record](docs/specs/release-0.3.1.md)). Published releases are listed on [GitHub](https://github.com/finolabs/vibecode/releases); after this release, `main` moves to `0.3.1-dev`.
 
 <p align="center">
   <picture>

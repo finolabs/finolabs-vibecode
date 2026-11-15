@@ -17,7 +17,7 @@ is the user-facing release note; this record maps its scope to merged packages a
 
 The unit here is a merged pull request, found with `git log --merges --oneline v0.1.10..HEAD`.
 Local branch-sync merges are excluded. Numbers identify pull requests in
-[finolabs/finolabs-vibecode](https://github.com/finolabs/finolabs-vibecode/pulls).
+[finolabs/vibecode](https://github.com/finolabs/vibecode/pulls).
 A merged design records intent; it does not establish that every mechanism was implemented.
 
 | # | Package | Delivered by merged pull requests | Status |

@@ -1,12 +1,12 @@
 {
-  "name": "Vibecode",
+  "name": "vibecode",
   "tagline": "Make your coding agents work\nlike a senior team, automatically",
   "mark": "../assets/icon-dark.svg",
   "input": "Add rate limiting to the\nlogin endpoint.",
   "output": "router receipt:\n  depth=NORMAL\nok    code review: APPROVE\nok    security review:\n      APPROVE\nMERGE OK",
   "footer": [
     "**Claude Code**, **Codex**, **Antigravity** plugin by **FINOLABS**",
-    "MIT licensed, github.com/finolabs/finolabs-vibecode"
+    "MIT licensed, github.com/finolabs/vibecode"
   ],
   "layout": {
     "markX": 630,

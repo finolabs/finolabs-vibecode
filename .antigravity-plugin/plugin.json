@@ -9,8 +9,8 @@
     "name": "FINOLABS",
     "url": "https://github.com/finolabs"
   },
-  "homepage": "https://github.com/finolabs/finolabs-vibecode",
-  "repository": "https://github.com/finolabs/finolabs-vibecode",
+  "homepage": "https://github.com/finolabs/vibecode",
+  "repository": "https://github.com/finolabs/vibecode",
   "license": "MIT",
   "keywords": [
     "coding-router",
