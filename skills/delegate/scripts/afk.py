@@ -33,6 +33,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
 | Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run` or `run --changed [--base <branch or commit>]` (no relative revision) with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
+| An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, no NEVER_DECIDED program, git or gh form that changes settings, credentials or the repository, rewrites history or discards work, no inline code) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | approval_subject, decidable_argv, decidable_paths, request_subject, open_approvals |
 | Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge and review-fallback kinds only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
 | Trusted PR authors, full independent review/check/local-test gate, changed paths (including staged commit paths), quota readings and actually calling check before execution remain caller obligations in this slice | agent judgment, advisory; merge_check --independent enforces its review condition |
 
@@ -128,6 +129,7 @@ KINDS = {'start': 1, 'stop': 1, 'action': 1, 'decision': 2, 'parked': 3,
          'run-start': 1, 'run-finish': 1, 'merge': 1, 'review-fallback': 1, 'error': 3}
 ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,39}')
 SHA = re.compile(r'[0-9a-f]{40}')
+SHA256 = re.compile(r'[0-9a-f]{64}')
 BRANCH = re.compile(r'(?:refs/heads/)?[A-Za-z0-9][A-Za-z0-9._/-]{0,160}')
 ROOTS = {'src', 'lib', 'app', 'tests', 'docs', 'scripts', 'skills'}
 DOCUMENTS = {'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md'}  # top-level documentation files that are known paths
@@ -1677,14 +1679,15 @@ def classify_argv(argv, applied, coordinator=None):
     return 'unknown'
 
 
-def check(folder, args):
-    current = now()
+def classified(folder, argv_json, paths, coordinator, current):
+    """(code, lease, applied, key, entry, argv, cwd) for one request, exactly as `check` judges it; nothing is stored."""
     code, lease, applied = lease_guard(folder, current)
+    key = entry = None
+    argv, cwd = None, os.getcwd()
     if code is None:
-        argv, cwd = None, os.getcwd()
-        if args.argv_json is not None:
+        if argv_json is not None:
             try:
-                argv = json.loads(args.argv_json)
+                argv = json.loads(argv_json)
             except ValueError:
                 argv = None
             if isinstance(argv, list) and len(argv) >= 3 and argv[:2] == ['git', '-C']:
@@ -1704,24 +1707,36 @@ def check(folder, args):
         if code is None:
             if isinstance(argv, list) and argv[:3] == ['git', 'worktree', 'remove']:
                 applied[MERGED] = merged_heads(folder, lease, current)
-            if args.argv_json is not None:
-                code = classify_argv(argv, applied, args.coordinator)
+            if argv_json is not None:
+                code = classify_argv(argv, applied, coordinator)
             else:
-                code = classify_paths(args.paths, applied['Roots'], context_of(applied), source_mode(applied),
+                code = classify_paths(paths, applied['Roots'], context_of(applied), source_mode(applied),
                                       applied.get(FILES, ()))
-        # Only a Tier 1 answer reserves an action (and, for a ledger start, a run); a denied check costs nothing.
-        if code == 'allowed':
-            entry['actions'] += 1
-            entry['hour_actions'].append(current)
-            if entry['first'] is None:
-                entry['first'] = current
-            if argv and any(Path(t).name == 'ledger.py' for t in argv) and 'start' in argv:
-                entry['runs'] += 1
-            lease['counters'][key] = entry
-            save_lease(folder, lease)
-            if isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
-                append_log(folder, merge_pin(argv, current), current)
-    tier = 1 if code == 'allowed' else 3
+    return code, lease, applied, key, entry, argv, cwd
+
+
+def check(folder, args):
+    current = now()
+    code, lease, applied, key, entry, argv, cwd = classified(folder, args.argv_json, args.paths, args.coordinator, current)
+    if code == 'unknown' and entry is not None:
+        # An away decision may have approved this exact request once (`log --kind decision --approve-...`).
+        subject = request_subject(applied, cwd, argv if args.argv_json is not None else None, args.paths)
+        if subject is not None and subject in open_approvals(folder, lease, current):
+            code = 'decided'
+            append_log(folder, dict(time=current, tier=1, kind='approval-used', subject=subject, note=''), current)
+    # Only a Tier 1 answer reserves an action (and, for a ledger start, a run); a denied check costs nothing.
+    if code in {'allowed', 'decided'}:
+        entry['actions'] += 1
+        entry['hour_actions'].append(current)
+        if entry['first'] is None:
+            entry['first'] = current
+        if argv and any(Path(t).name == 'ledger.py' for t in argv) and 'start' in argv:
+            entry['runs'] += 1
+        lease['counters'][key] = entry
+        save_lease(folder, lease)
+        if isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
+            append_log(folder, merge_pin(argv, current), current)
+    tier = 1 if code in {'allowed', 'decided'} else 3
     result = {'tier': tier, 'code': code}
     if code in ENDED:
         # A host loop can outlive the lease; the answer itself tells the caller to end it.
@@ -1923,7 +1938,8 @@ def packet_check(args):
 
 
 def log(folder, args):
-    decision_flags = ('rung', 'settled', 'precedents', 'topic', 'project', 'decision', *FIELDS)
+    decision_flags = ('rung', 'settled', 'precedents', 'topic', 'project', 'decision', *FIELDS,
+                      'approve_argv_json', 'approve_paths')
     if args.kind != 'decision' and any(getattr(args, key) is not None for key in decision_flags):
         raise Refusal('decision fields (--rung, --settled, --precedents, --topic, --project, --decision and the row fields) belong to --kind decision only')
     current = now()
@@ -1949,11 +1965,18 @@ def log(folder, args):
     if args.kind == 'merge' and args.head is not None and (fields['pr'], args.head) not in merge_pins(folder, current):
         raise Refusal('--head matches no allowed `gh pr merge` check of this lease')
     note = safe_note(args.note or '')
+    subject = None
+    if args.kind == 'decision' and (args.approve_argv_json is not None or args.approve_paths is not None):
+        attempt(args)  # the row itself must be valid before the request is judged
+        subject = approval_subject(folder, args, current)
     # Every other check passes before the decision line reaches the ledger.
     identifier = decide(folder, args, current) if args.kind == 'decision' else None
     if identifier:
         fields['decision'] = identifier
     append_log(folder, dict(time=current, tier=KINDS[args.kind], kind=args.kind, **fields, note=note), current)
+    if subject is not None:
+        append_log(folder, dict(time=current, tier=2, kind='approval', subject=subject, decision=identifier, note=''),
+                   current)
     print(identifier if identifier else 'afk action logged')
 
 
@@ -2003,6 +2026,236 @@ def merge_pins(folder, current):
         return set()
 
 
+
+# Programs whose effect no argv screen can bound: shells and command runners, privilege changes, network clients,
+# system and process control, permission or disk tools, and deletion (a destructive category of its own). A request through one of them is never decidable.
+NEVER_DECIDED = frozenset({
+    'sh', 'bash', 'zsh', 'fish', 'dash', 'ksh', 'csh', 'tcsh', 'env', 'exec', 'eval', 'xargs', 'nohup', 'time',
+    'timeout', 'watch', 'script', 'expect', 'sudo', 'su', 'doas', 'curl', 'wget', 'ssh', 'scp', 'sftp', 'rsync', 'nc',
+    'ncat', 'netcat', 'socat', 'telnet', 'ftp', 'http', 'https', 'security', 'launchctl', 'defaults', 'osascript',
+    'open', 'kill', 'pkill', 'killall', 'shutdown', 'reboot', 'halt', 'chmod', 'chown', 'chgrp', 'chflags', 'xattr',
+    'crontab', 'at', 'dd', 'mkfs', 'diskutil', 'mount', 'umount', 'ln', 'docker', 'kubectl', 'terraform',
+    'npx', 'pnpx', 'bunx', 'pipx', 'brew', 'apt', 'apt-get', 'gem', 'awk', 'gawk', 'sed', 'perl', 'tclsh', 'expect',
+    'rm', 'rmdir', 'unlink', 'shred', 'srm', 'truncate', 'claude', 'codex', 'agy', 'gemini'})
+# Interpreters that run code given inline; with such a flag the request is never decidable.
+INLINE_CODE = frozenset({'python', 'node', 'ruby', 'php', 'deno', 'lua', 'pwsh', 'powershell', 'R', 'Rscript'})
+INLINE_FLAGS = re.compile(r'-|-c|-e|-E|-p|-r|-x|--eval(?:=.*)?|--print(?:=.*)?|-command|-[A-Za-z]{1,4}')
+NETWORK_MODULES = frozenset({'ensurepip', 'http.server', 'urllib', 'urllib.request', 'smtplib', 'ftplib',
+                             'webbrowser', 'venv'})
+# git and gh may be decided for code, review, merge and workflow work (owner decision, 15/11/2026); never for
+# settings, credentials, deleting or renaming a repository, or rewriting history and discarding work, which the
+# owner's own rules forbid. A pinned `gh pr merge` and the push forms are in the rule table; their other forms park.
+GIT_NEVER = frozenset({'config', 'remote', 'credential', 'filter-branch', 'filter-repo', 'replace', 'update-ref',
+                       'symbolic-ref', 'reflog', 'gc', 'prune', 'clean', 'push', 'rebase', 'stash', 'submodule',
+                       'worktree', 'branch', 'tag', 'notes', 'lfs', 'daemon', 'send-email', 'request-pull', 'archive'})
+GH_NEVER = {'repo': {'delete', 'edit', 'rename', 'archive', 'unarchive', 'set-default', 'deploy-key', 'autolink',
+                     'gitignore', 'license', 'sync'},
+            'pr': {'merge'}, 'workflow': {'enable', 'disable'}, 'cache': {'delete'}, 'release': None, 'secret': None,
+            'variable': None, 'auth': None, 'ssh-key': None, 'gpg-key': None, 'ruleset': None, 'config': None,
+            'extension': None, 'alias': None, 'org': None, 'api': None, 'codespace': None, 'attestation': None,
+            'label': {'delete', 'edit', 'clone'}, 'project': {'delete', 'close', 'copy'}, 'gist': None}
+
+
+def git_decidable(argv):
+    """False for the git and gh forms that change settings, credentials or the repository itself, rewrite history or
+    discard work; True for the rest, which still pass every other decidable screen."""
+    if argv[0] == 'git':
+        tokens = [t for t in argv[1:] if not t.startswith('-')]
+        if not tokens or tokens[0] in GIT_NEVER or any(t.startswith('-c') or t.startswith('--exec-path')
+                                                       or t.startswith('--git-dir') or t.startswith('--work-tree')
+                                                       for t in argv[1:argv.index(tokens[0])]):
+            return False
+        rest = argv[argv.index(tokens[0]) + 1:]
+        if tokens[0] == 'reset' and any(t in {'--hard', '--merge', '--keep'} for t in rest):
+            return False
+        if tokens[0] in {'checkout', 'restore'} and any(t in {'.', '--', '-f', '--force', '--worktree', '-W'} for t in rest):
+            return False
+        if tokens[0] == 'commit' and any(t == '--amend' or t.startswith('--amend') for t in rest):
+            return False
+        return True
+    if argv[0] == 'gh':
+        tokens = [t for t in argv[1:] if not t.startswith('-')]
+        if not tokens or argv[1].startswith('-'):
+            return False
+        group = GH_NEVER.get(tokens[0], ())
+        if group is None or (group and len(tokens) > 1 and tokens[1] in group):
+            return False
+        return True
+    return True
+
+
+# Package and build tools: only the subcommands that run this repository's own scripts and tests.
+# `install`-like subcommands install only what the repository declares (owner decision, 15/11/2026): see declared_install.
+SUBCOMMANDS = {'npm': {'test', 't', 'run', 'run-script', 'install', 'i', 'ci'},
+               'pnpm': {'test', 't', 'run', 'install', 'i'}, 'yarn': {'test', 'run', 'install'},
+               'bun': {'test', 'run', 'install', 'i'}, 'cargo': {'test', 'build', 'check', 'clippy', 'fmt', 'run', 'bench', 'fetch'},
+               'go': {'test', 'build', 'vet', 'run', 'fmt', 'generate', 'mod'}, 'pip': {'install'},
+               'uv': {'sync', 'run'}, 'poetry': {'install', 'run'}, 'bundle': {'install', 'exec'}}
+INSTALLS = {'install', 'i', 'ci', 'sync', 'fetch', 'mod'}
+REGISTRY_FLAGS = re.compile(r'--(?:registry|index-url|extra-index-url|trusted-host|find-links|index|global|location|prefix|target|user|root|config|userconfig|globalconfig)(?:=.*)?|-g|-i|-f')
+
+
+def declared_install(name, args):
+    """True when an install takes only what the repository declares: no package named on the command line, no other
+    registry or index, nothing global. pip may name only `-r <file>`, `-e <path>` or a path inside the checkout (the
+    path screen checks where), and `go mod` only `download`, `tidy` or `verify`."""
+    if any(REGISTRY_FLAGS.fullmatch(t) for t in args):
+        return False
+    if name == 'go':
+        return args[:1] in (['download'], ['tidy'], ['verify'])
+    if name == 'pip':
+        rest, i = args, 0
+        while i < len(rest):
+            token = rest[i]
+            if token in {'-r', '--requirement', '-e', '--editable', '-c', '--constraint'} and i + 1 < len(rest):
+                i += 2
+                continue
+            if token.startswith('-') or token in {'.', './'} or token.startswith('./') or '/' in token:
+                i += 1
+                continue
+            return False  # a bare name is a package from the index
+        return True
+    return not any(not t.startswith('-') for t in args)
+
+
+def program_name(token):
+    """The base program name with a trailing version stripped (`python3.12` reads as `python`)."""
+    return re.sub(r'[0-9][0-9.]*$', '', Path(token).name) or Path(token).name
+
+
+def inside(token, context):
+    """True when a path token resolves, through every link, inside the checkout the request runs in."""
+    if token.startswith('~') or context.ident is None:
+        return False
+    root = os.path.realpath(context.ident.checkout)
+    full = os.path.realpath(os.path.join(context.cwd or os.getcwd(), token))
+    return full == root or full.startswith(root + os.sep)
+
+
+def decidable_argv(argv, context, hosts=frozenset()):
+    """True when an `unknown` command may enter the away ladder for approval: a found repository with user or project
+    settings, one plain program outside NEVER_DECIDED and inline-code forms, no shell syntax, URL, secret or machine
+    path, and every path operand inside this checkout. Everything else stays parked."""
+    if context.repository != 'found' or context.state not in {'user', 'project'} or not argv:
+        return False
+    # Without a shell, a newline or tab inside one argument is data (a multi-line brief); other controls deny.
+    if any(not isinstance(t, str) or not t or len(t.encode()) > 65536
+           or any(unicodedata.category(c).startswith('C') and c not in '\n\t' for c in t)
+           or t in {';', '&&', '||', '|', '&', '>', '>>', '<', '<<'} or '$(' in t or '`' in t or '://' in t
+           for t in argv):
+        return False
+    first = argv[0]
+    if '=' in first or first.startswith('-') or not re.fullmatch(r'[A-Za-z0-9_./+-]{1,240}', first):
+        return False
+    name = program_name(first)
+    if name in NEVER_DECIDED or Path(first).name in NEVER_DECIDED:
+        return False
+    if not git_decidable([name] + argv[1:]):
+        return False
+    if name in INLINE_CODE:
+        flags = []  # the interpreter's own options end at its script, or at `-m` and its module
+        for t in argv[1:]:
+            if t == '-m' or not t.startswith('-'):
+                break
+            flags.append(t)
+        if any(INLINE_FLAGS.fullmatch(t) and ('c' in t[1:] or 'e' in t[1:] or 'p' in t[1:] or 'r' in t[1:]
+                                              or 'x' in t[1:] or t in {'-', '-E'}) for t in flags):
+            return False
+        if any(t == '-m' and argv[i + 2:i + 3] and argv[i + 2].split('.')[0] in {m.split('.')[0] for m in NETWORK_MODULES}
+               for i, t in enumerate(argv[1:])):
+            return False
+    if SUBCOMMANDS.get(name) is not None and argv[1:2] and argv[1] not in SUBCOMMANDS[name]:
+        return False
+    if name in SUBCOMMANDS and argv[1:2] and argv[1] in INSTALLS and not declared_install(name, argv[2:]):
+        return False
+    if name in INLINE_CODE and argv[1:3] == ['-m', 'pip'] and (argv[3:4] != ['install']
+                                                                or not declared_install('pip', argv[4:])):
+        return False
+    if ('/' in first or first.startswith('.')) and not inside(first, context) and not os.path.isabs(first):
+        return False
+    skip = dispatch_prefix(argv, hosts)
+    for token in argv[skip:]:
+        value = token.split('=', 1)[1] if token.startswith('-') and '=' in token else token
+        if not value:
+            continue
+        if value.startswith('~') or screened(value):
+            return False
+        if (os.path.isabs(value) or path_operand(value, context.cwd)) and not inside(value, context):
+            return False
+    return True
+
+
+def dispatch_prefix(argv, hosts):
+    """How many leading tokens are a delegated run's own launcher, else 1: this install's `delegate_env.py` with
+    isolated Python, `--family F --` for a family of the lease's Hosts, and that family's owner-approved executable
+    (the quota probe's record). The run's own arguments after it pass the usual screen (a review or task brief is
+    screened for secrets and machine paths). Used only for an `unknown` request: any other dispatch form stays parked."""
+    name, tail = own_script(argv, ('delegate_env.py',))
+    if (name is None or len(tail) < 4 or tail[0] != '--family' or tail[2] != '--' or tail[1] not in PROGRAMS
+            or tail[1] not in hosts):
+        return 1
+    size = approved_program(tail[1], tail[3:])
+    if not size:
+        return 1
+    return len(argv) - len(tail) + 3 + size
+
+
+def decidable_paths(paths, context):
+    """True when every path of an `unknown` change is a plain relative path inside this checkout."""
+    if context.repository != 'found' or context.state not in {'user', 'project'} or not paths:
+        return False
+    return all(repository_path(p, context) is not None and inside(p, context) for p in paths)
+
+
+def request_subject(applied, cwd, argv, paths):
+    """The digest an approval binds: repository, working folder and the exact argv or set of paths; None when the
+    request is not decidable."""
+    context = context_of(applied)
+    if argv is not None:
+        hosts = {HOST_FAMILIES[h] for h in applied.get('Hosts', '').split(', ') if h in HOST_FAMILIES}
+        if not isinstance(argv, list) or not decidable_argv(argv, context, hosts):
+            return None
+        request = dict(argv=argv)
+    else:
+        if not isinstance(paths, list) or not decidable_paths(paths, context):
+            return None
+        request = dict(paths=sorted(paths))
+    return digest(dict(project=project_key(context), cwd=os.path.realpath(cwd), **request))
+
+
+def open_approvals(folder, lease, current):
+    """Subjects this lease's away decisions approved and no allowed check has used yet; empty on any doubt."""
+    try:
+        counts = {}
+        for line in (read_private(folder, 'log.jsonl', MAX_LOG) or b'').splitlines():
+            entry = json.loads(line)
+            if (not isinstance(entry, dict) or entry.get('kind') not in {'approval', 'approval-used'}
+                    or not isinstance(entry.get('subject'), str) or not SHA256.fullmatch(entry['subject'])
+                    or not finite(entry.get('time')) or not lease['start'] <= entry['time'] <= current):
+                continue
+            counts[entry['subject']] = counts.get(entry['subject'], 0) + (1 if entry['kind'] == 'approval' else -1)
+        return {subject for subject, count in counts.items() if count > 0}
+    except (OSError, ValueError, UnicodeError, TypeError, KeyError):
+        return set()
+
+
+def approval_subject(folder, args, current):
+    """The subject of `--approve-argv-json` or `--approve-paths`, checked before the decision is recorded: the rung
+    decided option 1 (run it), and the request, judged now and here exactly as `check` would, is `unknown` and
+    decidable. Refuses anything else."""
+    if args.rung not in {'rule', 'advisor', 'host'} or args.settled != 'yes' or args.option != '1':
+        raise Refusal('an approval needs a rule, advisor or host rung that settled on option 1, which runs the request')
+    if args.approve_argv_json is not None and args.approve_paths is not None:
+        raise Refusal('approve one request: --approve-argv-json or --approve-paths')
+    code, lease, applied, key, entry, argv, cwd = classified(
+        folder, args.approve_argv_json, args.approve_paths, None, current)
+    if code != 'unknown' or entry is None:
+        raise Refusal('only an unknown request may be approved; this one is %s' % (code or 'unknown'))
+    subject = request_subject(applied, cwd, argv if args.approve_argv_json is not None else None, args.approve_paths)
+    if subject is None:
+        raise Refusal('this request is never decidable: park it')
+    return subject
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0], allow_abbrev=False)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -2019,6 +2272,8 @@ def main(argv=None):
     record.add_argument('--kind', required=True, choices=sorted(KINDS))
     for key in ('task', 'pr', 'run', 'head', 'note', 'decision', 'rung', 'settled', 'precedents', 'topic', 'project', *FIELDS):
         record.add_argument('--' + key)
+    record.add_argument('--approve-argv-json')
+    record.add_argument('--approve-paths', nargs='+')
     reviewed = sub.add_parser('review', allow_abbrev=False)
     reviewed.add_argument('--decision', required=True)
     reviewed.add_argument('verdict', choices=('kept', 'reversed'))
