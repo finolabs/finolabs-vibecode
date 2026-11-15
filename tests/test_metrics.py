@@ -100,6 +100,10 @@ class MetricsTest(unittest.TestCase):
                 self.assertEqual(m.skill_name(old), new)
         self.assertNotIn("autopilot", m.SKILLS)
         self.assertNotIn("session-hygiene", m.SKILLS)
+        # Every current skill folder counts; an alias or a renamed folder does not.
+        folders = {d.name for d in (ROOT / "skills").iterdir() if (d / "SKILL.md").is_file() and not d.name.startswith("fnl-")}
+        self.assertEqual(set(m.SKILLS), folders - set(m.RENAMED))
+        self.assertIn("shape", m.SKILLS)
         # A new line holds the current name.
         self.assertTrue(self.record(name="session-hygiene"))
         self.assertEqual(self.events()[-1]["name"], "tidy")

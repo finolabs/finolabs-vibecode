@@ -547,7 +547,7 @@ class CheckupTest(unittest.TestCase):
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)))
         self.assertEqual(self.setup_item("host config")["status"], "ok")
         template = (ROOT / "skills/delegate/references/host-template.md").read_text()
-        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Heavy jobs", "ZCode", "Limits", "Machine rules"})
+        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Heavy jobs", "ZCode", "Machine rules"})
         self.assertNotIn("ZCode", checkup.HEADINGS)  # host configs written before ZCode stay complete
         self.assertNotIn("Limits", checkup.HEADINGS)  # retired in 0.2.5: a host config without it is complete
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)) + "\n## Machine rules\n")
