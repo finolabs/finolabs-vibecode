@@ -172,7 +172,7 @@ On Claude Code, on by default, one `UserPromptSubmit` hook reminds the agent of 
 ## Repository checks
 
 `/setup add checks` stores a repository's check list, as argument arrays you approved, in that repository's own `.finolabs/vibecode/checks.json` (in the main checkout, shared by its linked worktrees; folders 0700, file 0600), and adds the line `.finolabs/` to the repository's `.git/info/exclude`, never to a tracked `.gitignore`.
-It records the SHA-256 of the approved file and the time in `<data root>/state/checks-approved/<repository code>.json`; a file that differs from it, or has none, runs nothing.
+It records the SHA-256 of the approved file, the time and the SHA-256 identity digest of the main checkout it was approved for (never the path) in `<data root>/state/checks-approved/<repository code>.json`, so the approval counts only for that checkout; a file that differs from it, or has none, runs nothing.
 Replacing the list keeps the previous file beside it as `checks.json.bak-<date>`. Undo is `checks_setup.py remove` for this repository: it deletes the file and its approved digest and leaves the backups.
 A list saved with 0.2.4 under `## Checks` in canonical `<data root>/host.md` is no longer read, and the plugin neither reads nor changes that section; delete it by hand after you save the list again. Running the checks runs the repository's own code on your machine; the plugin sends nothing anywhere.
 

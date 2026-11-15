@@ -41,7 +41,7 @@ PROJECT_FILE = 'checks.json'
 PROJECT_LIMIT = 65536
 PROJECT_KEYS = {'version', 'checks', 'local_receipt'}
 APPROVED = 'state/checks-approved'
-APPROVED_KEYS = {'sha256', 'approved'}
+APPROVED_KEYS = {'sha256', 'approved'}  # plus 'identity', the full digest of the main checkout, since 0.3.1
 CHANGED = 'changed since it was approved'
 AGAIN = 'run /setup add checks again'
 
@@ -188,23 +188,32 @@ def render_project(checks, receipt):
     return (json.dumps(data, indent=2, ensure_ascii=True) + '\n').encode()
 
 
-def read_approved(code):
-    """The approved SHA-256 of this repository's project file; FileNotFoundError when none, ValueError when invalid."""
+def read_approved(code, identity=None):
+    """The approved SHA-256 of this repository's project file; FileNotFoundError when none, ValueError when invalid.
+
+    A record bound to a main checkout (its full `identity` digest) counts only for that checkout, so another
+    repository whose eight-character code collides never inherits it; a record written before 0.3.1 has no binding
+    and still counts, as the project settings approvals do, until setup writes it again."""
     if not isinstance(code, str) or not CODE.fullmatch(code):
         raise ValueError('invalid code')
     with dr.data_folder(APPROVED, private=True) as folder:
         record = json.loads(dr.read_file(folder, code + '.json', RECEIPT_LIMIT), object_pairs_hook=_object)
-    if (not isinstance(record, dict) or set(record) != APPROVED_KEYS or not isinstance(record['sha256'], str)
-            or not DIGEST.fullmatch(record['sha256']) or type(record['approved']) is not int or record['approved'] < 0):
+    if (not isinstance(record, dict) or set(record) - {'identity'} != APPROVED_KEYS
+            or not isinstance(record['sha256'], str) or not DIGEST.fullmatch(record['sha256'])
+            or type(record['approved']) is not int or record['approved'] < 0
+            or 'identity' in record and not (isinstance(record['identity'], str) and DIGEST.fullmatch(record['identity']))):
         raise ValueError('invalid approval')
+    if 'identity' in record and record['identity'] != identity:
+        raise ValueError('approval of another checkout')
     return record['sha256']
 
 
-def write_approved(code, sha256):
+def write_approved(code, sha256, identity):
     if not isinstance(code, str) or not CODE.fullmatch(code) or not isinstance(sha256, str) \
-            or not DIGEST.fullmatch(sha256):
+            or not DIGEST.fullmatch(sha256) or not isinstance(identity, str) or not DIGEST.fullmatch(identity) \
+            or identity[:8] != code:
         raise ValueError('invalid approval')
-    record = {'sha256': sha256, 'approved': int(time.time())}
+    record = {'sha256': sha256, 'approved': int(time.time()), 'identity': identity}
     with dr.data_folder(APPROVED, create=True, private=True) as folder:
         dr.atomic_write(folder, code + '.json', json.dumps(record, sort_keys=True).encode())
 
@@ -240,7 +249,7 @@ def read_project(code, root):
     except (OSError, ValueError):
         return [], False, 'unreadable'
     try:
-        approved = read_approved(code)
+        approved = read_approved(code, store.identity_digest(main))
     except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
         approved = None
     if approved is None or approved != hashlib.sha256(raw).hexdigest():

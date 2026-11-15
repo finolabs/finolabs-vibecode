@@ -333,7 +333,8 @@ class ChecksSetupTest(unittest.TestCase):
                                   'local_receipt': False}).encode()
                 (folder / 'checks.json').write_bytes(raw)
                 os.chmod(folder / 'checks.json', 0o600)
-                module.cl.write_approved(code_, hashlib.sha256(raw).hexdigest())
+                module.cl.write_approved(code_, hashlib.sha256(raw).hexdigest(),
+                                         module.cl.store.identity_digest(module.cl.layout(self.repo)[0]))
                 self.assertEqual(module.checks_for(code_, root=self.repo), ([], 'invalid'))
 
     def test_twenty_checks_are_accepted(self):
@@ -479,7 +480,9 @@ class ProjectFileTest(unittest.TestCase):
     def approve(self, root=None):
         """Record the current file's bytes as approved, as an apply would."""
         import hashlib
-        self.reader().write_approved(self.code(root), hashlib.sha256(self.project(root).read_bytes()).hexdigest())
+        reader = self.reader()
+        reader.write_approved(self.code(root), hashlib.sha256(self.project(root).read_bytes()).hexdigest(),
+                              reader.store.identity_digest(reader.layout(root or self.repo)[0]))
 
     def test_apply_writes_the_project_file_and_its_digest_and_leaves_host_identical(self):
         before = self.host.read_bytes()
@@ -503,7 +506,8 @@ class ProjectFileTest(unittest.TestCase):
         self.assertEqual(stat.S_IMODE((self.repo / '.finolabs').stat().st_mode), 0o700)
         import hashlib
         record = json.loads(self.approved().read_text())
-        self.assertEqual(set(record), {'sha256', 'approved'})
+        self.assertEqual(set(record), {'sha256', 'approved', 'identity'})
+        self.assertEqual(record['identity'][:8], self.code())  # bound to this main checkout's full digest
         self.assertEqual(record['sha256'], hashlib.sha256(self.project().read_bytes()).hexdigest())
         self.assertEqual(stat.S_IMODE(self.approved().stat().st_mode), 0o600)
         reader = self.reader()

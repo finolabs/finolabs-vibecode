@@ -1094,7 +1094,8 @@ class LocalReceiptTest(unittest.TestCase):
         raw = json.dumps({"version": 1, "checks": [{"name": "test", "argv": ["sh", "-c", "x"]}],
                           "local_receipt": True}).encode()
         (self.repo / ".finolabs/vibecode/checks.json").write_bytes(raw)
-        self.cl.write_approved(self.code, hashlib.sha256(raw).hexdigest())
+        self.cl.write_approved(self.code, hashlib.sha256(raw).hexdigest(),
+                                  self.cl.store.identity_digest(self.cl.layout(self.repo)[0]))
         ok, lines = self.evaluate(pr(checks=[]))
         self.assertFalse(ok)
         self.assertEqual(self.checks_line(lines), "BLOCK checks: none reported")
@@ -1107,7 +1108,8 @@ class LocalReceiptTest(unittest.TestCase):
         (folder / "checks.json").write_bytes(raw)
         os.chmod(folder / "checks.json", 0o600)
         if approve:
-            self.cl.write_approved(self.code, hashlib.sha256(raw).hexdigest())
+            self.cl.write_approved(self.code, hashlib.sha256(raw).hexdigest(),
+                                  self.cl.store.identity_digest(self.cl.layout(self.repo)[0]))
 
     def test_a_legacy_section_never_turns_the_mode_on(self):
         (self.repo / ".finolabs/vibecode/checks.json").unlink()

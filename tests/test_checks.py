@@ -165,8 +165,9 @@ class ChecksRunTest(unittest.TestCase):
         raw = json.dumps({'version': 1, 'checks': [{'name': 'test', 'argv': ['sh', '-c', 'x']}],
                           'local_receipt': False}).encode()
         (self.repo / '.finolabs/vibecode/checks.json').write_bytes(raw)
-        load('checks_list_invalid', SCRIPTS / 'checks_list.py').write_approved(self.code(),
-                                                                              hashlib.sha256(raw).hexdigest())
+        invalid = load('checks_list_invalid', SCRIPTS / 'checks_list.py')
+        invalid.write_approved(self.code(), hashlib.sha256(raw).hexdigest(),
+                               invalid.store.identity_digest(invalid.layout(self.repo)[0]))
         code, _, _ = self.run_cli(self.module(), 'run')
         self.assertEqual(code, 3)
         self.assertEqual(self.launched(), [])
@@ -208,7 +209,8 @@ class ChecksRunTest(unittest.TestCase):
         (folder / 'checks.json').write_bytes(raw)
         os.chmod(folder / 'checks.json', 0o600)
         if approve:
-            reader.write_approved(self.code(), hashlib.sha256(raw).hexdigest())
+            reader.write_approved(self.code(), hashlib.sha256(raw).hexdigest(),
+                                  reader.store.identity_digest(reader.layout(self.repo)[0]))
         exclude = self.repo / '.git/info/exclude'
         exclude.parent.mkdir(exist_ok=True)
         exclude.write_text('.finolabs/\n')
@@ -254,6 +256,29 @@ class ChecksRunTest(unittest.TestCase):
         self.assertEqual(code, 3)
         self.assertIn('changed since it was approved', out + err)
         self.assertEqual(self.launched(), [])
+
+    def test_an_approval_of_another_checkout_with_the_same_code_runs_nothing(self):
+        import hashlib
+        import json as _json
+        self.store_file(('a', self.mark('a')))
+        reader = load('checks_list_bound', SCRIPTS / 'checks_list.py')
+        raw = (self.repo / '.finolabs/vibecode/checks.json').read_bytes()
+        code = self.code()
+        with self.assertRaises(ValueError):  # an identity whose code differs is refused at write time
+            reader.write_approved(code, hashlib.sha256(raw).hexdigest(), 'f' * 64)
+        with reader.dr.data_folder(reader.APPROVED, private=True) as folder:
+            # Another checkout whose eight-character code collides: same code, another full digest.
+            other = code + 'e' * 56
+            reader.dr.atomic_write(folder, code + '.json', _json.dumps(
+                {'sha256': hashlib.sha256(raw).hexdigest(), 'approved': 1, 'identity': other}).encode())
+        status, out, err = self.run_cli(self.module(), 'run')
+        self.assertEqual(status, 3)
+        self.assertIn('changed since it was approved', out + err)
+        with reader.dr.data_folder(reader.APPROVED, private=True) as folder:
+            # A record written before 0.3.1 has no binding and still counts.
+            reader.dr.atomic_write(folder, code + '.json', _json.dumps(
+                {'sha256': hashlib.sha256(raw).hexdigest(), 'approved': 1}).encode())
+        self.assertEqual(self.run_cli(self.module(), 'run')[0], 0)
 
     # --changed
 
