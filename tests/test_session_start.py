@@ -283,6 +283,14 @@ class SessionStartTest(SyntheticStateTest):
                 self.assertIn("open_dispatch_nudge.py", prompt[1]["hooks"][0]["command"])
                 self.assertIn("compact_nudge.py", prompt[2]["hooks"][0]["command"])
                 raw = (json.dumps(manifest, indent=2) + "\n").encode()
+            else:
+                # The Codex compaction nudge (0.3.1) adds only its own UserPromptSubmit group.
+                import json
+                manifest = json.loads(raw)
+                prompt = manifest["hooks"].pop("UserPromptSubmit")
+                self.assertEqual(len(prompt), 1)
+                self.assertIn("compact_nudge.py\" --host codex", prompt[0]["hooks"][0]["command"])
+                raw = (json.dumps(manifest, indent=2) + "\n").encode()
             self.assertEqual(hashlib.sha256(raw).hexdigest(), digest)
 
 
