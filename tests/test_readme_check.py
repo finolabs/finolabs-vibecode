@@ -456,6 +456,17 @@ class ReadmeCheckTest(unittest.TestCase):
             self.assertIn(f"FAIL K1 link to a local or private address: {url}", lines)
             self.assertNotIn(f"EXTERNAL {url}", lines)
 
+    def test_local_names_zones_nat64_and_loopback_wildcards_are_not_public(self):
+        for url in ("http://localhost.localdomain:8080/", "http://ip6-localhost/", "http://metadata/",
+                    "http://printer.local/", "http://db.internal/", "http://[::1%251]/", "http://[fe80::1%25eth0]/",
+                    "http://[64:ff9b::127.0.0.1]/", "http://[64:ff9b::169.254.169.254]/", "http://127.0.0.1.nip.io/",
+                    "http://10.0.0.1.sslip.io/", "http://localtest.me/"):
+            with self.subTest(url=url):
+                self.assertFalse(readme_check.public_url(url))
+        for url in ("https://github.com/example/demo", "https://[2606:4700::1111]/", "http://[64:ff9b::8.8.8.8]/"):
+            with self.subTest(url=url):
+                self.assertTrue(readme_check.public_url(url))
+
     def assert_fast(self, line):
         self.edit("## Supported platforms", line + "\n\n## Supported platforms")
         start = time.monotonic()

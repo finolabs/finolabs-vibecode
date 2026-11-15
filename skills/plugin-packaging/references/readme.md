@@ -88,7 +88,7 @@ Run `python3 -I <this skill folder>/scripts/readme_check.py [repository root]`. 
 - **I1** (script) Every image has non-empty alt text and its local file exists.
 - **I2** (script) Every `<picture>` has a dark `<source>` and a light `<img>`, both files exist and are different files.
 - **I3** (agent) Screenshots and diagrams show the current product; one that may lag says so in its caption.
-- **K1** (script) Every relative link resolves to a file in the repository, and every `#anchor` to a heading or an `id` in the target file. A link that leads out of the repository, a `file:` link, or a link to a loopback, private or link-local address (`localhost`, `127.0.0.1`, `10.x`, `192.168.x`, `169.254.x`) fails K1 (I1 for an image), and such a URL is not listed for K2.
+- **K1** (script) Every relative link resolves to a file in the repository, and every `#anchor` to a heading or an `id` in the target file. A link that leads out of the repository, a `file:` link, or a link to a loopback, private or link-local address or to a local-only name (`localhost`, `127.0.0.1`, `10.x`, `192.168.x`, `169.254.x`, a single-label name, `.local`, `.internal`, an IPv6 zone, a NAT64 form of these, a wildcard name such as `127.0.0.1.nip.io`) fails K1 (I1 for an image), and such a URL is not listed for K2.
 - **K2** (agent) Every external link the script lists resolves (open it, or `curl -sI`), and points at what its text says.
 
 ### Content

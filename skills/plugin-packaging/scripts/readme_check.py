@@ -222,19 +222,33 @@ def load_json(root, path):
         return None
 
 
+LOCAL_NAMES = {"localhost", "ip6-localhost", "ip6-loopback", "localhost.localdomain", "localtest.me"}
+LOCAL_SUFFIXES = (".localhost", ".local", ".localdomain", ".internal", ".home.arpa", ".lan",
+                  ".nip.io", ".sslip.io", ".localtest.me")
+NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
 def public_url(url):
-    """Whether an http(s) URL names a public host: not loopback, private, link-local or a numeric shorthand."""
+    """Whether an http(s) URL names a public host: not loopback, private, link-local, a numeric shorthand, a
+    single-label or local-only name, or a well-known name that resolves to loopback. Offline, so names that only DNS
+    would reveal as private still pass; deny on doubt."""
     try:
         parts = urlsplit(url)
         host = (parts.hostname or "").rstrip(".").lower()
     except ValueError:
         return False
-    if parts.scheme.lower() not in ("http", "https") or not host or host == "localhost" or host.endswith(".localhost"):
+    if parts.scheme.lower() not in ("http", "https") or not host or host in LOCAL_NAMES or host.endswith(LOCAL_SUFFIXES):
         return False
     try:
-        ip = ipaddress.ip_address(host)
+        ip = ipaddress.ip_address(host.partition("%")[0])  # a zone index (fe80::1%eth0) names a local interface
     except ValueError:
+        if ":" in host or "%" in host or "." not in host:
+            return False  # an IPv6 form ipaddress refuses, or a single-label name (metadata, router, intranet)
         return not re.fullmatch(r"(?:0x[0-9a-f]*|\d+)(?:\.(?:0x[0-9a-f]*|\d+)){0,3}", host)  # 2130706433, 0x7f.1
+    if "%" in host:
+        return False
+    if ip.version == 6 and ip in NAT64:
+        ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)  # NAT64 embeds an IPv4 address in its last 32 bits
     ip = getattr(ip, "ipv4_mapped", None) or ip
     return ip.is_global and not ip.is_multicast
 
