@@ -50,6 +50,8 @@ One standard for every repository: applications, libraries, CLIs, services, plug
 - In a repository that ships upgrade notes (as `update` does in its `references/upgrades.json`), the release pull request writes or updates the entry for its version, as part of the documentation review; a test fails when a released manifest version has none.
 - **Advisory (agent judgment):** After the tag and GitHub release, and only with the owner's explicit go for that repository (name it and the fields it changes first; the target is read from the user's marketplace entry, so the owner confirms it), open a pull request in the catalog repository that entry points to, moving `ref` to the new tag and syncing name, description and keywords with the default-branch manifests. The catalog's CI enforces the content against the raw default-branch files, which can lag a few minutes.
 
+- **Advisory (agent judgment):** When the release is done (the tag, the forge release, the bump to the next `-dev` and, where the owner said go, the catalog pull request), invoke `tidy` before any other work: save the handover, write back the release's owner decisions and lessons, and rename or retire the session; start the next release's work in a fresh session.
+
 ## Authority
 
 Creating or pushing a tag, publishing a release or package, and changing a published version need explicit owner authority for that release. Preparing the bump, changelog and release notes for review needs none.

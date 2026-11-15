@@ -14,3 +14,4 @@ Typed by the user, or loaded by the agent when the task matches.
 - In phase 0, compatible changes bump the last digit; MINOR only when something breaks.
 - Between releases, builds report the next version with `-dev` (`0.4.0-dev`).
 - Published tags are never moved, deleted or reused; a bad release is superseded by a new version.
+- When a release is done, the agent runs `tidy`: handover, the release's decisions written back, then a fresh session.
