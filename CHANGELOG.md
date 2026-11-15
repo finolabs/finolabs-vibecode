@@ -13,11 +13,16 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- afk: `checks.py run --dispatch <dispatch id>` is Tier 1 under a lease, so an away coordinator can write the receipt that accepting a delegated run needs; checks.py still writes it only after the whole approved list passes on a clean tree at an unmoved head (owner decision, 15/11/2026).
+- afk consumers follow the unknown-request ladder: `afk` names the own-worktree branch form and `checks.py` as test runners, the `delegate` route rule for an absent user defers to `afk` "Decide" during a lease, `review-gate` sends the stop after two rework rounds through Decide during a lease, the `/setup add afk` test-command question says other allowlisted shapes may still be decided, and the spec, README and index wording match.
 - The `review-gate` low-risk lane also takes a post-release record: `merge_check.py --lane` qualifies a pull request that changes only the `Status:` line of a `docs/specs/release-X.Y.Z.md` record from its prepared form to `released; tagged vX.Y.Z on YYYY-MM-DD; ...` and that release's row in `docs/specs/index.md` the same way, beside the changelog and the manifest version bumps. A second changed line in either file, a record without its row, a wrong version or date form, or any other spec still takes both reviewers.
 
 ### Fixed
 
-- `afk.py check` lets an away lease follow the plugin's own branch rule and run its checks. `git worktree add -b <branch> <path> [origin/<default>]` is Tier 1 when the path is a new folder directly under the main checkout's `.claude/worktrees` (a plain name that is not protected, with no link at `.claude` or `.claude/worktrees`) and the branch passes the new-work-branch rule. This install's `checks.py` runs as a trusted wrapper with `show`, `run` or `run --changed [--base <branch or commit>]` (never `--dispatch` or `usage`) in a repository with user or project settings. Before, the `.claude` name made every worktree path Tier 3, `git worktree add` had no rule at all, and `checks.py` was not an allowed script, so an away session could neither cut a worktree nor run the approved check list.
+- The host config template no longer creates the retired `## Limits` section, whose bare heading `parallel_slots.py check-config` reports as legacy: its machine notes move to `## Machine rules`, and the parallel-limit lines left under `## Heavy jobs` are removed.
+- Usage metrics count the `shape` skill, which was missing from the skill list.
+- `/setup check` no longer reports a host config without `## Limits` as missing a required heading: the section was retired in 0.2.5 and nothing reads it.
+- `afk.py check` lets an away lease follow the plugin's own branch rule and run its checks. `git worktree add -b <branch> <path> [origin/<default>]` is Tier 1 when the path is a new folder directly under the main checkout's `.claude/worktrees` (a plain name that is not protected, with no link at `.claude` or `.claude/worktrees`) and the branch passes the new-work-branch rule. This install's `checks.py` runs as a trusted wrapper with `show`, `run` or `run --changed [--base <branch or commit>]` (never `usage`; `run --dispatch` is under Changed) in a repository with user or project settings. Before, the `.claude` name made every worktree path Tier 3, `git worktree add` had no rule at all, and `checks.py` was not an allowed script, so an away session could neither cut a worktree nor run the approved check list.
 
 ## [0.3.0] - 2026-11-15
 

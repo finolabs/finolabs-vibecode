@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Local afk lease, action classification and private action log; no execution.
 
-Rule table (each row names its enforcer; unknown input always fails closed):
+Rule table (each row names its enforcer; unknown input fails closed unless a recorded away decision approved that exact
+request, row `decided` below):
 
 | Rule | Enforcer |
 | --- | --- |
@@ -31,7 +32,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
 | Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths; every path rule (roots, documents, protected names, links) applies to the operand's path relative to the checkout root of the check's validated identity, read from cwd, and with no identity no path is known | classify_paths, repository_path |
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
-| Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run` or `run --changed [--base <branch or commit>]` (no relative revision) with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
+| Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run`, `run --changed [--base <branch or commit>]` (no relative revision) or `run --dispatch <dispatch id>` with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
 | An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, one of the allowlisted shapes: a script of this checkout, make, npm/pnpm/yarn/bun test, run and declared installs, python scripts and listed -m modules, cargo verbs without --config, go verbs with listed flags and local packages, declared pip, uv, poetry and bundle installs, listed git verbs and flags, listed gh group and verb pairs, or this install's delegated run) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, shape_decidable, dispatch_prefix, decidable_paths, request_subject, open_approvals |
 | Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge and review-fallback kinds only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
@@ -885,11 +886,14 @@ def script_command(argv, applied):
 
 def checks_command(tail, applied):
     """This install's checks.py on the repository's approved check list (written only by setup): `show`, `run`, or
-    `run --changed [--base <branch or commit>]` (no relative revision such as `HEAD~1`), in a found repository with user or project settings; never `--dispatch` (a
-    verification receipt) or `usage`."""
+    `run --changed [--base <branch or commit>]` (no relative revision such as `HEAD~1`), or `run --dispatch <dispatch id>`
+    (owner decision 15/11/2026: accepting a delegated run needs its receipt, which checks.py writes only after the whole
+    list passes on a clean tree at an unmoved head), in a found repository with user or project settings; never `usage`."""
     if context_of(applied).state not in ('user', 'project'):
         return 'unknown'
     if tail in (['show'], ['run'], ['run', '--changed']):
+        return 'allowed'
+    if len(tail) == 3 and tail[:2] == ['run', '--dispatch'] and DISPATCH_ID.fullmatch(tail[2]):
         return 'allowed'
     if (len(tail) == 4 and tail[:3] == ['run', '--changed', '--base'] and BRANCH.fullmatch(tail[3])
             and not tail[3].startswith('-') and '..' not in tail[3]):

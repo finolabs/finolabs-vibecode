@@ -15,8 +15,9 @@ import data_root as dr
 
 PLUGIN = "finolabs-vibecode"
 PRINCIPLE = "A file that says something is on is not proof that it runs."
-# Required sections; Effort preference, Delegation mode, Routing and ZCode are optional.
-HEADINGS = {"Limits", "Briefs folder", "Coordinators and reach", "Route judgment",
+# Required sections; Effort preference, Delegation mode, Routing and ZCode are optional, and the `## Limits` section
+# retired in 0.2.5 (nothing reads it) is optional too, so a host config that dropped it stays complete.
+HEADINGS = {"Briefs folder", "Coordinators and reach", "Route judgment",
             "Dispatch marker", "Claude Code", "Codex", "Antigravity",
             "Review posting", "Delegate environment"}
 MAX_BYTES = 262144
@@ -33,6 +34,8 @@ RENAMED = {"fnl-" + name: target for name, target in (
 # Skills renamed again in 0.2.5: session-hygiene stays a user-only alias of tidy; autopilot was dropped for afk,
 # so it and its fnl- name no longer load at all.
 RENAMED.update({"session-hygiene": "tidy", "autopilot": "afk"})
+# The plain older names `verification` and `ask` stay out: they are ordinary words in prose, so matching them would
+# flag most instruction files; their fnl- forms above are mapped.
 DROPPED = {"autopilot", "fnl-autopilot"}
 
 

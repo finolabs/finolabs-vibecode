@@ -536,7 +536,7 @@ class CheckupTest(unittest.TestCase):
         self.assertEqual(self.setup_item("agent skills")["status"], "missing")
 
     def test_required_headings_and_override(self):
-        config = self.write(self.base / "custom.md", "## Limits\n")
+        config = self.write(self.base / "custom.md", "## Limits\n## Coordinators and reach\n")
         self.env["ORCHESTRATION_HOST_CONFIG"] = str(config)
         row = self.setup_item("host config")
         self.assertEqual(row["status"], "missing")
@@ -547,8 +547,11 @@ class CheckupTest(unittest.TestCase):
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)))
         self.assertEqual(self.setup_item("host config")["status"], "ok")
         template = (ROOT / "skills/delegate/references/host-template.md").read_text()
-        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Heavy jobs", "ZCode"})
+        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Heavy jobs", "ZCode", "Machine rules"})
         self.assertNotIn("ZCode", checkup.HEADINGS)  # host configs written before ZCode stay complete
+        self.assertNotIn("Limits", checkup.HEADINGS)  # retired in 0.2.5: a host config without it is complete
+        config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)) + "\n## Machine rules\n")
+        self.assertEqual(self.setup_item("host config")["status"], "ok")
         for heading in ("Review posting", "Delegate environment"):
             with self.subTest(heading=heading):
                 config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS - {heading})))
@@ -594,7 +597,7 @@ class CheckupTest(unittest.TestCase):
         template = (ROOT / "skills/delegate/references/host-template.md").read_text()
         headings = re.findall(r"^## (.+)$", template, re.M)
         expected = ['Delegation mode', 'Routing', 'Agents on this machine', 'Delegate environment',
-                    'Review posting', 'Quota probe', 'Limits', 'Heavy jobs',
+                    'Review posting', 'Quota probe', 'Machine rules', 'Heavy jobs',
                     'Effort preference', 'Briefs folder', 'Coordinators and reach', 'Route judgment',
                     'Dispatch marker', 'Claude Code', 'Codex', 'Antigravity', 'ZCode']
         self.assertEqual(headings, expected)
@@ -718,7 +721,7 @@ class CheckupTest(unittest.TestCase):
         legacy = self.write(self.home / ".config/finolabs-vibecode/host.md", headings)
         self.env.pop("XDG_CONFIG_HOME", None)
         self.assertEqual(self.setup_item("host config")["status"], "missing")
-        self.write(self.home / ".finolabs/vibecode/host.md", "## Limits\n")
+        self.write(self.home / ".finolabs/vibecode/host.md", "## Coordinators and reach\n")
         self.assertEqual(self.setup_item("host config")["status"], "missing")
         legacy.unlink()
 

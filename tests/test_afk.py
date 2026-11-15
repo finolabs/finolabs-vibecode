@@ -2841,10 +2841,13 @@ class AwayFlowTest(AfkBase):
         self.start(SETUP + '- Max actions per hour: 1000\n')
         self.cwd, _ = self.git_repo('checking')
         checks = ['python3', '-I', str(ROOT / 'skills/checks/scripts/checks.py')]
-        for tail in (['run'], ['run', '--changed'], ['run', '--changed', '--base', 'origin/main'], ['show']):
+        # A delegated run's receipt (owner decision 15/11/2026): checks.py writes it only after a full clean pass.
+        for tail in (['run'], ['run', '--changed'], ['run', '--changed', '--base', 'origin/main'], ['show'],
+                     ['run', '--dispatch', 'd20261115-101500-ab12']):
             with self.subTest(tail=tail):
                 self.check(checks + tail)
-        for tail in (['run', '--dispatch', 'abc'], ['run', '--base', 'origin/main'], ['run', '--changed', '--base', '-x'],
+        for tail in (['run', '--dispatch', 'abc'], ['run', '--dispatch', 'd20261115-101500-ab12', '--changed'],
+                     ['run', '--changed', '--dispatch', 'd20261115-101500-ab12'], ['run', '--base', 'origin/main'], ['run', '--changed', '--base', '-x'],
                      ['run', '--changed', '--base', 'a..b'], ['usage', '--from', 'runs.json'], [], ['run', 'extra']):
             with self.subTest(tail=tail):
                 self.check(checks + tail, tier=3, code='unknown')
