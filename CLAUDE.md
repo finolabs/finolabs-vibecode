@@ -58,3 +58,7 @@ Standing relay (owner, 02/11/2026): when one model family wrote a pull request, 
 ## Commits
 
 Follow `skills/commit-messages/SKILL.md`: atomic commits, imperative subject lines, no secrets, env files or generated output.
+
+## Agent skills
+
+This repository uses the finolabs-vibecode skills. Routing on: use `coding-router`. Pull requests follow `review-gate` "Pull requests"; reviewers may post code/security reviews. Pull requests may take the low-risk lane of `review-gate`. Help: `/finolabs-vibecode:help` (Codex `$help`).
