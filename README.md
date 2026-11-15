@@ -63,7 +63,7 @@ One request, from your words to a merged pull request: the router picks depth an
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/request-to-merge-dark.png">
-    <img src="assets/request-to-merge-light.png" alt="Swimlane of one coding request: you describe it; the coding router names the session and picks depth and gates; delegate picks an agent from the assignment matrix and records the dispatch; another agent builds it; checks rerun the tests and write a receipt; reviewers of another model family post code and security markers; the merge waits for your go and merge_check.py; the agent removes the worktree and branch it created and lists the rest; the release waits for you." width="920">
+    <img src="assets/request-to-merge-light.png" alt="Swimlane of one coding request: you describe it; when the idea is unclear, shape interviews you first; the coding router names the session and picks depth and gates; delegate picks an agent from the assignment matrix and records the dispatch; another agent builds it in one worktree per branch while the main checkout stays on the default branch; checks rerun the tests and write a receipt; reviewers of another model family post code and security markers; the merge waits for your go and merge_check.py; the agent removes the worktree and branch it created and lists the rest; the release waits for you." width="920">
   </picture>
 </p>
 
@@ -137,7 +137,7 @@ The agent loads `handoff` directly through `delegate`, proposes `advisor` for on
 | Skill | Use it when |
 | --- | --- |
 | `coding-router` | Starting or resuming any coding work, in any repository: depth (MIN, NORMAL, DEEP), review and security gates, proof, the stop-before-a-third-fix checkpoint, and a workflow path for Spec Kit (with its depth gate), mattpocock/skills, obra/superpowers, or none. |
-| `tidy` | Keeping sessions healthy: naming the session, context pressure, phase changes, stale titles, handovers, and remembering or recalling decisions, lessons and project state in one shared knowledge base (Orrery or an Obsidian vault); code facts stay in the repository. Opt-in Claude Code/Antigravity context snapshots, or the on-request Claude Code/Codex context probe, feed the compaction steward; on Claude Code the compaction nudge asks for it at 80% and 90% of the threshold. |
+| `tidy` | Keeping sessions healthy: naming the session, context pressure, phase changes, stale titles, handovers, and remembering or recalling decisions, lessons and project state in one shared knowledge base (Orrery or an Obsidian vault); code facts stay in the repository. Opt-in Claude Code/Antigravity context snapshots, or the on-request Claude Code/Codex context probe, feed the compaction steward; on Claude Code and Codex the compaction nudge asks for it at 80% and 90% of the threshold. |
 | `delegate` | Handing work to other agents (Claude Code, Codex, Antigravity; ZCode for code and advice, see [Supported agents](#supported-agents)) and running it, coordinated from whichever one you run in: grading on five levels with one decision matrix (tier, effort, budget, who accepts), routing by agent and model through a dated capability map and the assignment matrix (`route_pick.py`), the configured judge, quota fallback, parallel runs up to the limit you set for each project, across any mix of agent families, time budgets, liveness from artifacts, the heavy-job lock, verify-before-accept, handover and the dispatch ledger; running a spec as a coordinator with one app session per task, standby sessions and review gates. |
 | `handoff` | Writing a self-contained brief and dispatching one task, or saving a handover through `tidy` so a later session or another agent continues the work. |
 | `shape` | Brainstorming, discussing or stress-testing an idea, plan or design, or unclear requirements before building: an interview in rounds where each question waits for the decisions it depends on and comes with a recommended answer, through the host's native question tool; nothing is acted on until you confirm the result. It runs first; `grilling` (`/grill-me`) runs when `shape` is missing or you ask for it by name. |
@@ -234,7 +234,7 @@ The following distinguishes shipped support from live delivery; local tests do n
 | Usage hooks | Bundled, opt-in | Bundled, opt-in; no skill/agent-use events | Separate previewed user hook, opt-in |
 | Context snapshot | Opt-in status-line command; desktop Code-tab delivery unverified | Not covered by this recorder | Opt-in status-line command; no startup Context line |
 | Context probe (on request, never a hook) | `/context` on a forked, unsaved copy of the session; live delivery unverified | App-server read of an idle thread; live delivery unverified | Not covered |
-| Compaction nudge | `UserPromptSubmit` hook, on by default, at 80% and 90% of the threshold; live delivery unverified | No declaration | No declaration (the opt-in compaction stop instead) |
+| Compaction nudge | `UserPromptSubmit` hook, on by default, at 80% and 90% of the threshold; live delivery unverified | `UserPromptSubmit` hook after trust, on by default, at 80% and 90% of `model_auto_compact_token_limit` (else 90% of the window); live delivery unverified | No declaration (the opt-in compaction stop instead) |
 | PreCompact summary instructions | Stdout feeds summary instructions | Plain stdout does not reach the model | No declaration |
 | Merge notice and dispatch nudge | `PostToolUse` line after `gh pr merge`; `UserPromptSubmit` line for this session's runs with no outcome | No declaration | No declaration |
 | Compaction handover re-injection | Declared on compact SessionStart; live order unverified | Declared on compact SessionStart; live order unverified | No automatic re-injection |
@@ -428,6 +428,13 @@ The trigger cases check that each skill fires on a representative prompt and tha
 One engineering practice for AI coding agents, packaged as a single plugin with a focused skill set. It tells an agent how to route a change, how deep to go, how to delegate to other agents and accept their work, how to commit, version and release, and which review and verification gates a change must pass.
 
 The [0.2.0 changes](CHANGELOG.md#020---2026-11-08) include [review roles, the navigator and verification receipts](docs/specs/agent-roles.md), [setup modes and companions](docs/specs/setup-restructure.md), [run hygiene](docs/specs/run-hygiene.md), [work records](docs/specs/work-tracking.md), [quota on demand](docs/specs/quota-on-demand.md) and [parallel slots](docs/specs/parallel-instances.md). [`route_task.py`](scripts/route_task.py) prints the delegation matrix's tier, effort, budget and family order; the coordinator still selects an available allowed model.
+
+Release 0.3.1 ([release record](docs/specs/release-0.3.1.md)):
+
+- **Compaction nudge on Codex.** The nudge that asks the agent to save a handover before compaction now runs on Codex too, at 80% and 90% of `model_auto_compact_token_limit` (else 90% of the window). Trust the plugin's hooks again with `/hooks` after the update.
+- **Away leases decide more, merge safer.** Under a lease, an unknown request of an allowlisted shape (a repository's CI script, `make` target, module test run) goes up the decision ladder and runs once if approved, instead of parking; a merge needs a recent MERGE OK receipt from `merge_check.py --independent`, bound to the repository it verified.
+- **Help for every skill.** `help` gains a page per skill, tips and troubleshooting.
+- **Hosted merge check.** `merge_check.py --ci-context` posts the merge check as a commit status a branch ruleset can require.
 
 Release 0.3.0 ([release record](docs/specs/release-0.3.0.md)):
 

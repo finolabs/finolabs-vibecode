@@ -24,6 +24,7 @@
 | [Release 0.2.5: scope](release-0.2.5.md) | released; tagged v0.2.5 on 2026-11-13; a real upgrade from 0.2.4 on a user's machine remains unverified. |
 | [Release 0.2.6: scope](release-0.2.6.md) | released; tagged v0.2.6 on 2026-11-14; a real upgrade from 0.2.5 on a user's machine remains unverified. |
 | [Release 0.3.0: scope](release-0.3.0.md) | released; tagged v0.3.0 on 2026-11-15; a real upgrade from 0.2.6 on a user's machine remains unverified. |
+| [Release 0.3.1: scope](release-0.3.1.md) | prepared; to be tagged v0.3.1 after the owner's yes. |
 | [Checks](checks.md) | implemented; in 0.2.4: `verification` became checks (alias kept until a later release removes it), a per-repository check list from `/setup add checks`, `checks.py run`, an optional pre-push hook, a cheaper cloud workflow and a labelled local receipt when cloud CI cannot run. |
 | [Update onboarding](update-onboarding.md) | implemented; in 0.2.4: per-release upgrade notes; `/update` updates and then walks the checklist (done, open, not applicable, skipped or unknown; the 0.2.4 items have no automatic check and show as unknown) through `setup`, and `/update whats-new` only shows it; the verified Codex refresh, latest by default or a chosen and pinnable version, and a release test that requires an entry. |
 | [Release 0.1.10: spec and plan](release-0.1.10.md) | released; the package table lists the pull request behind each package. |
@@ -39,7 +40,7 @@
 | [Run hygiene](run-hygiene.md) | implemented; release 0.2.0 brief lint, environment allowlists, guarded log scan/redaction and ledger states have local tests; real-host dispatch remains unverified and private HOME is deferred. |
 | [Context probe](context-probe.md) | implemented; release 0.2.5 `context_snapshot.py probe` for Claude Code and Codex with the session-start `Session id:` line, reusing the quota probe's confirmed executables; live delivery on a real host is unverified. |
 | [Ledger closure](ledger-closure.md) | accepted; owner decision 2026-11-12 ("all four in 0.2.5"); code and tests written on branch `ledger-closure`, tests not yet run, live-host hook delivery unverified. |
-| [Compaction nudge](compaction-nudge.md) | accepted; rule recorded as the eighth scoped exception in `CLAUDE.md` (owner decision 2026-11-12); no code yet. |
+| [Compaction nudge](compaction-nudge.md) | implemented; Claude Code in 0.2.5, Codex in 0.3.1 (PR 310); live delivery unverified on both hosts. |
 | [Context snapshot](context-snapshot.md) | implemented; release 0.2.0 local Claude Code and Antigravity status-line recorder, fresh context reads, steward checks and previewed settings writer; live status-line delivery and user-owned composition remain unverified. |
 | [Parallel agent instances](parallel-instances.md) | implemented; shared helper, setup, SessionStart, dashboard, CI copy group and documentation are integrated locally; targeted verification is recorded in the spec, while live-host scheduling and UI behavior remain unverified. |
 | [Heavy-job guard and test scope](heavy-jobs.md) | draft; `heavy_run.py` is implemented; the gate, its installer and the setup question are not; the gate exception is recorded in CLAUDE.md. |
