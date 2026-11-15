@@ -1,0 +1,84 @@
+name: Merge check
+
+# Posts the review gate's merge check (skills/review-gate/scripts/merge_check.py) as the
+# commit status `merge-check` on a pull request's head, so the main branch ruleset can
+# require it. Every trigger here runs the workflow and the script from the default
+# branch: no pull request code is checked out or run, and pull request text is read
+# only by merge_check.py, as data.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+  issue_comment:
+    types: [created, edited, deleted]
+  workflow_run:
+    workflows: [Validate]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: merge-check-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr || github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  merge-check:
+    # A comment counts only from a writer (merge_check.py checks that again), so only those re-run it.
+    if: >-
+      github.event_name != 'issue_comment' || (github.event.issue.pull_request &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Run the merge check and post its status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          PR_FROM_EVENT: ${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr }}
+          RUN_PRS: ${{ toJSON(github.event.workflow_run.pull_requests) }}
+        run: |
+          set -eu
+          if [ "$EVENT" = workflow_run ]; then
+            numbers=$(printf '%s' "$RUN_PRS" | python3 -I -c 'import json, sys; print(" ".join(str(p["number"]) for p in json.load(sys.stdin) or []))')
+          else
+            numbers=$PR_FROM_EVENT
+          fi
+          for number in $numbers; do
+            case "$number" in ''|*[!0-9]*) echo "not a pull request number"; exit 1;; esac
+            if [ "$(gh pr view "$number" --repo "$REPO" --json state --jq .state)" != OPEN ]; then
+              echo "pull request $number is not open; no status posted"
+              continue
+            fi
+            set +e
+            output=$(python3 -I skills/review-gate/scripts/merge_check.py "$number" --repo "$REPO" --ci-context merge-check)
+            code=$?
+            set -e
+            printf '%s\n' "$output"
+            head=$(printf '%s\n' "$output" | sed -n 's/^head \([0-9a-f]\{40\}\)$/\1/p' | head -n 1)
+            if [ -z "$head" ]; then
+              head=$(gh pr view "$number" --repo "$REPO" --json headRefOid --jq .headRefOid)
+            fi
+            case "$head" in *[!0-9a-f]*|'') echo "no head commit"; exit 1;; esac
+            [ ${#head} -eq 40 ] || { echo "no head commit"; exit 1; }
+            case "$code" in
+              0) state=success; description="Reviews, checks and marker pass at this head" ;;
+              3) state=pending; description="Waiting for hosted checks" ;;
+              1) state=failure; description="Blocked: see the merge-check run" ;;
+              *) state=error; description="Could not tell: see the merge-check run" ;;
+            esac
+            gh api "repos/$REPO/statuses/$head" -f state="$state" -f context=merge-check \
+              -f description="$description" -f target_url="$GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID" >/dev/null
+            echo "merge-check: $state at $head"
+          done

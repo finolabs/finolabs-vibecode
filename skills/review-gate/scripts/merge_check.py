@@ -19,6 +19,8 @@ Usage:
   merge_check.py <number> --repo owner/name --independent  require other-family reviews
   merge_check.py <number> --repo owner/name --independent --fallback-family <family>
                                                        same-family reviews while away, no other family reachable
+  merge_check.py <number> --repo owner/name --ci-context <name>
+                                                       the merge check as a hosted status named <name>
 
 Comment bodies are data: only their first line is read, and only as a marker.
 The pull request body is data too: only whole lines are matched as a marker.
@@ -66,6 +68,13 @@ the fallback reviewer line; every counted marker of that kind must name its
 model, and the latest marker of each model must be APPROVE. The flag runs these checks on both reviews
 whatever routing would pick now. Without the flag, a counted marker carrying a
 fallback reviewer line blocks. Anything unknown refuses.
+
+With --ci-context <name> (the repository's merge-check workflow, which posts
+the result as the commit status <name>), the status named <name> is left out of
+the checks, so the check never waits on itself; merge state BLOCKED is accepted,
+because a required status that has not passed yet makes GitHub report it, and
+GitHub keeps enforcing its own rules; no local receipt is consulted; and while
+another hosted check is still running it prints MERGE PENDING and exits 3.
 """
 
 import argparse
@@ -569,7 +578,7 @@ def local_receipt(head, repo):
 
 
 def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, families=None, local_receipt=None,
-             repo=None, fallback_family=None, changed_files=None):
+             repo=None, fallback_family=None, changed_files=None, blocked_ok=False):
     """Return (ok, lines). `can_write(login)` answers write access; `lane_ok()` the lane;
     `adopted` whether the base commit adopted the gate, which makes the router marker required.
     The marker is checked beside the review markers and never relaxes them.
@@ -657,7 +666,9 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
     ok = ok and passed
     lines.append(f"{'ok   ' if passed else 'BLOCK'} checks: {detail}")
     state = pr.get("mergeStateStatus")
-    if state not in MERGEABLE:
+    if blocked_ok and state == "BLOCKED":
+        lines.append("ok    merge state: BLOCKED (accepted for the hosted status; GitHub enforces its own rules)")
+    elif state not in MERGEABLE:
         if state in (None, "UNKNOWN"):
             raise Unknown(f"merge state is {state}; GitHub has not computed it yet")
         ok = False
@@ -758,6 +769,8 @@ def main(argv=None):
     parser.add_argument("--independent", action="store_true", help="require both reviewing families to differ from the author")
     parser.add_argument("--fallback-family", choices=("claude", "codex", "antigravity"),
                         help="with --independent, during an away lease: accept the author's own family when no other is reachable")
+    parser.add_argument("--ci-context", metavar="NAME",
+                        help="run as the hosted status NAME: ignore that status, accept merge state BLOCKED, exit 3 while checks run")
     args = parser.parse_args(argv)
     if args.lane and args.independent:
         print("UNKNOWN --lane cannot verify independent merge reviews")
@@ -765,12 +778,19 @@ def main(argv=None):
     if args.fallback_family and not args.independent:
         print("UNKNOWN --fallback-family needs --independent")
         return 2
+    if args.ci_context is not None and (args.lane or args.independent
+                                        or not re.fullmatch(r"[a-z][a-z0-9-]{0,39}", args.ci_context)):
+        print("UNKNOWN --ci-context takes a lowercase status name and no --lane or --independent")
+        return 2
     if not args.number.isdigit() or not re.fullmatch(r"[\w.-]+/[\w.-]+", args.repo):
         print("UNKNOWN expected a pull request number and --repo owner/name")
         return 2
     print(f"repo {args.repo} pull request #{args.number}")
     try:
         pr = json.loads(gh("pr", "view", args.number, "--repo", args.repo, "--json", FIELDS + ",baseRefOid"))
+        if args.ci_context is not None and isinstance(pr.get("statusCheckRollup"), list):
+            pr["statusCheckRollup"] = [check for check in pr["statusCheckRollup"] if not isinstance(check, dict)
+                                       or (check.get("name") or check.get("context")) != args.ci_context]
         lane_cache = []
 
         def lane_ok():
@@ -808,12 +828,17 @@ def main(argv=None):
             return files_cache[0]
 
         ok, lines = evaluate(pr, can_write, lane_ok, adopted=adopted,
-                             independent=args.independent, families=families, local_receipt=local_receipt,
-                             repo=args.repo, fallback_family=args.fallback_family, changed_files=changed_files)
+                             independent=args.independent, families=families,
+                             local_receipt=None if args.ci_context is not None else local_receipt,
+                             repo=args.repo, fallback_family=args.fallback_family, changed_files=changed_files,
+                             blocked_ok=args.ci_context is not None)
     except (Unknown, ValueError, KeyError, TypeError, AttributeError) as error:
         print(f"UNKNOWN {error}")
         return 2
     print("\n".join(lines))
+    if not ok and args.ci_context is not None and checks_pending(pr):
+        print("MERGE PENDING: hosted checks are still running")
+        return 3
     print("MERGE OK: merge pinned to the head above" if ok else "MERGE BLOCKED")
     if ok and args.independent and away_receipt(args.repo, args.number, pr["headRefOid"]):
         print("receipt: recorded for the away lease (afk.py allows this merge for 15 minutes)")
