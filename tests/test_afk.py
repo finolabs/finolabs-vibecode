@@ -2142,6 +2142,8 @@ class SecurityRoundOneTest(AfkBase):
         repo, git = self.git_repo('commits')
         self.cwd = repo
         self.check(['git', 'commit', '-m', 'Fix example'], tier=3, code='protected')
+        git('checkout', '-q', '--detach')  # a detached head is not a work branch
+        self.check(['git', 'commit', '-m', 'Fix example'], tier=3, code='protected')
         git('symbolic-ref', 'HEAD', 'refs/heads/feature')
         self.check(['git', 'commit', '-m', 'Fix example'])
         git('symbolic-ref', 'refs/heads/alias', 'refs/heads/main')
