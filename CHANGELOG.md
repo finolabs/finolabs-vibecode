@@ -16,6 +16,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- `versioning` ends every release with `tidy`: once the tag, the forge release, the `-dev` bump and any approved catalog pull request are done, the agent saves the handover, writes back the release's owner decisions and lessons, and renames or retires the session; `tidy` counts a finished release as a natural boundary (owner decision, 15/11/2026; advisory).
 - Breaking: `## Agent levels` in the host config is no longer read (owner decision, 15/11/2026). The assignment matrix is the only source of levels; without a valid matrix no levels are set and routing falls to the strength table. `levels_setup.py` and the setup reference `levels.md` are removed; `matrix_setup.py migrate` is the only reader left, so `/setup add delegation` still moves the levels into the matrix. `/setup check` reports a leftover section as no longer read with that fix, and the update checklist gains the `0.3.1/agent-levels-retired` note.
 - Breaking: the verification aliases (`verification` and its older `fnl-` name) are removed; type `checks` (owner decision, 15/11/2026).
 - afk: `git commit` under a lease is Tier 1 only on a work branch; on the default branch it answers `protected` (owner decision, 15/11/2026).
