@@ -1,6 +1,6 @@
 # Release 0.3.1: scope
 
-Status: accepted; prepared, to be tagged v0.3.1 after the owner's yes.
+Status: released; tagged v0.3.1 on 2026-11-15; live delivery of the Codex nudge and a real upgrade from 0.3.0 on a user's machine remain unverified.
 
 ## What shipped
 
