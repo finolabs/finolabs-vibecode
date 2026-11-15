@@ -5,3 +5,33 @@ The user asks what is in the plugin, or what exists for a purpose. Read [map.md]
 The current agent set is `fnl-reviewer`, `fnl-security-reviewer` and `fnl-navigator`. When explaining automation, distinguish fixed session-start state from observed live-host behavior, optional on-demand quota from a background timer, and verification receipts from the coordinator’s acceptance decision.
 
 The map lists every distinct script with its full-plugin path, including skill-only helpers. The map describes files shipped, not host capabilities: Claude Code user-only flags do not prove invocation-policy parity on Codex or Antigravity. Review agents forbid project edits by instruction; an authorized post uses a private draft.
+
+## Skill pages
+
+One short page per skill: what it does, when to use it, the command on each host and a few tips. Read the skill's own `SKILL.md` before answering in detail; the page is a summary and the skill file wins where they differ.
+
+- [`advisor`](skills/advisor.md)
+- [`afk`](skills/afk.md)
+- [`ask`](skills/ask.md)
+- [`brb`](skills/brb.md)
+- [`checks`](skills/checks.md)
+- [`coding-router`](skills/coding-router.md)
+- [`commit-messages`](skills/commit-messages.md)
+- [`delegate`](skills/delegate.md)
+- [`gtg`](skills/gtg.md)
+- [`handoff`](skills/handoff.md)
+- [`help`](skills/help.md)
+- [`open-source-review`](skills/open-source-review.md)
+- [`pause`](skills/pause.md)
+- [`plugin-packaging`](skills/plugin-packaging.md)
+- [`restore-point`](skills/restore-point.md)
+- [`review-gate`](skills/review-gate.md)
+- [`security-review-gate`](skills/security-review-gate.md)
+- [`session-hygiene`](skills/session-hygiene.md)
+- [`setup`](skills/setup.md)
+- [`shape`](skills/shape.md)
+- [`status`](skills/status.md)
+- [`tidy`](skills/tidy.md)
+- [`update`](skills/update.md)
+- [`verification`](skills/verification.md)
+- [`versioning`](skills/versioning.md)
