@@ -19,6 +19,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- afk: a merge pin and the merged head it allows name the repository the merge check verified, so a worktree of a fork or mirror with the same head is not removed; a full away log refuses a merge (`log-unwritable`) before an action is reserved; a work-tree git command checked without a working folder is protected instead of judged from the process's folder.
 - afk: a lease merges only after `merge_check.py --independent` printed MERGE OK for that pull request, head and repository within 15 minutes. MERGE OK writes a private receipt during the lease, and `afk.py check` answers `merge-unchecked` (Tier 3) for a `gh pr merge` without one; before, the merge gate's MERGE OK was agent judgment. A worktree's removal needs the head an allowed merge check pinned, so it now also follows a recorded MERGE OK (owner decision, 15/11/2026).
 - `readme_check.py` reads only regular files inside the repository, each at most 1 MiB, so a link to a FIFO or `/dev/zero` no longer hangs it or exhausts memory (exit 2 instead), and a `hosts` override that leaves out a manifest folder that still ships fails H1 instead of skipping that manifest's checks.
 - The host config template no longer creates the retired `## Limits` section, whose bare heading `parallel_slots.py check-config` reports as legacy: its machine notes move to `## Machine rules`, and the parallel-limit lines left under `## Heavy jobs` are removed.

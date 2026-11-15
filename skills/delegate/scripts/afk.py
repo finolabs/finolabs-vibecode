@@ -26,12 +26,12 @@ request, row `decided` below):
 | The project values (five, plus the three limits) start strict, where the user limits apply; a positively absent approval gives user values; an approved valid `autopilot` object whose record carries this checkout's full identity digest and whose recorded origin binding equals origin now replaces them key by key; anything else stays strict; the lease hash covers host.md only | effective, project_store.autopilot_binding, project_store.bound |
 | PR merge/create/edit/comment need exactly one `--repo github.com/OWNER/NAME` equal to the verified target; create needs one validated `--head`; implicit targets are Tier 3 | target_check, head_check, project_store.origin_target |
 | Title and body values of PR create/edit/comment, and `git commit -m` messages, are data (one exact `fnl-router` line included): newlines, tabs and a leading `-` pass; other controls, a backtick, `$(` and `$` before a letter, `_` or `{` deny; a review gate marker (`<!--`, optional space, `fnl-`) is `forbidden`; a secret, machine path or sensitive assignment is `unsafe`; one `--body-file` (gh) or `-F` (git commit) must be a regular file of at most 64 KiB inside the check's own checkout, outside the data root, with no link from that root down, whose text passes the control, marker, secret and path screens, read only for that verdict; comments follow `Repository comments` | text_values, text_ok, file_place, body_file, pr_text, commit_text |
-| With Merge yes: `git worktree remove [--] <path>` of a linked worktree of this repository whose HEAD is a full SHA a `log --kind merge --pr <number> --head` entry of this lease recorded, itself refused unless an allowed `gh pr merge` check of this lease pinned that number and head (never forced, the main checkout, the current checkout or a worktree holding this install) and `git branch -d [--] <branch>` (never -D, the current or a default branch) are Tier 1; `git rm [-r] [-q] [--] <paths>` on a work branch classifies each path like a change | worktree_remove, head_commit, merged_heads, branch_delete, tracked_remove |
+| With Merge yes: `git worktree remove [--] <path>` of a linked worktree of this repository whose HEAD is a full SHA a `log --kind merge --pr <number> --head` entry of this lease recorded for this repository's verified target, itself refused unless an allowed `gh pr merge` check of this lease pinned that number and head (never forced, the main checkout, the current checkout or a worktree holding this install) and `git branch -d [--] <branch>` (never -D, the current or a default branch) are Tier 1; `git rm [-r] [-q] [--] <paths>` on a work branch classifies each path like a change | worktree_remove, head_commit, merged_heads, branch_delete, tracked_remove |
 | `git worktree add -b <branch> <path> [origin/<default>]` is Tier 1 when the path is a new folder directly under the main checkout's `.claude/worktrees` (a plain, unprotected name; no link at `.claude` or `.claude/worktrees`), the one token spared the lexical check, and the branch passes `new_branch` | own_worktree_path, own_worktree_index, worktree_add |
 | `effective` prints the same context read-only for the advisory Task choice and Trusted authors | show_effective |
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
 | Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths; every path rule (roots, documents, protected names, links) applies to the operand's path relative to the checkout root of the check's validated identity, read from cwd, and with no identity no path is known | classify_paths, repository_path |
-| PR create/edit require push permission; PR merge requires Merge=yes, one full --match-head-commit SHA and a MERGE OK receipt for that number and head under 15 minutes old (`merge_check.py --independent`, else `merge-unchecked`) | classify_argv |
+| PR create/edit require push permission; PR merge requires Merge=yes, one full --match-head-commit SHA and a MERGE OK receipt for that number and head under 15 minutes old (`merge_check.py --independent`, else `merge-unchecked`); its pin names the repository and is written before the action is reserved (a full log answers `log-unwritable`) | classify_argv, check |
 | Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run`, `run --changed [--base <branch or commit>]` (no relative revision) or `run --dispatch <dispatch id>` with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
 | An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, one of the allowlisted shapes: a script of this checkout, make, npm/pnpm/yarn/bun test, run and declared installs, python scripts and listed -m modules, cargo verbs without --config, go verbs with listed flags and local packages, declared pip, uv, poetry and bundle installs, listed git verbs and flags, listed gh group and verb pairs, or this install's delegated run) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, shape_decidable, dispatch_prefix, decidable_paths, request_subject, open_approvals |
@@ -1547,8 +1547,10 @@ def classify_argv(argv, applied, coordinator=None):
         verb, tail = argv[1], argv[2:]
         if verb in WORK_TREE_VERBS:
             context = context_of(applied)
-            if install_owned('.', context.cwd or os.getcwd()):
-                return 'protected'  # changes this install's own files without naming a path (a merge, a commit)
+            if context.cwd is None or install_owned('.', context.cwd):
+                # Changes this install's own files without naming a path (a merge, a commit); a context without its
+                # own working folder (an error path) is never judged from the process's folder instead.
+                return 'protected'
         if verb == 'push':
             if any(t.startswith(('--force', '--delete', '--mirror', '--all', '--tags')) or t.startswith('+')
                    or t in {'-f', '-d'} for t in tail):
@@ -1714,7 +1716,7 @@ def classified(folder, argv_json, paths, coordinator, current):
             code, key, entry = project_limit(lease, applied, current)
         if code is None:
             if isinstance(argv, list) and argv[:3] == ['git', 'worktree', 'remove']:
-                applied[MERGED] = merged_heads(folder, lease, current)
+                applied[MERGED] = merged_heads(folder, lease, current, context_of(applied).target)
             if isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
                 applied[MERGE_OK] = merge_receipts(folder, current)
             if argv_json is not None:
@@ -1735,6 +1737,11 @@ def check(folder, args):
             code = 'decided'
             append_log(folder, dict(time=current, tier=1, kind='approval-used', subject=subject, note=''), current)
     # Only a Tier 1 answer reserves an action (and, for a ledger start, a run); a denied check costs nothing.
+    if code in {'allowed', 'decided'} and isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
+        try:  # the pin first: a full or invalid log refuses the merge before an action is reserved
+            append_log(folder, merge_pin(argv, current, context_of(applied).target), current)
+        except (OSError, ValueError, UnicodeError):
+            code = 'log-unwritable'
     if code in {'allowed', 'decided'}:
         entry['actions'] += 1
         entry['hour_actions'].append(current)
@@ -1744,8 +1751,6 @@ def check(folder, args):
             entry['runs'] += 1
         lease['counters'][key] = entry
         save_lease(folder, lease)
-        if isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
-            append_log(folder, merge_pin(argv, current), current)
     tier = 1 if code in {'allowed', 'decided'} else 3
     result = {'tier': tier, 'code': code}
     if code in ENDED:
@@ -1755,16 +1760,17 @@ def check(folder, args):
     return tier
 
 
-def merged_heads(folder, lease, current):
-    """The full head SHAs that `log --kind merge --pr <number> --head` entries recorded during this lease; empty on any doubt."""
+def merged_heads(folder, lease, current, target):
+    """The full head SHAs that `log --kind merge --pr <number> --head` entries recorded during this lease for the
+    repository `target`; empty on any doubt, for an entry without a repository and with no verified target."""
     try:
         raw = read_private(folder, 'log.jsonl', MAX_LOG) or b''
         heads = set()
         for line in raw.splitlines():
             entry = json.loads(line)
             if (isinstance(entry, dict) and entry.get('kind') == 'merge' and isinstance(entry.get('head'), str)
-                    and SHA.fullmatch(entry['head']) and finite(entry.get('time'))
-                    and lease['start'] <= entry['time'] <= current):
+                    and SHA.fullmatch(entry['head']) and finite(entry.get('time')) and target is not None
+                    and entry.get('repo') == target and lease['start'] <= entry['time'] <= current):
                 heads.add(entry['head'])
         return heads
     except (OSError, ValueError, UnicodeError, TypeError, KeyError):
@@ -1972,8 +1978,11 @@ def log(folder, args):
         fields['head'] = args.head
     if args.kind == 'review-fallback' and (args.pr is None or args.head is None):
         raise Refusal('--kind review-fallback needs --pr and --head')
-    if args.kind == 'merge' and args.head is not None and (fields['pr'], args.head) not in merge_pins(folder, current):
-        raise Refusal('--head matches no allowed `gh pr merge` check of this lease')
+    if args.kind == 'merge' and args.head is not None:
+        repos = {repo for pr, head, repo in merge_pins(folder, current) if (pr, head) == (fields['pr'], args.head)}
+        if len(repos) != 1:
+            raise Refusal('--head matches no allowed `gh pr merge` check of this lease, or matches checks of two repositories')
+        fields['repo'] = repos.pop()  # the merged head counts only in the repository the merge check named
     note = safe_note(args.note or '')
     subject = None
     if args.kind == 'decision' and (args.approve_argv_json is not None or args.approve_paths is not None):
@@ -2007,7 +2016,7 @@ def append_log(folder, record, current):
     write_private(folder, 'log.jsonl', payload)
 
 
-def merge_pin(argv, current):
+def merge_pin(argv, current, target):
     """The `merge-pin` record of an allowed `gh pr merge <n> --match-head-commit <sha>` check (classify_argv has
     already required one number operand and one full pin)."""
     tail = argv[3:]
@@ -2015,11 +2024,12 @@ def merge_pin(argv, current):
                                  {'--match-head-commit', '--repo', '-R'}))
     head = next(t.split('=', 1)[1] if t.startswith('--match-head-commit=') else tail[i + 1]
                 for i, t in enumerate(tail) if t == '--match-head-commit' or t.startswith('--match-head-commit='))
-    return dict(time=current, tier=1, kind='merge-pin', pr=int(pr), head=head, note='')
+    return dict(time=current, tier=1, kind='merge-pin', pr=int(pr), head=head, repo=target, note='')
 
 
 def merge_pins(folder, current):
-    """The (pull request, head) pairs that allowed `gh pr merge` checks of the live lease pinned; empty on any doubt."""
+    """The (pull request, head, repository) triples that allowed `gh pr merge` checks of the live lease pinned; empty on
+    any doubt. A pin without a repository (written before 0.3.1) pins nothing."""
     try:
         lease = read_lease(folder)
         if lease is None or read_private(folder, 'stop') is not None or not lease['start'] <= current < lease['expiry']:
@@ -2029,8 +2039,9 @@ def merge_pins(folder, current):
             entry = json.loads(line)
             if (isinstance(entry, dict) and entry.get('kind') == 'merge-pin' and type(entry.get('pr')) is int
                     and isinstance(entry.get('head'), str) and SHA.fullmatch(entry['head'])
+                    and isinstance(entry.get('repo'), str)
                     and finite(entry.get('time')) and lease['start'] <= entry['time'] <= current):
-                pins.add((entry['pr'], entry['head']))
+                pins.add((entry['pr'], entry['head'], entry['repo']))
         return pins
     except (OSError, ValueError, UnicodeError, TypeError, KeyError):
         return set()
