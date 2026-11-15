@@ -27,7 +27,7 @@ Propose an advisor and wait for the user's yes, because each run spends quota. P
 2. Otherwise prefer contrast: a model family other than the one you run on (`delegate` `references/models.md`). Three families are on offer: Claude (Claude Code), GPT (Codex) and Gemini (Antigravity Argon). Running on Claude, ask Codex or Argon; running on Codex, ask Claude Code or Argon; running on Antigravity, ask Claude Code or Codex. All read-only. The tier follows the question's difficulty: strong for an easy or medium question (a mid-priced model is enough), frontier for a hard or very hard one.
 3. When one family is out of quota or unreachable, try the other family, and each of its models. Use a subagent of your own host with fresh context only when every model of both other families is out of quota or unreachable, and say that the opinion comes from the same family.
 
-Load the `delegate` skill and the host config for the invocation commands and read-only flags. Requires the `delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill delegate`, or install the whole plugin) and stop.
+Load the `delegate` skill and the host config for the invocation commands and read-only flags. Requires the `delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add finolabs/vibecode --skill delegate`, or install the whole plugin) and stop.
 
 ## The briefing
 

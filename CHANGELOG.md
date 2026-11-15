@@ -16,6 +16,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- The repository moved to `finolabs/vibecode` (owner decision, 15/11/2026); the plugin keeps its name, `finolabs-vibecode`, so commands, the catalog entry and installs are unchanged. Links, install commands and the update check's release endpoint use the new path. An install of 0.3.0 or earlier stops seeing update notices, because its update check follows no redirect: update it once by hand with the host's update command.
 - `versioning` ends every release with `tidy`: once the tag, the forge release, the `-dev` bump and any approved catalog pull request are done, the agent saves the handover, writes back the release's owner decisions and lessons, and renames or retires the session; `tidy` counts a finished release as a natural boundary (owner decision, 15/11/2026; advisory).
 - Breaking: `## Agent levels` in the host config is no longer read (owner decision, 15/11/2026). The assignment matrix is the only source of levels; without a valid matrix no levels are set and routing falls to the strength table. `levels_setup.py` and the setup reference `levels.md` are removed; `matrix_setup.py migrate` is the only reader left, so `/setup add delegation` still moves the levels into the matrix. `/setup check` reports a leftover section as no longer read with that fix, and the update checklist gains the `0.3.1/agent-levels-retired` note.
 - Breaking: the verification aliases (`verification` and its older `fnl-` name) are removed; type `checks` (owner decision, 15/11/2026).
@@ -469,7 +470,7 @@ This release makes delegated work easier to direct, review and check, with a sho
 
 ### What to do
 
-- Update the plugin through your host's plugin update (the new update check, on by default, will tell you from now on; type `/fnl-update`, `$fnl-update` on Codex), or on Antigravity reinstall with `agy plugin install https://github.com/finolabs/finolabs-vibecode`. Claude Code needs a restart; Codex hooks need your trust again.
+- Update the plugin through your host's plugin update (the new update check, on by default, will tell you from now on; type `/fnl-update`, `$fnl-update` on Codex), or on Antigravity reinstall with `agy plugin install https://github.com/finolabs/vibecode`. Claude Code needs a restart; Codex hooks need your trust again.
 - Delegation mode defaults to `suggest` (the agent names who could take a task and waits for your yes). Use `/fnl-set-mode` (`$fnl-set-mode` on Codex) to see or change it and Routing, and `/fnl-scan-agents` to refresh present families and confirmed models.
 - The update check makes one GitHub request every 24 hours. Set `FNL_UPDATE_CHECK=off` to stop it; see `PRIVACY.md`.
 - Run `/fnl-setup` and choose Check to see what runs on its own on your host and what is unverified.
@@ -498,7 +499,7 @@ This release makes delegated work easier to direct, review and check, with a sho
 
 ### What to do
 
-- Update the plugin through your host's plugin update, or on Antigravity reinstall with `agy plugin install https://github.com/finolabs/finolabs-vibecode`.
+- Update the plugin through your host's plugin update, or on Antigravity reinstall with `agy plugin install https://github.com/finolabs/vibecode`.
 - Usage metrics are off until you consent. To turn them on, run setup (`/fnl-setup`, or `$fnl-setup` on Codex) and answer section F; on Codex also trust the plugin's hooks once with `/hooks`. Nothing else is required, and your existing ledger, host config and `.orchestration/` folders keep working where they are.
 
 ## [0.1.5] - 2026-11-03
@@ -509,7 +510,7 @@ This release makes delegated work easier to direct, review and check, with a sho
 
 ### What to do
 
-- On Antigravity, reinstall with `agy plugin install https://github.com/finolabs/finolabs-vibecode`; `agy plugin list --json` should show three agents.
+- On Antigravity, reinstall with `agy plugin install https://github.com/finolabs/vibecode`; `agy plugin list --json` should show three agents.
 
 ## [0.1.4] - 2026-11-03
 
@@ -582,7 +583,7 @@ These two steps would make this a minor release under `fnl-versioning`; the owne
 
 - `fnl-coding-router`'s Spec Kit depth gate lets a user story go from an accepted plan straight to implementation, skipping `speckit-tasks`, also when it makes a small, contained contract change that a security review covers; security, privacy, permission, migration, dependency and irreversible boundaries still go through tasks. A direct path is accepted by `fnl-verification` against each acceptance criterion and the two posted reviews, and `fnl-review-gate`'s reviewer packet carries the story's acceptance criteria and `plan.md` when Spec Kit is in use. A direct path runs no separate analyze or converge step. Two behavior evals guard it: an additive response field goes direct (it passes without the plugin too), and a new filter parameter that reaches a query goes to tasks (2/2 with the plugin, 0/2 without).
 - Claude Code and Codex install the plugin from the FINOLABS catalog, `finolabs/plugins` (`finolabs-vibecode@finolabs`), which groups the FINOLABS plugins under one name; the repository's own marketplace stays for existing installs. The manifests name FINOLABS as author and developer. The agent install steps check for an existing install before adding the catalog.
-- The repository moved to `github.com/finolabs/finolabs-vibecode`; links, manifests and install commands use the new address, and GitHub redirects the old one.
+- The repository moved to `github.com/finolabs/vibecode`; links, manifests and install commands use the new address, and GitHub redirects the old one.
 - `fnl-delegate`, the delegation host template and agent contracts use that title format.
 - `fnl-verifier` counts a review marker only from an author with write access, like the merge check, which now names the permission values GitHub returns.
 - `fnl-advisor` names Antigravity among the agents it can ask, in its description and argument hint.
@@ -653,23 +654,23 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/finolabs-vibecode/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.6...v0.3.0
-[0.2.6]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.5...v0.2.6
-[0.2.5]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.4...v0.2.5
-[0.2.4]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.3...v0.2.4
-[0.2.3]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.2...v0.2.3
-[0.2.2]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.1...v0.2.2
-[0.2.1]: https://github.com/finolabs/finolabs-vibecode/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.10...v0.2.0
-[0.1.10]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.9...v0.1.10
-[0.1.9]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.8...v0.1.9
-[0.1.8]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.7...v0.1.8
-[0.1.7]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.6...v0.1.7
-[0.1.6]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.5...v0.1.6
-[0.1.5]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.4...v0.1.5
-[0.1.4]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.3...v0.1.4
-[0.1.3]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.2...v0.1.3
-[0.1.2]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/finolabs/finolabs-vibecode/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/finolabs/finolabs-vibecode/releases/tag/v0.1.0
+[Unreleased]: https://github.com/finolabs/vibecode/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/finolabs/vibecode/compare/v0.2.6...v0.3.0
+[0.2.6]: https://github.com/finolabs/vibecode/compare/v0.2.5...v0.2.6
+[0.2.5]: https://github.com/finolabs/vibecode/compare/v0.2.4...v0.2.5
+[0.2.4]: https://github.com/finolabs/vibecode/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/finolabs/vibecode/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/finolabs/vibecode/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/finolabs/vibecode/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/finolabs/vibecode/compare/v0.1.10...v0.2.0
+[0.1.10]: https://github.com/finolabs/vibecode/compare/v0.1.9...v0.1.10
+[0.1.9]: https://github.com/finolabs/vibecode/compare/v0.1.8...v0.1.9
+[0.1.8]: https://github.com/finolabs/vibecode/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/finolabs/vibecode/compare/v0.1.6...v0.1.7
+[0.1.6]: https://github.com/finolabs/vibecode/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/finolabs/vibecode/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/finolabs/vibecode/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/finolabs/vibecode/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/finolabs/vibecode/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/finolabs/vibecode/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/finolabs/vibecode/releases/tag/v0.1.0

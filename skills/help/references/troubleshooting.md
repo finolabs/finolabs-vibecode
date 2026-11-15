@@ -15,5 +15,5 @@ Read the shared rules in [map.md](map.md#rules). Match the user's problem to one
 | `/afk start` stops and points to setup | Record the away rules first with `/setup add afk`, including an explicit Merge answer. |
 | `heavy_run.py` refuses a command with exit 77 | A pause marker is active. Run `/pause resume` once you are back from the restart; a marker older than 24 hours never blocks. |
 | `/restore-point` says "Not a git repository" | It works in git repositories only and creates nothing. Run `git init` yourself if you want one. |
-| A skill says a dependency is missing | It was installed on its own. Add the named skill, for example `npx skills add finolabs/finolabs-vibecode --skill delegate`, or install the whole plugin. |
+| A skill says a dependency is missing | It was installed on its own. Add the named skill, for example `npx skills add finolabs/vibecode --skill delegate`, or install the whole plugin. |
 | The agent does not list `setup`, `status` or another typed skill | Those skills are typed by the user only and may be missing from the agent's own list; type the command yourself. |

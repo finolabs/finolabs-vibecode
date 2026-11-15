@@ -14,7 +14,7 @@ import fnl_metrics as fm  # noqa: E402
 import data_root as dr
 import run_env  # noqa: E402
 
-URL = "https://api.github.com/repos/finolabs/finolabs-vibecode/releases/latest"
+URL = "https://api.github.com/repos/finolabs/vibecode/releases/latest"
 USER_AGENT = "finolabs-vibecode-update-check"
 MAX_AGE = 24 * 60 * 60
 MAX_RESPONSE = 65536
@@ -128,7 +128,7 @@ MAX_SKIPPED = 200
 # 200 ids of at most 64 characters each, quoted and comma-separated, plus the version and keys.
 ONBOARD_LIMIT = 16384
 EVIDENCE_LIMIT = 65536
-EVIDENCE_URL = "https://github.com/finolabs/finolabs-vibecode/releases/tag/"
+EVIDENCE_URL = "https://github.com/finolabs/vibecode/releases/tag/"
 
 
 def parse_item(release, item):

@@ -131,7 +131,7 @@ Only when requested, `restore-point create` stores a working-tree snapshot in th
 
 ## Update check
 
-The update check is **on by default**, separate from usage metrics and their consent. At startup on Claude Code and Codex, a detached worker makes one HTTPS GET to `https://api.github.com/repos/finolabs/finolabs-vibecode/releases/latest` when the cache is missing or at least 24 hours old. It uses only the generic User-Agent `finolabs-vibecode-update-check`: no request body, credentials, cookies, username, machine, repository, session, installed version, prompts, code, paths or usage events. It sends nothing about the user. GitHub necessarily sees your connection's source IP. There are no redirects, proxies or retries.
+The update check is **on by default**, separate from usage metrics and their consent. At startup on Claude Code and Codex, a detached worker makes one HTTPS GET to `https://api.github.com/repos/finolabs/vibecode/releases/latest` when the cache is missing or at least 24 hours old. It uses only the generic User-Agent `finolabs-vibecode-update-check`: no request body, credentials, cookies, username, machine, repository, session, installed version, prompts, code, paths or usage events. It sends nothing about the user. GitHub necessarily sees your connection's source IP. There are no redirects, proxies or retries.
 
 Set `FNL_UPDATE_CHECK=off` in your host's environment to stop requests and notices. A “never ask” choice suppresses notices while checking continues. A “skip this version” choice suppresses only that version. The checker never updates the plugin; `update` asks for your clear yes before a native host update. Host-native updates have their own network behavior.
 

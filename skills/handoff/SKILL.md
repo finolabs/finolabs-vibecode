@@ -22,7 +22,7 @@ Take Resume when the user is stopping or switching and asks to save the state, w
 
 ## Prerequisites
 
-Dispatch only. Load the `delegate` skill and the host config it names. Requires the `delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill delegate`, or install the whole plugin) and stop. Grade and route the task there unless the arguments name an agent.
+Dispatch only. Load the `delegate` skill and the host config it names. Requires the `delegate` skill installed beside this one. When it is missing, tell the user to add it (`npx skills add finolabs/vibecode --skill delegate`, or install the whole plugin) and stop. Grade and route the task there unless the arguments name an agent.
 
 ## Arguments
 
@@ -53,4 +53,4 @@ The completion notice brings you back. At the check deadline, judge liveness fro
 
 ## Resume
 
-Load `tidy` "Handover content" and follow its save-and-continue procedure. It is the one home for handover content, storage, read-back and continuation. This mode launches nothing. Requires `tidy`; when it is missing, tell the user to add it (`npx skills add finolabs/finolabs-vibecode --skill tidy`, or install the whole plugin) and stop.
+Load `tidy` "Handover content" and follow its save-and-continue procedure. It is the one home for handover content, storage, read-back and continuation. This mode launches nothing. Requires `tidy`; when it is missing, tell the user to add it (`npx skills add finolabs/vibecode --skill tidy`, or install the whole plugin) and stop.

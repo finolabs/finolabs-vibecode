@@ -322,7 +322,7 @@ class UpdateTest(unittest.TestCase):
 
 ONBOARD_LINE = ('finolabs-vibecode %s has upgrade notes. Let the user know they can type /update '
                 '(on Codex $update) to see what is new and finish its setup; do not run it on your own.\n')
-EVIDENCE_URL = 'https://github.com/finolabs/finolabs-vibecode/releases/tag/'
+EVIDENCE_URL = 'https://github.com/finolabs/vibecode/releases/tag/'
 
 
 class OnboardTest(unittest.TestCase):
