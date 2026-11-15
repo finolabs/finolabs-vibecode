@@ -16,6 +16,9 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- Breaking: the verification aliases (`verification` and its older `fnl-` name) are removed; type `checks` (owner decision, 15/11/2026).
+- afk: `git commit` under a lease is Tier 1 only on a work branch; on the default branch it answers `protected` (owner decision, 15/11/2026).
+- `ledger.py finish` prints a warning when it accepts a run with `--accept-unverified`, or a review without `--review-url`; the acceptance is still recorded.
 - The request-to-merge diagram shows `shape` interviewing you before the router when the idea is unclear, and the implementer working in one worktree per branch while the main checkout stays on the default branch. The README's PNG renderings are not regenerated yet.
 - The eighth scoped exception in `CLAUDE.md`, `PRIVACY.md` ("Compaction nudge") and `docs/specs/compaction-nudge.md` gain a Codex clause (owner decision, 15/11/2026): the same nudge as one Codex `UserPromptSubmit` hook that reads only two integers of the latest `token_count` event in the session's own transcript under the Codex home's `sessions` folder and only `model_auto_compact_token_limit` from its `config.toml`. The code lands in a later pull request.
 - afk: `checks.py run --dispatch <dispatch id>` is Tier 1 under a lease, so an away coordinator can write the receipt that accepting a delegated run needs; checks.py still writes it only after the whole approved list passes on a clean tree at an unmoved head (owner decision, 15/11/2026).

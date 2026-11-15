@@ -365,11 +365,11 @@ class CheckupTest(unittest.TestCase):
 
     def test_old_fnl_skill_names_are_listed_with_their_new_names(self):
         # The aliases are user-only, so a file telling the model to invoke an old name no longer loads it.
-        self.write(self.repo / "AGENTS.md", "Use fnl-coding-router, then fnl-verification.\nfnl-reviewer stays.\n")
+        self.write(self.repo / "AGENTS.md", "Use fnl-coding-router, then fnl-ask.\nfnl-reviewer stays.\n")
         self.write(self.home / ".claude/CLAUDE.md", "Help: fnl-ask.\n")
         row = self.setup_item("old skill names")
         self.assertEqual(row["status"], "missing")
-        for pair in ("fnl-coding-router -> coding-router", "fnl-verification -> checks", "fnl-ask -> help"):
+        for pair in ("fnl-coding-router -> coding-router", "fnl-ask -> help"):
             self.assertIn(pair, row["reason"])
         self.assertIn("instruction files must use the new names", row["reason"])
         self.assertNotIn("fnl-reviewer", row["reason"])
