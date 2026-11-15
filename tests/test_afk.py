@@ -214,7 +214,9 @@ class AfkTest(AfkBase):
         self.check(['git', 'status'], tier=3, code='spent')
         self.change_counts(runs=0, first=self.clock - 480 * 60)
         self.check(['git', 'status'], tier=3, code='spent')
-        self.change_counts(first=self.clock, hour_actions=[self.clock] * 30)
+        self.change_counts(runs=20, first=self.clock, hour_actions=[self.clock] * 30)
+        self.check(['git', 'status'], tier=3, code='spent')  # spent wins over the hourly cap: it never comes back
+        self.change_counts(runs=0, first=self.clock, hour_actions=[self.clock] * 30)
         self.check(['git', 'status'], tier=3, code='limit')
         self.clock += 3601
         self.check(['git', 'status'])
@@ -2702,6 +2704,39 @@ class AwayFlowTest(AfkBase):
             kept = away_lease.merge_receipts(folder, self.clock)
         self.assertEqual({pr for _, pr, _ in kept}, set(range(9, 41)))
         self.assertEqual(oct((self.state / 'merge-ok.lock').stat().st_mode & 0o777), '0o600')
+
+    def test_a_full_log_refuses_a_merge_before_reserving_an_action(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.cwd, _ = self.git_repo('fulllog')
+        argv = ['gh', 'pr', 'merge', '7', '--merge', '--match-head-commit', 'c' * 40, '--repo', 'github.com/example/demo']
+        self.check(['git', 'status'])
+        before = self.counts()['actions']
+        log = self.state / 'log.jsonl'
+        line = json.dumps(dict(time=self.clock, tier=1, kind='action', note='x' * 400)) + '\n'
+        log.write_text(line * (self.load().MAX_LOG // len(line)))
+        log.chmod(0o600)
+        self.merge_ok('7', 'c' * 40)
+        self.check(argv, tier=3, code='log-unwritable')
+        self.assertEqual(self.counts()['actions'], before)
+
+    def test_a_merged_head_counts_only_in_the_repository_its_merge_check_named(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.cwd, _ = self.git_repo('scoped')
+        head = 'c' * 40
+        self.merged('7', head)
+        module = self.load()
+        with module.private_folder() as folder:
+            lease = module.read_lease(folder)
+            self.assertEqual(module.merged_heads(folder, lease, self.clock, 'github.com/example/demo'), {head})
+            self.assertEqual(module.merged_heads(folder, lease, self.clock, 'github.com/other/mirror'), set())
+            self.assertEqual(module.merged_heads(folder, lease, self.clock, None), set())
+
+    def test_a_work_tree_verb_without_a_working_folder_is_protected(self):
+        module = self.load()
+        applied = {**module.DEFAULTS, **{c: 'stop' for c in module.CATEGORIES}, 'Merge': 'yes',
+                   module.CONSENT: 'no', module.TARGETS: [],
+                   module.CONTEXT: module.Context('found', None, 'user', 'github.com/example/demo')}
+        self.assertEqual(module.classify_argv(['git', 'commit', '-m', 'x'], applied), 'protected')
 
     def test_a_merge_entry_needs_an_allowed_merge_check_of_this_lease(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
