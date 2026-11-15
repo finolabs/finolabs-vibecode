@@ -675,7 +675,8 @@ class HookTest(unittest.TestCase):
         self.assertEqual(len(entries), 1)
         self.assertIn("metrics_hook.py", entries[0]["command"])
         self.assertTrue(entries[0]["async"])
-        self.assertNotIn("UserPromptSubmit", json.loads((ROOT / ".codex-plugin/hooks.json").read_text())["hooks"])
+        codex = json.loads((ROOT / ".codex-plugin/hooks.json").read_text())["hooks"].get("UserPromptSubmit", [])
+        self.assertFalse(any("metrics_hook.py" in h["command"] for g in codex for h in g["hooks"]))
 
 
 class DetachedFreshnessTest(unittest.TestCase):

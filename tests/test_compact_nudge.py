@@ -432,16 +432,16 @@ class CodexNudgeTest(unittest.TestCase):
         other = self.base / "other-codex"
         (other / "sessions").mkdir(parents=True)
         moved = other / "sessions" / "rollout.jsonl"
-        self.turn(750000, path=moved)
+        self.turn(720000, path=moved)
         self.assertEqual(self.run_hook(transcript=moved), "")
         self.assertEqual(self.run_hook(transcript=moved, env={"CODEX_HOME": str(other)}), message(80))
         claude = self.home / ".claude" / "projects"
         claude.mkdir(parents=True)
-        self.turn(750000, path=claude / "x.jsonl")
+        self.turn(720000, path=claude / "x.jsonl")
         self.assertEqual(self.run_hook(transcript=claude / "x.jsonl"), "")
 
     def test_symlink_content_and_off_switch(self):
-        self.turn(750000)
+        self.turn(720000)
         link = self.transcript.parent / "link.jsonl"
         link.symlink_to(self.transcript)
         self.assertEqual(self.run_hook(transcript=link), "")
@@ -453,10 +453,10 @@ class CodexNudgeTest(unittest.TestCase):
         self.assertEqual(mark.read_text(), "80")
 
     def test_unknown_arguments_and_claude_shape_print_nothing(self):
-        self.turn(750000)
+        self.turn(720000)
         self.assertEqual(self.run_hook(argv=("--host", "antigravity")), "")
         self.assertEqual(self.run_hook(argv=("--host",)), "")
-        self.transcript.write_text(json.dumps({"type": "assistant", "message": {"usage": {"input_tokens": 750000}}}) + "\n")
+        self.transcript.write_text(json.dumps({"type": "assistant", "message": {"usage": {"input_tokens": 720000}}}) + "\n")
         self.assertEqual(self.run_hook(), "")
 
     def test_hook_command_exits_zero_silently(self):
