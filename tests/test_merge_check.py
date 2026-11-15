@@ -1269,5 +1269,49 @@ class LocalReceiptTest(unittest.TestCase):
         self.assertEqual(seen, [(HEAD, "acme/other")])
 
 
+
+class CiContextTest(unittest.TestCase):
+    """--ci-context: the hosted merge-check status ignores itself, accepts BLOCKED, waits with exit 3."""
+
+    def main(self, data, *extra):
+        data = dict(data, baseRefOid=OLD)
+        out = __import__("io").StringIO()
+        receipts = []
+        with patch.object(mc, "gh", return_value=json.dumps(data)), \
+                patch.object(mc, "adopted_at", return_value=False), \
+                patch.object(mc, "permission", return_value=True), \
+                patch.object(mc, "local_receipt", lambda head, repo: receipts.append(head) or (True, "x")), \
+                patch("sys.stdout", out):
+            code = mc.main(["7", "--repo", "acme/demo", *extra])
+        return code, out.getvalue(), receipts
+
+    def test_own_failing_status_is_ignored_and_blocked_state_accepted(self):
+        checks = [{"name": "validate", "conclusion": "SUCCESS"}, {"context": "merge-check", "state": "FAILURE"}]
+        code, out, _ = self.main(pr(checks=checks, merge_state="BLOCKED"), "--ci-context", "merge-check")
+        self.assertEqual(code, 0, out)
+        self.assertIn("MERGE OK", out)
+        code, out, _ = self.main(pr(checks=checks, merge_state="BLOCKED"))
+        self.assertEqual(code, 1, out)
+
+    def test_other_running_check_is_pending_and_failures_still_block(self):
+        running = [{"name": "validate", "status": "IN_PROGRESS"}, {"context": "merge-check", "state": "PENDING"}]
+        code, out, _ = self.main(pr(checks=running, merge_state="BLOCKED"), "--ci-context", "merge-check")
+        self.assertEqual(code, 3, out)
+        self.assertIn("MERGE PENDING", out)
+        failed = [{"name": "validate", "conclusion": "FAILURE"}]
+        self.assertEqual(self.main(pr(checks=failed), "--ci-context", "merge-check")[0], 1)
+        code, out, _ = self.main(pr(comments=[], checks=[{"name": "validate", "conclusion": "SUCCESS"}]),
+                                 "--ci-context", "merge-check")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(self.main(pr(merge_state="BEHIND"), "--ci-context", "merge-check")[0], 1)
+
+    def test_no_local_receipt_and_bad_flags_refuse(self):
+        code, out, receipts = self.main(pr(checks=[]), "--ci-context", "merge-check")
+        self.assertEqual((code, receipts), (1, []), out)
+        for extra in (["--ci-context", "Merge Check"], ["--ci-context", "merge-check", "--lane"],
+                      ["--ci-context", "merge-check", "--independent"]):
+            self.assertEqual(self.main(pr(), *extra)[0], 2, extra)
+
+
 if __name__ == "__main__":
     unittest.main()
