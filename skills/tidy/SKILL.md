@@ -25,7 +25,7 @@ An agent reads its own context percentage only from a fresh snapshot or probe of
 
 - At a safe idle boundary, use supported compaction for the same workstream when context pressure warrants it. When the agent cannot compact itself, ask the user to, or propose a fresh session with a handover.
 - A wholly new, independent task starts in a fresh, correctly named session in the matching checkout, with a short verified handover.
-- A finished user story, with its review gate closed, and a finished release (`versioning`) are natural boundaries: prefer a fresh session for the next story with a short handover. A coordinator session whose context is still light may continue (`delegate`).
+- A finished user story (review gate closed) or release is a natural boundary: prefer a fresh session for the next one with a short handover. A coordinator session whose context is still light may continue (`delegate`).
 - Delegated agents follow the same rule: start a fresh run with a short handover brief rather than resuming a run that has used much of its window.
 - Read counts per [references/context-reading.md](references/context-reading.md): a fresh status-line snapshot, else `probe` with your own session id. Without a reading, say so; never invent counts, a threshold or a percentage, or interrupt active work (advisory, agent judgment).
 
