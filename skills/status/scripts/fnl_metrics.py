@@ -47,9 +47,9 @@ NAME = re.compile(r"^fnl-[a-z][a-z-]{0,39}\Z")  # agent names, and skill names s
 SKILLS = ("advisor", "afk", "ask", "brb", "checks", "coding-router", "commit-messages",
           "delegate", "gtg", "handoff", "help", "open-source-review", "pause", "plugin-packaging",
           "restore-point", "review-gate", "security-review-gate", "setup", "shape", "status", "tidy",
-          "update", "verification", "versioning")
-# Skills renamed in 0.2.5 after the prefix drop: the older name, typed, called or in a stored line, counts as the new one.
-RENAMED = {"autopilot": "afk", "session-hygiene": "tidy"}
+          "update", "versioning")
+# Skills renamed in 0.2.5 after the prefix drop (and the verification alias removed in 0.3.1): the older name, typed, called or in a stored line, counts as the new one.
+RENAMED = {"autopilot": "afk", "session-hygiene": "tidy", "verification": "checks"}
 REPO = re.compile(r"^[0-9a-f]{8}\Z")
 TS = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+00:00\Z")
 EVENT_FILE = re.compile(r"^events-(\d{4})-(\d{2})\.jsonl\Z")

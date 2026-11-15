@@ -33,7 +33,7 @@ RENAMED = {"fnl-" + name: target for name, target in (
     ("open-source-review", "open-source-review"), ("pause", "pause"), ("plugin-packaging", "plugin-packaging"),
     ("restore-point", "restore-point"), ("review-gate", "review-gate"),
     ("security-review-gate", "security-review-gate"), ("session-hygiene", "tidy"), ("setup", "setup"),
-    ("status", "status"), ("update", "update"), ("verification", "checks"), ("versioning", "versioning"))}
+    ("status", "status"), ("update", "update"), ("versioning", "versioning"))}
 # Skills renamed again in 0.2.5: session-hygiene stays a user-only alias of tidy; autopilot was dropped for afk,
 # so it and its fnl- name no longer load at all.
 RENAMED.update({"session-hygiene": "tidy", "autopilot": "afk"})
