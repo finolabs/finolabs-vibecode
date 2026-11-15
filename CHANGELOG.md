@@ -19,6 +19,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- afk: a lease merges only after `merge_check.py --independent` printed MERGE OK for that pull request, head and repository within 15 minutes. MERGE OK writes a private receipt during the lease, and `afk.py check` answers `merge-unchecked` (Tier 3) for a `gh pr merge` without one; before, the merge gate's MERGE OK was agent judgment. A worktree's removal needs the head an allowed merge check pinned, so it now also follows a recorded MERGE OK (owner decision, 15/11/2026).
 - The host config template no longer creates the retired `## Limits` section, whose bare heading `parallel_slots.py check-config` reports as legacy: its machine notes move to `## Machine rules`, and the parallel-limit lines left under `## Heavy jobs` are removed.
 - Usage metrics count the `shape` skill, which was missing from the skill list.
 - `/setup check` no longer reports a host config without `## Limits` as missing a required heading: the section was retired in 0.2.5 and nothing reads it.

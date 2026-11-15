@@ -243,7 +243,7 @@ never feed task choice or any gate.
 A merge by autopilot requires: a pull request it opened itself or one by a trusted author (owner decision, 2026-11-09); both review markers present for the current head,
 posted by a model family different from the pull request's author family (`merge_check.py` gains an
 `--independent` check for this; a same-family review is parked); checks green; the branch current; no two-round
-rework stop left unsettled (from 15/11/2026 a third round goes through `afk` "Decide"); and `MERGE OK`. A pull request touching Tier 3 paths is never merged by autopilot.
+rework stop left unsettled (from 15/11/2026 a third round goes through `afk` "Decide"); and `MERGE OK` (from 15/11/2026 script-enforced: `merge_check.py --independent` writes a receipt during the lease, and `afk.py check` answers `merge-unchecked` for a `gh pr merge` without one for that number, head and repository younger than 15 minutes; a worktree's removal follows, because only an allowed merge check pins the head it needs). A pull request touching Tier 3 paths is never merged by autopilot.
 
 ## Lease, state and what enforces what
 
