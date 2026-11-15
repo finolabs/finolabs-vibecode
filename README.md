@@ -378,7 +378,7 @@ The judge defaults to a small host model. Choose Jev through `setup` only with a
 .antigravity-plugin/plugin.json   Antigravity manifest, version kept equal
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 .github/readme-standard.json      this repository's README headings and house style for plugin-packaging's readme_check.py
-agents/*.md                   code reviewer, security reviewer and navigator definitions (no project edits; authorized posting uses a private draft)
+agents/*.md                       code reviewer, security reviewer and navigator definitions (no project edits; authorized posting uses a private draft)
 agents/openai.yaml                Codex skill-list display metadata
 skills/*/SKILL.md                 self-contained skills, model-invoked or flagged user-only on Claude Code
 skills/advisor/references/committee.md       committee procedure, loaded only for a committee
