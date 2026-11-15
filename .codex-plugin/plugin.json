@@ -6,8 +6,8 @@
     "name": "FINOLABS",
     "url": "https://github.com/finolabs"
   },
-  "homepage": "https://github.com/finolabs/finolabs-vibecode",
-  "repository": "https://github.com/finolabs/finolabs-vibecode",
+  "homepage": "https://github.com/finolabs/vibecode",
+  "repository": "https://github.com/finolabs/vibecode",
   "license": "MIT",
   "keywords": [
     "coding-router",
@@ -34,10 +34,10 @@
       "Use $setup to choose Quick or Advanced, then show add <feature>, instructions and check.",
       "Use $setup scan to refresh my local agent inventory, then $setup mode to show effective settings."
     ],
-    "websiteURL": "https://github.com/finolabs/finolabs-vibecode",
-    "supportURL": "https://github.com/finolabs/finolabs-vibecode/issues",
-    "privacyPolicyURL": "https://github.com/finolabs/finolabs-vibecode/blob/main/PRIVACY.md",
-    "termsOfServiceURL": "https://github.com/finolabs/finolabs-vibecode/blob/main/TERMS.md",
+    "websiteURL": "https://github.com/finolabs/vibecode",
+    "supportURL": "https://github.com/finolabs/vibecode/issues",
+    "privacyPolicyURL": "https://github.com/finolabs/vibecode/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/finolabs/vibecode/blob/main/TERMS.md",
     "brandColor": "#9750C4",
     "brandColorDark": "#7FE2CE",
     "composerIcon": "./assets/icon.svg",

@@ -16,7 +16,7 @@ Recheck the relevant host's help if it differs from these observations. Host-nat
 
 ## Privacy of the automatic check
 
-The automatic check is on by default and is the plugin's only automatic network call (the optional judge call to Jev runs only when the coordinator or the user invokes it; see PRIVACY.md): one HTTPS GET to `https://api.github.com/repos/finolabs/finolabs-vibecode/releases/latest` when its cache is missing or at least 24 hours old. It uses the generic User-Agent `finolabs-vibecode-update-check` and sends nothing about the user: no name, machine, repository, session, installed version or metrics. GitHub necessarily sees the connection's source IP. There are no retries, redirects or proxies.
+The automatic check is on by default and is the plugin's only automatic network call (the optional judge call to Jev runs only when the coordinator or the user invokes it; see PRIVACY.md): one HTTPS GET to `https://api.github.com/repos/finolabs/vibecode/releases/latest` when its cache is missing or at least 24 hours old. It uses the generic User-Agent `finolabs-vibecode-update-check` and sends nothing about the user: no name, machine, repository, session, installed version or metrics. GitHub necessarily sees the connection's source IP. There are no retries, redirects or proxies.
 
 Only a timestamp and validated stable release tag are cached; skipped versions, a never-ask flag and a pinned version are stored separately in the same state folder, and `onboard.json` holds only `last_seen` and the skipped note ids. Files are mode `0600`. The commands `whats-new`, `onboard` and `target` make no network call; a chosen version is checked from the user's own `gh` output.
 

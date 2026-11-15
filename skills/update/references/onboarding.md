@@ -24,9 +24,9 @@ A check's exit status decides the state: 0 done, 1 open, 3 not applicable, anyth
 
 ## A chosen version
 
-Run the user's own `gh release view <version> --repo finolabs/finolabs-vibecode --json tagName,isDraft,isPrerelease,url` (always the plugin's repository, whichever project the user is in; another host uses its equivalent bound to the same repository), save its output to a temporary file and pass it with `--evidence`.
+Run the user's own `gh release view <version> --repo finolabs/vibecode --json tagName,isDraft,isPrerelease,url` (always the plugin's repository, whichever project the user is in; another host uses its equivalent bound to the same repository), save its output to a temporary file and pass it with `--evidence`.
 
-The target is accepted only when the file (at most 64 KB) holds exactly those four fields, names exactly that tag, is neither a draft nor a prerelease, and its `url` is `https://github.com/finolabs/finolabs-vibecode/releases/tag/<tag>`. A `-dev` version, missing evidence or any mismatch is refused; never assume a target.
+The target is accepted only when the file (at most 64 KB) holds exactly those four fields, names exactly that tag, is neither a draft nor a prerelease, and its `url` is `https://github.com/finolabs/vibecode/releases/tag/<tag>`. A `-dev` version, missing evidence or any mismatch is refused; never assume a target.
 
 ## The session-start line
 
