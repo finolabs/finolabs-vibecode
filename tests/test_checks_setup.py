@@ -506,7 +506,8 @@ class ProjectFileTest(unittest.TestCase):
         self.assertEqual(stat.S_IMODE((self.repo / '.finolabs').stat().st_mode), 0o700)
         import hashlib
         record = json.loads(self.approved().read_text())
-        self.assertEqual(set(record), {'sha256', 'approved'})
+        self.assertEqual(set(record), {'sha256', 'approved', 'identity'})
+        self.assertEqual(record['identity'][:8], self.code())  # bound to this main checkout's full digest
         self.assertEqual(record['sha256'], hashlib.sha256(self.project().read_bytes()).hexdigest())
         self.assertEqual(stat.S_IMODE(self.approved().stat().st_mode), 0o600)
         reader = self.reader()
