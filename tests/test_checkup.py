@@ -1336,10 +1336,6 @@ class CheckupTest(unittest.TestCase):
         self.assertTrue(any(r["pattern"] == "include-cycle" for r in block["results"]))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class NativeWindowsMessageTest(unittest.TestCase):
     """Issue 193: without pwd, setup check and scan print one plain line and exit 1, no traceback."""
 
@@ -1352,3 +1348,7 @@ class NativeWindowsMessageTest(unittest.TestCase):
             self.assertNotIn("Traceback", result.stderr, script.name)
             self.assertIn("on Windows run it under WSL", result.stderr, script.name)
             self.assertEqual(len(result.stderr.strip().splitlines()), 1, script.name)
+
+
+if __name__ == "__main__":
+    unittest.main()
