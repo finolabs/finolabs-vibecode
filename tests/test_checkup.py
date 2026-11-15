@@ -1338,3 +1338,17 @@ class CheckupTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NativeWindowsMessageTest(unittest.TestCase):
+    """Issue 193: without pwd, setup check and scan print one plain line and exit 1, no traceback."""
+
+    def test_check_and_scan_print_one_line_without_pwd(self):
+        for script in (SCRIPT, ROOT / "skills/setup/scripts/agent_scan.py"):
+            code = ("import runpy, sys; sys.modules['pwd'] = None; sys.argv = [%r]; "
+                    "runpy.run_path(%r, run_name='__main__')" % (str(script), str(script)))
+            result = subprocess.run([sys.executable, "-I", "-c", code], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 1, script.name)
+            self.assertNotIn("Traceback", result.stderr, script.name)
+            self.assertIn("on Windows run it under WSL", result.stderr, script.name)
+            self.assertEqual(len(result.stderr.strip().splitlines()), 1, script.name)
