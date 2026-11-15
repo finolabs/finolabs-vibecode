@@ -12,7 +12,9 @@ failed, 2 when the input cannot be read.
 
 import fnmatch
 import json
+import os
 import re
+import stat
 import sys
 from pathlib import Path
 from urllib.parse import unquote
@@ -61,6 +63,9 @@ HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 LINK = re.compile(r"(?<!!)\[[^\]]*\]\(\s*(?:<([^>]+)>|([^)\s]+))(?:\s+\"[^\"]*\")?\s*\)")
 MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(\s*(?:<([^>]+)>|([^)\s]+))(?:\s+\"[^\"]*\")?\s*\)")
 LICENSE_FILES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")
+
+
+MAX_READ = 1 << 20  # bytes read from any one repository file
 
 
 class BadInput(Exception):
@@ -173,10 +178,28 @@ def anchors(text):
     return found
 
 
-def load_json(path):
+def read_text(root, path, errors="strict"):
+    """A regular file inside root, at most MAX_READ bytes; BadInput for a link out, a non-regular file or an oversize one."""
+    real, root = Path(os.path.realpath(path)), Path(os.path.realpath(root))
+    if real != root and root not in real.parents:
+        raise BadInput(f"{path.name} lies outside the repository")
+    fd = os.open(real, os.O_RDONLY | os.O_NONBLOCK)  # a FIFO opens without blocking, then fails the regular-file check
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise BadInput(f"{path.name} is not a regular file")
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            data = handle.read(MAX_READ + 1)
+    finally:
+        os.close(fd)
+    if len(data) > MAX_READ:
+        raise BadInput(f"{path.name} is larger than {MAX_READ} bytes")
+    return data.decode("utf-8", errors)
+
+
+def load_json(root, path):
+    try:
+        return json.loads(read_text(root, path))
+    except (OSError, ValueError, RecursionError):
         return None
 
 
@@ -190,7 +213,7 @@ def repo_slug(value):
 class Check:
     def __init__(self, root):
         self.root = root
-        self.text = (root / "README.md").read_text(encoding="utf-8")
+        self.text = read_text(root, root / "README.md")
         self.raw = self.text.splitlines()
         # Strip code first, so a comment marker inside a code span or block hides nothing.
         self.lines = blank_comments("\n".join(strip_code(self.text))).split("\n")
@@ -198,15 +221,18 @@ class Check:
         self.failures = {item: [] for item in ITEMS}
         self.na = set()
         self.external = []
-        self.config = self.read_config(root / ".github" / "readme-standard.json")
+        self.config = self.read_config(root, root / ".github" / "readme-standard.json")
         self.manifests, self.missing_hosts = {}, []
         hosts = self.config.get("hosts") or [h for h, _ in HOSTS]
         for host in hosts:
-            data = load_json(root / KNOWN_HOSTS[host] / "plugin.json")
+            data = load_json(root, root / KNOWN_HOSTS[host] / "plugin.json")
             if isinstance(data, dict):
                 self.manifests[host] = data
             elif "hosts" in self.config:
                 self.missing_hosts.append(host)
+        # A manifest that ships but the override leaves out would escape every manifest check.
+        listed = {KNOWN_HOSTS[h] for h in hosts}
+        self.unlisted_hosts = [h for h, folder in HOSTS if folder not in listed and (root / folder / "plugin.json").exists()]
         first = self.manifests.get("Claude Code") or next(iter(self.manifests.values()), {})
         self.name = first.get("name", "")
         interface = first.get("interface") if isinstance(first.get("interface"), dict) else {}
@@ -221,10 +247,10 @@ class Check:
         self.header = "\n".join(self.raw[:first_section])
 
     @staticmethod
-    def read_config(path):
+    def read_config(root, path):
         if not path.exists():
             return {}
-        config = load_json(path)
+        config = load_json(root, path)
         if not isinstance(config, dict):
             raise BadInput("readme-standard.json is not a JSON object")
         kinds = {"sections": dict, "exclude_skills": list, "catalog": dict, "badge_color": str, "banner_follow_up": str,
@@ -277,7 +303,7 @@ class Check:
                         if not any(fnmatch.fnmatch(p.parent.name, pat) for pat in excluded))
         agents = []
         for path in sorted(self.root.glob("agents/*.md")):
-            m = re.search(r"^name:\s*['\"]?([^'\"\n]+)", path.read_text(encoding="utf-8"), re.M)
+            m = re.search(r"^name:\s*['\"]?([^'\"\n]+)", read_text(self.root, path), re.M)
             agents.append(m.group(1).strip() if m else path.stem)
         commands = sorted(p.stem for p in self.root.glob("commands/*.md"))
         return {"skills": skills, "agents": agents, "commands": commands}
@@ -398,7 +424,7 @@ class Check:
         own = {self.name.lower()} if self.name else set()
         markets = set()
         for path in (".claude-plugin/marketplace.json", ".agents/plugins/marketplace.json"):
-            data = load_json(self.root / path)
+            data = load_json(self.root, self.root / path)
             if isinstance(data, dict) and data.get("name"):
                 markets.add(str(data["name"]).lower())
         catalog = self.config.get("catalog") if isinstance(self.config.get("catalog"), dict) else {}
@@ -427,7 +453,7 @@ class Check:
         descriptions = {h: m.get("description", "") for h, m in self.manifests.items()}
         if len(set(descriptions.values())) > 1:
             self.fail("D1", "manifest descriptions differ: " + ", ".join(sorted(descriptions)))
-        data = load_json(self.root / ".claude-plugin" / "marketplace.json")
+        data = load_json(self.root, self.root / ".claude-plugin" / "marketplace.json")
         main = next(iter(descriptions.values()), None)
         for entry in (data or {}).get("plugins", []) if isinstance(data, dict) else []:
             if isinstance(entry, dict) and entry.get("name") == self.name and "description" in entry:
@@ -435,11 +461,11 @@ class Check:
                     self.fail("D1", ".claude-plugin/marketplace.json entry description differs from the manifest")
 
     def check_license(self, spans):
-        path = next((self.root / n for n in LICENSE_FILES if (self.root / n).is_file()), None)
+        path = next((self.root / n for n in LICENSE_FILES if (self.root / n).exists()), None)  # read_text refuses a non-regular one
         if path is None:
             self.fail("L1", "no LICENSE, LICENSE.md, LICENSE.txt or COPYING file")
             return
-        head = path.read_text(encoding="utf-8", errors="replace")[:400]
+        head = read_text(self.root, path, errors="replace")[:400]
         match = next(((spdx, word) for pat, spdx, word in LICENSES if re.search(pat, head, re.I)), None)
         if not match:
             self.fail("L1", "LICENSE not recognized; check the License line by hand")
@@ -511,8 +537,8 @@ class Check:
             self.fail(item, f"missing file: {path}")
         elif anchor and file.suffix == ".md":
             try:
-                found = anchors(file.read_text(encoding="utf-8"))
-            except (OSError, UnicodeDecodeError):
+                found = anchors(read_text(self.root, file))
+            except (OSError, UnicodeDecodeError, BadInput):
                 self.fail(item, f"cannot read the anchors of {path}")
                 return
             if unquote(anchor) not in found:
@@ -533,6 +559,8 @@ class Check:
         self.check_license(spans)
         for host in self.missing_hosts:  # reported even when no listed host has a manifest
             self.fail("H1", f"the hosts override lists {host}, which has no manifest")
+        for host in self.unlisted_hosts:
+            self.fail("H1", f"{KNOWN_HOSTS[host]}/plugin.json ships, but the hosts override leaves out {host}")
         if self.manifests:
             self.check_badges(readme_anchors)
             self.check_counts(spans, shipped)

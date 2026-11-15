@@ -48,7 +48,7 @@ Headings match at level 2, or level 3 for Skills, Agents and Commands. Write the
 
 ## Checklist
 
-Run `python3 -I <this skill folder>/scripts/readme_check.py [repository root]`. It checks the items marked **script**, offline, and prints `FAIL <id> …` per finding and the external links for you to open; it is advisory (agent judgment decides what to fix) and exits 1 when anything failed. Then walk the items marked **agent** yourself. Report every item as PASS, FAIL, PENDING (an owner decision) or N/A with its reason.
+Run `python3 -I <this skill folder>/scripts/readme_check.py [repository root]`. It checks the items marked **script**, offline, and prints `FAIL <id> …` per finding and the external links for you to open; it is advisory (agent judgment decides what to fix) and exits 1 when anything failed. It reads only regular files inside the repository, each at most 1 MiB; a link out of it, a FIFO or device, or a larger file stops the check with exit 2. A local link target that fails those rules is reported as a K1 failure instead. Then walk the items marked **agent** yourself. Report every item as PASS, FAIL, PENDING (an owner decision) or N/A with its reason.
 
 ### Structure
 
@@ -117,7 +117,7 @@ A repository may keep `.github/readme-standard.json`. It adapts the standard to 
 - `exclude_skills` lists folder-name patterns that are aliases or internal and are left out of the counts and tables.
 - `badge_color` makes every host badge use that colour (script).
 - `catalog` is the shared catalog the README installs from; H2 accepts it, and D2 compares with its entry.
-- `hosts` lists the hosts the README serves, from `Claude Code`, `Claude Cowork`, `Codex` and `Antigravity`, in place of the hosts read from the manifest folders. Use it when a manifest format serves a host other than its default, as a plugin for Claude Cowork only does with `.claude-plugin`; each listed host still needs its manifest (Claude Cowork's is `.claude-plugin/plugin.json`).
+- `hosts` lists the hosts the README serves, from `Claude Code`, `Claude Cowork`, `Codex` and `Antigravity`, in place of the hosts read from the manifest folders. Use it when a manifest format serves a host other than its default, as a plugin for Claude Cowork only does with `.claude-plugin`; each listed host still needs its manifest (Claude Cowork's is `.claude-plugin/plugin.json`), and a manifest folder that ships but whose host the list leaves out fails H1.
 - `banner_follow_up` names who makes the banner when the repository has none: record it as a follow-up and leave the banner out; never ship a placeholder image.
 
 A house style (colours, catalog, wording rules of an organization) belongs in that file or in the organization's own instructions, not in this skill.
