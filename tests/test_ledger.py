@@ -60,8 +60,9 @@ class LedgerTest(unittest.TestCase):
                     contextlib.redirect_stderr(warning):
                 args.func(args)
             self.assertEqual(output.getvalue(), '')
-            self.assertEqual(warning.getvalue(), '' if status == 'no_findings' else
-                             'ledger: log_scan: ' + status + '\n')
+            unverified = 'ledger: warning: accepted without a verify receipt; run checks.py run --dispatch '
+            lines = [line for line in warning.getvalue().splitlines() if not line.startswith(unverified)]
+            self.assertEqual(lines, [] if status == 'no_findings' else ['ledger: log_scan: ' + status])
             done = self.records()[-1]
             self.assertEqual(done['log_scan'], status)
             self.assertEqual(done['head'], 'a' * 40)
@@ -196,7 +197,8 @@ class LedgerTest(unittest.TestCase):
             args = [a if a != "medium" else grade for a in START]
             ids[grade] = self.run_ledger(*args).stdout.strip()
         self.assertNotEqual(self.run_ledger(*[a if a != "medium" else "extreme" for a in START], check=False).returncode, 0)
-        self.run_ledger("finish", ids["ultra-hard"], "--outcome", "accepted", "--accept-unverified", "--reason", "Synthetic fixture")  # a summary counts finished runs only
+        result = self.run_ledger("finish", ids["ultra-hard"], "--outcome", "accepted", "--accept-unverified", "--reason", "Synthetic fixture")  # a summary counts finished runs only
+        self.assertIn("ledger: warning: accepted without a verify receipt; run checks.py run --dispatch " + ids["ultra-hard"], result.stderr)
         rows = json.loads(self.run_ledger("summary", "--json").stdout)
         self.assertEqual([(r["grade"], r["n"]) for r in rows], [("ultra-hard", 1)])
         self.assertIn("ultra-hard", self.run_ledger("summary").stdout)
@@ -309,13 +311,15 @@ class LedgerTest(unittest.TestCase):
 
     def test_review_accept_needs_no_receipt_and_records_a_given_url_as_a_flag(self):
         plain = self.start_kind("review")
-        self.run_ledger("finish", plain, "--outcome", "accepted", "--head", "b" * 40)
+        result = self.run_ledger("finish", plain, "--outcome", "accepted", "--head", "b" * 40)
+        self.assertIn("ledger: warning: review accepted without --review-url", result.stderr)
         finish = self.records()[-1]
         self.assertEqual((finish["outcome"], finish["reviewed_head"]), ("accepted", "b" * 40))
         self.assertNotIn("review_posted", finish)
         self.assertNotIn("accept_unverified", finish)
         posted = self.start_kind("review")
-        self.run_ledger("finish", posted, "--outcome", "accepted", "--review-url", self.REVIEW_URL)
+        result = self.run_ledger("finish", posted, "--outcome", "accepted", "--review-url", self.REVIEW_URL)
+        self.assertNotIn("warning", result.stderr)
         finish = self.records()[-1]
         self.assertIs(finish["review_posted"], True)
         self.assertNotIn("issuecomment", self.path.read_text())  # the URL itself is never stored

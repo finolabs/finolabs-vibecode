@@ -28,7 +28,6 @@ The skill folders and their purposes match the README.
 | `update` | Showing installed and cached available versions, updating through the host after a clear yes and walking the new version's setup checklist, showing what is new, targeting a chosen or pinned version, skipping a release, or stopping update notices. |
 | `help` | Plugin help: you are new and do not know where to start, want to know what the plugin holds, or have a question about a skill, agent or script; it gives the first steps, lists the contents, explains the piece you name, or maps your situation to the next command, including companion skills from other packs. It answers questions; it does not ask another agent. |
 | `ask` | Older name for `help`, kept as an alias; follows the same procedure and arguments. |
-| `verification` | Older name for `checks`, kept as an alias until a later release removes it; follows the same procedure. |
 | `session-hygiene` | Older name for `tidy`, kept as an alias; follows the same procedure and arguments. |
 | `open-source-review` | Before a repository goes public, and after: license, secrets in tree and history, internal leaks, clean payload, community files, repository settings, identity, data flow, plugin checks. |
 

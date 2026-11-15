@@ -8,7 +8,7 @@ HELP = ROOT / "skills/help"
 PAGES = HELP / "references/skills"
 # Typed by the user only: their pages say so.
 USER_ONLY = {"help", "ask", "setup", "status", "afk", "brb", "pause", "gtg", "update",
-             "restore-point", "session-hygiene", "verification"}
+             "restore-point", "session-hygiene"}
 
 
 def skill_names():
