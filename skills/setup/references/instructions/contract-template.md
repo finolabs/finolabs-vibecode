@@ -18,6 +18,7 @@ Each rule line says who enforces it: a host setting, a hook, the review gate, or
 - Whether repository or organization ownership grants access by itself (recommended: no).
 - How to handle conflicting instructions (recommended: expose the conflict; a newer instruction does not win by being newer).
 - Other sessions and agents: may the agent message, rename or stop sessions it did not start? (recommended: only with authority).
+- While the user is away: an `afk` lease is the user's standing yes for what its setup records (push and pull requests, merge only when its Merge answer is yes, the decided categories and lists), and every question goes through `afk` "Decide" instead of waiting. Point to `afk` in one line; keep only away preferences the lease cannot record (for example who may be told about parked work). The lease limits, hosts and lists live in `## afk` of the host config (`/setup add afk`), never here.
 
 ## 3. Secrets and private data (required)
 
@@ -41,6 +42,7 @@ Each rule line says who enforces it: a host setting, a hook, the review gate, or
 - Acceptance proof for a delegated task (recommended: every test of the package or test module that holds the changed code, plus its traced consumers, chosen from the diff, not a name-filtered subset; a repository-wide suite still runs only on the owner's request, as `checks` says). A repository whose owner instructions scope task-level proof more narrowly wins for that repository: the coordinator then builds the filter from the diff itself and runs the whole package at the boundary the repository names. This is a default for every repository; a repository's narrower rule lives in that repository's own instructions, not in the user contract.
 - Which Delegation mode the user wants: `manual`, `suggest` (default) or `auto`, and whether Routing is `on` (default) or `off`. `/setup mode` shows their effective sources and changes them after a clear yes; environment overrides win over host config. `/setup` asks these preferences during onboarding. Modes govern other-family hand-offs; own-family sessions follow the project and context rules in `delegate` and retain delegate authority limits.
 - Facts about this computer live in the delegation host config, not here. `/setup scan` refreshes present families and user-confirmed allowed models; `/setup` configures their reach.
+- Which agent and model takes which kind of work (levels, model rules per kind, the judge) is the assignment matrix in the host config (`/setup add delegation`); machine rules and heavy-job limits are the host config's `## Machine rules` and `## Heavy jobs`. Name only preferences those cannot hold.
 
 ## 6. Knowledge base (optional)
 

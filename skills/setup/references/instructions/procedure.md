@@ -6,7 +6,7 @@ Ask one scope question, recommendation first: user for a bare invocation or pref
 
 ## 1. Explore
 
-- Which hosts the user runs (`claude`, `codex`, `agy` on `PATH`) and which instruction files already exist in the chosen scope (`hosts.md`). Read them as the starting draft; read the user contract for comparison in project-only mode without changing it. Note any text copied into several files (a drift risk to offer to remove).
+- Which hosts the user runs (`claude`, `codex`, `agy` on `PATH`) and which instruction files already exist in the chosen scope (`hosts.md`). Read them as the starting draft; read the user contract for comparison in project-only mode without changing it. Note any text copied into several files (a drift risk to offer to remove), and lines that restate what a setup feature now owns: away rules (`afk` and its lease), model routing (the assignment matrix), machine and heavy-job limits (`## Machine rules`, `## Heavy jobs`), review relay (the project's `## Reviews` line); offer to replace each with a one-line pointer.
 - Project scope: the repository root, documented build and test commands and conventions, existing context files and overrides, and the `## Agent skills` block written by the core path. Read and preserve those entries; if missing, point to `/setup` and leave adoption pending. Run the look-first procedure in [../work-tracking.md](../work-tracking.md) before the work tracking interview.
 - Something that cannot be checked here is listed as unverified in one line, with a request that the user paste its contents; missing permissions are not a reason to stop.
 
@@ -36,7 +36,7 @@ Enforcers: agent judgment while drafting (advisory), then `/setup check` measure
 
 - User scope: one shared body with the host-neutral sections plus a short host section per host.
 - Project scope: `AGENTS.md` is the source; `CLAUDE.md` holds an `@AGENTS.md` include plus only Claude-specific lines. Consolidate existing rules without losing them; move the setup-owned `## Agent skills` block intact into the source only in a confirmed migration, never leaving a second copy; resolve conflicts with the user first.
-- Point to skills by name for practice the plugin covers: `coding-router`, `delegate`, `commit-messages`, `versioning`, `checks`, `advisor`, `tidy`.
+- Point to skills by name for practice the plugin covers: `coding-router`, `delegate`, `commit-messages`, `versioning`, `checks`, `advisor`, `tidy`, `afk`.
 - Keep it short: about 150 lines in the shared body is the house soft limit (no vendor source), 200 is Anthropic's target for Claude Code; beyond 150 offer to move detail into a skill or reference.
 - Committed context holds no personal, customer or organization names or machine paths. Personal project context goes in the untracked `CLAUDE.local.md`, kept out of git.
 - Drafted content is the template plus the user's answers, never text copied from repository files (advisory, agent judgment).
