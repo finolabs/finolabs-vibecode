@@ -33,7 +33,7 @@ RENAMED = {"fnl-" + name: target for name, target in (
     ("open-source-review", "open-source-review"), ("pause", "pause"), ("plugin-packaging", "plugin-packaging"),
     ("restore-point", "restore-point"), ("review-gate", "review-gate"),
     ("security-review-gate", "security-review-gate"), ("session-hygiene", "tidy"), ("setup", "setup"),
-    ("status", "status"), ("update", "update"), ("verification", "checks"), ("versioning", "versioning"))}
+    ("status", "status"), ("update", "update"), ("versioning", "versioning"))}
 # Skills renamed again in 0.2.5: session-hygiene stays a user-only alias of tidy; autopilot was dropped for afk,
 # so it and its fnl- name no longer load at all.
 RENAMED.update({"session-hygiene": "tidy", "autopilot": "afk"})
@@ -321,20 +321,28 @@ def has_agent_roles(text):
     return "Agent roles" in headings(text)
 
 
+def has_agent_levels(text):
+    """Retired 15/11/2026 (0.3.1): only the assignment matrix sets levels; a fenced example does not count."""
+    from upgrade_state import headings
+    return "Agent levels" in headings(text)
+
+
 def assignments_evidence(status, matrix, text):
     """(status, reason) for the matrix state with fixed problem reasons only, never a value from the section;
     None when the canonical host config cannot be read."""
     from assignments import ROLES
     if status != "ok":
         return None
-    # A leftover Agent roles section beside a matrix is named in the legacy host settings row instead.
-    legacy = bool(re.search(r"^## Agent levels[ \t]*\r?$", text, re.M))
-    ignored = "; legacy Agent levels present and ignored" if legacy else ""
-    unset = "roles and judge unset, reviews not routed, judge falls to the host model" + ignored
+    # A leftover Agent roles or Agent levels section beside a matrix is named in the legacy host settings row instead.
+    unset = "roles and judge unset, reviews not routed, judge falls to the host model"
     if matrix.state == "absent":
-        if has_agent_roles(text):
-            return "missing", ("roles: missing; matrix absent and Agent roles no longer read, so roles are unset and "
-                               "the judge is host; /setup add delegation (migrate) converts it")
+        roles, levels = has_agent_roles(text), has_agent_levels(text)
+        if roles or levels:
+            old = " and ".join(name for name, found in (("Agent roles", roles), ("Agent levels", levels)) if found)
+            unread = " and ".join(name for name, found in (("roles", roles), ("levels", levels)) if found)
+            return "missing", (("roles: missing; " if roles else "levels: missing; ") + "matrix absent and " + old +
+                               " no longer read, so " + unread + " are unset and the judge is host; "
+                               "/setup add delegation (migrate) converts it")
         return "ok", "matrix absent; roles unset, judge host"
     if matrix.state != "valid":
         return "missing", "matrix invalid (" + ", ".join(matrix.problems) + "); " + unset
@@ -342,7 +350,7 @@ def assignments_evidence(status, matrix, text):
         return "missing", "matrix without consent; " + unset
     roles = [role for role in ROLES if role in matrix.roles]
     return "ok", (f"matrix valid; {len(matrix.agents)} agents; judge {matrix.judge}; roles assigned: "
-                  + (", ".join(roles) or "none") + ignored)
+                  + (", ".join(roles) or "none"))
 
 
 def retired_evidence(paths, reader=read):
@@ -1001,10 +1009,13 @@ def legacy_evidence(status, text):
     import assignments
     found = legacy(text) if status == "ok" else []
     fixes = ["set again per repository (/setup add project, /setup add checks), then delete by hand"] if found else []
-    # Without a matrix the host config row reports Agent roles with its conversion instead.
+    # Without a matrix the host config row reports Agent roles and Agent levels with their conversion instead.
     if status == "ok" and has_agent_roles(text) and assignments.parse(text).state != "absent":
         found.append("## Agent roles beside the matrix")
         fixes.append("the matrix holds roles and the judge, so delete Agent roles by hand")
+    if status == "ok" and has_agent_levels(text) and assignments.parse(text).state != "absent":
+        found.append("## Agent levels beside the matrix")
+        fixes.append("the matrix holds levels, so delete Agent levels by hand")
     if not found:
         return []
     return [item("legacy host settings", "missing", "no longer read: " + ", ".join(found) + "; " + "; ".join(fixes))]

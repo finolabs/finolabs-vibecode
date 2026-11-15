@@ -85,7 +85,7 @@ class ManifestTest(unittest.TestCase):
     def test_aliases_load_their_final_target_and_never_call_a_user_only_one_through_the_skill_tool(self):
         # The Skill tool refuses a skill with disable-model-invocation, so an alias of one tells the agent to read it.
         aliases = [p.parent.name for p in (ROOT / "skills").glob("*/SKILL.md") if alias_target(p.parent.name)]
-        self.assertTrue({"fnl-help", "ask", "brb", "gtg", "verification", "session-hygiene"} <= set(aliases))
+        self.assertTrue({"fnl-help", "ask", "brb", "gtg", "session-hygiene"} <= set(aliases))
         for name in aliases:
             target = alias_target(name)
             body = (ROOT / "skills" / name / "SKILL.md").read_text().split("---", 2)[2]
@@ -170,14 +170,9 @@ class ManifestTest(unittest.TestCase):
         for spelled in ("`ask`", "/ask", "$ask"):
             self.assertNotIn(spelled, intro)
 
-    def test_verification_is_a_user_only_thin_alias_of_checks(self):
-        alias = ROOT / "skills/verification/SKILL.md"
-        _, frontmatter, body = alias.read_text().split("---", 2)
-        fields = dict(line.split(": ", 1) for line in frontmatter.strip().splitlines())
-        self.assertEqual((fields["name"], fields["disable-model-invocation"]), ("verification", "true"))
-        self.assertIn("Dependency: `checks`", body)
-        self.assertIn("This alias holds no rules of its own.", body)
-        self.assertEqual(sorted(p.name for p in alias.parent.iterdir()), ["SKILL.md"])
+    def test_verification_alias_is_gone_and_checks_is_model_invoked(self):
+        self.assertFalse((ROOT / "skills/verification").exists())
+        self.assertFalse((ROOT / "skills/fnl-verification").exists())
         main = (ROOT / "skills/checks/SKILL.md").read_text().split("---", 2)[1]
         self.assertIn("name: checks", main)
         self.assertNotIn("disable-model-invocation", main)

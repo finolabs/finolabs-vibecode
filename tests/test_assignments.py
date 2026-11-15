@@ -70,6 +70,11 @@ class ParseValidTest(unittest.TestCase):
                 self.assertEqual((m.state, m.problems, m.roles), ('absent', [], {}))
                 self.assertIsNone(m.judge)
 
+    def test_legacy_agent_levels_alone_gives_no_levels(self):
+        # Retired in 0.3.1: without a matrix a legacy levels section sets no agent and no level.
+        m = A.parse('# Host\n## Agent levels\n- Consent: yes (2026-10-01)\n- claudework: levels 3-5\n- codex: levels 1-4\n')
+        self.assertEqual((m.state, dict(m.agents), m.roles), ('absent', {}, {}))
+
     def test_heading_inside_fence_is_ignored(self):
         text = '# Host\n```\n' + HEAD + '- claude: levels 1-5\n```\n~~~md\n## Assignment matrix\n~~~\n'
         self.assertEqual(A.parse(text).state, 'absent')

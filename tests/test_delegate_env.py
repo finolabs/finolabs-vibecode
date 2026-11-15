@@ -96,5 +96,37 @@ class EndedLineTest(unittest.TestCase):
         self.assertEqual(ended[DISPATCH]['exit'], 7)
 
 
+
+@unittest.skipUnless(Path('/bin/zsh').exists(), 'zsh is required')
+class FunctionDispatchEnvironmentTest(unittest.TestCase):
+    """A shell-function command behind delegate_env.py gets only approved names (names only, no values)."""
+
+    def run_function(self, host_text):
+        import subprocess
+        import sys
+        sys.path.insert(0, str(ROOT / 'scripts'))
+        import delegate_env
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp).resolve()
+            (home / '.zshrc').write_text('claudetest() { if (( ${+LEVELS_SYNTH_NAME} )); then print -r -- "state:set"; else print -r -- "state:unset"; fi; }\n')
+            with mock.patch.dict(os.environ, {'HOME': str(home), 'LEVELS_SYNTH_NAME': 'x', 'PATH': '/usr/bin:/bin'}, clear=True):
+                env = delegate_env.environment('claude', host_text=host_text)
+            self.assertNotIn('ZDOTDIR', env)
+            result = subprocess.run(['/bin/zsh', '-ic', 'claudetest'], env=env, capture_output=True, text=True, timeout=30)
+        return [line for line in result.stdout.splitlines() if line.startswith('state:')]
+
+    def test_a_name_that_is_not_approved_does_not_reach_the_function(self):
+        self.assertEqual(self.run_function('## Delegate environment\n- claude: none\n'), ['state:unset'])
+
+    def test_documented_launch_form_uses_the_filter_and_the_users_zsh(self):
+        text = (ROOT / 'skills/delegate/references/agents.md').read_text()
+        line = next(l for l in text.splitlines() if 'Declared Claude Code commands' in l)
+        self.assertIn('delegate_env.py --family claude -- /bin/zsh -ic', line)
+        self.assertNotIn('never behind `delegate_env.py`', line)
+
+    def test_an_approved_name_reaches_the_function(self):
+        self.assertEqual(self.run_function('## Delegate environment\n- claude: LEVELS_SYNTH_NAME\n'), ['state:set'])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -385,6 +385,33 @@ class MatrixSetupTest(unittest.TestCase):
         self.assertIn('dropped: Agent levels section unreadable', out)
         self.assertEqual(self.cli('apply', '--digest', digest, '--consent', 'yes')[0], 3)
 
+    def test_migrate_reads_legacy_levels_strictly(self):
+        """`migrate` is the only reader of `## Agent levels` left (0.3.1); anything ambiguous is dropped, never guessed."""
+        cases = (
+            b'## Agent levels\n- Consent: yes (2026-11-09)\n- claudework: levels 3-5\n## Agent levels\n- Consent: no\n',
+            b'## Agent levels\n- Consent: yes (2026-11-09)\n- claudework: levels 3-5\n- claudework: levels 1-2\n',
+            b'## Agent levels\n- claudework: levels 3-5\n',
+            b'## Agent levels\n- Consent: yes (2026-11-09)\n- claudework: levels 5-3\n',
+            b'## Agent levels\n- Consent: yes (2026-11-09)\n- extra: note\n',
+            b'## Agent levels\n- Consent: no\n- claudework: levels 3-5\n',
+        )
+        for raw in cases:
+            with self.subTest(raw=raw):
+                self.host.write_bytes(PREFIX + b'## Agent roles\n- navigator: codex\n' + raw)
+                code, out, _ = self.cli('migrate')
+                if code == 0:
+                    self.assertIn('dropped: Agent levels section unreadable', out)
+                else:
+                    self.assertEqual(code, 1)
+                self.assertNotIn('claudework', out)
+
+    def test_migrate_skips_a_fenced_legacy_levels_heading(self):
+        self.host.write_bytes(PREFIX + b'```text\n```md\n## Agent levels\n- Consent: no\n```\n\n'
+                              b'## Agent levels\n\n- Consent: yes (2026-10-01)\n- codex: levels 1-4\n')
+        out, _ = self.migrate()
+        self.assertIn('codex: levels 1-4', out)
+        self.assertNotIn('dropped', out)
+
     def test_migrate_refuses_when_matrix_exists_or_nothing_to_migrate(self):
         self.host.write_bytes(PREFIX + LEGACY + b'## Assignment matrix\n- Consent: no\n- Judge: host\n')
         before = self.host.read_bytes()
