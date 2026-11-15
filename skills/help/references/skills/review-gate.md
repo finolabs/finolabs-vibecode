@@ -13,4 +13,4 @@ Typed by the user, or loaded by the agent when the task matches.
 - The reviewer is a fresh context, preferably another model family; `review_route.py` picks it from local state.
 - A push after a review makes that review stale; the reviewers review the new head and post again.
 - `merge_check.py` exits 0 when the merge may go ahead, 1 when something blocks it and 2 when it cannot tell.
-- Where a repository adopts it, a low-risk lane gives root-document and version-bump pull requests one review pass.
+- Where a repository adopts it, a low-risk lane gives root-document, version-bump and post-release record pull requests one review pass.

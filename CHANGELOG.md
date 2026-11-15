@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-15
+
 ### Added
 
 - The compaction nudge runs on Codex too: one `UserPromptSubmit` hook (`compact_nudge.py --host codex`) reads only `last_token_usage.total_tokens` and `model_context_window` of the latest `token_count` event in the session's transcript under the Codex home's `sessions` folder, and the top-level `model_auto_compact_token_limit` of its `config.toml`; the threshold is the smaller of that limit and 90% of the window, as Codex resolves it. Same bands, message, mark and `FNL_COMPACT_NUDGE=off`; it never blocks. Codex asks to trust the plugin's hooks again after this update.
@@ -16,15 +18,15 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
-- The repository moved to `finolabs/vibecode` (owner decision, 15/11/2026); the plugin keeps its name, `finolabs-vibecode`, so commands, the catalog entry and installs are unchanged. Links, install commands and the update check's release endpoint use the new path. An install of 0.3.0 or earlier stops seeing update notices, because its update check follows no redirect: update it once by hand with the host's update command.
-- `versioning` ends every release with `tidy`: once the tag, the forge release, the `-dev` bump and any approved catalog pull request are done, the agent saves the handover, writes back the release's owner decisions and lessons, and renames or retires the session; `tidy` counts a finished release as a natural boundary (owner decision, 15/11/2026; advisory).
 - Breaking: `## Agent levels` in the host config is no longer read (owner decision, 15/11/2026). The assignment matrix is the only source of levels; without a valid matrix no levels are set and routing falls to the strength table. `levels_setup.py` and the setup reference `levels.md` are removed; `matrix_setup.py migrate` is the only reader left, so `/setup add delegation` still moves the levels into the matrix. `/setup check` reports a leftover section as no longer read with that fix, and the update checklist gains the `0.3.1/agent-levels-retired` note.
 - Breaking: the verification aliases (`verification` and its older `fnl-` name) are removed; type `checks` (owner decision, 15/11/2026).
+- The repository moved to `finolabs/vibecode` (owner decision, 15/11/2026); the plugin keeps its name, `finolabs-vibecode`, so commands, the catalog entry and installs are unchanged. Links, install commands and the update check's release endpoint use the new path. An install of 0.3.0 or earlier stops seeing update notices, because its update check follows no redirect: update it once by hand with the host's update command.
+- `versioning` ends every release with `tidy`: once the tag, the forge release, the `-dev` bump and any approved catalog pull request are done, the agent saves the handover, writes back the release's owner decisions and lessons, and renames or retires the session; `tidy` counts a finished release as a natural boundary (owner decision, 15/11/2026; advisory).
 - afk: `git commit` under a lease is Tier 1 only on a work branch; on the default branch it answers `protected` (owner decision, 15/11/2026).
 - `ledger.py finish` prints a warning when it accepts a run with `--accept-unverified`, or a review without `--review-url`; the acceptance is still recorded.
 - The afk mechanism and away decision diagrams show the third answer of `afk.py check`: an `unknown` request of an allowlisted shape goes up the decide ladder as "run this exact request?", and an approval recorded with the decision makes the next check of that exact request answer `decided` (Tier 1) once; the afk mechanism also shows that a merge needs a recorded MERGE OK under 15 minutes old. The PNG renderings and the README alt text are updated.
-- The request-to-merge diagram shows `shape` interviewing you before the router when the idea is unclear, and the implementer working in one worktree per branch while the main checkout stays on the default branch. The README's PNG renderings are not regenerated yet.
-- The eighth scoped exception in `CLAUDE.md`, `PRIVACY.md` ("Compaction nudge") and `docs/specs/compaction-nudge.md` gain a Codex clause (owner decision, 15/11/2026): the same nudge as one Codex `UserPromptSubmit` hook that reads only two integers of the latest `token_count` event in the session's own transcript under the Codex home's `sessions` folder and only `model_auto_compact_token_limit` from its `config.toml`. The code lands in a later pull request.
+- The request-to-merge diagram shows `shape` interviewing you before the router when the idea is unclear, and the implementer working in one worktree per branch while the main checkout stays on the default branch.
+- The eighth scoped exception in `CLAUDE.md`, `PRIVACY.md` ("Compaction nudge") and `docs/specs/compaction-nudge.md` gain a Codex clause (owner decision, 15/11/2026): the same nudge as one Codex `UserPromptSubmit` hook that reads only two integers of the latest `token_count` event in the session's own transcript under the Codex home's `sessions` folder and only `model_auto_compact_token_limit` from its `config.toml`. The code is `compact_nudge.py --host codex`, under Added.
 - afk: `checks.py run --dispatch <dispatch id>` is Tier 1 under a lease, so an away coordinator can write the receipt that accepting a delegated run needs; checks.py still writes it only after the whole approved list passes on a clean tree at an unmoved head (owner decision, 15/11/2026).
 - afk consumers follow the unknown-request ladder: `afk` names the own-worktree branch form and `checks.py` as test runners, the `delegate` route rule for an absent user defers to `afk` "Decide" during a lease, `review-gate` sends the stop after two rework rounds through Decide during a lease, the `/setup add afk` test-command question says other allowlisted shapes may still be decided, and the spec, README and index wording match.
 - The `review-gate` low-risk lane also takes a post-release record: `merge_check.py --lane` qualifies a pull request that changes only the `Status:` line of a `docs/specs/release-X.Y.Z.md` record from its prepared form to `released; tagged vX.Y.Z on YYYY-MM-DD; ...` and that release's row in `docs/specs/index.md` the same way, beside the changelog and the manifest version bumps. A second changed line in either file, a record without its row, a wrong version or date form, or any other spec still takes both reviewers.
@@ -654,7 +656,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/vibecode/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/finolabs/vibecode/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/finolabs/vibecode/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/finolabs/vibecode/compare/v0.2.6...v0.3.0
 [0.2.6]: https://github.com/finolabs/vibecode/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/finolabs/vibecode/compare/v0.2.4...v0.2.5

@@ -377,11 +377,41 @@
       "version": "0.3.1",
       "items": [
         {
+          "id": "0.3.1/codex-hook-trust",
+          "kind": "hook",
+          "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; a UserPromptSubmit hook (the compaction nudge) was added."
+        },
+        {
+          "id": "0.3.1/codex-compaction-nudge",
+          "kind": "info",
+          "text": "On Codex the compaction nudge asks the agent to run tidy at 80% and 90% of model_auto_compact_token_limit, else 90% of the window. FNL_COMPACT_NUDGE=off turns it off."
+        },
+        {
+          "id": "0.3.1/afk-unknown-decided",
+          "kind": "info",
+          "text": "Under a lease an unknown request of an allowlisted shape goes up the decide ladder and runs once if approved; a merge needs a MERGE OK from merge_check.py --independent within 15 minutes."
+        },
+        {
+          "id": "0.3.1/checks-identity",
+          "kind": "info",
+          "text": "An approved check list is now bound to its checkout's full identity; one saved before 0.3.1 still counts until /setup add checks writes it again."
+        },
+        {
           "id": "0.3.1/agent-levels-retired",
           "kind": "migration",
           "text": "Breaking: ## Agent levels is no longer read; without a matrix no levels are set. Setup runs matrix_setup.py migrate to move them into the matrix and asks consent again.",
           "setup": "/setup add delegation",
           "check": ["skills/setup/scripts/upgrade_state.py", "levels-retired"]
+        },
+        {
+          "id": "0.3.1/verification-alias-removed",
+          "kind": "removed",
+          "text": "Breaking: the verification and fnl-verification skill names are removed; type checks instead. Usage metrics recorded under verification count as checks."
+        },
+        {
+          "id": "0.3.1/repository-moved",
+          "kind": "info",
+          "text": "The repository moved to github.com/finolabs/vibecode; the plugin keeps its name finolabs-vibecode. Installs of 0.3.0 and earlier stop seeing update notices, so update those once by hand."
         }
       ]
     }
