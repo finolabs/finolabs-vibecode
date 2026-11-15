@@ -216,7 +216,9 @@ a tier; unknown commands and paths are Tier 3.
     root down and no `..` step; its text is screened only for controls, secrets, machine paths and the marker.
   - With Merge yes, the merge gate's cleanup is Tier 1: `git worktree remove [--] <path>` of a linked worktree whose
     HEAD is a full SHA that a `log --kind merge --pr <n> --head <sha>` entry of the current lease recorded; that entry is
-    refused unless an allowed `gh pr merge <n> --match-head-commit <sha>` check of the same lease pinned it (never forced, the
+    refused unless an allowed `gh pr merge <n> --match-head-commit <sha>` check of the same lease pinned it, and both name the
+    repository the merge check verified, so the removal counts only in that repository (from 15/11/2026; the pin is written
+    before the action is reserved, and a full log answers `log-unwritable`) (never forced, the
     main checkout, the current checkout or a worktree that is or holds this install), and `git branch -d [--] <branch>`
     (never `-D`, the current or a default branch). A git verb that changes a work tree, index or HEAD (`merge`, `commit`, `add`, `rm`, `pull`,
     `checkout` and the like) is `protected` when it would run in this install's own checkout, by its working folder or
