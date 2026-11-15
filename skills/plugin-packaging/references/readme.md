@@ -88,7 +88,7 @@ Run `python3 -I <this skill folder>/scripts/readme_check.py [repository root]`. 
 - **I1** (script) Every image has non-empty alt text and its local file exists.
 - **I2** (script) Every `<picture>` has a dark `<source>` and a light `<img>`, both files exist and are different files.
 - **I3** (agent) Screenshots and diagrams show the current product; one that may lag says so in its caption.
-- **K1** (script) Every relative link resolves to a file in the repository, and every `#anchor` to a heading or an `id` in the target file.
+- **K1** (script) Every relative link resolves to a file in the repository, and every `#anchor` to a heading or an `id` in the target file. A link that leads out of the repository, a `file:` link, or a link to a loopback, private or link-local address (`localhost`, `127.0.0.1`, `10.x`, `192.168.x`, `169.254.x`) fails K1 (I1 for an image), and such a URL is not listed for K2.
 - **K2** (agent) Every external link the script lists resolves (open it, or `curl -sI`), and points at what its text says.
 
 ### Content
@@ -100,7 +100,7 @@ Run `python3 -I <this skill folder>/scripts/readme_check.py [repository root]`. 
 
 ## Repository-local override and house style
 
-A repository may keep `.github/readme-standard.json`. It adapts the standard to the repository and may add a house style; it never removes a required item. Unknown top-level keys are ignored; a key of the wrong type, an unknown section id under `sections` or a pattern that is not a valid regular expression stops the check with exit 2, naming the key.
+A repository may keep `.github/readme-standard.json`. It adapts the standard to the repository and may add a house style; it never removes a required item. Unknown top-level keys are ignored; a key of the wrong type, an unknown section id under `sections` or a pattern that is not a valid regular expression or is longer than 200 characters stops the check with exit 2, naming the key.
 
 ```json
 {
