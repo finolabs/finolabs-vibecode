@@ -42,7 +42,7 @@ One plugin with a skill set that gives AI coding agents a single engineering pra
 
 Pull requests follow `review-gate` "Pull requests"; reviewers may post their review comments on them. Pull requests may take the low-risk lane of `review-gate`. The lane covers changelog and root-document edits, manifest version bumps (the three plugin manifests' top-level `"version"`, such as the post-release bump to the next `-dev` version) and, by owner decision of 15/11/2026, a post-release record: the one `Status:` line of a `docs/specs/release-X.Y.Z.md` record changed from its prepared form to `released; tagged vX.Y.Z on YYYY-MM-DD; ...`, with only that release's row in `docs/specs/index.md` changed the same way; any other docs change stays outside the lane (enforcer: `merge_check.py --lane`).
 
-Standing relay (owner, 02/11/2026): when one model family wrote a pull request, a code review by another model family that cannot post may be posted unchanged by the coordinator, with a second line naming the reviewer, who relayed it and this record. Security reviews and every other relay still need the owner's approval per pull request.
+Standing relay (owner, 02/11/2026): when one model family wrote a pull request, a code review by another model family that cannot post may be posted unchanged by the coordinator, with a second line naming the reviewer, who relayed it and this record. While an away lease with Merge yes is live, the same standing relay covers a security review by another model family (owner, 15/11/2026: the lease's Merge answer already delegates reviews and merges). Outside a lease, security reviews and every other relay still need the owner's approval per pull request.
 
 ## Versions
 

@@ -4,6 +4,12 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- An away lease decides unknown requests instead of parking them (owner decision, 15/11/2026). When `afk.py check` answers `unknown`, the agent asks the away ladder "run this exact request?"; a `rule`, `advisor` or `host` attempt that settles on option 1 adds `--approve-argv-json '<argv>'` or `--approve-paths <paths>` to its `log --kind decision` call, and the next check of that exact request in that folder answers `decided` (Tier 1) once. The approval is refused unless the request is `unknown` and decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, and no program from the never-decided list (shells, network clients, privilege, system and process control, deletion, installing a package the repository does not declare (`npm ci`, `npm install` with no package, `pip install -r` or `-e`, `uv sync`, `go mod download` are decidable), inline code); `git` and `gh` are decidable except for settings, credentials, deleting or renaming a repository, rewriting history and discarding work. A repository's own CI script, `make` target, module test run or app launch no longer parks the lease.
+- `/setup instructions` offers a dated standing relay line for a repository whose reviewers cannot post, including security reviews while an away lease with Merge yes is live, and `/setup add afk` points to it after a Merge yes; this repository's `CLAUDE.md` "Reviews" records that clause (owner decision, 15/11/2026). Before, an away lease could not merge a pull request whose security reviewer could not post.
+- afk: a third rework round goes through the away ladder like every other stop after two rounds, instead of waiting for the user; a delegated run through this install's `delegate_env.py` with an approved program of a lease family is decidable, so a review on a fast model or an implementation dispatch no longer parks.
+
 ### Changed
 
 - The `review-gate` low-risk lane also takes a post-release record: `merge_check.py --lane` qualifies a pull request that changes only the `Status:` line of a `docs/specs/release-X.Y.Z.md` record from its prepared form to `released; tagged vX.Y.Z on YYYY-MM-DD; ...` and that release's row in `docs/specs/index.md` the same way, beside the changelog and the manifest version bumps. A second changed line in either file, a record without its row, a wrong version or date form, or any other spec still takes both reviewers.
