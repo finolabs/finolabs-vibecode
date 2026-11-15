@@ -3120,6 +3120,30 @@ class AwayFlowTest(AfkBase):
         self.invoke('stop')
         self.assertEqual(self.invoke('check', '--argv-json', '["git", "status"]')[0], 3)  # no lease
 
+    def test_a_merge_entry_matching_pins_of_two_repositories_is_refused(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        head = 'c' * 40
+        first, _ = self.git_repo('first')
+        second, git = self.git_repo('second')
+        git('remote', 'set-url', 'origin', 'https://github.com/other/demo.git')
+        self.cwd = first
+        self.check(['gh', 'pr', 'merge', '7', '--merge', '--match-head-commit', head, '--repo', 'github.com/example/demo'])
+        self.cwd = second
+        self.merge_ok('7', head, repo='github.com/other/demo')
+        self.check(['gh', 'pr', 'merge', '7', '--merge', '--match-head-commit', head, '--repo', 'github.com/other/demo'])
+        status, output = self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)
+        self.assertEqual(status, 3, output)
+
+    def test_a_merged_head_does_not_remove_the_worktree_once_origin_names_another_repository(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        repo, tree, git = self.worktree()
+        self.cwd = repo
+        self.merged('7', git('rev-parse', 'HEAD', cwd=tree))
+        self.check(['git', 'worktree', 'remove', str(tree)])
+        git('remote', 'set-url', 'origin', 'https://github.com/other/mirror.git')
+        status, output = self.invoke('check', '--argv-json', json.dumps(['git', 'worktree', 'remove', str(tree)]))
+        self.assertEqual(status, 3, output)
+
     def test_merged_worktree_and_branch_cleanup_and_tracked_removal(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
         repo, tree, git = self.worktree()
