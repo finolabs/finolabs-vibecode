@@ -372,6 +372,31 @@
           "text": "The same-family fallback may merge a change to an enforcer script or instruction file when each review kind has approvals from two different models, each marker naming model=<name>."
         }
       ]
+    },
+    {
+      "version": "0.3.1",
+      "items": [
+        {
+          "id": "0.3.1/codex-hook-trust",
+          "kind": "hook",
+          "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; a UserPromptSubmit hook (the compaction nudge) was added."
+        },
+        {
+          "id": "0.3.1/codex-compaction-nudge",
+          "kind": "info",
+          "text": "On Codex the compaction nudge asks the agent to run tidy at 80% and 90% of model_auto_compact_token_limit, else 90% of the window. FNL_COMPACT_NUDGE=off turns it off."
+        },
+        {
+          "id": "0.3.1/afk-unknown-decided",
+          "kind": "info",
+          "text": "Under a lease an unknown request of an allowlisted shape goes up the decide ladder and runs once if approved; a merge needs a MERGE OK from merge_check.py --independent within 15 minutes."
+        },
+        {
+          "id": "0.3.1/checks-identity",
+          "kind": "info",
+          "text": "An approved check list is now bound to its checkout's full identity; one saved before 0.3.1 still counts until /setup add checks writes it again."
+        }
+      ]
     }
   ]
 }
