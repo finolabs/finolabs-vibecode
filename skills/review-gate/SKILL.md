@@ -18,7 +18,7 @@ Enforcers: `review_route.py` chooses families; `post_review.py` bounds posting; 
 
 Route before starting a reviewer (advisory, agent judgment). Run `python3 -I <this skill folder>/scripts/review_route.py --base <base ref>`, which reads only local state ([references/reviewers.md](references/reviewers.md) "Routing"). See [references/routing-and-posting.md](references/routing-and-posting.md) for the exact interface, output and failure handling.
 
-Call the selected family directly (advisory, agent judgment); no reviewer routes for another. Engines: `fnl-reviewer` with `/code-review` or `fnl-security-reviewer` with `/security-review` on Claude Code, a headless `codex review --base <branch>` on Codex, a headless `agy` run on Antigravity. Companions, delegated runs and a missing engine: [references/reviewers.md](references/reviewers.md) "Engines per family".
+Call the selected family directly (advisory, agent judgment); no reviewer routes for another. Engines: `reviewer` with `/code-review` or `security-reviewer` with `/security-review` on Claude Code, a headless `codex review --base <branch>` on Codex, a headless `agy` run on Antigravity. Companions, delegated runs and a missing engine: [references/reviewers.md](references/reviewers.md) "Engines per family".
 
 ## Who reviews
 

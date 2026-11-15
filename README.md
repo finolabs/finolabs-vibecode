@@ -167,9 +167,9 @@ The three agent definitions in `agents/` apply the skills above in a fresh conte
 
 | Agent | Question | Use it when |
 | --- | --- | --- |
-| `fnl-reviewer` | Is the change good? | A pull request or story is ready: it reads changed hunks and their impact set, or identifies coverage supplied by a native review engine, under `review-gate`. |
-| `fnl-security-reviewer` | Is the change safe? | The change crosses a sensitive boundary: it reads the changed files, then every trust path that reaches them, under `security-review-gate`. |
-| `fnl-navigator` | Is the project on course? | Compare confirmed outcome anchors with bounded repository evidence, report unsupported work and at most three ways to steer back, and edit nothing. [Navigator design and validation limits](docs/specs/agent-roles.md#g-the-navigator). |
+| `reviewer` | Is the change good? | A pull request or story is ready: it reads changed hunks and their impact set, or identifies coverage supplied by a native review engine, under `review-gate`. |
+| `security-reviewer` | Is the change safe? | The change crosses a sensitive boundary: it reads the changed files, then every trust path that reaches them, under `security-review-gate`. |
+| `navigator` | Is the project on course? | Compare confirmed outcome anchors with bounded repository evidence, report unsupported work and at most three ways to steer back, and edit nothing. [Navigator design and validation limits](docs/specs/agent-roles.md#g-the-navigator). |
 
 Headless dispatch forms use `delegate_env.py` and `run_env.py` for an environment allowlist and `brief_check.py` to lint the brief; finished logs are scanned locally and read through `log_scan.py show`. HOME remains reachable: protection is environment-only, excluding interactive, desktop-app sessions and in-session subagents; private HOME is deferred. See [run hygiene and its limits](docs/specs/run-hygiene.md).
 
@@ -298,7 +298,7 @@ Companion choices never install anything: a Yes prints a checked command, a No r
 
 These skills set the gates and the routing; they do not try to replace good phase tools. They pair with [Matt Pocock's skills](https://github.com/mattpocock/skills) (MIT): `tdd` and `diagnosing-bugs` inside the work `coding-router` routes, `code-review` as the reviewer's instrument in the review gate, `grilling` and `prototype` for clarification (`shape` runs first; `grilling` when `shape` is missing or you ask for it), `pr` for pull request bodies, and `handoff` for portable handovers. Install that pack with its own instructions; `/finolabs-vibecode:help` points to its skills when they fit. The two packs are independent projects.
 
-For reviews, the gates and the `fnl-reviewer` agent use each host's native instruments: `/code-review`, `/security-review` and `claude ultrareview` on Claude Code, `codex review` on Codex. Antigravity has no native review command, so it reviews by reading the diff, and the native second pass runs on Claude Code or Codex. For security audits, the security gates recommend [Cloudflare's `security-audit` skill](https://github.com/cloudflare/security-audit-skill) (MIT):
+For reviews, the gates and the `reviewer` agent use each host's native instruments: `/code-review`, `/security-review` and `claude ultrareview` on Claude Code, `codex review` on Codex. Antigravity has no native review command, so it reviews by reading the diff, and the native second pass runs on Claude Code or Codex. For security audits, the security gates recommend [Cloudflare's `security-audit` skill](https://github.com/cloudflare/security-audit-skill) (MIT):
 
 ```bash
 npx skills add https://github.com/cloudflare/security-audit-skill --skill security-audit
@@ -378,7 +378,7 @@ The judge defaults to a small host model. Choose Jev through `setup` only with a
 .antigravity-plugin/plugin.json   Antigravity manifest, version kept equal
 .agents/plugins/marketplace.json  Codex marketplace listing this repository
 .github/readme-standard.json      this repository's README headings and house style for plugin-packaging's readme_check.py
-agents/fnl-*.md                   code reviewer, security reviewer and navigator definitions (no project edits; authorized posting uses a private draft)
+agents/*.md                   code reviewer, security reviewer and navigator definitions (no project edits; authorized posting uses a private draft)
 agents/openai.yaml                Codex skill-list display metadata
 skills/*/SKILL.md                 self-contained skills, model-invoked or flagged user-only on Claude Code
 skills/advisor/references/committee.md       committee procedure, loaded only for a committee
@@ -568,7 +568,7 @@ Suggested combinations, not presets (nothing selects a build for you):
 | Build | What you get | Skills |
 | --- | --- | --- |
 | **Solo** | One implementer that plans before editing, proves its work and writes clean commits | `coding-router`, `checks`, `commit-messages` |
-| **Reviewed** | Solo, plus pull requests held for posted code and security reviews | Solo + `review-gate`, `security-review-gate` (and the `fnl-reviewer` and `fnl-security-reviewer` agents, which only the plugin install carries) |
+| **Reviewed** | Solo, plus pull requests held for posted code and security reviews | Solo + `review-gate`, `security-review-gate` (and the `reviewer` and `security-reviewer` agents, which only the plugin install carries) |
 | **Whole team** | Reviewed, plus coordination of the agents you have | Reviewed + `delegate`, `handoff`; optionally `advisor`, `status` |
 | **Your own** | Any subset that fits how you work | Any skills; the delegation family needs `delegate` beside it |
 

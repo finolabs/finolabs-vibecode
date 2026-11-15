@@ -57,7 +57,7 @@ Common fields: `ts` (UTC, ISO 8601), `sid` (the host's session id), `repo` (firs
 | --- | --- | --- |
 | `session_start` | `host`, `dispatch` (value of `FNL_DISPATCH_ID` or null), `source` (`startup`, `resume`, `clear`, `compact`) | hook on `SessionStart` |
 | `skill` | `name` (only one of this plugin's skill names, a closed list in `fnl_metrics.py`; an older `fnl-` alias name is recorded as the skill's current name) | hook after the `Skill` tool; on Claude Code also the `UserPromptSubmit` hook when the prompt starts with a typed `/name`, `/finolabs-vibecode:name` or an older `/fnl-name` or `/plugin:fnl-name`, followed by whitespace or the end (the prompt is read in memory for that name only and discarded) |
-| `agent` | `name` (only an agent name that starts with `fnl-`) | hook after the `Agent` tool |
+| `agent` | `name` (only one of this plugin's agents: `reviewer`, `security-reviewer`, `navigator`; an older `fnl-` name of one, typed or in a line stored before 0.3.2, counts as the new one) | hook after the `Agent` tool |
 | `first_edit` | none; written once per session | hook after `Edit` or `Write`, guarded by a marker file per session |
 | `commit` | none | hook after `Bash`, only when the command contains `git commit` |
 | `review` | `kind` (`code` or `security`), `verdict` (`APPROVE` or `REWORK`), `pr` (number) | hook after `Bash`, only when the command posts a comment (`gh pr comment`) whose body (a file, `--body`, or a heredoc on stdin) starts with a `fnl-review` marker line |

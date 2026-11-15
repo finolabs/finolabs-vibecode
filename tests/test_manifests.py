@@ -78,8 +78,8 @@ class ManifestTest(unittest.TestCase):
                     self.assertNotIn("user-only", body)
 
     def test_agents_match_the_folders(self):
-        agents = {p.stem for p in (ROOT / "agents").glob("fnl-*.md")}
-        self.assertEqual(agents, {"fnl-reviewer", "fnl-security-reviewer", "fnl-navigator"})
+        agents = {p.stem for p in (ROOT / "agents").glob("*.md")}
+        self.assertEqual(agents, {"reviewer", "security-reviewer", "navigator"})
         readme = (ROOT / "README.md").read_text()
         ask = (ROOT / "skills/help/references/map.md").read_text()
         display = (ROOT / "agents/openai.yaml").read_text()

@@ -37,6 +37,8 @@ RENAMED = {"fnl-" + name: target for name, target in (
 # Skills renamed again in 0.2.5: session-hygiene stays a user-only alias of tidy; autopilot was dropped for afk,
 # so it and its fnl- name no longer load at all.
 RENAMED.update({"session-hygiene": "tidy", "autopilot": "afk"})
+# The agents lost the prefix in 0.3.2; a brief or instruction file naming an old one points at nothing.
+RENAMED.update({"fnl-" + name: name for name in ("reviewer", "security-reviewer", "navigator")})
 # The plain older names `verification` and `ask` stay out: they are ordinary words in prose, so matching them would
 # flag most instruction files; their fnl- forms above are mapped.
 TYPED_ONLY = {"session-hygiene"}  # the one old name above that still loads, when the user types it

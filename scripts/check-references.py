@@ -4,11 +4,11 @@
 - README and the help map list exactly the skill folders (tests/test_manifests.py checks the count).
 - Retired names occur only in dated releases, Unreleased migration mappings or
   the explicitly listed historical setup specs.
-- Every `fnl-<name>` in backticks names an agent or the review or router marker,
+- Every `fnl-<name>` in backticks names the review or router marker (agents lost the prefix in 0.3.2),
   except explicitly retired setup names in the historical specs listed below.
 - The older `fnl-<name>` of a renamed skill (its alias was removed in 0.3.2) appears only in the
   changelog, the release spec that renamed the skills, or a line that says "alias" or "older name".
-- Every `<skill>` or `fnl-<agent>` "Heading" names a heading in that skill or agent.
+- Every `<skill>` or `<agent>` "Heading" names a heading in that skill or agent.
 - No `skills/fnl-<name>/` folder exists: the fnl- aliases were removed in 0.3.2.
 - Every `file.md` "Heading" or [file.md](file.md) "Heading" names a heading in that file, in the same skill.
 - Every relative Markdown link points to an existing file.
@@ -33,7 +33,9 @@ RETIRED = {"fnl-" + old: new for old, new in (
     ("knowledge", "tidy"))}
 # Historical specs and released entries retain these names; current callers use the replacements.
 RETIRED_AGENTS = {"fnl-" + old: new for old, new in (
-    ("verifier", "verification"), ("steward", "tidy"))}
+    ("verifier", "verification"), ("steward", "tidy"),
+    # Renamed without the prefix in 0.3.2 (owner decision, 16/11/2026).
+    ("reviewer", "reviewer"), ("security-reviewer", "security-reviewer"), ("navigator", "navigator"))}
 # Setup commands were folded into one skill in 0.2.0. Keep the original
 # decisions in these specs; current surfaces must use the replacement commands.
 SETUP_RETIRED = {"fnl-" + old: "/setup " + new for old, new in (
@@ -102,7 +104,7 @@ def targets(root):
     found = {}
     for skill in root.glob("skills/*/SKILL.md"):
         found[skill.parent.name] = skill
-    for agent in root.glob("agents/fnl-*.md"):
+    for agent in root.glob("agents/*.md"):
         found[agent.stem] = agent
     return found
 

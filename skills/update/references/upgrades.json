@@ -421,7 +421,7 @@
         {
           "id": "0.3.2/fnl-aliases-removed",
           "kind": "removed",
-          "text": "Breaking: the fnl- skill names are removed (fnl-setup is now setup); type the new names. /setup check lists any old name left in your instruction files."
+          "text": "Breaking: fnl- skill names are removed (fnl-setup is now setup) and the agents are reviewer, security-reviewer and navigator; use the new names. /setup check lists the old names it finds."
         }
       ]
     }

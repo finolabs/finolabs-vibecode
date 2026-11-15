@@ -773,7 +773,7 @@ class RefreshTest(unittest.TestCase):
             self.event(60, "d", X, "first_edit"),
             self.event(50, "e", Y, "session_start", **start), self.event(49, "e", Y, "router", depth="MIN", trigger="none"),
             self.event(40, "e", Y, "first_edit"),
-            self.event(35, "a", X, "agent", name="fnl-reviewer"), self.event(34, "a", X, "agent", name="fnl-reviewer"),
+            self.event(35, "a", X, "agent", name="fnl-reviewer"), self.event(34, "a", X, "agent", name="reviewer"),
             self.event(30, "a", X, "review", kind="code", verdict="REWORK", pr=5),
             self.event(20, "a", X, "review", kind="security", verdict="APPROVE", pr=5),
             self.event(10, "e", Y, "review", kind="code", verdict="APPROVE", pr=7),
@@ -908,7 +908,7 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(d["router"], {"covered": 2, "missed": 1, "excluded": 1, "unclassified": 1, "eligible": 3})
         self.assertAlmostEqual(d["kpi"]["router_coverage"], 2 / 3)
         self.assertEqual({(u["kind"], u["name"], u["count"]) for u in d["use"]},
-                         {("skill", "coding-router", 1), ("agent", "fnl-reviewer", 2)})
+                         {("skill", "coding-router", 1), ("agent", "reviewer", 2)})
         self.assertEqual(d["kpi"]["calls"], 3)
         self.assertEqual({r["depth"]: (r["receipts"], r["reworked"]) for r in d["depth"]}, {"MIN": (1, 0), "DEEP": (1, 1)})
         self.assertEqual({(r["repo"], r["pr"]): r["verdicts"] for r in d["reviews"]},

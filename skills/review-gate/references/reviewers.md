@@ -10,7 +10,7 @@ Detail behind `SKILL.md` "Instruments", "Who reviews", "The reviewer packet" and
 
 Call the selected family directly (advisory, agent judgment); no reviewer routes for another:
 
-- **Claude Code**: `fnl-reviewer` with `/code-review`, or `fnl-security-reviewer` with `/security-review`, as the engine.
+- **Claude Code**: `reviewer` with `/code-review`, or `security-reviewer` with `/security-review`, as the engine.
 - **Codex**: a headless `codex review --base <branch>` run (or `--commit <sha>`), with the packet and the requested review kind.
 - **Antigravity**: a headless `agy` run that reads the diff; `/diff` and the review pane are human tools, not AI review engines.
 - **Companions**: `code-review` from [mattpocock/skills](https://github.com/mattpocock/skills) for standards and spec; `security-audit` from [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill) when `security-review-gate` triggers. Name that requirement in the brief. A cloud multi-agent review needs the owner's approval before code leaves the checkout.

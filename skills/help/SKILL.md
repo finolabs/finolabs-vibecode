@@ -27,4 +27,4 @@ The map lists every skill, including `setup` (with `add <feature>`, `instruction
 Read a procedure reference only when the question concerns that procedure. Answer and stop: invoke nothing; leave the how-to to the target skill when it runs.
 On Codex the user types `$` instead of `/` for skill commands; Claude Code and Antigravity use `/`. Skills the user types, such as `setup`, may be missing from your own skill list; do not warn the user that they are missing.
 
-The plugin also ships three agents instructed to leave project files unchanged: `fnl-reviewer`, `fnl-security-reviewer` and `fnl-navigator`; the map covers every distinct script name, every setup feature, review routing, receipts, judge, run hygiene, work records, context snapshots, quota on demand and advisory parallel slots.
+The plugin also ships three agents instructed to leave project files unchanged: `reviewer`, `security-reviewer` and `navigator`; the map covers every distinct script name, every setup feature, review routing, receipts, judge, run hygiene, work records, context snapshots, quota on demand and advisory parallel slots.

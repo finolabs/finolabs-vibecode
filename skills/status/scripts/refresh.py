@@ -476,8 +476,9 @@ def build(days=WEEKS * 7, cwd=None):
     start = today - timedelta(days=days - 1)
     consent = fm.read_consent()
     recorded_events = fm.read_events()[0]
-    # A skill line stored under its older `fnl-` name counts as the skill's current name.
-    events = [{**e, "name": fm.skill_name(e["name"])} if e["event"] == "skill" and fm.skill_name(e["name"]) else e
+    # A skill or agent line stored under its older `fnl-` name counts under the current name.
+    events = [{**e, "name": fm.skill_name(e["name"])} if e["event"] == "skill" and fm.skill_name(e["name"]) else
+              {**e, "name": fm.agent_name(e["name"])} if e["event"] == "agent" and fm.agent_name(e["name"]) else e
               for e in recorded_events if local_date(e["ts"]) >= start]
     by_sid = defaultdict(list)
     for e in events:

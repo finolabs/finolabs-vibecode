@@ -365,14 +365,14 @@ class CheckupTest(unittest.TestCase):
 
     def test_old_fnl_skill_names_are_listed_with_their_new_names(self):
         # The fnl- names were removed in 0.3.2, so a file that names one points at nothing.
-        self.write(self.repo / "AGENTS.md", "Use fnl-coding-router, then fnl-ask.\nfnl-reviewer stays.\n")
+        self.write(self.repo / "AGENTS.md", "Use fnl-coding-router, then fnl-ask.\nfnl-review markers stay.\n")
         self.write(self.home / ".claude/CLAUDE.md", "Help: fnl-ask.\n")
         row = self.setup_item("old skill names")
         self.assertEqual(row["status"], "missing")
         for pair in ("fnl-coding-router -> coding-router", "fnl-ask -> help"):
             self.assertIn(pair, row["reason"])
         self.assertIn("instruction files must use the new names (the other old names no longer load)", row["reason"])
-        self.assertNotIn("fnl-reviewer", row["reason"])
+        self.assertNotIn("fnl-review ", row["reason"])
         rows = [r for r in self.instruction_rows("I14") if r["pattern"] == "old-skill-name"]
         self.assertEqual(sorted((r["file"], r["line"], r["status"]) for r in rows),
                          [("AGENTS.md", 1, "warn"), ("AGENTS.md", 1, "warn"), ("~/.claude/CLAUDE.md", 1, "warn")])
@@ -384,12 +384,14 @@ class CheckupTest(unittest.TestCase):
     def test_renamed_names_cover_every_removed_alias(self):
         # The fnl- aliases were removed in 0.3.2; every older name still maps to the skill files must use.
         self.assertEqual(list((ROOT / "skills").glob("fnl-*")), [])
-        self.assertEqual(len(checkup.RENAMED), 25)
+        self.assertEqual(len(checkup.RENAMED), 28)
         self.assertTrue({"fnl-setup", "fnl-ask", "fnl-gtg", "session-hygiene", "autopilot"} <= set(checkup.RENAMED))
+        self.assertEqual(checkup.RENAMED["fnl-security-reviewer"], "security-reviewer")
+        self.assertTrue((ROOT / "agents/security-reviewer.md").is_file())
         self.assertEqual((checkup.RENAMED["session-hygiene"], checkup.RENAMED["fnl-session-hygiene"]), ("tidy", "tidy"))
         self.assertEqual((checkup.RENAMED["autopilot"], checkup.RENAMED["fnl-autopilot"]), ("afk", "afk"))
         for old, new in checkup.RENAMED.items():
-            self.assertTrue((ROOT / "skills" / new / "SKILL.md").is_file(), new)
+            self.assertTrue((ROOT / "skills" / new / "SKILL.md").is_file() or (ROOT / "agents" / (new + ".md")).is_file(), new)
 
     def test_session_hygiene_and_autopilot_are_listed_with_tidy_and_afk(self):
         self.write(self.repo / "AGENTS.md", "Invoke session-hygiene, then fnl-session-hygiene.\nRun /autopilot start.\n")
