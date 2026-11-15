@@ -1342,7 +1342,7 @@ class ProjectScopeTest(AfkBase):
                      ['python3', '-m', 'timeit', '1'], ['python3', '-m', 'code'], ['python3'], ['node'],
                      ['node', '-e"1"'], ['deno', 'eval', '1'], ['pwsh', '-Command', 'x'], ['uv', 'run', 'bash'],
                      ['poetry', 'run', 'sh'], ['bundle', 'exec', 'sh'], ['go', 'mod', 'download', 'x@v1'],
-                     ['go', 'run', 'example.com/x@latest'], ['pip', 'install', 'git+git@github.com:a/b.git'],
+                     ['go', 'run', 'example.com/x@latest'], ['pip', 'install', 'git+git@example.com:a/b.git'],
                      ['gh', 'pr', 'review', '7', '--approve'], ['gh', 'issue', 'delete', '7'],
                      ['gh', 'repo', 'create', 'x'], ['zcode', '-p', 'x'], ['cat', 'git@example.com:a/b']):
             with self.subTest(argv=argv):
