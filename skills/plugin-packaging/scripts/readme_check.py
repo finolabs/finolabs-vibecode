@@ -11,13 +11,14 @@ failed, 2 when the input cannot be read.
 """
 
 import fnmatch
+import ipaddress
 import json
 import os
 import re
 import stat
 import sys
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 HOSTS = (("Claude Code", ".claude-plugin"), ("Codex", ".codex-plugin"), ("Antigravity", ".antigravity-plugin"))
 # Every host the override's `hosts` may name; Claude Cowork reads the Claude Code manifest format.
@@ -59,13 +60,14 @@ PLACEHOLDERS = re.compile(r"\b(?:TODO|TBD|FIXME|XXX)\b|lorem ipsum|coming soon|\
 PLACEHOLDER_CASE = re.compile(r"\b(?:todo|tbd|fixme|xxx)\b")  # lower-case words are prose, not markers
 COUNT = re.compile(r"\b(\d+) (skill folders|skills?|agents?|commands?)\b")
 ROW = re.compile(r"^\|\s*((?:`[^`|]+`[\s,/]*)+)\|")  # one or more backticked names in the first cell
-HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
+HEADING = re.compile(r"^(#{1,6})\s+(.*)$")  # the closing #s are cut in headings(), without backtracking
 LINK = re.compile(r"(?<!!)\[[^\]]*\]\(\s*(?:<([^>]+)>|([^)\s]+))(?:\s+\"[^\"]*\")?\s*\)")
 MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(\s*(?:<([^>]+)>|([^)\s]+))(?:\s+\"[^\"]*\")?\s*\)")
 LICENSE_FILES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")
 
 
 MAX_READ = 1 << 20  # bytes read from any one repository file
+MAX_PATTERN = 200  # characters in one override heading pattern
 
 
 class BadInput(Exception):
@@ -80,18 +82,35 @@ def attrs(text):
 
 
 def blank_comments(text):
-    """Blank HTML comments, keeping line numbers."""
-    return re.sub(r"<!--.*?-->", lambda m: "\n" * m.group(0).count("\n"), text, flags=re.S)
+    """Blank HTML comments, keeping line numbers (one pass: an opener with no closer ends the scan)."""
+    out, pos = [], 0
+    while (start := text.find("<!--", pos)) != -1:
+        end = text.find("-->", start + 4)
+        if end == -1:
+            break
+        out += [text[pos:start], "\n" * text.count("\n", start, end)]
+        pos = end + 3
+    out.append(text[pos:])
+    return "".join(out)
 
 
 def opens_comment(line, open_comment):
     """Whether an HTML comment block is still open after this line (inline code already removed).
 
-    Only a `<!--` at the start of a line opens a block, as in CommonMark; one in prose does not."""
-    if open_comment:
-        return "-->" not in line
-    start = re.match(r" {0,3}<!--", line)
-    return bool(start) and "-->" not in line[start.end():]
+    Only a `<!--` at the start of a line opens a block, as in CommonMark; one in prose does not.
+    A `<!--` after a `-->` on the same line reopens it, as blank_comments reads it."""
+    pos = 0
+    if not open_comment:
+        start = re.match(r" {0,3}<!--", line)
+        if not start:
+            return False
+        pos = start.end()
+    while (end := line.find("-->", pos)) != -1:
+        reopen = line.find("<!--", end + 3)
+        if reopen == -1:
+            return False
+        pos = reopen + 4
+    return True
 
 
 def strip_code(text):
@@ -129,7 +148,7 @@ def code_lines(text):
             comment = opens_comment(line, True)
             continue
         if fence:
-            if mark and mark.group(1)[0] == fence[0]:
+            if mark and mark.group(1)[0] == fence[0] and len(mark.group(1)) >= len(fence):
                 fence = None
             else:
                 found.append((i, line))
@@ -161,16 +180,16 @@ def headings(lines):
     for i, line in enumerate(lines):
         m = HEADING.match(line)
         if m:
-            result.append((i, len(m.group(1)), plain(m.group(2))))
+            result.append((i, len(m.group(1)), plain(m.group(2).rstrip().rstrip("#"))))
     return result
 
 
 def anchors(text):
-    lines = strip_code(text)
+    body = blank_comments("\n".join(strip_code(text)))  # no id or heading from code or a comment
     seen, found = {}, set()
-    for _, _, head in headings(lines):
+    for _, _, head in headings(body.split("\n")):
         found.add(slugify(head, seen))
-    for tag in re.findall(r"<[a-z][^>]*>", text, re.I):
+    for tag in re.findall(r"<[a-z][^>]*>", body, re.I):
         a = attrs(tag)
         for key in ("id", "name"):
             if key in a:
@@ -201,6 +220,37 @@ def load_json(root, path):
         return json.loads(read_text(root, path))
     except (OSError, ValueError, RecursionError):
         return None
+
+
+LOCAL_NAMES = {"localhost", "ip6-localhost", "ip6-loopback", "localhost.localdomain", "localtest.me"}
+LOCAL_SUFFIXES = (".localhost", ".local", ".localdomain", ".internal", ".home.arpa", ".lan",
+                  ".nip.io", ".sslip.io", ".localtest.me")
+NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
+def public_url(url):
+    """Whether an http(s) URL names a public host: not loopback, private, link-local, a numeric shorthand, a
+    single-label or local-only name, or a well-known name that resolves to loopback. Offline, so names that only DNS
+    would reveal as private still pass; deny on doubt."""
+    try:
+        parts = urlsplit(url)
+        host = (parts.hostname or "").rstrip(".").lower()
+    except ValueError:
+        return False
+    if parts.scheme.lower() not in ("http", "https") or not host or host in LOCAL_NAMES or host.endswith(LOCAL_SUFFIXES):
+        return False
+    try:
+        ip = ipaddress.ip_address(host.partition("%")[0])  # a zone index (fe80::1%eth0) names a local interface
+    except ValueError:
+        if ":" in host or "%" in host or "." not in host:
+            return False  # an IPv6 form ipaddress refuses, or a single-label name (metadata, router, intranet)
+        return not re.fullmatch(r"(?:0x[0-9a-f]*|\d+)(?:\.(?:0x[0-9a-f]*|\d+)){0,3}", host)  # 2130706433, 0x7f.1
+    if "%" in host:
+        return False
+    if ip.version == 6 and ip in NAT64:
+        ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)  # NAT64 embeds an IPv4 address in its last 32 bits
+    ip = getattr(ip, "ipv4_mapped", None) or ip
+    return ip.is_global and not ip.is_multicast
 
 
 def repo_slug(value):
@@ -262,6 +312,8 @@ class Check:
         for sid, pattern in config.get("sections", {}).items():
             if sid not in known or not isinstance(pattern, str):
                 raise BadInput(f"readme-standard.json: sections.{sid} is not a known section with a string pattern")
+            if len(pattern) > MAX_PATTERN:
+                raise BadInput(f"readme-standard.json: sections.{sid} is longer than {MAX_PATTERN} characters")
             try:
                 re.compile(pattern)
             except re.error:
@@ -389,15 +441,17 @@ class Check:
                 kind = kinds[word]
                 if int(number) != len(shipped[kind]):
                     self.fail("C1", f"{where} says {number} {word}; {len(shipped[kind])} ship")
-        rows = {name for line in self.raw if (m := ROW.match(line)) for name in self.row_names(m.group(1))}
+        # A row is read from the raw line (code spans hold its names) only where it is outside code and comments.
+        rows = {name for line, kept in zip(self.raw, self.lines) if kept.startswith("|") and (m := ROW.match(line))
+                for name in self.row_names(m.group(1))}
         for kind, names in shipped.items():
             for name in names:
                 if name not in rows:
                     self.fail("C2", f"{kind[:-1]} {name} has no table row")
             if kind in spans:
                 start, end = spans[kind]
-                for line in self.raw[start:end]:
-                    m = ROW.match(line)
+                for line, kept in zip(self.raw[start:end], self.lines[start:end]):
+                    m = ROW.match(line) if kept.startswith("|") else None
                     for name in self.row_names(m.group(1)) if m else ():
                         if name not in names:
                             self.fail("C2", f"{kind} table lists {name}, which does not ship")
@@ -451,6 +505,9 @@ class Check:
     # Description and license ---------------------------------------------
     def check_descriptions(self):
         descriptions = {h: m.get("description", "") for h, m in self.manifests.items()}
+        for host in [h for h, d in descriptions.items() if not isinstance(d, str)]:
+            self.fail("D1", f"{host} manifest description is not a string")
+            descriptions[host] = repr(descriptions[host])  # hashable, and differs from every string description
         if len(set(descriptions.values())) > 1:
             self.fail("D1", "manifest descriptions differ: " + ", ".join(sorted(descriptions)))
         data = load_json(self.root, self.root / ".claude-plugin" / "marketplace.json")
@@ -476,7 +533,7 @@ class Check:
                 self.fail("L1", f"{host} manifest license {manifest.get('license')!r}, LICENSE is {spdx}")
         if "license" in spans:
             start, end = spans["license"]
-            body = "\n".join(self.raw[start + 1:end])
+            body = "\n".join(self.lines[start + 1:end])
             if word.lower() not in body.lower():
                 self.fail("L1", f"License section does not name {spdx}")
             if path.name not in body:
@@ -521,8 +578,10 @@ class Check:
     def target(self, target, item, readme_anchors):
         if not target:
             return
-        if re.match(r"https?://", target):
-            if target not in self.external:
+        if re.match(r"https?://|file:", target, re.I):
+            if not public_url(target):
+                self.fail(item, f"link to a local or private address: {target}")
+            elif target not in self.external:
                 self.external.append(target)
             return
         if target.startswith("#"):
@@ -533,7 +592,9 @@ class Check:
             return
         path, _, anchor = target.partition("#")
         file = (self.root / unquote(path.split("?")[0]).lstrip("/")).resolve()
-        if not file.exists():
+        if file != self.root and self.root not in file.parents:
+            self.fail(item, f"outside the repository: {path}")
+        elif not file.exists():
             self.fail(item, f"missing file: {path}")
         elif anchor and file.suffix == ".md":
             try:
