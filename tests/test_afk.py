@@ -2137,6 +2137,17 @@ class SecurityRoundOneTest(AfkBase):
         git('symbolic-ref', 'HEAD', 'refs/heads/side', cwd=linked)
         self.check(['git', 'merge', 'refs/heads/feature'])
 
+    def test_a_commit_runs_only_on_a_work_branch(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        repo, git = self.git_repo('commits')
+        self.cwd = repo
+        self.check(['git', 'commit', '-m', 'Fix example'], tier=3, code='protected')
+        git('symbolic-ref', 'HEAD', 'refs/heads/feature')
+        self.check(['git', 'commit', '-m', 'Fix example'])
+        git('symbolic-ref', 'refs/heads/alias', 'refs/heads/main')
+        git('symbolic-ref', 'HEAD', 'refs/heads/alias')
+        self.check(['git', 'commit', '-m', 'Fix example'], tier=3, code='protected')
+
     def test_real_git_hexadecimal_branch_names_in_any_case_are_ambiguous(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
         repo, git = self.git_repo('hex')
