@@ -36,6 +36,11 @@ https or ssh URL) names the `--repo` repository; otherwise the line says
 `local receipt: checkout is not <owner/name>`. The receipt is self-reported.
 With the mode off nothing changes.
 
+With --independent during a live away lease, MERGE OK also writes a receipt
+(repository, number, head, time) to the lease's private state folder; afk.py
+allows `gh pr merge` for that number and head only with a receipt younger than
+15 minutes.
+
 With --independent, independent_families uses review_route.author_family's
 head-bound local ledger and consistent base..head commit trailers, and the
 canonical review_config roles for both reviewing families. No family is inferred
@@ -810,7 +815,22 @@ def main(argv=None):
         return 2
     print("\n".join(lines))
     print("MERGE OK: merge pinned to the head above" if ok else "MERGE BLOCKED")
+    if ok and args.independent and away_receipt(args.repo, args.number, pr["headRefOid"]):
+        print("receipt: recorded for the away lease (afk.py allows this merge for 15 minutes)")
     return 0 if ok else 1
+
+
+def away_receipt(repo, number, head):
+    """Record MERGE OK for afk.py during a live away lease; False without one or on any error (never a pass)."""
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import away_lease
+        owner, name = repo.split("/")
+        return away_lease.record_merge_ok("/".join(("github.com", owner.casefold(), name.casefold().removesuffix(".git"))),
+                                          int(number), head, time.time())
+    except (ImportError, OSError, ValueError, TypeError):
+        return False
 
 
 if __name__ == "__main__":

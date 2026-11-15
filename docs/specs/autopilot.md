@@ -243,13 +243,15 @@ never feed task choice or any gate.
 A merge by autopilot requires: a pull request it opened itself or one by a trusted author (owner decision, 2026-11-09); both review markers present for the current head,
 posted by a model family different from the pull request's author family (`merge_check.py` gains an
 `--independent` check for this; a same-family review is parked); checks green; the branch current; no two-round
-rework stop left unsettled (from 15/11/2026 a third round goes through `afk` "Decide"); and `MERGE OK`. A pull request touching Tier 3 paths is never merged by autopilot.
+rework stop left unsettled (from 15/11/2026 a third round goes through `afk` "Decide"); and `MERGE OK` (from 15/11/2026 script-enforced: `merge_check.py --independent` writes a receipt during the lease, and `afk.py check` answers `merge-unchecked` for a `gh pr merge` without one for that number, head and repository younger than 15 minutes; a worktree's removal follows, because only an allowed merge check pins the head it needs). A pull request touching Tier 3 paths is never merged by autopilot.
 
 ## Lease, state and what enforces what
 
 Files (`<data root>/state/autopilot/`, 0600, private folder, atomic, symlink-safe): `lease.json` (lease id, start,
 expiry, scope, scheduled-task id, hash of the setup read at start, counters, last tick), `log.jsonl`, `stop`
-(created by `stop`), `lock` (a directory created with `mkdir`; stale after twice the tick limit and a dead owner pid).
+(created by `stop`), `lock` (a directory created with `mkdir`; stale after twice the tick limit and a dead owner pid),
+`merge-ok.json` and `merge-ok.lock` (MERGE OK receipts from `merge_check.py --independent`: repository, number, head and
+time, at most 32, each valid for 15 minutes).
 The log holds, per action: time, tier, action kind from a fixed list, ids (task, run, pull request), the advisor
 decision id, and a rationale of at most 500 characters with control characters removed and secret patterns
 redacted. The next tick reads the enumerated fields back, never the rationale text, as history. The log is the user's

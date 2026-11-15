@@ -31,7 +31,7 @@ request, row `decided` below):
 | `effective` prints the same context read-only for the advisory Task choice and Trusted authors | show_effective |
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
 | Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths; every path rule (roots, documents, protected names, links) applies to the operand's path relative to the checkout root of the check's validated identity, read from cwd, and with no identity no path is known | classify_paths, repository_path |
-| PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
+| PR create/edit require push permission; PR merge requires Merge=yes, one full --match-head-commit SHA and a MERGE OK receipt for that number and head under 15 minutes old (`merge_check.py --independent`, else `merge-unchecked`) | classify_argv |
 | Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run`, `run --changed [--base <branch or commit>]` (no relative revision) or `run --dispatch <dispatch id>` with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
 | An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, one of the allowlisted shapes: a script of this checkout, make, npm/pnpm/yarn/bun test, run and declared installs, python scripts and listed -m modules, cargo verbs without --config, go verbs with listed flags and local packages, declared pip, uv, poetry and bundle installs, listed git verbs and flags, listed gh group and verb pairs, or this install's delegated run) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, shape_decidable, dispatch_prefix, decidable_paths, request_subject, open_approvals |
@@ -73,7 +73,7 @@ import data_root as dr
 import parallel_slots as slots
 import project_store as store
 import secret_patterns
-from away_lease import finite, private_info, read_lease, read_private  # the one safe lease reader
+from away_lease import finite, merge_receipts, private_info, read_lease, read_private  # the one safe lease reader
 
 DEFAULTS = {'Hosts': 'Claude Code', 'Task choice': 'choose', 'Push and pull requests': 'yes',
             'Trusted authors': 'own', 'Lease hours': 8, 'Max runs': 20,
@@ -143,6 +143,7 @@ OFF = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', '
 # The strict and no-repository states also reset every category to stop and both target lists to empty.
 CLOSED = {**{c: 'stop' for c in CATEGORIES}, TARGETS: [], **{name: [] for name in LISTS}}
 CONTEXT = 'Repository context'  # the applied-settings entry holding the check's Context
+MERGE_OK = 'Merge receipts'  # the (target, number, head) MERGE OK receipts merge_check.py wrote in this lease
 MERGED = 'Merged heads'  # the applied-settings entry holding the heads this lease's `log --kind merge` entries recorded
 EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yaml', '.yml'}
 MAX_LOG = 8 * 1024 * 1024
@@ -1646,7 +1647,10 @@ def classify_argv(argv, applied, coordinator=None):
             operands = options(tail, {'--squash', '--merge', '--rebase', '--delete-branch'}, {'--match-head-commit', '--repo', '-R'})
             if operands is None or len(operands) != 1 or not re.fullmatch(r'[1-9][0-9]{0,9}', operands[0]):
                 return 'unknown'  # the same ASCII number grammar `log --pr` takes, so a pin names what gh merges
-            return target_check(tail, context_of(applied))  # the permission is this context's target, never another
+            result = target_check(tail, context_of(applied))  # the permission is this context's target, never another
+            if result == 'allowed' and (context_of(applied).target, int(operands[0]), pins[0]) not in applied.get(MERGE_OK, ()):
+                return 'merge-unchecked'  # merge_check.py --independent has not printed MERGE OK for this head lately
+            return result
         if group == 'pr' and verb in {'create', 'edit'}:
             if applied['Push and pull requests'] != 'yes':
                 return 'push-disabled'
@@ -1711,6 +1715,8 @@ def classified(folder, argv_json, paths, coordinator, current):
         if code is None:
             if isinstance(argv, list) and argv[:3] == ['git', 'worktree', 'remove']:
                 applied[MERGED] = merged_heads(folder, lease, current)
+            if isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
+                applied[MERGE_OK] = merge_receipts(folder, current)
             if argv_json is not None:
                 code = classify_argv(argv, applied, coordinator)
             else:

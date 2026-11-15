@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Safe away-lease reader and away ledger appender, shared by afk.py, the question gate and session start.
+"""Safe away-lease reader, MERGE OK receipts and away ledger appender, shared by afk.py, merge_check.py, the question
+gate and session start.
 
 The reader takes no lock, creates nothing, never follows a link and accepts only private (0600)
 regular files owned by the user. Every caller other than afk.py treats any error as no lease.
@@ -17,6 +18,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
 import data_root as dr
 
 STATE = 'state/autopilot'
+RECEIPTS = 'merge-ok.json'  # merge_check.py's MERGE OK receipts, read by afk.py before a merge
+RECEIPT_TTL = 900  # seconds a receipt stays valid
+MAX_RECEIPTS = 32
+SHA = re.compile(r'[0-9a-f]{40}')
 
 
 def finite(value):
@@ -79,6 +84,43 @@ def live_lease(current):
     if lease is None or not lease['start'] <= current < lease['expiry']:
         return None
     return lease
+
+
+def merge_receipts(folder, current):
+    """The (target, pull request, head) triples of MERGE OK receipts younger than RECEIPT_TTL; empty on any doubt."""
+    try:
+        entries = json.loads(read_private(folder, RECEIPTS) or b'[]')
+        return {(e['repo'], e['pr'], e['head']) for e in entries
+                if isinstance(e, dict) and isinstance(e.get('repo'), str) and type(e.get('pr')) is int
+                and isinstance(e.get('head'), str) and SHA.fullmatch(e['head'])
+                and finite(e.get('time')) and current - RECEIPT_TTL <= e['time'] <= current}
+    except (OSError, ValueError, TypeError, KeyError):
+        return set()
+
+
+def record_merge_ok(target, pr, head, current):
+    """During a live lease, record that merge_check.py printed MERGE OK with --independent for this pull request and
+    head of `target` (`github.com/<owner>/<name>`, casefolded). Without a live lease it writes nothing; False then."""
+    if (live_lease(current) is None or type(pr) is not int or not SHA.fullmatch(head)
+            or not re.fullmatch(r'github\.com/[^/]+/[^/]+', target)):
+        return False
+    import fcntl  # imported here so the lease reader stays importable where fcntl is missing
+    with dr.data_folder(STATE, private=True) as folder:
+        private_info(folder, 'merge-ok.lock')
+        lock = os.open('merge-ok.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, dir_fd=folder)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX)  # one read-modify-write at a time, so no receipt is lost
+            try:
+                kept = [e for e in json.loads(read_private(folder, RECEIPTS) or b'[]')
+                        if isinstance(e, dict) and finite(e.get('time')) and current - RECEIPT_TTL <= e['time'] <= current]
+            except (ValueError, TypeError):
+                kept = []
+            kept = (kept + [dict(repo=target, pr=pr, head=head, time=current)])[-MAX_RECEIPTS:]
+            private_info(folder, RECEIPTS)
+            dr.atomic_write(folder, RECEIPTS, json.dumps(kept, separators=(',', ':')).encode())
+        finally:
+            os.close(lock)
+    return True
 
 
 def append_ledger(record):

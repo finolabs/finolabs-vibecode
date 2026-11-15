@@ -893,10 +893,42 @@ class IndependentMergeTest(unittest.TestCase):
                  patch.object(mc, "adopted_at", return_value=False), \
                  patch.object(mc, "permission", return_value=True), \
                  patch.object(mc, "independent_families", return_value=families), \
+                 patch.object(mc, "away_receipt", return_value=False) as receipt, \
                  contextlib.redirect_stdout(output):
                 actual = mc.main(["7", "--repo", "acme/demo", "--independent"])
             self.assertEqual(actual, status, output.getvalue())
             self.assertEqual("MERGE OK" in output.getvalue(), status == 0)
+            # Only MERGE OK with --independent records a receipt for the away lease.
+            if status == 0:
+                receipt.assert_called_once_with("acme/demo", "7", pr()["headRefOid"])
+            else:
+                receipt.assert_not_called()
+
+    def test_merge_ok_prints_the_receipt_line_only_when_one_was_recorded(self):
+        import contextlib
+        import io
+        families = dict(author="codex", code="claude", security="claude")
+        for recorded in (True, False):
+            output = io.StringIO()
+            with patch.object(mc, "gh", return_value=json.dumps(pr())), \
+                 patch.object(mc, "adopted_at", return_value=False), \
+                 patch.object(mc, "permission", return_value=True), \
+                 patch.object(mc, "independent_families", return_value=families), \
+                 patch.object(mc, "away_receipt", return_value=recorded), \
+                 contextlib.redirect_stdout(output):
+                self.assertEqual(mc.main(["7", "--repo", "acme/demo", "--independent"]), 0)
+            self.assertEqual("receipt: recorded for the away lease" in output.getvalue(), recorded)
+
+    def test_away_receipt_names_the_casefolded_target_and_fails_closed(self):
+        sys.path.insert(0, str(SCRIPT.parent))
+        import away_lease
+        with patch.object(away_lease, "record_merge_ok", return_value=True) as record:
+            self.assertTrue(mc.away_receipt("Acme/Demo.GIT", "7", "c" * 40))
+        self.assertEqual(record.call_args.args[:3], ("github.com/acme/demo", 7, "c" * 40))
+        with patch.object(away_lease, "record_merge_ok", side_effect=OSError("disk")):
+            self.assertFalse(mc.away_receipt("acme/demo", "7", "c" * 40))
+        with patch.object(away_lease, "live_lease", return_value=None):
+            self.assertFalse(away_lease.record_merge_ok("github.com/acme/demo", 7, "c" * 40, 1.0))
 
     def test_resolver_uses_head_bound_author_and_the_families_routing_would_pick(self):
         sys.path.insert(0, str(SCRIPT.parent))

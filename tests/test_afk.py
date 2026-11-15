@@ -8,6 +8,7 @@ import re
 import os
 from pathlib import Path
 import stat
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -90,7 +91,20 @@ class AfkBase(unittest.TestCase):
         status, output = self.invoke('start')
         self.assertEqual(status, 0, output)
 
+    def merge_ok(self, pr, head, repo='github.com/example/demo', age=0):
+        """The receipt merge_check.py --independent writes on MERGE OK during the lease."""
+        path = self.state / 'merge-ok.json'
+        kept = json.loads(path.read_text()) if path.exists() else []
+        path.write_text(json.dumps(kept + [dict(repo=repo, pr=int(pr), head=head, time=self.clock - age)]))
+        path.chmod(0o600)
+
     def check(self, argv=None, paths=None, tier=1, code='allowed'):
+        if argv is not None and argv[:3] == ['gh', 'pr', 'merge'] and code == 'allowed' and self.state.is_dir():
+            # An allowed merge needs a fresh MERGE OK receipt; tests of the receipt itself write their own.
+            tail = argv[3:]
+            head = next((t.split('=', 1)[1] if '=' in t else tail[i + 1]) for i, t in enumerate(tail)
+                        if t.startswith('--match-head-commit'))
+            self.merge_ok(next(t for t in tail if t.isdigit()), head)
         flags = ('--argv-json', json.dumps(argv)) if argv is not None else ('--paths', *paths)
         status, output = self.invoke('check', *flags)
         self.assertEqual(status, 0 if tier == 1 else 3, output)  # a denied check never exits 0
@@ -1162,7 +1176,8 @@ class AwayDecisionTest(AfkBase):
                 '--repo', 'github.com/example/demo']
         applied = {**module.DEFAULTS, **{c: 'stop' for c in module.CATEGORIES}, 'Merge': 'yes',
                    module.CONSENT: 'no', module.TARGETS: [],
-                   module.CONTEXT: module.Context('found', None, 'user', 'github.com/example/demo')}
+                   module.CONTEXT: module.Context('found', None, 'user', 'github.com/example/demo'),
+                   module.MERGE_OK: {('github.com/example/demo', 215, 'a' * 40)}}
         self.assertEqual(module.classify_argv(argv, applied), 'allowed')
         self.assertEqual(module.classify_argv(argv + ['--delete-branch'], applied), 'forbidden')
         applied['Recoverable deletion'] = 'decide'
@@ -2067,6 +2082,8 @@ class SecurityRoundOneTest(AfkBase):
         self.check(['git', 'push', 'origin', 'HEAD:HEAD'], tier=3, code='forbidden')
 
     def check_code(self, argv):
+        if argv[:3] == ['gh', 'pr', 'merge'] and self.state.is_dir():
+            self.merge_ok(next(t for t in argv[3:] if t.isdigit()), 'a' * 40)  # every pin here is PIN
         status, output = self.invoke('check', '--argv-json', json.dumps(argv))
         result = json.loads(output)
         self.assertEqual(result['tier'] == 1, result['code'] == 'allowed', output)
@@ -2179,6 +2196,8 @@ class PolicyContextTest(AfkBase):
         return json.loads(output)
 
     def check_code(self, argv):
+        if argv[:3] == ['gh', 'pr', 'merge'] and self.state.is_dir():
+            self.merge_ok(next(t for t in argv[3:] if t.isdigit()), 'a' * 40)  # every pin here is PIN
         status, output = self.invoke('check', '--argv-json', json.dumps(argv))
         result = json.loads(output)
         self.assertEqual(result['tier'] == 1, result['code'] == 'allowed', output)
@@ -2648,6 +2667,41 @@ class AwayFlowTest(AfkBase):
         """An allowed `gh pr merge` check pins the number and head, then the merge entry records them."""
         self.check(['gh', 'pr', 'merge', pr, '--merge', '--match-head-commit', head, '--repo', 'github.com/example/demo'])
         self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', pr, '--head', head)[0], 0)
+
+    def test_a_merge_needs_a_fresh_merge_ok_receipt_for_its_number_head_and_repository(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.cwd, _ = self.git_repo('receipt')
+        head = 'c' * 40
+        argv = ['gh', 'pr', 'merge', '7', '--merge', '--match-head-commit', head, '--repo', 'github.com/example/demo']
+        self.check(argv, tier=3, code='merge-unchecked')  # merge_check has not printed MERGE OK
+        for pr, pinned, repo, age in (('8', head, 'github.com/example/demo', 0), ('7', 'd' * 40, 'github.com/example/demo', 0),
+                                      ('7', head, 'github.com/other/demo', 0), ('7', head, 'github.com/example/demo', 901),
+                                      ('7', head, 'github.com/example/demo', -5)):
+            with self.subTest(pr=pr, head=pinned, repo=repo, age=age):
+                self.merge_ok(pr, pinned, repo, age)
+                self.check(argv, tier=3, code='merge-unchecked')
+        self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)  # nothing pinned
+        self.merge_ok('7', head, age=899)
+        self.check(argv)
+
+    def test_merge_check_records_a_receipt_only_during_a_live_lease(self):
+        sys.path.insert(0, str(SCRIPT.parent))
+        import away_lease
+        self.assertFalse(away_lease.record_merge_ok('github.com/example/demo', 7, 'c' * 40, self.clock))
+        self.start()
+        self.assertTrue(away_lease.record_merge_ok('github.com/example/demo', 7, 'c' * 40, self.clock))
+        self.assertFalse(away_lease.record_merge_ok('github.com/example/demo', 7, 'short', self.clock))
+        self.assertEqual(oct((self.state / 'merge-ok.json').stat().st_mode & 0o777), '0o600')
+        with away_lease.dr.data_folder(away_lease.STATE, private=True) as folder:
+            self.assertEqual(away_lease.merge_receipts(folder, self.clock + 60), {('github.com/example/demo', 7, 'c' * 40)})
+            self.assertEqual(away_lease.merge_receipts(folder, self.clock + 901), set())
+        # Several pull requests keep their own receipts; only the newest 32 are kept.
+        for number in range(1, 41):
+            self.assertTrue(away_lease.record_merge_ok('github.com/example/demo', number, 'c' * 40, self.clock))
+        with away_lease.dr.data_folder(away_lease.STATE, private=True) as folder:
+            kept = away_lease.merge_receipts(folder, self.clock)
+        self.assertEqual({pr for _, pr, _ in kept}, set(range(9, 41)))
+        self.assertEqual(oct((self.state / 'merge-ok.lock').stat().st_mode & 0o777), '0o600')
 
     def test_a_merge_entry_needs_an_allowed_merge_check_of_this_lease(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
