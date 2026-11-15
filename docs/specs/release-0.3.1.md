@@ -1,6 +1,6 @@
 # Release 0.3.1: scope
 
-Status: prepared; to be tagged v0.3.1 after the owner's yes.
+Status: accepted; prepared, to be tagged v0.3.1 after the owner's yes.
 
 ## What shipped
 
