@@ -2695,6 +2695,13 @@ class AwayFlowTest(AfkBase):
         with away_lease.dr.data_folder(away_lease.STATE, private=True) as folder:
             self.assertEqual(away_lease.merge_receipts(folder, self.clock + 60), {('github.com/example/demo', 7, 'c' * 40)})
             self.assertEqual(away_lease.merge_receipts(folder, self.clock + 901), set())
+        # Several pull requests keep their own receipts; only the newest 32 are kept.
+        for number in range(1, 41):
+            self.assertTrue(away_lease.record_merge_ok('github.com/example/demo', number, 'c' * 40, self.clock))
+        with away_lease.dr.data_folder(away_lease.STATE, private=True) as folder:
+            kept = away_lease.merge_receipts(folder, self.clock)
+        self.assertEqual({pr for _, pr, _ in kept}, set(range(9, 41)))
+        self.assertEqual(oct((self.state / 'merge-ok.lock').stat().st_mode & 0o777), '0o600')
 
     def test_a_merge_entry_needs_an_allowed_merge_check_of_this_lease(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')

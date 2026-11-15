@@ -827,7 +827,7 @@ def away_receipt(repo, number, head):
     try:
         import away_lease
         owner, name = repo.split("/")
-        return away_lease.record_merge_ok("/".join(("github.com", owner.casefold(), name.removesuffix(".git").casefold())),
+        return away_lease.record_merge_ok("/".join(("github.com", owner.casefold(), name.casefold().removesuffix(".git"))),
                                           int(number), head, time.time())
     except (ImportError, OSError, ValueError, TypeError):
         return False

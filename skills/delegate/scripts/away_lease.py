@@ -104,15 +104,22 @@ def record_merge_ok(target, pr, head, current):
     if (live_lease(current) is None or type(pr) is not int or not SHA.fullmatch(head)
             or not re.fullmatch(r'github\.com/[^/]+/[^/]+', target)):
         return False
+    import fcntl  # imported here so the lease reader stays importable where fcntl is missing
     with dr.data_folder(STATE, private=True) as folder:
+        private_info(folder, 'merge-ok.lock')
+        lock = os.open('merge-ok.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, dir_fd=folder)
         try:
-            kept = [e for e in json.loads(read_private(folder, RECEIPTS) or b'[]')
-                    if isinstance(e, dict) and finite(e.get('time')) and current - RECEIPT_TTL <= e['time'] <= current]
-        except (ValueError, TypeError):
-            kept = []
-        kept = (kept + [dict(repo=target, pr=pr, head=head, time=current)])[-MAX_RECEIPTS:]
-        private_info(folder, RECEIPTS)
-        dr.atomic_write(folder, RECEIPTS, json.dumps(kept, separators=(',', ':')).encode())
+            fcntl.flock(lock, fcntl.LOCK_EX)  # one read-modify-write at a time, so no receipt is lost
+            try:
+                kept = [e for e in json.loads(read_private(folder, RECEIPTS) or b'[]')
+                        if isinstance(e, dict) and finite(e.get('time')) and current - RECEIPT_TTL <= e['time'] <= current]
+            except (ValueError, TypeError):
+                kept = []
+            kept = (kept + [dict(repo=target, pr=pr, head=head, time=current)])[-MAX_RECEIPTS:]
+            private_info(folder, RECEIPTS)
+            dr.atomic_write(folder, RECEIPTS, json.dumps(kept, separators=(',', ':')).encode())
+        finally:
+            os.close(lock)
     return True
 
 
