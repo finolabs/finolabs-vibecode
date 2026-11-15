@@ -59,7 +59,8 @@ class UpgradeStateTest(unittest.TestCase):
         self.assertEqual(self.state('matrix', '## Assignment matrix\n## Agent levels\n'), us.OPEN)
         self.assertEqual(self.state('matrix', '## Assignment matrix\n- Judge: host\n'), us.DONE)
         self.assertEqual(self.state('matrix', '## Routing\non\n'), us.NOT_APPLICABLE)
-        self.assertEqual(self.state('levels', '## Agent levels\n'), us.DONE)
+        # Since 0.3.1 a legacy Agent levels section is not read, so it no longer records levels.
+        self.assertEqual(self.state('levels', '## Agent levels\n'), us.OPEN)
         self.assertEqual(self.state('levels', '## Assignment matrix\n'), us.DONE)
         self.assertEqual(self.state('levels', '## Routing\n'), us.OPEN)
         self.assertEqual(self.state('afk', '## afk\n- Merge: no\n'), us.DONE)
@@ -81,6 +82,16 @@ class UpgradeStateTest(unittest.TestCase):
         self.assertEqual(self.state('roles-retired', '## Agent roles\n- judge: jev\n'
                                     + matrix.replace('yes (2026-11-09)', 'no')), us.OPEN)
         self.assertEqual(self.state('roles-retired', '```\n## Agent roles\n```\n'), us.DONE)
+
+    def test_levels_retired_is_done_without_agent_levels_or_with_a_valid_matrix(self):
+        matrix = '## Assignment matrix\n\n- Consent: yes (2026-11-09)\n- Judge: host\n- codex: levels 1-5\n'
+        levels = '## Agent levels\n- Consent: yes (2026-10-01)\n- codex: levels 1-4\n'
+        self.assertEqual(self.state('levels-retired'), us.DONE)
+        self.assertEqual(self.state('levels-retired', '## Routing\non\n'), us.DONE)
+        self.assertEqual(self.state('levels-retired', levels), us.OPEN)
+        self.assertEqual(self.state('levels-retired', levels + matrix), us.DONE)
+        self.assertEqual(self.state('levels-retired', levels + matrix.replace('yes (2026-11-09)', 'no')), us.OPEN)
+        self.assertEqual(self.state('levels-retired', '```\n## Agent levels\n```\n'), us.DONE)
 
     def test_afk_section_is_open_until_the_old_heading_is_gone(self):
         self.assertEqual(self.state('afk-section', '## Autopilot\n- Merge: no\n'), us.OPEN)
