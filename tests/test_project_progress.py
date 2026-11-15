@@ -1626,7 +1626,8 @@ class ForeignCommonTest(unittest.TestCase):
         raw = self.checks.render_project([['unit', ['make', 'unit']]], True)
         with store.project_folder(self.a) as folder:
             self.checks.dr.atomic_write(folder, 'checks.json', raw)
-        self.checks.write_approved(code_a, hashlib.sha256(raw).hexdigest())
+        self.checks.write_approved(code_a, hashlib.sha256(raw).hexdigest(),
+                                   self.checks.store.identity_digest(self.checks.layout(self.a)[0]))
         self.assertEqual(self.checks.checks_for(code_a, self.a)[1], None)
         code_b = hashlib.sha256(str(self.b).encode('utf-8')).hexdigest()[:8]
         self.assertEqual({self.pp.repository_code(self.b), self.slots.repository_code(self.b),

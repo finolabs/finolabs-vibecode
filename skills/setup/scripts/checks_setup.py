@@ -278,7 +278,7 @@ def write_project(plan, main, code):
         else:
             raw = plan['content'].encode()
             dr.atomic_write(fd, cl.PROJECT_FILE, raw)
-            cl.write_approved(code, cs.content_hash(raw))
+            cl.write_approved(code, cs.content_hash(raw), cl.store.identity_digest(main))
 
 
 def apply(value, yes):

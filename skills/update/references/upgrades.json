@@ -218,6 +218,12 @@
           "setup": "/setup add compaction"
         },
         {
+          "id": "0.2.5/compaction-config",
+          "kind": "setup",
+          "text": "Compaction setup now reports a Claude Code setting that turns auto-compaction off (autoCompactEnabled false, or DISABLE_AUTO_COMPACT or CLAUDE_CODE_AUTO_COMPACT_WINDOW in the environment), so the threshold you choose would never fire; it reads only those keys and changes nothing.",
+          "setup": "/setup add compaction"
+        },
+        {
           "id": "0.2.5/shape",
           "kind": "info",
           "text": "New shape skill: brainstorming or discussing an idea or design runs an interview through the question tool; the router sends open ideas to it first, and grilling only if you ask for it."
