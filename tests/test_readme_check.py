@@ -5,6 +5,7 @@ import io
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -306,7 +307,8 @@ class ReadmeCheckTest(unittest.TestCase):
                             ({"exclude_skills": None}, "exclude_skills"),
                             ({"exclude_skills": [1]}, "exclude_skills"),
                             ({"catalog": "example-org/plugins"}, "catalog"),
-                            ({"badge_color": 7}, "badge_color")):
+                            ({"badge_color": 7}, "badge_color"),
+                            ({"sections": {"install": "Install|" + "x" * readme_check.MAX_PATTERN}}, "sections.install")):
             with self.subTest(config=config):
                 self.write(".github/readme-standard.json", json.dumps(config))
                 self.assertIn(key, self.bad_input())
@@ -434,6 +436,75 @@ class ReadmeCheckTest(unittest.TestCase):
 
     def test_one_row_may_name_several_skills(self):
         self.edit("| `alpha` | Alpha work. |\n| `beta` | Beta work. |", "| `alpha`, `beta` | Both. |")
+        code, lines = self.run_check()
+        self.assertEqual(code, 0, lines)
+
+    def test_a_link_out_of_the_repository_fails_k1_even_when_the_file_exists(self):
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        (Path(outside.name) / "secret.md").write_text("# Secret\n", encoding="utf-8")
+        rel = os.path.relpath(Path(outside.name).resolve() / "secret.md", self.root.resolve())
+        self.edit("[the skills](#skills)", f"[out]({rel})")
+        self.assertEqual(self.fails("K1"), [f"FAIL K1 outside the repository: {rel}"])
+
+    def test_local_and_private_external_links_fail_and_are_not_listed(self):
+        urls = ("http://127.0.0.1:8080/x", "http://169.254.169.254/latest", "http://192.168.1.2/", "file:///etc/passwd")
+        self.edit("[the skills](#skills)", " ".join(f"[l]({u})" for u in urls))
+        code, lines = self.run_check()
+        self.assertEqual(code, 1, lines)
+        for url in urls:
+            self.assertIn(f"FAIL K1 link to a local or private address: {url}", lines)
+            self.assertNotIn(f"EXTERNAL {url}", lines)
+
+    def test_local_names_zones_nat64_and_loopback_wildcards_are_not_public(self):
+        for url in ("http://localhost.localdomain:8080/", "http://ip6-localhost/", "http://metadata/",
+                    "http://printer.local/", "http://db.internal/", "http://[::1%251]/", "http://[fe80::1%25eth0]/",
+                    "http://[64:ff9b::127.0.0.1]/", "http://[64:ff9b::169.254.169.254]/", "http://127.0.0.1.nip.io/",
+                    "http://10.0.0.1.sslip.io/", "http://localtest.me/"):
+            with self.subTest(url=url):
+                self.assertFalse(readme_check.public_url(url))
+        for url in ("https://github.com/example/demo", "https://[2606:4700::1111]/", "http://[64:ff9b::8.8.8.8]/"):
+            with self.subTest(url=url):
+                self.assertTrue(readme_check.public_url(url))
+
+    def assert_fast(self, line):
+        self.edit("## Supported platforms", line + "\n\n## Supported platforms")
+        start = time.monotonic()
+        self.run_check()
+        self.assertLess(time.monotonic() - start, 3)
+
+    def test_an_adversarial_heading_runs_in_linear_time(self):
+        self.assertEqual(readme_check.headings(["## Install ##"]), [(0, 2, "Install")])
+        self.assert_fast("# a" + " " * 3000 + "\x01")
+
+    def test_many_comment_openers_run_in_linear_time(self):
+        self.assert_fast("x" + "<!--" * 30000)
+
+    def test_a_closing_fence_is_at_least_as_long_as_the_opening_one(self):
+        self.edit("```text\n/plugin marketplace add", "````text\n```\n/plugin install other@demo-plugin\n/plugin marketplace add")
+        self.edit("/plugin install demo-plugin@demo-plugin\n```", "/plugin install demo-plugin@demo-plugin\n````")
+        self.assertTrue(any("other@demo-plugin" in l for l in self.fails("H2")))
+
+    def test_anchors_ignore_ids_in_comments_and_code(self):
+        self.edit("[the skills](#skills)", "[a](#ghost) [b](#spook) `<a name=\"spook\">`")
+        self.edit("## Supported platforms", "<!--\n<a id=\"ghost\"></a>\n-->\n\n## Supported platforms")
+        self.assertEqual(sorted(self.fails("K1")), ["FAIL K1 missing anchor: #ghost", "FAIL K1 missing anchor: #spook"])
+
+    def test_rows_and_the_license_line_in_code_or_comments_do_not_count(self):
+        self.edit("| `beta` | Beta work. |", "| `beta` | Beta work. |\n\n```text\n| `ghost` | Gone. |\n```")
+        code, lines = self.run_check()
+        self.assertEqual(code, 0, lines)
+        self.edit("MIT. See [LICENSE](LICENSE).", "<!-- MIT -->\nSee [LICENSE](LICENSE).")
+        self.assertIn("FAIL L1 License section does not name MIT", self.fails("L1"))
+
+    def test_a_non_string_description_is_a_d1_failure(self):
+        data = manifest(".codex-plugin")
+        data["description"] = ["2 skills"]
+        self.write(".codex-plugin/plugin.json", json.dumps(data))
+        self.assertIn("FAIL D1 Codex manifest description is not a string", self.fails("D1"))
+
+    def test_a_second_unclosed_comment_on_a_line_keeps_its_fence_closed(self):
+        self.edit("## Start here (you)", "<!-- a --> <!-- b\n```\n-->\n\n## Start here (you)")
         code, lines = self.run_check()
         self.assertEqual(code, 0, lines)
 
