@@ -160,11 +160,18 @@ TIMEOUT = 60  # seconds for each gh call
 
 # The low-risk lane: files a pull request may change and still take one review
 # pass. The changelog and the root documents written for people may change
-# freely; a plugin manifest only in its top-level "version". Agent context
+# freely; a plugin manifest only in its top-level "version"; a release record
+# and the spec index only as RELEASE_RECORD below says. Agent context
 # files (CLAUDE.md, AGENTS.md), skills, agents and rules never qualify.
 LANE_FREE = {"CHANGELOG.md", "README.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md",
              "SECURITY.md", "PRIVACY.md", "TERMS.md"}
 LANE_VERSION_ONLY = {".claude-plugin/plugin.json", ".codex-plugin/plugin.json", ".antigravity-plugin/plugin.json"}
+# A post-release record (owner decision, 15/11/2026): a release record may change
+# only its one `Status:` line, from a prepared form to the released form, and the
+# spec index only that release's row, in the same pull request.
+RELEASE_RECORD = re.compile(r"docs/specs/release-(\d+\.\d+\.\d+)\.md")
+SPEC_INDEX = "docs/specs/index.md"
+RELEASED = r"released; tagged v{version} on (\d{{4}}-\d{{2}}-\d{{2}})(?:; .+|\.)?"
 
 
 class Unknown(Exception):
@@ -268,12 +275,73 @@ def version_only(base_text, head_text):
     return base == head
 
 
+def one_changed_line(base_text, head_text):
+    """(index, base line, head line) when the texts differ in exactly one line, else None."""
+    if base_text is None or head_text is None:
+        return None
+    base, head = base_text.split("\n"), head_text.split("\n")
+    if len(base) != len(head):
+        return None
+    changed = [i for i, (old, new) in enumerate(zip(base, head)) if old != new]
+    return (changed[0], base[changed[0]], head[changed[0]]) if len(changed) == 1 else None
+
+
+def released_status(text, version):
+    """True when `text` is the released form for `version` with a real date."""
+    match = re.fullmatch(RELEASED.format(version=re.escape(version)), text)
+    if not match:
+        return False
+    try:
+        datetime.strptime(match.group(1), "%Y-%m-%d")
+    except ValueError:
+        return False
+    return True
+
+
+def release_record_only(version, base_text, head_text):
+    """True when a release record changes only its `Status:` line, from a prepared form to the released form."""
+    change = one_changed_line(base_text, head_text)
+    if change is None:
+        return False
+    _, old, new = change
+    if not old.startswith("Status: ") or old.startswith("Status: released") or not new.startswith("Status: "):
+        return False
+    return released_status(new[len("Status: "):], version)
+
+
+INDEX_ROW = re.compile(r"\| (\[Release (\d+\.\d+\.\d+)[^\]]*\]\(release-\2\.md\)) \| (.+) \|")
+
+
+def index_row_only(base_text, head_text, versions):
+    """The release version when the spec index changes only that release's row,
+    from a prepared status to the released form, and the version is in `versions`; else None."""
+    change = one_changed_line(base_text, head_text)
+    if change is None:
+        return None
+    _, old, new = change
+    old_row, new_row = INDEX_ROW.fullmatch(old), INDEX_ROW.fullmatch(new)
+    if not old_row or not new_row or old_row.group(1) != new_row.group(1):
+        return None
+    version = new_row.group(2)
+    if version not in versions or old_row.group(3).startswith("released"):
+        return None
+    return version if released_status(new_row.group(3), version) else None
+
+
 def lane_files(files, read):
     """(eligible, reasons) for the low-risk lane. `read(path, side)` returns the
     file's text at "base" or "head"."""
     reasons = []
     if not files:
         reasons.append("no files listed")
+    records = {}
+    for entry in files:
+        match = RELEASE_RECORD.fullmatch(entry.get("filename") or "")
+        if match and entry.get("status") == "modified":
+            records[match.group(1)] = entry["filename"]
+    index_version = None
+    if any(entry.get("filename") == SPEC_INDEX and entry.get("status") == "modified" for entry in files):
+        index_version = index_row_only(read(SPEC_INDEX, "base"), read(SPEC_INDEX, "head"), records)
     for entry in files:
         name, status = entry.get("filename"), entry.get("status")
         if status != "modified":
@@ -283,6 +351,15 @@ def lane_files(files, read):
         elif name in LANE_VERSION_ONLY:
             if not version_only(read(name, "base"), read(name, "head")):
                 reasons.append(f"{name}: changes more than the top-level version")
+        elif RELEASE_RECORD.fullmatch(name or ""):
+            version = RELEASE_RECORD.fullmatch(name).group(1)
+            if not release_record_only(version, read(name, "base"), read(name, "head")):
+                reasons.append(f"{name}: changes more than its Status line to the released form")
+            elif index_version != version:
+                reasons.append(f"{name}: its row in {SPEC_INDEX} is not changed with it")
+        elif name == SPEC_INDEX:
+            if index_version is None:
+                reasons.append(f"{name}: changes more than one changed release's row to the released form")
         else:
             reasons.append(f"{name}: outside the lane")
     return not reasons, reasons

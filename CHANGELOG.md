@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- The `review-gate` low-risk lane also takes a post-release record: `merge_check.py --lane` qualifies a pull request that changes only the `Status:` line of a `docs/specs/release-X.Y.Z.md` record from its prepared form to `released; tagged vX.Y.Z on YYYY-MM-DD; ...` and that release's row in `docs/specs/index.md` the same way, beside the changelog and the manifest version bumps. A second changed line in either file, a record without its row, a wrong version or date form, or any other spec still takes both reviewers.
+
 ## [0.3.0] - 2026-11-15
 
 ### Added
