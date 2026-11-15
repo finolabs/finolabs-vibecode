@@ -33,6 +33,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
 | Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run` or `run --changed [--base <branch or commit>]` (no relative revision) with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
+| An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, one of the allowlisted shapes: a script of this checkout, make, npm/pnpm/yarn/bun test, run and declared installs, python scripts and listed -m modules, cargo verbs without --config, go verbs with listed flags and local packages, declared pip, uv, poetry and bundle installs, listed git verbs and flags, listed gh group and verb pairs, or this install's delegated run) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, shape_decidable, dispatch_prefix, decidable_paths, request_subject, open_approvals |
 | Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge and review-fallback kinds only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
 | Trusted PR authors, full independent review/check/local-test gate, changed paths (including staged commit paths), quota readings and actually calling check before execution remain caller obligations in this slice | agent judgment, advisory; merge_check --independent enforces its review condition |
 
@@ -128,6 +129,7 @@ KINDS = {'start': 1, 'stop': 1, 'action': 1, 'decision': 2, 'parked': 3,
          'run-start': 1, 'run-finish': 1, 'merge': 1, 'review-fallback': 1, 'error': 3}
 ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,39}')
 SHA = re.compile(r'[0-9a-f]{40}')
+SHA256 = re.compile(r'[0-9a-f]{64}')
 BRANCH = re.compile(r'(?:refs/heads/)?[A-Za-z0-9][A-Za-z0-9._/-]{0,160}')
 ROOTS = {'src', 'lib', 'app', 'tests', 'docs', 'scripts', 'skills'}
 DOCUMENTS = {'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md'}  # top-level documentation files that are known paths
@@ -1677,14 +1679,15 @@ def classify_argv(argv, applied, coordinator=None):
     return 'unknown'
 
 
-def check(folder, args):
-    current = now()
+def classified(folder, argv_json, paths, coordinator, current):
+    """(code, lease, applied, key, entry, argv, cwd) for one request, exactly as `check` judges it; nothing is stored."""
     code, lease, applied = lease_guard(folder, current)
+    key = entry = None
+    argv, cwd = None, os.getcwd()
     if code is None:
-        argv, cwd = None, os.getcwd()
-        if args.argv_json is not None:
+        if argv_json is not None:
             try:
-                argv = json.loads(args.argv_json)
+                argv = json.loads(argv_json)
             except ValueError:
                 argv = None
             if isinstance(argv, list) and len(argv) >= 3 and argv[:2] == ['git', '-C']:
@@ -1704,24 +1707,36 @@ def check(folder, args):
         if code is None:
             if isinstance(argv, list) and argv[:3] == ['git', 'worktree', 'remove']:
                 applied[MERGED] = merged_heads(folder, lease, current)
-            if args.argv_json is not None:
-                code = classify_argv(argv, applied, args.coordinator)
+            if argv_json is not None:
+                code = classify_argv(argv, applied, coordinator)
             else:
-                code = classify_paths(args.paths, applied['Roots'], context_of(applied), source_mode(applied),
+                code = classify_paths(paths, applied['Roots'], context_of(applied), source_mode(applied),
                                       applied.get(FILES, ()))
-        # Only a Tier 1 answer reserves an action (and, for a ledger start, a run); a denied check costs nothing.
-        if code == 'allowed':
-            entry['actions'] += 1
-            entry['hour_actions'].append(current)
-            if entry['first'] is None:
-                entry['first'] = current
-            if argv and any(Path(t).name == 'ledger.py' for t in argv) and 'start' in argv:
-                entry['runs'] += 1
-            lease['counters'][key] = entry
-            save_lease(folder, lease)
-            if isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
-                append_log(folder, merge_pin(argv, current), current)
-    tier = 1 if code == 'allowed' else 3
+    return code, lease, applied, key, entry, argv, cwd
+
+
+def check(folder, args):
+    current = now()
+    code, lease, applied, key, entry, argv, cwd = classified(folder, args.argv_json, args.paths, args.coordinator, current)
+    if code == 'unknown' and entry is not None:
+        # An away decision may have approved this exact request once (`log --kind decision --approve-...`).
+        subject = request_subject(applied, cwd, argv if args.argv_json is not None else None, args.paths)
+        if subject is not None and subject in open_approvals(folder, lease, current):
+            code = 'decided'
+            append_log(folder, dict(time=current, tier=1, kind='approval-used', subject=subject, note=''), current)
+    # Only a Tier 1 answer reserves an action (and, for a ledger start, a run); a denied check costs nothing.
+    if code in {'allowed', 'decided'}:
+        entry['actions'] += 1
+        entry['hour_actions'].append(current)
+        if entry['first'] is None:
+            entry['first'] = current
+        if argv and any(Path(t).name == 'ledger.py' for t in argv) and 'start' in argv:
+            entry['runs'] += 1
+        lease['counters'][key] = entry
+        save_lease(folder, lease)
+        if isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
+            append_log(folder, merge_pin(argv, current), current)
+    tier = 1 if code in {'allowed', 'decided'} else 3
     result = {'tier': tier, 'code': code}
     if code in ENDED:
         # A host loop can outlive the lease; the answer itself tells the caller to end it.
@@ -1923,7 +1938,8 @@ def packet_check(args):
 
 
 def log(folder, args):
-    decision_flags = ('rung', 'settled', 'precedents', 'topic', 'project', 'decision', *FIELDS)
+    decision_flags = ('rung', 'settled', 'precedents', 'topic', 'project', 'decision', *FIELDS,
+                      'approve_argv_json', 'approve_paths')
     if args.kind != 'decision' and any(getattr(args, key) is not None for key in decision_flags):
         raise Refusal('decision fields (--rung, --settled, --precedents, --topic, --project, --decision and the row fields) belong to --kind decision only')
     current = now()
@@ -1949,11 +1965,18 @@ def log(folder, args):
     if args.kind == 'merge' and args.head is not None and (fields['pr'], args.head) not in merge_pins(folder, current):
         raise Refusal('--head matches no allowed `gh pr merge` check of this lease')
     note = safe_note(args.note or '')
+    subject = None
+    if args.kind == 'decision' and (args.approve_argv_json is not None or args.approve_paths is not None):
+        attempt(args)  # the row itself must be valid before the request is judged
+        subject = approval_subject(folder, args, current)
     # Every other check passes before the decision line reaches the ledger.
     identifier = decide(folder, args, current) if args.kind == 'decision' else None
     if identifier:
         fields['decision'] = identifier
     append_log(folder, dict(time=current, tier=KINDS[args.kind], kind=args.kind, **fields, note=note), current)
+    if subject is not None:
+        append_log(folder, dict(time=current, tier=2, kind='approval', subject=subject, decision=identifier, note=''),
+                   current)
     print(identifier if identifier else 'afk action logged')
 
 
@@ -2003,6 +2026,273 @@ def merge_pins(folder, current):
         return set()
 
 
+
+# Decidable commands are an allowlist of fixed shapes (owner decision, 15/11/2026, after two review rounds showed a
+# deny list cannot be complete): a script of this checkout, the repository's own test, run, build and lint entry
+# points, installs of what the repository declares, listed git and gh verbs, and this install's delegated runs.
+# Every other program, form, option or verb stays parked.
+PY_OPTIONS = frozenset({'-I', '-B', '-u', '-O', '-OO', '-s', '-E', '-S', '-q', '-v', '-b', '-bb'})
+# Modules that run this checkout's tests and linters; never one that runs another module or code from an option
+# (`coverage run -m`, `pylint --init-hook`) or installs from the network (`build`, `tox`, `nox`).
+PY_MODULES = frozenset({'unittest', 'pytest', 'doctest', 'py_compile', 'compileall', 'mypy', 'ruff', 'black', 'flake8',
+                        'pyflakes'})
+WORD = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.:/-]{0,120}')
+# `make VAR=value`: a plain value without a slash, and never a variable that names a program, flags or a path.
+MAKE_VAR = re.compile(r'([A-Z][A-Z0-9_]{0,40})=[A-Za-z0-9_.,-]{0,120}')
+MAKE_TOOL_VAR = re.compile(r'SHELL|MAKE|MAKEFLAGS|MFLAGS|CC|CXX|CPP|LD|AR|AS|FC|RM|INSTALL|SUDO|DESTDIR|PREFIX|'
+                           r'[A-Z0-9_]*(?:FLAGS|CMD|COMMAND|BIN|PATH|DIR|EXEC|PROGRAM|TOOL|RUNNER)')
+JS_TOOLS = frozenset({'npm', 'pnpm', 'yarn', 'bun'})
+JS_INSTALL_FLAGS = frozenset({'--frozen-lockfile', '--immutable', '--no-audit', '--no-fund', '--prefer-offline',
+                              '--ignore-scripts', '--silent', '-s'})
+CARGO_VERBS = frozenset({'test', 'build', 'check', 'clippy', 'fmt', 'bench', 'fetch', 'run', 'doc'})
+GO_VERBS = frozenset({'test', 'build', 'vet', 'fmt', 'run'})
+# go flags from a closed list, written with `=` (Go accepts one or two dashes); package operands are local paths.
+GO_FLAG = re.compile(r'-{1,2}(?:v|race|short|cover|failfast|json|count=[0-9]{1,4}|run=[A-Za-z0-9_.|^$()/*-]{1,120}|'
+                     r'timeout=[0-9]{1,4}[smh]|tags=[A-Za-z0-9_,]{1,120}|p=[0-9]{1,2})')
+# git: verbs that change only this checkout's commits and index in ways the owner allows, or read; options from a
+# closed list, so no option runs a program (`--ext-diff`, `-x` of difftool, `--exec`) or writes a file (`--output`).
+GIT_VERBS = frozenset({'fetch', 'cherry-pick', 'revert', 'add', 'mv', 'log', 'show', 'diff', 'status', 'blame',
+                       'grep', 'ls-files', 'shortlog', 'describe', 'rev-parse', 'merge-base'})
+GIT_FLAGS = frozenset({'--no-edit', '-x', '--continue', '--abort', '--skip', '--quiet', '-q', '--prune', '--oneline',
+                       '--stat', '--name-only', '--name-status', '--cached', '--staged', '-p', '--no-color',
+                       '--porcelain', '-s', '--short', '-b', '-n', '--all', '-A', '-u', '--update', '--', '-i', '-l',
+                       '--no-ext-diff', '--no-textconv', '--abbrev-ref', '--show-toplevel', '-v'})
+GIT_NUMBER = re.compile(r'-n?[0-9]{1,4}|--max-count=[0-9]{1,4}')
+# gh: (group, verb) pairs at fixed positions, then data; another repository than the verified one denies.
+GH_VERBS = {'pr': {'view', 'list', 'checks', 'diff', 'status'},
+            'issue': {'create', 'view', 'list', 'comment', 'edit', 'close', 'reopen'},
+            'run': {'view', 'list', 'watch', 'rerun'}, 'workflow': {'run', 'view', 'list'},
+            'repo': {'view'}, 'release': {'view', 'list'}, 'label': {'list', 'create'}}
+
+
+def script_inside(token, context):
+    """A script operand: an existing regular file inside this checkout, not an option."""
+    if token.startswith('-') or not inside(token, context):
+        return False
+    return os.path.isfile(os.path.join(context.cwd or os.getcwd(), token))
+
+
+def pip_declared(args, context):
+    """`pip install` of declared requirements only: every operand follows `-r`, `-c` or `-e` and is an existing path
+    inside this checkout; at least one such pair; no other option."""
+    pairs, i = 0, 0
+    while i < len(args):
+        if args[i] not in {'-r', '--requirement', '-e', '--editable', '-c', '--constraint'} or i + 1 >= len(args):
+            return False
+        operand = args[i + 1]
+        if (operand.startswith('-') or any(c in operand for c in '@+:')
+                or not os.path.lexists(os.path.join(context.cwd or os.getcwd(), operand)) or not inside(operand, context)):
+            return False
+        pairs, i = pairs + 1, i + 2
+    return pairs > 0
+
+
+def shape_decidable(name, first, args, context):
+    """True when the command has one of the allowlisted shapes."""
+    if '/' in first or first.startswith('.'):
+        return script_inside(first, context)  # a script of this checkout, with data arguments
+    if name == 'make':
+        return all((WORD.fullmatch(t) and '=' not in t) or t in {'-k', '-s', '-n'} or re.fullmatch(r'-j[0-9]{0,2}', t)
+                   or (MAKE_VAR.fullmatch(t) and not MAKE_TOOL_VAR.fullmatch(MAKE_VAR.fullmatch(t).group(1)))
+                   for t in args)
+    if name in JS_TOOLS:
+        if not args:
+            return name == 'yarn'
+        verb, rest = args[0], args[1:]
+        if verb in {'test', 't'}:
+            return True
+        if verb in {'run', 'run-script'}:
+            return bool(rest) and WORD.fullmatch(rest[0]) is not None
+        if verb in {'install', 'i', 'ci'}:
+            return all(t in JS_INSTALL_FLAGS for t in rest)  # no package named: install what the lockfile declares
+        return False
+    if name == 'python':
+        i = 0
+        while i < len(args) and args[i] in PY_OPTIONS:
+            i += 1
+        if args[i:i + 1] == ['-m']:
+            module = args[i + 1] if i + 2 <= len(args) else ''
+            if module == 'pip':
+                return args[i + 2:i + 3] == ['install'] and pip_declared(args[i + 3:], context)
+            return module in PY_MODULES
+        return i < len(args) and script_inside(args[i], context)
+    if name == 'pip':
+        return args[:1] == ['install'] and pip_declared(args[1:], context)
+    if name == 'node':
+        if args[:1] == ['--test']:
+            return all(not t.startswith('-') and inside(t, context) for t in args[1:])
+        return bool(args) and script_inside(args[0], context)
+    if name == 'cargo':
+        return bool(args) and args[0] in CARGO_VERBS and not any(t.startswith(('--config', '-Z')) for t in args)
+    if name == 'go':
+        if args[:1] == ['mod']:
+            return args[1:2] in (['download'], ['tidy'], ['verify']) and all(GO_FLAG.fullmatch(t) for t in args[2:])
+        return bool(args) and args[0] in GO_VERBS and all(
+            GO_FLAG.fullmatch(t) or (t.startswith('.') and '@' not in t and inside(t.rstrip('.').rstrip('/') or '.', context))
+            for t in args[1:])
+    if name in {'uv', 'poetry', 'bundle'}:
+        verb = {'uv': 'sync', 'poetry': 'install', 'bundle': 'install'}[name]
+        return args[:1] == [verb] and all(t in {'--frozen', '--locked', '--no-root', '--quiet'} for t in args[1:])
+    if name == 'git':
+        if not args or args[0] not in GIT_VERBS:
+            return False
+        if args[0] == 'fetch':
+            # Only from origin, by branch name: no other host, URL, scp-like remote or refspec.
+            operands = [t for t in args[1:] if not t.startswith('-')]
+            if operands[:1] not in ([], ['origin']) or any(':' in t or not BRANCH.fullmatch(t) for t in operands):
+                return False
+        return all(not t.startswith('-') or t in GIT_FLAGS or GIT_NUMBER.fullmatch(t) for t in args[1:])
+    if name == 'gh':
+        if len(args) < 2 or args[1] not in GH_VERBS.get(args[0], ()):
+            return False
+        for i, t in enumerate(args):
+            if t.startswith(('-R', '--repo')):
+                # pflag reads `-R x`, `-R=x`, `-Rx`, `--repo x` and `--repo=x` alike.
+                if t in {'-R', '--repo'}:
+                    value = args[i + 1] if i + 1 < len(args) else ''
+                elif t.startswith('--repo='):
+                    value = t[len('--repo='):]
+                elif t.startswith('-R'):
+                    value = t[2:].removeprefix('=')
+                else:
+                    return False  # another long option starting with --repo
+                if context.target is None or value.removeprefix('github.com/').lower() != context.target.removeprefix('github.com/'):
+                    return False
+        return True
+    return False
+
+
+def program_name(token):
+    """The base program name with a trailing version stripped (`python3.12` reads as `python`)."""
+    return re.sub(r'[0-9][0-9.]*$', '', Path(token).name) or Path(token).name
+
+
+def inside(token, context):
+    """True when a path token resolves, through every link, inside the checkout the request runs in and outside its
+    protected paths (`.git/`, `.github/`, `.claude/`, credential and key names), so a link cannot lead there."""
+    if token.startswith('~') or context.ident is None:
+        return False
+    root = os.path.realpath(context.ident.checkout)
+    full = os.path.realpath(os.path.join(context.cwd or os.getcwd(), token))
+    if full == root:
+        return True
+    if not full.startswith(root + os.sep):
+        return False
+    return not protected(os.path.relpath(full, root))
+
+
+REMOTE = re.compile(r'(?:[^\s/]*@)?[A-Za-z0-9_.-]+\.[A-Za-z]{2,}:|[^\s/]*@[^\s/]+:')  # an scp-like remote, `[user@]host:path`
+
+
+def decidable_argv(argv, context, hosts=frozenset()):
+    """True when an `unknown` command may enter the away ladder for approval: a found repository with user or project
+    settings, one of the allowlisted shapes (shape_decidable) or this install's delegated run (dispatch_prefix), no
+    shell syntax, URL, remote, secret or machine path, and every path operand inside this checkout, outside its
+    protected paths. Everything else stays parked."""
+    if context.repository != 'found' or context.state not in {'user', 'project'} or not argv:
+        return False
+    # Without a shell, a newline or tab inside one argument is data (a multi-line brief); other controls deny.
+    if any(not isinstance(t, str) or not t or len(t.encode()) > 65536
+           or any(unicodedata.category(c).startswith('C') and c not in '\n\t' for c in t)
+           or t in {';', '&&', '||', '|', '&', '>', '>>', '<', '<<'} or '$(' in t or '`' in t or '://' in t
+           for t in argv):
+        return False
+    first = argv[0]
+    if '=' in first or first.startswith('-') or not re.fullmatch(r'[A-Za-z0-9_./+-]{1,240}', first):
+        return False
+    skip = dispatch_prefix(argv, hosts)
+    if skip == 1 and (any(REMOTE.match(t) for t in argv[1:])
+                      or not shape_decidable(program_name(first), first, argv[1:], context)):
+        return False
+    for token in argv[skip:]:
+        value = token.split('=', 1)[1] if '=' in token else token  # `--flag=value` and `VAR=value` alike
+        if not value:
+            continue
+        if value.startswith('~') or screened(value):
+            return False
+        if (os.path.isabs(value) or path_operand(value, context.cwd)) and not inside(value, context):
+            return False
+    return True
+
+
+def dispatch_prefix(argv, hosts):
+    """How many leading tokens are a delegated run's own launcher, else 1: this install's `delegate_env.py` with
+    isolated Python, `--family F --` for a family of the lease's Hosts, and that family's owner-approved executable
+    (the quota probe's record). The run's own arguments after it pass the usual screen (a review or task brief is
+    screened for secrets and machine paths). Used only for an `unknown` request: any other dispatch form stays parked."""
+    name, tail = own_script(argv, ('delegate_env.py',))
+    if (name is None or len(tail) < 4 or tail[0] != '--family' or tail[2] != '--' or tail[1] not in PROGRAMS
+            or tail[1] not in hosts):
+        return 1
+    size = approved_program(tail[1], tail[3:])
+    if not size:
+        return 1
+    return len(argv) - len(tail) + 3 + size
+
+
+def decidable_paths(paths, context):
+    """True when every path of an `unknown` change is a plain relative file path inside this checkout, outside its
+    protected paths, with no link on the way."""
+    if context.repository != 'found' or context.state not in {'user', 'project'} or not paths:
+        return False
+    for p in paths:
+        relative = repository_path(p, context)
+        if (relative is None or not inside(p, context) or not no_links(relative, context)
+                or (context.ident.checkout / relative).is_dir()):
+            return False
+    return True
+
+
+def request_subject(applied, cwd, argv, paths):
+    """The digest an approval binds: repository, working folder and the exact argv or set of paths; None when the
+    request is not decidable."""
+    context = context_of(applied)
+    if argv is not None:
+        hosts = {HOST_FAMILIES[h] for h in applied.get('Hosts', '').split(', ') if h in HOST_FAMILIES}
+        if not isinstance(argv, list) or not decidable_argv(argv, context, hosts):
+            return None
+        request = dict(argv=argv)
+    else:
+        if not isinstance(paths, list) or not decidable_paths(paths, context):
+            return None
+        request = dict(paths=sorted(paths))
+    return digest(dict(project=project_key(context), cwd=os.path.realpath(cwd), **request))
+
+
+def open_approvals(folder, lease, current):
+    """Subjects this lease's away decisions approved and no allowed check has used yet; empty on any doubt."""
+    try:
+        counts = {}
+        for line in (read_private(folder, 'log.jsonl', MAX_LOG) or b'').splitlines():
+            entry = json.loads(line)
+            if (not isinstance(entry, dict) or entry.get('kind') not in {'approval', 'approval-used'}
+                    or not isinstance(entry.get('subject'), str) or not SHA256.fullmatch(entry['subject'])
+                    or not finite(entry.get('time')) or not lease['start'] <= entry['time'] <= current):
+                continue
+            counts[entry['subject']] = counts.get(entry['subject'], 0) + (1 if entry['kind'] == 'approval' else -1)
+        return {subject for subject, count in counts.items() if count > 0}
+    except (OSError, ValueError, UnicodeError, TypeError, KeyError):
+        return set()
+
+
+def approval_subject(folder, args, current):
+    """The subject of `--approve-argv-json` or `--approve-paths`, checked before the decision is recorded: the rung
+    decided option 1 (run it), and the request, judged now and here exactly as `check` would, is `unknown` and
+    decidable. Refuses anything else."""
+    if args.rung not in {'rule', 'advisor', 'host'} or args.settled != 'yes' or args.option != '1':
+        raise Refusal('an approval needs a rule, advisor or host rung that settled on option 1, which runs the request')
+    if args.approve_argv_json is not None and args.approve_paths is not None:
+        raise Refusal('approve one request: --approve-argv-json or --approve-paths')
+    code, lease, applied, key, entry, argv, cwd = classified(
+        folder, args.approve_argv_json, args.approve_paths, None, current)
+    if code != 'unknown' or entry is None:
+        # entry is None when `git -C` named a folder outside this repository or under a protected path
+        raise Refusal('only an unknown request in a checked folder may be approved')
+    subject = request_subject(applied, cwd, argv if args.approve_argv_json is not None else None, args.approve_paths)
+    if subject is None:
+        raise Refusal('this request is never decidable: park it')
+    return subject
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0], allow_abbrev=False)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -2019,6 +2309,8 @@ def main(argv=None):
     record.add_argument('--kind', required=True, choices=sorted(KINDS))
     for key in ('task', 'pr', 'run', 'head', 'note', 'decision', 'rung', 'settled', 'precedents', 'topic', 'project', *FIELDS):
         record.add_argument('--' + key)
+    record.add_argument('--approve-argv-json')
+    record.add_argument('--approve-paths', nargs='+')
     reviewed = sub.add_parser('review', allow_abbrev=False)
     reviewed.add_argument('--decision', required=True)
     reviewed.add_argument('verdict', choices=('kept', 'reversed'))

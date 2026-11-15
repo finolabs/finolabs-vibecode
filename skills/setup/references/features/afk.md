@@ -41,7 +41,7 @@ Yes: Save Merge: yes. This lets the agents merge eligible pull requests while a 
 No: Save Merge: no; agents cannot merge pull requests.
 Undo: Stop the current lease and repeat setup with Merge: no to withdraw this authority.
 Choices: "Yes, allow merges during a live lease" / "No, keep merges off".
-There is no default for Merge. Starting a lease applies this answer; it does not grant any further authority (advisory, agent judgment; the script denies merge when the setting is no).
+After a yes, say once that a merge also needs both reviews posted: in a repository whose reviewers cannot post, the coordinator relays them only under a standing relay committed in that repository's context file, which `/setup instructions` offers ("Review relay"). There is no default for Merge. Starting a lease applies this answer; it does not grant any further authority (advisory, agent judgment; the script denies merge when the setting is no).
 
 Translate the answers into `python3 -I <this skill folder>/scripts/afk_setup.py preview --hosts <names> --task-choice <choose|listed> --push-and-pull-requests <yes|no> --trusted-authors own --lease-hours <n> --max-runs <n> --max-runtime-minutes <n> --max-actions-per-hour <n> --quota-floor-percent <n> --merge <yes|no> [--decide <key>]... [--non-production-target '<command>']... [--test-command '<command>']... [--top-level-file <name>]... [--release-target '<command>']... [--production-target '<command>']... --excerpts-leave-the-machine <yes|no>`.
 Quote "Claude Code" as one name. Pass every answer explicitly. Show the target, entire section, backup and SHA-256 digest before asking the separate write approval:

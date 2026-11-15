@@ -939,6 +939,27 @@ class AwayDecisionTest(AfkBase):
         self.check_as(AGY, coordinator='antigravity', tier=3, code='unknown')
         self.assertEqual(self.counts()['actions'], 3)
 
+    def test_a_delegated_run_outside_the_advisor_form_may_be_decided_once(self):
+        # Owner decision 15/11/2026: a review on a fast model, or an implementation run, goes up the ladder.
+        self.start_away(SETUP_ALL)
+        self.cwd = self.repo
+        review = AGY[:AGY.index('gemini-4-argon-high')] + ['gemini-3.8-flash-high'] + AGY[AGY.index('gemini-4-argon-high') + 1:]
+        argv = self.real(review)
+        self.check_as(argv, tier=3, code='unknown')
+        host = ('--rung', 'host', '--settled', 'yes', '--by', 'claude', '--option', '1', '--of', '2',
+                '--model', 'claude-opus-5-5')
+        status, output = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'review run',
+                                     '--precedents', '0', *host, '--approve-argv-json', json.dumps(argv))
+        self.assertEqual(status, 0, output)
+        self.check_as(argv, code='decided')
+        self.check_as(argv, tier=3, code='unknown')
+        # A program other than the recorded executable, or a family outside Hosts, never enters the ladder.
+        for bad in (review, ENV + ['--family', 'zcode', '--', 'zcode', '-p', BRIEF]):
+            with self.subTest(bad=bad):
+                status, output = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'review run',
+                                             '--precedents', '0', *host, '--approve-argv-json', json.dumps(bad))
+                self.assertEqual(status, 3, output)
+
     def test_the_advisor_model_is_frontier_else_strong(self):
         self.start_away(SETUP_ALL)
         forms = {'antigravity': (AGY, AGY.index('gemini-4-argon-high')),
@@ -1250,6 +1271,116 @@ class ProjectScopeTest(AfkBase):
         (repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/main\n')
         (repo / '.git/config').write_text(ORIGIN_CONFIG)
         return repo
+
+    HOST_YES = ('--rung', 'host', '--settled', 'yes', '--by', 'claude', '--option', '1', '--of', '2',
+                '--model', 'claude-opus-5-5')
+
+    def approve(self, *request, status=0, rung=HOST_YES):
+        found = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'run it', '--precedents', '0',
+                            *rung, *request)
+        self.assertEqual(found[0], status, found[1])
+        return found[1]
+
+    def test_an_away_decision_approves_one_unknown_command_once_in_this_folder(self):
+        # Owner decision 15/11/2026: an unknown request goes up the away ladder instead of parking.
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        (self.repo / 'scripts').mkdir(exist_ok=True)
+        (self.repo / 'scripts/ci-local.sh').write_text('#!/bin/sh\n')
+        argv = ['scripts/ci-local.sh', 'fast']
+        self.check(argv, tier=3, code='unknown')
+        self.approve('--approve-argv-json', json.dumps(argv))
+        self.check(argv, code='decided')
+        self.check(argv, tier=3, code='unknown')  # one approval runs once
+        self.approve('--approve-argv-json', json.dumps(argv))
+        self.check(['scripts/ci-local.sh', 'web'], tier=3, code='unknown')  # bound to the exact argv
+        self.cwd = self.other_repo('second')
+        self.check(argv, tier=3, code='unknown')  # and to the repository and folder
+        self.cwd = self.repo
+        self.check(argv, code='decided')
+        (self.repo / 'requirements.txt').write_text('x\n')
+        for test in (['npm', 'test', '--', 'unit'], ['python3', '-m', 'unittest', 'tests.test_x'], ['make', 'ci-local'],
+                     ['go', 'test', './...'], ['go', 'test', '-race', '-count=1', './...'], ['make', 'ci-local', 'TIER=fast'],
+                     ['git', 'fetch', 'origin', 'main'], ['gh', 'issue', 'create', '-R', 'example/demo', '--title', 'x'],
+                     ['python3', '-I', 'scripts/ci-local.sh'],
+                     # git and gh for code, review and workflow work (owner decision, 15/11/2026).
+                     ['git', 'cherry-pick', 'abc1234'], ['git', 'revert', '--no-edit', 'abc1234'],
+                     ['gh', 'workflow', 'run', 'deploy.yml'], ['gh', 'run', 'rerun', '123'],
+                     ['gh', 'issue', 'create', '--title', 'x', '--body', 'y'],
+                     # Installing what the repository declares (owner decision, 15/11/2026).
+                     ['npm', 'ci'], ['npm', 'install'], ['pnpm', 'install', '--frozen-lockfile'], ['uv', 'sync'],
+                     ['pip', 'install', '-r', 'requirements.txt'], ['python3', '-m', 'pip', 'install', '-e', '.'],
+                     ['python3', '-I', '-m', 'pytest', '-q'], ['python3', '-u', '-m', 'pip', 'install', '-r', 'requirements.txt'],
+                     ['go', 'mod', 'download']):
+            with self.subTest(test=test):
+                self.approve('--approve-argv-json', json.dumps(test))
+                self.check(test, code='decided')
+        # A change of paths no rule names, bound to the same set of paths.
+        (self.repo / 'NOTES.md').write_text('x\n')
+        self.check(paths=['NOTES.md'], tier=3, code='unknown')
+        self.approve('--approve-paths', 'NOTES.md')
+        self.check(paths=['NOTES.md'], code='decided')
+        self.check(paths=['NOTES.md'], tier=3, code='unknown')
+
+    def test_an_approval_is_refused_for_known_protected_or_unbounded_requests(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        (self.repo / 'tests').mkdir(exist_ok=True)
+        outside = self.home / 'outside.txt'
+        outside.write_text('x\n')
+        for argv in (['curl', '-o', 'x', 'https://example.com'], ['bash', '-c', 'make'], ['sh', 'run.sh'],
+                     ['python3', '-c', 'print(1)'], ['node', '-e', '1'], ['python3', '-m', 'pip', 'install', 'x'],
+                     ['npm', 'install', 'left-pad'], ['go', 'install', 'x'], ['npm', 'ci', '--registry', 'http://x'],
+                     ['pip', 'install', 'requests'], ['python3', '-m', 'pip', 'install', 'requests'], ['npm', 'i', '-g'],
+                     ['pip', 'install', '-r', '../req.txt'], ['go', 'mod', 'edit', '-require=x'], ['npx', 'tsc'], ['rm', '-rf', 'build'],
+                     ['cat', str(outside)], ['cat', '../outside.txt'], ['cat', '~/x'], ['FOO=1', 'make'],
+                     ['make', 'ci', '|', 'tee'], ['make', '$(id)'], ['sudo', 'make'], ['/bin/rm', 'x'],
+                     ['git', 'reset', '--hard'], ['gh', 'api', 'x'], ['make', 'TOKEN=ghp_' + 'a' * 36],
+                     ['gh', 'repo', 'delete', 'example/demo'], ['gh', 'repo', 'edit', '--visibility', 'public'],
+                     ['gh', 'secret', 'set', 'NAME'], ['git', 'config', 'user.name', 'x'], ['git', '-c', 'a=b', 'log'],
+                     ['git', 'push', '--force'], ['git', 'filter-branch', 'HEAD'], ['git', 'rebase', 'main'],
+                     ['git', 'clean', '-fdx'], ['gh', 'pr', 'merge', '7'], ['gh', 'workflow', 'disable', 'ci'],
+                     # Review round one (PR 295): each of these slipped through the first screen.
+                     ['git', 'restore', 'NOTES.md'], ['git', 'checkout', 'NOTES.md'], ['git', 'merge', 'topic'],
+                     ['git', '-Csub', 'log'], ['git', '--config-env=core.pager=X', 'log'], ['git', 'pull'],
+                     ['python3', '-u', '-m', 'pip', 'install', 'requests'], ['python3', '-c"print(1)"'],
+                     ['python3', '-m', 'timeit', '1'], ['python3', '-m', 'code'], ['python3'], ['node'],
+                     ['node', '-e"1"'], ['deno', 'eval', '1'], ['pwsh', '-Command', 'x'], ['uv', 'run', 'bash'],
+                     ['poetry', 'run', 'sh'], ['bundle', 'exec', 'sh'], ['go', 'mod', 'download', 'x@v1'],
+                     ['go', 'run', 'example.com/x@latest'], ['pip', 'install', 'git+git@example.com:a/b.git'],
+                     ['gh', 'pr', 'review', '7', '--approve'], ['gh', 'issue', 'delete', '7'],
+                     ['gh', 'repo', 'create', 'x'], ['zcode', '-p', 'x'], ['cat', 'git@example.com:a/b'],
+                     # Review round two (PR 295), closed by the allowlist.
+                     ['go', 'test', '-exec', 'sh', './...'], ['git', 'difftool', '-x', 'sh'], ['git', 'bisect', 'run', 'sh'],
+                     ['gh', 'pr', '-R', 'example/demo', 'merge', '7'], ['pip', 'install', 'tests'], ['nodejs', '-e', '1'],
+                     ['pythonw', '-c', '1'], ['git', 'commit'], ['gh', 'pr', 'checkout', '7'], ['gh', 'repo', 'clone', 'x'],
+                     ['git', 'apply', '--unsafe-paths', 'x.patch'], ['git', 'log', '--output=x'], ['git', 'diff', '--ext-diff'],
+                     ['gh', 'issue', 'create', '--repo', 'other/repo', '--title', 'x'], [str(outside)], ['cargo', '--config', 'x', 'test'],
+                     # Review round three (PR 295): options inside the allowed shapes.
+                     ['go', 'test', '--exec', 'sh', './...'], ['go', 'test', '--exec=sh', './...'], ['go', 'vet', '-vettool=sh'],
+                     ['go', 'test', 'example.com/x'], ['gh', 'issue', 'create', '-R=other/repo', '--title', 'x'],
+                     ['gh', 'issue', 'create', '-Rother/repo'], ['make', 'DESTDIR=' + str(outside)], ['make', 'CC=curl'],
+                     ['make', 'SHELL=sh'], ['python3', '-m', 'pylint', '--init-hook=x'], ['python3', '-m', 'coverage', 'run', '-m', 'pip'],
+                     ['git', 'fetch', 'example.com:repo.git'], ['git', 'fetch', 'origin', 'a:b']):
+            with self.subTest(argv=argv):
+                self.approve('--approve-argv-json', json.dumps(argv), status=3)
+                self.check(argv, tier=3, code=json.loads(self.invoke('check', '--argv-json', json.dumps(argv))[1])['code'])
+        self.check(['git', 'status'])
+        self.approve('--approve-argv-json', json.dumps(['git', 'status']), status=3)  # already allowed: no approval
+        self.approve('--approve-paths', '.github/workflows/x.yml', status=3)  # protected never enters the ladder
+        (self.repo / '.git/hooks').mkdir(parents=True, exist_ok=True)
+        (self.repo / 'notes-link').symlink_to(self.repo / '.git/hooks')
+        self.approve('--approve-paths', 'notes-link/pre-commit', status=3)  # a link into a protected folder
+        self.approve('--approve-argv-json', json.dumps(['make', 'notes-link/pre-commit']), status=3)
+        argv = json.dumps(['make', 'ci-local'])
+        for rung in (('--rung', 'host', '--settled', 'yes', '--by', 'claude', '--option', '2', '--of', '2',
+                      '--model', 'claude-opus-5-5'),
+                     ('--rung', 'table', '--settled', 'yes', '--by', 'host-small', '--of', '2', '--probability', '0.9'),
+                     ('--rung', 'park', '--settled', 'yes', '--by', 'claude')):
+            with self.subTest(rung=rung):
+                self.approve('--approve-argv-json', argv, status=3, rung=rung)
+        self.check(['make', 'ci-local'], tier=3, code='unknown')  # nothing was approved
+        # The strict state (a repository whose settings cannot be trusted) never approves.
+        self.cwd = self.home
+        self.approve('--approve-argv-json', argv, status=3)
 
     def test_production_targets_are_tier_one_only_where_the_repository_listed_and_decides_them(self):
         targets = '- Non-production targets: npx wrangler deploy --env uat\n'

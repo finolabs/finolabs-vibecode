@@ -6,7 +6,7 @@ While a lease is live, a decision you would otherwise ask the user goes up this 
 
 ## Frame the question
 
-Write the question and two to six closed options, numbered from 1, each an action you may already take (advisory, agent judgment). A rung chooses among options; it grants no authority. Tier 3 work never enters the ladder: park it. Write down the anchor every rung decides on: the current spec's goal, or the project's stated goal.
+Write the question and two to six closed options, numbered from 1, each an action you may already take (advisory, agent judgment). A rung chooses among options; it grants no authority. Tier 3 work never enters the ladder: park it, except an `unknown` answer from `check`, which enters with the two fixed options of `SKILL.md` "Work inside the lease" (1 run it, 2 park it); a rung that settles on 1 records `--approve-argv-json` or `--approve-paths` on its attempt (script: the approval is refused unless the request is unknown and decidable, and it runs once). Write down the anchor every rung decides on: the current spec's goal, or the project's stated goal.
 
 ## Two checks against "Where it must stop"
 
@@ -69,5 +69,6 @@ Every attempt is one call; the first prints the decision id (`q<date>-<time>-<4 
 - `table yes`: `--by <jev|host-small> --of <k> --probability <the top probability>`; `table unavailable`: `--by <jev|host-small>`. A table never takes `--option`: it decides nothing.
 - `advisor yes`: `--by <agent> --option <n> --of <k> --dispatch <id> --model <model>`; `advisor no`: `--by <agent> --dispatch <id> --model <model>`; `advisor unavailable`: `--by <agent>` (and `--dispatch` if a run started), or nothing further when no candidate was found.
 - `host yes`: `--by <your family> --option <n> --of <k> --model <your model>`; `park yes`: `--by <your family>`.
+- An approval: a `rule`, `advisor` or `host` attempt with `--settled yes --option 1` adds `--approve-argv-json '<argv JSON>'` or `--approve-paths <paths...>`, run from the folder the request runs in; any other row with either flag is refused (script).
 
 Never put question or option text in the topic or note; the topic is a short label (advisory, agent judgment; the script screens labels). When the advisor's family wrote the work the decision concerns, say so in your report.
