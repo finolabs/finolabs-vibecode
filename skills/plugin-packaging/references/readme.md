@@ -48,7 +48,7 @@ Headings match at level 2, or level 3 for Skills, Agents and Commands. Write the
 
 ## Checklist
 
-Run `python3 -I <this skill folder>/scripts/readme_check.py [repository root]`. It checks the items marked **script**, offline, and prints `FAIL <id> …` per finding and the external links for you to open; it is advisory (agent judgment decides what to fix) and exits 1 when anything failed. It reads only regular files inside the repository, each at most 1 MiB; a link out of it, a FIFO or device, or a larger file stops the check with exit 2. Then walk the items marked **agent** yourself. Report every item as PASS, FAIL, PENDING (an owner decision) or N/A with its reason.
+Run `python3 -I <this skill folder>/scripts/readme_check.py [repository root]`. It checks the items marked **script**, offline, and prints `FAIL <id> …` per finding and the external links for you to open; it is advisory (agent judgment decides what to fix) and exits 1 when anything failed. It reads only regular files inside the repository, each at most 1 MiB; a link out of it, a FIFO or device, or a larger file stops the check with exit 2. A local link target that fails those rules is reported as a K1 failure instead. Then walk the items marked **agent** yourself. Report every item as PASS, FAIL, PENDING (an owner decision) or N/A with its reason.
 
 ### Structure
 

@@ -180,7 +180,7 @@ def anchors(text):
 
 def read_text(root, path, errors="strict"):
     """A regular file inside root, at most MAX_READ bytes; BadInput for a link out, a non-regular file or an oversize one."""
-    real = Path(os.path.realpath(path))
+    real, root = Path(os.path.realpath(path)), Path(os.path.realpath(root))
     if real != root and root not in real.parents:
         raise BadInput(f"{path.name} lies outside the repository")
     fd = os.open(real, os.O_RDONLY | os.O_NONBLOCK)  # a FIFO opens without blocking, then fails the regular-file check
@@ -461,7 +461,7 @@ class Check:
                     self.fail("D1", ".claude-plugin/marketplace.json entry description differs from the manifest")
 
     def check_license(self, spans):
-        path = next((self.root / n for n in LICENSE_FILES if (self.root / n).is_file()), None)
+        path = next((self.root / n for n in LICENSE_FILES if (self.root / n).exists()), None)  # read_text refuses a non-regular one
         if path is None:
             self.fail("L1", "no LICENSE, LICENSE.md, LICENSE.txt or COPYING file")
             return

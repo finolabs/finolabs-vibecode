@@ -400,6 +400,15 @@ class ReadmeCheckTest(unittest.TestCase):
         self.write(".github/readme-standard.json", json.dumps({"hosts": ["Claude Code", "Antigravity"]}))
         self.assertTrue(any("Antigravity" in l and "no manifest" in l for l in self.fails("H1")))
 
+    def test_in_repository_links_and_hosts_sharing_a_manifest_still_pass(self):
+        (self.root / "docs").mkdir()
+        (self.root / "README.md").rename(self.root / "docs/README.md")
+        (self.root / "README.md").symlink_to("docs/README.md")
+        code, lines = self.run_check()
+        self.assertEqual(code, 0, lines)
+        self.write(".github/readme-standard.json", json.dumps({"hosts": ["Claude Cowork", "Codex"]}))
+        self.assertFalse([l for l in self.run_check()[1] if "leaves out" in l])
+
     def test_a_shipped_manifest_the_hosts_override_leaves_out_fails(self):
         self.write(".github/readme-standard.json", json.dumps({"hosts": ["Claude Code"]}))
         self.assertIn("FAIL H1 .codex-plugin/plugin.json ships, but the hosts override leaves out Codex", self.fails("H1"))
