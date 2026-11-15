@@ -33,7 +33,7 @@ Rule table (each row names its enforcer; unknown input always fails closed):
 | PR create/edit require push permission; PR merge requires Merge=yes and one full --match-head-commit SHA | classify_argv |
 | Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run` or `run --changed [--base <branch or commit>]` (no relative revision) with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
-| An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, one of the allowlisted shapes: a script of this checkout, make, npm/pnpm/yarn/bun test, run and declared installs, python scripts and listed -m modules, cargo and go verbs without -exec or @version, declared pip, uv, poetry and bundle installs, listed git verbs and flags, listed gh group and verb pairs, or this install's delegated run) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, shape_decidable, dispatch_prefix, decidable_paths, request_subject, open_approvals |
+| An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, one of the allowlisted shapes: a script of this checkout, make, npm/pnpm/yarn/bun test, run and declared installs, python scripts and listed -m modules, cargo verbs without --config, go verbs with listed flags and local packages, declared pip, uv, poetry and bundle installs, listed git verbs and flags, listed gh group and verb pairs, or this install's delegated run) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, shape_decidable, dispatch_prefix, decidable_paths, request_subject, open_approvals |
 | Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge and review-fallback kinds only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
 | Trusted PR authors, full independent review/check/local-test gate, changed paths (including staged commit paths), quota readings and actually calling check before execution remain caller obligations in this slice | agent judgment, advisory; merge_check --independent enforces its review condition |
 
@@ -2032,16 +2032,23 @@ def merge_pins(folder, current):
 # points, installs of what the repository declares, listed git and gh verbs, and this install's delegated runs.
 # Every other program, form, option or verb stays parked.
 PY_OPTIONS = frozenset({'-I', '-B', '-u', '-O', '-OO', '-s', '-E', '-S', '-q', '-v', '-b', '-bb'})
+# Modules that run this checkout's tests and linters; never one that runs another module or code from an option
+# (`coverage run -m`, `pylint --init-hook`) or installs from the network (`build`, `tox`, `nox`).
 PY_MODULES = frozenset({'unittest', 'pytest', 'doctest', 'py_compile', 'compileall', 'mypy', 'ruff', 'black', 'flake8',
-                        'pyflakes', 'pylint', 'coverage', 'tox', 'nox', 'build'})
+                        'pyflakes'})
 WORD = re.compile(r'[A-Za-z0-9_][A-Za-z0-9_.:/-]{0,120}')
-MAKE_VAR = re.compile(r'[A-Z][A-Z0-9_]{0,40}=[A-Za-z0-9_.,/-]{0,120}')
+# `make VAR=value`: a plain value without a slash, and never a variable that names a program, flags or a path.
+MAKE_VAR = re.compile(r'([A-Z][A-Z0-9_]{0,40})=[A-Za-z0-9_.,-]{0,120}')
+MAKE_TOOL_VAR = re.compile(r'SHELL|MAKE|MAKEFLAGS|MFLAGS|CC|CXX|CPP|LD|AR|AS|FC|RM|INSTALL|SUDO|DESTDIR|PREFIX|'
+                           r'[A-Z0-9_]*(?:FLAGS|CMD|COMMAND|BIN|PATH|DIR|EXEC|PROGRAM|TOOL|RUNNER)')
 JS_TOOLS = frozenset({'npm', 'pnpm', 'yarn', 'bun'})
 JS_INSTALL_FLAGS = frozenset({'--frozen-lockfile', '--immutable', '--no-audit', '--no-fund', '--prefer-offline',
                               '--ignore-scripts', '--silent', '-s'})
 CARGO_VERBS = frozenset({'test', 'build', 'check', 'clippy', 'fmt', 'bench', 'fetch', 'run', 'doc'})
 GO_VERBS = frozenset({'test', 'build', 'vet', 'fmt', 'run'})
-GO_DENIED = re.compile(r'-(?:exec|toolexec|overlay|modfile|pgo|ldflags|gcflags|asmflags)(?:=.*)?')
+# go flags from a closed list, written with `=` (Go accepts one or two dashes); package operands are local paths.
+GO_FLAG = re.compile(r'-{1,2}(?:v|race|short|cover|failfast|json|count=[0-9]{1,4}|run=[A-Za-z0-9_.|^$()/*-]{1,120}|'
+                     r'timeout=[0-9]{1,4}[smh]|tags=[A-Za-z0-9_,]{1,120}|p=[0-9]{1,2})')
 # git: verbs that change only this checkout's commits and index in ways the owner allows, or read; options from a
 # closed list, so no option runs a program (`--ext-diff`, `-x` of difftool, `--exec`) or writes a file (`--output`).
 GIT_VERBS = frozenset({'fetch', 'cherry-pick', 'revert', 'add', 'mv', 'log', 'show', 'diff', 'status', 'blame',
@@ -2085,7 +2092,8 @@ def shape_decidable(name, first, args, context):
     if '/' in first or first.startswith('.'):
         return script_inside(first, context)  # a script of this checkout, with data arguments
     if name == 'make':
-        return all(WORD.fullmatch(t) or MAKE_VAR.fullmatch(t) or t in {'-k', '-s', '-n'} or re.fullmatch(r'-j[0-9]{0,2}', t)
+        return all((WORD.fullmatch(t) and '=' not in t) or t in {'-k', '-s', '-n'} or re.fullmatch(r'-j[0-9]{0,2}', t)
+                   or (MAKE_VAR.fullmatch(t) and not MAKE_TOOL_VAR.fullmatch(MAKE_VAR.fullmatch(t).group(1)))
                    for t in args)
     if name in JS_TOOLS:
         if not args:
@@ -2117,23 +2125,37 @@ def shape_decidable(name, first, args, context):
     if name == 'cargo':
         return bool(args) and args[0] in CARGO_VERBS and not any(t.startswith(('--config', '-Z')) for t in args)
     if name == 'go':
-        if any('@' in t or GO_DENIED.fullmatch(t) for t in args):
-            return False
         if args[:1] == ['mod']:
-            return args[1:2] in (['download'], ['tidy'], ['verify']) and all(t.startswith('-') for t in args[2:])
-        return bool(args) and args[0] in GO_VERBS
+            return args[1:2] in (['download'], ['tidy'], ['verify']) and all(GO_FLAG.fullmatch(t) for t in args[2:])
+        return bool(args) and args[0] in GO_VERBS and all(
+            GO_FLAG.fullmatch(t) or (t.startswith('.') and '@' not in t and inside(t.rstrip('.').rstrip('/') or '.', context))
+            for t in args[1:])
     if name in {'uv', 'poetry', 'bundle'}:
         verb = {'uv': 'sync', 'poetry': 'install', 'bundle': 'install'}[name]
         return args[:1] == [verb] and all(t in {'--frozen', '--locked', '--no-root', '--quiet'} for t in args[1:])
     if name == 'git':
-        return (bool(args) and args[0] in GIT_VERBS
-                and all(not t.startswith('-') or t in GIT_FLAGS or GIT_NUMBER.fullmatch(t) for t in args[1:]))
+        if not args or args[0] not in GIT_VERBS:
+            return False
+        if args[0] == 'fetch':
+            # Only from origin, by branch name: no other host, URL, scp-like remote or refspec.
+            operands = [t for t in args[1:] if not t.startswith('-')]
+            if operands[:1] not in ([], ['origin']) or any(':' in t or not BRANCH.fullmatch(t) for t in operands):
+                return False
+        return all(not t.startswith('-') or t in GIT_FLAGS or GIT_NUMBER.fullmatch(t) for t in args[1:])
     if name == 'gh':
         if len(args) < 2 or args[1] not in GH_VERBS.get(args[0], ()):
             return False
         for i, t in enumerate(args):
-            if t in {'-R', '--repo'} or t.startswith('--repo='):
-                value = t.split('=', 1)[1] if '=' in t else (args[i + 1] if i + 1 < len(args) else '')
+            if t.startswith(('-R', '--repo')):
+                # pflag reads `-R x`, `-R=x`, `-Rx`, `--repo x` and `--repo=x` alike.
+                if t in {'-R', '--repo'}:
+                    value = args[i + 1] if i + 1 < len(args) else ''
+                elif t.startswith('--repo='):
+                    value = t[len('--repo='):]
+                elif t.startswith('-R'):
+                    value = t[2:].removeprefix('=')
+                else:
+                    return False  # another long option starting with --repo
                 if context.target is None or value.removeprefix('github.com/').lower() != context.target.removeprefix('github.com/'):
                     return False
         return True
@@ -2159,7 +2181,7 @@ def inside(token, context):
     return not protected(os.path.relpath(full, root))
 
 
-REMOTE = re.compile(r'[^\s/]*@[^\s/]+:')  # an scp-like remote, `user@host:path`
+REMOTE = re.compile(r'(?:[^\s/]*@)?[A-Za-z0-9_.-]+\.[A-Za-z]{2,}:|[^\s/]*@[^\s/]+:')  # an scp-like remote, `[user@]host:path`
 
 
 def decidable_argv(argv, context, hosts=frozenset()):
@@ -2183,7 +2205,7 @@ def decidable_argv(argv, context, hosts=frozenset()):
                       or not shape_decidable(program_name(first), first, argv[1:], context)):
         return False
     for token in argv[skip:]:
-        value = token.split('=', 1)[1] if token.startswith('-') and '=' in token else token
+        value = token.split('=', 1)[1] if '=' in token else token  # `--flag=value` and `VAR=value` alike
         if not value:
             continue
         if value.startswith('~') or screened(value):

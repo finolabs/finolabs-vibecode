@@ -1299,7 +1299,9 @@ class ProjectScopeTest(AfkBase):
         self.check(argv, code='decided')
         (self.repo / 'requirements.txt').write_text('x\n')
         for test in (['npm', 'test', '--', 'unit'], ['python3', '-m', 'unittest', 'tests.test_x'], ['make', 'ci-local'],
-                     ['go', 'test', './...'], ['python3', '-I', 'scripts/ci-local.sh'],
+                     ['go', 'test', './...'], ['go', 'test', '-race', '-count=1', './...'], ['make', 'ci-local', 'TIER=fast'],
+                     ['git', 'fetch', 'origin', 'main'], ['gh', 'issue', 'create', '-R', 'example/demo', '--title', 'x'],
+                     ['python3', '-I', 'scripts/ci-local.sh'],
                      # git and gh for code, review and workflow work (owner decision, 15/11/2026).
                      ['git', 'cherry-pick', 'abc1234'], ['git', 'revert', '--no-edit', 'abc1234'],
                      ['gh', 'workflow', 'run', 'deploy.yml'], ['gh', 'run', 'rerun', '123'],
@@ -1351,7 +1353,13 @@ class ProjectScopeTest(AfkBase):
                      ['gh', 'pr', '-R', 'example/demo', 'merge', '7'], ['pip', 'install', 'tests'], ['nodejs', '-e', '1'],
                      ['pythonw', '-c', '1'], ['git', 'commit'], ['gh', 'pr', 'checkout', '7'], ['gh', 'repo', 'clone', 'x'],
                      ['git', 'apply', '--unsafe-paths', 'x.patch'], ['git', 'log', '--output=x'], ['git', 'diff', '--ext-diff'],
-                     ['gh', 'issue', 'create', '--repo', 'other/repo', '--title', 'x'], [str(outside)], ['cargo', '--config', 'x', 'test']):
+                     ['gh', 'issue', 'create', '--repo', 'other/repo', '--title', 'x'], [str(outside)], ['cargo', '--config', 'x', 'test'],
+                     # Review round three (PR 295): options inside the allowed shapes.
+                     ['go', 'test', '--exec', 'sh', './...'], ['go', 'test', '--exec=sh', './...'], ['go', 'vet', '-vettool=sh'],
+                     ['go', 'test', 'example.com/x'], ['gh', 'issue', 'create', '-R=other/repo', '--title', 'x'],
+                     ['gh', 'issue', 'create', '-Rother/repo'], ['make', 'DESTDIR=' + str(outside)], ['make', 'CC=curl'],
+                     ['make', 'SHELL=sh'], ['python3', '-m', 'pylint', '--init-hook=x'], ['python3', '-m', 'coverage', 'run', '-m', 'pip'],
+                     ['git', 'fetch', 'example.com:repo.git'], ['git', 'fetch', 'origin', 'a:b']):
             with self.subTest(argv=argv):
                 self.approve('--approve-argv-json', json.dumps(argv), status=3)
                 self.check(argv, tier=3, code=json.loads(self.invoke('check', '--argv-json', json.dumps(argv))[1])['code'])
