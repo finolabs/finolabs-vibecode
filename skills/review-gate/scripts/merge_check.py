@@ -605,8 +605,8 @@ def open_fallback(family, verdicts_found):
         if second == expected or second.startswith(expected + " "):
             parts.append(f"{kind} same family")
             continue
-        if second.startswith("Reviewer: "):
-            return False, f"{kind} marker has a malformed or another family's reviewer line"
+        if any(second.startswith(fallback_line(other)) for other in ("claude", "codex", "antigravity", "zcode")):
+            return False, f"{kind} marker has a malformed or another family's fallback line"
         role = roles.get(f"{kind} review")
         if role in review_config.FAMILIES and role != family:
             parts.append(f"{kind} by the configured {role} role")

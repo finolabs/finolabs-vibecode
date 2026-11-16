@@ -103,10 +103,10 @@ class ZeroParkLeaseTest(AfkBase):
         self.step('open the pull request', ['gh', 'pr', 'create', '--head', 'feat/demo-page', '--repo',
                                             'github.com/example/demo', '--title', 'Add the demo page',
                                             '--body', 'Adds the demo page.'])
-        body = self.repo / '.finolabs/review.md'
-        body.parent.mkdir()
-        body.write_text('<!-- fnl-review kind=code head=%s verdict=APPROVE -->\nReviewer: claude\n' % ('a' * 40))
+        (self.repo / '.finolabs').mkdir()
         for kind in ('code', 'security'):
+            body = self.repo / f'.finolabs/{kind}-review.md'
+            body.write_text('<!-- fnl-review kind=%s head=%s verdict=APPROVE -->\nReviewer: claude\n' % (kind, 'a' * 40))
             self.step(f'post the {kind} review', ['python3', '-I', POST_REVIEW, '7', '--body-file', str(body)], run=False)
         head = self.git('rev-parse', 'HEAD')
         self.step('merge', ['gh', 'pr', 'merge', '7', '--merge', '--match-head-commit', head, '--repo',
