@@ -39,8 +39,8 @@ class ZeroParkLeaseTest(AfkBase):
             stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
         self.env = {'PATH': f'{self.stubs}{os.pathsep}{os.environ.get("PATH", os.defpath)}', 'HOME': str(self.home),
                     'STUB_LOG': str(self.calls), 'GIT_CONFIG_GLOBAL': os.devnull, 'GIT_CONFIG_NOSYSTEM': '1',
-                    'GIT_AUTHOR_NAME': 'Synthetic', 'GIT_AUTHOR_EMAIL': 'synthetic@example.test',
-                    'GIT_COMMITTER_NAME': 'Synthetic', 'GIT_COMMITTER_EMAIL': 'synthetic@example.test',
+                    'GIT_AUTHOR_NAME': 'Synthetic', 'GIT_AUTHOR_EMAIL': 'synthetic@example.com',
+                    'GIT_COMMITTER_NAME': 'Synthetic', 'GIT_COMMITTER_EMAIL': 'synthetic@example.com',
                     # Only the real git runs see the local bare remote; the checkout's own origin stays the GitHub
                     # repository that `check` verifies as the target.
                     'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': f'url.{self.bare}.insteadOf',
