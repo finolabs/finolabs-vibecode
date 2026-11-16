@@ -98,7 +98,12 @@ OPEN_TIER1 = [
     (['rm', '-rf', 'dist'], 'A'), (['git', 'push', 'origin', 'topic'], 'A'), (['git', 'push', 'origin', 'HEAD'], 'obligation 1'),
     (['git', 'push', '-u', 'origin', 'HEAD'], 'obligation 1'), (['git', 'push'], 'obligation 1'),
     (['git', 'tag', 'v1.0.0'], 'A'), (['gh', 'release', 'create', 'v1.0.0'], 'A'), (['ps', '-ef'], 'B'),
-    (['curl', 'https://example.test?a=1&b=2'], 'B'), (['git', 'push', 'origin', 'v1.0.0:refs/tags/v1.0.0'], 'C'), (['npm', 'test'], 'A'), (['git', 'status'], 'A'),
+    (['curl', 'https://example.test?a=1&b=2'], 'B'), (['git', 'push', 'origin', 'v1.0.0:refs/tags/v1.0.0'], 'C'), (['npm', 'test'], 'A'), (['git', 'status'], 'A'), (['git', '--version'], 'code review of e83d029'),
+    (['gh', 'issue', 'comment', '12', '--body', 'Moved the API credentials guide'], 'B text rule'),
+    (['gh', 'issue', 'create', '--title', 'x', '--body', 'copy it to .env'], 'B text rule'),
+    (['git', 'tag', '-a', 'v1', '-m', 'rotate credentials'], 'B text rule'),
+    (['git', 'merge', '--no-ff', '-m', 'Merge the credentials docs', 'topic'], 'B text rule'),
+    (['gh', 'release', 'create', 'v1', '--title', 'Token refresh', '--notes', 'Fix the password reset'], 'B text rule'),
 ]
 
 # (argv, source): `guarded` with the default-branch guard on, Tier 1 with it open. HEAD is `topic` unless noted.
@@ -116,6 +121,8 @@ GUARDED = [
      'obligation 2'), (['true', '&&', 'git', 'push', 'origin', 'main'], 'B step 1'),
     (['bash', '-c', 'git push origin main'], 'B step 3'),
     (['git', 'push', 'origin', 'topic:heads/main'], 'security review of e83d029'),
+    (['git', 'push', '--signed', 'origin', 'main'], 'code review of e83d029'),
+    (['git', '-c', 'remote.origin.mirror=true', 'push'], 'code review of e83d029'),
     (['git', 'push', 'origin', 'topic:refs/notes/x'], 'security review of e83d029'),
 ]
 
@@ -161,6 +168,12 @@ class FloorCorpusTest(OpenBase):
         self.check(['git', 'commit', '-m', 'key ghp_' + 'a' * 36], tier=3, code='floor')
         self.check(['gh', 'pr', 'create', '--title', 'x', '--body', 'sk-ant-' + 'b' * 30], tier=3, code='floor')
 
+    def test_substitutions_in_text_floor(self):
+        for argv in (['gh', 'pr', 'comment', '5', '--body', '$(cat ~/.aws/credentials)'],
+                     ['git', 'commit', '-m', '$(printenv)'], ['gh', 'issue', 'create', '--body', 'key: $OPENAI_API_KEY']):
+            with self.subTest(argv=argv):
+                self.check(argv, tier=3, code='floor')
+
     def test_body_files_take_the_name_tests_first(self):
         (self.repo / '.env').write_text('PLAIN=1\n')
         (self.repo / 'notes.md').write_text('A plain pull request body.\n')
@@ -187,11 +200,25 @@ class FloorCorpusTest(OpenBase):
 
 class FloorStrictTest(AfkBase):
     def test_floor_forms_stay_tier_3_in_strict(self):
+        # strict keeps its own refusals (`protected`, `forbidden`); where it would answer `unknown`, the floor answers.
         self.start(STRICT)
         for argv, source in FLOOR:
             with self.subTest(argv=argv, source=source):
                 status, output = self.invoke('check', '--argv-json', json.dumps(argv))
-                self.assertEqual(json.loads(output)['tier'], 3, (argv, output))
+                result = json.loads(output)
+                self.assertEqual(result['tier'], 3, (argv, output))
+                self.assertNotIn(result['code'], {'unknown', 'decided'}, (argv, output))
+
+    def test_a_floor_form_cannot_be_approved_in_strict(self):
+        self.start(STRICT)
+        argv = ['git', 'show', 'HEAD:$OPENAI_API_KEY']
+        status, output = self.invoke('check', '--argv-json', json.dumps(argv))
+        self.assertEqual(json.loads(output), {'tier': 3, 'code': 'floor'})
+        status, output = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'run it',
+                                     '--precedents', '0', '--rung', 'host', '--settled', 'yes', '--by', 'claude',
+                                     '--option', '1', '--of', '2', '--model', 'claude-opus-5-5',
+                                     '--approve-argv-json', json.dumps(argv))
+        self.assertEqual(status, 3, output)
 
 
 class GuardTest(OpenBase):
@@ -207,6 +234,11 @@ class GuardTest(OpenBase):
                 self.check(argv, tier=3, code='guarded')
         self.head('topic')
         self.check(['git', 'commit', '-m', 'x'])
+
+    def test_matching_push_default_is_guarded(self):
+        config = self.repo / '.git/config'
+        config.write_text(config.read_text() + '[push]\n\tdefault = matching\n')
+        self.check(['git', 'push'], tier=3, code='guarded')
 
     def test_configured_push_destination(self):
         config = self.repo / '.git/config'

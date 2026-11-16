@@ -1886,6 +1886,8 @@ def git_parts(words):
         if token in GIT_GLOBAL_FLAGS:
             index += 1
             continue
+        if token.startswith('-'):
+            return None, [], folder, keys  # `git --version`, `--help`, `-h`: no verb
         return token, words[index + 1:], folder, keys
     return None, [], folder, keys
 
@@ -2100,8 +2102,8 @@ def floor_hit(argv, cwd=None):
 
 # The default-branch guard (C, obligations 1, 2 and 5).
 DEFAULT_NAMES = ('main', 'master', 'trunk')
-PUSH_KEYS = re.compile(r'(?i)(?:push\..*|remote\..*\.push|branch\..*\.merge|alias\..*)')
-PUSH_VALUED = {'--repo', '--receive-pack', '--exec', '-o', '--push-option', '--signed', '--recurse-submodules'}
+PUSH_KEYS = re.compile(r'(?i)(?:push\..*|remote\..*\.(?:push|mirror)|branch\..*\.(?:merge|remote)|alias\..*)')
+PUSH_VALUED = {'--repo', '--receive-pack', '--exec', '-o', '--push-option'}  # `--signed` and `--recurse-submodules` take `=value` only
 
 
 def git_config_values(context):
@@ -2185,9 +2187,11 @@ def guard_hit(program, words, env, context):
         if config is None:
             return True
         remote = operands[0] if operands else 'origin'
-        if config.get(f'remote.{remote}.push'):
+        if config.get(f'remote.{remote}.push') or (config.get(f'remote.{remote}.mirror') or [''])[-1].casefold() == 'true':
             return True
         mode = (config.get('push.default') or ['simple'])[-1].casefold()
+        if mode == 'matching':
+            return True  # every same-named branch, the default branch included
         upstream = (config.get(f'branch.{current}.merge') or [''])[-1].removeprefix('refs/heads/')
         return mode in {'upstream', 'tracking', 'matching'} and (not upstream or upstream.casefold() in
                                                                  {k.casefold() for k in kept})
@@ -2248,6 +2252,63 @@ def body_secret(name, cwd):
         return False
 
 
+# Text values (B text rule): on these programs a title, body, message or notes value is data, checked only for secret
+# values and for the substitutions and `$NAME` references a shell would expand inside it.
+TEXT_PROGRAMS = {'git', 'gh', 'glab'}
+OPEN_TEXT_FLAGS = {'-m', '--message', '-t', '--title', '-b', '--body', '--notes'}
+SUBSTITUTION = re.compile(r'\$\(([^()]*(?:\([^()]*\)[^()]*)*)\)|`([^`]*)`|<\(([^()]*)\)')
+
+
+def open_texts(argv):
+    """argv with each text value of a git, gh or glab command replaced by `text`, and the values."""
+    out, values, program, index = [], [], None, 0
+    while index < len(argv):
+        token = argv[index]
+        if token in OPERATORS:
+            program = None
+            out.append(token)
+            index += 1
+            continue
+        if program is None:
+            env = []
+            program, _ = normalize(argv[index:], env)
+            program = program or ''
+        key, equal, value = token.partition('=')
+        if program in TEXT_PROGRAMS and equal and key in OPEN_TEXT_FLAGS:
+            out.append(key + '=text')
+            values.append(value)
+        elif program in TEXT_PROGRAMS and token in OPEN_TEXT_FLAGS and index + 1 < len(argv):
+            out += [token, 'text']
+            values.append(argv[index + 1])
+            index += 1
+        else:
+            out.append(token)
+        index += 1
+    return out, values
+
+
+def text_floor(value, cwd=None):
+    """True when a text value holds a secret or a shell would expand a secret into it."""
+    for match in DOLLAR_NAME.finditer(value):
+        if match[1] == '!' or sensitive_name(match[2]):
+            return True
+    for match in SUBSTITUTION.finditer(value):
+        inner = next(group for group in match.groups() if group is not None)
+        if floor_hit(inner.split(), cwd):
+            return True
+    return screened(value)
+
+
+def floored(argv, paths, cwd):
+    """True when a request touches the credential floor (B); argv None means a paths check."""
+    if argv is None:
+        return isinstance(paths, list) and any(isinstance(p, str) and floor_path(p, cwd) for p in paths)
+    stripped, texts = open_texts(argv)
+    return (any(text_floor(value, cwd) for value in texts if value)
+            or any(body_secret(name, cwd) for name in open_body_files(stripped, cwd))
+            or floor_hit(stripped, cwd))
+
+
 def open_verdict(argv, paths, applied):
     """The `open` answer: 'floor' and 'guarded' are Tier 3, everything else is 'allowed' (A)."""
     context = context_of(applied)
@@ -2255,16 +2316,12 @@ def open_verdict(argv, paths, applied):
     if argv is None:
         if not isinstance(paths, list):
             return 'unknown'
-        return 'floor' if any(isinstance(p, str) and floor_path(p, cwd) for p in paths) else 'allowed'
+        return 'floor' if floored(None, paths, cwd) else 'allowed'
     if not isinstance(argv, list) or not argv or not all(isinstance(t, str) for t in argv):
         return 'unknown'
-    stripped, texts = text_values(argv)
-    if any(screened(value) for value in texts if value):
+    if floored(argv, None, cwd):
         return 'floor'
-    if any(body_secret(name, cwd) for name in open_body_files(stripped, cwd)):
-        return 'floor'
-    if floor_hit(stripped, cwd):
-        return 'floor'
+    stripped = open_texts(argv)[0]
     if applied.get(DEFAULT_BRANCH) != 'open':
         for program, words, env, _ in commands_of(stripped):
             if program != '#inline' and guard_hit(program, words, env, context):
@@ -2316,6 +2373,14 @@ def classified(folder, argv_json, paths, coordinator, current):
             else:
                 code = classify_paths(paths, applied['Roots'], context_of(applied), source_mode(applied),
                                       applied.get(FILES, ()))
+            if code == 'unknown':
+                # The floor applies in `strict` too (A, B): an unknown request that touches it is never decidable.
+                try:
+                    valid = argv_json is None or isinstance(argv, list) and all(isinstance(t, str) for t in argv)
+                    if valid and floored(argv if argv_json is not None else None, paths, cwd):
+                        code = 'floor'
+                except Exception:
+                    code = 'unsafe'
     return code, lease, applied, key, entry, argv, cwd
 
 
@@ -2329,11 +2394,17 @@ def check(folder, args):
             code = 'decided'
             append_log(folder, dict(time=current, tier=1, kind='approval-used', subject=subject, note=''), current)
     # Only a Tier 1 answer reserves an action (and, for a ledger start, a run); a denied check costs nothing.
-    if code in {'allowed', 'decided'} and entry is not None and isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
-        try:  # the pin first: a full or invalid log refuses the merge before an action is reserved
-            append_log(folder, merge_pin(argv, current, context_of(applied).target), current)
-        except (OSError, ValueError, UnicodeError):
-            code = 'log-unwritable'
+    if code in {'allowed', 'decided'} and isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
+        if entry is not None:
+            try:  # the pin first: a full or invalid log refuses the merge before an action is reserved
+                append_log(folder, merge_pin(argv, current, context_of(applied).target), current)
+            except (OSError, ValueError, UnicodeError):
+                code = 'log-unwritable'
+        elif any(t.startswith('--match-head-commit') for t in argv):
+            try:  # `open`: a pinned merge still records its pin, so `log --kind merge` can name it afterwards
+                append_log(folder, merge_pin(argv, current, context_of(applied).target), current)
+            except (OSError, ValueError, UnicodeError):
+                pass
     if code in {'allowed', 'decided'} and entry is not None:  # `open` keeps no per-project counters
         entry['actions'] += 1
         entry['hour_actions'].append(current)
