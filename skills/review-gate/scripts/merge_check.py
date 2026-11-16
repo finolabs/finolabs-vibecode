@@ -69,6 +69,14 @@ model, and the latest marker of each model must be APPROVE. The flag runs these 
 whatever routing would pick now. Without the flag, a counted marker carrying a
 fallback reviewer line blocks. Anything unknown refuses.
 
+Under a lease whose effective mode for --repo is `open` (docs/specs/afk-autonomy.md D), the fallback needs only the
+live lease, <family> as the author's family, and for each kind either a counted marker whose second line starts with
+the exact fallback reviewer line or, inside this branch only, a marker without any fallback line whose kind's
+configured review role names a family other than <family>; no quota evidence, router trigger or two-model condition
+applies. The mode is the `## afk` `Mode` line of the canonical host config (a missing line is `open`), replaced by the
+approved `mode` of the checkout in the working folder whose origin is --repo, read through this skill's copy of
+`project_store.py`; any doubt counts as `strict`, which keeps the conditions above. Outside a lease nothing changes.
+
 With --ci-context <name> (the repository's merge-check workflow, which posts
 the result as the commit status <name>), the status named <name> is left out of
 the checks, so the check never waits on itself; merge state BLOCKED is accepted,
@@ -466,9 +474,10 @@ def out_families(lines, current=None, configured=None):
     return out
 
 
-def fallback(pr, family, families, files, verdicts_found, markers=None):
+def fallback(pr, family, families, files, verdicts_found, markers=None, repo=None):
     """(granted, detail) for the same-family fallback; every unknown refuses and the detail never echoes text.
-    `markers` is `head_markers` of the pull request; without it a changed enforcer or instruction file refuses."""
+    `markers` is `head_markers` of the pull request; without it a changed enforcer or instruction file refuses.
+    Under a lease whose effective mode for `repo` is `open` (`lease_mode`), only `open_fallback` applies."""
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     try:
@@ -479,6 +488,8 @@ def fallback(pr, family, families, files, verdicts_found, markers=None):
             return False, "no live away lease"
         if not isinstance(families, dict) or families.get("author") != family:
             return False, f"{family} is not the pull request author's family"
+        if lease_mode(repo) == "open":
+            return open_fallback(family, verdicts_found)
         present = set(review_config.present_families(review_config.host_text()))
         if family not in present:
             return False, f"{family} is not a present family"
@@ -514,6 +525,83 @@ def fallback(pr, family, families, files, verdicts_found, markers=None):
         return True, reachable
     except (ImportError, OSError, ValueError, KeyError, TypeError, AttributeError, Unknown):
         return False, "fallback evidence cannot be read"
+
+
+AFK_LINE = re.compile(r"- ([A-Za-z -]+): (.+)")
+
+
+def lease_mode(repo):
+    """The away lease's effective mode for `repo` (owner/name), read as `afk.py` reads it
+    (docs/specs/afk-autonomy.md A and D): the `## afk` `Mode` line of the canonical host config (a missing line is
+    `open`), replaced by the approved `mode` of the checkout in the working folder when its origin is `repo`.
+    `strict` on any doubt: no or an unreadable section, a malformed or repeated line, an invalid value, no validated
+    checkout, another origin, an unreadable, invalid or unbound approval, or any error."""
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    try:
+        import project_progress
+        import project_store as store
+        import review_config
+        if not isinstance(repo, str) or not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
+            return "strict"
+        text = review_config.host_text()
+        start, body, end = project_progress.host_section(text, "afk")
+        if start == body == end:
+            return "strict"
+        user, seen = "open", set()
+        for line in text[body:end].splitlines():
+            if not line.strip():
+                continue
+            match = AFK_LINE.fullmatch(line)
+            if not match or match[1] in seen:
+                return "strict"
+            seen.add(match[1])
+            if match[1] == "Mode":
+                if match[2] not in ("open", "strict"):
+                    return "strict"
+                user = match[2]
+        owner, name = repo.split("/")
+        target = store.repository_target("github.com", owner, name)
+        found, ident = store.identity(str(Path.cwd()))
+        if target is None or found != "found" or store.origin_target(ident) != target:
+            return "strict"
+        state, values, _, record = store.autopilot_binding(ident)
+        if state == "unset" or state == "approved" and "autopilot" not in values:
+            return user
+        project = values.get("autopilot") if state == "approved" else None
+        if (not store.valid_autopilot(project) or not isinstance(record, dict) or record.get("target") != target
+                or not store.bound(record, ident)):
+            return "strict"
+        mode = project.get("mode", user)
+        return mode if mode in ("open", "strict") else "strict"
+    except Exception:  # any doubt is strict, never a relaxation
+        return "strict"
+
+
+def open_fallback(family, verdicts_found):
+    """(granted, detail) under an `open` lease (docs/specs/afk-autonomy.md D): each kind's counted head marker either
+    starts its second line with the exact fallback reviewer line of `family`, or carries no fallback reviewer line
+    and the configured review role for its kind (`review_config.read_roles`) names a family other than `family`, so
+    it counts as that family's. No quota evidence, router trigger or two-model condition applies."""
+    import review_config
+    roles = review_config.read_roles(review_config.host_text())
+    expected, parts = fallback_line(family), []
+    for kind in ("code", "security"):
+        found = verdicts_found.get(kind)
+        second = found[3] if found and len(found) > 3 else ""
+        if not isinstance(second, str):
+            return False, f"{kind} marker cannot be read"
+        if second == expected or second.startswith(expected + " "):
+            parts.append(f"{kind} same family")
+            continue
+        if any(second.startswith(fallback_line(other)) for other in ("claude", "codex", "antigravity", "zcode")):
+            return False, f"{kind} marker names another family's fallback line"
+        role = roles.get(f"{kind} review")
+        if role in review_config.FAMILIES and role != family:
+            parts.append(f"{kind} by the configured {role} role")
+            continue
+        return False, f"{kind} marker lacks the fallback reviewer line"
+    return True, "open lease: " + "; ".join(parts)
 
 
 GITHUB_REMOTE = re.compile(
@@ -622,7 +710,7 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
                 # A fallback request treats both reviews as same-family, whatever routing would pick now.
                 same = ["code", "security"]
                 granted, detail = fallback(pr, fallback_family, families, changed_files or (lambda: []), found,
-                                           head_markers(pr, can_write))
+                                           head_markers(pr, can_write), repo=repo)
                 lines.append(f"{'ok   ' if granted else 'BLOCK'} same-family review: {detail}")
                 ok = ok and granted
             else:
