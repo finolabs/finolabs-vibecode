@@ -433,6 +433,16 @@
           "id": "0.3.2/afk-open-fallback",
           "kind": "info",
           "text": "Under an open lease merge_check.py --fallback-family accepts same-family reviews with the fallback line and no quota evidence; afk.py rules prints both modes' rules."
+        },
+        {
+          "id": "0.3.2/afk-overlay",
+          "kind": "info",
+          "text": "/setup add afk can write a local AGENTS.afk.md that overrides instruction-file rules your away rules replace, printed only while a lease is live."
+        },
+        {
+          "id": "0.3.2/codex-hook-trust",
+          "kind": "hook",
+          "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; the session-start hook changed."
         }
       ]
     }
