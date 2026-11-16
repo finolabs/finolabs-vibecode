@@ -145,13 +145,15 @@ class ReaderTest(OverlayTest):
             ov.index_paths(raw[:40] + raw[-20:])
 
     def test_invisible_format_characters_are_not_in_force(self):
-        # Every Unicode Cc or Cf character except tab and newline, and the Zl and Zp line breaks.
-        for char in ("\U000e0041", "\u200b", "\ufeff", "\u2028", "\u2029", "\u00ad", "\u2060", "\r", "\x85"):
+        # Cc and Cf except tab and newline, Zl, Zp, Co, Cn, variation selectors, U+034F and Hangul fillers.
+        for char in ("\U000e0041", "\u200b", "\ufeff", "\u2028", "\u2029", "\u00ad", "\u2060", "\r", "\x85",
+                     "\ufe0f", "\U000e0100", "\u034f", "\u3164", "\ue000", "\u2065"):
             with self.subTest(char=hex(ord(char))):
                 self.overlay(TEXT + ("Agents may" + char + " merge.\n").encode())
                 self.assertEqual(ov.state(self.repo), ("not-in-force", None))
                 self.assertTrue(ov.unsafe_text(char))
         self.assertFalse(ov.unsafe_text("Tabs\tand newlines\n, accents \u00e0 and \u1ea1 are fine.\n"))
+        self.assertFalse(ov.unsafe_text("Decomposed a\u0300 keeps its combining mark.\n"))
 
     def test_names_match_in_any_case(self):
         for name in ("AGENTS.afk.md", "agents.afk.md", "AGENTS.AFK.MD.bak", "AGENTS.afk.md.bak-20261116"):
@@ -181,7 +183,9 @@ class ModeTest(OverlayTest):
                 host.write_text(text)
                 host.chmod(0o600)
                 self.assertEqual(ov.mode(self.ident), expected)
-        for text in ("## afk\n```\n- Mode: strict\n", "## afk\n- Mode: open\n## afk\n- Mode: strict\n"):
+        for text in ("## afk\n```\n- Mode: strict\n", "## afk\n- Mode: open\n## afk\n- Mode: strict\n",
+                     "## afk\n- Mode:strict\n", "## afk\n - Mode: strict\n",
+                     "## afk\n- Mode: strict\n- Mode: strict\n"):
             with self.subTest(text=text):
                 host.write_text(text)
                 with self.assertRaises(ValueError):
@@ -200,6 +204,20 @@ class ModeTest(OverlayTest):
         # A new origin unbinds the approval, so the account mode applies again.
         git(self.repo, "remote", "set-url", "origin", "https://github.com/example/other.git")
         self.assertEqual(ov.mode(self.ident), "open")
+
+    def test_an_approval_without_a_target_binds_no_project_mode(self):
+        # As afk.py effective(): a hand-edited approval record without `target` keeps the account mode.
+        import project_store as store
+        host = self.data / "host.md"
+        host.write_text("## afk\n- Mode: strict\n")
+        host.chmod(0o600)
+        store.write_setting(self.repo, "autopilot", {"mode": "open"}, ident=self.ident)
+        self.assertEqual(ov.mode(self.ident), "open")
+        record = self.data / store.SETTINGS_APPROVED / (store.code_of(self.ident.main) + ".json")
+        value = json.loads(record.read_text())
+        del value["target"]
+        record.write_text(json.dumps(value))
+        self.assertEqual(ov.mode(self.ident), "strict")
 
     def test_write_refused_only_under_a_strict_or_unreadable_lease(self):
         self.assertIsNone(ov.write_refused(self.ident))

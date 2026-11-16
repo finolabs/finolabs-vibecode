@@ -47,11 +47,17 @@ def is_name(name):
     return isinstance(name, str) and unicodedata.normalize('NFKC', name).casefold().startswith(NAME.casefold())
 
 
+# Invisible characters outside Cc and Cf: variation selectors, the combining grapheme joiner and the Hangul fillers.
+INVISIBLE = re.compile('[\u034f\u115f\u1160\u3164\ufe00-\ufe0f\uffa0\U000e0100-\U000e01ef]')
+
+
 def unsafe_text(text):
-    """True when overlay text holds a control or format character (Unicode Cc or Cf): C0 and C1 controls, escapes,
-    bidirectional controls, zero-width characters, tag characters and the byte order mark. Tab and newline are fine;
-    U+2028 and U+2029 (Zl, Zp) are refused too, as line breaks a reader may not show."""
-    return any(ch not in '\t\n' and unicodedata.category(ch) in ('Cc', 'Cf', 'Zl', 'Zp') for ch in text)
+    """True when overlay text holds a character a reader may not see: a control or format character (Unicode Cc or
+    Cf: C0 and C1 controls, escapes, bidirectional controls, zero-width, tag characters, the byte order mark), a line
+    or paragraph separator (Zl, Zp), a private-use or unassigned code point (Co, Cn), a variation selector, the
+    combining grapheme joiner or a Hangul filler. Tab and newline are fine; other combining marks stay allowed."""
+    return bool(INVISIBLE.search(text)) or any(
+        ch not in '\t\n' and unicodedata.category(ch) in ('Cc', 'Cf', 'Zl', 'Zp', 'Co', 'Cn') for ch in text)
 
 
 def disabled():
@@ -235,14 +241,22 @@ def mode(ident):
     start, body, end = slots.host_section(text, 'afk')
     if start == body == end:
         raise ValueError('afk setup is missing')
-    values = [m[1] for m in (re.fullmatch(r'- Mode: (.+)', line) for line in text[body:end].splitlines()) if m]
-    if len(values) > 1 or values and values[0] not in ('open', 'strict'):
+    values = {}
+    for line in text[body:end].splitlines():
+        if not line.strip():
+            continue
+        match = re.fullmatch(r'- ([A-Za-z -]+): (.+)', line)  # the line grammar of afk.py settings()
+        if not match or match[1] in values:
+            raise ValueError('afk setup is invalid')
+        values[match[1]] = match[2]
+    result = values.get('Mode', 'open')
+    if result not in ('open', 'strict'):
         raise ValueError('afk mode is invalid')
-    result = values[0] if values else 'open'
     found, settings, _, record = store.autopilot_binding(ident)
     project = settings.get('autopilot') if found == 'approved' else None
     if (isinstance(project, dict) and 'mode' in project and store.valid_autopilot(project)
-            and store.bound(record, ident) and record.get('target') == store.origin_target(ident)):
+            and store.bound(record, ident) and 'target' in record
+            and record['target'] == store.origin_target(ident)):
         result = project['mode']
     return result
 
