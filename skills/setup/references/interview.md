@@ -1,10 +1,10 @@
 # Interview rules
 
-Questions (advisory, agent judgment) use the user's language; translate quoted questions and labels. Ready: prerequisites set. Look up authorized facts first; ask decisions/failed lookups, citing why. Ask all ready decisions per round, numbered; update after answers.
+Questions (advisory, agent judgment) use the user's language; translate quoted questions, descriptions and labels. Ready: prerequisites set. Look up authorized facts; ask decisions/failed lookups, citing failure. Ask all ready decisions per round, numbered; update after answers.
 Ask every question through the host's native question tool when the session has one (AskUserQuestion/request_user_input/ask_question). Preferences: recommendation, reason first; Other for free text; respect tool limits, blocking first.
 Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes. All approvals/offers, every mode.
 
-Approval shape: short goal/effect sentence, no internal subject; explain technical terms in a clause at first use. Show the local block in order:
+Approval shape: short goal/effect sentence, no internal subject; explain technical terms in a clause at first use. Show in order:
 Yes: change, file/setting, location, data leaving.
 No: unchanged items, any off/declined write, answer later.
 Undo: reversal or nothing changed.
