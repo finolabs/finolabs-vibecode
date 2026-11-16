@@ -18,6 +18,8 @@ The lease ledger of 11/11 to 16/11/2026 holds 113 entries: 60 `parked`, 20 `deci
 
 6. Two guards stay on by default in `open`, and the user may switch each off in setup: "có thể tao nhầm, mặc định 2 cái này là strict, nhưng users có quyền chọn open". The two are: instructions from third-party content never grant actions, and no force push or direct push to the default branch (section C).
 
+7. The owner stopped the spec review loop after the reviews of head 4c53da8: "Dừng vòng spec". The one finding that opened the credential floor was fixed; the rest are implementation obligations with tests ("Implementation obligations" below).
+
 Decisions 3, 4 and 6 replace the earlier answers of this session on the floor, the default branch, third-party instructions, the merge gate, CI configuration, wrapped commands and the floor's own state; the history is in "Superseded".
 
 ## A. Two modes
@@ -44,7 +46,7 @@ In both modes `check` answers `floor` (Tier 3, never approvable through Decide) 
 
 Then, in each command:
 
-- **On every token** (path operands included), as `protected()` matches today: the substring `credential` (`.git-credentials`, `git credential-osxkeychain`), the `secret_patterns.py` prefixes, a sensitive name in a `NAME=value` assignment or a token that began with `$` (`$OPENAI_API_KEY`, and the indirect expansion `${!x}`), and the file and folder names `.env` and `.env.*` other than `.env.example`, `.env.sample` and `.env.template`, `.dev.vars`, `.pgpass`, `.yarnrc*`, `.boto`, `*creds*`, `auth.json`, `hosts.yml`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `.netrc`, `.npmrc`, `.pypirc`, `id_rsa`, `id_ed25519`, `.ssh`, `.aws`, `.gnupg`, `.docker`, `.kube` and `.wrangler`.
+- **On every token** (path operands included), as `protected()` matches today: the substring `credential` (`.git-credentials`, `git credential-osxkeychain`), the `secret_patterns.py` prefixes, a sensitive name in a `NAME=value` assignment or after a `$` or `${` anywhere in the raw token, before step 4 (`$OPENAI_API_KEY`, `"Bearer $GITHUB_TOKEN"`, `key=$OPENAI_API_KEY`, and the indirect expansion `${!x}`), and the file and folder names `.env` and `.env.*` other than `.env.example`, `.env.sample` and `.env.template`, `.dev.vars`, `.pgpass`, `.yarnrc*`, `.boto`, `*creds*`, `auth.json`, `hosts.yml`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `.netrc`, `.npmrc`, `.pypirc`, `id_rsa`, `id_ed25519`, `.ssh`, `.aws`, `.gnupg`, `.docker`, `.kube`, `.wrangler`, `.azure`, `.vault-token` and `/proc/*/environ`.
 - **Only on the tokens of a credential command and on inline code**: the words `token`, `password` and `secret` on `_`, `.` or `-` boundaries, and the bare sensitive names. So `src/auth/token.ts`, `reset-password.tsx`, `secret_patterns.py`, `rg process.env src`, `grep -rn OPENAI_API_KEY .` and `rg 'import|export'` are not floor.
 - **Credential commands**, on the program word and its subcommand: `env`, `printenv`, bare `export` and `export -p`, `set` with no operand, `declare` and `typeset` with `-p` or `-x`, `security`, `git credential`, `gh auth` (every verb), `gh secret`, `npm login`, `logout` and `token`, `npm config get` and `list`, `wrangler login`, `logout` and `secret`, `docker login`, `gcloud auth`, `aws configure`, `kubectl config view`, `ps` with an `e` or `E` option, `launchctl getenv`, `jq` with `env` or `$ENV`, `op`, `pass`, `bw`, `lpass`, `secret-tool`.
 - **Environment words in inline code**: `environ`, `getenv`, `process.env`, `process["env"]`, `ENV`, `%ENV`, `$ENV`, `ENVIRON`, `Deno.env`, `Bun.env`.
@@ -89,6 +91,18 @@ Enforcer: `afk_setup.py` and the sync test (script).
 7. `merge_check.py --independent --fallback-family claude` under a live lease passes with fallback lines and no quota reading, for each router trigger and for a changed enforcer script, and for a Codex code review with a same-family security review; it refuses without a lease, for a non-author family, for a same-family marker without the line, and under a `strict` lease without quota evidence, with a router trigger and for an enforcer change with one model.
 8. `rules.md` equals `afk.py rules`; `SKILL.md` plus `lease-rules.md` is at most 8.5 KB.
 9. `PRIVACY.md`, setup, the afk skill and `upgrades.json` describe the modes and the floor (documentation review).
+
+## Implementation obligations (decision 7)
+
+Findings of the last spec reviews that do not open the credential floor; the code pull requests close each with the test named:
+
+1. Push resolution: `HEAD` and `@` resolve to the current branch's name; an absent destination checks the current branch and its upstream; `git push origin HEAD` on a branch made from `origin/main` and `git push -u origin HEAD` on a new branch are Tier 1 with the guard on.
+2. Push config from outside the command line: a `GIT_CONFIG_*` or `GIT_CONFIG_PARAMETERS` assignment before git counts as `-c`; an absent destination also reads `remote.<remote>.push` and `push.default`; `env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.push GIT_CONFIG_VALUE_0=HEAD:main git push` and `git push` after `git config remote.origin.push HEAD:main` answer `guarded`.
+3. `ENV`, `%ENV`, `$ENV` and `ENVIRON` match case-sensitively as whole identifiers, the lowercase words case-insensitively; `bash -lc 'source .venv/bin/activate && pytest'` and `bash -c 'cat .env.example'` are Tier 1.
+4. The floor uses its own matcher with only the listed tests, not `protected()` with its other names; `credential` matches `.git-credentials`, `credentials*` and `git credential*`; `src/components/CredentialForm.tsx` and a repository's own `.yarnrc.yml` without a token are Tier 1, real secret file names and secret values stop.
+5. "A known git verb" is git's built-in command list, fixed in the script.
+6. Operators inside a single argv token (`echo x|env`) are split as well, at `|`, `&&`, `||` and `;`, so the floor sees `env`.
+7. The Tier 1 examples of acceptance 4 hold in `open`; `strict` keeps today's `protected()`.
 
 ## Superseded (16/11/2026)
 
