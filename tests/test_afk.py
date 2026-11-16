@@ -18,7 +18,7 @@ from tests.data_root_fixture import account
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'skills/delegate/scripts/afk.py'
 SETUP = ('## afk\n- Hosts: Claude Code\n- Task choice: choose\n'
-         '- Push and pull requests: yes\n- Merge: yes\n- Trusted authors: own\n')
+         '- Push and pull requests: yes\n- Merge: yes\n- Trusted authors: own\n- Mode: strict\n')
 ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
                  '[remote "origin"]\n\turl = https://github.com/example/demo.git\n'
                  '\tfetch = +refs/heads/*:refs/remotes/origin/*\n')

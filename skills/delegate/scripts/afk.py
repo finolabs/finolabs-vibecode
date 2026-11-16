@@ -84,6 +84,11 @@ CATEGORIES = {'Production': True, 'Real users and customer data': True, 'Unrecov
               'Messages outside the repository': False, 'Tags and releases': False, 'Publishing': False,
               'Shared settings': False, 'Recoverable deletion': False, 'Repository comments': False}
 CONSENT = 'Excerpts leave the machine'
+# docs/specs/afk-autonomy.md A and C: the lease mode and the two guards of `open`; a missing line is the default.
+MODE = 'Mode'
+THIRD_PARTY = 'Third-party instructions'
+DEFAULT_BRANCH = 'Default branch'
+CHOICES = {MODE: ('open', 'strict'), THIRD_PARTY: ('guard', 'open'), DEFAULT_BRANCH: ('guard', 'open')}
 TARGETS = 'Non-production targets'
 PRODUCTION_TARGETS = 'Production targets'  # exact production deploys; Production itself is decided only per repository
 TEST_COMMANDS = 'Test commands'  # exact test commands (docs/specs/afk-per-project.md F)
@@ -135,7 +140,8 @@ BRANCH = re.compile(r'(?:refs/heads/)?[A-Za-z0-9][A-Za-z0-9._/-]{0,160}')
 ROOTS = {'src', 'lib', 'app', 'tests', 'docs', 'scripts', 'skills'}
 DOCUMENTS = {'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md'}  # top-level documentation files that are known paths
 # The project-scoped keys of settings.json `autopilot` and their host.md names; broken project settings turn them off.
-PROJECT_KEYS = {'task-choice': 'Task choice', 'push-and-pull-requests': 'Push and pull requests', 'merge': 'Merge',
+PROJECT_KEYS = {'mode': MODE, 'third-party-instructions': THIRD_PARTY, 'default-branch': DEFAULT_BRANCH,
+                'task-choice': 'Task choice', 'push-and-pull-requests': 'Push and pull requests', 'merge': 'Merge',
                 'trusted-authors': 'Trusted authors', 'max-runs': 'Max runs',
                 'max-runtime-minutes': 'Max runtime minutes', 'max-actions-per-hour': 'Max actions per hour'}
 MAX_PROJECTS = 64  # entries in the lease's per-project counter table
@@ -164,13 +170,14 @@ def settings():
     start, body, end = slots.host_section(text, 'afk')
     if start == body == end:
         raise ValueError('afk setup is missing')
-    result, seen = {**DEFAULTS, **{c: 'stop' for c in CATEGORIES}, CONSENT: 'no', TARGETS: [],
+    result, seen = {**DEFAULTS, MODE: 'open', THIRD_PARTY: 'guard', DEFAULT_BRANCH: 'guard',
+                    **{c: 'stop' for c in CATEGORIES}, CONSENT: 'no', TARGETS: [],
                     **{name: [] for name in LISTS}}, set()
     for line in text[body:end].splitlines():
         if not line.strip():
             continue
         match = re.fullmatch(r'- ([A-Za-z -]+): (.+)', line)
-        if not match or match[1] not in {*DEFAULTS, 'Merge', *CATEGORIES, CONSENT, TARGETS, *LISTS} or match[1] in seen:
+        if not match or match[1] not in {*DEFAULTS, 'Merge', *CHOICES, *CATEGORIES, CONSENT, TARGETS, *LISTS} or match[1] in seen:
             raise ValueError('afk setup is invalid')
         key, value = match.groups()
         seen.add(key)
@@ -181,6 +188,9 @@ def settings():
                 raise ValueError('afk setup has an invalid list')
         elif key in CATEGORIES:
             value = 'decide' if value == 'decide' and not CATEGORIES[key] else 'stop'
+        elif key in CHOICES:
+            if value not in CHOICES[key]:
+                raise ValueError('afk setup has an invalid choice')
         elif key == CONSENT:
             value = 'yes' if value == 'yes' else 'no'
         elif key == TARGETS:
@@ -201,7 +211,10 @@ def settings():
             raise ValueError('afk setup has an invalid choice')
         result[key] = value
     if 'Merge' not in seen:
-        raise ValueError('afk setup needs an explicit Merge answer')
+        # In `open` the Merge answer is ignored, so it may be absent; a repository that sets `strict` then reads no.
+        if result[MODE] != 'open':
+            raise ValueError('afk setup needs an explicit Merge answer')
+        result['Merge'] = 'no'
     return result
 
 
@@ -269,7 +282,7 @@ def start(folder, args):
         os.unlink('stop', dir_fd=folder)
     except FileNotFoundError:
         pass
-    summary = {**applied, 'Lease hours': hours,
+    summary = {MODE: applied[MODE], **applied, 'Lease hours': hours,
                **{name: '; '.join(applied[name]) or 'none' for name in (TARGETS, *LISTS)}}
     print('afk started\n' + '\n'.join(f'- {key}: {value}' for key, value in summary.items()))
     # The summary above is the account's; the repository of this folder may apply other rules (U3 of the afk UAT).
@@ -1697,6 +1710,519 @@ def classify_argv(argv, applied, coordinator=None):
     return 'unknown'
 
 
+# ---- `open` mode (docs/specs/afk-autonomy.md A, B, C) ----------------------------------------------------------------
+# The floor is defined by its purpose: a request that changes a credential, or reads, prints, copies or sends a secret
+# or key. The lists below are its matcher, owned here with the corpus in tests/test_afk_floor.py; a form that serves
+# that purpose and passes is a bug fixed by a corpus case and an entry here, never by a spec change.
+OPERATORS = {';', '&&', '||', '|', '&', '|&', '\n'}
+# Inside a token: in inline code every operator; in a top-level argv token not a lone `|` or `&`, which a pattern
+# (`rg 'import|export'`) or a URL holds as data.
+SPLIT_INLINE = re.compile(r'(;|&&|\|\||\||&|\n|\$\(|`|<\()')
+SPLIT_TOP = re.compile(r'(;|&&|\|\||\n|\$\(|`|<\()')
+INTERPRETERS = {'python', 'python3', 'node', 'deno', 'bun', 'perl', 'ruby', 'php', *('sh', 'bash', 'zsh', 'dash', 'ksh', 'fish')}
+PREFIX_WORDS = {'command', 'exec', 'nohup', 'nice', 'timeout', 'time', 'sudo', 'xargs', 'npx', 'bunx', 'uvx', 'doas'}
+PREFIX_VALUED = {'-n', '-u', '-g', '-s', '-k', '-I', '-P', '-L', '-d', '-a', '-p', '--user', '--group', '--signal'}
+GIT_GLOBAL_VALUED = {'-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env'}
+GIT_GLOBAL_FLAGS = {'--no-pager', '-p', '--paginate', '-P', '--bare', '--no-replace-objects', '--literal-pathspecs',
+                    '--glob-pathspecs', '--noglob-pathspecs', '--icase-pathspecs', '--no-optional-locks',
+                    '--no-lazy-fetch', '--exec-path'}
+# Git's built-in commands (`git help -a`); any other verb may be an alias, which the guard treats as an unknown push.
+GIT_BUILTINS = frozenset('''add am annotate apply archive bisect blame branch bugreport bundle cat-file check-attr
+check-ignore check-mailmap check-ref-format checkout checkout-index cherry cherry-pick citool clean clone column
+commit commit-graph commit-tree config count-objects credential credential-cache credential-store describe diagnose
+diff diff-files diff-index diff-tree difftool fast-export fast-import fetch fetch-pack filter-branch fmt-merge-msg
+for-each-ref for-each-repo format-patch fsck gc get-tar-commit-id grep gui hash-object help hook index-pack init
+instaweb interpret-trailers log ls-files ls-remote ls-tree mailinfo mailsplit maintenance merge merge-base merge-file
+merge-index merge-tree mergetool mktag mktree multi-pack-index mv notes pack-objects pack-redundant pack-refs patch-id
+prune prune-packed pull push range-diff read-tree rebase reflog remote repack replace replay request-pull rerere
+reset restore rev-list rev-parse revert rm scalar send-email send-pack shortlog show show-branch show-index show-ref
+sparse-checkout stash status stripspace submodule switch symbolic-ref tag unpack-file unpack-objects update-index
+update-ref update-server-info var verify-commit verify-pack verify-tag version whatchanged worktree write-tree'''.split())
+SHELLS = {'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish'}
+INLINE_FLAGS = {'python': {'-c'}, 'python3': {'-c'}, 'node': {'-e', '-p', '--eval', '--print'}, 'deno': {'eval'},
+                'bun': {'-e', '--eval', '-p', '--print'}, 'perl': {'-e', '-E'}, 'ruby': {'-e'}}
+AWKS = {'awk', 'gawk', 'mawk', 'nawk'}
+FLOOR_NAMES = {'.dev.vars', '.pgpass', '.boto', 'auth.json', 'hosts.yml', '.netrc', '.npmrc', '.pypirc', 'id_rsa',
+               'id_ed25519', 'id_ecdsa', 'id_dsa', '.ssh', '.aws', '.gnupg', '.docker', '.kube', '.wrangler', '.azure',
+               '.vault-token', '.git-credentials', 'keychain-db', '.config/gh', 'application_default_credentials.json'}
+FLOOR_SUFFIXES = ('.pem', '.key', '.p12', '.pfx', '.keychain', '.keychain-db', '.kdbx', '.gpg', '.asc')
+ENV_EXCEPTIONS = {'.env.example', '.env.sample', '.env.template'}
+NOT_ENV_FILES = {'process', 'meta', 'deno', 'bun', 'import'}  # `process.env` and friends name the environment object
+# Credential commands: the program word, then the subcommands that make it one (None: every use).
+CREDENTIAL_COMMANDS = {
+    'printenv': None, 'security': None, 'op': None, 'pass': None, 'bw': None, 'lpass': None, 'secret-tool': None,
+    'vault': None, 'keyring': None, 'gopass': None, 'aws-vault': None, 'chamber': None, 'doppler': {'secrets'},
+    'gh': {'auth', 'secret'}, 'npm': {'login', 'logout', 'token', 'adduser', 'whoami'}, 'pnpm': {'login', 'logout'},
+    'yarn': {'npm'}, 'wrangler': {'login', 'logout', 'secret', 'whoami'}, 'docker': {'login', 'logout'},
+    'podman': {'login', 'logout'}, 'gcloud': {'auth'}, 'aws': {'configure'}, 'az': {'login', 'logout'},
+    'heroku': {'auth:token', 'auth', 'authorizations'}, 'fly': {'auth', 'tokens'}, 'flyctl': {'auth', 'tokens'},
+    'vercel': {'login', 'logout'}, 'netlify': {'login', 'logout'}, 'firebase': {'login', 'logout', 'login:ci'},
+    'launchctl': {'getenv'}, 'git': {'credential', 'credential-cache', 'credential-store'}, 'ssh-add': None,
+    'ssh-keygen': None, 'gpg': {'--export-secret-keys', '--export-secret-subkeys', '--armor'}, 'keytool': None,
+}
+# Subcommand pairs on top of CREDENTIAL_COMMANDS: (program, first, second) prints or changes a credential.
+CREDENTIAL_PAIRS = {('npm', 'config', 'get'), ('npm', 'config', 'list'), ('npm', 'config', 'ls'),
+                    ('kubectl', 'config', 'view'), ('kubectl', 'get', 'secret'), ('kubectl', 'get', 'secrets'),
+                    ('kubectl', 'describe', 'secret'), ('kubectl', 'describe', 'secrets'),
+                    ('kubectl', 'create', 'secret'), ('gcloud', 'config', 'config-helper'),
+                    ('az', 'account', 'get-access-token'), ('aws', 'sts', 'get-session-token'),
+                    ('aws', 'ecr', 'get-login-password'), ('aws', 'secretsmanager', 'get-secret-value'),
+                    ('aws', 'ssm', 'get-parameter'), ('aws', 'ssm', 'get-parameters'), ('git', 'config', '--get-urlmatch')}
+ENV_WORDS = ('environ', 'getenv', 'process.env', 'process["env"]', "process['env']", 'deno.env', 'bun.env',
+             'os.environ', 'system.getenv', 'printenv')
+ENV_IDENTIFIERS = re.compile(r'(?<![A-Za-z0-9_])(?:%ENV|\$ENV|ENV|ENVIRON)(?![A-Za-z0-9_])')
+WORDS = re.compile(r'(?:^|[_.-])(?:token|tokens|password|passwd|secret|secrets)(?:[_.-]|$)', re.I)
+DOLLAR_NAME = re.compile(r'\$\{?(!?)([A-Za-z_][A-Za-z0-9_]*)')
+ASSIGNMENT = re.compile(r'([A-Za-z_][A-Za-z0-9_]*)=(.*)', re.S)
+
+
+def sensitive_name(name):
+    if name.startswith('GIT_CONFIG_'):
+        return False  # git's config-key variables (GIT_CONFIG_KEY_0) are read by the default-branch guard instead
+    return bool(secret_patterns.SENSITIVE.search(name)) and bool(re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', name))
+
+
+def standalone_split(tokens):
+    """Commands of one argv split at operators standing as tokens (B step 1)."""
+    commands, current = [], []
+    for token in tokens:
+        if token in OPERATORS:
+            if current:
+                commands.append(current)
+            current = []
+        else:
+            current.append(token)
+    if current:
+        commands.append(current)
+    return commands
+
+
+def inline_tokens(code):
+    """Inline code split like an argv, also on quotes, commas and brackets (B step 3)."""
+    return [t for t in re.split(r'''[\s'",;]+''', code) if t]
+
+
+def strip_token(token):
+    return token.replace('${', '').replace('}', '').lstrip('$').strip('\'"')
+
+
+def normalize(command, env):
+    """(program, words) after B step 2: base name, dropped prefixes and `VAR=value` assignments (recorded in `env`).
+    `env` with nothing after its assignments, or with options, stays the command `env`."""
+    words = list(command)
+    while words:
+        head = Path(words[0]).name
+        match = ASSIGNMENT.fullmatch(words[0])
+        if match and '/' not in match[1]:
+            env.append((match[1], match[2]))
+            words = words[1:]
+            continue
+        if head == 'env':
+            rest = words[1:]
+            while rest and ASSIGNMENT.fullmatch(rest[0]):
+                env.append(ASSIGNMENT.fullmatch(rest[0]).groups())
+                rest = rest[1:]
+            if not rest or rest[0].startswith('-'):
+                return 'env', words[1:]
+            words = rest
+            continue
+        if head == 'pnpm' and words[1:2] == ['exec']:
+            words = words[2:]
+            continue
+        if head in PREFIX_WORDS:
+            words = words[1:]
+            while words and words[0].startswith('-') and words[0] != '-':
+                flag = words[0]
+                words = words[1:]
+                if flag in PREFIX_VALUED and words:
+                    words = words[1:]
+            if head == 'timeout' and words and re.fullmatch(r'[0-9.]+[smhd]?', words[0]):
+                words = words[1:]
+            if head == 'nice' and words and re.fullmatch(r'-?[0-9]+', words[0]):
+                words = words[1:]
+            continue
+        return head, words[1:]
+    return None, []
+
+
+def git_parts(words):
+    """(verb, tail, -C folder, -c keys) of a git command after dropping git's global options."""
+    folder, keys, index = None, [], 0
+    while index < len(words):
+        token = words[index]
+        key, equal, value = token.partition('=')
+        if key in GIT_GLOBAL_VALUED and key.startswith('--') and equal:
+            if key == '--config-env':
+                keys.append(value.split('=')[0])
+            index += 1
+            continue
+        if token in GIT_GLOBAL_VALUED:
+            value = words[index + 1] if index + 1 < len(words) else ''
+            if token == '-C':
+                folder = value if folder is None else os.path.join(folder, value)
+            elif token in {'-c', '--config-env'}:
+                keys.append(value.split('=')[0])
+            index += 2
+            continue
+        if token.startswith('-c') and len(token) > 2:
+            keys.append(token[2:].split('=')[0])
+            index += 1
+            continue
+        if token in GIT_GLOBAL_FLAGS:
+            index += 1
+            continue
+        return token, words[index + 1:], folder, keys
+    return None, [], folder, keys
+
+
+def inline_codes(program, words):
+    """The inline program texts of a shell -c, an interpreter's -c/-e/-p, awk's program, `eval` (B step 3)."""
+    codes = []
+    if program in SHELLS:
+        for index, token in enumerate(words):
+            if re.fullmatch(r'-[A-Za-z]*c[A-Za-z]*', token) and index + 1 < len(words):
+                codes.append(words[index + 1])
+    elif program == 'eval':
+        codes.append(' '.join(words))
+    elif program in AWKS:
+        rest = [w for w in words if not w.startswith('-')]
+        if rest and '-f' not in words:
+            codes.append(rest[0])
+    else:
+        base = re.sub(r'[0-9.]+$', '', program) or program
+        flags = INLINE_FLAGS.get(program) or INLINE_FLAGS.get(base)
+        if flags:
+            for index, token in enumerate(words):
+                key, equal, value = token.partition('=')
+                if key in flags:
+                    if equal:
+                        codes.append(value)
+                    elif index + 1 < len(words):
+                        codes.append(words[index + 1])
+    return codes
+
+
+def floor_path(token, cwd=None):
+    """True when one path or argv token names a secret, key or credential file, folder or helper (B, obligation 4)."""
+    if secret_patterns.PREFIX.search(token):
+        return True
+    raw = token
+    for match in DOLLAR_NAME.finditer(raw):
+        if match[1] == '!' or sensitive_name(match[2]):
+            return True
+    match = ASSIGNMENT.fullmatch(raw)
+    if match and sensitive_name(match[1]):
+        return True
+    value = strip_token(raw).replace('\\', '/')
+    lower = value.casefold()
+    if 'credentials' in lower or lower.startswith('credential.') or '.git-credentials' in lower:
+        return True
+    if re.search(r'/proc/[^/]+/environ', lower):
+        return True
+    if '.config/gh/hosts.yml' in lower or '.config/gcloud' in lower and ('token' in lower or 'credential' in lower):
+        return True
+    for part in re.split(r'[/:=]+', lower):
+        if not part:
+            continue
+        name = part.lstrip('.')
+        if part in FLOOR_NAMES or part.endswith(FLOOR_SUFFIXES) or 'creds' in part:
+            return True
+        if part == '.env' or part.startswith('.env.') and part not in ENV_EXCEPTIONS:
+            return True
+        if part.endswith('.env') and part != '.env' and part[:-4].split('.')[-1] not in NOT_ENV_FILES:
+            return True
+        if name == 'secrets' or name.startswith('secrets.'):
+            return True
+        if part.startswith('.yarnrc') and yarnrc_secret(value, cwd):
+            return True
+    return False
+
+
+def yarnrc_secret(value, cwd):
+    """A `.yarnrc*` file is a secret only when it holds one (a repository's own file without a token is not)."""
+    try:
+        full = Path(os.path.expanduser(value))
+        full = full if full.is_absolute() else Path(cwd or os.getcwd()) / full
+        info = os.stat(full)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > TEXT_LIMIT:
+            return info.st_size > TEXT_LIMIT
+        text = full.read_text('utf-8', 'replace')
+    except OSError:
+        return False
+    return bool(re.search(r'(?i)authtoken|_auth|_password|token', text)) or screened(text)
+
+
+def floor_command(program, words, inline, cwd=None):
+    """True when one normalized command is a credential command or, in inline code, names one (B)."""
+    if program is None:
+        return False
+    if 'credential' in program.casefold():
+        return True
+    if program == 'git':
+        verb = git_parts(words)[0]
+        if verb and 'credential' in verb.casefold():
+            return True  # git runs git-credential-<helper> for `git credential-<helper>`
+    if program in INTERPRETERS:
+        script = next((w for w in words if not w.startswith('-')), None)
+        if script and 'credential' in Path(script).name.casefold():
+            return True  # a credential helper run as a script
+    if program == 'env':
+        return True
+    for flag in ('-exec', '-execdir', '-ok', '-okdir'):
+        if program == 'find' and flag in words:
+            tail = words[words.index(flag) + 1:]
+            inner = normalize([t for t in tail if t not in {';', '+', '{}'}], [])
+            if floor_command(*inner, inline, cwd):
+                return True
+    rest = [w for w in words if not w.startswith('-')]
+    if program in CREDENTIAL_COMMANDS:
+        subs = CREDENTIAL_COMMANDS[program]
+        if subs is None or (rest[:1] and rest[0] in subs) or any(w in subs for w in words if w.startswith('--')):
+            return True
+    if len(rest) >= 2 and (program, rest[0], rest[1]) in CREDENTIAL_PAIRS:
+        return True
+    if program == 'export' and (not words or words == ['-p']):
+        return True
+    if program == 'set' and not words:
+        return True
+    if program in {'declare', 'typeset'} and any(re.fullmatch(r'-[A-Za-z]*[px][A-Za-z]*', w) for w in words):
+        return True
+    if program == 'ps' and any(w in {'e', 'E', '-E'} or not w.startswith('-') and re.fullmatch(r'[a-zA-Z]*e[a-zA-Z]*', w)
+                               and re.fullmatch(r'[auxwjlvsSmrhTcCe]+', w) for w in words):
+        return True
+    if program == 'jq' and any(w == 'env' or '$ENV' in w or re.search(r'(?<![A-Za-z0-9_])env(?:\.|$)', w) for w in words):
+        return True
+    if program == 'cat' and any(w.startswith('/dev/fd') for w in words):
+        return False
+    if inline:
+        for word in [program, *words]:
+            bare = strip_token(word)
+            if WORDS.search(bare) or secret_patterns.NAME.fullmatch(bare) and secret_patterns.SENSITIVE.search(bare):
+                return True
+    return False
+
+
+def commands_of(tokens, inline=False, depth=0, keep=frozenset()):
+    """[(program, words, env, inline)] for every command of `tokens`, inline code included (B steps 1 to 3, obligation
+    6). An inline program text is kept whole for its own pass; every other token is also split at operators inside it."""
+    found, splitter = [], SPLIT_INLINE if inline else SPLIT_TOP
+    for command in standalone_split(tokens):
+        env = []
+        program, words = normalize(command, env)
+        codes = inline_codes(program, words) if program is not None else []
+        kept = keep | set(codes)
+        expanded = []
+        for token in command:
+            if token in kept:
+                expanded.append(token)
+                continue
+            for piece in splitter.split(token):
+                if splitter.fullmatch(piece):
+                    expanded.append(';')
+                elif piece.strip('()'):
+                    expanded.append(piece.strip('()'))
+        if expanded != command and depth < 8:
+            found.extend(commands_of(expanded, inline, depth + 1, kept))
+            continue
+        found.append((program, words, env, inline))
+        if depth < 8:
+            for code in codes:
+                found.append(('#inline', [code], [], True))
+                shell = program in SHELLS or program == 'eval'
+                found.extend(commands_of(code.split() if shell else inline_tokens(code), True, depth + 1))
+    return found
+
+
+def floor_hit(argv, cwd=None):
+    """True when an argv (text values already removed) touches the floor in any of its commands."""
+    for program, words, env, inline in commands_of(argv):
+        if program == '#inline':
+            code = words[0]
+            lower = code.casefold()
+            if any(word in lower for word in ENV_WORDS) or ENV_IDENTIFIERS.search(code):
+                return True
+            continue
+        if any(sensitive_name(name) or secret_patterns.PREFIX.search(value) for name, value in env):
+            return True
+        if floor_command(program, words, inline, cwd):
+            return True
+        if any(floor_path(t, cwd) for t in ([program] if program else []) + words):
+            return True
+    return False
+
+
+# The default-branch guard (C, obligations 1, 2 and 5).
+DEFAULT_NAMES = ('main', 'master', 'trunk')
+PUSH_KEYS = re.compile(r'(?i)(?:push\..*|remote\..*\.push|branch\..*\.merge|alias\..*)')
+PUSH_VALUED = {'--repo', '--receive-pack', '--exec', '-o', '--push-option', '--signed', '--recurse-submodules'}
+
+
+def git_config_values(context):
+    """{key: value} of push.default, remote.*.push and branch.*.merge in the repository's own config; None on doubt."""
+    try:
+        text = store.git_metadata.bounded(context.ident.common / 'config', 65536).decode('utf-8')
+    except (OSError, ValueError, AttributeError, UnicodeError):
+        return None
+    found, section = {}, None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith(('#', ';')):
+            continue
+        header = re.fullmatch(r'\[([A-Za-z0-9.-]+)(?:\s+"([^"]*)")?\]', line)
+        if header:
+            section = header[1].casefold() + ('.' + header[2] if header[2] is not None else '')
+            if header[1].casefold() in {'include', 'includeif'}:
+                return None
+            continue
+        entry = re.fullmatch(r'([A-Za-z][A-Za-z0-9-]*)\s*(?:=\s*(.*))?', line)
+        if not entry or section is None:
+            return None
+        found.setdefault(f'{section}.{entry[1].casefold()}', []).append((entry[2] or '').strip().strip('"'))
+    return found
+
+
+def guard_hit(program, words, env, context):
+    """True when a git command commits on, or pushes to, the default branch, forces, deletes or mirrors, or cannot be
+    resolved (C). Literal forms only; server-side branch protection covers everything else."""
+    if program != 'git':
+        return False
+    verb, tail, folder, keys = git_parts(words)
+    keys = keys + [value.split('=')[0] for name, value in env if name.startswith('GIT_CONFIG_KEY')]
+    config_env = any(name.startswith('GIT_CONFIG') for name, _ in env)
+    if verb is None:
+        return False
+    if folder is not None:
+        try:
+            context = effective_context(folder, context)
+        except (OSError, ValueError, TypeError):
+            context = UNKNOWN
+    if verb not in GIT_BUILTINS:
+        return True  # an alias may be a push
+    if verb not in {'push', 'commit'}:
+        return False
+    try:
+        current, default = branch_context(context)
+    except (OSError, ValueError, UnicodeError, TypeError):
+        current, default = None, None
+    kept = {*DEFAULT_NAMES, *([default] if default else [])}
+    on_default = current is None or current.casefold() in {k.casefold() for k in kept}
+    if verb == 'commit':
+        return on_default
+    if config_env or any(PUSH_KEYS.fullmatch(k) for k in keys):
+        return True
+    operands, index = [], 0
+    while index < len(tail):
+        token = tail[index]
+        if token == '--':
+            operands += tail[index + 1:]
+            break
+        if token.startswith('--'):
+            if token.startswith(('--force', '--mirror', '--all', '--delete', '--prune')):
+                return True
+            if token in PUSH_VALUED:
+                index += 1
+        elif token.startswith('-') and len(token) > 1:
+            if 'f' in token[1:] or 'd' in token[1:]:
+                return True
+            if token == '-o':
+                index += 1
+        else:
+            operands.append(token)
+        index += 1
+    refspecs = operands[1:]
+    if not refspecs:
+        # An absent destination: the current branch, its upstream, remote.<remote>.push and push.default decide.
+        if on_default:
+            return True
+        config = git_config_values(context)
+        if config is None:
+            return True
+        remote = operands[0] if operands else 'origin'
+        if config.get(f'remote.{remote}.push'):
+            return True
+        mode = (config.get('push.default') or ['simple'])[-1].casefold()
+        upstream = (config.get(f'branch.{current}.merge') or [''])[-1].removeprefix('refs/heads/')
+        return mode in {'upstream', 'tracking', 'matching'} and (not upstream or upstream.casefold() in
+                                                                 {k.casefold() for k in kept})
+    for spec in refspecs:
+        if spec.startswith('+'):
+            return True
+        source, colon, destination = spec.partition(':')
+        if colon and not source:
+            return True  # `:dst` deletes and `:` pushes every matching branch
+        destination = destination if colon else source
+        destination = destination.removeprefix('refs/heads/')
+        if destination in {'HEAD', '@'}:
+            if current is None:
+                return True
+            destination = current
+        if not destination or destination.casefold() in {k.casefold() for k in kept}:
+            return True
+    return False
+
+
+def effective_context(folder, context):
+    base = context.cwd or os.getcwd()
+    full = os.path.abspath(os.path.join(base, os.path.expanduser(folder)))
+    found, ident = store.identity(full)
+    if found != 'found':
+        return UNKNOWN
+    return Context('found', ident, context.state, store.origin_target(ident), full)
+
+
+def open_body_files(argv, cwd):
+    """Paths of --body-file, -F (gh) and -F, --file (git commit) values."""
+    names, flags = [], {'--body-file', '-F', '--file'}
+    for index, token in enumerate(argv):
+        key, equal, value = token.partition('=')
+        if key in flags and equal:
+            names.append(value)
+        elif token in flags and index + 1 < len(argv):
+            names.append(argv[index + 1])
+    return names
+
+
+def body_secret(name, cwd):
+    """True when a body file's name or real path is a floor path or its text holds a secret (B text rule)."""
+    if floor_path(name, cwd):
+        return True
+    try:
+        full = Path(os.path.abspath(os.path.join(cwd or os.getcwd(), os.path.expanduser(name))))
+        if floor_path(os.path.realpath(full), cwd):
+            return True
+        info = os.stat(full)
+        if not stat.S_ISREG(info.st_mode):
+            return False
+        raw = full.read_bytes()[:TEXT_LIMIT + 1]
+        return len(raw) <= TEXT_LIMIT and bool(raw) and screened(raw.decode('utf-8', 'replace'))
+    except OSError:
+        return False
+
+
+def open_verdict(argv, paths, applied):
+    """The `open` answer: 'floor' and 'guarded' are Tier 3, everything else is 'allowed' (A)."""
+    context = context_of(applied)
+    cwd = context.cwd
+    if argv is None:
+        if not isinstance(paths, list):
+            return 'unknown'
+        return 'floor' if any(isinstance(p, str) and floor_path(p, cwd) for p in paths) else 'allowed'
+    if not isinstance(argv, list) or not argv or not all(isinstance(t, str) for t in argv):
+        return 'unknown'
+    stripped, texts = text_values(argv)
+    if any(screened(value) for value in texts if value):
+        return 'floor'
+    if any(body_secret(name, cwd) for name in open_body_files(stripped, cwd)):
+        return 'floor'
+    if floor_hit(stripped, cwd):
+        return 'floor'
+    if applied.get(DEFAULT_BRANCH) != 'open':
+        for program, words, env, _ in commands_of(stripped):
+            if program != '#inline' and guard_hit(program, words, env, context):
+                return 'guarded'
+    return 'allowed'
+
+
 def classified(folder, argv_json, paths, coordinator, current):
     """(code, lease, applied, key, entry, argv, cwd) for one request, exactly as `check` judges it; nothing is stored."""
     code, lease, applied = lease_guard(folder, current)
@@ -1708,6 +2234,11 @@ def classified(folder, argv_json, paths, coordinator, current):
                 argv = json.loads(argv_json)
             except ValueError:
                 argv = None
+        here = effective(applied, cwd)
+        if here.get(MODE) == 'open':
+            # `open`: no list, category, limit or repository state applies; only the floor and the guards (A).
+            return open_verdict(argv if argv_json is not None else None, paths, here), lease, here, None, None, argv, cwd
+        if argv_json is not None:
             if isinstance(argv, list) and len(argv) >= 3 and argv[:2] == ['git', '-C']:
                 # `git -C <folder> ...` is judged as the same command run in that folder, which must lie in a
                 # checkout of this repository and not under a protected path; anything else is Tier 3.
@@ -1745,12 +2276,12 @@ def check(folder, args):
             code = 'decided'
             append_log(folder, dict(time=current, tier=1, kind='approval-used', subject=subject, note=''), current)
     # Only a Tier 1 answer reserves an action (and, for a ledger start, a run); a denied check costs nothing.
-    if code in {'allowed', 'decided'} and isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
+    if code in {'allowed', 'decided'} and entry is not None and isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']:
         try:  # the pin first: a full or invalid log refuses the merge before an action is reserved
             append_log(folder, merge_pin(argv, current, context_of(applied).target), current)
         except (OSError, ValueError, UnicodeError):
             code = 'log-unwritable'
-    if code in {'allowed', 'decided'}:
+    if code in {'allowed', 'decided'} and entry is not None:  # `open` keeps no per-project counters
         entry['actions'] += 1
         entry['hour_actions'].append(current)
         if entry['first'] is None:
@@ -1787,6 +2318,8 @@ def merged_heads(folder, lease, current, target):
 
 def repository_rules(result):
     """The rules `check` applies in this repository beyond the five values: limits, decided categories and the lists."""
+    if result.get(MODE) == 'open':
+        return {MODE: 'open', THIRD_PARTY: result[THIRD_PARTY], DEFAULT_BRANCH: result[DEFAULT_BRANCH]}
     return {'Max runs': result['Max runs'], 'Max runtime minutes': result['Max runtime minutes'],
             'Max actions per hour': result['Max actions per hour'],
             'Decide': [c for c in CATEGORIES if result.get(c) == 'decide'],
@@ -1800,7 +2333,9 @@ def show_effective(folder):
     result = effective(applied if applied is not None else settings(), os.getcwd())
     context = result[CONTEXT]
     print(json.dumps({'lease': code or 'live', 'repository': context.repository, 'state': context.state,
-                      'target': context.target, 'values': {name: result[name] for name in OFF},
+                      'target': context.target, 'mode': result[MODE],
+                      'guards': {THIRD_PARTY: result[THIRD_PARTY], DEFAULT_BRANCH: result[DEFAULT_BRANCH]},
+                      'values': {name: result[name] for name in OFF},
                       'rules': repository_rules(result)},
                      separators=(',', ':')))
 
