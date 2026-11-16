@@ -1724,8 +1724,10 @@ PREFIX_WORDS = {'command', 'exec', 'nohup', 'nice', 'timeout', 'time', 'sudo', '
                 'caffeinate', 'stdbuf', 'watch', 'ionice', 'chrt', 'taskset', 'unbuffer', 'strace', 'ltrace'}
 FILE_PREFIXES = {'flock', 'script'}  # each takes one file operand before the command it runs
 PREFIX_VALUED = {'-n', '-u', '-g', '-s', '-k', '-I', '-P', '-L', '-d', '-a', '-p', '--user', '--group', '--signal'}
-GIT_GLOBAL_VALUED = {'-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env'}
-GIT_GLOBAL_FLAGS = {'--no-pager', '-p', '--paginate', '-P', '--bare', '--no-replace-objects', '--literal-pathspecs',
+GIT_GLOBAL_VALUED = {'-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env',
+                     '--attr-source', '--super-prefix'}
+GIT_NO_VERB = {'--version', '-v', '--help', '-h', '--html-path', '--man-path', '--info-path'}
+GIT_GLOBAL_FLAGS = {'--no-advice', '--no-pager', '-p', '--paginate', '-P', '--bare', '--no-replace-objects', '--literal-pathspecs',
                     '--glob-pathspecs', '--noglob-pathspecs', '--icase-pathspecs', '--no-optional-locks',
                     '--no-lazy-fetch', '--exec-path'}
 # Git's built-in commands (`git help -a`); any other verb may be an alias, which the guard treats as an unknown push.
@@ -1741,11 +1743,13 @@ reset restore rev-list rev-parse revert rm scalar send-email send-pack shortlog 
 sparse-checkout stash status stripspace submodule switch symbolic-ref tag unpack-file unpack-objects update-index
 update-ref update-server-info var verify-commit verify-pack verify-tag version whatchanged worktree write-tree'''.split())
 SHELLS = {'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish'}
+SHELL_WORDS = {'{', '}', '!', 'if', 'then', 'else', 'elif', 'do', 'while', 'until', 'function', 'coproc'}
 INLINE_FLAGS = {'python': {'-c'}, 'python3': {'-c'}, 'node': {'-e', '-p', '--eval', '--print'}, 'deno': {'eval'},
                 'bun': {'-e', '--eval', '-p', '--print'}, 'perl': {'-e', '-E'}, 'ruby': {'-e'}, 'osascript': {'-e'},
                 'pwsh': {'-c', '-Command', '-command'}, 'powershell': {'-c', '-Command', '-command'}, 'lua': {'-e'},
                 'php': {'-r'}, 'R': {'-e'}, 'Rscript': {'-e'}, 'julia': {'-e'}, 'tclsh': set(), 'groovy': {'-e'}}
 AWKS = {'awk', 'gawk', 'mawk', 'nawk'}
+CODE_FLAGS = {'-e', '-E', '-p', '-r', '--eval', '--print', '-Command', '-command', 'eval'}
 FLOOR_NAMES = {'.dev.vars', '.pgpass', '.boto', 'auth.json', 'hosts.yml', '.netrc', '.npmrc', '.pypirc', 'id_rsa',
                'id_ed25519', 'id_ecdsa', 'id_dsa', '.ssh', '.aws', '.gnupg', '.docker', '.kube', '.wrangler', '.azure',
                '.vault-token', '.git-credentials', 'keychain-db', '.config/gh', 'application_default_credentials.json'}
@@ -1776,7 +1780,7 @@ ENV_WORDS = ('environ', 'getenv', 'process.env', 'process["env"]', "process['env
              'os.environ', 'system.getenv', 'printenv', 'system attribute', '$env:', 'childitem env:', 'env:\\',
              'getenvironmentvariable')
 # A search program's pattern operand is data, never split at operators (`rg 'import|export'`).
-PATTERN_PROGRAMS = {'rg', 'grep', 'egrep', 'fgrep', 'ag', 'ack', 'git-grep'}
+PATTERN_PROGRAMS = {'rg', 'grep', 'egrep', 'fgrep', 'ag', 'ack', 'git-grep', 'jq'}  # jq: its filter
 PATTERN_VALUED = {'-e', '--regexp', '-g', '--glob', '-t', '--type', '-f', '--file', '-A', '-B', '-C', '-m',
                   '--max-count', '--include', '--exclude'}
 ENV_IDENTIFIERS = re.compile(r'(?<![A-Za-z0-9_])(?:%ENV|\$ENV|ENV|ENVIRON)(?![A-Za-z0-9_])')
@@ -1820,6 +1824,9 @@ def normalize(command, env):
     `env` with nothing after its assignments, or with options, stays the command `env`."""
     words = list(command)
     while words:
+        if words[0] in SHELL_WORDS or re.fullmatch(r'[A-Za-z_][A-Za-z0-9_.-]*\(\)', words[0]):
+            words = words[1:]  # a group, a function definition or a compound keyword runs the command after it
+            continue
         head = Path(words[0]).name
         match = ASSIGNMENT.fullmatch(words[0])
         if match and '/' not in match[1]:
@@ -1853,7 +1860,10 @@ def normalize(command, env):
         if head in FILE_PREFIXES:
             words = [w for w in words[1:]]
             while words and words[0].startswith('-'):
-                words = words[1:]
+                flag, words = words[0], words[1:]
+                if flag in {'-w', '--wait', '--timeout', '-E', '--conflict-exit-code', '-t', '-T', '--log-timing',
+                            '-I', '--log-in', '-O', '--log-out', '-B', '--log-io'} and words:
+                    words = words[1:]
             words = words[1:]  # the lock or typescript file
             continue
         return head, words[1:]
@@ -1886,8 +1896,10 @@ def git_parts(words):
         if token in GIT_GLOBAL_FLAGS:
             index += 1
             continue
-        if token.startswith('-'):
+        if token in GIT_NO_VERB or token.startswith('--list-cmds='):
             return None, [], folder, keys  # `git --version`, `--help`, `-h`: no verb
+        if token.startswith('-'):
+            return token, words[index + 1:], folder, keys  # an unknown global option: unresolved, never a known verb
         return token, words[index + 1:], folder, keys
     return None, [], folder, keys
 
@@ -2044,7 +2056,7 @@ def patterns(program, words):
     return found or ([operand] if operand is not None else [])
 
 
-def commands_of(tokens, inline=False, depth=0, keep=frozenset(), full=False):
+def commands_of(tokens, inline=False, depth=0, keep=frozenset(), full=False, split_patterns=False):
     """[(program, words, env, inline)] for every command of `tokens`, inline code included (B steps 1 to 3, obligation
     6). An inline program text is kept whole for its own pass; every other token is also split at operators inside it."""
     found, splitter = [], SPLIT_INLINE if inline or full else SPLIT_TOP
@@ -2052,8 +2064,10 @@ def commands_of(tokens, inline=False, depth=0, keep=frozenset(), full=False):
         env = []
         program, words = normalize(command, env)
         codes = inline_codes(program, words) if program is not None else []
-        kept = keep | set(codes)
-        searched = set(patterns(program, words))
+        # Inline code stays whole for its own pass, also when its program only appears after an in-token split.
+        kept = keep | set(codes) | {command[i + 1] for i, t in enumerate(command[:-1]) if t in CODE_FLAGS
+                                    or re.fullmatch(r'-[A-Za-z]*c', t)}
+        searched = set() if split_patterns else set(patterns(program, words))
         expanded = []
         for token in command:
             if token in kept:
@@ -2071,20 +2085,28 @@ def commands_of(tokens, inline=False, depth=0, keep=frozenset(), full=False):
                 elif piece.strip('()'):
                     expanded.append(piece.strip('()'))
         if expanded != command and depth < 8:
-            found.extend(commands_of(expanded, inline, depth + 1, kept, full))
+            found.extend(commands_of(expanded, inline, depth + 1, kept, full, split_patterns))
             continue
         found.append((program, words, env, inline))
         if depth < 8:
             for code in codes:
                 found.append(('#inline', [code], [], True))
                 shell = program in SHELLS or program == 'eval'
-                found.extend(commands_of(code.split() if shell else inline_tokens(code), True, depth + 1, full=full))
+                found.extend(commands_of(code.split() if shell else inline_tokens(code), True, depth + 1, full=full,
+                                         split_patterns=split_patterns))
     return found
 
 
 def floor_hit(argv, cwd=None):
-    """True when an argv (text values already removed) touches the floor in any of its commands."""
-    for program, words, env, inline in commands_of(argv, full=True):
+    """True when an argv (text values already removed) touches the floor in any of its commands. A search pattern is
+    read twice: as data (so `rg 'import|export'` stays Tier 1) and split at lone `|` and `&`, since an argv token cannot
+    show whether its pipe was quoted; the second reading skips only the bare `export`, `set` and `env` rules."""
+    return (commands_hit(commands_of(argv, full=True), cwd, loose=False)
+            or commands_hit(commands_of(argv, full=True, split_patterns=True), cwd, loose=True))
+
+
+def commands_hit(commands, cwd, loose):
+    for program, words, env, inline in commands:
         if program == '#inline':
             code = words[0]
             lower = code.casefold()
@@ -2093,6 +2115,8 @@ def floor_hit(argv, cwd=None):
             continue
         if any(sensitive_name(name) or secret_patterns.PREFIX.search(value) for name, value in env):
             return True
+        if loose and not words and program in {'export', 'set', 'env'}:
+            continue
         if floor_command(program, words, inline, cwd):
             return True
         if any(floor_path(t, cwd) for t in ([program] if program else []) + words):
@@ -2256,12 +2280,20 @@ def body_secret(name, cwd):
 # values and for the substitutions and `$NAME` references a shell would expand inside it.
 TEXT_PROGRAMS = {'git', 'gh', 'glab'}
 OPEN_TEXT_FLAGS = {'-m', '--message', '-t', '--title', '-b', '--body', '--notes'}
+# On git only these verbs take a message, and only `-m` and `--message` (`checkout -t` and `-b` are flags).
+GIT_MESSAGE_VERBS = {'commit', 'tag', 'merge', 'notes', 'stash', 'revert', 'cherry-pick'}
+GIT_TEXT_FLAGS = {'-m', '--message'}
+HOST_TEXT_VERBS = {(group, verb) for group in ('pr', 'issue', 'mr') for verb in ('create', 'edit', 'comment', 'review',
+                                                                                'merge', 'close', 'note')} | {
+    ('release', 'create'), ('release', 'edit'), ('gist', 'create')}
+# A delegation brief (one long or multi-line operand of an agent CLI) is text: a line of it is no command.
+AGENT_PROGRAMS = {'claude', 'codex', 'agy', 'gemini', 'zcode'}
 SUBSTITUTION = re.compile(r'\$\(([^()]*(?:\([^()]*\)[^()]*)*)\)|`([^`]*)`|<\(([^()]*)\)')
 
 
 def open_texts(argv):
     """argv with each text value of a git, gh or glab command replaced by `text`, and the values."""
-    out, values, program, index = [], [], None, 0
+    out, values, program, index, flags = [], [], None, 0, set()
     while index < len(argv):
         token = argv[index]
         if token in OPERATORS:
@@ -2271,13 +2303,22 @@ def open_texts(argv):
             continue
         if program is None:
             env = []
-            program, _ = normalize(argv[index:], env)
+            program, rest = normalize(argv[index:], env)
             program = program or ''
+            if program in {'gh', 'glab'}:
+                flags = OPEN_TEXT_FLAGS if tuple(rest[:2]) in HOST_TEXT_VERBS else set()
+            elif program == 'git':
+                flags = GIT_TEXT_FLAGS if git_parts(rest)[0] in GIT_MESSAGE_VERBS else set()
+            else:
+                flags = set()
         key, equal, value = token.partition('=')
-        if program in TEXT_PROGRAMS and equal and key in OPEN_TEXT_FLAGS:
+        if program in AGENT_PROGRAMS and ('\n' in token or len(token) > 200):
+            out.append('text')
+            values.append(token)
+        elif equal and key in flags:
             out.append(key + '=text')
             values.append(value)
-        elif program in TEXT_PROGRAMS and token in OPEN_TEXT_FLAGS and index + 1 < len(argv):
+        elif token in flags and index + 1 < len(argv):
             out += [token, 'text']
             values.append(argv[index + 1])
             index += 1
@@ -2321,9 +2362,11 @@ def open_verdict(argv, paths, applied):
         return 'unknown'
     if floored(argv, None, cwd):
         return 'floor'
-    stripped = open_texts(argv)[0]
+    stripped, texts = open_texts(argv)
     if applied.get(DEFAULT_BRANCH) != 'open':
-        for program, words, env, _ in commands_of(stripped):
+        bodies = [next(g for g in m.groups() if g is not None) for value in texts for m in SUBSTITUTION.finditer(value)]
+        commands = commands_of(stripped, full=True) + [c for body in bodies for c in commands_of(body.split(), True)]
+        for program, words, env, _ in commands:
             if program != '#inline' and guard_hit(program, words, env, context):
                 return 'guarded'
     return 'allowed'
