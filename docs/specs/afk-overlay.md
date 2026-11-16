@@ -1,6 +1,6 @@
 # afk overlay: repository rules that yield during an away lease
 
-Status: proposed; rule recorded as the ninth scoped exception in `CLAUDE.md` (owner decisions 2026-11-16). No code lands before that rule is merged.
+Status: accepted; rule recorded as the ninth scoped exception in `CLAUDE.md` (owner decisions 2026-11-16). No code lands before that rule is merged.
 
 ## Why
 
