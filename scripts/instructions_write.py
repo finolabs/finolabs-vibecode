@@ -7,7 +7,10 @@ apply --digest <64 hex> --yes
     Re-checks the plan and writes atomically, keeping a backup that never overwrites an earlier one.
 
 Allowed targets are a closed list: the user-level files `hosts.md` lists (Codex uses the account-derived default only), and
-AGENTS.md, CLAUDE.md and CLAUDE.local.md at the git top level of the working folder. Symlinks are refused
+AGENTS.md, CLAUDE.md and CLAUDE.local.md at the git top level of the working folder, and the afk overlay
+`AGENTS.afk.md` at the top of the repository's main checkout (docs/specs/afk-overlay.md): refused when Git tracks it
+or while a strict away lease is live; its backups go to the private state, and `apply` adds it to the local
+`.git/info/exclude` and records its SHA-256 as the overlay's trust anchor. Symlinks are refused
 at the target and at every folder below the allowed base. Metadata only: nothing is sent anywhere.
 """
 import argparse
@@ -19,6 +22,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import struct
 import subprocess
 import sys
 import time
@@ -33,6 +37,7 @@ USER_TARGETS = {
     (".gemini", "GEMINI.md"), (".gemini", "AGENTS.md"), (".agents", "instructions.md"),
 }
 PROJECT_TARGETS = ("AGENTS.md", "CLAUDE.md", "CLAUDE.local.md")
+OVERLAY = "AGENTS.afk.md"
 BLOCKS = ("Agent skills", "Work tracking")
 FULL = re.compile(r"[0-9a-f]{64}")
 STATE = "state/instructions"
@@ -83,6 +88,8 @@ def allowed(target):
     if (rel is not None and len(rel) == 4 and rel[:3] == (".gemini", "config", "rules")
             and rel[-1].endswith(".md") and rel[-1] != ".md"):
         return home, rel
+    if Path(path).name.casefold() == OVERLAY.casefold():
+        return overlay_target(path)
     top = git_top()
     parent = os.path.dirname(path)
     if top is not None and Path(path).name in PROJECT_TARGETS and os.path.realpath(parent) == top:
@@ -91,6 +98,26 @@ def allowed(target):
         return top, (Path(path).name,)
     raise Refusal("target is not on the allowed list (user-level instruction files, or AGENTS.md, CLAUDE.md, "
                   "CLAUDE.local.md at the repository top level)")
+
+
+def overlay_target(path):
+    """(main checkout, ("AGENTS.afk.md",)) for the afk overlay of the working folder's repository, else refuse."""
+    import afk_overlay
+    ident = afk_overlay.repository(os.getcwd())
+    if ident is None:
+        raise Refusal("the afk overlay needs a repository whose identity can be validated")
+    main = str(ident.main)
+    if Path(path).name != OVERLAY or os.path.dirname(path) != main or os.path.realpath(main) != main:
+        raise Refusal("the afk overlay is only AGENTS.afk.md at the top of this repository's main checkout")
+    reason = afk_overlay.write_refused(ident)
+    if reason:
+        raise Refusal(reason)
+    try:
+        if afk_overlay.tracked(ident):
+            raise Refusal("Git tracks AGENTS.afk.md here; the afk overlay must stay local")
+    except (OSError, ValueError, IndexError, struct.error):
+        raise Refusal("the Git index cannot be read, so the overlay cannot be shown to be untracked")
+    return main, (OVERLAY,)
 
 
 def open_dir(base, rel, create):
@@ -201,7 +228,14 @@ def plan_digest(plan):
 def preview(target, content_file, block):
     base, rel = allowed(target)
     path = os.path.join(base, *rel)
+    overlay = rel[-1] == OVERLAY and base != str(dr.account_home())
+    if block and overlay:
+        raise Refusal("the afk overlay is written whole, never as a block")
     content = read_content(content_file)
+    if overlay:
+        import afk_overlay
+        if len(content.encode("utf-8")) > afk_overlay.LIMIT or afk_overlay.unsafe_text(content):
+            raise Refusal("the afk overlay must be at most 8 KiB of text with no control or bidirectional characters")
     folder = None
     try:
         try:
@@ -237,7 +271,10 @@ def preview(target, content_file, block):
     print("Target: " + path)
     print("Exists: " + ("yes" if existing is not None else "no"))
     print("Lines: %d, bytes: %d" % (len(new_text.splitlines()), len(data)))
-    print("Backup: " + ("<file>.bak-YYYYMMDD (next free suffix)" if existing is not None else "not needed"))
+    print("Backup: " + (("private state (afk overlay backups)" if overlay else "<file>.bak-YYYYMMDD (next free suffix)")
+                        if existing is not None else "not needed"))
+    if overlay:
+        print("Also: adds AGENTS.afk.md* to .git/info/exclude and records this file's SHA-256 as the overlay's trust anchor")
     for line in diff:
         print(line)
     print("Digest: " + value)
@@ -281,13 +318,27 @@ def apply(value, yes):
         base, rel = allowed(plan["target"])
         if os.path.join(base, *rel) != plan["target"]:
             raise Refusal("the target is no longer on the allowed list")
+        overlay = None
+        if rel[-1] == OVERLAY and base != str(dr.account_home()):
+            import afk_overlay
+            overlay = afk_overlay
+            ident = overlay.repository(os.getcwd())
+            if ident is None or str(ident.main) != base or not overlay.ensure_excluded(ident):
+                raise Refusal("AGENTS.afk.md* could not be added to .git/info/exclude; nothing was written")
         folder = open_dir(base, rel, create=True)
         try:
             existing = read_existing(folder, rel[-1])
             if (sha(existing) if existing is not None else "absent") != plan["existing_sha256"]:
                 raise Refusal("the file changed after the preview; run preview again")
-            made = backup(folder, rel[-1], existing) if existing is not None else None
+            if existing is None:
+                made = None
+            elif overlay:
+                made = "private state " + overlay.backup(existing)
+            else:
+                made = backup(folder, rel[-1], existing)
             mode = stat.S_IMODE(os.stat(rel[-1], dir_fd=folder, follow_symlinks=False).st_mode) if existing is not None else 0o600
+            if overlay:
+                mode = 0o600  # the reader refuses a group- or world-writable overlay
             temporary = ".write-" + os.urandom(12).hex()
             fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=folder)
             try:
@@ -306,8 +357,12 @@ def apply(value, yes):
         finally:
             os.close(folder)
         os.unlink(value + ".json", dir_fd=state)
+    if overlay:
+        overlay.write_anchor(ident, data)
     print("Wrote: " + plan["target"])
     print("Backup: " + (made if made else "not needed"))
+    if overlay:
+        print("Overlay: excluded from Git; trust anchor recorded")
 
 
 def main():

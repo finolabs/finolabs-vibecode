@@ -74,6 +74,7 @@ import parallel_slots as slots
 import project_store as store
 import secret_patterns
 from away_lease import finite, merge_receipts, private_info, read_lease, read_private  # the one safe lease reader
+import afk_overlay  # the owner-approved overlay of repository rules (docs/specs/afk-overlay.md)
 
 DEFAULTS = {'Hosts': 'Claude Code', 'Task choice': 'choose', 'Push and pull requests': 'yes',
             'Trusted authors': 'own', 'Lease hours': 8, 'Max runs': 20,
@@ -157,7 +158,7 @@ ENFORCERS = {'afk.py','data_root.py', 'parallel_slots.py', 'secret_patterns.py',
              'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
              'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py', 'heavy_run.py', 'delegate_env.py',
              'auto_gate.py', 'mode.py', 'judge.py', 'log_scan.py', 'route_task.py', 'brief_check.py', 'assignments.py',
-             'away_lease.py', 'away_gate_hook.py', 'project_store.py', 'project_progress.py'}
+             'away_lease.py', 'away_gate_hook.py', 'project_store.py', 'project_progress.py', 'afk_overlay.py'}
 ENFORCERS = {name.casefold() for name in ENFORCERS}  # case-insensitive filesystems name one file many ways
 
 
@@ -274,6 +275,7 @@ def start(folder, args):
         until = datetime.fromtimestamp(previous['expiry'], timezone.utc).isoformat(timespec='minutes')
         print(f'afk already live until {until}; this lease covers every session on this machine. '
               'Nothing was changed: work under it (check before each action, Decide for every question).')
+        print(afk_overlay.lines(os.getcwd()), end='')
         return
     lease = dict(id=uuid.uuid4().hex, start=current, expiry=current + hours * 3600,
                  settings_hash=digest(applied), counters={})
@@ -291,6 +293,7 @@ def start(folder, args):
     print(f'This folder ({here[CONTEXT].state}): ' + '; '.join(
         f'{key}: {", ".join(map(str, value)) or "none"}' if isinstance(value, list) else f'{key}: {value}'
         for key, value in rules.items()) + '. Run `effective` in each repository you work in.')
+    print(afk_overlay.lines(os.getcwd()), end='')
 
 
 def stop(folder):
@@ -301,6 +304,8 @@ def stop(folder):
         os.unlink('lease.json', dir_fd=folder)
         os.fsync(folder)
     print('afk stopped: stop marker written; lease ' + ('removed' if removed else 'already absent'))
+    if afk_overlay.present(os.getcwd()):
+        print(afk_overlay.STOPPED)
 
 
 ENDED = {'no-lease', 'expired', 'stopped', 'setup-changed'}
@@ -375,13 +380,27 @@ def protected(value, source=False):
     value = value.lower().replace('\\', '/')
     parts = re.split(r'[/:=\s]+', value)
     exact = HARD if source else HARD | SOFT
-    prefixes = ('.env', 'credentials', 'secrets') + (() if source else SOFT_PREFIXES)
+    # The afk overlay and its backups, and the Spec Kit constitution: protected in strict (open never reaches here).
+    prefixes = ('.env', 'credentials', 'secrets', 'agents.afk.md') + (() if source else SOFT_PREFIXES)
+    if constitution(value) or any(p.startswith('agents.afk.md') for p in re.split(
+            r'[/:=\s]+', unicodedata.normalize('NFKC', original).casefold())):
+        return True  # NFKC and casefold, as APFS folds names (`ſ` is `s`)
     return any(p in exact or p.startswith(prefixes)
                or p.endswith(('.pem', '.key', '.p12', '.pfx', '.env'))
                or 'credential' in p or re.search(r'(?:^|[_.-])(?:token|password|secret)(?:[_.-]|$)', p)
                for p in parts) or bool(secret_patterns.PREFIX.search(original)) or any(
                    secret_patterns.NAME.fullmatch(p) and secret_patterns.SENSITIVE.search(p)
                    for p in re.split(r'[=:\s]+', value.upper()))
+
+
+CONSTITUTION = '.specify/memory/constitution.md'
+
+
+def constitution(value):
+    """True when a path, or the last path in an option or ref token, normalizes to the Spec Kit constitution."""
+    last = re.split(r'[:=\s]+', unicodedata.normalize('NFKC', value).casefold().replace('\\', '/'))[-1]
+    normal = os.path.normpath(last).replace('\\', '/') if last else ''
+    return normal == CONSTITUTION or normal.endswith('/' + CONSTITUTION)
 
 
 def plugin_code(name, base=None):
@@ -599,6 +618,11 @@ def token_protected(token, applied):
     base = context.cwd or os.getcwd()
     if path_operand(token, base) and install_owned(token, base):
         return True
+    if token.casefold().endswith('constitution.md') and context.ident is not None:
+        # Read from cwd, so `git rm constitution.md` inside .specify/memory is judged like the full path.
+        found = checkout_of(token, base)
+        if found is not None and constitution(found[1].as_posix()):
+            return True
     if not protected(token):
         return False
     if context.ident is None:
@@ -636,6 +660,8 @@ def classify_paths(paths, roots=(), context=UNKNOWN, source=False, files=()):
         if not isinstance(name, str) or install_owned(name, context.cwd):
             return 'protected'
         relative = repository_path(name, context)
+        if relative is not None and constitution(relative.as_posix()):
+            return 'protected'
         own = bool(source) and relative is not None and source_path(relative, source)
         if protected(name, own):
             return 'protected'
@@ -2484,6 +2510,8 @@ def check(folder, args):
     if code in ENDED:
         # A host loop can outlive the lease; the answer itself tells the caller to end it.
         result['end'] = ENDED_LINE
+        if afk_overlay.present(os.getcwd()):
+            result['overlay'] = afk_overlay.STOPPED
     print(json.dumps(result, separators=(',', ':')))
     return tier
 

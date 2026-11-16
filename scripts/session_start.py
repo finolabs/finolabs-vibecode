@@ -6,6 +6,8 @@ delegation mode, roles and posting state, cached quota and the count of open led
 dispatches, a fixed warning when the repository's main checkout is off its default
 branch and, when available, this session's fresh context counts. Every value
 printed is a fixed word or a capped integer, never text read from a file, because the hook also runs in untrusted repositories.
+One scoped exception: while an away lease is live, the afk overlay the owner approved for this repository (its bytes
+must match the recorded digest; see `afk_overlay.py`).
 The one exception is the host's own session id, printed only when it is a lowercase UUID, so the agent can run the
 context probe for its own session. It
 starts no process, makes no network call and writes nothing.
@@ -197,6 +199,23 @@ def away_line():
         return ""
 
 
+def overlay_lines():
+    """While a valid lease is live: the afk overlay in force for this repository, or its fixed not-in-force line.
+
+    The one place this hook prints file text (ninth scoped exception, docs/specs/afk-overlay.md): only the bytes of a
+    local, untracked `AGENTS.afk.md` whose SHA-256 equals the trust anchor the owner approved. Any error prints nothing.
+    """
+    try:
+        import time
+        import away_lease
+        if away_lease.live_lease(time.time()) is None:
+            return ""
+        import afk_overlay
+        return afk_overlay.lines(os.getcwd())
+    except Exception:
+        return ""
+
+
 CHECKOUT_LINE = ('The main checkout is not on its default branch: keep it on the default branch and work in a worktree '
                  '(commit-messages "Branches").\n')
 ORIGIN_HEAD = "ref: refs/remotes/origin/"
@@ -229,6 +248,7 @@ def state_block():
             f"Open ledger dispatches: {open_dispatches()}\n"
             f"Parallel slots: {parallel_words()}\n"
             f"{away_line()}"
+            f"{overlay_lines()}"
             f"{checkout_line()}")
 
 
