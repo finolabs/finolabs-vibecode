@@ -22,6 +22,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
 import data_root as dr
 import git_metadata
+import parallel_slots as slots  # the host.md section reader afk.py settings() uses
 import project_store as store
 
 NAME = 'AGENTS.afk.md'
@@ -46,12 +47,11 @@ def is_name(name):
     return isinstance(name, str) and unicodedata.normalize('NFKC', name).casefold().startswith(NAME.casefold())
 
 
-CONTROL = re.compile('[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]')
-
-
 def unsafe_text(text):
-    """True when overlay text holds control, escape or bidirectional characters (tab and newline are fine)."""
-    return bool(CONTROL.search(text))
+    """True when overlay text holds a control or format character (Unicode Cc or Cf): C0 and C1 controls, escapes,
+    bidirectional controls, zero-width characters, tag characters and the byte order mark. Tab and newline are fine;
+    U+2028 and U+2029 (Zl, Zp) are refused too, as line breaks a reader may not show."""
+    return any(ch not in '\t\n' and unicodedata.category(ch) in ('Cc', 'Cf', 'Zl', 'Zp') for ch in text)
 
 
 def disabled():
@@ -228,24 +228,14 @@ def present(cwd):
         return False
 
 
-def _section(text, heading):
-    found, inside = [], False
-    for line in text.splitlines():
-        if line.startswith('## '):
-            inside = line.rstrip() == '## ' + heading
-            continue
-        if inside:
-            found.append(line)
-    return found
-
-
 def mode(ident):
     """`open` or `strict` for this repository, as afk.py resolves it: the user's `## afk` `- Mode:` line (absent
     means open), replaced by an approved, bound repository `autopilot` `mode`. Any doubt raises."""
-    text = dr.read_data('host.md', 262144).decode('utf-8')
-    if sum(line.rstrip() == '## afk' for line in text.splitlines()) != 1:
-        raise ValueError('afk setup is missing or ambiguous')
-    values = [m[1] for m in (re.fullmatch(r'- Mode: (.+)', line) for line in _section(text, 'afk')) if m]
+    text = dr.read_data('host.md', slots.HOST_LIMIT).decode('utf-8')
+    start, body, end = slots.host_section(text, 'afk')
+    if start == body == end:
+        raise ValueError('afk setup is missing')
+    values = [m[1] for m in (re.fullmatch(r'- Mode: (.+)', line) for line in text[body:end].splitlines()) if m]
     if len(values) > 1 or values and values[0] not in ('open', 'strict'):
         raise ValueError('afk mode is invalid')
     result = values[0] if values else 'open'

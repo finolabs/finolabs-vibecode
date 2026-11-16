@@ -106,7 +106,7 @@ jobs:
                     ["scripts/record.py", "skills/coding-router/scripts/record.py", "skills/delegate/scripts/record.py", "skills/checks/scripts/record.py"],
                     ["scripts/context_steward.py", "skills/tidy/scripts/context_steward.py"],
                     ["scripts/project_store.py", "skills/status/scripts/project_store.py", "skills/setup/scripts/project_store.py", "skills/checks/scripts/project_store.py", "skills/review-gate/scripts/project_store.py", "skills/delegate/scripts/project_store.py"],
-                    ["scripts/parallel_slots.py","skills/delegate/scripts/parallel_slots.py", "skills/status/scripts/parallel_slots.py", "skills/checks/scripts/parallel_slots.py"],
+                    ["scripts/parallel_slots.py","skills/delegate/scripts/parallel_slots.py", "skills/status/scripts/parallel_slots.py", "skills/checks/scripts/parallel_slots.py", "skills/setup/scripts/parallel_slots.py"],
                     ["scripts/context_snapshot.py", "skills/tidy/scripts/context_snapshot.py"],
                     ["scripts/statusline_setup.py", "skills/setup/scripts/statusline_setup.py"],
                     ["scripts/compact_setup.py", "skills/setup/scripts/compact_setup.py"],

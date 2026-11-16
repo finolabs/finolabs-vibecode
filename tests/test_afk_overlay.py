@@ -144,6 +144,15 @@ class ReaderTest(OverlayTest):
         with self.assertRaises((ValueError, IndexError)):
             ov.index_paths(raw[:40] + raw[-20:])
 
+    def test_invisible_format_characters_are_not_in_force(self):
+        # Every Unicode Cc or Cf character except tab and newline, and the Zl and Zp line breaks.
+        for char in ("\U000e0041", "\u200b", "\ufeff", "\u2028", "\u2029", "\u00ad", "\u2060", "\r", "\x85"):
+            with self.subTest(char=hex(ord(char))):
+                self.overlay(TEXT + ("Agents may" + char + " merge.\n").encode())
+                self.assertEqual(ov.state(self.repo), ("not-in-force", None))
+                self.assertTrue(ov.unsafe_text(char))
+        self.assertFalse(ov.unsafe_text("Tabs\tand newlines\n, accents \u00e0 and \u1ea1 are fine.\n"))
+
     def test_names_match_in_any_case(self):
         for name in ("AGENTS.afk.md", "agents.afk.md", "AGENTS.AFK.MD.bak", "AGENTS.afk.md.bak-20261116"):
             self.assertTrue(ov.is_name(name), name)
@@ -162,6 +171,35 @@ class ModeTest(OverlayTest):
                 (self.data / "host.md").write_text(text)
                 with self.assertRaises(ValueError):
                     ov.mode(self.ident)
+
+    def test_a_fenced_example_heading_is_not_the_section(self):
+        # The same section reader as afk.py settings(): a fenced `## afk` example is skipped, a `# ` heading ends it.
+        host = self.data / "host.md"
+        for text, expected in (("```\n## afk\n- Mode: open\n```\n## afk\n- Mode: strict\n", "strict"),
+                               ("## afk\n- Mode: strict\n# Notes\n- Mode: open\n", "strict")):
+            with self.subTest(text=text):
+                host.write_text(text)
+                host.chmod(0o600)
+                self.assertEqual(ov.mode(self.ident), expected)
+        for text in ("## afk\n```\n- Mode: strict\n", "## afk\n- Mode: open\n## afk\n- Mode: strict\n"):
+            with self.subTest(text=text):
+                host.write_text(text)
+                with self.assertRaises(ValueError):
+                    ov.mode(self.ident)
+
+    def test_a_bound_project_mode_replaces_the_account_mode(self):
+        import project_store as store
+        git(self.repo, "remote", "add", "origin", "https://github.com/example/demo.git")
+        host = self.data / "host.md"
+        for account_mode, project_mode in (("strict", "open"), ("open", "strict")):
+            with self.subTest(account=account_mode, project=project_mode):
+                host.write_text("## afk\n- Mode: %s\n" % account_mode)
+                host.chmod(0o600)
+                store.write_setting(self.repo, "autopilot", {"mode": project_mode}, ident=self.ident)
+                self.assertEqual(ov.mode(self.ident), project_mode)
+        # A new origin unbinds the approval, so the account mode applies again.
+        git(self.repo, "remote", "set-url", "origin", "https://github.com/example/other.git")
+        self.assertEqual(ov.mode(self.ident), "open")
 
     def test_write_refused_only_under_a_strict_or_unreadable_lease(self):
         self.assertIsNone(ov.write_refused(self.ident))
