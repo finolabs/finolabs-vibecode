@@ -1277,6 +1277,24 @@ class ProjectScopeTest(AfkBase):
     def settings_file(self):
         return self.repo / '.finolabs/vibecode/settings.json'
 
+    def test_a_project_mode_wins_over_the_user_mode_line(self):
+        # A repository's approved `mode` replaces the `## afk` Mode line there, in both directions.
+        self.start()  # the user line says strict
+        self.assertEqual(self.effective_mode(), ('strict', 'user'))
+        self.project({'mode': 'open'})
+        self.assertEqual(self.effective_mode(), ('open', 'project'))
+        self.invoke('stop')
+        self.start(SETUP.replace('- Mode: strict\n', '- Mode: open\n'))
+        self.project({'mode': 'strict'})
+        self.assertEqual(self.effective_mode(), ('strict', 'project'))
+        self.check(['npm', 'publish'], tier=3, code='forbidden')  # strict there: Publishing is stop
+
+    def effective_mode(self):
+        status, output = self.invoke('effective')
+        self.assertEqual(status, 0, output)
+        result = json.loads(output)
+        return result['mode'], result['state']
+
     def test_a_project_value_wins_over_the_user_value_for_merge_and_push(self):
         self.start(NO)
         self.project({'merge': 'yes', 'push-and-pull-requests': 'yes'})
