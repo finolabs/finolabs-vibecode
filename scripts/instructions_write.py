@@ -22,6 +22,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import struct
 import subprocess
 import sys
 import time
@@ -114,7 +115,7 @@ def overlay_target(path):
     try:
         if afk_overlay.tracked(ident):
             raise Refusal("Git tracks AGENTS.afk.md here; the afk overlay must stay local")
-    except (OSError, ValueError, IndexError):
+    except (OSError, ValueError, IndexError, struct.error):
         raise Refusal("the Git index cannot be read, so the overlay cannot be shown to be untracked")
     return main, (OVERLAY,)
 
@@ -227,9 +228,14 @@ def plan_digest(plan):
 def preview(target, content_file, block):
     base, rel = allowed(target)
     path = os.path.join(base, *rel)
-    if block and rel[-1] == OVERLAY:
+    overlay = rel[-1] == OVERLAY and base != str(dr.account_home())
+    if block and overlay:
         raise Refusal("the afk overlay is written whole, never as a block")
     content = read_content(content_file)
+    if overlay:
+        import afk_overlay
+        if len(content.encode("utf-8")) > afk_overlay.LIMIT or afk_overlay.unsafe_text(content):
+            raise Refusal("the afk overlay must be at most 8 KiB of text with no control or bidirectional characters")
     folder = None
     try:
         try:
@@ -265,7 +271,6 @@ def preview(target, content_file, block):
     print("Target: " + path)
     print("Exists: " + ("yes" if existing is not None else "no"))
     print("Lines: %d, bytes: %d" % (len(new_text.splitlines()), len(data)))
-    overlay = rel[-1] == OVERLAY and base != str(dr.account_home())
     print("Backup: " + (("private state (afk overlay backups)" if overlay else "<file>.bak-YYYYMMDD (next free suffix)")
                         if existing is not None else "not needed"))
     if overlay:
@@ -314,7 +319,7 @@ def apply(value, yes):
         if os.path.join(base, *rel) != plan["target"]:
             raise Refusal("the target is no longer on the allowed list")
         overlay = None
-        if rel[-1] == OVERLAY:
+        if rel[-1] == OVERLAY and base != str(dr.account_home()):
             import afk_overlay
             overlay = afk_overlay
             ident = overlay.repository(os.getcwd())
@@ -332,6 +337,8 @@ def apply(value, yes):
             else:
                 made = backup(folder, rel[-1], existing)
             mode = stat.S_IMODE(os.stat(rel[-1], dir_fd=folder, follow_symlinks=False).st_mode) if existing is not None else 0o600
+            if overlay:
+                mode = 0o600  # the reader refuses a group- or world-writable overlay
             temporary = ".write-" + os.urandom(12).hex()
             fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=folder)
             try:

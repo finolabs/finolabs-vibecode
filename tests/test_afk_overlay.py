@@ -220,6 +220,21 @@ class WriterTest(OverlayTest):
         with self.assertRaises(iw.Refusal):
             iw.preview(str(self.repo / ov.NAME), str(draft), None)
 
+    def test_oversized_or_control_text_and_a_strict_apply_are_refused(self):
+        draft = self.repo.parent / "draft.md"
+        for data in (b"x" * (ov.LIMIT + 1), b"Agents may push.\x1b[2J\n", "\u202eevil\n".encode()):
+            draft.write_bytes(data)
+            with self.assertRaises(iw.Refusal):
+                iw.preview(str(self.repo / ov.NAME), str(draft), None)
+        draft.write_bytes(TEXT)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            iw.preview(str(self.repo / ov.NAME), str(draft), None)
+        self.lease("strict")
+        with self.assertRaises(iw.Refusal):
+            iw.apply(out.getvalue().rsplit("Digest: ", 1)[1].strip(), True)
+        self.assertFalse((self.repo / ov.NAME).exists())
+
     def test_an_open_lease_allows_the_write(self):
         self.lease("open")
         self.preview_apply(TEXT)
@@ -251,6 +266,28 @@ class ProtectedNameTest(unittest.TestCase):
             self.assertTrue(afk.protected(value, source=True), value)
         for value in ("docs/constitution.md", "AGENTS.md.notes", "src/agents.ts"):
             self.assertFalse(afk.protected(value, source=True), value)
+        for value in ("AGENT\u017f.afk.md", ".\u017fpecify/memory/con\u017ftitution.md"):
+            self.assertTrue(afk.protected(value, source=True), value)
+        for value in (".specify//memory/constitution.md", ".specify/./memory/constitution.md", "--file=.specify/memory/constitution.md"):
+            self.assertTrue(afk.protected(value), value)
+
+    def test_the_constitution_is_protected_from_inside_its_folder(self):
+        sys.path.insert(0, str(ROOT / "skills/delegate/scripts"))
+        self.addCleanup(sys.path.remove, str(ROOT / "skills/delegate/scripts"))
+        afk = importlib.import_module("afk")
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp).resolve() / "repo"
+            (repo / ".specify/memory").mkdir(parents=True)
+            git(repo, "init", "-q", "-b", "main")
+            (repo / ".specify/memory/constitution.md").write_text("# Constitution\n")
+            found, ident = afk.store.identity(str(repo))
+            self.assertEqual(found, "found")
+            inside = str(repo / ".specify/memory")
+            context = afk.Context("found", ident, "user", None, inside)
+            applied = {afk.CONTEXT: context}
+            self.assertTrue(afk.token_protected("constitution.md", applied))
+            self.assertEqual(afk.classify_paths(["constitution.md"], context=context), "protected")
+            self.assertFalse(afk.token_protected("notes.md", applied))
 
 
 if __name__ == "__main__":

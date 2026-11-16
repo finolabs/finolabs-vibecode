@@ -16,6 +16,7 @@ import stat
 import struct
 import sys
 import time
+import unicodedata
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
@@ -41,8 +42,16 @@ STOPPED = "The afk overlay is no longer in force: the repository's normal instru
 
 
 def is_name(name):
-    """True for `AGENTS.afk.md` and its backups in any letter case (case-insensitive file systems)."""
-    return isinstance(name, str) and name.casefold().startswith(NAME.casefold())
+    """True for `AGENTS.afk.md` and its backups in any letter case (case-insensitive file systems fold `ſ` too)."""
+    return isinstance(name, str) and unicodedata.normalize('NFKC', name).casefold().startswith(NAME.casefold())
+
+
+CONTROL = re.compile('[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]')
+
+
+def unsafe_text(text):
+    """True when overlay text holds control, escape or bidirectional characters (tab and newline are fine)."""
+    return bool(CONTROL.search(text))
 
 
 def disabled():
@@ -193,6 +202,8 @@ def state(cwd):
         if recorded is None or tracked(ident) or hashlib.sha256(data).hexdigest() != recorded:
             return 'not-in-force', None
         text = data.decode('utf-8')
+        if unsafe_text(text):
+            return 'not-in-force', None
     except (OSError, ValueError, UnicodeError, IndexError, struct.error):
         return 'not-in-force', None
     return 'in-force', text

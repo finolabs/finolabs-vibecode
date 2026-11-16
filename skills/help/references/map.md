@@ -106,6 +106,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/auto_gate.py` | Stores local repository-window handoff/keep decisions for the opt-in auto gate. |
 | `scripts/auto_gate_hook.py` | Claude Code first-write nudge; allows on errors, never covers shell writes. |
 | `scripts/away_gate_hook.py` | Claude Code question gate: denies `AskUserQuestion` only while a valid away lease exists, never reads the question, allows on every error. |
+| `scripts/afk_overlay.py` | The afk overlay reader, trust anchor and Git index check shared by session start, afk and the instruction writer; `status` prints its state for `/setup check`. |
 | `scripts/away_lease.py` | Safe away-lease reader and away ledger appender shared by afk, the question gate and session start; any error means no lease. |
 | `scripts/brief_check.py` | Lints brief headings, the environment rule and secret patterns without quoting matches; standalone copy in `handoff`. |
 | `scripts/build-parity-plugins.sh` | Builds local evaluation plugins from this checkout and a supplied upstream skill checkout. |

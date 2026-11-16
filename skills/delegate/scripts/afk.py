@@ -382,14 +382,25 @@ def protected(value, source=False):
     exact = HARD if source else HARD | SOFT
     # The afk overlay and its backups, and the Spec Kit constitution: protected in strict (open never reaches here).
     prefixes = ('.env', 'credentials', 'secrets', 'agents.afk.md') + (() if source else SOFT_PREFIXES)
-    if re.search(r'(?:^|[/:=\s])\.specify/memory/constitution\.md$', value):
-        return True
+    if constitution(value) or any(p.startswith('agents.afk.md') for p in re.split(
+            r'[/:=\s]+', unicodedata.normalize('NFKC', original).casefold())):
+        return True  # NFKC and casefold, as APFS folds names (`ſ` is `s`)
     return any(p in exact or p.startswith(prefixes)
                or p.endswith(('.pem', '.key', '.p12', '.pfx', '.env'))
                or 'credential' in p or re.search(r'(?:^|[_.-])(?:token|password|secret)(?:[_.-]|$)', p)
                for p in parts) or bool(secret_patterns.PREFIX.search(original)) or any(
                    secret_patterns.NAME.fullmatch(p) and secret_patterns.SENSITIVE.search(p)
                    for p in re.split(r'[=:\s]+', value.upper()))
+
+
+CONSTITUTION = '.specify/memory/constitution.md'
+
+
+def constitution(value):
+    """True when a path, or the last path in an option or ref token, normalizes to the Spec Kit constitution."""
+    last = re.split(r'[:=\s]+', unicodedata.normalize('NFKC', value).casefold().replace('\\', '/'))[-1]
+    normal = os.path.normpath(last).replace('\\', '/') if last else ''
+    return normal == CONSTITUTION or normal.endswith('/' + CONSTITUTION)
 
 
 def plugin_code(name, base=None):
@@ -607,6 +618,11 @@ def token_protected(token, applied):
     base = context.cwd or os.getcwd()
     if path_operand(token, base) and install_owned(token, base):
         return True
+    if token.casefold().endswith('constitution.md') and context.ident is not None:
+        # Read from cwd, so `git rm constitution.md` inside .specify/memory is judged like the full path.
+        found = checkout_of(token, base)
+        if found is not None and constitution(found[1].as_posix()):
+            return True
     if not protected(token):
         return False
     if context.ident is None:
@@ -644,6 +660,8 @@ def classify_paths(paths, roots=(), context=UNKNOWN, source=False, files=()):
         if not isinstance(name, str) or install_owned(name, context.cwd):
             return 'protected'
         relative = repository_path(name, context)
+        if relative is not None and constitution(relative.as_posix()):
+            return 'protected'
         own = bool(source) and relative is not None and source_path(relative, source)
         if protected(name, own):
             return 'protected'
