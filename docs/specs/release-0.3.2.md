@@ -26,7 +26,7 @@ The changelog's 0.3.2 section holds the user-facing wording; `update` carries th
 
 ## Drift review
 
-Every item that describes the product was checked against what ships at the release branch's base, `e1c8892`.
+Every item in the table below was checked against what ships at the release branch's base, `e1c8892`; `CLAUDE.md` and the `skills/*/SKILL.md` bodies were sampled only (old names, afk Merge wording). Review round 1 on pull request 331 then narrowed the wording: the third-party-instructions guard is marked advisory wherever it is listed with the enforced default-branch guard; the comparison page, the README, the help and the diagrams say that in `open` afk enforces neither reviews nor `merge_check.py`, that the default-branch guard covers `git commit` and `git push` only (not `gh pr merge` or `gh api` ref writes), and that only server-side branch protection or a required `merge_check.py --ci-context` status gates a merge, while the decision ladder, the merge-gate procedure and the kept-or-reversed review apply in both modes as advisory steps; the overlay is protected only in `strict`; the credential floor covers known forms (see `afk.py rules`).
 
 | Item | Result |
 | --- | --- |
@@ -67,3 +67,4 @@ Every item that describes the product was checked against what ships at the rele
 - Live delivery of the afk overlay on Claude Code and Codex hosts remains unverified.
 - A real upgrade from 0.3.1 on a user's machine remains unverified.
 - The `finolabs/plugins` catalog entry moves only with the owner's go after the tag.
+- The Reviews section of `CLAUDE.md` (line 46) still ties the standing relay of a security review to "an away lease with Merge yes", but `open`, the default, ignores the `Merge` answer. That is owner rule text: the owner decides the new wording in its own pull request.
