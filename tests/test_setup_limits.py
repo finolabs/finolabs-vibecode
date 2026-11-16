@@ -192,9 +192,12 @@ class ConsentInventoryTests(unittest.TestCase):
     def test_afk_settings_are_separate_and_merge_is_last(self):
         text = (REFS / "features/afk.md").read_text().split("## Project scope")[0]
         questions = re.findall(r'Ask(?: Merge last among the settings)?: "([^"\n]+)"', text)
-        # Each permission has its own question; the five limits are accepted together or set in one round.
-        self.assertEqual(len(questions), 6)
-        self.assertEqual(len(set(questions)), 6)
+        # Each permission has its own question; the five limits are accepted together or set in one round. The mode
+        # and the two guards of `open` come first (docs/specs/afk-autonomy.md E).
+        self.assertEqual(len(questions), 9)
+        self.assertEqual(len(set(questions)), 9)
+        self.assertEqual(questions[0], "How much may the agents do while you are away?")
+        self.assertIn('"Open (recommended)" / "Strict"', text)
         self.assertEqual(questions[-1], "May the agents merge pull requests while a lease is live?")
         self.assertIn('"Yes, use these limits" / "No, set each limit"', text)
         # The scope is settled before any rule is asked.

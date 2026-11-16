@@ -28,6 +28,12 @@ ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
 ENDED_CODES = {'no-lease', 'expired', 'stopped', 'setup-changed'}
 ENDED_LINE = 'The away lease has ended: stop any loop or wakeup you started for it, then report to the user.'
 
+def holds_floor(argv):
+    """The cases of the `or_floor` tables that hold a floor form: a secret value, an env file operand or a sensitive
+    assignment on a line of its own. Every other case of those tables must answer its own code, never `floor`."""
+    return any('ghp_' in token or token == '.env' or '\nsession_cookie=' in token for token in argv)
+
+
 class AfkBase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -572,8 +578,8 @@ class AwayDecisionTest(AfkBase):
         flags = ('--coordinator', coordinator) if coordinator else ()
         status, output = self.invoke('check', *flags, '--argv-json', json.dumps(argv))
         result = json.loads(output)
-        if or_floor and result == {'tier': 3, 'code': 'floor'}:
-            return  # docs/specs/afk-autonomy.md B: an unknown form holding a secret, key or env file is the floor in strict
+        if or_floor and holds_floor(argv):
+            code = 'floor'  # docs/specs/afk-autonomy.md B: a form holding a secret, key or env file is the floor in strict
         self.assertEqual(status, 0 if result['tier'] == 1 else 3, output)
         if code is None:  # any Tier 3 code: a checkout under a protected folder may say `protected` first
             self.assertEqual(result['tier'], 3, argv)
@@ -2487,6 +2493,12 @@ class PolicyContextTest(AfkBase):
         self.assertEqual(shown['target'], 'github.com/example/demo')
         self.assertEqual(shown['effective']['Merge'], 'yes (repository)')
         self.assertEqual(shown['effective']['Task choice'], 'choose (user)')
+        # The mode and its guards show first (docs/specs/afk-autonomy.md A and C); this setup records `strict`.
+        self.assertEqual(list(shown['effective'])[:3], ['Mode', 'Third-party instructions', 'Default branch'])
+        self.assertEqual(shown['effective']['Mode'], 'strict (user)')
+        self.assertEqual(shown['effective']['Default branch'], 'guard (user)')
+        self.assertEqual(self.preview('--set', 'autopilot=' + json.dumps({'mode': 'open'}))['effective']['Mode'],
+                         'open (repository)')
         self.assertFalse(self.settings_file().exists())  # a preview writes nothing
         self.apply(*allow)
         self.assertEqual(self.check_code(MERGE), 'allowed')

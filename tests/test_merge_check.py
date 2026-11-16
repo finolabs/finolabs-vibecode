@@ -1000,6 +1000,7 @@ class LeaseModeTest(unittest.TestCase):
     def test_any_doubt_is_strict(self):
         for text in ("", "## Other\n", self.SETUP + "- Mode: closed\n", self.SETUP + "- Mode: open\n- Mode: open\n",
                      self.SETUP + "garbled\n", "## afk\n- Mode: open\n## afk\n- Mode: open\n",
+                     self.SETUP + "- Bogus: x\n", self.SETUP + "- Default branch: off\n",
                      "```\n## afk\n- Mode: open\n"):
             with self.subTest(text=text):
                 self.host(text)
@@ -1025,6 +1026,35 @@ class LeaseModeTest(unittest.TestCase):
         self.assertEqual(self.mode(), "strict")
         self.host(self.SETUP)
         self.assertEqual(self.mode(), "open")
+
+    def test_the_key_set_matches_afk(self):
+        source = (SCRIPT.parents[2] / "delegate/scripts/afk.py").read_text()
+        afk = importlib.util.spec_from_file_location("afk_keys", SCRIPT.parents[2] / "delegate/scripts/afk.py")
+        module = importlib.util.module_from_spec(afk)
+        afk.loader.exec_module(module)
+        self.assertIn("def settings()", source)
+        self.assertEqual(mc.AFK_KEYS, {*module.DEFAULTS, "Merge", *module.CHOICES, *module.CATEGORIES, module.CONSENT,
+                                       module.TARGETS, *module.LISTS})
+        self.assertEqual(mc.AFK_CHOICES, module.CHOICES)
+
+    def test_a_repository_cannot_flip_itself_to_open(self):
+        # A settings file the branch carries, with no approval record, is not an approval: the user's strict holds.
+        self.host(self.SETUP + "- Mode: strict\n")
+        folder = self.repo / ".finolabs/vibecode"
+        folder.mkdir(parents=True)
+        (folder / "settings.json").write_text(json.dumps({"autopilot": {"mode": "open"}}))
+        self.assertEqual(self.mode(), "strict")
+
+    def test_an_approval_bound_to_another_checkout_is_strict(self):
+        self.host(self.SETUP)
+        self.approve({"mode": "open"})
+        other = self.repository("copy")
+        folder = other / ".finolabs/vibecode"
+        folder.parent.mkdir(parents=True, exist_ok=True)
+        import shutil
+        shutil.copytree(self.repo / ".finolabs/vibecode", folder)
+        self.host(self.SETUP + "- Mode: strict\n")
+        self.assertEqual(self.mode(cwd=other), "strict")  # the copied record carries the first checkout's digest
 
     def test_an_unbound_approval_is_strict(self):
         self.host(self.SETUP)

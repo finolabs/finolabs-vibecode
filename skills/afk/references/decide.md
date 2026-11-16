@@ -6,11 +6,11 @@ While a lease is live, a decision you would otherwise ask the user goes up this 
 
 ## Frame the question
 
-Write the question and two to six closed options, numbered from 1, each an action you may already take (advisory, agent judgment). A rung chooses among options; it grants no authority. Tier 3 work never enters the ladder: park it, except an `unknown` answer from `check`, which enters with the two fixed options of `SKILL.md` "Work inside the lease" (1 run it, 2 park it); a rung that settles on 1 records `--approve-argv-json` or `--approve-paths` on its attempt (script: the approval is refused unless the request is unknown and decidable, and it runs once). Write down the anchor every rung decides on: the current spec's goal, or the project's stated goal.
+Write the question and two to six closed options, numbered from 1, each an action you may already take (advisory, agent judgment). A rung chooses among options; it grants no authority. Tier 3 work never enters the ladder: park it, except an `unknown` answer from `check`, which enters with the two fixed options of [lease-rules.md](lease-rules.md) (1 run it, 2 park it); a rung that settles on 1 records `--approve-argv-json` or `--approve-paths` on its attempt (script: the approval is refused unless the request is unknown and decidable, and it runs once). Write down the anchor every rung decides on: the current spec's goal, or the project's stated goal.
 
 ## Two checks against "Where it must stop"
 
-Check the question before it enters the ladder, and check the chosen action again before it runs. Park at either check whatever a rung answered. The first match wins:
+Check the question before it enters the ladder, and check the chosen action again before it runs. Park at either check whatever a rung answered. In `open` only credentials park (row 1 without the agent's own limits, which `open` allows); the other rows are `strict`'s. The first match wins:
 
 | # | Condition | Result |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ Check the question before it enters the ladder, and check the chosen action agai
 | 5 | Every applicable category is `decide` (for a tag, release or publish, with the command equal to a listed release target), or the deploy equals a listed target | go on |
 | 6 | Local work no category names | classified as usual |
 
-Enforcer: `python3 -I <script> check` for the command forms it reads (tags, releases, publishing, deploys, forced pushes, protected paths); rows 1 to 3 for anything a command does not show (real users, customer data, a message to a person) are advisory (agent judgment), and a doubt counts as `stop`. A listed non-production target relaxes only row 4; a listed production target, with `production` in this repository's `decide`, relaxes rows 2 and 4 for that exact command only; a listed release target relaxes only row 4. Each list loads like an environment variable: a repository's own list replaces the user's whole list there. In the strict and no-repository states every category stops and every list is empty, so tags, releases, publishing and deploys park; `gh release create` names `--repo github.com/OWNER/NAME` equal to the verified target, like a merge. A decision is never permission: act only on Tier 1 from `check`.
+Enforcer: `python3 -I <script> check` for the command forms [rules.md](rules.md) lists; rows 1 to 3 for anything a command does not show (real users, customer data, a message to a person) are advisory (agent judgment), and a doubt counts as `stop`. A listed non-production target relaxes only row 4; a listed production target, with `production` in this repository's `decide`, relaxes rows 2 and 4 for that exact command only; a listed release target relaxes only row 4. A repository's own list replaces the user's there. A decision is never permission: act only on Tier 1 from `check`.
 
 When something parks, record it (see "Record each attempt", rung `park`), tell the user once, and go on with other work (advisory, agent judgment).
 

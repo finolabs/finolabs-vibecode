@@ -528,13 +528,24 @@ def fallback(pr, family, families, files, verdicts_found, markers=None, repo=Non
 
 
 AFK_LINE = re.compile(r"- ([A-Za-z -]+): (.+)")
+# The closed key set of `afk.py` `settings()` (a test keeps the two equal, since each skill folder stands alone); a
+# section with any other key fails there, so it reads as `strict` here.
+AFK_KEYS = {'Hosts', 'Task choice', 'Push and pull requests', 'Trusted authors', 'Lease hours', 'Max runs',
+            'Max runtime minutes', 'Max actions per hour', 'Quota floor percent', 'Merge', 'Mode',
+            'Third-party instructions', 'Default branch', 'Production', 'Real users and customer data',
+            'Unrecoverable deletion', 'Messages outside the repository', 'Tags and releases', 'Publishing',
+            'Shared settings', 'Recoverable deletion', 'Repository comments', 'Excerpts leave the machine',
+            'Non-production targets', 'Production targets', 'Test commands', 'Top-level files', 'Release targets'}
+AFK_CHOICES = {'Mode': ('open', 'strict'), 'Third-party instructions': ('guard', 'open'),
+               'Default branch': ('guard', 'open')}
 
 
 def lease_mode(repo):
     """The away lease's effective mode for `repo` (owner/name), read as `afk.py` reads it
     (docs/specs/afk-autonomy.md A and D): the `## afk` `Mode` line of the canonical host config (a missing line is
     `open`), replaced by the approved `mode` of the checkout in the working folder when its origin is `repo`.
-    `strict` on any doubt: no or an unreadable section, a malformed or repeated line, an invalid value, no validated
+    `strict` on any doubt: no or an unreadable section, a malformed or repeated line, a key `afk.py` does not read,
+    an invalid mode or guard value, no validated
     checkout, another origin, an unreadable, invalid or unbound approval, or any error."""
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -553,12 +564,12 @@ def lease_mode(repo):
             if not line.strip():
                 continue
             match = AFK_LINE.fullmatch(line)
-            if not match or match[1] in seen:
+            if not match or match[1] in seen or match[1] not in AFK_KEYS:
                 return "strict"
             seen.add(match[1])
+            if match[1] in AFK_CHOICES and match[2] not in AFK_CHOICES[match[1]]:
+                return "strict"
             if match[1] == "Mode":
-                if match[2] not in ("open", "strict"):
-                    return "strict"
                 user = match[2]
         owner, name = repo.split("/")
         target = store.repository_target("github.com", owner, name)
@@ -594,8 +605,8 @@ def open_fallback(family, verdicts_found):
         if second == expected or second.startswith(expected + " "):
             parts.append(f"{kind} same family")
             continue
-        if any(second.startswith(fallback_line(other)) for other in ("claude", "codex", "antigravity", "zcode")):
-            return False, f"{kind} marker names another family's fallback line"
+        if second.startswith("Reviewer: "):
+            return False, f"{kind} marker has a malformed or another family's reviewer line"
         role = roles.get(f"{kind} review")
         if role in review_config.FAMILIES and role != family:
             parts.append(f"{kind} by the configured {role} role")

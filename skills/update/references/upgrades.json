@@ -422,6 +422,17 @@
           "id": "0.3.2/fnl-aliases-removed",
           "kind": "removed",
           "text": "Breaking: fnl- skill names are removed (fnl-setup is now setup) and the agents are reviewer, security-reviewer and navigator; use the new names. /setup check lists the old names it finds."
+        },
+        {
+          "id": "0.3.2/afk-modes",
+          "kind": "migration",
+          "text": "Breaking: afk runs in open mode by default: everything under a lease except credentials, with the default-branch guard on. Add - Mode: strict to ## afk to keep the earlier rules.",
+          "setup": "/setup add afk"
+        },
+        {
+          "id": "0.3.2/afk-open-fallback",
+          "kind": "info",
+          "text": "Under an open lease merge_check.py --fallback-family accepts same-family reviews with the fallback line and no quota evidence; afk.py rules prints both modes' rules."
         }
       ]
     }

@@ -102,6 +102,10 @@ FLOOR = [
     (['php', '-r', 'print_r(getenv());'], 'same'), (['python', '-ic', 'import os; os.environ'], 'same'),
     (['python3', '-m', 'keyring', 'get', 'svc', 'user'], 'same'),
     (['git', 'config', '--get', 'http.extraheader'], 'same'), (['git', 'config', 'user.password'], 'same'),
+    # The bare `export`, `set` and `env` carve-out is decided by where a piece comes from: only a pattern piece after a
+    # lone `|` or `&` (security closure review of 73580fd).
+    (['find', '.', '-exec', 'sh', '-c', 'a;export', ';'], 'security closure review of 73580fd'),
+    (['find', '.', '-exec', 'bash', '-c', 'true&&set', ';'], 'same'), (['grep', '-e', 'a;env'], 'same'),
 ]
 
 # (argv, source): each is Tier 1 in `open`.
