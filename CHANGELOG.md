@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-16
+
 ### Added
 
 - `/setup add delegation` asks which AI helpers vibecode uses as one native multiple-choice question built from the agent scan (AskUserQuestion, `request_user_input` on Codex, `ask_question` on Antigravity; numbered text choices where a host has none), then one single-choice question per role (code-review, security-review, navigator, advisor) among the chosen helpers plus "None", recommending a family other than the coordinator's. A helper left unchosen gets no matrix line, and the levels, types and model questions are asked only for the chosen ones (Quick mode gives them `levels 1-5`). The new read-only `matrix_setup.py choices` prints every helper name the matrix accepts, from `## Agents on this machine` and the `~/.claude-<name>` folders, with its family, presence and the coordinator mark, never a path, and says when the inventory is missing or stale and `/setup scan` should run first.
@@ -21,6 +23,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - `/setup add afk` asks the mode first, `open` recommended with one plain paragraph on what agents may do, then the two guards of `open`, each defaulting to `guard`, and for `open` only the apps and the lease hours; `strict` keeps every earlier question. A repository's own away rules ask its `mode` and guards first, and the repository settings preview shows `Mode`, `Third-party instructions` and `Default branch` first.
 - `afk.py rules` prints the afk rule table, generated from the data `check` reads (modes and guards, the credential floor, the default-branch guard, the `strict` settings, paths and rule rows, the log kinds); `skills/afk/references/rules.md` is that output and `tests/test_afk_rules.py` keeps them equal. The afk skill, its lease rules, the decision and merge-gate references point to it instead of restating rules; the skill and its lease rules shrink from 16.5 KB to 7.4 KB.
 - afk: the bare `export`, `set` and `env` exception of the credential floor applies only to a word cut out of a search pattern after a lone `|` or `&`; `find . -exec sh -c 'a;export' ';'` now answers `floor`. `merge_check.py` reads a lease as `strict` when its `## afk` section has a key `afk.py` does not read or an invalid guard value.
+
+- The afk mechanism and away decision diagrams say they show `strict` and that `open`, the default, runs every action except the credential floor and two guards; their PNG renderings and the README alt text are updated. The README, `help` map and pages, and the comparison page describe the modes, the guards, the overlay, the setup mode question and the helper picker.
 
 ### Removed
 
@@ -686,7 +690,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/vibecode/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/finolabs/vibecode/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/finolabs/vibecode/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/finolabs/vibecode/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/finolabs/vibecode/compare/v0.2.6...v0.3.0
 [0.2.6]: https://github.com/finolabs/vibecode/compare/v0.2.5...v0.2.6
