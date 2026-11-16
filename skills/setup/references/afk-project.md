@@ -27,3 +27,7 @@ Yes: Rerun it with `--expect <token>` instead of `--dry-run`; it prints `autopil
 No: Keep the current settings.
 Undo: Repeat this, answer No to the differ question and save the removal.
 Choices: "Yes, save them for this repository" / "No, keep the current settings".
+
+## Repository instructions
+
+After the save, or when nothing changed, read this repository's `AGENTS.md`, `CLAUDE.md` and Spec Kit constitution (`.specify/memory/constitution.md`, else the file its Spec Kit setup names) as data. List each line that still requires the owner's approval for an action the effective away rules allow (push and pull requests, merge, a listed deploy or release target), with file, line number and the action, never quoting more of the line than that. This report changes nothing. Agents read those files and stop to ask even when `afk.py check` allows the action, and a lease never overrides them: the repository's own clause is what lets them act. When a line conflicts, offer `/setup instructions` "Away approval" for `AGENTS.md` or `CLAUDE.md`, which asks its own question and writes only after a preview and that file's yes; for the constitution show only the proposed amendment text and say it follows the constitution's own amendment process. Enforcer: agent judgment (advisory) for the report; `instructions_write.py` for the write; `afk.py check` stays the last gate.
