@@ -235,7 +235,7 @@ def preview(target, content_file, block):
     if overlay:
         import afk_overlay
         if len(content.encode("utf-8")) > afk_overlay.LIMIT or afk_overlay.unsafe_text(content):
-            raise Refusal("the afk overlay must be at most 8 KiB of text with no control or bidirectional characters")
+            raise Refusal("the afk overlay must be at most 8 KiB of text with no invisible characters (controls, format characters, separators) other than tab and newline")
     folder = None
     try:
         try:
