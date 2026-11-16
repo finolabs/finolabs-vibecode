@@ -9,6 +9,8 @@ argument-hint: "[start|stop]"
 
 Dependency: `delegate`. Resolve <script> to <delegate folder>/scripts/afk.py; if it is absent, report the missing dependency and stop (advisory (agent judgment)). The script's docstring rule table is the classification contract; it executes no action and makes no network call.
 
+**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
+
 ## Start
 
 1. Run only on the user's invocation; use `start` when no argument is supplied (advisory (agent judgment)). Run `python3 -I <script> start` and report its settings summary and lease length. The script requires a recorded `## afk` section with an explicit Merge answer; an older `## Autopilot` section is not read. One lease covers every session on the machine: when one is already live, `start` reports when it ends and changes nothing, and this session works under that lease from step 2 on; never treat it as another session's lease or work outside it. If setup is missing, point to `/setup add afk` and stop (advisory (agent judgment)).
