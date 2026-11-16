@@ -198,6 +198,8 @@ class ConsentInventoryTests(unittest.TestCase):
         self.assertEqual(len(set(questions)), 9)
         self.assertEqual(questions[0], "How much may the agents do while you are away?")
         self.assertIn('"Open (recommended)" / "Strict"', text)
+        for guard in questions[1:3]:  # the two guards are asked in `open` only
+            self.assertIn('(Open only.)', text.split(guard, 1)[1].splitlines()[0])
         self.assertEqual(questions[-1], "May the agents merge pull requests while a lease is live?")
         self.assertIn('"Yes, use these limits" / "No, set each limit"', text)
         # The scope is settled before any rule is asked.

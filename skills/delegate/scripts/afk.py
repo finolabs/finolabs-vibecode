@@ -3168,6 +3168,9 @@ def rules():
         out.append(f'| Category `{name}` | {"`stop` (fixed)" if fixed else "`stop` or `decide`, default `stop`"} |')
     out += ['', f'- Known paths: the roots {_codes(ROOTS)} with the extensions {_codes(EXTENSIONS)}, and the top-level '
             f'{_codes(DOCUMENTS)}; a repository\'s approved `roots` and `top-level-files` add to them.',
+            f'- The account lists {_codes(LISTS)} are the default for every repository; a repository\'s approved '
+            f'{_codes(LISTS.values())} replaces the whole list there, and none applies in the strict or no-repository '
+            'state. A listed test command runs bare or as `heavy_run.py run [options] -- <command>`.',
             f'- Protected everywhere (hard names): {_codes(HARD)}; also `AGENTS.afk.md*` and the constitution '
             f'`{CONSTITUTION}`, so a lease cannot write the afk overlay or replace a constitution rule.',
             f'- Protected outside the plugin\'s own source on a work branch (soft names): {_codes(SOFT)} and names '

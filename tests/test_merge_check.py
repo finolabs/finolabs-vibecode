@@ -920,6 +920,23 @@ class OpenLeaseFallbackTest(SameFamilyFallbackTest):
                                                     comment(marker("security", "APPROVE") + "\n" + self.LINE)],
                                           body=ROUTED))[0])
 
+    def test_a_line_naming_another_family_than_the_role_refuses(self):
+        # A same-family line that is not the exact fallback line never counts as the configured role's review.
+        self.roles = {"judge": "host", "code review": "codex", "security review": "claude"}
+        for second in ("Reviewer: claude", "Reviewer: claude (same family as the author)", self.LINE[:-1]):
+            with self.subTest(second=second):
+                data = pr(comments=[comment(marker("code", "APPROVE") + "\n" + second),
+                                    comment(marker("security", "APPROVE") + "\n" + self.LINE)], body=ROUTED)
+                self.assertFalse(self.evaluate(data)[0])
+
+    def test_a_role_reviewer_may_name_itself(self):
+        # A non-author role's marker may carry its own `Reviewer:` line; only a fallback line of another family refuses.
+        self.roles = {"judge": "host", "code review": "codex", "security review": "claude"}
+        data = pr(comments=[comment(marker("code", "APPROVE") + "\nReviewer: codex, relayed by the coordinator"),
+                            comment(marker("security", "APPROVE") + "\n" + self.LINE)], body=ROUTED)
+        ok, lines = self.evaluate(data)
+        self.assertTrue(ok, lines)
+
     def test_a_strict_lease_keeps_todays_conditions(self):
         self.mode = "strict"
         self.assertFalse(self.evaluate()[0])  # no quota evidence

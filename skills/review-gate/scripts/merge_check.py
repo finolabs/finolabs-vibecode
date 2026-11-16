@@ -589,6 +589,9 @@ def lease_mode(repo):
         return "strict"
 
 
+REVIEWER_NAME = re.compile(r"Reviewer: ([a-z]+)\b")
+
+
 def open_fallback(family, verdicts_found):
     """(granted, detail) under an `open` lease (docs/specs/afk-autonomy.md D): each kind's counted head marker either
     starts its second line with the exact fallback reviewer line of `family`, or carries no fallback reviewer line
@@ -605,9 +608,12 @@ def open_fallback(family, verdicts_found):
         if second == expected or second.startswith(expected + " "):
             parts.append(f"{kind} same family")
             continue
-        if second.startswith("Reviewer: "):
-            return False, f"{kind} marker has a malformed or another family's reviewer line"
+        if any(second.startswith(fallback_line(other)) for other in review_config.FAMILIES):
+            return False, f"{kind} marker has a malformed or another family's fallback line"
         role = roles.get(f"{kind} review")
+        named = REVIEWER_NAME.match(second)
+        if named and named.group(1) in review_config.FAMILIES and named.group(1) != role:
+            return False, f"{kind} marker names the {named.group(1)} reviewer, not the configured role"
         if role in review_config.FAMILIES and role != family:
             parts.append(f"{kind} by the configured {role} role")
             continue
