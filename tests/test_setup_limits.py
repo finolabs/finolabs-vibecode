@@ -56,6 +56,7 @@ EXTRA_APPROVALS = [
     ('May the agents merge pull requests while a lease is live?', REFS / "features" / "afk.md"),
     ('Save the shown away-session settings?', REFS / "features" / "afk.md"),
     ('Save these away settings for this repository?', REFS / "afk-project.md"),
+    ('Let these afk overlay entries replace the named rules while an away lease is live?', REFS / "afk-project.md"),
     ('Keep the table as shown?', REFS / "afk-decisions.md"),
     ('Let the agents decide this kind of work while you are away?', REFS / "afk-decisions.md"),
     ('Let excerpts of your past decisions go to the judge or another AI provider when agents decide for you?',
