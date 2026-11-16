@@ -52,7 +52,7 @@ Undo: Restore the named backup; remove a newly created file if no longer wanted.
 Choices: "Yes, save this file" / "No, leave this file unchanged".
 Only after that file's clear yes (neutral Yes and No, none preselected) run `instructions_write.py apply --digest <full 64-hex digest> --yes`. Never write an instruction file in either scope without that file's explicit yes; these files steer future sessions.
 
-Enforcers: the script. It writes only the closed list of targets (the user-level files `hosts.md` names, and `AGENTS.md`, `CLAUDE.md`, `CLAUDE.local.md` at the git top level), refuses a symlink at the target or any folder below its base, refuses when the content digest differs from the one shown or the file changed after the preview, expires the plan after 60 minutes, writes atomically (owner-only for a new file) and keeps a backup `<file>.bak-YYYYMMDD`, then `-2`, `-3`, never overwriting one. Reading the result back is agent judgment.
+Enforcers: the script. It writes only the closed list of targets (the user-level files `hosts.md` names, `AGENTS.md`, `CLAUDE.md`, `CLAUDE.local.md` at the git top level, and the local afk overlay `AGENTS.afk.md` at the main checkout's top level, which [../afk-project.md](../afk-project.md) "Repository instructions" drafts), refuses a symlink at the target or any folder below its base, refuses when the content digest differs from the one shown or the file changed after the preview, expires the plan after 60 minutes, writes atomically (owner-only for a new file) and keeps a backup `<file>.bak-YYYYMMDD`, then `-2`, `-3`, never overwriting one. Reading the result back is agent judgment.
 
 ## 6. Report
 
