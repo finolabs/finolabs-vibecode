@@ -220,8 +220,8 @@ class ModeTest(OverlayTest):
         spec.loader.exec_module(module)
         self.assertEqual(ov.AFK_KEYS, {*module.DEFAULTS, "Merge", *module.CHOICES, *module.CATEGORIES,
                                        module.CONSENT, module.TARGETS, *module.LISTS})
-        for key, choices in module.CHOICES.items():
-            self.assertEqual(ov.AFK_CHOICES[key], choices)
+        self.assertEqual(ov.AFK_CHOICES, {**module.CHOICES, **module.VALUE_CHOICES})
+        self.assertEqual(ov.AFK_HOSTS, module.AFK_HOSTS)
         self.assertEqual(ov.AFK_NUMBERS, module.NUMBERS)
         self.assertEqual(ov.AFK_LISTS, module.LISTS)
 

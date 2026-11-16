@@ -91,6 +91,10 @@ MODE = 'Mode'
 THIRD_PARTY = 'Third-party instructions'
 DEFAULT_BRANCH = 'Default branch'
 CHOICES = {MODE: ('open', 'strict'), THIRD_PARTY: ('guard', 'open'), DEFAULT_BRANCH: ('guard', 'open')}
+# The other closed values `settings()` reads, and the apps a `Hosts` line may name.
+VALUE_CHOICES = {'Task choice': ('choose', 'listed'), 'Push and pull requests': ('yes', 'no'), 'Merge': ('yes', 'no'),
+                 'Trusted authors': ('own',)}
+AFK_HOSTS = {'Claude Code', 'Codex', 'Antigravity'}
 TARGETS = 'Non-production targets'
 PRODUCTION_TARGETS = 'Production targets'  # exact production deploys; Production itself is decided only per repository
 TEST_COMMANDS = 'Test commands'  # exact test commands (docs/specs/afk-per-project.md F)
@@ -206,10 +210,9 @@ def settings():
             value = int(value)
         elif key == 'Hosts':
             hosts = value.split(', ')
-            if len(hosts) != len(set(hosts)) or not set(hosts) <= {'Claude Code', 'Codex', 'Antigravity'}:
+            if len(hosts) != len(set(hosts)) or not set(hosts) <= AFK_HOSTS:
                 raise ValueError('afk setup has invalid hosts')
-        elif value not in {'Task choice': {'choose', 'listed'}, 'Push and pull requests': {'yes', 'no'},
-                            'Merge': {'yes', 'no'}, 'Trusted authors': {'own'}}[key]:
+        elif value not in VALUE_CHOICES[key]:
             raise ValueError('afk setup has an invalid choice')
         result[key] = value
     if 'Merge' not in seen:
@@ -1806,7 +1809,8 @@ CREDENTIAL_PAIRS = {('npm', 'config', 'get'), ('npm', 'config', 'list'), ('npm',
 ENV_WORDS = ('environ', 'getenv', 'process.env', 'process["env"]', "process['env']", 'deno.env', 'bun.env',
              'os.environ', 'system.getenv', 'printenv', 'system attribute', '$env:', 'childitem env:', 'env:\\',
              'getenvironmentvariable')
-# A search program's pattern operand is data, never split at operators (`rg 'import|export'`).
+# A search program's pattern operand is data for the first floor reading (`rg 'import|export'`); the second reading
+# splits it at a lone `|` or `&` and floors a bare `env` or `printenv` cut out there (`floor_hit`).
 PATTERN_PROGRAMS = {'rg', 'grep', 'egrep', 'fgrep', 'ag', 'ack', 'git-grep', 'jq'}  # jq: its filter
 PATTERN_VALUED = {'-e', '--regexp', '-g', '--glob', '-t', '--type', '-f', '--file', '-A', '-B', '-C', '-m',
                   '--max-count', '--include', '--exclude'}
@@ -3131,7 +3135,9 @@ def rules():
             f'- Inline code is read as commands: shells {_codes(SHELLS)} with `-c`; '
             + '; '.join(f'`{k}` {_codes(v)}' for k, v in sorted(INLINE_FLAGS.items(), key=lambda i: i[0].casefold()) if v)
             + f'; {_codes(AWKS)} program text; `eval`.',
-            f'- Search patterns of {_codes(PATTERN_PROGRAMS)} are data, never split; the values of '
+            f'- Search patterns of {_codes(PATTERN_PROGRAMS)} are data in the first floor reading; a second reading '
+            'splits them at a lone `|` or `&`, since an argv cannot show whether the pipe was quoted, and floors a bare '
+            '`env` or `printenv` cut out there (a bare `export` or `set` there is skipped); the values of '
             f'{_codes(OPEN_TEXT_FLAGS)} for {_codes(TEXT_PROGRAMS)} are text, floored only for a secret value.', '',
             '### Floor: commands', '',
             '| Program | Floors on |', '| --- | --- |']

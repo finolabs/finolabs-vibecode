@@ -933,7 +933,8 @@ class OpenLeaseFallbackTest(SameFamilyFallbackTest):
         # Case, spacing and compatibility forms fold before the name is compared (review of PR 329).
         for second in ("Reviewer: claude", "Reviewer: claude (same family as the author)", self.LINE[:-1],
                        "Reviewer: Claude", "Reviewer:  claude", " Reviewer: claude", "Reviewer:\tCLAUDE",
-                       "Reviewer: \uff43\uff4c\uff41\uff55\uff44\uff45", "\uff32eviewer: claude"):
+                       "Reviewer: \uff43\uff4c\uff41\uff55\uff44\uff45", "\uff32eviewer: claude",
+                       "Reviewer:claude", "Reviewer: claude\uff3f"):
             with self.subTest(second=second):
                 data = pr(comments=[comment(marker("code", "APPROVE") + "\n" + second),
                                     comment(marker("security", "APPROVE") + "\n" + self.LINE)], body=ROUTED)

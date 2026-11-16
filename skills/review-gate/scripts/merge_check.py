@@ -590,7 +590,7 @@ def lease_mode(repo):
         return "strict"
 
 
-REVIEWER_NAME = re.compile(r"Reviewer:\s+([A-Za-z]+)\b")
+REVIEWER_NAME = re.compile(r"Reviewer:\s*([A-Za-z]+)(?![A-Za-z])")
 
 
 def open_fallback(family, verdicts_found):
@@ -685,14 +685,6 @@ def local_receipt(head, repo):
         return None
 
 
-def review_families():
-    """`review_config.FAMILIES`, the one family list, loaded from this folder."""
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    import review_config
-    return review_config.FAMILIES
-
-
 def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, families=None, local_receipt=None,
              repo=None, fallback_family=None, changed_files=None, blocked_ok=False):
     """Return (ok, lines). `can_write(login)` answers write access; `lane_ok()` the lane;
@@ -743,10 +735,13 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
                 ok = ok and granted
             else:
                 same = [kind for kind in ("code", "security") if families[kind] == families["author"]]
+                from pathlib import Path
+                sys.path.insert(0, str(Path(__file__).resolve().parent))
+                import review_config
                 for kind in ("code", "security"):
                     second = (found.get(kind) or ("", "", None, ""))[3]
                     if any(second == fallback_line(f) or second.startswith(fallback_line(f) + " ")
-                           for f in review_families()):
+                           for f in review_config.FAMILIES):
                         ok = False
                         lines.append(f"BLOCK independent {kind} review: a same-family fallback marker needs --fallback-family")
             for kind in ("code", "security"):
