@@ -94,7 +94,7 @@ Enforcer: `afk_setup.py` and the sync test (script).
 
 ## Implementation obligations (decision 7)
 
-Findings of the last spec reviews that do not open the credential floor; the code pull requests close each with the test named:
+Findings of the last spec reviews that do not open the credential floor; the code pull requests close each with the test named (where an obligation differs from sections A to E or the acceptance list, the obligation governs):
 
 1. Push resolution: `HEAD` and `@` resolve to the current branch's name; an absent destination checks the current branch and its upstream; `git push origin HEAD` on a branch made from `origin/main` and `git push -u origin HEAD` on a new branch are Tier 1 with the guard on.
 2. Push config from outside the command line: a `GIT_CONFIG_*` or `GIT_CONFIG_PARAMETERS` assignment before git counts as `-c`; an absent destination also reads `remote.<remote>.push` and `push.default`; `env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.push GIT_CONFIG_VALUE_0=HEAD:main git push` and `git push` after `git config remote.origin.push HEAD:main` answer `guarded`.
