@@ -192,6 +192,9 @@ macOS and Linux are supported. Native Windows is not: the plugin's scripts rely 
 
 ZCode, Z.ai's coding agent ([zai-org/ZCode](https://github.com/zai-org/ZCode), Apache-2.0), is a fourth delegate family (12/11/2026). It takes code tasks in its `edit` mode, where it has no shell, so the coordinator runs the tests, and advice in its `plan` mode; it is never run in `yolo`, `guarded` or `build`. Reviews are not routed to it, and the away lease refuses it. Its facts come from ZCode's own CLI documentation, and a machine's first dispatch starts with ZCode's permission check. `/setup scan` finds it, and a host config without a ZCode row stays valid. A dispatch sends the brief and the code ZCode reads to the model provider set in ZCode's configuration (Z.ai's coding plan by default). See `delegate` `references/agents.md` "ZCode".
 
+> [!WARNING]
+> **Your accounts, your risk.** Delegation, cross-agent reviews, `advisor` second opinions and the quota and context probes start other agents' command-line programs (Codex, Antigravity, ZCode, Claude Code) headless, from scripts, under the accounts you are signed in with, including while you are away under afk. Each provider sets its own terms for that kind of use. A consumer plan may forbid driving its CLI from another agent or a third-party tool, and a provider may suspend an account for it. Read your plan's terms before you turn a family on, prefer an API key or a business plan where its terms require one, and leave a family out of `/setup add delegation` if you are unsure. finolabs-vibecode is open source and only starts the agent programs you set up; which agents run, under which account and plan, is your decision and your responsibility.
+
 ## Install
 
 Every install path ships the same `skills/` folder. Install the whole plugin on a host, or pick single skills with [skills.sh](https://skills.sh). Choose one way per agent, because both together list every skill twice.
