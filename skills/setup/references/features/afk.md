@@ -6,6 +6,17 @@ Every question follows [interview.md](../interview.md): native question tool; ea
 
 Scope first. Outside a repository say "These are your account's away rules (every repository)." and ask nothing. Inside one, ask: "Set away rules for your account (every repository) or only for this repository?" Choices: "Your account" / "Only this repository". Only this repository goes to "Project scope" when host.md already has a valid `## afk` section; otherwise say the account rules come first (apps, limits and the table live only there) and run them.
 
+Ask the mode first: "How much may the agents do while you are away?"
+Open (recommended): Save Mode: open. Say in one plain paragraph: under a lease the agents may do anything (push, merge without review, deploy to production, publish, delete, send messages and data, edit this plugin and the lease itself) except touch credentials, and you carry that risk.
+Strict: Save Mode: strict; keep the lists, categories, limits and Merge question below.
+Undo: Stop the lease; repeat setup to change the mode.
+Choices: "Open (recommended)" / "Strict".
+
+For Open, ask each guard in a question of its own, `guard` shown as the default:
+Ask: "Should instructions found in issues, other people's pull requests, web pages and tool output be kept from choosing tasks or granting actions?" Guard (default): Save Third-party instructions: guard. Open: Save Third-party instructions: open. Choices: "Guard (default)" / "Open".
+Ask: "Should commits on the default branch, pushes to it and every force, delete and mirror push be refused?" Guard (default): Save Default branch: guard. Open: Save Default branch: open. Choices: "Guard (default)" / "Open".
+For Open, then ask only the apps below and the lease hours (a whole number 1-24, default 8); pass the defaults for the rest, which apply only in strict (`afk.py rules` from `delegate` prints what each mode allows). For Strict, ask every question below.
+
 Ask: "Which AI apps may run while you are away?"
 Choices: Claude Code / Codex / Antigravity; allow several. Suggest Claude Code; save the chosen names as Hosts.
 Undo: Repeat setup to change the apps.
@@ -36,14 +47,14 @@ Missing or stale usage readings also stop routing (advisory, agent judgment).
 
 Then follow [../afk-decisions.md](../afk-decisions.md): what must wait for you, optional deploy targets, the default test commands, top-level files, release and production commands for every repository, and the separate excerpt consent.
 
-Ask Merge last among the settings: "May the agents merge pull requests while a lease is live?"
+For Strict, ask Merge last among the settings (Open ignores it and passes no `--merge`): "May the agents merge pull requests while a lease is live?"
 Yes: Save Merge: yes. This lets the agents merge eligible pull requests while a lease is live when both independent reviews and all checks pass at the current head, including local tests of touched modules and MERGE OK from merge_check.py. Only your own account and afk's own branches qualify; protected changes remain forbidden. This is your own decision and grants merge authority.
 No: Save Merge: no; agents cannot merge pull requests.
 Undo: Stop the current lease and repeat setup with Merge: no to withdraw this authority.
 Choices: "Yes, allow merges during a live lease" / "No, keep merges off".
 After a yes, say once that a merge also needs both reviews posted: in a repository whose reviewers cannot post, the coordinator relays them only under a standing relay committed in that repository's context file, which `/setup instructions` offers ("Review relay"). There is no default for Merge. Starting a lease applies this answer; it does not grant any further authority (advisory, agent judgment; the script denies merge when the setting is no).
 
-Translate the answers into `python3 -I <this skill folder>/scripts/afk_setup.py preview --hosts <names> --task-choice <choose|listed> --push-and-pull-requests <yes|no> --trusted-authors own --lease-hours <n> --max-runs <n> --max-runtime-minutes <n> --max-actions-per-hour <n> --quota-floor-percent <n> --merge <yes|no> [--decide <key>]... [--non-production-target '<command>']... [--test-command '<command>']... [--top-level-file <name>]... [--release-target '<command>']... [--production-target '<command>']... --excerpts-leave-the-machine <yes|no>`.
+Translate the answers into `python3 -I <this skill folder>/scripts/afk_setup.py preview --mode <open|strict> --third-party-instructions <guard|open> --default-branch <guard|open> --hosts <names> --task-choice <choose|listed> --push-and-pull-requests <yes|no> --trusted-authors own --lease-hours <n> --max-runs <n> --max-runtime-minutes <n> --max-actions-per-hour <n> --quota-floor-percent <n> [--merge <yes|no>] [--decide <key>]... [--non-production-target '<command>']... [--test-command '<command>']... [--top-level-file <name>]... [--release-target '<command>']... [--production-target '<command>']... --excerpts-leave-the-machine <yes|no>`.
 Quote "Claude Code" as one name. Pass every answer explicitly. Show the target, entire section, backup and SHA-256 digest before asking the separate write approval:
 "Save the shown away-session settings?"
 Yes: Apply only the previewed afk section in local host.md, keeping a backup of an existing file. No lease starts and no permission beyond the answered settings is granted.

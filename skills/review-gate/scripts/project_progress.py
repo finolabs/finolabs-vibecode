@@ -92,13 +92,16 @@ def project_label(root):
     return store.read_settings(root).get('label')
 
 
-AWAY_KEYS = (('task-choice', 'Task choice'), ('push-and-pull-requests', 'Push and pull requests'), ('merge', 'Merge'),
+# docs/specs/afk-autonomy.md A and C: the mode and the two guards first; a missing line is `open` and `guard`.
+AWAY_KEYS = (('mode', 'Mode'), ('third-party-instructions', 'Third-party instructions'), ('default-branch', 'Default branch'),
+             ('task-choice', 'Task choice'), ('push-and-pull-requests', 'Push and pull requests'), ('merge', 'Merge'),
              ('trusted-authors', 'Trusted authors'), ('max-runs', 'Max runs'),
              ('max-runtime-minutes', 'Max runtime minutes'), ('max-actions-per-hour', 'Max actions per hour'))
 AWAY_NUMBERS = {'Max runs': (1, 10000), 'Max runtime minutes': (1, 1440), 'Max actions per hour': (1, 10000)}
 AWAY_USER = {'Task choice': ('choose', 'listed'), 'Push and pull requests': ('yes', 'no'), 'Merge': ('yes', 'no'),
-             'Trusted authors': ('own',)}
-AWAY_DEFAULTS = {'Task choice': 'choose', 'Push and pull requests': 'yes', 'Trusted authors': 'own',
+             'Trusted authors': ('own',), 'Mode': ('open', 'strict'), 'Third-party instructions': ('guard', 'open'),
+             'Default branch': ('guard', 'open')}
+AWAY_DEFAULTS = {'Mode': 'open', 'Third-party instructions': 'guard', 'Default branch': 'guard', 'Task choice': 'choose', 'Push and pull requests': 'yes', 'Trusted authors': 'own',
                  'Max runs': '20', 'Max runtime minutes': '480', 'Max actions per hour': '30'}
 
 

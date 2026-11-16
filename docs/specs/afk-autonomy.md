@@ -1,6 +1,6 @@
 # afk autonomy: `open` allows everything except credentials
 
-Status: accepted; owner decisions 16/11/2026; code not started.
+Status: implemented; owner decisions 16/11/2026; code in pull requests 322, 323 and this one (E), not yet released.
 
 This document changes [afk-per-project.md](afk-per-project.md), [autopilot.md](autopilot.md) and [away-decisions.md](away-decisions.md) where they set path, command, category, limit and fallback rules. Where they disagree, this document wins from the release that ships its code; each of the three carries a pointer here.
 
