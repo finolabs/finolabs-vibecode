@@ -25,8 +25,8 @@ TEXT = b"# afk overlay (owner, 2026-11-16)\n\n## Replaces AGENTS.md > Authority:
 
 def git(cwd, *args):
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(cwd), "GIT_CONFIG_NOSYSTEM": "1",
-           "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
-           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
+           "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
     subprocess.run(["git", *args], cwd=cwd, env=env, check=True, capture_output=True)
 
 
