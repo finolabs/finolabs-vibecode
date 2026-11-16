@@ -459,6 +459,92 @@ class MatrixSetupTest(unittest.TestCase):
         self.assertEqual(json.loads(out), {'commands': ['claudeomni', 'claudework'], 'folders': ['work']})
         self.assertNotIn(str(self.home), out)
 
+    def inventory(self, rows, coordinator='Claude Code', checked='2026-11-01'):
+        table = ''.join(f'| {name} | {present} | 1.0 | unverified | {checked} |\r\n' for name, present in rows)
+        self.host.write_bytes(PREFIX + (f'## Agents on this machine\r\n\r\nCoordinator: {coordinator}\r\n\r\n'
+                                        '| Agent | Present | Version | Allowed models (confirmed by user) | Checked |\r\n'
+                                        '| --- | --- | --- | --- | --- |\r\n' + table).encode())
+
+    def choices(self):
+        with mock.patch('subprocess.run', side_effect=AssertionError('command run')), \
+                mock.patch('subprocess.Popen', side_effect=AssertionError('command run')), \
+                mock.patch('socket.socket', side_effect=AssertionError('network')):
+            code, out, err = self.cli('choices')
+        self.assertEqual(code, 0, err)
+        self.assertNotIn(str(self.home), out)
+        self.assertNotIn('/', out.replace('/setup scan', ''))
+        return json.loads(out)
+
+    def test_choices_lists_families_with_presence_and_the_coordinator(self):
+        self.inventory([('Claude Code', 'yes'), ('Codex', 'no'), ('Antigravity', 'maybe')], coordinator='Codex')
+        result = self.choices()
+        self.assertEqual(result['inventory'], 'current')
+        self.assertNotIn('advice', result)
+        self.assertEqual(result['coordinator'], 'codex')
+        self.assertEqual(result['helpers'], [
+            {'name': 'claude', 'family': 'claude', 'present': True, 'coordinator': False},
+            {'name': 'codex', 'family': 'codex', 'present': False, 'coordinator': True},
+            {'name': 'antigravity', 'family': 'antigravity', 'present': 'unverified', 'coordinator': False},
+            {'name': 'zcode', 'family': 'zcode', 'present': 'unverified', 'coordinator': False}])
+
+    def test_choices_adds_claude_config_folders_as_claude_helpers(self):
+        self.inventory([('Claude Code', 'yes'), ('Codex', 'yes'), ('Antigravity', 'no'), ('ZCode', 'no')])
+        for name in ('.claude-work', '.claude-omni', '.claude-Bad', '.claude-'):
+            (self.home / name).mkdir()
+        (self.home / '.claude-file').write_text('x')
+        (self.home / '.claude-link').symlink_to(self.home / '.claude-work')
+        result = self.choices()
+        self.assertEqual(result['coordinator'], 'claude')
+        extra = result['helpers'][4:]
+        self.assertEqual(extra, [
+            {'name': 'claudeomni', 'family': 'claude', 'present': True, 'coordinator': True},
+            {'name': 'claudework', 'family': 'claude', 'present': True, 'coordinator': True}])
+        writer = load('matrix_setup_names', SCRIPT)
+        for helper in result['helpers']:
+            self.assertRegex(helper['name'], writer.am.NAME)
+
+    def test_choices_reports_a_missing_unreadable_or_stale_inventory(self):
+        result = self.choices()
+        self.assertEqual((result['inventory'], result['coordinator']), ('missing', None))
+        self.assertIn('/setup scan', result['advice'])
+        self.assertEqual({h['present'] for h in result['helpers']}, {'unverified'})
+        self.host.unlink()
+        self.assertEqual(self.choices()['inventory'], 'missing')
+        self.inventory([('Claude Code', 'yes')], checked='2026-09-01')
+        result = self.choices()
+        self.assertEqual(result['inventory'], 'stale')
+        self.assertIn('/setup scan', result['advice'])
+        self.assertTrue(result['helpers'][0]['present'])
+        self.inventory([('Claude Code', 'yes')], checked='later')
+        self.assertEqual(self.choices()['inventory'], 'stale')
+        self.inventory([])
+        result = self.choices()
+        self.assertEqual(result['inventory'], 'missing')
+        self.assertIn('/setup scan', result['advice'])
+        self.host.write_bytes(PREFIX + b'## Agents on this machine\r\n\r\n## Agents on this machine\r\n')
+        result = self.choices()
+        self.assertEqual(result['inventory'], 'unreadable')
+        self.assertIn('/setup scan', result['advice'])
+
+    def test_choices_family_names_match_the_scan(self):
+        scan = load('agent_scan_names', ROOT / 'skills/setup/scripts/agent_scan.py')
+        writer = load('matrix_setup_families', SCRIPT)
+        self.assertEqual(writer.FAMILIES, {name: key for key, name in scan.AGENTS.items()})
+
+    def test_matrix_reference_asks_native_multiple_choice_first(self):
+        text = (ROOT / 'skills/setup/references/matrix.md').read_text()
+        for words in ('matrix_setup.py choices', '"Which AI helpers should vibecode use?"', '`multiSelect: true`',
+                      'At most 4 options per question', 'Other', 'code-review, security-review, navigator, advisor', '"None"',
+                      '(Recommended)', 'gets no matrix line', 'levels 1-5', 'request_user_input', 'ask_question',
+                      'numbered choices', 'when no helper is chosen, skip the role questions', '2 to 4 options',
+                      'up to two other chosen helpers', 'only through "Other"', 'does not name a chosen helper counts as "None"',
+                      'more than 8 helpers', 'offer the unverified ones too', 'reason first', 'one quoted `--line` argument',
+                      'loses its line', 'keeps its current levels, types, model and models'):
+            self.assertIn(words, text)
+        writer = load('matrix_setup_pattern', SCRIPT)
+        self.assertIn('fully matches the helper-name pattern `%s`' % writer.am.NAME.pattern, text)
+        self.assertLess(text.index('"Which AI helpers should vibecode use?"'), text.index('1. Levels:'))
+
     def test_writer_runs_no_command_and_makes_no_network_call(self):
         self.host.write_bytes(PREFIX + LEGACY)
         with mock.patch('subprocess.run', side_effect=AssertionError('command run')), \

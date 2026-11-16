@@ -170,7 +170,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `skills/setup/scripts/checkup.py` | Read-only setup/instruction evidence; no host commands or credentials. |
 | `skills/setup/scripts/compact_stop_setup.py` | Previews/installs/removes the separately consented Antigravity size-stop hook. |
 | `skills/setup/scripts/data_location.py` | Previews/copies plugin data into an empty approved folder and publishes the pointer last. |
-| `skills/setup/scripts/matrix_setup.py` | Previews, validates, migrates and applies only the host config's `## Assignment matrix` after a digest-bound yes; `migrate` is the only reader left of the retired `## Agent levels` and `## Agent roles`; runs no command and makes no network call. |
+| `skills/setup/scripts/matrix_setup.py` | Previews, validates, migrates and applies only the host config's `## Assignment matrix` after a digest-bound yes; `choices` lists the helper names setup offers as one multiple-choice question (family, presence from the scan, the coordinator), read-only; `migrate` is the only reader left of the retired `## Agent levels` and `## Agent roles`; runs no command and makes no network call. |
 | `skills/setup/scripts/quota_setup.py` | Previews exact quota executable paths and applies only the approved digest-bound plan. |
 | `skills/setup/scripts/setup_features.py` | Shows/records/clears declined features; a decline is not a consent. |
 | `skills/status/scripts/refresh.py` | Rebuilds/opens local dashboard data; manages metrics consent/purge and the separately approved Antigravity metrics hook. |
