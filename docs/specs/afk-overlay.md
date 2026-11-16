@@ -15,7 +15,8 @@ A lease must not override repository instructions on its own: they belong to the
 3. It is local: git-ignored through the repository's local `.git/info/exclude`, never committed.
 4. It is loaded by the session-start hook while a lease is live, and printed by `/afk start`.
 5. The conflict report is agent judgment, not a pattern scan in `checkup.py`.
-6. An override lists the exact actions allowed on the day of the approval (push and pull requests, merge, each listed deploy and release command), never a general reference to the away rules, so widening those rules later needs a new approval.
+6. An override lists the exact actions allowed on the day of the approval (push and pull requests, merge, each listed deploy and release command), never a general reference to the away rules, so widening those rules later needs a new approval. This holds in `strict`; see decision 7 for `open`.
+7. The overlay protection applies only in `strict` ("Chỉ khóa ở strict", owner, 2026-11-16, after the afk `open` mode of [afk-autonomy.md](afk-autonomy.md) merged). In `strict`, everything in this spec holds as written. In `open`, `afk.py check` adds no protection for `AGENTS.afk.md*`, the constitution path or the trust anchor, nothing joins the credential floor, `instructions_write.py` does not refuse the overlay target during a lease, and each entry says the agents may take every action except the credential floor and the two guards while they are on; the user accepts that risk by choosing `open`.
 
 ## Design
 
@@ -42,8 +43,9 @@ Agents may run exactly `<deploy command>` without asking. Every other deploy sti
 ```
 
 - A constitution rule is never replaced. Setup shows the amendment text it would need and says it follows the constitution's own amendment process, for the owner to run; until it is amended, the constitution line wins.
+- In `open` the entry wording is "Agents may take every action without asking, except what the credential floor and the two afk guards still stop." instead of a list.
 - An action the away rules do not allow gets no entry. With no conflict left, setup offers no overlay.
-- One script writes it: `instructions_write.py`, which gains one target, `AGENTS.afk.md` at the top level of the repository's main checkout (never a linked worktree), refused when Git tracks it and refused while an away lease is live. Same preview, digest and per-file yes as every instruction file, under its own consent question. Its backups go to the data root's private state, not beside the file, so no old overlay text sits untracked in the repository.
+- One script writes it: `instructions_write.py`, which gains one target, `AGENTS.afk.md` at the top level of the repository's main checkout (never a linked worktree), refused when Git tracks it and, in `strict`, refused while an away lease is live. Same preview, digest and per-file yes as every instruction file, under its own consent question. Its backups go to the data root's private state, not beside the file, so no old overlay text sits untracked in the repository.
 - In the same `apply`, after the file is written, `instructions_write.py` adds the pattern `AGENTS.afk.md*` to the main checkout's `.git/info/exclude` (once) and writes the trust anchor `<data root>/state/afk-overlay/<repository identity digest>.json` (owner-only, atomic; exactly two fields, `sha256` and `time`, no path and no content). The identity digest is `project_store.identity`'s; with an unknown identity there is no record and no overlay applies. The readers accept only a record of that shape. The overlay counts only while the file's bytes match it.
 
 ### Deference line
@@ -58,7 +60,7 @@ The normal instructions must say that the overlay may replace rules, or an agent
 
 ### Guarding the file
 
-`afk.py check` treats `AGENTS.afk.md` (and its `AGENTS.afk.md*` backups) as a hard protected name (Tier 3), matched case-insensitively, in every repository and on every branch, so a lease cannot write or stage it, and the Decide ladder cannot approve it. The constitution path is protected the same way, so a lease cannot amend it through an approved `unknown` path; the constitution path is `.specify/memory/constitution.md` and, when the repository's Spec Kit setup names another file, that file too, and the conflict report reads the same set. The trust anchor lies outside every repository, under the data root's private state, which `afk.py check` already refuses as a path outside the repository. `instructions_write.py` refuses the overlay target while a lease is live, so an agent that settled the consent question through the away ladder still cannot write the file or its record. A changed file fails the digest and is not in force.
+In `strict` (decision 7), `afk.py check` treats `AGENTS.afk.md` (and its `AGENTS.afk.md*` backups) as a hard protected name (Tier 3), matched case-insensitively, in every repository and on every branch, so a lease cannot write or stage it, and the Decide ladder cannot approve it. The constitution path is protected the same way, so a lease cannot amend it through an approved `unknown` path; the constitution path is `.specify/memory/constitution.md` and, when the repository's Spec Kit setup names another file, that file too, and the conflict report reads the same set. The trust anchor lies outside every repository, under the data root's private state, which `afk.py check` already refuses as a path outside the repository. `instructions_write.py` refuses the overlay target while a `strict` lease is live, so an agent that settled the consent question through the away ladder still cannot write the file or its record. In `open` none of these protections apply, so an agent under the lease can rewrite the overlay through the writer. A changed file fails the digest and is not in force in both modes.
 
 The overlay replaces the committed clause first drafted in pull request 319. Its security review (2026-11-16) found that an agent under a lease with Push and Merge yes could write such a clause into top-level `AGENTS.md` on a work branch and merge it, after which it looked exactly like an owner-written one. The overlay has no merge path: it is never committed, a lease cannot write it, and it counts only while its bytes match the digest that setup recorded after the owner's yes. A deference line an agent added on its own grants nothing without a matching overlay.
 
@@ -68,16 +70,16 @@ The overlay replaces the committed clause first drafted in pull request 319. Its
 
 ### Lease rules
 
-`afk` `references/lease-rules.md`: a Tier 1 answer never overrides the repository's instructions; an agent acts on a rule that requires the owner's approval only when the overlay in force replaces it; never edit the overlay or the deference line during a lease.
+`afk` `references/lease-rules.md`: a Tier 1 answer never overrides the repository's instructions; an agent acts on a rule that requires the owner's approval only when the overlay in force replaces it; never edit the overlay or the deference line during a lease (enforced by `afk.py check` only in `strict`).
 
 ## Enforcers
 
 | Step | Enforcer |
 | --- | --- |
 | Conflict report, drafting the entries, staleness wording | agent judgment (advisory) |
-| Writing the overlay, its exclude entry and its trust anchor, and the deference line | `instructions_write.py` (preview, digest, backup, per-file yes; refused while a lease is live) |
+| Writing the overlay, its exclude entry and its trust anchor, and the deference line | `instructions_write.py` (preview, digest, backup, per-file yes; refused while a `strict` lease is live) |
 | Loading | `session_start.py` and `afk.py start` (record shape, digest, file checks, lease) |
-| Lease cannot change the overlay, its record or the constitution | `afk.py check` (hard protected names; the record lies outside the repository) |
+| Lease cannot change the overlay, its record or the constitution (`strict` only) | `afk.py check` (hard protected names; the record lies outside the repository) |
 | Every action | `afk.py check` (last gate; the overlay never widens it) |
 
 ## Privacy
