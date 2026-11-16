@@ -4,6 +4,8 @@
 
 > 0.3.0 (owner decisions, 14/11/2026): [afk-per-project.md](afk-per-project.md) changes this document; where they disagree, it wins.
 
+> Owner decisions of 16/11/2026: [afk-autonomy.md](afk-autonomy.md) changes the path, command, category and fallback rules of this document; where they disagree, it wins once its code ships.
+
 Status: accepted; owner decisions recorded on 2026-11-06 and 2026-11-09; release 0.2.1 takes the first slice named under the 2026-11-09 decisions, the rest stays design only. Nothing was built in 0.2.0. Implementation and unresolved host decisions still need owner approval; open questions are listed under "Open".
 
 Idea: owner, 2026-11-06. An agent that, only when the user asks, coordinates the repository's work while the

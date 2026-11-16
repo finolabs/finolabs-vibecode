@@ -151,8 +151,9 @@ class AfkSetupTest(unittest.TestCase):
 
     def test_merge_required_and_bounds(self):
         before = self.snapshot()
-        self.assertEqual(self.cli('preview')[0], 1)
+        self.assertEqual(self.cli('preview', '--mode', 'strict')[0], 1)  # strict needs an explicit Merge answer
         for option, values in {
+            '--mode': ('closed',), '--default-branch': ('off',), '--third-party-instructions': ('off',),
             '--lease-hours': ('0', '25'), '--max-runs': ('0', '10001'),
             '--max-runtime-minutes': ('0', '1441'), '--max-actions-per-hour': ('0', '10001'),
             '--quota-floor-percent': ('-1', '101', '1.5'), '--hosts': ('Unknown',),
@@ -200,6 +201,18 @@ class AfkSetupTest(unittest.TestCase):
         self.assertEqual((writer.CONSENT, writer.TARGETS), (reader.CONSENT, reader.TARGETS))
         self.assertEqual(writer.LISTS, reader.LISTS)
 
+    def test_open_mode_writes_mode_first_and_needs_no_merge(self):
+        code, out, err = self.cli('preview', '--mode', 'open', '--default-branch', 'open')
+        self.assertEqual(code, 0, err)
+        self.apply(out.split('Digest: ')[1].splitlines()[0])
+        section = self.host.read_text()
+        section = section[section.index('## afk'):]
+        self.assertEqual(section.splitlines()[2:5],
+                         ['- Mode: open', '- Third-party instructions: guard', '- Default branch: open'])
+        self.assertNotIn('- Merge:', section)
+        applied = self.reader().settings()
+        self.assertEqual((applied['Mode'], applied['Default branch'], applied['Merge']), ('open', 'open', 'no'))
+
     def test_fixed_rows_cannot_be_moved(self):
         before = self.snapshot()
         for name in ('Production', 'Real users and customer data', 'Unknown category'):
@@ -207,7 +220,8 @@ class AfkSetupTest(unittest.TestCase):
                 self.assertEqual(self.cli('preview', '--merge', 'no', '--decide', name)[0], 1)
                 self.assertEqual(self.snapshot(), before)
         writer = self.writer()
-        values = {**writer.DEFAULTS, 'Merge': 'no', **{c: 'stop' for c in writer.CATEGORIES},
+        values = {**writer.DEFAULTS, 'Merge': 'no', 'Mode': 'strict', 'Third-party instructions': 'guard',
+                  'Default branch': 'guard', **{c: 'stop' for c in writer.CATEGORIES},
                   writer.CONSENT: 'no', writer.TARGETS: [], **{key: [] for key in writer.LISTS}}
         writer.validate(values)
         for name in ('Production', 'Real users and customer data'):
