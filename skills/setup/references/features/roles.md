@@ -4,7 +4,8 @@ Needs: the agent scan (`scan.md`), asked as its own consent; declining it ends t
 
 Every question follows [interview.md](../interview.md): native question tool, neutral approvals, explicit yes; fallback only as stated there (advisory, agent judgment).
 
-Roles and the judge live only in the assignment matrix ([../matrix.md](../matrix.md), part of `add delegation`); `## Agent roles` is never read or written (owner decision, 13/11/2026). The judge and roles answers below become the matrix's `--judge` and each helper's `roles`, written only after the matrix's own save question (enforcer: `matrix_setup.py`). Start from the lines `matrix_setup.py show` prints; a helper new to the matrix gets `levels 1-5` for the user to edit. With old sections and no matrix, run `matrix_setup.py migrate` first, as matrix.md says.
+Roles and the judge live only in the assignment matrix ([../matrix.md](../matrix.md), part of `add delegation`); `## Agent roles` is never read or written (owner decision, 13/11/2026). The judge and roles answers below become the matrix's `--judge` and each helper's `roles`, written only after the matrix's own save question (enforcer: `matrix_setup.py`).
+Start from the lines `matrix_setup.py show` prints, shown before the helper question (none preselected): a re-picked helper keeps its values, an unpicked one loses its line, and a helper new to the matrix gets `levels 1-5` for the user to edit. With old sections and no matrix, run `matrix_setup.py migrate` first, as matrix.md says.
 
 ## Judge
 

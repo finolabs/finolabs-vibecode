@@ -443,7 +443,7 @@ def choices():
         coordinator, rows = inventory_rows(text)
     except (OSError, ValueError, UnicodeError):
         state, rows = 'unreadable', {}
-    if state == 'current' and rows is None:
+    if state == 'current' and not rows:
         state, rows = 'missing', {}
     if state == 'current':
         now = datetime.date.fromisoformat(today())

@@ -517,6 +517,10 @@ class MatrixSetupTest(unittest.TestCase):
         self.assertTrue(result['helpers'][0]['present'])
         self.inventory([('Claude Code', 'yes')], checked='later')
         self.assertEqual(self.choices()['inventory'], 'stale')
+        self.inventory([])
+        result = self.choices()
+        self.assertEqual(result['inventory'], 'missing')
+        self.assertIn('/setup scan', result['advice'])
         self.host.write_bytes(PREFIX + b'## Agents on this machine\r\n\r\n## Agents on this machine\r\n')
         result = self.choices()
         self.assertEqual(result['inventory'], 'unreadable')
@@ -530,10 +534,15 @@ class MatrixSetupTest(unittest.TestCase):
     def test_matrix_reference_asks_native_multiple_choice_first(self):
         text = (ROOT / 'skills/setup/references/matrix.md').read_text()
         for words in ('matrix_setup.py choices', '"Which AI helpers should vibecode use?"', '`multiSelect: true`',
-                      'at most 4 options', 'Other', 'code-review, security-review, navigator, advisor', '"None"',
+                      'At most 4 options per question', 'Other', 'code-review, security-review, navigator, advisor', '"None"',
                       '(Recommended)', 'gets no matrix line', 'levels 1-5', 'request_user_input', 'ask_question',
-                      'numbered choices'):
+                      'numbered choices', 'when no helper is chosen, skip the role questions', '2 to 4 options',
+                      'up to two other chosen helpers', 'only through "Other"', 'does not name a chosen helper counts as "None"',
+                      'more than 8 helpers', 'offer the unverified ones too', 'reason first', 'one quoted `--line` argument',
+                      'loses its line', 'keeps its current levels, types, model and models'):
             self.assertIn(words, text)
+        writer = load('matrix_setup_pattern', SCRIPT)
+        self.assertIn('fully matches the helper-name pattern `%s`' % writer.am.NAME.pattern, text)
         self.assertLess(text.index('"Which AI helpers should vibecode use?"'), text.index('1. Levels:'))
 
     def test_writer_runs_no_command_and_makes_no_network_call(self):
