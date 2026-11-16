@@ -2038,6 +2038,17 @@ def floor_command(program, words, inline, cwd=None):
     return False
 
 
+def code_program(command, index):
+    """True when the flag at `index` belongs to an inline-code program: the nearest earlier word that is not an option,
+    after its last in-token operator, names a shell or an interpreter of INLINE_FLAGS."""
+    for word in reversed(command[:index]):
+        if word.startswith('-'):
+            continue
+        name = Path(re.split(r'\|\||&&|[|&;]', word)[-1]).name
+        return name in SHELLS or name in INLINE_FLAGS or (re.sub(r'[0-9.]+$', '', name) or name) in INLINE_FLAGS
+    return False
+
+
 def patterns(program, words):
     """The pattern operands of a search program: `-e` values, else its first operand."""
     if program not in PATTERN_PROGRAMS:
@@ -2065,8 +2076,8 @@ def commands_of(tokens, inline=False, depth=0, keep=frozenset(), full=False, spl
         program, words = normalize(command, env)
         codes = inline_codes(program, words) if program is not None else []
         # Inline code stays whole for its own pass, also when its program only appears after an in-token split.
-        kept = keep | set(codes) | {command[i + 1] for i, t in enumerate(command[:-1]) if t in CODE_FLAGS
-                                    or re.fullmatch(r'-[A-Za-z]*c', t)}
+        kept = keep | set(codes) | {command[i + 1] for i, t in enumerate(command[:-1])
+                                    if (t in CODE_FLAGS or re.fullmatch(r'-[A-Za-z]*c', t)) and code_program(command, i)}
         searched = set() if split_patterns else set(patterns(program, words))
         expanded = []
         for token in command:
@@ -2313,8 +2324,11 @@ def open_texts(argv):
                 flags = set()
         key, equal, value = token.partition('=')
         if program in AGENT_PROGRAMS and ('\n' in token or len(token) > 200):
+            # A brief is prose, exempt from the word rules; each piece after an in-line operator is still a command.
             out.append('text')
             values.append(token)
+            for piece in re.split(r'\|\||&&|[;|&]', token)[1:]:
+                out += [';', *piece.split()]
         elif equal and key in flags:
             out.append(key + '=text')
             values.append(value)
@@ -2365,7 +2379,8 @@ def open_verdict(argv, paths, applied):
     stripped, texts = open_texts(argv)
     if applied.get(DEFAULT_BRANCH) != 'open':
         bodies = [next(g for g in m.groups() if g is not None) for value in texts for m in SUBSTITUTION.finditer(value)]
-        commands = commands_of(stripped, full=True) + [c for body in bodies for c in commands_of(body.split(), True)]
+        commands = (commands_of(stripped, full=True) + commands_of(stripped, full=True, split_patterns=True)
+                    + [c for body in bodies for c in commands_of(body.split(), True)])
         for program, words, env, _ in commands:
             if program != '#inline' and guard_hit(program, words, env, context):
                 return 'guarded'
