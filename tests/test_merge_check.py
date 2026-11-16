@@ -674,6 +674,7 @@ class SameFamilyFallbackTest(unittest.TestCase):
         self.out = [f"Quota codex/default: measured {iso(timedelta(hours=-1))}; week 7d: 2% remaining, resets {iso(timedelta(days=1))}",
                     f"Quota agy: rate-limit marker {iso(timedelta(minutes=-5))}; out of quota until {iso(timedelta(hours=1))} (advisory)"]
         self.iso = iso
+        self.quota = list(self.out)
         self.lease = patch.object(away_lease, "live_lease", return_value={"start": 1})
         self.present = patch.object(review_config, "present_families", return_value={"claude", "codex", "antigravity"})
         self.host = patch.object(review_config, "host_text", return_value="synthetic")
@@ -851,6 +852,185 @@ class SameFamilyFallbackTest(unittest.TestCase):
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             self.assertEqual(mc.main(["7", "--repo", "acme/demo", "--fallback-family", "claude"]), 2)
+
+
+class OpenLeaseFallbackTest(SameFamilyFallbackTest):
+    """docs/specs/afk-autonomy.md D and acceptance 7: under a lease whose effective mode is `open` the fallback needs
+    only the lease, the author's family and the fallback line (or a non-author configured role) on each kind."""
+
+    def setUp(self):
+        super().setUp()
+        import review_config
+        self.mode = "open"
+        patcher = patch.object(mc, "lease_mode", side_effect=lambda repo: self.mode)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.roles = {"judge": "host"}
+        patcher = patch.object(review_config, "read_roles", side_effect=lambda text: self.roles)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.out = []  # no quota reading at all
+
+    def test_all_five_conditions_pass(self):
+        ok, lines = self.evaluate()
+        self.assertTrue(ok, lines)
+        self.assertIn("ok    same-family review: open lease: code same family; security same family", lines)
+
+    def test_each_router_trigger_and_an_enforcer_change_pass_without_quota_evidence(self):
+        for trigger in mc.TRIGGERS:
+            with self.subTest(trigger=trigger):
+                ok, lines = self.evaluate(self.data(trigger=trigger))
+                self.assertTrue(ok, lines)
+        for name in ("skills/delegate/scripts/afk.py", "skills/review-gate/scripts/merge_check.py", "CLAUDE.md"):
+            with self.subTest(name=name):
+                self.files = [{"filename": name}]
+                ok, lines = self.evaluate(self.data(self.LINE))  # one model, no model named
+                self.assertTrue(ok, lines)
+
+    def test_a_codex_code_review_with_a_same_family_security_review(self):
+        self.roles = {"judge": "host", "code review": "codex", "security review": "claude"}
+        data = pr(comments=[comment(marker("code", "APPROVE") + "\nreport by codex"),
+                            comment(marker("security", "APPROVE") + "\n" + self.LINE)], body=ROUTED)
+        ok, lines = self.evaluate(data)
+        self.assertTrue(ok, lines)
+        self.assertIn("ok    same-family review: open lease: code by the configured codex role; security same family",
+                      lines)
+        # The security kind's role is the author's own family: its marker without the line refuses.
+        data["comments"][1] = comment(marker("security", "APPROVE") + "\nreport")
+        self.assertFalse(self.evaluate(data)[0])
+
+    def test_each_failed_condition_blocks(self):
+        import away_lease
+        with patch.object(away_lease, "live_lease", return_value=None):
+            ok, lines = self.evaluate()
+            self.assertFalse(ok)
+            self.assertIn("BLOCK same-family review: no live away lease", lines)
+        with patch.object(away_lease, "live_lease", side_effect=OSError):
+            self.assertFalse(self.evaluate()[0])
+        self.assertFalse(self.evaluate(family="codex")[0])  # not the author's family
+        for second in ("", "report", "Reviewer: claude", self.LINE + "x", "x " + self.LINE,
+                       "Reviewer: codex (same family as the author; no other family reachable)"):
+            with self.subTest(second=second):
+                self.assertFalse(self.evaluate(self.data(second))[0])
+        # A marker naming another family's fallback line never counts through a role.
+        self.roles = {"judge": "host", "code review": "codex", "security review": "codex"}
+        self.assertFalse(self.evaluate(self.data("Reviewer: codex (same family as the author; no other family reachable)"))[0])
+        self.roles = {"judge": "host", "code review": "zcode-x", "security review": "claude"}
+        self.assertFalse(self.evaluate(pr(comments=[comment(marker("code", "APPROVE") + "\nreport"),
+                                                    comment(marker("security", "APPROVE") + "\n" + self.LINE)],
+                                          body=ROUTED))[0])
+
+    def test_a_strict_lease_keeps_todays_conditions(self):
+        self.mode = "strict"
+        self.assertFalse(self.evaluate()[0])  # no quota evidence
+        self.out = list(self.quota)
+        self.assertTrue(self.evaluate()[0])
+        self.assertFalse(self.evaluate(self.data(trigger="permission"))[0])
+        self.files = [{"filename": "skills/delegate/scripts/afk.py"}]
+        self.assertFalse(self.evaluate(self.data(self.LINE + " model=opus-5"))[0])  # an enforcer change, one model
+        self.roles = {"judge": "host", "code review": "codex", "security review": "codex"}
+        self.files = [{"filename": "docs/notes.md"}]
+        self.assertFalse(self.evaluate(pr(comments=[comment(marker("code", "APPROVE") + "\nreport"),
+                                                    comment(marker("security", "APPROVE") + "\n" + self.LINE)],
+                                          body=ROUTED))[0])
+
+    # The strict-only cases of the parent class do not apply under an open lease.
+    def test_an_enforcer_or_instruction_change_needs_two_models_of_each_kind(self):
+        pass
+
+    def test_only_positive_evidence_counts_as_out(self):
+        pass
+
+    def test_the_fallback_runs_whatever_routing_picks(self):
+        ok, lines = self.evaluate(families=dict(author="claude", code="codex", security="codex"))
+        self.assertTrue(ok, lines)
+
+    def test_partial_or_unknown_evidence_refuses(self):
+        pass
+
+
+class LeaseModeTest(unittest.TestCase):
+    """lease_mode reads the `## afk` Mode line and the approved repository mode; any doubt is `strict`."""
+    SETUP = "## afk\n- Hosts: Claude Code\n- Merge: yes\n"
+    ORIGIN = ("[core]\n\trepositoryformatversion = 0\n\tbare = false\n"
+              "[remote \"origin\"]\n\turl = https://github.com/example/demo.git\n"
+              "\tfetch = +refs/heads/*:refs/remotes/origin/*\n")
+
+    def setUp(self):
+        from tests.data_root_fixture import account
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.home = account(self, Path(tmp.name) / "home")
+        self.root = self.home / ".finolabs/vibecode"
+        self.root.mkdir(parents=True, mode=0o700)
+        self.repo = self.repository("checkout")
+        sys.path.insert(0, str(SCRIPT.parent))
+        import project_store
+        self.store = project_store
+
+    def repository(self, name, origin=None):
+        repo = self.home / name
+        (repo / ".git/refs/remotes/origin").mkdir(parents=True)
+        (repo / ".git/HEAD").write_text("ref: refs/heads/topic\n")
+        (repo / ".git/config").write_text(origin or self.ORIGIN)
+        return repo
+
+    def host(self, text):
+        (self.root / "host.md").write_text(text)
+        (self.root / "host.md").chmod(0o600)
+
+    def mode(self, repo="example/demo", cwd=None):
+        with patch("os.getcwd", return_value=str(cwd or self.repo)):
+            return mc.lease_mode(repo)
+
+    def approve(self, value, repo=None):
+        found, ident = self.store.identity(str(repo or self.repo))
+        self.assertEqual(found, "found")
+        self.store.write_setting(str(repo or self.repo), "autopilot", value, ident=ident)
+
+    def test_the_user_mode_line(self):
+        self.host(self.SETUP)
+        self.assertEqual(self.mode(), "open")  # a missing Mode line is open
+        self.host(self.SETUP + "- Mode: open\n")
+        self.assertEqual(self.mode(), "open")
+        self.assertEqual(self.mode("Example/Demo"), "open")
+        self.host(self.SETUP + "- Mode: strict\n")
+        self.assertEqual(self.mode(), "strict")
+
+    def test_any_doubt_is_strict(self):
+        for text in ("", "## Other\n", self.SETUP + "- Mode: closed\n", self.SETUP + "- Mode: open\n- Mode: open\n",
+                     self.SETUP + "garbled\n", "## afk\n- Mode: open\n## afk\n- Mode: open\n",
+                     "```\n## afk\n- Mode: open\n"):
+            with self.subTest(text=text):
+                self.host(text)
+                self.assertEqual(self.mode(), "strict")
+        self.host(self.SETUP)
+        for repo in ("example/other", "nobody", None, "a/b/c"):
+            with self.subTest(repo=repo):
+                self.assertEqual(self.mode(repo), "strict")
+        self.assertEqual(self.mode(cwd=self.home), "strict")  # no checkout in the working folder
+        other = self.repository("other", self.ORIGIN.replace("example/demo", "example/other"))
+        self.assertEqual(self.mode(cwd=other), "strict")  # its origin is not --repo
+        with patch.object(self.store, "autopilot_binding", side_effect=OSError):
+            self.assertEqual(self.mode(), "strict")
+
+    def test_the_repository_mode_wins_there_only(self):
+        self.host(self.SETUP)
+        self.approve({"mode": "strict"})
+        self.assertEqual(self.mode(), "strict")
+        self.host(self.SETUP + "- Mode: strict\n")
+        self.approve({"mode": "open"})
+        self.assertEqual(self.mode(), "open")
+        self.approve({"default-branch": "open"})  # no mode key: the user's line applies
+        self.assertEqual(self.mode(), "strict")
+        self.host(self.SETUP)
+        self.assertEqual(self.mode(), "open")
+
+    def test_an_unbound_approval_is_strict(self):
+        self.host(self.SETUP)
+        self.approve({"mode": "open"})
+        (self.repo / ".git/config").write_text(self.ORIGIN.replace("example/demo", "example/moved"))
+        self.assertEqual(self.mode("example/moved"), "strict")  # the approval was bound to another origin
 
 
 class IndependentMergeTest(unittest.TestCase):
