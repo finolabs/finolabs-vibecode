@@ -29,6 +29,9 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- afk: the credential floor now answers `floor` for a bare `env` cut out of a search pattern after a lone `|` or `&` (`rg x|env`): an argv cannot show whether the pipe was quoted, and unquoted the shell prints the environment. The bare `export` and `set` exception there stays, so `rg 'import|export'` is still Tier 1.
+- The afk overlay writer's `mode()` refuses a `## afk` key or value that `afk.py settings()` refuses (an unknown key, a closed choice such as `- Merge: maybe`, a limit, the apps or a list), so it fails closed instead of reading such a section as `open`.
+- `merge_check.py` under an `open` lease folds case, spacing and compatibility forms (NFKC) before it compares a marker's `Reviewer:` name with the configured role, so `Reviewer: Claude` or `Reviewer:  claude` no longer counts as the role's review; the check that a same-family fallback marker needs `--fallback-family` now covers every family, `zcode` included.
 - Questions follow the user's language: the rule injected at session start says to ask in the language the user is using and to translate every question, description and choice label a skill quotes, keeping command names, flags, paths and skill names unchanged; `setup`'s interview rules open with the same point, and `afk` and `review-gate` carry the language line. Before, setup and away questions copied in English reached users who write another language.
 
 ## [0.3.1] - 2026-11-15
