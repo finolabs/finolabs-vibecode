@@ -1,6 +1,6 @@
 # Interview rules
 
-Questions (advisory, agent judgment) use the user's language; translate quoted questions, descriptions and labels. Ready: prerequisites set. Look up authorized facts; ask decisions/failed lookups, citing failure. Ask all ready decisions per round, numbered; update after answers.
+Questions (advisory, agent judgment) use the user's language; translate quoted questions, descriptions and labels. Ready: prerequisites set. Look up authorized facts first; ask decisions/failed lookups, citing failure. Ask all ready decisions per round, numbered; update after answers.
 Ask every question through the host's native question tool when the session has one (AskUserQuestion/request_user_input/ask_question). Preferences: recommendation, reason first; Other for free text; respect tool limits, blocking first.
 Offer neutral Yes and No choices with none preselected or marked recommended; a default, a timeout or an auto-selected option never counts as the yes. All approvals/offers, every mode.
 
