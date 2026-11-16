@@ -10,7 +10,9 @@ Typed by the user only.
 
 ## Tips
 
-- Set it up first with `/setup add afk`, which records the rules and an explicit Merge answer; without it `start` points there and stops.
+- Set it up first with `/setup add afk`, which asks the mode first: `open` (the default) lets every action run except the credential floor and two guards; `strict` records every rule and an explicit Merge answer. Without setup `start` points there and stops.
+- `afk.py rules` prints the rules of both modes.
+- `/setup add afk` can also write a local `AGENTS.afk.md` overlay for instruction-file rules your away rules replace; it is printed only while a lease is live and its bytes still match.
 - `start` prints a goal for you to type in the host's `/goal` command; the model cannot type it for you.
 - One lease covers every session on the machine. On Claude Code the question tool is denied during the lease, so questions go up the decision ladder instead of to you.
 - On `stop` you get parked work, decisions and runs still waiting, and you mark each decision `kept` or `reversed`. There is no status command.
