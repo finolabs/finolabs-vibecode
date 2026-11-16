@@ -20,7 +20,7 @@ Status: accepted; prepared, to be tagged v0.3.2 after the owner's yes.
 | 328 | `/setup add delegation` picks helpers from one multiple-choice question and one picker per role; `matrix_setup.py choices`. |
 | 329 | LOW findings of the rule table pull request. |
 | 330 | afk and merge check LOW findings: a bare `env` in a search pattern floors; the overlay writer and `merge_check.py` fail closed on an unknown `## afk` key; NFKC reviewer names. |
-| This pull request | The drift review below, upgrade notes, re-rendered afk diagrams, changelog and manifests. |
+| 331 | This release: the drift review below, upgrade notes, re-rendered afk diagrams, changelog and manifests. |
 
 The changelog's 0.3.2 section holds the user-facing wording; `update` carries the 0.3.2 upgrade notes. The afk-mechanism and away-decision-sequence PNGs were re-rendered (2530 pixels wide) through the shared Chromium.
 
