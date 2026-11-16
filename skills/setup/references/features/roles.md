@@ -43,7 +43,7 @@ Yes: Carry the shown roles into the assignment matrix preview; the matrix's save
 No: Leave assignments unchanged; ask later.
 Undo: Restore or change these role lines through setup.
 Choices: "Yes, save these assignments" / "No, keep current assignments".
-Show one matrix line per helper with its roles (`code-review`, `security-review`, `navigator`, `advisor`, each owned by one helper at most), with defaults from the scan (present families other than the coordinator's), then preview, ask and apply as [../matrix.md](../matrix.md) says. The family that codes and the family that reviews should differ (highly recommended, not forced).
+Ask the roles as matrix.md's per-role multiple-choice questions among the chosen helpers plus "None" (`code-review`, `security-review`, `navigator`, `advisor`, each owned by one helper at most), the recommendation a family other than the coordinator's from `matrix_setup.py choices`; then show one matrix line per helper with its roles, preview, ask and apply as [../matrix.md](../matrix.md) says. The family that codes and the family that reviews should differ (highly recommended, not forced).
 
 ## Review posting
 

@@ -4,6 +4,7 @@ try:
     import fcntl
 except ImportError:
     raise ImportError("finolabs-vibecode needs POSIX file APIs (pwd, fcntl) and supports macOS and Linux; on Windows run it under WSL.") from None
+import datetime
 import fnmatch
 import json
 import os
@@ -385,6 +386,11 @@ def candidates():
                         commands.append(item.name)
         except OSError:
             continue
+    return {'commands': sorted(commands)[:LISTED], 'folders': config_folders()}
+
+
+def config_folders():
+    """Suffixes of ~/.claude-* folders (names only, never a path)."""
     folders = []
     try:
         with os.scandir(dr.account_home()) as items:
@@ -394,7 +400,72 @@ def candidates():
                     folders.append(match[1])
     except OSError:
         pass
-    return {'commands': sorted(commands)[:LISTED], 'folders': sorted(folders)[:LISTED]}
+    return sorted(folders)[:LISTED]
+
+
+# Display names of `## Agents on this machine`, as `agent_scan.py` writes them (AGENTS there; a test keeps them equal).
+FAMILIES = {'Claude Code': 'claude', 'Codex': 'codex', 'Antigravity': 'antigravity', 'ZCode': 'zcode'}
+STALE_DAYS = 30
+SCAN_ADVICE = 'Run /setup scan to refresh the list of AI helpers before choosing.'
+
+
+def inventory_rows(text):
+    """Coordinator family and {family: (present, checked)} from the canonical inventory; ValueError when ambiguous."""
+    spans = sections(text, '## Agents on this machine')
+    if len(spans) > 1:
+        raise ValueError('duplicate inventory')
+    if not spans:
+        return None, None
+    coordinator, rows, seen = None, {}, set()
+    for line in unfenced(text[spans[0][0]:spans[0][1]]):
+        match = re.fullmatch(r'Coordinator: (.+)', line.strip())
+        if match:
+            coordinator = FAMILIES.get(match[1].strip())
+            continue
+        cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
+        if len(cells) != 5 or cells[0] not in FAMILIES:
+            continue
+        family = FAMILIES[cells[0]]
+        present = {'yes': True, 'no': False}.get(cells[1], 'unverified')
+        rows[family] = ('unverified', None) if family in seen else (present, cells[4])
+        seen.add(family)
+    return coordinator, rows
+
+
+def choices():
+    """Every helper name the matrix accepts, with family, presence and the coordinator mark; reads only host.md."""
+    state, coordinator, rows = 'current', None, {}
+    try:
+        try:
+            text = dr.read_data('host.md', CAP).decode('utf-8')
+        except FileNotFoundError:
+            text = ''
+        coordinator, rows = inventory_rows(text)
+    except (OSError, ValueError, UnicodeError):
+        state, rows = 'unreadable', {}
+    if state == 'current' and rows is None:
+        state, rows = 'missing', {}
+    if state == 'current':
+        now = datetime.date.fromisoformat(today())
+        for _, checked in rows.values():
+            try:
+                age = (now - datetime.date.fromisoformat(checked or '')).days
+            except ValueError:
+                age = None
+            if age is None or not 0 <= age <= STALE_DAYS:
+                state = 'stale'
+    helpers = []
+    for family in FAMILIES.values():
+        present = rows.get(family, ('unverified', None))[0]
+        helpers.append({'name': family, 'family': family, 'present': present, 'coordinator': family == coordinator})
+    claude = helpers[0]['present']
+    for folder in config_folders():
+        helpers.append({'name': 'claude' + folder, 'family': 'claude', 'present': claude,
+                        'coordinator': coordinator == 'claude'})
+    result = {'inventory': state, 'coordinator': coordinator, 'helpers': helpers}
+    if state != 'current':
+        result['advice'] = SCAN_ADVICE
+    return result
 
 
 def main(argv=None):
@@ -413,11 +484,15 @@ def main(argv=None):
         commands.add_parser('migrate')
         commands.add_parser('show')
         commands.add_parser('candidates')
+        commands.add_parser('choices')
         args = parser.parse_args(argv)
         if args.action == 'show':
             return show()
         if args.action == 'candidates':
             print(json.dumps(candidates(), separators=(',', ':')))
+            return 0
+        if args.action == 'choices':
+            print(json.dumps(choices(), separators=(',', ':')))
             return 0
         if args.action == 'validate':
             print(am.render(build_values(args.line, args.judge, args.consent)), end='')
