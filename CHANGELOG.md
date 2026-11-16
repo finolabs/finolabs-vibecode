@@ -6,6 +6,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- README: a warning under "Supported agents" that delegation, cross-agent reviews, quota readings and afk run other agents' CLIs headless under your own accounts, that some consumer plans forbid that use, and that which agents run is your decision and responsibility.
+
 - The afk overlay (`docs/specs/afk-overlay.md`, owner decisions 16/11/2026): `/setup add afk` lists the lines of `AGENTS.md`, `CLAUDE.md` and the Spec Kit constitution that still require your approval for an action your away rules allow, and offers a local `AGENTS.afk.md` holding only override entries for those rules, each naming the rule it replaces. `instructions_write.py` writes it after its own question, keeps it out of Git, keeps earlier versions in the private state and records its SHA-256; while a lease is live the session-start hook (Claude Code, Codex) and `/afk start` print it only when its bytes still match and hold no control or format character other than tab and newline, else one fixed "not in force" line (the writer refuses such text too), and `/afk stop` says it no longer applies. In `strict`, `afk.py check` protects `AGENTS.afk.md*` and `.specify/memory/constitution.md` and the writer refuses during a lease; in `open` neither applies. A constitution rule is never replaced: setup only proposes the amendment. `FNL_AFK_OVERLAY=off` stops the printing; `/setup check` reports the overlay's state.
 
 ### Changed
