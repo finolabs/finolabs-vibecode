@@ -1712,7 +1712,7 @@ def classify_argv(argv, applied, coordinator=None):
 
 # ---- `open` mode (docs/specs/afk-autonomy.md A, B, C) ----------------------------------------------------------------
 # The floor is defined by its purpose: a request that changes a credential, or reads, prints, copies or sends a secret
-# or key. The lists below are its matcher, owned here with the corpus in tests/test_afk_floor.py; a form that serves
+# or key. The lists below are its matcher, owned here with the corpus in tests/test_afk_open.py; a form that serves
 # that purpose and passes is a bug fixed by a corpus case and an entry here, never by a spec change.
 OPERATORS = {';', '&&', '||', '|', '&', '|&', '\n'}
 # Inside a token: in inline code every operator; in a top-level argv token not a lone `|` or `&`, which a pattern
@@ -1720,7 +1720,9 @@ OPERATORS = {';', '&&', '||', '|', '&', '|&', '\n'}
 SPLIT_INLINE = re.compile(r'(;|&&|\|\||\||&|\n|\$\(|`|<\()')
 SPLIT_TOP = re.compile(r'(;|&&|\|\||\n|\$\(|`|<\()')
 INTERPRETERS = {'python', 'python3', 'node', 'deno', 'bun', 'perl', 'ruby', 'php', *('sh', 'bash', 'zsh', 'dash', 'ksh', 'fish')}
-PREFIX_WORDS = {'command', 'exec', 'nohup', 'nice', 'timeout', 'time', 'sudo', 'xargs', 'npx', 'bunx', 'uvx', 'doas'}
+PREFIX_WORDS = {'command', 'exec', 'nohup', 'nice', 'timeout', 'time', 'sudo', 'xargs', 'npx', 'bunx', 'uvx', 'doas',
+                'caffeinate', 'stdbuf', 'watch', 'ionice', 'chrt', 'taskset', 'unbuffer', 'strace', 'ltrace'}
+FILE_PREFIXES = {'flock', 'script'}  # each takes one file operand before the command it runs
 PREFIX_VALUED = {'-n', '-u', '-g', '-s', '-k', '-I', '-P', '-L', '-d', '-a', '-p', '--user', '--group', '--signal'}
 GIT_GLOBAL_VALUED = {'-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env'}
 GIT_GLOBAL_FLAGS = {'--no-pager', '-p', '--paginate', '-P', '--bare', '--no-replace-objects', '--literal-pathspecs',
@@ -1740,7 +1742,9 @@ sparse-checkout stash status stripspace submodule switch symbolic-ref tag unpack
 update-ref update-server-info var verify-commit verify-pack verify-tag version whatchanged worktree write-tree'''.split())
 SHELLS = {'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish'}
 INLINE_FLAGS = {'python': {'-c'}, 'python3': {'-c'}, 'node': {'-e', '-p', '--eval', '--print'}, 'deno': {'eval'},
-                'bun': {'-e', '--eval', '-p', '--print'}, 'perl': {'-e', '-E'}, 'ruby': {'-e'}}
+                'bun': {'-e', '--eval', '-p', '--print'}, 'perl': {'-e', '-E'}, 'ruby': {'-e'}, 'osascript': {'-e'},
+                'pwsh': {'-c', '-Command', '-command'}, 'powershell': {'-c', '-Command', '-command'}, 'lua': {'-e'},
+                'php': {'-r'}, 'R': {'-e'}, 'Rscript': {'-e'}, 'julia': {'-e'}, 'tclsh': set(), 'groovy': {'-e'}}
 AWKS = {'awk', 'gawk', 'mawk', 'nawk'}
 FLOOR_NAMES = {'.dev.vars', '.pgpass', '.boto', 'auth.json', 'hosts.yml', '.netrc', '.npmrc', '.pypirc', 'id_rsa',
                'id_ed25519', 'id_ecdsa', 'id_dsa', '.ssh', '.aws', '.gnupg', '.docker', '.kube', '.wrangler', '.azure',
@@ -1769,7 +1773,12 @@ CREDENTIAL_PAIRS = {('npm', 'config', 'get'), ('npm', 'config', 'list'), ('npm',
                     ('aws', 'ecr', 'get-login-password'), ('aws', 'secretsmanager', 'get-secret-value'),
                     ('aws', 'ssm', 'get-parameter'), ('aws', 'ssm', 'get-parameters'), ('git', 'config', '--get-urlmatch')}
 ENV_WORDS = ('environ', 'getenv', 'process.env', 'process["env"]', "process['env']", 'deno.env', 'bun.env',
-             'os.environ', 'system.getenv', 'printenv')
+             'os.environ', 'system.getenv', 'printenv', 'system attribute', '$env:', 'childitem env:', 'env:\\',
+             'getenvironmentvariable')
+# A search program's pattern operand is data, never split at operators (`rg 'import|export'`).
+PATTERN_PROGRAMS = {'rg', 'grep', 'egrep', 'fgrep', 'ag', 'ack', 'git-grep'}
+PATTERN_VALUED = {'-e', '--regexp', '-g', '--glob', '-t', '--type', '-f', '--file', '-A', '-B', '-C', '-m',
+                  '--max-count', '--include', '--exclude'}
 ENV_IDENTIFIERS = re.compile(r'(?<![A-Za-z0-9_])(?:%ENV|\$ENV|ENV|ENVIRON)(?![A-Za-z0-9_])')
 WORDS = re.compile(r'(?:^|[_.-])(?:token|tokens|password|passwd|secret|secrets)(?:[_.-]|$)', re.I)
 DOLLAR_NAME = re.compile(r'\$\{?(!?)([A-Za-z_][A-Za-z0-9_]*)')
@@ -1841,6 +1850,12 @@ def normalize(command, env):
             if head == 'nice' and words and re.fullmatch(r'-?[0-9]+', words[0]):
                 words = words[1:]
             continue
+        if head in FILE_PREFIXES:
+            words = [w for w in words[1:]]
+            while words and words[0].startswith('-'):
+                words = words[1:]
+            words = words[1:]  # the lock or typescript file
+            continue
         return head, words[1:]
     return None, []
 
@@ -1894,6 +1909,8 @@ def inline_codes(program, words):
         if flags:
             for index, token in enumerate(words):
                 key, equal, value = token.partition('=')
+                if '-c' in flags and re.fullmatch(r'-[A-Za-z]*c', token):
+                    key = '-c'  # python's short-option cluster (`-ic`, `-uc`)
                 if key in flags:
                     if equal:
                         codes.append(value)
@@ -1981,6 +1998,11 @@ def floor_command(program, words, inline, cwd=None):
             return True
     if len(rest) >= 2 and (program, rest[0], rest[1]) in CREDENTIAL_PAIRS:
         return True
+    if program in INTERPRETERS and '-m' in words and words[words.index('-m') + 1:words.index('-m') + 2] in (['keyring'],):
+        return True
+    if program == 'git' and git_parts(words)[0] == 'config' and any(
+            re.search(r'(?i)extraheader|password|passwd|token|credential|secret', w) for w in git_parts(words)[1]):
+        return True
     if program == 'export' and (not words or words == ['-p']):
         return True
     if program == 'set' and not words:
@@ -2002,40 +2024,65 @@ def floor_command(program, words, inline, cwd=None):
     return False
 
 
-def commands_of(tokens, inline=False, depth=0, keep=frozenset()):
+def patterns(program, words):
+    """The pattern operands of a search program: `-e` values, else its first operand."""
+    if program not in PATTERN_PROGRAMS:
+        return []
+    found, index, operand = [], 0, None
+    while index < len(words):
+        word = words[index]
+        if word in {'-e', '--regexp'} and index + 1 < len(words):
+            found.append(words[index + 1])
+        if word in PATTERN_VALUED:
+            index += 2
+            continue
+        if not word.startswith('-') and operand is None:
+            operand = word
+        index += 1
+    return found or ([operand] if operand is not None else [])
+
+
+def commands_of(tokens, inline=False, depth=0, keep=frozenset(), full=False):
     """[(program, words, env, inline)] for every command of `tokens`, inline code included (B steps 1 to 3, obligation
     6). An inline program text is kept whole for its own pass; every other token is also split at operators inside it."""
-    found, splitter = [], SPLIT_INLINE if inline else SPLIT_TOP
+    found, splitter = [], SPLIT_INLINE if inline or full else SPLIT_TOP
     for command in standalone_split(tokens):
         env = []
         program, words = normalize(command, env)
         codes = inline_codes(program, words) if program is not None else []
         kept = keep | set(codes)
+        searched = set(patterns(program, words))
         expanded = []
         for token in command:
             if token in kept:
                 expanded.append(token)
                 continue
-            for piece in splitter.split(token):
-                if splitter.fullmatch(piece):
+            # A pattern holds `|` and `&` as data, but the shell still runs a substitution inside it.
+            pieces = (SPLIT_TOP if token in searched else splitter).split(token)
+            for piece in pieces:
+                if SPLIT_INLINE.fullmatch(piece):
                     expanded.append(';')
+                elif len(pieces) > 1:
+                    # A piece cut out of a token (a substitution, a pipeline written without spaces) is a command of
+                    # its own: split it into words like inline shell code.
+                    expanded.extend(w.strip('()\'"') for w in piece.split() if w.strip('()\'"'))
                 elif piece.strip('()'):
                     expanded.append(piece.strip('()'))
         if expanded != command and depth < 8:
-            found.extend(commands_of(expanded, inline, depth + 1, kept))
+            found.extend(commands_of(expanded, inline, depth + 1, kept, full))
             continue
         found.append((program, words, env, inline))
         if depth < 8:
             for code in codes:
                 found.append(('#inline', [code], [], True))
                 shell = program in SHELLS or program == 'eval'
-                found.extend(commands_of(code.split() if shell else inline_tokens(code), True, depth + 1))
+                found.extend(commands_of(code.split() if shell else inline_tokens(code), True, depth + 1, full=full))
     return found
 
 
 def floor_hit(argv, cwd=None):
     """True when an argv (text values already removed) touches the floor in any of its commands."""
-    for program, words, env, inline in commands_of(argv):
+    for program, words, env, inline in commands_of(argv, full=True):
         if program == '#inline':
             code = words[0]
             lower = code.casefold()
@@ -2151,7 +2198,9 @@ def guard_hit(program, words, env, context):
         if colon and not source:
             return True  # `:dst` deletes and `:` pushes every matching branch
         destination = destination if colon else source
-        destination = destination.removeprefix('refs/heads/')
+        if destination.startswith('refs/') and not destination.startswith(('refs/heads/', 'refs/tags/')):
+            return True  # another ref namespace: unresolved
+        destination = destination.removeprefix('refs/heads/').removeprefix('heads/')
         if destination in {'HEAD', '@'}:
             if current is None:
                 return True
@@ -2237,7 +2286,11 @@ def classified(folder, argv_json, paths, coordinator, current):
         here = effective(applied, cwd)
         if here.get(MODE) == 'open':
             # `open`: no list, category, limit or repository state applies; only the floor and the guards (A).
-            return open_verdict(argv if argv_json is not None else None, paths, here), lease, here, None, None, argv, cwd
+            try:
+                verdict = open_verdict(argv if argv_json is not None else None, paths, here)
+            except Exception:  # any parser error answers Tier 3, never Tier 1 (fails closed)
+                verdict = 'unsafe'
+            return verdict, lease, here, None, None, argv, cwd
         if argv_json is not None:
             if isinstance(argv, list) and len(argv) >= 3 and argv[:2] == ['git', '-C']:
                 # `git -C <folder> ...` is judged as the same command run in that folder, which must lie in a
