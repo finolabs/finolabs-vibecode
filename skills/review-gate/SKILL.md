@@ -7,6 +7,8 @@ description: Gate work on an independent code review. Use when a user story or i
 
 Enforcers: `review_route.py` chooses families; `post_review.py` bounds posting; `merge_check.py` checks merge evidence. Every other procedure below is advisory (agent judgment), including route-first dispatch, fresh contexts, relay authorization, receipts and re-review. None grants host access.
 
+**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
+
 ## When the gate applies
 
 - **After each user story** or increment: review it, dispose every finding, fix and verify, then review the next story. The next story's implementation starts only after the previous gate is closed.
