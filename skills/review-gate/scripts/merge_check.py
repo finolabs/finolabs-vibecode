@@ -92,6 +92,7 @@ import re
 import subprocess
 import sys
 import time
+import unicodedata
 from datetime import datetime, timezone
 
 MARKER = re.compile(
@@ -589,7 +590,7 @@ def lease_mode(repo):
         return "strict"
 
 
-REVIEWER_NAME = re.compile(r"Reviewer: ([a-z]+)\b")
+REVIEWER_NAME = re.compile(r"Reviewer:\s+([A-Za-z]+)\b")
 
 
 def open_fallback(family, verdicts_found):
@@ -611,9 +612,11 @@ def open_fallback(family, verdicts_found):
         if any(second.startswith(fallback_line(other)) for other in review_config.FAMILIES):
             return False, f"{kind} marker has a malformed or another family's fallback line"
         role = roles.get(f"{kind} review")
-        named = REVIEWER_NAME.match(second)
-        if named and named.group(1) in review_config.FAMILIES and named.group(1) != role:
-            return False, f"{kind} marker names the {named.group(1)} reviewer, not the configured role"
+        # Fold case, spacing and compatibility forms first, so `Reviewer:  Claude` cannot slip past as another name.
+        named = REVIEWER_NAME.match(unicodedata.normalize("NFKC", second).strip())
+        name = named.group(1).casefold() if named else None
+        if name in review_config.FAMILIES and name != role:
+            return False, f"{kind} marker names the {name} reviewer, not the configured role"
         if role in review_config.FAMILIES and role != family:
             parts.append(f"{kind} by the configured {role} role")
             continue
@@ -682,6 +685,14 @@ def local_receipt(head, repo):
         return None
 
 
+def review_families():
+    """`review_config.FAMILIES`, the one family list, loaded from this folder."""
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import review_config
+    return review_config.FAMILIES
+
+
 def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, families=None, local_receipt=None,
              repo=None, fallback_family=None, changed_files=None, blocked_ok=False):
     """Return (ok, lines). `can_write(login)` answers write access; `lane_ok()` the lane;
@@ -735,7 +746,7 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
                 for kind in ("code", "security"):
                     second = (found.get(kind) or ("", "", None, ""))[3]
                     if any(second == fallback_line(f) or second.startswith(fallback_line(f) + " ")
-                           for f in ("claude", "codex", "antigravity")):
+                           for f in review_families()):
                         ok = False
                         lines.append(f"BLOCK independent {kind} review: a same-family fallback marker needs --fallback-family")
             for kind in ("code", "security"):
