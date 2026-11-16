@@ -9,7 +9,7 @@ argument-hint: "[start|stop]"
 
 Dependency: `delegate`. <script> is <delegate folder>/scripts/afk.py; if it is absent, report the missing dependency and stop. It classifies requests, keeps the lease and the log, executes nothing and makes no network call. What `check` allows in each mode is [references/rules.md](references/rules.md), the output of `afk.py rules`; read it, never restate it.
 
-Talk to the user in the language they are using, options included; keep commands, flags, paths and skill names unchanged (advisory (agent judgment)).
+**Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
 
 ## Start
 

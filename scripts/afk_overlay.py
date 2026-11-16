@@ -22,6 +22,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # support python -I
 import data_root as dr
 import git_metadata
+import parallel_slots as slots  # the host.md section reader afk.py settings() uses
 import project_store as store
 
 NAME = 'AGENTS.afk.md'
@@ -46,12 +47,17 @@ def is_name(name):
     return isinstance(name, str) and unicodedata.normalize('NFKC', name).casefold().startswith(NAME.casefold())
 
 
-CONTROL = re.compile('[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]')
+# Invisible characters outside Cc and Cf: variation selectors, the combining grapheme joiner and the Hangul fillers.
+INVISIBLE = re.compile('[\u034f\u115f\u1160\u3164\ufe00-\ufe0f\uffa0\U000e0100-\U000e01ef]')
 
 
 def unsafe_text(text):
-    """True when overlay text holds control, escape or bidirectional characters (tab and newline are fine)."""
-    return bool(CONTROL.search(text))
+    """True when overlay text holds a character a reader may not see: a control or format character (Unicode Cc or
+    Cf: C0 and C1 controls, escapes, bidirectional controls, zero-width, tag characters, the byte order mark), a line
+    or paragraph separator (Zl, Zp), a private-use or unassigned code point (Co, Cn), a variation selector, the
+    combining grapheme joiner or a Hangul filler. Tab and newline are fine; other combining marks stay allowed."""
+    return bool(INVISIBLE.search(text)) or any(
+        ch not in '\t\n' and unicodedata.category(ch) in ('Cc', 'Cf', 'Zl', 'Zp', 'Co', 'Cn') for ch in text)
 
 
 def disabled():
@@ -228,31 +234,29 @@ def present(cwd):
         return False
 
 
-def _section(text, heading):
-    found, inside = [], False
-    for line in text.splitlines():
-        if line.startswith('## '):
-            inside = line.rstrip() == '## ' + heading
-            continue
-        if inside:
-            found.append(line)
-    return found
-
-
 def mode(ident):
     """`open` or `strict` for this repository, as afk.py resolves it: the user's `## afk` `- Mode:` line (absent
     means open), replaced by an approved, bound repository `autopilot` `mode`. Any doubt raises."""
-    text = dr.read_data('host.md', 262144).decode('utf-8')
-    if sum(line.rstrip() == '## afk' for line in text.splitlines()) != 1:
-        raise ValueError('afk setup is missing or ambiguous')
-    values = [m[1] for m in (re.fullmatch(r'- Mode: (.+)', line) for line in _section(text, 'afk')) if m]
-    if len(values) > 1 or values and values[0] not in ('open', 'strict'):
+    text = dr.read_data('host.md', slots.HOST_LIMIT).decode('utf-8')
+    start, body, end = slots.host_section(text, 'afk')
+    if start == body == end:
+        raise ValueError('afk setup is missing')
+    values = {}
+    for line in text[body:end].splitlines():
+        if not line.strip():
+            continue
+        match = re.fullmatch(r'- ([A-Za-z -]+): (.+)', line)  # the line grammar of afk.py settings()
+        if not match or match[1] in values:
+            raise ValueError('afk setup is invalid')
+        values[match[1]] = match[2]
+    result = values.get('Mode', 'open')
+    if result not in ('open', 'strict'):
         raise ValueError('afk mode is invalid')
-    result = values[0] if values else 'open'
     found, settings, _, record = store.autopilot_binding(ident)
     project = settings.get('autopilot') if found == 'approved' else None
     if (isinstance(project, dict) and 'mode' in project and store.valid_autopilot(project)
-            and store.bound(record, ident) and record.get('target') == store.origin_target(ident)):
+            and store.bound(record, ident) and 'target' in record
+            and record['target'] == store.origin_target(ident)):
         result = project['mode']
     return result
 
