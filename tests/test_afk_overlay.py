@@ -2,6 +2,7 @@
 import contextlib
 import hashlib
 import importlib
+import importlib.util
 import io
 import json
 import os
@@ -190,6 +191,39 @@ class ModeTest(OverlayTest):
                 host.write_text(text)
                 with self.assertRaises(ValueError):
                     ov.mode(self.ident)
+
+    def test_a_key_or_value_afk_refuses_raises(self):
+        # The same closed keys and values as afk.py settings() (security review of PR 326): any other fails closed.
+        host = self.data / "host.md"
+        for line in ("- Foo: bar", "- Merge: maybe", "- Task choice: any", "- Push and pull requests: maybe",
+                     "- Trusted authors: all", "- Third-party instructions: off", "- Default branch: off",
+                     "- Lease hours: 0", "- Max runs: many", "- Quota floor percent: 101", "- Hosts: Codex, Codex",
+                     "- Hosts: Elsewhere", "- Test commands: git status"):
+            with self.subTest(line=line):
+                host.write_text("## afk\n- Mode: open\n%s\n" % line)
+                host.chmod(0o600)
+                with self.assertRaises(ValueError):
+                    ov.mode(self.ident)
+        for line in ("- Merge: no", "- Lease hours: 8", "- Hosts: Claude Code, Codex", "- Production: decide",
+                     "- Test commands: npm test", "- Excerpts leave the machine: yes"):
+            with self.subTest(line=line):
+                host.write_text("## afk\n- Mode: open\n%s\n" % line)
+                self.assertEqual(ov.mode(self.ident), "open")
+        # Under a live lease the writer refuses, so an invalid line can never read as open.
+        self.lease()
+        host.write_text("## afk\n- Mode: open\n- Foo: bar\n")
+        self.assertIsNotNone(ov.write_refused(self.ident))
+
+    def test_the_key_set_matches_afk(self):
+        spec = importlib.util.spec_from_file_location("afk_keys_overlay", ROOT / "skills/delegate/scripts/afk.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(ov.AFK_KEYS, {*module.DEFAULTS, "Merge", *module.CHOICES, *module.CATEGORIES,
+                                       module.CONSENT, module.TARGETS, *module.LISTS})
+        self.assertEqual(ov.AFK_CHOICES, {**module.CHOICES, **module.VALUE_CHOICES})
+        self.assertEqual(ov.AFK_HOSTS, module.AFK_HOSTS)
+        self.assertEqual(ov.AFK_NUMBERS, module.NUMBERS)
+        self.assertEqual(ov.AFK_LISTS, module.LISTS)
 
     def test_a_bound_project_mode_replaces_the_account_mode(self):
         import project_store as store

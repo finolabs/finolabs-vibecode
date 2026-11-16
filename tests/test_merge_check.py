@@ -810,6 +810,13 @@ class SameFamilyFallbackTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("BLOCK independent code review: a same-family fallback marker needs --fallback-family", lines)
 
+    def test_a_fallback_marker_of_any_family_without_the_flag_blocks(self):
+        # The refusal reads the one family list, `zcode` included.
+        ok, lines = mc.evaluate(self.data(mc.fallback_line("zcode")), lambda who: who in WRITERS, adopted=False,
+                                independent=True, families=dict(author="claude", code="codex", security="codex"))
+        self.assertFalse(ok)
+        self.assertIn("BLOCK independent code review: a same-family fallback marker needs --fallback-family", lines)
+
     def test_partial_or_unknown_evidence_refuses(self):
         from datetime import timedelta
         iso = self.iso
@@ -923,7 +930,11 @@ class OpenLeaseFallbackTest(SameFamilyFallbackTest):
     def test_a_line_naming_another_family_than_the_role_refuses(self):
         # A same-family line that is not the exact fallback line never counts as the configured role's review.
         self.roles = {"judge": "host", "code review": "codex", "security review": "claude"}
-        for second in ("Reviewer: claude", "Reviewer: claude (same family as the author)", self.LINE[:-1]):
+        # Case, spacing and compatibility forms fold before the name is compared (review of PR 329).
+        for second in ("Reviewer: claude", "Reviewer: claude (same family as the author)", self.LINE[:-1],
+                       "Reviewer: Claude", "Reviewer:  claude", " Reviewer: claude", "Reviewer:\tCLAUDE",
+                       "Reviewer: \uff43\uff4c\uff41\uff55\uff44\uff45", "\uff32eviewer: claude",
+                       "Reviewer:claude", "Reviewer: claude\uff3f"):
             with self.subTest(second=second):
                 data = pr(comments=[comment(marker("code", "APPROVE") + "\n" + second),
                                     comment(marker("security", "APPROVE") + "\n" + self.LINE)], body=ROUTED)

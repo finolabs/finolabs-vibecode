@@ -26,7 +26,7 @@ A repository's approved key wins in that repository only. `strict` keeps both gu
 - Split at the operators `&`, `&&`, `;`, `|`, `|&`, `||` and newlines, standing alone or inside a token, and at `$(`, backticks and `<(`.
 - Program words lose their folder and these prefixes: `bunx`, `caffeinate`, `chrt`, `command`, `doas`, `exec`, `ionice`, `ltrace`, `nice`, `nohup`, `npx`, `stdbuf`, `strace`, `sudo`, `taskset`, `time`, `timeout`, `unbuffer`, `uvx`, `watch`, `xargs`; `flock`, `script` with their file operand; `env` with its assignments.
 - Inline code is read as commands: shells `bash`, `dash`, `fish`, `ksh`, `sh`, `zsh` with `-c`; `bun` `--eval`, `--print`, `-e`, `-p`; `deno` `eval`; `groovy` `-e`; `julia` `-e`; `lua` `-e`; `node` `--eval`, `--print`, `-e`, `-p`; `osascript` `-e`; `perl` `-E`, `-e`; `php` `-r`; `powershell` `-c`, `-Command`, `-command`; `pwsh` `-c`, `-Command`, `-command`; `python` `-c`; `python3` `-c`; `R` `-e`; `Rscript` `-e`; `ruby` `-e`; `awk`, `gawk`, `mawk`, `nawk` program text; `eval`.
-- Search patterns of `ack`, `ag`, `egrep`, `fgrep`, `git-grep`, `grep`, `jq`, `rg` are data, never split; the values of `--body`, `--message`, `--notes`, `--title`, `-b`, `-m`, `-t` for `gh`, `git`, `glab` are text, floored only for a secret value.
+- Search patterns of `ack`, `ag`, `egrep`, `fgrep`, `git-grep`, `grep`, `jq`, `rg` are data in the first floor reading; a second reading splits them at a lone `|` or `&`, since an argv cannot show whether the pipe was quoted, and floors a bare `env` or `printenv` cut out there (a bare `export` or `set` there is skipped); the values of `--body`, `--message`, `--notes`, `--title`, `-b`, `-m`, `-t` for `gh`, `git`, `glab` are text, floored only for a secret value.
 
 ### Floor: commands
 

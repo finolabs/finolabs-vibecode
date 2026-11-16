@@ -92,6 +92,7 @@ import re
 import subprocess
 import sys
 import time
+import unicodedata
 from datetime import datetime, timezone
 
 MARKER = re.compile(
@@ -589,7 +590,7 @@ def lease_mode(repo):
         return "strict"
 
 
-REVIEWER_NAME = re.compile(r"Reviewer: ([a-z]+)\b")
+REVIEWER_NAME = re.compile(r"Reviewer:\s*([A-Za-z]+)(?![A-Za-z])")
 
 
 def open_fallback(family, verdicts_found):
@@ -611,9 +612,11 @@ def open_fallback(family, verdicts_found):
         if any(second.startswith(fallback_line(other)) for other in review_config.FAMILIES):
             return False, f"{kind} marker has a malformed or another family's fallback line"
         role = roles.get(f"{kind} review")
-        named = REVIEWER_NAME.match(second)
-        if named and named.group(1) in review_config.FAMILIES and named.group(1) != role:
-            return False, f"{kind} marker names the {named.group(1)} reviewer, not the configured role"
+        # Fold case, spacing and compatibility forms first, so `Reviewer:  Claude` cannot slip past as another name.
+        named = REVIEWER_NAME.match(unicodedata.normalize("NFKC", second).strip())
+        name = named.group(1).casefold() if named else None
+        if name in review_config.FAMILIES and name != role:
+            return False, f"{kind} marker names the {name} reviewer, not the configured role"
         if role in review_config.FAMILIES and role != family:
             parts.append(f"{kind} by the configured {role} role")
             continue
@@ -732,10 +735,13 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
                 ok = ok and granted
             else:
                 same = [kind for kind in ("code", "security") if families[kind] == families["author"]]
+                from pathlib import Path
+                sys.path.insert(0, str(Path(__file__).resolve().parent))
+                import review_config
                 for kind in ("code", "security"):
                     second = (found.get(kind) or ("", "", None, ""))[3]
                     if any(second == fallback_line(f) or second.startswith(fallback_line(f) + " ")
-                           for f in ("claude", "codex", "antigravity")):
+                           for f in review_config.FAMILIES):
                         ok = False
                         lines.append(f"BLOCK independent {kind} review: a same-family fallback marker needs --fallback-family")
             for kind in ("code", "security"):
