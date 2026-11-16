@@ -89,6 +89,8 @@ FLOOR = [
     (['{', 'gh', 'auth', 'token;', '}'], 'security review of de4157b'),
     (['bash', '-c', 'f() { gh auth token; }; f'], 'security review of de4157b'),
     (['git', 'checkout', '-t', 'x|printenv'], 'security review of de4157b'),
+    (['rg', 'x|env'], 'security review of PR 325'), (['rg', 'x&env'], 'security review of PR 325'),
+    (['grep', '-e', 'a|env'], 'security review of PR 325'), (['rg', 'x|printenv', '.'], 'security review of PR 325'),
     (['git', 'diff', '--no-index', '-b', '.env', '/dev/null'], 'code review of de4157b'),
     (['git', 'show', '-m', 'HEAD:.env'], 'code review of de4157b'),
     (['git', '--no-advice', 'config', 'user.password'], 'code review of de4157b'),

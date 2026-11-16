@@ -2098,7 +2098,7 @@ def commands_of(tokens, inline=False, depth=0, keep=frozenset(), full=False, spl
     """[(program, words, env, inline, pattern)] for every command of `tokens`, inline code included (B steps 1 to 3,
     obligation 6). An inline program text is kept whole for its own pass; every other token is also split at operators
     inside it. `pattern` is True only for a command that a split reading cut out of a search pattern after a lone `|`
-    or `&` (`origin`), the one place the bare `export`, `set` and `env` carve-out applies."""
+    or `&` (`origin`), the one place the bare `export` and `set` carve-out applies."""
     found, splitter = [], SPLIT_INLINE if inline or full else SPLIT_TOP
     for command in standalone_split(tokens):
         env = []
@@ -2158,7 +2158,8 @@ def commands_of(tokens, inline=False, depth=0, keep=frozenset(), full=False, spl
 def floor_hit(argv, cwd=None):
     """True when an argv (text values already removed) touches the floor in any of its commands. A search pattern is
     read twice: as data (so `rg 'import|export'` stays Tier 1) and split at lone `|` and `&`, since an argv token cannot
-    show whether its pipe was quoted; the second reading skips only the bare `export`, `set` and `env` rules."""
+    show whether its pipe was quoted; the second reading skips only the bare `export` and `set` rules (a bare `env`
+    still floors, so an unquoted `rg x|env` cannot print the environment)."""
     return any(commands_hit(commands_of(argv, full=True, split_patterns=reading), cwd, loose=bool(reading))
                for reading in READINGS)
 
@@ -2177,8 +2178,10 @@ def commands_hit(commands, cwd, loose):
             continue
         if any(sensitive_name(name) or secret_patterns.PREFIX.search(value) for name, value in env):
             return True
-        if loose and pattern and not words and program in {'export', 'set', 'env'}:
-            continue  # `rg 'import|export'`: a pattern word after a lone pipe, read as a command by the split reading
+        # `rg 'import|export'`: a pattern word after a lone pipe, read as a command by the split reading. A bare `env`
+        # is never skipped: the argv of an unquoted `rg x|env` is the same, and the shell would print the environment.
+        if loose and pattern and not words and program in {'export', 'set'}:
+            continue
         if floor_command(program, words, inline, cwd):
             return True
         if any(floor_path(t, cwd) for t in ([program] if program else []) + words):
