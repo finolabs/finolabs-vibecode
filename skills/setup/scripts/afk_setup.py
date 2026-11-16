@@ -34,6 +34,8 @@ CATEGORIES = {'Production': True, 'Real users and customer data': True, 'Unrecov
               'Shared settings': False, 'Recoverable deletion': False, 'Repository comments': False}
 MOVABLE = tuple(name for name, fixed in CATEGORIES.items() if not fixed)
 CONSENT = 'Excerpts leave the machine'
+# docs/specs/afk-autonomy.md A, C and E: the mode first, then the two guards of `open`; `strict` keeps Merge.
+CHOICES = {'Mode': ('open', 'strict'), 'Third-party instructions': ('guard', 'open'), 'Default branch': ('guard', 'open')}
 TARGETS = 'Non-production targets'
 MAX_TARGETS = 20
 # Account defaults of the command and file lists; a repository's own list replaces each (owner decision 15/11/2026).
@@ -45,9 +47,18 @@ STATE = 'state/autopilot-setup'
 
 
 def validate(values):
-    if not isinstance(values, dict) or set(values) != {*DEFAULTS, 'Merge', *CATEGORIES, CONSENT, TARGETS, *LISTS}:
-        raise ValueError('explicit Merge answer and all settings required')
+    required = {*DEFAULTS, *CHOICES, *CATEGORIES, CONSENT, TARGETS, *LISTS}
+    if not isinstance(values, dict) or not required <= set(values) or not set(values) <= required | {'Merge'}:
+        raise ValueError('all settings required')
+    if values['Mode'] == 'strict' and values.get('Merge') is None:
+        raise ValueError('explicit Merge answer required in strict')
     for key, value in values.items():
+        if key == 'Merge' and value is None:
+            continue
+        if key in CHOICES:
+            if value not in CHOICES[key]:
+                raise ValueError('invalid choice')
+            continue
         if key in LISTS:
             # The reader splits on '; ', so an entry holding it would read as two.
             if not isinstance(value, list) or (value and (any(not isinstance(e, str) or ';' in e for e in value)
@@ -82,8 +93,9 @@ def validate(values):
 
 def render(values):
     validate(values)
-    keys = ['Hosts', 'Task choice', 'Push and pull requests', 'Merge', 'Trusted authors', *NUMBERS, *CATEGORIES, CONSENT]
-    lines = ''.join(f'- {key}: {values[key]}\n' for key in keys)
+    keys = ['Mode', 'Third-party instructions', 'Default branch', 'Hosts', 'Task choice', 'Push and pull requests',
+            'Merge', 'Trusted authors', *NUMBERS, *CATEGORIES, CONSENT]
+    lines = ''.join(f'- {key}: {values[key]}\n' for key in keys if values.get(key) is not None)
     if values[TARGETS]:  # an empty list is no line: the reader's default is empty
         lines += f'- {TARGETS}: ' + '; '.join(values[TARGETS]) + '\n'
     for key in LISTS:
@@ -195,7 +207,10 @@ def main(argv=None):
         pre.add_argument('--hosts', nargs='+', choices=('Claude Code', 'Codex', 'Antigravity'), default=['Claude Code'])
         pre.add_argument('--task-choice', choices=('choose', 'listed'), default='choose')
         pre.add_argument('--push-and-pull-requests', choices=('yes', 'no'), default='yes')
-        pre.add_argument('--merge', choices=('yes', 'no'), required=True)
+        pre.add_argument('--mode', choices=CHOICES['Mode'], default='open')
+        pre.add_argument('--third-party-instructions', choices=CHOICES['Third-party instructions'], default='guard')
+        pre.add_argument('--default-branch', choices=CHOICES['Default branch'], default='guard')
+        pre.add_argument('--merge', choices=('yes', 'no'))  # required in strict; ignored and optional in open
         pre.add_argument('--trusted-authors', choices=('own',), default='own')
         for key in NUMBERS:
             pre.add_argument('--' + key.lower().replace(' ', '-'), type=int, default=DEFAULTS[key])
@@ -209,7 +224,8 @@ def main(argv=None):
         app.add_argument('--digest', required=True)
         args = parser.parse_args(argv)
         if args.action == 'preview':
-            values = {key: getattr(args, key.lower().replace(' ', '_')) for key in (*DEFAULTS, 'Merge')}
+            values = {key: getattr(args, key.lower().replace(' ', '_').replace('-', '_'))
+                      for key in (*DEFAULTS, 'Merge', *CHOICES)}
             values['Hosts'] = ', '.join(args.hosts)
             values.update({c: 'decide' if c in args.decide else 'stop' for c in CATEGORIES})
             values[CONSENT] = args.excerpts_leave_the_machine

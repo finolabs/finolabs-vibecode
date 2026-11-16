@@ -43,7 +43,8 @@ SETTINGS_APPROVED = 'state/settings-approved'
 SETTING_KEYS = ('ledger', 'tasks', 'parallel', 'parallel-caps', 'label', 'autopilot')
 # The project-scoped away keys (docs/specs/autopilot.md "Project scope"), in stored order; every other autopilot
 # key is user scope only, so a project file cannot carry it.
-AUTOPILOT_KEYS = {'task-choice': ('choose', 'listed'), 'push-and-pull-requests': ('yes', 'no'),
+AUTOPILOT_KEYS = {'mode': ('open', 'strict'), 'third-party-instructions': ('guard', 'open'),
+                  'default-branch': ('guard', 'open'), 'task-choice': ('choose', 'listed'), 'push-and-pull-requests': ('yes', 'no'),
                   'merge': ('yes', 'no'), 'trusted-authors': ('own',), 'roots': None,
                   'max-runs': range(1, 10001), 'max-runtime-minutes': range(1, 1441),
                   'max-actions-per-hour': range(1, 10001),

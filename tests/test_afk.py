@@ -18,7 +18,7 @@ from tests.data_root_fixture import account
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'skills/delegate/scripts/afk.py'
 SETUP = ('## afk\n- Hosts: Claude Code\n- Task choice: choose\n'
-         '- Push and pull requests: yes\n- Merge: yes\n- Trusted authors: own\n')
+         '- Push and pull requests: yes\n- Merge: yes\n- Trusted authors: own\n- Mode: strict\n')
 ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
                  '[remote "origin"]\n\turl = https://github.com/example/demo.git\n'
                  '\tfetch = +refs/heads/*:refs/remotes/origin/*\n')
@@ -567,11 +567,13 @@ class AwayDecisionTest(AfkBase):
             return argv[:6] + [paths[argv[6]]] + argv[7:]
         return argv
 
-    def check_as(self, argv, coordinator='claude', tier=1, code='allowed', real=True):
+    def check_as(self, argv, coordinator='claude', tier=1, code='allowed', real=True, or_floor=False):
         argv = self.real(argv) if real else argv
         flags = ('--coordinator', coordinator) if coordinator else ()
         status, output = self.invoke('check', *flags, '--argv-json', json.dumps(argv))
         result = json.loads(output)
+        if or_floor and result == {'tier': 3, 'code': 'floor'}:
+            return  # docs/specs/afk-autonomy.md B: an unknown form holding a secret, key or env file is the floor in strict
         self.assertEqual(status, 0 if result['tier'] == 1 else 3, output)
         if code is None:  # any Tier 3 code: a checkout under a protected folder may say `protected` first
             self.assertEqual(result['tier'], 3, argv)
@@ -917,7 +919,7 @@ class AwayDecisionTest(AfkBase):
                      JUDGE[:-1] + ['.finolabs/briefs/packet.sh'],
                      JUDGE[:3] + ['check-host'] + JUDGE[4:], JUDGE[:3] + JUDGE[5:]):
             with self.subTest(argv=argv[3:6] + argv[-2:]):
-                self.check_as(argv, tier=3, code='unknown')
+                self.check_as(argv, tier=3, code='unknown', or_floor=True)
         # Another copy of judge.py or a call without isolated Python is not the ladder form.
         for argv in (JUDGE[:2] + [other] + JUDGE[3:], ['python3'] + JUDGE[2:]):
             self.check_as(argv, tier=3, code=None)
@@ -1122,7 +1124,7 @@ class AwayDecisionTest(AfkBase):
                 (CODEX[:-2], 'claude'),  # no brief and no separator
                 (['python3'] + CODEX[2:], 'claude')):
             with self.subTest(argv=argv[3:9], coordinator=coordinator):
-                self.check_as(argv, coordinator=coordinator, tier=3, code='unknown')
+                self.check_as(argv, coordinator=coordinator, tier=3, code='unknown', or_floor=True)
         # Another copy of the wrapper is not the form; inside this install's checkout it is also a protected path.
         self.check_as(['python3', '-I', str(ROOT / 'scripts/delegate_env.py')] + CODEX[3:], tier=3, code=None)
         self.assertEqual(self.counts()['actions'], 0)
@@ -1155,7 +1157,7 @@ class AwayDecisionTest(AfkBase):
                 shapes['separator then brief'] = AGY[:8] + AGY[9:] + ['--', BRIEF]
             for name, argv in shapes.items():
                 with self.subTest(family=family, shape=name):
-                    self.check_as(argv, coordinator=coordinator, tier=3, code='unknown')
+                    self.check_as(argv, coordinator=coordinator, tier=3, code='unknown', or_floor=True)
         self.assertEqual(self.counts()['actions'], 0)
         for form, coordinator in forms.values():
             self.check_as(form, coordinator=coordinator)
@@ -1194,7 +1196,7 @@ class AwayDecisionTest(AfkBase):
                       'Read ' + home + '/notes.md first.', 'See ~/private/notes.', 'Look in /ho' + 'me/synthetic/x.',
                       'Open C:\\work\\x.txt.', BRIEF + '\nsession_cookie=abc'):
             with self.subTest(brief=brief):
-                self.check_as(CODEX[:-1] + [brief], tier=3, code='unknown')
+                self.check_as(CODEX[:-1] + [brief], tier=3, code='unknown', or_floor=True)
         self.assertEqual(self.counts()['actions'], 0)
         # Discussing configuration without an assigned value stays possible.
         for brief in ('Should the db password setting move to the vault, or stay in the env file?',

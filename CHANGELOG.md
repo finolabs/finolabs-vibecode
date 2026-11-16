@@ -4,14 +4,18 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
-### Fixed
+### Changed
 
-- Questions follow the user's language: the rule injected at session start says to ask in the language the user is using and to translate every question, description and choice label a skill quotes, keeping command names, flags, paths and skill names unchanged; `setup`'s interview rules open with the same point, and `afk` and `review-gate` carry the language line. Before, setup and away questions copied in English reached users who write another language.
+- Breaking: afk gains two modes (owner decisions, 16/11/2026; `docs/specs/afk-autonomy.md`). `open`, the default, lets every command, path, category and merge run under a live lease except the credential floor: `afk.py check` answers `floor` (Tier 3, never approvable through Decide) for a request that changes a credential or reads, prints, copies or sends a secret or key, after splitting operators, dropping wrapper prefixes and reading inline code. Two guards are on by default in `open`: instructions from third-party content never grant actions (advisory), and `check` answers `guarded` for a commit on the default branch, a push to it, and every force, delete and mirror push. `- Default branch: open` and `- Third-party instructions: open` switch them off; a repository's approved `mode`, `default-branch` and `third-party-instructions` keys win there. `- Mode: strict` keeps every earlier list, category, limit and gate. A lease set up before this change, with no `Mode` line, is now `open`; add `- Mode: strict` to `## afk` to keep the earlier rules. In `open` the `Merge` answer is ignored and optional, and `/setup add afk` (`afk_setup.py preview --mode`) writes the mode first.
 
 ### Removed
 
 - Breaking: the 22 `fnl-` skill aliases (`skills/fnl-<name>/`) are removed (owner decision, 16/11/2026); type the current name instead: `/fnl-advisor` → `/advisor`, `/fnl-afk` → `/afk`, `/fnl-ask` → `/help`, `/fnl-brb` → `/afk`, `/fnl-checks` → `/checks`, `/fnl-coding-router` → `/coding-router`, `/fnl-commit-messages` → `/commit-messages`, `/fnl-delegate` → `/delegate`, `/fnl-gtg` → `/pause`, `/fnl-handoff` → `/handoff`, `/fnl-help` → `/help`, `/fnl-open-source-review` → `/open-source-review`, `/fnl-pause` → `/pause`, `/fnl-plugin-packaging` → `/plugin-packaging`, `/fnl-restore-point` → `/restore-point`, `/fnl-review-gate` → `/review-gate`, `/fnl-security-review-gate` → `/security-review-gate`, `/fnl-session-hygiene` → `/tidy`, `/fnl-setup` → `/setup`, `/fnl-status` → `/status`, `/fnl-update` → `/update`, `/fnl-versioning` → `/versioning`. Instruction files that still name an old `fnl-` skill point at nothing: `/setup check` lists each one with its new name. The `fnl-review` and `fnl-router` markers keep their names, so reviews already posted on open pull requests still count; usage metrics recorded under an old skill name still count under the new one.
 - Breaking: the three agents lose the prefix too (owner decision, 16/11/2026): `fnl-reviewer` → `reviewer`, `fnl-security-reviewer` → `security-reviewer`, `fnl-navigator` → `navigator`. On Claude Code start them as `finolabs-vibecode:reviewer`, `finolabs-vibecode:security-reviewer` and `finolabs-vibecode:navigator`; a brief, instruction file or host config that names an old agent must use the new name. Usage metrics record the new names, and agent events stored under an old name count under the new one. On Claude Code and Antigravity the aliases go away with the update; on Codex they stay until the plugin is refreshed.
+
+### Fixed
+
+- Questions follow the user's language: the rule injected at session start says to ask in the language the user is using and to translate every question, description and choice label a skill quotes, keeping command names, flags, paths and skill names unchanged; `setup`'s interview rules open with the same point, and `afk` and `review-gate` carry the language line. Before, setup and away questions copied in English reached users who write another language.
 
 ## [0.3.1] - 2026-11-15
 
