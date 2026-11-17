@@ -1,6 +1,6 @@
 # Release 0.3.2: scope
 
-Status: accepted; prepared, to be tagged v0.3.2 after the owner's yes.
+Status: released; tagged v0.3.2 on 2026-11-17; live delivery of the afk check hook, the proof nudge and the merge notice rename reminder on a user's machine, and a real upgrade from 0.3.1, remain unverified.
 
 ## What shipped
 
