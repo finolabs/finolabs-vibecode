@@ -34,7 +34,7 @@ A pack installed only for the user, with no instruction adopting it, supplies to
 
 A request that is only a review, with no change to make, goes to `review-gate`, plus `security-review-gate` when its triggers hit, on every path.
 
-When the host config names a judge, read [references/activity-selection.md](references/activity-selection.md) before choosing the depth and the next activity, and take those judgments from it. Without a judge, decide them yourself by observed fit and the adapter, or ask the user the one question that decides it.
+Decide the depth and the next activity yourself by observed fit and the adapter, or ask the user the one question that decides it (advisory, agent judgment).
 
 Done when you can name the workflow path, the phase and the next activity.
 
@@ -44,7 +44,7 @@ Done when you can name the workflow path, the phase and the next activity.
 - **NORMAL**: understood behavior and integration.
 - **DEEP**: consequential uncertainty, unknown consumers, sensitive boundaries or irreversible effects. Also: logic that combines several calculations whose errors compound, a prediction or forecast, and user input that is itself ambiguous.
 
-With a judge configured, ask it for the depth as [references/activity-selection.md](references/activity-selection.md) "Depth" says; the triggers here still raise it. Depth sets effort inside the chosen path and decides its optional ceremony, whatever a workflow skill's own trigger says; in a Spec Kit repository it bypasses nothing except through the Spec Kit depth gate. Upgrade before dependent work. Downgrade only future ceremony when evidence allows, never acceptance, gates, findings or failure counters. File count alone does not set depth.
+Depth sets effort inside the chosen path and decides its optional ceremony, whatever a workflow skill's own trigger says; in a Spec Kit repository it bypasses nothing except through the Spec Kit depth gate. Upgrade before dependent work. Downgrade only future ceremony when evidence allows, never acceptance, gates, findings or failure counters. File count alone does not set depth.
 
 Record the receipt with `python3 -I <this skill's folder>/scripts/record.py router --depth <MIN|NORMAL|DEEP> --trigger <trigger>`. The command only prints the receipt; when the user has turned usage metrics on, the plugin's hook records it with the session. The trigger names what set the depth, one of `none`, `contract`, `security`, `privacy`, `permission`, `migration`, `dependency`, `uncertainty`, `consumers`, `irreversible`, `calculation`, `prediction`, `input`.
 
