@@ -175,14 +175,19 @@ class AfkCheckHookTest(unittest.TestCase):
         self.start()
         # Ordinary style: the operator ends the word before it, so both commands are read and judged.
         for command in ('ls /tmp; git status', 'ls /tmp&& git status', 'ls /tmp|| git status', 'ls /tmp| head',
-                        'ls /tmp; git status; git log -1'):
+                        'ls /tmp; git status; git log -1', 'ls /tmp; git status 2>&1 | head'):
             with self.subTest(command=command):
                 self.assertIsNone(self.hook(command))
         for command in ('ls /tmp; printenv', 'git commit -m msg; printenv', 'ls /tmp&& env', 'ls /tmp| printenv'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), parked('floor'))
         # An operator glued to the word after it, or one inside quotes beside a split one, is still not read.
-        for command in ('ls /tmp;printenv', 'git commit -m msg;printenv', 'echo "a;" b; printenv'):
+        # A quoted or escaped operator elsewhere never stands in for the glued one (review of #352).
+        for command in ('ls /tmp;printenv', 'git commit -m msg;printenv', 'echo "a;" b; printenv',
+                        "git commit -m x;printenv FNL_TEST 'a;'", 'git commit -m x;printenv FNL_TEST a\\;',
+                        'git commit -m x&&printenv FNL_TEST "a&&"', "git commit -m x;printenv FNL_TEST $'a;'",
+                        'git commit -m x;printenv FNL_TEST $"a;"', "git commit -m x;cat</tmp/.netrc - 'a;'",
+                        "git commit -m 'x;' y;printenv"):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), denial(PARSE))
         # A quoted operator alone is a text value, as before.

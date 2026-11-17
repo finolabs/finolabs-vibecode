@@ -296,11 +296,17 @@ def command_words(argv, afk):
 def glued_operator(text, argv):
     """True when an operator outside quotes is glued to a word (`x;printenv`, `a&&b`, `ls|cat`): the word reads as
     one argument here, as a commit message or another text value, while the shell runs what follows it."""
+    return operators_in(punctuated(text)) != operators_in(argv)
+
+
+def punctuated(text):
+    """The words of a punctuation-aware split, which ends a word at an operator outside quotes as bash does and
+    keeps a quoted or escaped operator inside its word."""
     import shlex
     lexer = shlex.shlex(text, posix=True, punctuation_chars=True)
     lexer.commenters = ''
     lexer.whitespace_split = True
-    return operators_in(list(lexer)) != operators_in(argv)
+    return list(lexer)
 
 
 PUNCTUATION = re.compile(r'[();<>|&]+')
@@ -314,13 +320,28 @@ TRAILING_OPERATOR = re.compile(r'(.*?[^;&|])(;|&&|\|\||\|&|\||&)')
 def detached(argv):
     """The argv with a control operator that ends a word split off as its own word (`/x;` becomes `/x` and `;`), as
     bash ends a word at an unquoted operator. Only a word whose last characters are one operator is split; the
-    caller keeps the result only when it then holds exactly the operators the shell reads, so an operator inside
-    quotes is never split off."""
+    caller keeps the result only when it is `aligned` with the punctuation-aware split, so a quoted or escaped
+    operator is never split off and cannot stand in for one that stays glued elsewhere."""
     words = []
     for word in argv:
         match = TRAILING_OPERATOR.fullmatch(word)
         words.extend(match.groups() if match else (word,))
     return words
+
+
+def aligned(words, tokens):
+    """True when each word, in order, equals one run of consecutive punctuation-aware tokens, and a run of more than
+    one token holds no control operator: a glued redirect (`2>&1`) may read as one word, an operator never hides
+    inside a word, and a word split at a quoted operator (`'a;'` read as `a` and `;`) matches no run."""
+    position = 0
+    for word in words:
+        run = []
+        while position < len(tokens) and len(''.join(run)) < len(word):
+            run.append(tokens[position])
+            position += 1
+        if ''.join(run) != word or (len(run) > 1 and operators_in(run)):
+            return False
+    return position == len(tokens)
 
 
 def operators_in(tokens):
@@ -421,7 +442,7 @@ def main():
         # An operator glued to the word after it (`x;printenv`) is not split and stays denied below.
         if glued_operator(unquoted_newlines(command), argv):
             split = detached(argv)
-            if not glued_operator(unquoted_newlines(command), split):
+            if aligned(split, punctuated(unquoted_newlines(command))):
                 argv = split
         if unreadable(command):
             deny(PARSE_MESSAGE)

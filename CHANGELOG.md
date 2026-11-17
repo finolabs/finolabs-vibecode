@@ -16,7 +16,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - The worktree sweep (`commit-messages`, `review-gate`) reported every worktree dirty when a folder such as `.claude/` was ignored only by the user's global ignore file: it runs git without the home folder, so git never read that file. It now resolves the global ignore file once and passes it to `git status` alone, so merged, clean worktrees become candidates again.
 
-- The afk check hook refused every command written in the usual style `a; b` or `a&& b`: shlex keeps an operator that ends a word inside that word, which the hook read as an operator glued to a word. It now splits such an operator off as bash does and judges both commands; an operator glued to the word after it (`a;b`) is still refused.
+- The afk check hook refused every command written in the usual style `a; b` or `a&& b`: shlex keeps an operator that ends a word inside that word, which the hook read as an operator glued to a word. It now splits such an operator off as bash does and judges both commands; an operator glued to the word after it (`a;b`) is still refused, and a quoted or escaped operator is never split off, so it cannot stand in for a glued one.
 
 ### Known limits
 
