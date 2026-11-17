@@ -6,19 +6,21 @@ Every question follows [interview.md](../interview.md): native question tool, ne
 
 ## Native threshold (Claude Code, Codex)
 
+The beginner path and Quick setup open this section too. Before asking, say that without a limit Claude Code's `tidy` nudge has no threshold and stays silent (Codex falls back to 90% of the window).
 Ask: "Choose when Claude Code or Codex shortens a long conversation to make room?"
-Yes: Choose a limit measured in tokens, small pieces of text; a separate approval follows before host settings change. Preparation stays local.
-No: Leave conversation settings unchanged; ask later.
+Yes: Choose a limit measured in tokens, small pieces of text, and where it applies; a separate approval follows before host settings change. Preparation stays local.
+No: Leave conversation settings unchanged; Claude Code's reminder to save work before shortening stays silent. Ask later.
 Undo: Cancel before applying; after applying, approve a removal plan.
 Choices: "Yes, choose a limit" / "No, keep current settings".
-After a clear yes, recheck the installed host's documented control from `tidy` "Context pressure", then ask the token value as free text: "How many tokens should the conversation reach before it is shortened?"
+After a clear yes, recheck the installed host's documented control from `tidy` "Context pressure". For Claude Code, ask: "Where should this limit apply?" Choices: "Every repository (user scope)" / "This repository only", none preselected. User scope writes the account's settings.json (every repository of that install); this repository writes its untracked `.claude/settings.local.json`, this machine only, overriding the user value there (managed settings win). Codex: user scope only. The answer picks the preview; the save approval still decides (advisory, agent judgment).
+Then show the "Recommended threshold" row for the user's session kind, with its reason, from [compaction-details.md](../compaction-details.md), never preselected or prefilled, and ask the token value as free text: "How many tokens should the conversation reach before it is shortened?"
 Description: Enter a token count to prepare a local plan; nothing sent or applied. Skip to keep settings; choose later or change the number before approval.
-Claude Code allows 100000 to 1000000; Codex 1000 to 10000000. Explain that models with a 1M window compact late by default, so a lower value compacts earlier; prescribe no value. Antigravity has no documented native setting: skip this and offer the stop below (advisory, agent judgment).
+Claude Code allows 100000 to 1000000; Codex 1000 to 10000000. Explain that 1M-window models compact late by default, so a lower value compacts earlier; the user picks the number (advisory, agent judgment). Antigravity has no documented native setting: skip this and offer the stop below (advisory, agent judgment).
 Antigravity vendor docs through 1.5.3 (07/11/2026) document automatic compaction and `/context`, but no threshold or off switch; `/compact` may not exist. Offer `/new` or `/fork` (advisory, agent judgment).
 
 Before the limit approval, follow the native preview procedure in [compaction-details.md](../compaction-details.md).
 "Save the shown limit for shortening future conversations?"
-Yes: Change only the shown key in the listed Claude settings.json or Codex config.toml, with backups. It affects new sessions; saving sends nothing.
+Yes: Change only the shown key in the listed Claude settings.json or settings.local.json, or Codex config.toml, with backups. It affects new sessions; saving sends nothing.
 No: Leave those files unchanged; ask later.
 Undo: Approve a plan using --off to remove this key, or restore the backup.
 Choices: "Yes, save this limit" / "No, leave settings unchanged".
