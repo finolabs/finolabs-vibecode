@@ -1,6 +1,6 @@
 # afk check hook
 
-Status: accepted; rule recorded as the tenth scoped exception in `CLAUDE.md` (owner decisions, 17/11/2026); code follows in its own pull request.
+Status: implemented; rule recorded as the tenth scoped exception in `CLAUDE.md` (owner decisions, 17/11/2026); `scripts/afk_check_hook.py`, tests in `tests/test_afk_check_hook.py`; live host delivery unverified.
 
 ## Why
 

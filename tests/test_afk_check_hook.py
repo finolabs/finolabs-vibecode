@@ -1,0 +1,149 @@
+"""The afk check hook: actual hook stdout and exits under a real `afk start` lease, synthetic account home only."""
+
+import contextlib
+import io
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from tests.data_root_fixture import account
+
+ROOT = Path(__file__).resolve().parents[1]
+HOOK = ROOT / 'scripts/afk_check_hook.py'
+sys.path.insert(0, str(ROOT / 'skills/delegate/scripts'))
+import afk  # noqa: E402
+
+BOOT = '''import pwd, runpy, sys
+from types import SimpleNamespace
+account_home = sys.argv.pop(1)
+pwd.getpwuid = lambda uid: SimpleNamespace(pw_dir=account_home, pw_name="quota-test-user")
+sys.dont_write_bytecode = True
+script = sys.argv.pop(1)
+sys.argv[0] = script
+runpy.run_path(script, run_name="__main__")
+'''
+SETUP = ('## afk\n- Hosts: Claude Code\n- Task choice: choose\n'
+         '- Push and pull requests: yes\n- Merge: yes\n- Trusted authors: own\n')
+ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
+                 '[remote "origin"]\n\turl = https://github.com/example/demo.git\n'
+                 '\tfetch = +refs/heads/*:refs/remotes/origin/*\n')
+PARSE = 'afk: the command could not be read; write it as a simpler command'
+
+
+def denial(reason):
+    return {'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'deny',
+                                   'permissionDecisionReason': reason}}
+
+
+def parked(code):
+    return denial(f'afk: {code}; this action is parked under the away lease (afk.py check)')
+
+
+class AfkCheckHookTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.home = account(self, Path(tmp.name) / 'home')
+        self.root = self.home / '.finolabs/vibecode'
+        self.root.mkdir(parents=True, mode=0o700)
+        self.repo = self.home / 'checkout'
+        (self.repo / '.git/refs/remotes/origin').mkdir(parents=True)
+        (self.repo / '.git/HEAD').write_text('ref: refs/heads/topic\n')
+        (self.repo / '.git/refs/remotes/origin/HEAD').write_text('ref: refs/remotes/origin/main\n')
+        (self.repo / '.git/config').write_text(ORIGIN_CONFIG)
+        self.env = {'PATH': os.defpath}
+
+    def afk(self, *argv):
+        with patch('os.getcwd', return_value=str(self.repo)), contextlib.redirect_stdout(io.StringIO()) as out:
+            status = afk.main(list(argv))
+        return status, out.getvalue()
+
+    def start(self, text=SETUP):
+        (self.root / 'host.md').write_text(text)
+        (self.root / 'host.md').chmod(0o600)
+        status, output = self.afk('start', '--hours', '1')
+        self.assertEqual(status, 0, output)
+
+    def hook(self, command, env=None, cwd=None):
+        payload = json.dumps({'tool_name': 'Bash', 'tool_input': {'command': command},
+                              'cwd': str(self.repo if cwd is None else cwd)})
+        result = subprocess.run([sys.executable, '-I', '-c', BOOT, str(self.home), str(HOOK)], input=payload,
+                                env=env or self.env, capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stderr, '')
+        return json.loads(result.stdout) if result.stdout else None
+
+    def test_no_lease_allows_everything(self):
+        self.assertIsNone(self.hook('printenv'))
+
+    def test_open_lease_denies_the_floor_and_allows_the_rest(self):
+        self.start()
+        self.assertEqual(self.hook('printenv'), parked('floor'))
+        self.assertEqual(self.hook('echo ok && env'), parked('floor'))
+        # A newline outside quotes separates commands, so the second line is judged on its own.
+        self.assertEqual(self.hook('ls\nprintenv'), parked('floor'))
+        self.assertIsNone(self.hook('git status'))
+        self.assertIsNone(self.hook('git commit -m "fix the parser\n\nprintenv is not run here"'))
+
+    def test_strict_lease_denies_every_parked_answer(self):
+        self.start(SETUP + '- Mode: strict\n')
+        self.assertEqual(self.hook('curl https://example.com'), parked('unknown'))
+        self.assertIsNone(self.hook('git status'))
+
+    def test_an_unreadable_command_is_denied(self):
+        self.start()
+        self.assertEqual(self.hook('echo "unbalanced'), denial(PARSE))
+        self.assertEqual(self.hook("echo 'unbalanced"), denial(PARSE))
+
+    def test_a_stopped_lease_and_the_switch_allow(self):
+        self.start()
+        for value in ('off', 'OFF', '0', 'false', 'no'):
+            with self.subTest(value=value):
+                self.assertIsNone(self.hook('printenv', env={**self.env, 'FNL_AFK_HOOK': value}))
+        self.afk('stop')
+        self.assertIsNone(self.hook('printenv'))
+
+    def test_other_tools_and_bad_input_allow(self):
+        self.start()
+        for payload in ('', 'not json', json.dumps({'tool_name': 'Edit', 'tool_input': {'command': 'printenv'}}),
+                        json.dumps({'tool_name': 'Bash', 'tool_input': {}})):
+            with self.subTest(payload=payload):
+                result = subprocess.run([sys.executable, '-I', '-c', BOOT, str(self.home), str(HOOK)], input=payload,
+                                        env=self.env, capture_output=True, text=True, timeout=20)
+                self.assertEqual((result.returncode, result.stdout, result.stderr), (0, '', ''))
+
+    def test_the_command_text_is_never_stored(self):
+        self.start()
+        marker = 'zz-unique-command-marker'
+        self.hook(f'echo {marker}')
+        self.hook(f'printenv {marker}')
+        for path in self.root.rglob('*'):
+            if path.is_file():
+                with self.subTest(path=path.name):
+                    self.assertNotIn(marker.encode(), path.read_bytes())
+
+    def test_a_pinned_merge_records_its_pin(self):
+        self.start()
+        head = 'c' * 40
+        self.assertIsNone(self.hook(f'gh pr merge 7 --merge --match-head-commit {head} --repo github.com/example/demo'))
+        log = (self.root / 'state/autopilot/log.jsonl').read_text().splitlines()
+        pins = [json.loads(line) for line in log if json.loads(line).get('kind') == 'merge-pin']
+        self.assertEqual([(p['pr'], p['head']) for p in pins], [(7, head)])
+
+    def test_the_manifest_has_the_hook_in_its_own_group(self):
+        manifest = json.loads((ROOT / '.claude-plugin/hooks.json').read_text())
+        groups = [g for g in manifest['hooks']['PreToolUse']
+                  if any('afk_check_hook.py' in h['command'] for h in g['hooks'])]
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]['matcher'], 'Bash')
+        self.assertEqual(len(groups[0]['hooks']), 1)
+        self.assertNotIn('metrics_hook.py', json.dumps(groups[0]))
+
+
+if __name__ == '__main__':
+    unittest.main()
