@@ -27,7 +27,7 @@ NOT_A_MERGE = ("--auto", "--disable-auto", "--help", "-h")
 EXIT_KEYS = ("exit_code", "exitCode", "returnCode", "return_code")
 MAX_COMMAND = 8192  # longer command text is not tested at all
 LINE = ("fnl: a pull request merged; run worktree_sweep.py list and, for its worktree when a candidate, "
-        "the two git commands it prints; if it closed a spec, story or this session's main task, rename the "
+        "the two git commands it prints; if it closed a spec, story or large pull request, rename the "
         "session for its next work (tidy Titles) (advisory).")
 
 

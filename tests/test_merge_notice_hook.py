@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "scripts/merge_notice_hook.py"
 LINE = ("fnl: a pull request merged; run worktree_sweep.py list and, for its worktree when a candidate, "
-        "the two git commands it prints; if it closed a spec, story or this session's main task, rename the "
+        "the two git commands it prints; if it closed a spec, story or large pull request, rename the "
         "session for its next work (tidy Titles) (advisory).")
 
 
