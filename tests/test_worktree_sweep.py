@@ -260,6 +260,14 @@ class SweepTest(unittest.TestCase):
                 self.assertIn(" clean ", line)
                 self.assertIn("candidate=yes", line)
                 ignore.unlink()
+        # The configured value is used as written: a trailing space or newline names another file, never the trimmed one.
+        trimmed = self.base / "trimmed-ignore"
+        trimmed.write_text("*\n")
+        for value in (str(trimmed) + " ", str(trimmed) + "\n"):
+            with self.subTest(value=repr(value)):
+                self.git(self.base, "config", "--global", "core.excludesFile", value)
+                self.assert_not_candidate(self.sweep().stdout, path, "dirty")
+        self.git(self.base, "config", "--global", "--unset", "core.excludesFile")
         # A real untracked file is still dirty with the global file in force.
         (self.home / ".config/git/ignore").write_text(".agentcache/\n")
         (path / "notes.txt").write_text("untracked\n")

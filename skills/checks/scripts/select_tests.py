@@ -92,10 +92,11 @@ def select(root, changed):
         if (pure.parent.as_posix() == 'tests' and pure.name.startswith('test_') and pure.suffix == '.py'
                 and f'tests.{pure.stem}' in modules):  # a deleted module is never scheduled
             hits.add(f'tests.{pure.stem}')
-        checks = [p for copy in copies(path, index) for p in patterns(copy)]
+        every = copies(path, index)
+        checks = [p for copy in every for p in patterns(copy)]
         hits.update(name for name, text in modules.items() if any(c.search(text) for c in checks))
         hits.update(name for name, text in modules.items()
-                    if any(path.startswith(folder) for folder in READS.findall(text)))
+                    if any(copy.startswith(folder) for folder in READS.findall(text) for copy in every))
         if hits:
             chosen.update(hits)
         else:

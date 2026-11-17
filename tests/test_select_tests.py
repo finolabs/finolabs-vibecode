@@ -97,6 +97,14 @@ class SelectTestsTest(unittest.TestCase):
         # A marker matches a whole folder prefix only, and only on a line of its own.
         self.assertEqual(select_tests.READS.findall("x = 1  # select-tests: reads docs/\n"), [])
         self.assertEqual(select_tests.READS.findall("# select-tests: reads docs\n"), [])
+        # A marker covers every copy: a change to one copy selects a module reading another copy's folder.
+        (self.repo / 'tests/test_folder.py').write_text("# select-tests: reads skills/fnl-two/\n")
+        self.git('add', '.')
+        self.git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-qm', 'Marker')
+        (self.repo / 'docs/orphan.md').write_text('nobody reads this\n')
+        (self.repo / 'skills/fnl-one/references/terms.md').write_text('changed copy\n')
+        done = self.select()
+        self.assertIn('tests.test_folder', done.stdout.split('\n\n')[0].splitlines())
         for bad in ("../", "./", "docs/../", "/etc/"):
             self.assertEqual(select_tests.READS.findall(f"# select-tests: reads {bad}\n"), [], bad)
         self.assertEqual(select_tests.READS.findall("# select-tests: reads skills/setup/\n"), ["skills/setup/"])

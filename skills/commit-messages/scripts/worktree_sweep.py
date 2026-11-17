@@ -144,15 +144,16 @@ def excludes_file():
     env = child_environment()
     env.update({k: os.environ[k] for k in ("HOME", "XDG_CONFIG_HOME") if k in os.environ})
     try:
-        done = subprocess.run(["git", "config", "--global", "--path", "--get", "core.excludesFile"],
+        done = subprocess.run(["git", "config", "--global", "--null", "--path", "--get", "core.excludesFile"],
                               capture_output=True, text=True, encoding="utf-8", timeout=60, env=env)
-        value = done.stdout.strip() if done.returncode == 0 else ""
+        # Only the NUL terminator is removed: a value with spaces or a newline stays as configured.
+        value = done.stdout[:-1] if done.returncode == 0 and done.stdout.endswith("\0") else ""
     except (OSError, subprocess.SubprocessError, UnicodeError):
         return None
     if not value:
         base = env.get("XDG_CONFIG_HOME") or (os.path.join(env["HOME"], ".config") if env.get("HOME") else "")
         value = os.path.join(base, "git", "ignore") if os.path.isabs(base) else ""
-    if not os.path.isabs(value) or "\n" in value or not os.path.isfile(value):
+    if not os.path.isabs(value) or any(ord(c) < 32 or ord(c) == 127 for c in value) or not os.path.isfile(value):
         return None
     return value
 
