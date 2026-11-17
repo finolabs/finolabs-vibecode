@@ -55,6 +55,10 @@ Private HOME is an open owner decision and is not offered or created in this pac
 
 How many rework rounds `review-gate` runs before it hands the remaining findings to the owner: 2, 3 or 4; absent or invalid means 2. `/setup add delegation` asks it with the roles. `ledger.py finish` refuses more rounds than this without a `--reason` (script-enforced); stopping at it is advisory (agent judgment).
 
+- Same-family security fallback: no (<YYYY-MM-DD>)
+
+Written only by `/setup add roles` after its own question and preview. `yes (<YYYY-MM-DD>)` lets `merge_check.py --independent --fallback-family <family>` count same-family reviews outside an away lease when every other present family is positively out of quota, with the exact fallback reviewer line on each marker (`review-gate` "Who reviews"); `no`, a missing or malformed line, or a future date counts as no.
+
 ## Quota probe
 
 - Quota probe: off

@@ -35,7 +35,7 @@ Undo: Set Instruction check to off through setup.
 Choices: "Yes, allow instruction-line checks" / "No, keep those checks off".
 
 Say it sees the text of your private instruction files, apart from lines that look like secrets or machine paths, which are dropped; instruction checking uses the small host fallback because it is outside the four outbound sites, under the host provider's retention; judge grading is optional and the agent grades those items itself without it.
-A yes does not follow from the judge choice. Record `- Instruction check: on (<DD/MM/YYYY>)` under `## Instruction check`; no, or no judge, records `off`. A `## Route judgment` section left from before 0.3.2 is not read: run `matrix_setup.py migrate` to move its line (matrix.md).
+A yes does not follow from the judge choice. Record `- Instruction check: on (<DD/MM/YYYY>)` under `## Instruction check`; no, or no judge, records `off`. An old `## Route judgment` is not read; `matrix_setup.py migrate` moves it (matrix.md).
 
 ## Roles
 
@@ -58,3 +58,5 @@ A review run posts its own comment when it can; otherwise it returns the comment
 - Antigravity: a remembered allow-rule for the exact argv of `post_review.py`, never for `gh` itself, no wildcard, recorded in the host config like the test-command grants.
 
 Record `- <family>: unverified` in `## Review posting`; `yes` is written only after the coordinator sees that family's own marker on a pull request from the expected identity, and enabling a setting does not count. Before `yes`, no family's posting is promised.
+
+Then ask [the security fallback](../security-fallback.md).

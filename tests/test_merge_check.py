@@ -861,6 +861,85 @@ class SameFamilyFallbackTest(unittest.TestCase):
             self.assertEqual(mc.main(["7", "--repo", "acme/demo", "--fallback-family", "claude"]), 2)
 
 
+class RecordedSecurityFallbackTest(unittest.TestCase):
+    """Owner decision 17/11/2026: outside a lease, the recorded `## Reviews` choice runs the strict fallback without
+    its router-trigger condition; quota evidence, the exact fallback line and the two-model rule still apply."""
+    FAMILIES = SameFamilyFallbackTest.FAMILIES
+    LINE = SameFamilyFallbackTest.LINE
+    setUp = SameFamilyFallbackTest.setUp
+    data = SameFamilyFallbackTest.data
+    evaluate = SameFamilyFallbackTest.evaluate
+    RECORDED = "## Reviews\n- Rework limit: 3\n- Same-family security fallback: yes (2026-11-17)\n"
+
+    def outside(self, text=None):
+        import away_lease
+        import review_config
+        for p in (patch.object(away_lease, "live_lease", return_value=None),
+                  patch.object(review_config, "host_text", return_value=self.RECORDED if text is None else text)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_the_recorded_choice_grants_with_every_other_family_out(self):
+        self.outside()
+        for trigger in ("none", "security", "permission", "privacy"):
+            with self.subTest(trigger=trigger):
+                ok, lines = self.evaluate(self.data(trigger=trigger))
+                self.assertTrue(ok, lines)
+                self.assertIn("ok    same-family review: outside a lease, by the recorded same-family security "
+                              "fallback: no other family reachable (antigravity, codex)", lines)
+        ok, lines = self.evaluate(pr(comments=self.data()["comments"], body="no marker"))
+        self.assertTrue(ok, lines)
+
+    def test_a_live_lease_keeps_the_trigger_condition_with_the_recorded_yes(self):
+        import review_config
+        with patch.object(review_config, "host_text", return_value=self.RECORDED):
+            for trigger in ("security", "permission", "privacy"):
+                with self.subTest(trigger=trigger):
+                    self.assertFalse(self.evaluate(self.data(trigger=trigger))[0])
+            self.assertTrue(self.evaluate()[0])
+
+    def test_without_the_recorded_yes_outside_a_lease_refuses(self):
+        import away_lease
+        import review_config
+        for text in ("", "synthetic", "## Reviews\n- Same-family security fallback: no (2026-11-17)\n",
+                     "## Reviews\n- Same-family security fallback: yes\n",
+                     "## Reviews\n- Same-family security fallback: yes (2999-01-01)\n",
+                     "## Reviews\n- Same-family security fallback: yes (2026-02-30)\n",
+                     "## Reviews\n- Same-family security fallback: Yes (2026-11-17)\n",
+                     self.RECORDED + "- Same-family security fallback: yes (2026-11-17)\n",
+                     "## Afk\n- Same-family security fallback: yes (2026-11-17)\n",
+                     self.RECORDED + "## Reviews\n"):
+            with self.subTest(text=text):
+                with patch.object(away_lease, "live_lease", return_value=None), \
+                        patch.object(review_config, "host_text", return_value=text):
+                    ok, lines = self.evaluate()
+                self.assertFalse(ok)
+                self.assertIn("BLOCK same-family review: no live away lease", lines)
+
+    def test_every_other_condition_still_applies(self):
+        self.outside()
+        self.out = [self.quota[0]]  # antigravity has no evidence of being out
+        ok, lines = self.evaluate()
+        self.assertFalse(ok)
+        self.assertIn("BLOCK same-family review: no evidence that antigravity is out", lines)
+        self.out = list(self.quota)
+        self.assertFalse(self.evaluate(family="codex")[0])  # not the author's family
+        for second in ("", "Reviewer: claude", self.LINE + "x"):
+            with self.subTest(second=second):
+                self.assertFalse(self.evaluate(self.data(second))[0])
+        self.files = [{"filename": "skills/review-gate/scripts/merge_check.py"}]
+        self.assertFalse(self.evaluate(self.data(self.LINE + " model=opus-5"))[0])  # an enforcer change, one model
+
+    def test_the_reader_takes_only_the_exact_line(self):
+        import datetime
+        import review_config
+        today = datetime.date(2026, 11, 17)
+        self.assertTrue(review_config.security_fallback(self.RECORDED, today))
+        self.assertTrue(review_config.security_fallback("```\n## Reviews\n```\n" + self.RECORDED, today))
+        self.assertFalse(review_config.security_fallback(self.RECORDED, datetime.date(2026, 11, 16)))
+        self.assertFalse(review_config.security_fallback(self.RECORDED.replace("yes", "no"), today))
+
+
 class OpenLeaseFallbackTest(SameFamilyFallbackTest):
     """docs/specs/afk-autonomy.md D and acceptance 7: under a lease whose effective mode is `open` the fallback needs
     only the lease, the author's family and the fallback line (or a non-author configured role) on each kind."""
