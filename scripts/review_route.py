@@ -31,6 +31,7 @@ import review_config as config
 import git_metadata as metadata
 
 # ZCode reviews headless in `plan` mode (owner decision, 17/11/2026); a family missing here never reviews or authors.
+# A ZCode-authored range does not route yet: `author_family` accepts no ZCode trailer, so it fails closed.
 FORMS = {"claude": "agent", "codex": "headless", "antigravity": "headless", "zcode": "headless"}
 ORDER = tuple(f for f in config.FAMILIES if f in FORMS)
 OID = re.compile(r"[0-9a-f]{40}")
@@ -365,8 +366,8 @@ def route(author, text, quota_lines, *, lane=False, kinds=("code", "security"), 
     present = config.present_families(text)
     if matrix == "valid":
         # A usable matrix names the helpers vibecode uses: a present family without a line there never reviews
-        # (an extra Claude Code command, `claude<suffix>`, is the claude family, as in `read_roles`).
-        listed = {agent if agent in config.FAMILIES else "claude" for agent in am.parse(text).agents}
+        # (an extra command, `claude<suffix>` or `zcode<suffix>`, is its prefix's family, as in `read_roles`).
+        listed = {config.family_of(agent) for agent in am.parse(text).agents}
         present = present & listed
     if not present:
         raise ValueError("no present family")

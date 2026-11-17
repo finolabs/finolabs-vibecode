@@ -207,14 +207,17 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(self.pick(host(posting=posting) + matrix(code="codex", security="antigravity"))[0][0], "codex")
         self.assertEqual(self.pick(host(("claude", "codex"), posting=posting))[0][0], "codex")
 
-    def test_zcode_reviews_and_authors_headless(self):
+    def test_zcode_reviews_headless(self):
         # Owner decision, 17/11/2026: ZCode is a review family like the others.
         self.assertEqual(route.ORDER, config.FAMILIES)
         present = ("claude", "codex", "antigravity", "zcode")
         rows = self.pick(host(present) + matrix(code="zcode", security="zcode"))
         self.assertEqual(rows, [("zcode", "headless", "assigned-one-run-two-comments")] * 2)
-        rows = route.route("zcode", host(present) + matrix(code="codex", security="claude"), [])
-        self.assertEqual(rows, [("codex", "headless", "assigned"), ("claude", "agent", "assigned")])
+        # An extra ZCode command keeps its family, for roles and for the listed families (code review of PR 332).
+        text = host(present) + matrix(code="zcodework", security="codex")
+        self.assertEqual(config.read_roles(text)["code review"], "zcode")
+        lines = ["Quota codex: rate-limit marker 2026-11-17T00:00:00Z; out of quota until 2999-01-01T00:00:00Z (advisory)"]
+        self.assertEqual([r[0] for r in route.route("codex", text, lines)], ["zcode", "zcode"])
 
     def test_a_present_family_without_a_matrix_line_never_reviews(self):
         # 17/11/2026: Antigravity left the matrix but stayed present, and took the reviews when Codex ran out.

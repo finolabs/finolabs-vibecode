@@ -82,14 +82,17 @@ def matrix_state(text):
     return "absent" if matrix.state == "absent" else "valid" if usable(matrix) else "unset"
 
 
+def family_of(agent):
+    """The family of one matrix agent name: an extra command (`claude<suffix>`, `zcode<suffix>`) is its prefix's family."""
+    return next(f for f in FAMILIES if agent.startswith(f))
+
+
 def read_roles(text):
     """Only a usable matrix sets roles and the judge; the retired `## Agent roles` section is never read."""
     matrix = am.parse(text)
     if not usable(matrix):
         return {"judge": "host"}
-    # An extra Claude Code command (`claude<suffix>`) belongs to the claude family for routing.
-    families = {role.replace("-", " "): agent if agent in FAMILIES else "claude"
-                for role, agent in matrix.roles.items()}
+    families = {role.replace("-", " "): family_of(agent) for role, agent in matrix.roles.items()}
     return {"judge": matrix.judge, **families}
 
 

@@ -32,7 +32,7 @@ request, row `decided` below):
 | `rules` prints this table with the mode, floor, guard and strict data as Markdown (`skills/afk/references/rules.md`); it reads no file | rules |
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
 | Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths; every path rule (roots, documents, protected names, links) applies to the operand's path relative to the checkout root of the check's validated identity, read from cwd, and with no identity no path is known | classify_paths, repository_path |
-| PR create/edit require push permission; PR merge requires Merge=yes, one full --match-head-commit SHA (other options: a method flag, --delete-branch, --repo and --author-email) and a MERGE OK receipt for that number and head under 15 minutes old (`merge_check.py --independent`, else `merge-unchecked`); its pin names the repository and is written before the action is reserved (a full log answers `log-unwritable`) | classify_argv, check |
+| PR create/edit require push permission; PR merge requires Merge=yes, one full --match-head-commit SHA (other options, long forms only: a method flag, --delete-branch, --repo and an email-shaped --author-email) and a MERGE OK receipt for that number and head under 15 minutes old (`merge_check.py --independent`, else `merge-unchecked`); its pin names the repository and is written before the action is reserved (a full log answers `log-unwritable`) | classify_argv, check |
 | Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run`, `run --changed [--base <branch or commit>]` (no relative revision) or `run --dispatch <dispatch id>` with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
 | An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, one of the allowlisted shapes: a script of this checkout, make, npm/pnpm/yarn/bun test, run and declared installs, python scripts and listed -m modules, cargo verbs without --config, go verbs with listed flags and local packages, declared pip, uv, poetry and bundle installs, listed git verbs and flags, listed gh group and verb pairs, or this install's delegated run) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, shape_decidable, dispatch_prefix, decidable_paths, request_subject, open_approvals |
@@ -1700,6 +1700,10 @@ def classify_argv(argv, applied, coordinator=None):
             operands = options(tail, MERGE_FLAGS, MERGE_VALUED)
             if operands is None or len(operands) != 1 or not re.fullmatch(r'[1-9][0-9]{0,9}', operands[0]):
                 return 'unknown'  # the same ASCII number grammar `log --pr` takes, so a pin names what gh merges
+            emails = [t.split('=', 1)[1] if '=' in t else tail[i + 1] if i + 1 < len(tail) else ''
+                      for i, t in enumerate(tail) if t.split('=', 1)[0] in {'--author-email', '-A'}]
+            if any(not EMAIL.fullmatch(e) for e in emails):
+                return 'unknown'  # the merge commit's author: one plain email address, nothing else
             result = target_check(tail, context_of(applied))  # the permission is this context's target, never another
             if result == 'allowed' and (context_of(applied).target, int(operands[0]), pins[0]) not in applied.get(MERGE_OK, ()):
                 return 'merge-unchecked'  # merge_check.py --independent has not printed MERGE OK for this head lately
@@ -2799,6 +2803,7 @@ def append_log(folder, record, current):
 
 # `gh pr merge` options a merge check reads: the method and branch flags, and the pin, repository and commit author
 # email values (`--author-email` sets the merge commit's author, as the repository's commit rules ask).
+EMAIL = re.compile(r'[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})+')
 MERGE_FLAGS = frozenset({'--squash', '--merge', '--rebase', '--delete-branch'})
 MERGE_VALUED = frozenset({'--match-head-commit', '--repo', '-R', '--author-email', '-A'})
 

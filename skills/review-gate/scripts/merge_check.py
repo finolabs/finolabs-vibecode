@@ -590,7 +590,6 @@ def lease_mode(repo):
         return "strict"
 
 
-REVIEWER_NAME = re.compile(r"Reviewer:\s*([A-Za-z]+)(?![A-Za-z])")
 # The whole name word after `Reviewer:`, so a look-alike letter from another script (`Сlaude`) is caught, not skipped.
 REVIEWER_WORD = re.compile(r"Reviewer:\s*([^\s,;:()]+)")
 
@@ -619,8 +618,9 @@ def open_fallback(family, verdicts_found):
         word = REVIEWER_WORD.match(folded)
         if word and not word.group(1).isascii():
             return False, f"{kind} marker names a reviewer with letters outside ASCII"
-        named = REVIEWER_NAME.match(folded)
-        name = named.group(1).casefold() if named else None
+        # A family name the word starts with counts, so an ASCII disguise (`ClaudeCode`, `Cl-aude`) is that family.
+        letters = "".join(c for c in word.group(1) if c.isalpha()).casefold() if word else ""
+        name = next((f for f in review_config.FAMILIES if letters.startswith(f)), None)
         if name in review_config.FAMILIES and name != role:
             return False, f"{kind} marker names the {name} reviewer, not the configured role"
         if role in review_config.FAMILIES and role != family:

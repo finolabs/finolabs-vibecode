@@ -936,7 +936,9 @@ class OpenLeaseFallbackTest(SameFamilyFallbackTest):
                        "Reviewer: \uff43\uff4c\uff41\uff55\uff44\uff45", "\uff32eviewer: claude",
                        "Reviewer:claude", "Reviewer: claude\uff3f",
                        # A Cyrillic look-alike letter at either end of the name (LOW of PR 330).
-                       "Reviewer: \u0441laude", "Reviewer: claud\u0435", "Reviewer: \u0441odex"):
+                       "Reviewer: \u0441laude", "Reviewer: claud\u0435", "Reviewer: \u0441odex",
+                       # ASCII disguises of a family name (security review of PR 332).
+                       "Reviewer: ClaudeCode", "Reviewer: Cl-aude"):
             with self.subTest(second=second):
                 data = pr(comments=[comment(marker("code", "APPROVE") + "\n" + second),
                                     comment(marker("security", "APPROVE") + "\n" + self.LINE)], body=ROUTED)
