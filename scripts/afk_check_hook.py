@@ -147,6 +147,19 @@ def bad_program(program, words):
                                or all(w.startswith('-') for w in words))
 
 
+def glued_split(argv, afk):
+    """argv with every operator glued to a word (`ls|xargs`, `(xargs`, `true&&xargs`) cut out as `;`, so the
+    wrapper-flag rule sees each wrapper wherever the shell starts a command."""
+    words = []
+    for word in argv:
+        for piece in afk.SPLIT_INLINE.split(word):
+            if afk.SPLIT_INLINE.fullmatch(piece):
+                words.append(';')
+            else:
+                words.extend(w.strip('()') for w in piece.split() if w.strip('()'))
+    return words
+
+
 def reparsed(argv, afk):
     """True when any command `check` reads out of argv (every reading, wrappers, glued operators and compound words
     included, and a `find -exec` command) runs code a shell parses again, changes the shell's glob options, or has
@@ -154,17 +167,18 @@ def reparsed(argv, afk):
     if any(word in OPAQUE_WORDS for word in argv):
         return True
     wrappers = afk.PREFIX_WORDS | afk.FILE_PREFIXES
-    for index, word in enumerate(argv):
+    words = glued_split(argv, afk)
+    for index, word in enumerate(words):
         base = os.path.basename(word)
         if base not in wrappers:
             continue
         allowed, at = WRAPPER_FLAGS.get(base, {}), index + 1
-        if base in afk.FILE_PREFIXES and any(w.startswith('-') for w in argv[index + 1:index + 4]):
+        if base in afk.FILE_PREFIXES and any(w.startswith('-') for w in words[index + 1:index + 4]):
             return True
-        while at < len(argv) and argv[at].startswith('-') and argv[at] not in OPERATORS:
-            if argv[at] not in allowed:
+        while at < len(words) and words[at].startswith('-') and words[at] not in OPERATORS:
+            if words[at] not in allowed:
                 return True  # a wrapper flag `commands_of` may misread
-            at += 1 + allowed[argv[at]]
+            at += 1 + allowed[words[at]]
     for reading in afk.READINGS:
         for program, words, _env, inline, _pattern in afk.commands_of(argv, full=True, split_patterns=reading):
             if inline:

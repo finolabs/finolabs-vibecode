@@ -163,7 +163,10 @@ class AfkCheckHookTest(unittest.TestCase):
                         'function f { ls; }', 'hash -p /bin/ls p', "trap 'ls' EXIT", "caffeinate -s sh -c 'ls'", 'stdbuf -oL ls', "xargs -J % sh -c 'ls'", "xargs -n 1 -E x sh -c 'ls'",
                         "npx --package x sh -c 'ls'", "uvx --from x sh -c 'ls'", "flock f -c 'ls'",
                         "timeout --kill-after 1 5 sh -c 'ls'", 'command -p ls', 'time -p ls', 'sudo -n ls',
-                        r'find . -exec timeout 5 sh -c x \;'):
+                        r'find . -exec timeout 5 sh -c x \;', "ls|xargs -J % sh -c 'ls'", 'true&&xargs -J % sh -c x',
+                        'ls||xargs -E x sh -c x', 'ls&xargs -J % sh -c x', '(xargs -J % sh -c x)', 'ls;flock f -c x',
+                        'ls|npx --package x sh -c x', 'ls|timeout --kill-after 1 5 sh -c x', 'ls|caffeinate -s sh -c x',
+                        'ls|sudo -n sh -c x', '(nice -5 sh -c x)'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), denial(PARSE))
         # Ordinary forms stay readable.
