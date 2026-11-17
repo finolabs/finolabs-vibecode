@@ -736,7 +736,7 @@ def evaluate(pr, can_write, lane_ok=None, *, adopted, independent=False, familie
         else:
             lines.append(f"ok    {kind} review: APPROVE ({verdict[1]})")
     if independent:
-        known = {"claude", "codex", "antigravity"}
+        known = {"claude", "codex", "antigravity", "zcode"}
         if (not isinstance(families, dict)
                 or any(families.get(key) not in known for key in ("author", "code", "security"))):
             ok = False

@@ -31,7 +31,7 @@ Status: accepted; prepared, to be tagged v0.3.2 after the owner's yes.
 | 339 | `/setup add compaction` recommends an auto-compact threshold and can write it for one repository (`compact_setup.py --project`). |
 | 340 | `tidy` hands the user a ready `/compact <focus>` command (bare `/compact` on Codex, `/new` or `/fork` on Antigravity). |
 | 341 | The afk check hook on Claude Code: a syntax allowlist that judges each Bash command as `afk.py check` does under a lease. |
-| 342 | This record: rows 332 to 342, the second drift review below, upgrade notes for 336 to 341. |
+| 342 | This record: rows 332 to 342, the second drift review below, upgrade notes for 336 to 341, and `merge_check.py --independent` counting ZCode reviews. |
 
 The changelog's 0.3.2 section holds the user-facing wording; `update` carries the 0.3.2 upgrade notes. The afk-mechanism and away-decision-sequence PNGs were re-rendered (2530 pixels wide) through the shared Chromium.
 
@@ -77,6 +77,10 @@ Checked against `main` at `33fd133` (after pull request 341) for what 332 to 341
 | `docs/specs/index.md` | Current: afk check hook, proof nudge and compaction threshold rows say implemented. |
 | `CHANGELOG.md` 0.3.2 | Current: each of 332 to 341 added its entry. |
 | Diagrams | The afk mechanism diagram still shows the agent calling `check`; on Claude Code the hook now calls it for Bash. Left unchanged for 0.3.2 (the call and its rules are the same); noted here. |
+| `docs/diagrams/task-lifecycle-*.html` and the README alt text | Drifted with the rework limit (337): said "max 2 rounds". Now the Rework limit, two by default; the PNGs were not re-rendered and still show the default. |
+| `skills/help/references/skills/advisor.md` | Drifted with 335: gave the configured advisor role unconditional precedence. Now only when it is of another family, as `advisor` says. |
+| `merge_check.py --independent` | Defect found by this review: the family check left out `zcode`, so ZCode reviews (332) could not pass. Fixed here with a regression test. |
+| README and upgrade note for compaction | Now say the repository threshold and the ready `/compact <focus>` are Claude Code, a bare `/compact` on Codex and `/new` or `/fork` on Antigravity. |
 
 ## Owner decisions
 

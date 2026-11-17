@@ -463,7 +463,7 @@
         {
           "id": "0.3.2/compaction-threshold",
           "kind": "setup",
-          "text": "Setup now recommends an auto-compact threshold and can write it for one repository; tidy hands you a ready /compact <focus> command.",
+          "text": "Setup recommends an auto-compact threshold and, on Claude Code, can write it for one repository; there tidy also hands you a ready /compact <focus> command.",
           "setup": "/setup add compaction"
         },
         {

@@ -17,7 +17,7 @@ svg{width:100%;min-width:900px;display:block}
 <p class="sub">From a coding request to a published release. Depth sets ceremony and writes the PR body marker; the gates hold at every depth. Tasks fan out to parallel pools within user limits; context snapshots feed the compaction steward. Two failed fixes stop at Checkpoint.</p>
 <svg viewBox="0 0 1280 610" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="task-lifecycle-dark-title task-lifecycle-dark-desc">
 <title id="task-lifecycle-dark-title">Life of a change under the coding router</title>
-<desc id="task-lifecycle-dark-desc">State machine: Inspect (quota on demand), Path (pool fan-out), Depth (PR marker), Red, Change (context snapshot), Proof (verify_claim and judge), Review (review_route and post_review), Merged (navigator check, merge_check), Released. Review sends blocking findings back to Change, max 2 rounds. Two failed fixes move Change to Checkpoint, returning to Red with a design and a new failing test. Delegation runs with parallel pools (limits/caps), delegate_env allowlist and log_scan.</desc>
+<desc id="task-lifecycle-dark-desc">State machine: Inspect (quota on demand), Path (pool fan-out), Depth (PR marker), Red, Change (context snapshot), Proof (verify_claim and judge), Review (review_route and post_review), Merged (navigator check, merge_check), Released. Review sends blocking findings back to Change, up to the Rework limit (2 by default, 2 to 4). Two failed fixes move Change to Checkpoint, returning to Red with a design and a new failing test. Delegation runs with parallel pools (limits/caps), delegate_env allowlist and log_scan.</desc>
 <defs>
 <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#BCBCD0"/></marker>
 <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#E5D2F4"/></marker>
@@ -49,7 +49,7 @@ svg{width:100%;min-width:900px;display:block}
 <text x="260" y="342" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">merge_check.py passes</text>
 <path d="M400,320 L400,300 Q400,292 408,292 L922,292 Q930,292 930,300 L930,320" fill="none" stroke="#BCBCD0" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
 <rect x="586.5" y="273" width="157.0" height="12" fill="#050510"/>
-<text x="665" y="282" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">blocking finding, max 2 rounds</text>
+<text x="665" y="282" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">blocking finding, Rework limit (2)</text>
 <path d="M1040,352 L1157,352 Q1165,352 1165,344 L1165,274" fill="none" stroke="#E5D2F4" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
 <rect x="1062.7" y="333" width="78.6" height="12" fill="#050510"/>
 <text x="1102" y="342" fill="#8B8BA6" font-size="8" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">2 failed fixes</text>

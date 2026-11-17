@@ -441,7 +441,7 @@ Release 0.3.2 ([release record](docs/specs/release-0.3.2.md)):
 - **Your accounts, your risk.** The README warns that delegation, reviews, `advisor` and the probes run other agents' CLIs headless under your own accounts.
 - **afk check hook on Claude Code.** While a lease is live, a `PreToolUse` Bash hook judges each command as `afk.py check` does and denies Tier 3 answers and every form it cannot read in full (variables other than `$HOME`, `$(...)`, `xargs`, `find -exec`, glued operators, directory changes with a relative glob); write simpler commands and commit with `-F <file>`. `FNL_AFK_HOOK=off` turns it off.
 - **Proof after commits.** On Claude Code a `Stop` reminder asks for `checks` when this session committed the head and no passing receipt exists for it.
-- **Easier compaction.** `/setup add compaction` recommends a threshold (300-500K for a coordinator on a 1M model) and can write it for one repository; `tidy` hands you a ready `/compact <focus>` command.
+- **Easier compaction.** `/setup add compaction` recommends a threshold (300-500K for a coordinator on a 1M model) and, on Claude Code, can write it for one repository; `tidy` hands you a ready `/compact <focus>` command on Claude Code, a bare `/compact` on Codex and `/new` or `/fork` on Antigravity.
 - **Reviews and routing.** A same-family security fallback can be recorded for when no other family can review; a `Rework limit` under `## Reviews` caps rework rounds; the router judge step is gone; `advisor` routes through the assignment matrix.
 - **Leaner skills.** Long skill sections load only when needed, and the session-start text carries the proof rule and the session title format.
 
@@ -525,7 +525,7 @@ Claude Code and Codex, on by default: the compaction nudge, a `UserPromptSubmit`
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/task-lifecycle-dark.png">
-    <img src="assets/task-lifecycle-light.png" alt="State diagram of a change under the coding router: inspect, pick the workflow path, choose depth, red, change, proof, review, merge and release. Blocking review findings return to change for at most two rounds; two failed fixes of one invariant stop at a checkpoint." width="920">
+    <img src="assets/task-lifecycle-light.png" alt="State diagram of a change under the coding router: inspect, pick the workflow path, choose depth, red, change, proof, review, merge and release. Blocking review findings return to change up to the Rework limit (two rounds by default); two failed fixes of one invariant stop at a checkpoint." width="920">
   </picture>
 </p>
 

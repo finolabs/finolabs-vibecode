@@ -804,6 +804,12 @@ class SameFamilyFallbackTest(unittest.TestCase):
         self.assertIn("BLOCK same-family review: no evidence that codex is out", lines)
         self.assertFalse(any("different family" in line for line in lines), lines)
 
+    def test_zcode_reviews_of_a_claude_pull_request_count_as_independent(self):
+        ok, lines = mc.evaluate(self.data("Reviewer: zcode"), lambda who: who in WRITERS, adopted=False,
+                                independent=True, families=dict(author="claude", code="zcode", security="zcode"))
+        self.assertTrue(ok, lines)
+        self.assertNotIn("BLOCK independent reviews: author or reviewing family cannot be determined", lines)
+
     def test_a_fallback_marker_without_the_flag_blocks(self):
         ok, lines = mc.evaluate(self.data(), lambda who: who in WRITERS, adopted=False, independent=True,
                                 families=dict(author="claude", code="codex", security="codex"))
