@@ -1,6 +1,6 @@
 ---
 name: delegate
-description: Hand work to other coding agents (Claude Code, Codex, Antigravity, ZCode) and run it, coordinating from whichever one you run in. Use whenever work is split across agents or needs a routing decision: giving a task to another agent, choosing the agent and model for each of several tasks, running independent tasks in parallel, an agent's quota running out, a delegated run you are watching that stalls, times out or is interrupted, or running a spec as a coordinator with one session per task. Writing the brief for a single task, or saving a handover, belongs to handoff.
+description: Route and run work across coding agents (Claude Code, Codex, Antigravity, ZCode). Use when choosing the agent and model per task, handing a task to an agent, running tasks in parallel, when quota runs out, a watched run stalls or times out, or running a spec with a session per task. One brief or handover is handoff.
 ---
 
 # Delegate
