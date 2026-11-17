@@ -451,6 +451,28 @@
           "text": "Review rework rounds now follow - Rework limit: <2-4> under ## Reviews in host.md (default 2); setup asks it with the review roles."
         },
         {
+          "id": "0.3.2/afk-check-hook",
+          "kind": "info",
+          "text": "Claude Code: under a lease a Bash hook judges each command like afk.py check and denies forms it cannot read in full ($VAR, $(...), xargs, find -exec); commit with -F <file>."
+        },
+        {
+          "id": "0.3.2/proof-nudge",
+          "kind": "info",
+          "text": "Claude Code: a Stop reminder asks for proof when this session committed the head and no passing checks or verify_claim receipt exists for it."
+        },
+        {
+          "id": "0.3.2/compaction-threshold",
+          "kind": "setup",
+          "text": "Setup now recommends an auto-compact threshold and can write it for one repository; tidy hands you a ready /compact <focus> command.",
+          "setup": "/setup add compaction"
+        },
+        {
+          "id": "0.3.2/security-fallback",
+          "kind": "setup",
+          "text": "Outside a lease you can record a same-family security fallback for when no other family can review; setup asks it with the review roles.",
+          "setup": "/setup add roles"
+        },
+        {
           "id": "0.3.2/codex-hook-trust",
           "kind": "hook",
           "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; the session-start hook changed."
