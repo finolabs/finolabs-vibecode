@@ -30,6 +30,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Reviews route to ZCode (owner decision, 17/11/2026): `review_route.py` and `merge_check.py --independent` count ZCode as a review family, run headless in `--mode plan`; before, the router skipped it and an independent merge with a ZCode role failed closed. A pull request ZCode wrote does not route its reviews yet (no ZCode commit trailer is recognised).
 - The standing relay rule in `CLAUDE.md` and the relay line `/setup instructions` offers cover a security review while an away lease is live in `open` mode, or in `strict` mode with Merge yes (owner decision, 17/11/2026); before, `open` never matched the "Merge yes" wording.
 - afk: a bare `export` or `set` cut out of a search pattern after a lone `|` or `&` now floors like a bare `env`, so `rg 'import|export'` floors (its argv is the same as an unquoted `rg import|export`, which prints the environment); write `rg -e import -e export`.
+- Breaking: the instruction-check consent moves from the legacy `## Route judgment` section, whose judge line nothing read, to its own `## Instruction check` section of `host.md`; `/setup check` requires the new heading, reads the consent only there and names a leftover `## Route judgment` with its fix. `matrix_setup.py migrate` moves the line (only `on` or `off` and its date) and removes the old section, with the matrix conversion or on its own beside an existing matrix; until you run it the instruction check is off.
 
 ### Removed
 
