@@ -24,6 +24,7 @@ except ImportError:
     tomllib = None
 
 KEYS = {"claude": "autoCompactWindow", "codex": "model_auto_compact_token_limit"}
+MODEL = re.compile(r"[a-z0-9][a-z0-9.\[\]-]{0,63}")
 LIMIT = 4 * 1024 * 1024
 INDEX_LIMIT = 64 * 1024 * 1024
 LOCAL = ".claude/settings.local.json"
@@ -136,7 +137,30 @@ def model_overrides(data):
     return [name for name, settings in models.items() if isinstance(settings, dict) and "autoCompactWindow" in settings]
 
 
-def transform(host, raw, tokens, clear_models=False):
+def transform_model(data, raw, key, tokens, model):
+    """Set or remove `modelSettings.<model>.<key>`, creating the entry when absent and removing an entry left empty."""
+    models = data.get("modelSettings")
+    if "modelSettings" in data and not isinstance(models, dict):
+        raise Refusal("modelSettings must be an object")
+    entry = models.get(model) if models is not None else None
+    if models is not None and model in models and not isinstance(entry, dict):
+        raise Refusal("the model's settings must be an object")
+    present = entry is not None and key in entry
+    old = entry.get(key) if present else None
+    if (type(old) is int and old == tokens) or (tokens is None and not present):
+        return raw, "No difference."
+    if tokens is None:
+        del entry[key]
+        if not entry:
+            del models[model]
+    else:
+        data.setdefault("modelSettings", {}).setdefault(model, {})[key] = tokens
+    result = (json.dumps(data, indent=2, ensure_ascii=False, allow_nan=False) + "\n").encode()
+    old_label = str(old) if type(old) is int else "present (non-integer)" if present else "absent"
+    return result, f"modelSettings.{model}.{key}: {old_label} -> {tokens if tokens is not None else 'removed'}"
+
+
+def transform(host, raw, tokens, clear_models=False, model=None):
     key = KEYS[host]
     if host == "claude":
         try:
@@ -145,6 +169,8 @@ def transform(host, raw, tokens, clear_models=False):
             raise Refusal("invalid JSON") from None
         if not isinstance(data, dict):
             raise Refusal("JSON must be an object")
+        if model is not None:
+            return transform_model(data, raw, key, tokens, model)
         old = data.get(key)
         present = key in data
         cleared = model_overrides(data) if clear_models else []
@@ -216,9 +242,16 @@ def transform(host, raw, tokens, clear_models=False):
     return result, f"{key}: {old_label} -> {tokens if tokens is not None else 'removed'}"
 
 
-def validate_choice(host, tokens, clear_models=False):
+def validate_choice(host, tokens, clear_models=False, model=None):
     if type(clear_models) is not bool or (clear_models and host != "claude"):
         raise Refusal("--clear-model-overrides is for Claude only")
+    if model is not None:
+        if host != "claude":
+            raise Refusal("--model is for Claude only")
+        if not isinstance(model, str) or not MODEL.fullmatch(model):
+            raise Refusal("--model must be a model id of lowercase letters, digits, dots, dashes and brackets")
+        if clear_models:
+            raise Refusal("--model and --clear-model-overrides are exclusive")
     if host == "antigravity":
         raise Refusal("no documented setting; /compact only")
     if host not in KEYS:
@@ -391,25 +424,31 @@ def disabled_notice(raws, project=None):
         print(f"Warning: {finding}, so the window shown here does nothing until auto-compaction is on.")
 
 
-def target_notice(host, raw, clear_models=False):
+def target_notice(host, raw, clear_models=False, model=None):
     # Called only after transform has validated the target JSON. Names and values stay unprinted:
     # a non-integer value may hold any text.
     if host == "claude" and raw is not None and not clear_models:
-        count = len(model_overrides(json.loads(raw)))
+        overrides = model_overrides(json.loads(raw))
+        if model is not None:
+            others = len([name for name in overrides if name != model])
+            if others:
+                print(f"Per-model autoCompactWindow: {others} other model setting(s) keep their own value.")
+            return
+        count = len(overrides)
         if count:
             print("Warning: modelSettings contains a per-model autoCompactWindow that overrides the top-level setting.")
             print(f"Per-model autoCompactWindow: {count} model setting(s); preview again with "
                   "--clear-model-overrides to remove them in this same write.")
 
 
-def preview(host, folders, tokens, project=None, clear_models=False):
-    validate_choice(host, tokens, clear_models)
+def preview(host, folders, tokens, project=None, clear_models=False, model=None):
+    validate_choice(host, tokens, clear_models, model)
     if project is not None:
         if host != "claude":
             raise Refusal("--project is for Claude only")
         if folders:
             raise Refusal("--project and --folder are exclusive")
-        return preview_project(project, tokens, clear_models)
+        return preview_project(project, tokens, clear_models, model)
     if host == "codex":
         if folders:
             raise Refusal("--folder is for Claude only")
@@ -432,14 +471,14 @@ def preview(host, folders, tokens, project=None, clear_models=False):
                 raise Refusal("duplicate config folder")
             identities.add(identity)
             raw, mode = read_target(folder, path.name)
-            result, change = transform(host, raw, tokens, clear_models)
-            target_notice(host, raw, clear_models)
+            result, change = transform(host, raw, tokens, clear_models, model)
+            target_notice(host, raw, clear_models, model)
             if raw is not None:
                 raws.append(("user", raw))
             backup = backup_name(folder, path.name)
             targets.append({"path": str(path), "sha256": content_hash(raw), "mode": mode, "backup": backup})
             displays.append((path, raw is not None, change, backup, result != raw))
-    value = store_plan(host, tokens, root, targets, "user", clear_models)
+    value = store_plan(host, tokens, root, targets, "user", clear_models, model)
     for path, exists, change, backup, changed in displays:
         print(f"Target: {path}\nExists: {'yes' if exists else 'no'}\n{change}")
         print(f"Backup: {path.parent / backup}" + (" (not needed)" if not exists or not changed else ""))
@@ -449,9 +488,9 @@ def preview(host, folders, tokens, project=None, clear_models=False):
     print("Digest: " + value)
 
 
-def store_plan(host, tokens, root, targets, scope, clear_models=False):
+def store_plan(host, tokens, root, targets, scope, clear_models=False, model=None):
     plan = {"host": host, "tokens": tokens, "created": time.time(), "root": str(root), "targets": targets,
-            "scope": scope, "clear_models": clear_models}
+            "scope": scope, "clear_models": clear_models, "model": model}
     value = digest(plan)
     with dr.data_folder("state/compact", create=True, private=True) as state:
         # An existing unsafe preview is never silently replaced.
@@ -463,7 +502,7 @@ def store_plan(host, tokens, root, targets, scope, clear_models=False):
     return value
 
 
-def preview_project(project, tokens, clear_models=False):
+def preview_project(project, tokens, clear_models=False, model=None):
     """One repository's untracked `.claude/settings.local.json`: this checkout on this machine only."""
     root = dr.consent_root()
     if root is None:
@@ -471,11 +510,11 @@ def preview_project(project, tokens, clear_models=False):
     path = checked_path(Path(project) / LOCAL, "claude", "project")
     with project_folder(project) as folder:
         raw, mode = read_target(folder, path.name) if folder is not None else (None, 0o600)
-        result, change = transform("claude", raw, tokens, clear_models)
-        target_notice("claude", raw, clear_models)
+        result, change = transform("claude", raw, tokens, clear_models, model)
+        target_notice("claude", raw, clear_models, model)
         backup = backup_name(folder, path.name) if folder is not None else path.name + ".bak-" + datetime.now().strftime("%Y%m%d")
     targets = [{"path": str(path), "sha256": content_hash(raw), "mode": mode, "backup": backup}]
-    value = store_plan("claude", tokens, root, targets, "project", clear_models)
+    value = store_plan("claude", tokens, root, targets, "project", clear_models, model)
     print(f"Target: {path}\nScope: this repository on this machine (untracked local settings)")
     print(f"Exists: {'yes' if raw is not None else 'no'}" + ("" if folder is not None else " (.claude folder will be created)"))
     print(change)
@@ -517,9 +556,9 @@ def apply(value, yes):
             raise Refusal("digest mismatch; preview again")
         plan = saved["plan"]
         if not isinstance(plan, dict) or set(plan) != {"host", "tokens", "created", "root", "targets", "scope",
-                                                       "clear_models"}:
+                                                       "clear_models", "model"}:
             raise Refusal("invalid plan")
-        validate_choice(plan["host"], plan["tokens"], plan["clear_models"])
+        validate_choice(plan["host"], plan["tokens"], plan["clear_models"], plan["model"])
         scope = plan["scope"]
         if scope not in ("user", "project") or (scope == "project" and plan["host"] != "claude"):
             raise Refusal("invalid plan")
@@ -557,7 +596,7 @@ def apply(value, yes):
                 raise Refusal("target changed; preview again")
             if not re.fullmatch(re.escape(path.name) + r"\.bak-\d{8}(?:-[1-9][0-9]*)?", target["backup"]):
                 raise Refusal("invalid backup name")
-            result, _ = transform(plan["host"], raw, plan["tokens"], plan["clear_models"])
+            result, _ = transform(plan["host"], raw, plan["tokens"], plan["clear_models"], plan["model"])
             if result != raw and raw is not None:
                 try:
                     os.stat(target["backup"], dir_fd=folder, follow_symlinks=False)
@@ -567,7 +606,7 @@ def apply(value, yes):
                     raise Refusal("previewed backup exists; preview again")
             ready.append((folder, path, target, raw, mode, result))
         for folder, path, target, raw, mode, result in ready:
-            target_notice(plan["host"], raw, plan["clear_models"])
+            target_notice(plan["host"], raw, plan["clear_models"], plan["model"])
             if result == raw:
                 print("No difference.")
                 continue
@@ -605,6 +644,7 @@ def main():
         pre.add_argument("--folder", action="append", default=[])
         pre.add_argument("--project")
         pre.add_argument("--clear-model-overrides", action="store_true")
+        pre.add_argument("--model")
         choice = pre.add_mutually_exclusive_group(required=True)
         choice.add_argument("--tokens", type=int)
         choice.add_argument("--off", action="store_true")
@@ -613,7 +653,7 @@ def main():
         app.add_argument("--yes", action="store_true")
         args = parser.parse_args()
         if args.action == "preview":
-            preview(args.host, args.folder, args.tokens, args.project, args.clear_model_overrides)
+            preview(args.host, args.folder, args.tokens, args.project, args.clear_model_overrides, args.model)
         else:
             apply(args.digest, args.yes)
         return 0

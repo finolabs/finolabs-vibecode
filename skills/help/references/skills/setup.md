@@ -15,5 +15,6 @@ Typed by the user only.
 - A plain sentence such as "install everything" never answers a consent question; each grant keeps its own question.
 - `/setup add delegation` asks which helpers to use as one multiple-choice question built from the scan, then one picker per role.
 - `/setup add compaction` recommends an auto-compact threshold (300-500K for a coordinator on a 1M model, 600-800K for one task) and, on Claude Code, can write it for one repository only. The threshold is when the conversation is shortened, not the model's window. Settings cannot tell a coordinator from a task session, so the saved value is for task sessions, and setup shows a line to open a coordinator with its own value: `CLAUDE_CODE_AUTO_COMPACT_WINDOW=500000 claude` (hooks cannot see `--autocompact`, so the reminder before compaction would stay silent). It can also remove per-model values that would override the one you save.
+- On Claude Code, `/setup add compaction` can save the threshold for one model only, as `/autocompact` does, instead of for every model.
 - `/setup add roles` also asks the Rework limit (2 to 4 review rounds) and whether a same-family security review may count when no other family can review.
 - `/setup scan` refreshes which agents and models are present; `/setup instructions` drafts instruction files with approval per file.

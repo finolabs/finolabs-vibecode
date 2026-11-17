@@ -15,5 +15,6 @@ Typed by the user, or loaded by the agent when the task matches. `session-hygien
 - When the agent asks you to compact, it gives the command ready to copy: `/compact <focus>` on Claude Code, a bare `/compact` on Codex, `/new` or `/fork` with the handover on Antigravity.
 - About 60% context is a point to consider a boundary, not the host's compaction threshold.
 - Open a coordinator session on Claude Code with its own threshold: `CLAUDE_CODE_AUTO_COMPACT_WINDOW=500000 claude`. The reminder to save a handover before compaction sees this variable but not the `--autocompact` flag.
+- `/autocompact <tokens>` saves the threshold for the current model, and since 0.3.3 the reminder follows the session's model too.
 - A wholly new task starts in a fresh, correctly named session with a short handover.
 - Notes, briefs and logs go in `.finolabs/` at the main checkout's root, kept out of git; temporary folders are wiped on restart.
