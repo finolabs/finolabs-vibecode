@@ -2,7 +2,8 @@
 """Compaction nudge (UserPromptSubmit): one fixed line at 80% and 90% of the threshold.
 
 Claude Code: reads only the integer `usage` counts of the latest assistant entry in the
-session's transcript tail and the two compaction settings. Codex (`--host codex`): reads
+session's transcript tail, that entry's model id (only to look up its per-model setting,
+never stored, logged or printed) and the compaction settings. Codex (`--host codex`): reads
 only `last_token_usage.total_tokens` and `model_context_window` of the latest `token_count`
 event and the top-level `model_auto_compact_token_limit` of the Codex home's config.toml.
 Never blocks, always exits 0, sends nothing. See docs/specs/compaction-nudge.md and the
@@ -28,6 +29,7 @@ TAIL = 256 * 1024
 MAX_MARKS = 200
 MARK_LIMIT = 32
 TOKENS = (1000, 10000000)
+MODEL = re.compile(r"[a-z0-9][a-z0-9.\[\]-]{0,63}")
 USAGE = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
 FOLDER = "state/compaction-nudge"
 MESSAGE = ("Context is at {}% of this session's compaction threshold. Before the host compacts, run "
@@ -136,7 +138,10 @@ def codex_threshold(home, window):
 
 
 def used_tokens(tail):
-    """Sum of the four usage counts of the latest assistant entry; no other field is kept."""
+    """(used, model) of the latest assistant entry with valid usage, else None.
+
+    `used` sums its four usage counts; `model` is its `message.model` when that fully matches
+    MODEL, else None. No other field is kept, and the model id stays in memory only."""
     lines = tail.split(b"\n")
     if not tail.endswith(b"\n"):
         lines = lines[:-1]  # only complete lines
@@ -153,7 +158,8 @@ def used_tokens(tail):
             continue
         values = [usage.get(key) for key in USAGE]
         if all(type(v) is int and 0 <= v <= 100000000 for v in values) and sum(values) > 0:
-            return sum(values)
+            model = message.get("model")
+            return sum(values), model if isinstance(model, str) and MODEL.fullmatch(model) else None
     return None
 
 
@@ -182,8 +188,11 @@ def settings_files(environ, cwd):
     return files
 
 
-def settings_values(files):
-    """Only `autoCompactEnabled` and `autoCompactWindow` from each readable file, in the given order."""
+def settings_values(files, model=None):
+    """(autoCompactEnabled, window) from each readable file, in the given order.
+
+    The window is the file's `modelSettings[model].autoCompactWindow` when `model` is set and that value
+    is a valid integer, else its top-level `autoCompactWindow`; `model` is only an exact dictionary key."""
     from compact_setup import read_settings
     values = []
     for _, path in files:
@@ -195,7 +204,14 @@ def settings_values(files):
         except (ValueError, UnicodeError):
             continue
         if isinstance(data, dict):
-            values.append((data.get("autoCompactEnabled"), data.get("autoCompactWindow")))
+            window = data.get("autoCompactWindow")
+            models = data.get("modelSettings") if model is not None else None
+            entry = models.get(model) if isinstance(models, dict) else None
+            if isinstance(entry, dict):
+                value = entry.get("autoCompactWindow")
+                if type(value) is int and integer(value) is not None:
+                    window = value
+            values.append((data.get("autoCompactEnabled"), window))
     return values
 
 
@@ -294,12 +310,13 @@ def main(argv=()):
             if limit is None or limit <= 0:
                 return 0
         else:
-            limit = threshold(environ, settings_values(settings_files(environ, event.get("cwd"))))
-            if limit is None:
-                return 0
             tail = transcript_tail(event.get("transcript_path"), config_dir(environ) / "projects")
-            used = used_tokens(tail) if tail is not None else None
-            if used is None:
+            found = used_tokens(tail) if tail is not None else None
+            if found is None:
+                return 0
+            used, model = found
+            limit = threshold(environ, settings_values(settings_files(environ, event.get("cwd")), model))
+            if limit is None:
                 return 0
         percent = decide(session, used, limit)
         if percent is not None:

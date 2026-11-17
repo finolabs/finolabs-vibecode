@@ -54,11 +54,13 @@ class CompactNudgeTest(unittest.TestCase):
         path.write_text(data if isinstance(data, str) else json.dumps(data))
         return path
 
-    def turn(self, used, path=None, text=SECRET):
+    def turn(self, used, path=None, text=SECRET, model=None):
         usage = {"input_tokens": used // 2, "cache_creation_input_tokens": 1,
                  "cache_read_input_tokens": used - used // 2 - 2, "output_tokens": 1}
         entry = {"type": "assistant", "sessionId": SESSION, "cwd": str(self.repo),
                  "message": {"role": "assistant", "content": [{"type": "text", "text": text}], "usage": usage}}
+        if model is not None:
+            entry["message"]["model"] = model
         with open(path or self.transcript, "a") as stream:
             stream.write(json.dumps({"type": "user", "message": {"role": "user", "content": text}}) + "\n")
             stream.write(json.dumps(entry) + "\n")
@@ -244,6 +246,98 @@ class CompactNudgeTest(unittest.TestCase):
                 self.assertEqual(self.threshold({"CLAUDE_CODE_AUTO_COMPACT_WINDOW": value}), WINDOW)
         self.settings("local", {"autoCompactEnabled": "false"})
         self.assertEqual(self.threshold(), WINDOW)
+
+    # Per-model threshold
+
+    def model_threshold(self, model, env=None):
+        environ = env or {}
+        return cn.threshold(environ, cn.settings_values(cn.settings_files(environ, str(self.repo)), model))
+
+    def test_per_model_value_wins_within_a_file_for_that_model_only(self):
+        self.settings("user", {"autoCompactWindow": WINDOW,
+                               "modelSettings": {"model-a": {"autoCompactWindow": 500000}}})
+        self.assertEqual(self.model_threshold("model-a"), 500000)
+        self.assertEqual(self.model_threshold("model-b"), WINDOW)
+        self.assertEqual(self.model_threshold(None), WINDOW)
+
+    def test_file_order_wins_over_per_model(self):
+        self.settings("user", {"autoCompactWindow": 700000,
+                               "modelSettings": {"model-a": {"autoCompactWindow": 500000}}})
+        self.settings("local", {"autoCompactWindow": 600000})
+        self.assertEqual(self.model_threshold("model-a"), 600000)  # measured on Claude Code
+        self.settings("local", {"modelSettings": {"model-b": {"autoCompactWindow": 300000}}})
+        self.assertEqual(self.model_threshold("model-b"), 300000)
+        self.assertEqual(self.model_threshold("model-a"), 500000)
+        self.settings("local", {"modelSettings": {"model-a": {"autoCompactWindow": 300000}}})
+        self.assertEqual(self.model_threshold("model-a"), 300000)
+
+    def test_environment_variable_still_wins(self):
+        self.settings("user", {"autoCompactWindow": WINDOW,
+                               "modelSettings": {"model-a": {"autoCompactWindow": 500000}}})
+        self.assertEqual(self.model_threshold("model-a", {"CLAUDE_CODE_AUTO_COMPACT_WINDOW": "300000"}), 300000)
+        self.assertEqual(self.model_threshold("model-a", {"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "50"}), 250000)
+        self.assertIsNone(self.model_threshold("model-a", {"DISABLE_AUTO_COMPACT": "1"}))
+
+    def test_invalid_per_model_values_fall_back_to_the_top_level(self):
+        for entry in ({"autoCompactWindow": "500000"}, {"autoCompactWindow": 999}, {"autoCompactWindow": True},
+                      {"other": 1}, "500000", [500000], None):
+            with self.subTest(entry=entry):
+                self.settings("user", {"autoCompactWindow": WINDOW, "modelSettings": {"model-a": entry}})
+                self.assertEqual(self.model_threshold("model-a"), WINDOW)
+        self.settings("user", {"autoCompactWindow": WINDOW, "modelSettings": ["model-a"]})
+        self.assertEqual(self.model_threshold("model-a"), WINDOW)
+
+    def test_model_id_from_the_transcript_selects_the_per_model_value(self):
+        self.settings("user", {"autoCompactWindow": WINDOW,
+                               "modelSettings": {"model-a": {"autoCompactWindow": 500000}}})
+        self.turn(410000, model="model-a")
+        self.assertEqual(self.run_hook(), message(82))
+        self.turn(820000, model="model-b")  # another model: top-level window, 82% again but band unchanged
+        self.assertEqual(self.run_hook(), "")
+        self.turn(920000, model="model-b")
+        self.assertEqual(self.run_hook(), message(92))
+
+    def test_dots_and_brackets_are_literal_key_characters(self):
+        model = "model-a.5[1m]"
+        self.settings("user", {"autoCompactWindow": WINDOW,
+                               "modelSettings": {model: {"autoCompactWindow": 500000},
+                                                 "model-a": {"autoCompactWindow": 200000},
+                                                 "model-a.5": {"autoCompactWindow": 300000}}})
+        self.assertEqual(self.model_threshold(model), 500000)
+        self.turn(410000, model=model)
+        self.assertEqual(self.run_hook(), message(82))
+
+    def test_invalid_model_ids_fall_back_to_the_top_level(self):
+        for model in ("Model-a", "m" * 65, "model/a", "model a", 5, ["model-a"], "-model", ""):
+            with self.subTest(model=model):
+                self.settings("user", {"autoCompactWindow": WINDOW,
+                                       "modelSettings": {str(model): {"autoCompactWindow": 500000}}})
+                self.transcript.write_text("")
+                self.turn(450000, model=model)
+                self.assertEqual(cn.used_tokens(self.transcript.read_bytes()), (450000, None))
+                self.assertEqual(self.run_hook(), "")
+        self.assertEqual(cn.used_tokens(b""), None)
+        self.transcript.write_text("")
+        self.turn(450000, model="m" * 64)
+        self.assertEqual(cn.used_tokens(self.transcript.read_bytes()), (450000, "m" * 64))
+
+    def test_entry_without_model_works_as_before(self):
+        self.turn(810000)
+        self.assertEqual(cn.used_tokens(self.transcript.read_bytes()), (810000, None))
+        self.assertEqual(self.run_hook(), message(81))
+
+    def test_model_id_never_reaches_output_or_mark(self):
+        model = "synthetic-model-9z4"
+        self.settings("user", {"autoCompactWindow": WINDOW,
+                               "modelSettings": {model: {"autoCompactWindow": 500000}}})
+        self.turn(460000, model=model)
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "stderr", stderr):
+            output = self.run_hook()
+        self.assertEqual(output, message(92))
+        self.assertNotIn(model, output + stderr.getvalue())
+        self.assertNotIn(model.encode(), b"".join(p.read_bytes() for p in self.mark_folder().iterdir()))
+        self.assertNotIn(model, " ".join(os.listdir(self.mark_folder())))
 
     def test_settings_symlink_is_not_read(self):
         real = self.base / "real-settings.json"
