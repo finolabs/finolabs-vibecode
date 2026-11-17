@@ -14,4 +14,6 @@ Typed by the user only.
 - `/setup add <feature>` opens one feature, for example `afk`, `checks` or `metrics`.
 - A plain sentence such as "install everything" never answers a consent question; each grant keeps its own question.
 - `/setup add delegation` asks which helpers to use as one multiple-choice question built from the scan, then one picker per role.
+- `/setup add compaction` recommends an auto-compact threshold (300-500K for a coordinator on a 1M model, 600-800K for one task) and, on Claude Code, can write it for one repository only.
+- `/setup add roles` also asks the Rework limit (2 to 4 review rounds) and whether a same-family security review may count when no other family can review.
 - `/setup scan` refreshes which agents and models are present; `/setup instructions` drafts instruction files with approval per file.

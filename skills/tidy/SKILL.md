@@ -31,7 +31,8 @@ A title tells the user which session holds which work, without opening it: `<emo
 
 Keep the title near 50 characters, the activity in English unless asked otherwise, technical names intact. Examples: `🐛 billing-api: fix webhook retries`, `✨ billing-api 003 search: T044–T046 rebuild CLI`, `🔍 docs-site: review PR 12`.
 
-When to name: at entry, on a resume whose title no longer matches the work, and when the task or phase changes materially (a new story, planning to implementation to review). Do not rename for every step. Check the title again after a compaction. Advisory (agent judgment): where the host's rename tool needs this session's own id, a session can read its id from the "started by" entry of a child session it started itself; with no such child, say so in one line and ask the user to
+When to name: at entry, on a resume whose title no longer matches the work, when the task or phase changes materially (a new story, planning to implementation to review), and when a spec, story or large pull request the session ran is done: a coordinator session that carries on renames to its next work (the merge notice reminds it after `gh pr merge`). Do not rename for every step. Check the title again after a compaction.
+Advisory (agent judgment): where the host's rename tool needs this session's own id, a session can read its id from the "started by" entry of a child session it started itself; with no such child, say so in one line and ask the user to
 rename, and do not guess ids or retry blind.
 
 Whose: rename only this session and sessions you started; a session someone else started keeps its name unless the user asks. A delegated run takes its title, or its log file name where the host has no titles, from its ledger project and task label (`delegate`).

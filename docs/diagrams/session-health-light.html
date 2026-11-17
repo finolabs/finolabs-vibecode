@@ -17,7 +17,7 @@ svg{width:100%;min-width:900px;display:block}
 <p class="sub">tidy names the session, watches its context size and writes a handover before compaction, so the work picks up where it left off.</p>
 <svg viewBox="0 0 1280 568" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="session-health-light-title session-health-light-desc">
 <title id="session-health-light-title">Keeping a long session healthy</title>
-<desc id="session-health-light-desc">Loop of session hygiene: the agent names the session at the first task and when the phase changes; reads the context size from the status line snapshot or, on request, the probe (Claude Code&#x27;s /context or Codex&#x27;s app-server); context_steward.py answers ok, prepare from 80 percent, wait or compact at your threshold; on Claude Code the compaction nudge hook prints a line asking for tidy at 80 and 90 percent; on prepare the agent writes a private handover; the host compacts at its threshold or you run /compact; the compact hook at session start re-injects the handover and reminds the agent to check the title.</desc>
+<desc id="session-health-light-desc">Loop of session hygiene: the agent names the session at the first task, when the phase changes and when a spec, story or large pull request is done; reads the context size from the status line snapshot or, on request, the probe (Claude Code&#x27;s /context or Codex&#x27;s app-server); context_steward.py answers ok, prepare from 80 percent, wait or compact at your threshold; on Claude Code the compaction nudge hook prints a line asking for tidy at 80 and 90 percent; on prepare the agent writes a private handover; the host compacts at its threshold or you run /compact; the compact hook at session start re-injects the handover and reminds the agent to check the title.</desc>
 <defs><marker id="session-health-light-default" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5B5B79"/></marker><marker id="session-health-light-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4B1E73"/></marker><marker id="session-health-light-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#14627A"/></marker></defs>
 <rect width="100%" height="100%" fill="#F7F7FB"/>
 <path d="M360,96 H480" fill="none" stroke="#5B5B79" stroke-width="1.2" marker-end="url(#session-health-light-default)"/>
@@ -33,7 +33,7 @@ svg{width:100%;min-width:900px;display:block}
 <rect x="40" y="40" width="320" height="112" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.70)" stroke-width="1"/>
 <text x="200" y="72" fill="#0B0B17" font-size="16" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">Name the session</text>
 <text x="200" y="96" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">at the first task</text>
-<text x="200" y="116" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">again when the phase changes</text>
+<text x="200" y="116" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">again at each phase, spec or PR</text>
 <text x="200" y="136" fill="#5B5B79" font-size="12" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">project scope: activity</text>
 </g>
 <g class="node">
