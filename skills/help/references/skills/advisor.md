@@ -11,6 +11,6 @@ Typed by the user, or proposed by the agent, which waits for your yes.
 ## Tips
 
 - Each run spends quota, so the agent proposes one and waits; asking for it yourself needs no proposal.
-- `--agent` picks the advisor; otherwise it prefers a family other than the one you run on.
+- `--agent` picks the advisor; otherwise the helper you gave the `advisor` role in the assignment matrix (`/setup add delegation`), then the matrix's ranked candidates from another family, then any family other than the one you run on.
 - You get the advisor's verdict and the agent's own recommendation, with where they agree and differ.
 - It needs `delegate` installed beside it; when that is missing it tells you how to add it and stops.

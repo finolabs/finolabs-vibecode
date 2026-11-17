@@ -36,6 +36,12 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - The standing relay rule in `CLAUDE.md` and the relay line `/setup instructions` offers cover a security review while an away lease is live in `open` mode, or in `strict` mode with Merge yes (owner decision, 17/11/2026); before, `open` never matched the "Merge yes" wording.
 - afk: a bare `export` or `set` cut out of a search pattern after a lone `|` or `&` now floors like a bare `env`, so `rg 'import|export'` floors (its argv is the same as an unquoted `rg import|export`, which prints the environment); write `rg -e import -e export`.
 
+- `advisor` picks its family from the assignment matrix: the helper holding the `advisor` role, else the first `route_pick.py pick --kind advisor` candidate of another family, else a contrasting family; it no longer proposes a fixed Claude, Codex or Antigravity Argon list. The committee picks its second member the same way.
+
+- The model-invocable skill descriptions are at most 320 characters each (5,306 to 3,912 characters always loaded), leading with the action and keeping every trigger case.
+
+- `CLAUDE.md` "Checks before committing": run the test modules `scripts/select_tests.py --base origin/main` lists, at most two per command, instead of the full suite; the full suite runs in CI and before a release tag (owner decision, 17/11/2026).
+
 ### Removed
 
 - Breaking: the 22 `fnl-` skill aliases (`skills/fnl-<name>/`) are removed (owner decision, 16/11/2026); type the current name instead: `/fnl-advisor` → `/advisor`, `/fnl-afk` → `/afk`, `/fnl-ask` → `/help`, `/fnl-brb` → `/afk`, `/fnl-checks` → `/checks`, `/fnl-coding-router` → `/coding-router`, `/fnl-commit-messages` → `/commit-messages`, `/fnl-delegate` → `/delegate`, `/fnl-gtg` → `/pause`, `/fnl-handoff` → `/handoff`, `/fnl-help` → `/help`, `/fnl-open-source-review` → `/open-source-review`, `/fnl-pause` → `/pause`, `/fnl-plugin-packaging` → `/plugin-packaging`, `/fnl-restore-point` → `/restore-point`, `/fnl-review-gate` → `/review-gate`, `/fnl-security-review-gate` → `/security-review-gate`, `/fnl-session-hygiene` → `/tidy`, `/fnl-setup` → `/setup`, `/fnl-status` → `/status`, `/fnl-update` → `/update`, `/fnl-versioning` → `/versioning`. Instruction files that still name an old `fnl-` skill point at nothing: `/setup check` lists each one with its new name. The `fnl-review` and `fnl-router` markers keep their names, so reviews already posted on open pull requests still count; usage metrics recorded under an old skill name still count under the new one.
