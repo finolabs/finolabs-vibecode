@@ -21,6 +21,17 @@ Status: accepted; prepared, to be tagged v0.3.2 after the owner's yes.
 | 329 | LOW findings of the rule table pull request. |
 | 330 | afk and merge check LOW findings: a bare `env` in a search pattern floors; the overlay writer and `merge_check.py` fail closed on an unknown `## afk` key; NFKC reviewer names. |
 | 331 | This release: the drift review below, upgrade notes, re-rendered afk diagrams, changelog and manifests. |
+| 332 | Remaining 0.3.2 fixes: afk `check` reads `--author-email` on a pinned merge; a bare `export` or `set` after a lone `|` floors; `merge_check.py` refuses non-ASCII reviewer names under `open`; reviews route to ZCode; the security relay holds under an `open` lease. |
+| 333 | Long skill sections load only when needed (`references/` disclosure). |
+| 334 | The session-start text carries the proof rule and the session title format, scoped to this project. |
+| 335 | `advisor` routes through the assignment matrix; shorter skill descriptions. |
+| 336 | The afk check hook rule, the tenth scoped exception in `CLAUDE.md`, with `PRIVACY.md` and the spec. |
+| 337 | The router judge step is removed; `## Instruction check` gets its own section; `Rework limit` under `## Reviews`. |
+| 338 | The proof nudge (`Stop` reminder after an unverified commit) and the recorded same-family security fallback. |
+| 339 | `/setup add compaction` recommends an auto-compact threshold and can write it for one repository (`compact_setup.py --project`). |
+| 340 | `tidy` hands the user a ready `/compact <focus>` command (bare `/compact` on Codex, `/new` or `/fork` on Antigravity). |
+| 341 | The afk check hook on Claude Code: a syntax allowlist that judges each Bash command as `afk.py check` does under a lease. |
+| 342 | This record: rows 332 to 342, the second drift review below, upgrade notes for 336 to 341, and `merge_check.py --independent` counting ZCode reviews. |
 
 The changelog's 0.3.2 section holds the user-facing wording; `update` carries the 0.3.2 upgrade notes. The afk-mechanism and away-decision-sequence PNGs were re-rendered (2530 pixels wide) through the shared Chromium.
 
@@ -51,10 +62,33 @@ Every item in the table below was checked against what ships at the release bran
 | `docs/specs/index.md` | The afk autonomy row said `accepted` while its spec says implemented; now `implemented`. Added this record's row. |
 | Historical specs (`agent-roles.md` and earlier release records) | Still name `fnl-reviewer` and the other old names as history; left unchanged on purpose. |
 
+### Second drift review (pull request 342)
+
+Checked against `main` at `33fd133` (after pull request 341) for what 332 to 341 added.
+
+| Item | Result |
+| --- | --- |
+| README release 0.3.2 section | Drifted: no afk check hook, proof nudge, compaction threshold, `/compact` line, review and routing changes or leaner skills. Added five bullets. |
+| README skill table, `afk` row | Drifted: did not say a hook judges each command on Claude Code. Added. |
+| `skills/help/references/skills/afk.md` | Drifted: no afk check hook. Added one sentence. |
+| `skills/help/references/map.md` | `afk_check_hook.py`, `proof_nudge.py` and `compact_setup.py --project` rows current (the hook row was corrected in 341). |
+| `skills/update/references/upgrades.json` | Added `0.3.2/afk-check-hook`, `0.3.2/proof-nudge`, `0.3.2/compaction-threshold` (`/setup add compaction`) and `0.3.2/security-fallback` (`/setup add roles`). Codex hooks did not change after 334, so `0.3.2/codex-hook-trust` stands. |
+| `PRIVACY.md` | Current: "Proof nudge" and "afk check hook" sections landed with their rule pull requests. |
+| `docs/specs/index.md` | Current: afk check hook, proof nudge and compaction threshold rows say implemented. |
+| `CHANGELOG.md` 0.3.2 | Current: each of 332 to 341 added its entry. |
+| Diagrams | The afk mechanism diagram still shows the agent calling `check`; on Claude Code the hook now calls it for Bash. Left unchanged for 0.3.2 (the call and its rules are the same); noted here. |
+| `docs/diagrams/task-lifecycle-*.html` and the README alt text | Drifted with the rework limit (337): said "max 2 rounds". Now the Rework limit, two by default; the PNGs were not re-rendered and still show the default. |
+| `skills/help/references/skills/advisor.md` | Drifted with 335: gave the configured advisor role unconditional precedence. Now only when it is of another family, as `advisor` says. |
+| `merge_check.py --independent` | Defect found by this review: the family check left out `zcode`, so ZCode reviews (332) could not pass. Fixed here with a regression test. |
+| README and upgrade note for compaction | Now say the repository threshold and the ready `/compact <focus>` are Claude Code, a bare `/compact` on Codex and `/new` or `/fork` on Antigravity. |
+
 ## Owner decisions
 
 - 16/11/2026: ship the three breaking changes (the `fnl-` aliases removed, the agents renamed, afk `open` as the default) as 0.3.2, a patch, because the shipped text, upgrade notes and tests already name 0.3.2. This overrides `versioning`, which asks for a MINOR bump for a breaking change in phase 0, and applies to 0.3.2 only; the changelog marks the entries Breaking and the upgrade notes say what to do.
 - 16/11/2026: remove the `fnl-` aliases and drop the prefix from the agents; afk `open` mode is the default, with the credential floor, the default-branch guard and the third-party-instructions guard; the afk overlay (see `CLAUDE.md`, the ninth scoped exception, and `docs/specs/afk-overlay.md`).
+- 17/11/2026: reviews of 333 to 341 went to the claudework install (headless Claude Code) and, once its quota ran out, the last rounds of 341 to Codex; the security review of 341 was relayed with the owner's approval for that pull request.
+- 17/11/2026: the afk check hook (tenth scoped exception) is a syntax allowlist: false denials are accepted (the owner chose to block, then the syntax allowlist); the rule text is tighter than first approved.
+- 17/11/2026: the auto-compact recommendation and the ready `/compact` command ship in 0.3.2; the setup bare-run budget moves from 15000 to 15050 bytes and the beginner threshold step gets a 16000-byte budget.
 - 17/11/2026: reviews route to ZCode, headless in `plan` mode; the standing relay of a security review also holds under an `open` lease (the "Reviews" section of [CLAUDE.md](../../CLAUDE.md)).
 
 ## The upgrade
