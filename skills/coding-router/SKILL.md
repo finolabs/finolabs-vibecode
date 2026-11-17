@@ -15,7 +15,7 @@ Read the goal and acceptance criteria, the scoped instructions (`AGENTS.md`, `CL
 
 Keep a short receipt: source, task, workflow path, depth, gaps, evidence limits. A receipt is a record, not proof.
 
-Once the task is known, invoke `tidy` to name or rename the session ("Titles"), and again when the phase changes (planning to implementation to review). Advisory (agent judgment).
+Once the task is known, name or rename the session in the title format the session-start rules give (`tidy` "Titles" when they are not in context), and again when the phase changes (planning to implementation to review). Advisory (agent judgment).
 
 Done when the workflow path and the depth can be chosen without guessing.
 
