@@ -171,6 +171,23 @@ class AfkCheckHookTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertNotEqual(self.hook(command), denial(PARSE))
 
+    def test_an_operator_that_ends_a_word_is_split_off_as_bash_does(self):
+        self.start()
+        # Ordinary style: the operator ends the word before it, so both commands are read and judged.
+        for command in ('ls /tmp; git status', 'ls /tmp&& git status', 'ls /tmp|| git status', 'ls /tmp| head',
+                        'ls /tmp; git status; git log -1'):
+            with self.subTest(command=command):
+                self.assertIsNone(self.hook(command))
+        for command in ('ls /tmp; printenv', 'git commit -m msg; printenv', 'ls /tmp&& env', 'ls /tmp| printenv'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), parked('floor'))
+        # An operator glued to the word after it, or one inside quotes beside a split one, is still not read.
+        for command in ('ls /tmp;printenv', 'git commit -m msg;printenv', 'echo "a;" b; printenv'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), denial(PARSE))
+        # A quoted operator alone is a text value, as before.
+        self.assertIsNone(self.hook('git commit -m "fix;" -q'))
+
     def test_input_past_the_cap_denies_only_under_a_live_lease(self):
         padded = 'printenv' + ' ' * (262 * 1024)
         self.assertIsNone(self.hook(padded))

@@ -308,6 +308,21 @@ REDIRECT = re.compile(r'[0-9]*(?:&>>?|[<>]+[&|]?)')
 OPERATOR = re.compile(r'\|\||&&|\|&|;|\||&')
 
 
+TRAILING_OPERATOR = re.compile(r'(.*?[^;&|])(;|&&|\|\||\|&|\||&)')
+
+
+def detached(argv):
+    """The argv with a control operator that ends a word split off as its own word (`/x;` becomes `/x` and `;`), as
+    bash ends a word at an unquoted operator. Only a word whose last characters are one operator is split; the
+    caller keeps the result only when it then holds exactly the operators the shell reads, so an operator inside
+    quotes is never split off."""
+    words = []
+    for word in argv:
+        match = TRAILING_OPERATOR.fullmatch(word)
+        words.extend(match.groups() if match else (word,))
+    return words
+
+
 def operators_in(tokens):
     """The control operators inside every token made only of punctuation (`;(` holds `;`), redirects left out."""
     found = []
@@ -402,6 +417,12 @@ def main():
             return 0
         if not argv:
             return 0
+        # `ls /x; pwd` reads `/x;` as one word; split the operator off as bash does, so `check` sees both commands.
+        # An operator glued to the word after it (`x;printenv`) is not split and stays denied below.
+        if glued_operator(unquoted_newlines(command), argv):
+            split = detached(argv)
+            if not glued_operator(unquoted_newlines(command), split):
+                argv = split
         if unreadable(command):
             deny(PARSE_MESSAGE)
             return 0
