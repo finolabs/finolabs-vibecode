@@ -11,6 +11,6 @@ Typed by the user only.
 ## Tips
 
 - A notice is not permission: nothing is installed before your yes to the exact host command.
-- Claude Code needs a restart after updating; on Codex, open `/hooks` in a new session and trust the plugin's hooks again.
+- Claude Code needs a restart after updating; on Codex, open `/hooks` in a new session and trust the plugin's hooks again. Each host installs the release its catalog pins; the catalog moves to a new tag shortly after each release.
 - `/update whats-new` only shows the checklist; it installs and changes nothing.
 - `FNL_UPDATE_CHECK=off` stops the daily check, the notices and these helper commands.
