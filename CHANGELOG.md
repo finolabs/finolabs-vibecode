@@ -26,6 +26,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - The afk mechanism and away decision diagrams say they show `strict` and that `open`, the default, runs every action except the credential floor and the default-branch guard (`git commit` and `git push` only), with an advisory third-party-instructions guard and no enforced review or `merge_check.py`; their PNG renderings and the README alt text are updated. The README, `help` map and pages, and the comparison page describe the modes, the guards, the overlay, the setup mode question and the helper picker.
 - The session-start rules carry the proof rule (a report is a claim: run the targeted tests yourself and read the output; a missing setup or credential is BLOCKED, not PASS) and the session title format and per-host mechanism, so a rename no longer loads `tidy`; `checks` is still invoked before accepting a delegated run. `tidy` "Context pressure" moves to `references/context-pressure.md`, read when the compaction nudge fires, context passes about 60% or work hands over.
+- The session-start state block: `Open ledger dispatches` counts this project's open records and those past budget (with a `ledger.py stale` hint) instead of every project on the machine, and the posting, quota and parallel-slot words list only the families the assignment matrix or `## Agents on this machine` marks present (all four when neither does; a family with an open dispatch still shows).
 
 ### Removed
 

@@ -2,8 +2,8 @@
 """Read-only SessionStart reminder for Claude Code and Codex; fail open, exit 0.
 
 After the reminder it prints the plugin's state from local files only: the
-delegation mode, roles and posting state, cached quota and the count of open ledger
-dispatches, a fixed warning when the repository's main checkout is off its default
+delegation mode, roles and posting state, cached quota and this project's open ledger
+dispatches (per-family words only for the families the host config lists as present), a fixed warning when the repository's main checkout is off its default
 branch and, when available, this session's fresh context counts. Every value
 printed is a fixed word or a capped integer, never text read from a file, because the hook also runs in untrusted repositories.
 One scoped exception: while an away lease is live, the afk overlay the owner approved for this repository (its bytes
@@ -23,9 +23,11 @@ from pathlib import Path
 MODES = ("manual", "suggest", "auto")
 # Cache key in `quota_probe.py` -> the family name printed.
 FAMILIES = (("claude", "claude-code"), ("codex", "codex"), ("agy", "antigravity"), ("zcode", "zcode"))
+# Family names in fixed order; per-family words print only for the families `present_families` returns.
+ALL_FAMILIES = ("claude", "codex", "antigravity", "zcode")
+QUOTA_FAMILY = {"claude": "claude", "codex": "codex", "agy": "antigravity", "zcode": "zcode"}
 # The only id shape printed for the context probe; anything else prints nothing.
 SESSION_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
-LEDGER_LIMIT = 4 * 1024 * 1024  # a larger ledger reads as unknown at session start
 OPEN_CAP = 99
 
 
@@ -64,9 +66,29 @@ def delegation_word():
         return "unknown"
 
 
-def roles_words():
+def present_families():
+    """The families a usable assignment matrix or `## Agents on this machine` lists as present, in fixed order.
+
+    All four when neither lists one, or on any error, so a missing or broken config hides nothing.
+    """
+    try:
+        import assignments
+        import review_config as config
+        text = config.host_text()
+        if not isinstance(text, str):
+            raise ValueError("host")
+        found = set(config.present_families(text))
+        matrix = assignments.parse(text)
+        if config.usable(matrix):
+            for name in matrix.agents:
+                found.add("claude" if name.startswith("claude") else "zcode" if name.startswith("zcode") else name)
+        return tuple(family for family in ALL_FAMILIES if family in found) or ALL_FAMILIES
+    except Exception:
+        return ALL_FAMILIES
+
+
+def roles_words(families=ALL_FAMILIES):
     """Read canonical roles once; render only closed enumerations, never config text."""
-    families = ("claude", "codex", "antigravity", "zcode")
     keys = ("code review", "security review", "navigator", "judge")
     try:
         import review_config as config
@@ -76,7 +98,7 @@ def roles_words():
         roles, posting = config.read_roles(text), config.read_posting(text)
         parts = []
         for key in keys:
-            allowed = ("host", "jev") if key == "judge" else families
+            allowed = ("host", "jev") if key == "judge" else ALL_FAMILIES
             value = roles.get(key, "host" if key == "judge" else "unassigned")
             word = value if isinstance(value, str) and value in (*allowed, "unassigned") else "unknown"
             parts.append(f"{key} {word}")
@@ -126,7 +148,7 @@ def family_quota(probe, agent, labels, marked, current):
     return ("out" if out else "ok"), min(100, max(0, int(min(fractions) * 100)))
 
 
-def quota_words():
+def quota_words(families=ALL_FAMILIES):
     try:
         import quota_probe as probe
         with probe.state_folder(read_only=True) as folder:
@@ -138,7 +160,7 @@ def quota_words():
         parts = []
         for agent, name in FAMILIES:
             labels = cache.get(agent)
-            if not labels and agent not in limits:
+            if QUOTA_FAMILY[agent] not in families or (not labels and agent not in limits):
                 continue
             word, percent = family_quota(probe, agent, labels or {}, limits.get(agent), current)
             parts.append(f"{name} {word}" + (f" {percent}%" if percent is not None else ""))
@@ -149,39 +171,30 @@ def quota_words():
         return "unknown"
 
 
+def capped(count):
+    return f"{OPEN_CAP}+" if count > OPEN_CAP else str(count)
+
+
 def open_dispatches():
-    """Count of ledger `start` lines with no `finish` line, capped; 0 without a ledger."""
+    """This project's open ledger dispatches and those past their budget, as `parallel_slots` scopes them; else unknown."""
     try:
-        import data_root as dr
-        if dr.consent_root() is None:
+        from parallel_slots import status
+        state = status(os.getcwd())
+        if state["scope"] is None:
+            return "unknown outside a repository"
+        opened, stale = state["open"], state["stale"]
+        if type(opened) is not int or type(stale) is not int or opened < 0 or stale < 0:
             return "unknown"
-        try:
-            raw = dr.read_data("ledger.jsonl", LEDGER_LIMIT)
-        except FileNotFoundError:
-            return "0"
-        if not isinstance(raw, bytes):
-            return "unknown"
-        starts, finishes = set(), set()
-        for line in raw.decode("utf-8").splitlines():
-            try:
-                record = json.loads(line)
-            except ValueError:
-                continue
-            if isinstance(record, dict) and isinstance(record.get("id"), str):
-                if record.get("event") == "start":
-                    starts.add(record["id"])
-                elif record.get("event") == "finish":
-                    finishes.add(record["id"])
-        count = len(starts - finishes)
-        return f"{OPEN_CAP}+" if count > OPEN_CAP else str(count)
+        hint = f", {capped(stale)} past budget; ledger.py stale previews old ones to close" if stale else ""
+        return f"{capped(opened)} open in this project{hint}"
     except Exception:
         return "unknown"
 
 
-def parallel_words():
+def parallel_words(families=ALL_FAMILIES):
     try:
         from parallel_slots import summary
-        return summary(os.getcwd())
+        return summary(os.getcwd(), families=families)
     except Exception:
         return "unknown"
 
@@ -240,13 +253,14 @@ def checkout_line():
 
 
 def state_block():
+    families = present_families()
     return ("\nPlugin state (local files; fixed words and counts only)\n"
             f"Delegation mode: {delegation_word()}\n"
-            f"Roles: {roles_words()}\n"
+            f"Roles: {roles_words(families)}\n"
             f"{assignments_line()}"
-            f"Quota (cached): {quota_words()}\n"
+            f"Quota (cached): {quota_words(families)}\n"
             f"Open ledger dispatches: {open_dispatches()}\n"
-            f"Parallel slots: {parallel_words()}\n"
+            f"Parallel slots: {parallel_words(families)}\n"
             f"{away_line()}"
             f"{overlay_lines()}"
             f"{checkout_line()}")
