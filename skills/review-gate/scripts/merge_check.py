@@ -188,7 +188,8 @@ TIMEOUT = 60  # seconds for each gh call
 
 # The low-risk lane: files a pull request may change and still take one review
 # pass. The changelog and the root documents written for people may change
-# freely; a plugin manifest only in its top-level "version"; a release record
+# freely; a plugin manifest only in its top-level "version"; a plugin catalog
+# only as LANE_CATALOG below says; a release record
 # and the spec index only as RELEASE_RECORD below says. Agent context
 # files (CLAUDE.md, AGENTS.md), skills, agents and rules never qualify.
 LANE_FREE = {"CHANGELOG.md", "README.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md",
@@ -198,6 +199,11 @@ LANE_VERSION_ONLY = {".claude-plugin/plugin.json", ".codex-plugin/plugin.json", 
 # only its one `Status:` line, from a prepared form to the released form, and the
 # spec index only that release's row, in the same pull request.
 RELEASE_RECORD = re.compile(r"docs/specs/release-(\d+\.\d+\.\d+)\.md")
+# A catalog pin (owner decision, 17/11/2026): a plugin catalog may change only an
+# existing entry's `source.ref`, to a release tag vX.Y.Z, and its `description`;
+# no entry is added, removed or moved and no source, repository or URL changes.
+LANE_CATALOG = {".claude-plugin/marketplace.json", ".agents/plugins/marketplace.json"}
+RELEASE_TAG = re.compile(r"v\d+\.\d+\.\d+")
 SPEC_INDEX = "docs/specs/index.md"
 RELEASED = r"released; tagged v{version} on (\d{{4}}-\d{{2}}-\d{{2}})(?:; .+|\.)?"
 
@@ -303,6 +309,37 @@ def version_only(base_text, head_text):
     return base == head
 
 
+def catalog_pin_only(base_text, head_text):
+    """True when two catalogs differ only in entries' source refs, moved to a
+    release tag, and their descriptions."""
+    base, head = strict_object(base_text), strict_object(head_text)
+    if base is None or head is None:
+        return False
+    old, new = base.pop("plugins", None), head.pop("plugins", None)
+    if base != head or not isinstance(old, list) or not isinstance(new, list) or len(old) != len(new):
+        return False
+    for before, after in zip(old, new):
+        if not isinstance(before, dict) or not isinstance(after, dict):
+            return False
+        before, after = dict(before), dict(after)
+        if "description" in after and not isinstance(after["description"], str):
+            return False
+        before.pop("description", None)
+        after.pop("description", None)
+        source_before, source_after = before.get("source"), after.get("source")
+        if isinstance(source_before, dict) and isinstance(source_after, dict) and "ref" in source_after:
+            ref = source_after["ref"]
+            if not isinstance(ref, str) or not RELEASE_TAG.fullmatch(ref):
+                return False
+            source_before, source_after = dict(source_before), dict(source_after)
+            source_before.pop("ref", None)
+            source_after.pop("ref")
+            before["source"], after["source"] = source_before, source_after
+        if before != after:
+            return False
+    return True
+
+
 def one_changed_line(base_text, head_text):
     """(index, base line, head line) when the texts differ in exactly one line, else None."""
     if base_text is None or head_text is None:
@@ -379,6 +416,9 @@ def lane_files(files, read):
         elif name in LANE_VERSION_ONLY:
             if not version_only(read(name, "base"), read(name, "head")):
                 reasons.append(f"{name}: changes more than the top-level version")
+        elif name in LANE_CATALOG:
+            if not catalog_pin_only(read(name, "base"), read(name, "head")):
+                reasons.append(f"{name}: changes more than entries' release refs and descriptions")
         elif RELEASE_RECORD.fullmatch(name or ""):
             version = RELEASE_RECORD.fullmatch(name).group(1)
             if not release_record_only(version, read(name, "base"), read(name, "head")):
