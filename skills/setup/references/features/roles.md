@@ -29,13 +29,13 @@ Undo: Choose host in setup or use FNL_JUDGE=off; already sent data follows TypeS
 Choices: "Yes, allow budgeted TypeSafe checks" / "No, keep the host fallback".
 
 When the judge is not none, ask a second, separate question: "Let your AI provider review your saved instructions during setup checks?"
-Yes: Save Instruction check: on and its date in local host.md. Send selected lines from files telling AI how to behave, excluding secret/path matches, to the small host model under that provider’s retention; never TypeSafe for this check.
+Yes: Save Instruction check: on and its date under `## Instruction check` in local host.md. Send selected lines from files telling AI how to behave, excluding secret/path matches, to the small host model under that provider’s retention; never TypeSafe for this check.
 No: Record off; the agent assesses those items itself. Ask later.
 Undo: Set Instruction check to off through setup.
 Choices: "Yes, allow instruction-line checks" / "No, keep those checks off".
 
 Say it sees the text of your private instruction files, apart from lines that look like secrets or machine paths, which are dropped; instruction checking uses the small host fallback because it is outside the four outbound sites, under the host provider's retention; judge grading is optional and the agent grades those items itself without it.
-A yes does not follow from the judge choice. Record `Instruction check: on` with the date; no, or no judge, records `off`.
+A yes does not follow from the judge choice. Record `- Instruction check: on (<DD/MM/YYYY>)` under `## Instruction check`; no, or no judge, records `off`. A `## Route judgment` section left from before 0.3.2 is not read: run `matrix_setup.py migrate` to move its line (matrix.md).
 
 ## Roles
 

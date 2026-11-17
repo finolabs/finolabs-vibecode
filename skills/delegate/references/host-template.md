@@ -49,6 +49,12 @@ Private HOME is an open owner decision and is not offered or created in this pac
 - antigravity: unverified (checked 2026-11-07)
 - zcode: unverified (checked 2026-11-07)
 
+## Reviews
+
+- Rework limit: 2
+
+How many rework rounds `review-gate` runs before it hands the remaining findings to the owner: 2, 3 or 4; absent or invalid means 2. `/setup add delegation` asks it with the roles. `ledger.py finish` refuses more rounds than this without a `--reason` (script-enforced); stopping at it is advisory (agent judgment).
+
 ## Quota probe
 
 - Quota probe: off
@@ -58,7 +64,7 @@ Advisory (agent judgment): use `/setup add quota` to opt in after the scan and c
 
 ## Machine rules
 
-The parallel run limit, ledger name, task file and display label live in each repository's own settings file (set with `setup add delegation`); the `## Limits` section that held them is retired.
+The parallel run limit, ledger name, task file and display label live in each repository's own settings file (set with `setup add delegation`); a `## Limits` section sets nothing (`parallel_slots.py check-config` reports it).
 
 - Machine role: <daily workstation | CI box>. Heavy jobs at one time: <1>.
 - Heavy jobs: <container-backed suites, scale measurements, end-to-end suites>.
@@ -99,11 +105,15 @@ Which agent can coordinate on this machine, and which delegates each one can rea
 | Antigravity | <yes / no> | <yes / no> | — | <yes / no> |
 | ZCode | <yes / no> | <yes / no> | <yes / no> | — |
 
-## Route judgment
+## Instruction check
 
-Judge selection lives only in canonical `## Assignment matrix`; without a valid, consented matrix the judge is `host`. This legacy heading retains instruction-check consent. `judge.py` caps calls at 24 per run, and no skill install is required for calls.
+- Instruction check: <on | off>. Default off. `on` means the user approved, on <DD/MM/YYYY>, sending lines of their private instruction files to the configured judge for the Check judgment items. Instruction checks use the small host fallback because they are outside the four outbound sites; retention is the host provider's. It is separate from the routing approval and is global to this machine; turning it off takes effect on the next run.
 
-`/setup add delegation` writes `## Assignment matrix` (`matrix_setup.py`; `migrate` builds it from the old sections, asks for a new consent and removes them in the same write). It replaces `## Agent roles`, which no reader takes roles or the judge from since 0.2.6 (without a matrix no review role is set and the judge is `host`), and `## Agent levels`, which no reader takes levels from since 0.3.1 (without a matrix no levels are set; only `migrate` still reads it). A valid matrix with its own yes consent alone decides roles and judge, and a role no line names is unassigned; an invalid matrix or one without consent leaves roles and judge unset, never falling back to the old sections. Its shape, shown indented here so that no reader takes it for a section:
+This section replaces `## Route judgment` (0.3.2), which nothing reads: `matrix_setup.py migrate` moves its `Instruction check` line here and removes it.
+
+Judge selection lives only in canonical `## Assignment matrix`; without a valid, consented matrix the judge is `host`. `judge.py` caps calls at 24 per run, and no skill install is required for calls.
+
+`/setup add delegation` writes `## Assignment matrix` (`matrix_setup.py`; `migrate` builds it from the old sections, asks for a new consent and removes them in the same write). It replaces `## Agent roles` and `## Agent levels`, which only `migrate` reads: without a matrix no review role and no levels are set and the judge is `host`. A valid matrix with its own yes consent alone decides roles and judge, and a role no line names is unassigned; an invalid matrix or one without consent leaves roles and judge unset, never falling back to the old sections. Its shape, shown indented here so that no reader takes it for a section:
 
     ## Assignment matrix
 
@@ -112,8 +122,6 @@ Judge selection lives only in canonical `## Assignment matrix`; without a valid,
     - <agent>: levels <L>-<H>[; works on <type>, ...][; model <id>][; roles <role>, ... | roles none]
 
 Agents are `claude`, `codex`, `antigravity`, `zcode` or an extra Claude Code command; types are `frontend`, `design`, `video`, `three-d`, `image-generation`, `transcription`; roles are `code-review`, `security-review`, `navigator`, `advisor`, each named by one agent at most.
-
-- Instruction check: <on | off>. Default off. `on` means the user approved, on <DD/MM/YYYY>, sending lines of their private instruction files to the configured judge for the Check judgment items. Instruction checks use the small host fallback because they are outside the four outbound sites; retention is the host provider's. It is separate from the routing approval and is global to this machine; turning it off takes effect on the next run.
 
 ## Dispatch marker
 
@@ -153,7 +161,7 @@ FNL_DISPATCH_ID="<ledger id>" python3 -I <delegate skill folder>/scripts/delegat
 
 ## ZCode
 
-- Executable: <absolute path the user confirmed: the `zcode` single executable, or node plus the absolute path of `zcode.cjs`>. ZCode version and the date of the permission check in `agents.md` "ZCode": <version, date, result>.
+- Executable: <absolute path the user confirmed: the `zcode` single executable, or node plus the absolute path of `zcode.cjs`>. ZCode version and the date of the permission check in `agents/zcode.md` "ZCode": <version, date, result>.
 - Command: FNL_DISPATCH_ID=<ledger id> python3 -I <delegate skill folder>/scripts/delegate_env.py --family zcode -- <hard-cap wrapper> <executable> --prompt "$(cat "$B")" --cwd <worktree, absolute> --mode edit --disallowed-tools "AskUserQuestion EnterPlanMode ExitPlanMode" --output-format json --no-color. Use `--mode plan` for advice. Never `yolo`, `guarded` or `build`.
 - Model the user configured in ZCode for delegation, as a record only (ZCode takes no model flag): <model id>.
 - ZCode's configuration folder on this machine, if the user wants it recorded: <path>.

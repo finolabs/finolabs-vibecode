@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Write a self-contained brief and either dispatch one task to Claude Code, Codex or Antigravity under a hard time budget, or save a handover so a later session or another agent continues the work. Use whenever a user asks to hand one task or half-finished work to an agent (named or not) or to write the brief for it, to restart a timed-out or stalled run with a fresh brief, to send review findings back for a fix, or to wrap up a session to resume it later. Choosing among agents, parallel dispatch and quota belong to delegate.
+description: Write a self-contained brief and dispatch one task to an agent under a hard time budget, or save a handover. Use when handing one task or half-finished work to an agent, writing its brief, restarting a stalled or timed-out run, sending findings back for a fix, or wrapping up to resume. Choosing agents is delegate.
 user-invocable: true
 argument-hint: "[--agent claude|codex|antigravity|zcode] [--model <id>] [--worktree] <task>"
 ---
@@ -36,7 +36,7 @@ Read [references/brief-template.md](references/brief-template.md) in full before
 
 **Preserve task semantics.** Investigate-only → "Do not edit files." Fix → "implement the fix." Refactor → "refactor, not rewrite." Carry the user's exact intent and scope.
 
-**Findings sent back.** While the run is still light, send the findings as a follow-up to the same run, one defect per item. Open a new run with a new brief, carrying what was tried, when the run has used about 60% of its context or two rework rounds have not cleared the defects (`tidy` "Context pressure").
+**Findings sent back.** While the run is still light, send the findings as a follow-up to the same run, one defect per item. Open a new run with a new brief, carrying what was tried, when the run has used about 60% of its context or the recorded rework limit (default two rounds) has not cleared the defects (`tidy` "Context pressure").
 
 **Prose output.** Write the brief in English and name the output language and tone in the Task. When the result is social content or a document for readers, and the user's instructions give an editing pass for that language, the coordinator runs the pass at acceptance; the agent does not. A plain reply to a user needs no pass.
 
