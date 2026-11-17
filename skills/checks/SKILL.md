@@ -1,6 +1,6 @@
 ---
 name: checks
-description: Verify before claiming or accepting work. Use before saying work is done, fixed or passing, when the user asks "is it done?", "did the tests pass?" or "is it ready to merge?", before accepting a delegated run, when an agent or session reports a task done or tests passing, when choosing which tests to run after a change, when deciding whether a full suite is needed, before heavy container-backed or end-to-end runs, and when CI is red or slow, CI minutes or quota run out, or a repository needs checks set up to run locally or in CI.
+description: Verify before claiming or accepting work. Use before saying work is done, fixed or passing; on "is it done?", "did the tests pass?" or "is it ready to merge?"; before accepting a delegated run or done report; when picking tests or a full suite; before end-to-end runs; when CI fails, is slow, runs out or needs setup.
 ---
 
 # Checks

@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Write a self-contained brief and either dispatch one task to Claude Code, Codex or Antigravity under a hard time budget, or save a handover so a later session or another agent continues the work. Use whenever a user asks to hand one task or half-finished work to an agent (named or not) or to write the brief for it, to restart a timed-out or stalled run with a fresh brief, to send review findings back for a fix, or to wrap up a session to resume it later. Choosing among agents, parallel dispatch and quota belong to delegate.
+description: Write a self-contained brief and dispatch one task to an agent under a hard time budget, or save a handover for a later session. Use when handing one task or half-finished work to an agent, writing its brief, restarting a stalled or timed-out run, sending review findings back for a fix, or wrapping up to resume later.
 user-invocable: true
 argument-hint: "[--agent claude|codex|antigravity|zcode] [--model <id>] [--worktree] <task>"
 ---

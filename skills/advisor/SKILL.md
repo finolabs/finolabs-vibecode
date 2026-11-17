@@ -1,6 +1,6 @@
 ---
 name: advisor
-description: Get one second opinion or convene two contrasting model families for root-cause analysis and a plan. Use when the user asks for an advisor, a second opinion or what another model thinks, before committing to a risky design or fix, or when stuck, looping on failed fixes, or facing a hard planning or design problem.
+description: Get one second opinion or convene two contrasting model families for root-cause analysis and a plan. Use when the user asks for an advisor, a second opinion or what another model thinks, before a risky design or fix, or when stuck, looping on failed fixes, or facing a hard planning or design problem.
 user-invocable: true
 argument-hint: "[--agent claude|codex|antigravity|zcode] <question>"
 ---

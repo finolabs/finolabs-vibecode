@@ -28,6 +28,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - `advisor` picks its family from the assignment matrix: the helper holding the `advisor` role, else the first `route_pick.py pick --kind advisor` candidate of another family, else a contrasting family; it no longer proposes a fixed Claude, Codex or Antigravity Argon list. The committee picks its second member the same way.
 
+- The model-invocable skill descriptions are at most 320 characters each (5,306 to 3,912 characters always loaded), leading with the action and keeping every trigger case.
+
 ### Removed
 
 - Breaking: the 22 `fnl-` skill aliases (`skills/fnl-<name>/`) are removed (owner decision, 16/11/2026); type the current name instead: `/fnl-advisor` → `/advisor`, `/fnl-afk` → `/afk`, `/fnl-ask` → `/help`, `/fnl-brb` → `/afk`, `/fnl-checks` → `/checks`, `/fnl-coding-router` → `/coding-router`, `/fnl-commit-messages` → `/commit-messages`, `/fnl-delegate` → `/delegate`, `/fnl-gtg` → `/pause`, `/fnl-handoff` → `/handoff`, `/fnl-help` → `/help`, `/fnl-open-source-review` → `/open-source-review`, `/fnl-pause` → `/pause`, `/fnl-plugin-packaging` → `/plugin-packaging`, `/fnl-restore-point` → `/restore-point`, `/fnl-review-gate` → `/review-gate`, `/fnl-security-review-gate` → `/security-review-gate`, `/fnl-session-hygiene` → `/tidy`, `/fnl-setup` → `/setup`, `/fnl-status` → `/status`, `/fnl-update` → `/update`, `/fnl-versioning` → `/versioning`. Instruction files that still name an old `fnl-` skill point at nothing: `/setup check` lists each one with its new name. The `fnl-review` and `fnl-router` markers keep their names, so reviews already posted on open pull requests still count; usage metrics recorded under an old skill name still count under the new one.
