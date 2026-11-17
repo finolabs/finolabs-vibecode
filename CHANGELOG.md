@@ -8,7 +8,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
-- afk check hook on Claude Code (tenth scoped exception, owner decisions 17/11/2026; `docs/specs/afk-check-hook.md`): while an away lease is live, a `PreToolUse` Bash hook judges each command as `afk.py check` does and denies every Tier 3 answer, in both modes, and a command it cannot split into words; it allows on every other error and stores no command text. The agent no longer has to call `check` before a Bash command on Claude Code. `FNL_AFK_HOOK=off` disables it.
+- afk check hook on Claude Code (tenth scoped exception, owner decisions 17/11/2026; `docs/specs/afk-check-hook.md`): while an away lease is live, a `PreToolUse` Bash hook judges each command as `afk.py check` does and denies every Tier 3 answer, in both modes, and every form outside the syntax it reads in full (a syntax allowlist: variables other than a plain `$HOME`, command substitution, `xargs`, `find -exec`, directory changes with a relative glob, glued operators and more; false denials are expected); once a lease is live any error denies as `unsafe`, and it never answers allow and stores no command text. The agent no longer has to call `check` before a Bash command on Claude Code. `FNL_AFK_HOOK=off` disables it.
 
 - `tidy`: when the agent asks the user to compact, it hands over the command ready to copy in its own block, on Claude Code `/compact <focus>` with a one-line focus naming what the summary must keep (goal, current task, open runs and pull requests, next action, handover saved), a bare `/compact` on Codex, and `/new` or `/fork` with the handover on Antigravity, whose `/compact` may not exist.
 

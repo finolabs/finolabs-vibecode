@@ -105,12 +105,14 @@ class AfkCheckHookTest(unittest.TestCase):
         (self.home / '.netrc').write_text('machine example.com\n')
         env = {**self.env, 'HOME': str(self.home)}
         for command in (f'python3 -I {script} log --note "$(cat ~/.netrc)"',
-                        f'python3 -I {script} log --note "`cat ~/.netrc`"'):
+                        f'python3 -I {script} log --note "`cat ~/.netrc`"',
+                        f'python3 -I {script} log --note x;printenv',
+                        f'python3 -I {script} log --note x|cat ~/.netrc'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command, env=env), denial(PARSE))
         for command in (f'python3 -I {script} rules >~/.netrc',
-                        f'python3 -I {script} log --note x;printenv',
-                        f'python3 -I {script} log --note x|cat ~/.netrc'):
+                        f'python3 -I {script} log --note x ; printenv',
+                        f'python3 -I {script} log --note x | cat ~/.netrc'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command, env=env), parked('floor'))
 
@@ -214,9 +216,18 @@ class AfkCheckHookTest(unittest.TestCase):
                         'echo auth token | xargs gh', "printf 'auth token' | xargs gh", 'xargs printenv',
                         'xargs az account get-access-token', 'xargs -0 -n 1 ls', "find ~ -name '.ne*c' -exec cat {} +",
                         "find ~ -name '.ne*c' | xargs cat", r'find . -exec env printenv \;', 'find . -name x -delete',
-                        'fd netrc ~ -x cat', 'fd netrc ~ --exec-batch cat'):
+                        'fd netrc ~ -x cat', 'fd netrc ~ --exec-batch cat', 'git commit -m x;printenv',
+                        'git commit -m x;gh auth token', 'echo ok&&printenv', 'cat ~/**/.ne?rc'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), denial(PARSE))
+        # A glob past the match limit is never truncated.
+        many = self.home / 'many'
+        many.mkdir()
+        for index in range(201):
+            (many / f'f{index:03d}').write_text('')
+        self.assertEqual(self.hook(f'cat {many}/f*'), denial(PARSE))
+        # A quoted operator stays one word.
+        self.assertIsNone(self.hook('git status -- "a;b"'))
         # A glob with no directory change, or anchored at `/` or `~`, is still expanded for the floor.
         self.assertIsNone(self.hook('cd src && ls /tmp/*.log'))
         self.assertIsNone(self.hook('ls *.py'))

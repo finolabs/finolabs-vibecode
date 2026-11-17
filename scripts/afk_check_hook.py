@@ -293,6 +293,17 @@ def command_words(argv, afk):
     return [os.path.basename(w.lstrip('({!')) for w in words]
 
 
+def glued_operator(text, argv):
+    """True when an operator outside quotes is glued to a word (`x;printenv`, `a&&b`, `ls|cat`): the word reads as
+    one argument here, as a commit message or another text value, while the shell runs what follows it."""
+    import shlex
+    lexer = shlex.shlex(text, posix=True, punctuation_chars=True)
+    lexer.commenters = ''
+    lexer.whitespace_split = True
+    split = [t for t in lexer if t in OPERATORS]
+    return len(split) != len([t for t in argv if t in OPERATORS])
+
+
 def outside_allowlist(argv, afk):
     """True when the command holds a form outside the syntax the hook reads in full: a program fed by run-time
     data (`xargs`, `find -exec` or `-delete`, `fd --exec`), or a glob not anchored at `/` or `~` in a command
@@ -323,8 +334,12 @@ def expanded_paths(argv, limit=200):
         if not any(c in piece for c in '~$*?['):
             continue
         value = shell_expanded(piece)
+        if '**' in value:
+            raise ValueError('recursive glob')  # zsh `**/` also matches no folder; never read as Python's glob
         matches = glob.glob(value) if any(c in value for c in '*?[') else [value]
-        found.extend(matches[:limit])
+        if len(matches) > limit:
+            raise ValueError('too many matches')  # the split message, never a truncated reading
+        found.extend(matches)
     return found
 
 
@@ -388,10 +403,15 @@ def main():
         sys.path.insert(0, str(script.parent))
         import afk
 
-        if reparsed(argv, afk) or outside_allowlist(argv, afk):
+        if (glued_operator(unquoted_newlines(command), argv) or reparsed(argv, afk)
+                or outside_allowlist(argv, afk)):
             deny(PARSE_MESSAGE)
             return 0
-        paths = expanded_paths(argv)
+        try:
+            paths = expanded_paths(argv)
+        except ValueError:
+            deny(PARSE_MESSAGE)  # a recursive glob or more matches than the hook reads: never truncated
+            return 0
         expanded = [shell_expanded(word) for word in argv]
         if ((paths and afk.floored(None, paths, cwd)) or (expanded != argv and afk.floored(expanded, None, cwd))
                 or floor_words(argv, paths, afk) or floor_words(expanded, paths, afk)):
