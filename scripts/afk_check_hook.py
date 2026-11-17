@@ -314,7 +314,7 @@ REDIRECT = re.compile(r'[0-9]*(?:&>>?|[<>]+[&|]?)')
 OPERATOR = re.compile(r'\|\||&&|\|&|;|\||&')
 
 
-TRAILING_OPERATOR = re.compile(r'(.*?[^;&|])(;|&&|\|\||\|&|\||&)')
+TRAILING_OPERATOR = re.compile(r'(.*?[^;&|])(;|&&|\|\||\|&|\||&)', re.DOTALL)
 
 
 def detached(argv):
@@ -336,6 +336,9 @@ def aligned(words, tokens):
     position = 0
     for word in words:
         run = []
+        if not word and position < len(tokens) and tokens[position] == '':
+            run.append(tokens[position])  # an empty word (`""`) is its own empty token
+            position += 1
         while position < len(tokens) and len(''.join(run)) < len(word):
             run.append(tokens[position])
             position += 1
@@ -438,12 +441,16 @@ def main():
             return 0
         if not argv:
             return 0
-        # `ls /x; pwd` reads `/x;` as one word; split the operator off as bash does, so `check` sees both commands.
-        # An operator glued to the word after it (`x;printenv`) is not split and stays denied below.
-        if glued_operator(unquoted_newlines(command), argv):
-            split = detached(argv)
-            if aligned(split, punctuated(unquoted_newlines(command))):
-                argv = split
+        # `check` judges the words bash runs: an operator or redirect outside quotes is its own word (`ls /x; pwd`,
+        # `printenv>&2`, `cat<f`), taken from the punctuation-aware split only when the shlex words, or the words
+        # with an operator that ends a word split off, line up with it. Anything else (`x;printenv`, a quoted
+        # operator beside a split one) gets the split message.
+        tokens = punctuated(unquoted_newlines(command))
+        if argv != tokens:
+            if not (aligned(detached(argv), tokens) or aligned(argv, tokens)):
+                deny(PARSE_MESSAGE)
+                return 0
+            argv = tokens
         if unreadable(command):
             deny(PARSE_MESSAGE)
             return 0

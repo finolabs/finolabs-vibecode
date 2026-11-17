@@ -192,6 +192,12 @@ class AfkCheckHookTest(unittest.TestCase):
                 self.assertEqual(self.hook(command), denial(PARSE))
         # A quoted operator alone is a text value, as before.
         self.assertIsNone(self.hook('git commit -m "fix;" -q'))
+        self.assertIsNone(self.hook('ls /tmp; pwd ""'))
+        # A redirect glued to a word is its own word, so the program and the target are judged (review of #352).
+        for command in ('printenv>&2', 'printenv>/tmp/afk-out', 'gh>out auth token', 'true; printenv>&2',
+                        "true; pri''ntenv>&2", 'true; gh>out auth token', 'cat<~/.netrc', 'true; cat</tmp/x/.netrc'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), parked('floor'))
 
     def test_input_past_the_cap_denies_only_under_a_live_lease(self):
         padded = 'printenv' + ' ' * (262 * 1024)
@@ -271,7 +277,8 @@ class AfkCheckHookTest(unittest.TestCase):
         (self.home / '.netrc').write_text('machine example.com\n')
         env = {**self.env, 'HOME': str(self.home)}
         self.assertEqual(self.hook('cat x<~/.n?trc', env=env), parked('floor'))
-        self.assertEqual(self.hook('cat<~/.n?trc', env=env), denial(PARSE))
+        # The redirect is its own word since #352, so the program name is `cat` and the target is judged.
+        self.assertEqual(self.hook('cat<~/.n?trc', env=env), parked('floor'))
 
     def test_an_unreadable_command_is_denied(self):
         self.start()
