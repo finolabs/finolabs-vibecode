@@ -90,6 +90,8 @@ FLOOR = [
     (['bash', '-c', 'f() { gh auth token; }; f'], 'security review of de4157b'),
     (['git', 'checkout', '-t', 'x|printenv'], 'security review of de4157b'),
     (['rg', 'x|env'], 'security review of PR 325'), (['rg', 'x&env'], 'security review of PR 325'),
+    # A bare `export` or `set` cut out of a pattern floors too: the argv of an unquoted `rg x|export` is the same.
+    (['rg', 'x|export'], 'review LOW of PR 330'), (['rg', 'x&set'], 'same'), (['rg', 'import|export'], 'same'),
     (['grep', '-e', 'a|env'], 'security review of PR 325'), (['rg', 'x|printenv', '.'], 'security review of PR 325'),
     (['git', 'diff', '--no-index', '-b', '.env', '/dev/null'], 'code review of de4157b'),
     (['git', 'show', '-m', 'HEAD:.env'], 'code review of de4157b'),
@@ -104,8 +106,7 @@ FLOOR = [
     (['php', '-r', 'print_r(getenv());'], 'same'), (['python', '-ic', 'import os; os.environ'], 'same'),
     (['python3', '-m', 'keyring', 'get', 'svc', 'user'], 'same'),
     (['git', 'config', '--get', 'http.extraheader'], 'same'), (['git', 'config', 'user.password'], 'same'),
-    # The bare `export`, `set` and `env` carve-out is decided by where a piece comes from: only a pattern piece after a
-    # lone `|` or `&` (security closure review of 73580fd).
+    # A bare `export`, `set` or `env` floors wherever a split cuts it out (security closure review of 73580fd).
     (['find', '.', '-exec', 'sh', '-c', 'a;export', ';'], 'security closure review of 73580fd'),
     (['find', '.', '-exec', 'bash', '-c', 'true&&set', ';'], 'same'), (['grep', '-e', 'a;env'], 'same'),
 ]
@@ -114,7 +115,7 @@ FLOOR = [
 OPEN_TIER1 = [
     (['git', 'add', 'src/auth/token.ts'], 'acceptance 4'), (['git', 'commit', '-m', 'fix token refresh'], 'acceptance 4'),
     (['rg', 'process.env', 'src'], 'acceptance 4'), (['grep', '-rn', 'OPENAI_API_KEY', '.'], 'acceptance 4'),
-    (['rg', 'import|export'], 'acceptance 4'), (['git', 'add', 'reset-password.tsx'], 'review of 960d3e4'),
+    (['rg', '-e', 'import', '-e', 'export'], 'acceptance 4, after the review LOW of PR 330'), (['git', 'add', 'reset-password.tsx'], 'review of 960d3e4'),
     (['git', 'add', 'secret_patterns.py'], 'review of 960d3e4'), (['cat', '.env.example'], 'B'),
     (['bash', '-lc', 'source .venv/bin/activate && pytest'], 'obligation 3'), (['bash', '-c', 'cat .env.example'], 'obligation 3'),
     (['git', 'add', 'src/components/CredentialForm.tsx'], 'obligation 4'),
@@ -199,6 +200,13 @@ class FloorCorpusTest(OpenBase):
 
     def test_an_unpinned_merge_is_tier_1(self):
         self.assertEqual(self.verdict(['gh', 'pr', 'merge', '7', '--squash']), (0, {'tier': 1, 'code': 'allowed'}))
+
+    def test_a_pinned_merge_with_options_the_pin_cannot_read_stays_tier_1(self):
+        # UAT 17/11/2026: `--author-email` made the pin record raise, and `check` answered `unsafe`.
+        head = 'a' * 40
+        for extra in (['--author-email', 'synthetic@example.com'], ['-A', 'synthetic@example.com'], ['--subject', 'x']):
+            with self.subTest(extra=extra):
+                self.check(['gh', 'pr', 'merge', '7', '--merge', '--match-head-commit', head, *extra])
 
     def test_secret_text_values_floor(self):
         self.check(['git', 'commit', '-m', 'key ghp_' + 'a' * 36], tier=3, code='floor')

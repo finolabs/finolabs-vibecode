@@ -32,7 +32,7 @@ request, row `decided` below):
 | `rules` prints this table with the mode, floor, guard and strict data as Markdown (`skills/afk/references/rules.md`); it reads no file | rules |
 | The current branch is resolved through its symbolic refs (at most 5, no cycle); any default-branch name on the way makes it the default branch | branch_context |
 | Project roots take the built-in roots' path rules; top-level README.md, CHANGELOG.md and CONTRIBUTING.md are known paths; every path rule (roots, documents, protected names, links) applies to the operand's path relative to the checkout root of the check's validated identity, read from cwd, and with no identity no path is known | classify_paths, repository_path |
-| PR create/edit require push permission; PR merge requires Merge=yes, one full --match-head-commit SHA and a MERGE OK receipt for that number and head under 15 minutes old (`merge_check.py --independent`, else `merge-unchecked`); its pin names the repository and is written before the action is reserved (a full log answers `log-unwritable`) | classify_argv, check |
+| PR create/edit require push permission; PR merge requires Merge=yes, one full --match-head-commit SHA (other options: a method flag, --delete-branch, --repo and --author-email) and a MERGE OK receipt for that number and head under 15 minutes old (`merge_check.py --independent`, else `merge-unchecked`); its pin names the repository and is written before the action is reserved (a full log answers `log-unwritable`) | classify_argv, check |
 | Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run`, `run --changed [--base <branch or commit>]` (no relative revision) or `run --dispatch <dispatch id>` with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
 | An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, one of the allowlisted shapes: a script of this checkout, make, npm/pnpm/yarn/bun test, run and declared installs, python scripts and listed -m modules, cargo verbs without --config, go verbs with listed flags and local packages, declared pip, uv, poetry and bundle installs, listed git verbs and flags, listed gh group and verb pairs, or this install's delegated run) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, shape_decidable, dispatch_prefix, decidable_paths, request_subject, open_approvals |
@@ -1697,7 +1697,7 @@ def classify_argv(argv, applied, coordinator=None):
                 return 'unpinned'
             if '--delete-branch' in tail and not permits({'Recoverable deletion'}, applied):
                 return 'forbidden'  # row 3: the deletion is its own category beside Merge
-            operands = options(tail, {'--squash', '--merge', '--rebase', '--delete-branch'}, {'--match-head-commit', '--repo', '-R'})
+            operands = options(tail, MERGE_FLAGS, MERGE_VALUED)
             if operands is None or len(operands) != 1 or not re.fullmatch(r'[1-9][0-9]{0,9}', operands[0]):
                 return 'unknown'  # the same ASCII number grammar `log --pr` takes, so a pin names what gh merges
             result = target_check(tail, context_of(applied))  # the permission is this context's target, never another
@@ -2102,7 +2102,7 @@ def commands_of(tokens, inline=False, depth=0, keep=frozenset(), full=False, spl
     """[(program, words, env, inline, pattern)] for every command of `tokens`, inline code included (B steps 1 to 3,
     obligation 6). An inline program text is kept whole for its own pass; every other token is also split at operators
     inside it. `pattern` is True only for a command that a split reading cut out of a search pattern after a lone `|`
-    or `&` (`origin`), the one place the bare `export` and `set` carve-out applies."""
+    or `&` (`origin`)."""
     found, splitter = [], SPLIT_INLINE if inline or full else SPLIT_TOP
     for command in standalone_split(tokens):
         env = []
@@ -2161,10 +2161,10 @@ def commands_of(tokens, inline=False, depth=0, keep=frozenset(), full=False, spl
 
 def floor_hit(argv, cwd=None):
     """True when an argv (text values already removed) touches the floor in any of its commands. A search pattern is
-    read twice: as data (so `rg 'import|export'` stays Tier 1) and split at lone `|` and `&`, since an argv token cannot
-    show whether its pipe was quoted; the second reading skips only the bare `export` and `set` rules (a bare `env`
-    still floors, so an unquoted `rg x|env` cannot print the environment)."""
-    return any(commands_hit(commands_of(argv, full=True, split_patterns=reading), cwd, loose=bool(reading))
+    read twice: as data and split at lone `|` and `&`, since an argv token cannot show whether its pipe was quoted, so
+    every floor rule applies to what the split cuts out (an unquoted `rg x|export`, `rg x|set` or `rg x|env` would print
+    the environment; write a pattern that holds such a word with one `-e` per alternative)."""
+    return any(commands_hit(commands_of(argv, full=True, split_patterns=reading), cwd)
                for reading in READINGS)
 
 
@@ -2172,7 +2172,7 @@ def floor_hit(argv, cwd=None):
 READINGS = (False, True, 'all')
 
 
-def commands_hit(commands, cwd, loose):
+def commands_hit(commands, cwd):
     for program, words, env, inline, pattern in commands:
         if program == '#inline':
             code = words[0]
@@ -2182,10 +2182,6 @@ def commands_hit(commands, cwd, loose):
             continue
         if any(sensitive_name(name) or secret_patterns.PREFIX.search(value) for name, value in env):
             return True
-        # `rg 'import|export'`: a pattern word after a lone pipe, read as a command by the split reading. A bare `env`
-        # is never skipped: the argv of an unquoted `rg x|env` is the same, and the shell would print the environment.
-        if loose and pattern and not words and program in {'export', 'set'}:
-            continue
         if floor_command(program, words, inline, cwd):
             return True
         if any(floor_path(t, cwd) for t in ([program] if program else []) + words):
@@ -2519,8 +2515,8 @@ def check(folder, args):
         elif any(t.startswith('--match-head-commit') for t in argv):
             try:  # `open`: a pinned merge still records its pin, so `log --kind merge` can name it afterwards
                 append_log(folder, merge_pin(argv, current, context_of(applied).target), current)
-            except (OSError, ValueError, UnicodeError):
-                pass
+            except (OSError, ValueError, UnicodeError, TypeError, StopIteration, IndexError):
+                pass  # an argv the pin grammar cannot read records no pin; the open answer stays Tier 1
     if code in {'allowed', 'decided'} and entry is not None:  # `open` keeps no per-project counters
         entry['actions'] += 1
         entry['hour_actions'].append(current)
@@ -2801,12 +2797,17 @@ def append_log(folder, record, current):
     write_private(folder, 'log.jsonl', payload)
 
 
+# `gh pr merge` options a merge check reads: the method and branch flags, and the pin, repository and commit author
+# email values (`--author-email` sets the merge commit's author, as the repository's commit rules ask).
+MERGE_FLAGS = frozenset({'--squash', '--merge', '--rebase', '--delete-branch'})
+MERGE_VALUED = frozenset({'--match-head-commit', '--repo', '-R', '--author-email', '-A'})
+
+
 def merge_pin(argv, current, target):
     """The `merge-pin` record of an allowed `gh pr merge <n> --match-head-commit <sha>` check (classify_argv has
     already required one number operand and one full pin)."""
     tail = argv[3:]
-    pr = next(t for t in options(tail, {'--squash', '--merge', '--rebase', '--delete-branch'},
-                                 {'--match-head-commit', '--repo', '-R'}))
+    pr = next(t for t in options(tail, MERGE_FLAGS, MERGE_VALUED))
     head = next(t.split('=', 1)[1] if t.startswith('--match-head-commit=') else tail[i + 1]
                 for i, t in enumerate(tail) if t == '--match-head-commit' or t.startswith('--match-head-commit='))
     return dict(time=current, tier=1, kind='merge-pin', pr=int(pr), head=head, repo=target, note='')
@@ -3136,8 +3137,8 @@ def rules():
             + '; '.join(f'`{k}` {_codes(v)}' for k, v in sorted(INLINE_FLAGS.items(), key=lambda i: i[0].casefold()) if v)
             + f'; {_codes(AWKS)} program text; `eval`.',
             f'- Search patterns of {_codes(PATTERN_PROGRAMS)} are data in the first floor reading; a second reading '
-            'splits them at a lone `|` or `&`, since an argv cannot show whether the pipe was quoted, and floors a bare '
-            '`env` or `printenv` cut out there (a bare `export` or `set` there is skipped); the values of '
+            'splits them at a lone `|` or `&`, since an argv cannot show whether the pipe was quoted, and applies every '
+            'floor rule to what it cuts out (so `rg \'import|export\'` floors; write `rg -e import -e export`); the values of '
             f'{_codes(OPEN_TEXT_FLAGS)} for {_codes(TEXT_PROGRAMS)} are text, floored only for a secret value.', '',
             '### Floor: commands', '',
             '| Program | Floors on |', '| --- | --- |']
