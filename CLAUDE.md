@@ -56,7 +56,7 @@ Same-family security fallback (owner decision, 17/11/2026): outside an away leas
 - `claude plugin validate .` passes.
 - A changed `description` gets a trigger check: a representative prompt fires the skill, and an unrelated prompt does not.
 - `skills/open-source-review/SKILL.md` stays green for this repository.
-- `python3 -m unittest discover -s tests` passes, and `python3 scripts/check-references.py .` passes.
+- `python3 scripts/select_tests.py --base origin/main` lists the test modules the change touches (it prints them two per command and sees tracked files changed since the merge base, not untracked files); run them, at most two per command, and `python3 scripts/check-references.py .` passes; a `no test names: <path>` line means no test covers that file, so say so instead of reporting it as tested. The full suite (`python3 -m unittest discover -s tests`) runs in CI and before a release tag (owner decision, 17/11/2026).
 
 ## Commits
 

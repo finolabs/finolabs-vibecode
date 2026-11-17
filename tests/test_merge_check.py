@@ -1039,6 +1039,9 @@ class OpenLeaseFallbackTest(SameFamilyFallbackTest):
         self.assertFalse(self.evaluate(self.data(trigger="permission"))[0])
         self.files = [{"filename": "skills/delegate/scripts/afk.py"}]
         self.assertFalse(self.evaluate(self.data(self.LINE + " model=opus-5"))[0])  # an enforcer change, one model
+        # The per-family dispatch contracts stay instruction files after their move out of agents.md (review of PR 333).
+        self.files = [{"filename": "skills/delegate/references/agents/zcode.md"}]
+        self.assertFalse(self.evaluate(self.data(self.LINE + " model=opus-5"))[0])
         self.roles = {"judge": "host", "code review": "codex", "security review": "codex"}
         self.files = [{"filename": "docs/notes.md"}]
         self.assertFalse(self.evaluate(pr(comments=[comment(marker("code", "APPROVE") + "\nreport"),

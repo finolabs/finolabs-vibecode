@@ -191,7 +191,8 @@ class RunHygieneTest(unittest.TestCase):
     def test_lesson_report_and_every_dispatch_family(self):
         lesson = (ROOT / 'skills/tidy/SKILL.md').read_text()
         self.assertIn('Corrected-lesson example: on 2026-11-07 a delegated test assertion dumped the process environment', lesson)
-        agents = (ROOT / 'skills/delegate/references/agents.md').read_text()
+        references = ROOT / 'skills/delegate/references'
+        agents = '\n'.join(path.read_text() for path in [references / 'agents.md', *sorted((references / 'agents').glob('*.md'))])
         for family in ('claude', 'codex', 'antigravity'):
             self.assertIn('delegate_env.py --family ' + family + ' --', agents)
         for expected in ('brief_check.py', 'agybird runner', 'environment-only',

@@ -64,7 +64,7 @@ Advisory (agent judgment): use `/setup add quota` to opt in after the scan and c
 
 ## Machine rules
 
-The parallel run limit, ledger name, task file and display label live in each repository's own settings file (set with `setup add delegation`); the `## Limits` section that held them is retired.
+The parallel run limit, ledger name, task file and display label live in each repository's own settings file (set with `setup add delegation`); a `## Limits` section sets nothing (`parallel_slots.py check-config` reports it).
 
 - Machine role: <daily workstation | CI box>. Heavy jobs at one time: <1>.
 - Heavy jobs: <container-backed suites, scale measurements, end-to-end suites>.
@@ -109,7 +109,7 @@ Which agent can coordinate on this machine, and which delegates each one can rea
 
 Judge selection lives only in canonical `## Assignment matrix`; without a valid, consented matrix the judge is `host`. This legacy heading retains instruction-check consent. `judge.py` caps calls at 24 per run, and no skill install is required for calls.
 
-`/setup add delegation` writes `## Assignment matrix` (`matrix_setup.py`; `migrate` builds it from the old sections, asks for a new consent and removes them in the same write). It replaces `## Agent roles`, which no reader takes roles or the judge from since 0.2.6 (without a matrix no review role is set and the judge is `host`), and `## Agent levels`, which no reader takes levels from since 0.3.1 (without a matrix no levels are set; only `migrate` still reads it). A valid matrix with its own yes consent alone decides roles and judge, and a role no line names is unassigned; an invalid matrix or one without consent leaves roles and judge unset, never falling back to the old sections. Its shape, shown indented here so that no reader takes it for a section:
+`/setup add delegation` writes `## Assignment matrix` (`matrix_setup.py`; `migrate` builds it from the old sections, asks for a new consent and removes them in the same write). It replaces `## Agent roles` and `## Agent levels`, which only `migrate` reads: without a matrix no review role and no levels are set and the judge is `host`. A valid matrix with its own yes consent alone decides roles and judge, and a role no line names is unassigned; an invalid matrix or one without consent leaves roles and judge unset, never falling back to the old sections. Its shape, shown indented here so that no reader takes it for a section:
 
     ## Assignment matrix
 
@@ -159,7 +159,7 @@ FNL_DISPATCH_ID="<ledger id>" python3 -I <delegate skill folder>/scripts/delegat
 
 ## ZCode
 
-- Executable: <absolute path the user confirmed: the `zcode` single executable, or node plus the absolute path of `zcode.cjs`>. ZCode version and the date of the permission check in `agents.md` "ZCode": <version, date, result>.
+- Executable: <absolute path the user confirmed: the `zcode` single executable, or node plus the absolute path of `zcode.cjs`>. ZCode version and the date of the permission check in `agents/zcode.md` "ZCode": <version, date, result>.
 - Command: FNL_DISPATCH_ID=<ledger id> python3 -I <delegate skill folder>/scripts/delegate_env.py --family zcode -- <hard-cap wrapper> <executable> --prompt "$(cat "$B")" --cwd <worktree, absolute> --mode edit --disallowed-tools "AskUserQuestion EnterPlanMode ExitPlanMode" --output-format json --no-color. Use `--mode plan` for advice. Never `yolo`, `guarded` or `build`.
 - Model the user configured in ZCode for delegation, as a record only (ZCode takes no model flag): <model id>.
 - ZCode's configuration folder on this machine, if the user wants it recorded: <path>.

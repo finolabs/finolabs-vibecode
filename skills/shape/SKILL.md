@@ -1,6 +1,6 @@
 ---
 name: shape
-description: Interview the user in short rounds that settle every decision an idea, plan or design depends on, each question with a recommended answer, before anything is built. Use when the user wants to brainstorm, discuss, ideate, shape or stress-test an idea, plan or design, asks to be grilled or interviewed about it, or when requirements are unclear before building; it fires on these requests in any language the user writes.
+description: Interview the user in short rounds, each with a recommended answer, until every decision an idea, plan or design depends on is settled. Use when the user wants to brainstorm, discuss, ideate, shape, stress-test or be grilled on an idea, plan or design, or requirements are unclear before building, in any language.
 argument-hint: "<idea, plan or design to shape>"
 ---
 

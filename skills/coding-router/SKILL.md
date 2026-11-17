@@ -1,6 +1,6 @@
 ---
 name: coding-router
-description: Route coding work in a repository before the first substantive change: depth (MIN, NORMAL, DEEP), review and security gates, proof, and the workflow path (Spec Kit, another workflow skill pack, or none). Use when starting, resuming or redirecting an implementation, bug fix, refactor or feature, when the user wants to brainstorm, discuss, ideate or shape an idea or design for code before building it, when a Spec Kit story might skip speckit-tasks, or when fixes keep failing on the same invariant.
+description: Route coding work by depth (MIN, NORMAL, DEEP), gates, proof and workflow (Spec Kit, another pack, none) before substantive edits. Use when starting, resuming or redirecting a feature, fix or refactor, brainstorming code before building, before a Spec Kit story skips speckit-tasks, or when fixes fail on one invariant.
 ---
 
 # Coding router
