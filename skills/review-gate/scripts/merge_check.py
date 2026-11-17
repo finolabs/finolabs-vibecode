@@ -508,7 +508,9 @@ def fallback(pr, family, families, files, verdicts_found, markers=None, repo=Non
                 for entry in listed):
             return False, "changed files could not be read"
         names = [entry["filename"] for entry in listed] + [str(entry.get("previous_filename") or "") for entry in listed]
-        sensitive = any(name.rsplit("/", 1)[-1].casefold() in ENFORCERS | INSTRUCTION_FILES for name in names)
+        # The per-family dispatch contracts left `agents.md` for `references/agents/` (PR 333) and stay as sensitive.
+        sensitive = any(name.rsplit("/", 1)[-1].casefold() in ENFORCERS | INSTRUCTION_FILES
+                        or name.casefold().startswith("skills/delegate/references/agents/") for name in names)
         expected = fallback_line(family)
         for kind in ("code", "security"):
             found = verdicts_found.get(kind)

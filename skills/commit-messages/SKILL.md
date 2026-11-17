@@ -28,10 +28,11 @@ When committing a stopped run's work on its behalf, mark it in the subject (`WIP
 
 **Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
 
-Trunk-based: the default branch stays releasable, and every change reaches it through a short-lived branch and a pull request; a branching scheme the repository already documents wins. Read [references/branches.md](references/branches.md) before creating, naming, syncing or merging a branch, resolving conflicts or backporting a fix. In short:
+Trunk-based: the default branch stays releasable, and every change reaches it through a short-lived branch and a pull request; a branching scheme the repository already documents wins. Read [references/branches.md](references/branches.md) before creating, naming, syncing, pushing or merging a branch, resolving conflicts, backporting a fix or cleaning up after a merge. In short:
 
 - **Main checkout** stays on the default branch and clean; every branch, a coordinator's own small fix included, gets a worktree of its own: `git worktree add -b <name> <path> origin/<base>`. Advisory (agent judgment); the session start warns when the main checkout is off its default branch.
 - **Sync**: rebase a branch you have not pushed onto `origin/<base>`; merge the base into a pushed one. Rebasing a pushed branch needs authority ("Authority" below).
+- **Default branch**: changes arrive by pull request; an agent never uses a branch-protection bypass, even when its login holds one, and a rejected direct push means: open a pull request.
 - **Merge** through the pull request after the merge check (`review-gate` "Pull requests"), pinned to the reviewed head: `gh pr merge <number> --merge --match-head-commit <sha>` on GitHub.
 - **Worktree sweep**: right after a successful merge, run `python3 -I <this skill's folder>/scripts/worktree_sweep.py list` (read-only); only for the worktree of the pull request just merged, when it is a candidate this agent or its runs created, run exactly the two git commands it prints, and tell the user the rest of the list with sizes (advisory, agent judgment; git enforces its own checks).
 
