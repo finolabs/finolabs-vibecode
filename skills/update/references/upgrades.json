@@ -440,6 +440,17 @@
           "text": "/setup add afk can write a local AGENTS.afk.md that overrides instruction-file rules your away rules replace, printed only while a lease is live."
         },
         {
+          "id": "0.3.2/instruction-check-section",
+          "kind": "migration",
+          "text": "Breaking: the instruction-check consent moved from ## Route judgment to its own ## Instruction check section; until you migrate it reads off and /setup check flags the old section.",
+          "setup": "/setup add delegation"
+        },
+        {
+          "id": "0.3.2/rework-limit",
+          "kind": "info",
+          "text": "Review rework rounds now follow - Rework limit: <2-4> under ## Reviews in host.md (default 2); setup asks it with the review roles."
+        },
+        {
           "id": "0.3.2/codex-hook-trust",
           "kind": "hook",
           "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; the session-start hook changed."

@@ -25,10 +25,15 @@ STATE = 'state/matrix-setup'
 ROLES_HEADING = '## Agent roles'
 LEVELS_HEADING = '## Agent levels'
 LEGACY = (ROLES_HEADING, LEVELS_HEADING)
+# `## Route judgment` (retired 0.3.2) held only the instruction-check consent; `migrate` moves it to its own section.
+ROUTE_HEADING = '## Route judgment'
+INSTRUCTION_HEADING = '## Instruction check'
+INSTRUCTION_LINE = re.compile(r'- Instruction check: (on|off)(?:[ .].*)?')
+INSTRUCTION_DATE = re.compile(r'\b(\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2})\b')
 LEGACY_ROLE = {'code review': 'code-review', 'security review': 'security-review', 'navigator': 'navigator'}
 ROLE_LINE = re.compile(r'- (code review|security review|navigator): (.*)')
 JUDGE_LINE = re.compile(r'- judge: (.*)')
-PLAN_KEYS = {'kind', 'values', 'dropped', 'root', 'created', 'sha256', 'mode', 'backup'}
+PLAN_KEYS = {'kind', 'values', 'dropped', 'root', 'created', 'sha256', 'mode', 'backup', 'instruction', 'route'}
 # `## Agent levels` is no longer read for routing (0.3.1); only `migrate` reads it, to carry the levels over.
 LEVELS_ENTRY = re.compile(r'- (claude|codex|antigravity|claude[a-z0-9]{1,24}): levels ([1-5])-([1-5])')
 LEVELS_CONSENT = re.compile(r'- Consent: (?:yes \((\d{4}-\d{2}-\d{2})\)|(no))')
@@ -59,11 +64,11 @@ def sections(text, title):
     return spans
 
 
-def transform(raw, values, remove=()):
+def transform(raw, values, remove=(), instruction=None):
+    """Rewrite the matrix (when values is given), drop the `remove` sections and append the instruction section."""
     text = raw.decode('utf-8') if raw is not None else ''
     newline = '\r\n' if '\r\n' in text else '\n'
-    section = am.render(values).replace('\n', newline)
-    own = sections(text, am.HEADING)
+    own = sections(text, am.HEADING) if values is not None else []
     edits = []
     for title in remove:
         spans = sections(text, title)
@@ -73,12 +78,17 @@ def transform(raw, values, remove=()):
     if len(own) > 1:
         raise ValueError('ambiguous host section')
     if own:
-        edits.append((own[0][0], own[0][1], section))
+        edits.append((own[0][0], own[0][1], am.render(values).replace('\n', newline)))
     for start, end, replacement in sorted(edits, reverse=True):
         text = text[:start] + replacement + text[end:]
-    if not own:
+    added = [] if own else [am.render(values)] if values is not None else []
+    if instruction is not None:
+        if sections(text, INSTRUCTION_HEADING):
+            raise ValueError('instruction section exists')
+        added.append(f'{INSTRUCTION_HEADING}\n\n{instruction}\n')
+    for section in added:
         separator = newline * (2 if not text.endswith(newline) else 1) if text and not text.endswith(newline * 2) else ''
-        text = text + separator + section
+        text = text + separator + section.replace('\n', newline)
     encoded = text.encode('utf-8')
     if len(encoded) > CAP:
         raise ValueError('host too large')
@@ -191,6 +201,35 @@ def build_migration(text):
     return values, dropped, notes
 
 
+def build_route(text):
+    """Read the retired `## Route judgment` for `migrate`: (instruction line or None, dropped, notes), or None when
+    absent. Only a normalized `on`/`off` and its date carry over, so no other text of the section reaches the plan."""
+    lines = legacy_section_lines(text, ROUTE_HEADING)
+    if lines is None:
+        return None
+    dropped, notes, found = [], [], []
+    # A comment anywhere in the file can span headings, so any comment marker carries nothing over.
+    fenced = ('<!--' in text or '-->' in text or any(line.lstrip().startswith(('```', '~~~')) for line in lines))
+    for number, line in enumerate(lines, 1):
+        where = f'dropped: Route judgment line {number}'
+        match = INSTRUCTION_LINE.fullmatch(line)
+        if match and not fenced:
+            found.append((number, match))
+        elif re.fullmatch(r'- [Jj]udge: .*', line):
+            notes.append(f'Route judgment line {number}: the judge line is not read; the matrix holds the judge')
+        else:
+            dropped.append(f'{where}: unrecognized line')
+    instruction = None
+    if len(found) == 1 and not sections(text, INSTRUCTION_HEADING):
+        match = found[0][1]
+        date = INSTRUCTION_DATE.search(match[0][len('- Instruction check: '):])
+        instruction = f'- Instruction check: {match[1]}' + (f' ({date[1]})' if match[1] == 'on' and date else '')
+    else:
+        reason = 'Instruction check section exists' if found and sections(text, INSTRUCTION_HEADING) else 'repeated line'
+        dropped.extend(f'dropped: Route judgment line {number}: {reason}' for number, _ in found)
+    return instruction, dropped, notes
+
+
 def write_plan(plan, shown):
     value = cs.digest(plan)
     root = dr.consent_root()
@@ -207,21 +246,31 @@ def write_plan(plan, shown):
     print('Preview expires in 60 minutes; host configuration unchanged.')
 
 
-def preview(kind, values, dropped=(), notes=()):
-    validate(values)
+def removed(kind, route):
+    return (LEGACY if kind == 'migrate' else ()) + ((ROUTE_HEADING,) if route else ())
+
+
+def preview(kind, values, dropped=(), notes=(), instruction=None, route=False):
+    if values is not None:
+        validate(values)
     root = dr.consent_root()
     if root is None:
         raise ValueError('invalid data root')
     with dr.root_folder(create=True) as folder:
         fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
         raw, mode = read_host(folder)
-        transform(raw, values, LEGACY if kind == 'migrate' else ())
+        transform(raw, values, removed(kind, route), instruction)
         plan = {'kind': kind, 'values': values, 'dropped': list(dropped), 'root': str(root), 'created': time.time(),
-                'sha256': cs.content_hash(raw), 'mode': mode, 'backup': cs.backup_name(folder, 'host.md')}
-    shown = am.render(values)
+                'sha256': cs.content_hash(raw), 'mode': mode, 'backup': cs.backup_name(folder, 'host.md'),
+                'instruction': instruction, 'route': route}
+    shown = am.render(values) if values is not None else ''
     if kind == 'migrate':
         shown += 'Consent is not inherited: a new yes is needed, so apply requires --consent yes and then writes the Consent line.\n'
         shown += 'The Agent roles and Agent levels sections are removed in the same write; the backup keeps them.\n'
+    if route:
+        shown += (f'{INSTRUCTION_HEADING}\n\n{instruction}\n' if instruction is not None else
+                  'No Instruction check line carries over; record it again through setup if you want it on.\n')
+        shown += 'The Route judgment section is removed in the same write; the backup keeps it.\n'
     shown += ''.join(f'Note: {note}\n' for note in notes) + ''.join(f'{line}\n' for line in dropped)
     if dropped:
         shown += 'Unmapped legacy lines are listed above; apply refuses (exit 3) until you acknowledge them with --ack-dropped.\n'
@@ -240,9 +289,17 @@ def apply(value, consent, acknowledged):
         digest = cs.digest(plan)
         if saved['digest'] != digest or not digest.startswith(value):
             raise ValueError('digest mismatch; preview again')
-        if not isinstance(plan, dict) or set(plan) != PLAN_KEYS or plan['kind'] not in ('set', 'migrate'):
+        if not isinstance(plan, dict) or set(plan) != PLAN_KEYS or plan['kind'] not in ('set', 'migrate', 'route'):
             raise ValueError('invalid plan')
-        validate(plan['values'])
+        route, instruction = plan['route'], plan['instruction']
+        if type(route) is not bool or (plan['kind'] == 'route') != (plan['values'] is None) or \
+                (plan['kind'] == 'route' and not route) or (plan['kind'] == 'set' and route):
+            raise ValueError('invalid plan')
+        if instruction is not None and not (route and isinstance(instruction, str) and
+                                            re.fullmatch(r'- Instruction check: (?:on(?: \([0-9/-]{10}\))?|off)', instruction)):
+            raise ValueError('invalid plan')
+        if plan['values'] is not None:
+            validate(plan['values'])
         dropped = plan['dropped']
         if not isinstance(dropped, list) or any(not isinstance(item, str) for item in dropped):
             raise ValueError('invalid plan')
@@ -252,13 +309,13 @@ def apply(value, consent, acknowledged):
             raise ValueError('preview expired; preview again')
         if not isinstance(plan['backup'], str) or not re.fullmatch(r'host\.md\.bak-\d{8}(?:-[1-9][0-9]*)?', plan['backup']):
             raise ValueError('invalid backup')
-        values, remove = plan['values'], ()
+        values, remove = plan['values'], removed(plan['kind'], route)
         if plan['kind'] == 'migrate':
             if consent != 'yes' or values['consent'] != 'no':
                 raise ValueError('a new consent is required')
-            if dropped and not acknowledged:
-                raise Dropped('unmapped legacy lines')
-            values, remove = dict(values, consent='yes', date=today()), LEGACY
+            values = dict(values, consent='yes', date=today())
+        if plan['kind'] != 'set' and dropped and not acknowledged:
+            raise Dropped('unmapped legacy lines')
         with dr.root_folder() as folder:
             fcntl.flock(folder, fcntl.LOCK_EX | fcntl.LOCK_NB)
             raw, mode = read_host(folder)
@@ -266,7 +323,7 @@ def apply(value, consent, acknowledged):
                 raise ValueError('host changed; preview again')
             if plan['kind'] == 'migrate' and raw is not None and sections(raw.decode('utf-8'), am.HEADING):
                 raise ValueError('matrix exists')
-            result = transform(raw, values, remove)
+            result = transform(raw, values, remove, instruction)
             if result != raw:
                 if raw is not None:
                     fd = os.open(plan['backup'], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=folder)
@@ -278,7 +335,8 @@ def apply(value, consent, acknowledged):
                 cs.write_target(folder, 'host.md', result, mode)
         os.unlink('preview.json', dir_fd=state)
         os.fsync(state)
-    print('Assignment matrix saved; no command was run.')
+    print('Assignment matrix saved; no command was run.' if plan['kind'] != 'route' else
+          'Instruction check moved and Route judgment removed; no command was run.')
 
 
 def unfenced(body):
@@ -504,10 +562,15 @@ def main(argv=None):
             with dr.root_folder() as folder:
                 raw, _ = read_host(folder)
                 text = raw.decode('utf-8') if raw is not None else ''
-            if sections(text, am.HEADING):
-                raise ValueError('matrix exists')
-            values, dropped, notes = build_migration(text)
-            preview('migrate', values, dropped, notes)
+            route = build_route(text)
+            instruction, extra, more = route if route is not None else (None, [], [])
+            if sections(text, am.HEADING) or not (sections(text, ROLES_HEADING) or sections(text, LEVELS_HEADING)):
+                if route is None:
+                    raise ValueError('nothing to migrate')
+                preview('route', None, extra, more, instruction, True)
+            else:
+                values, dropped, notes = build_migration(text)
+                preview('migrate', values, dropped + extra, notes + more, instruction, route is not None)
         else:
             apply(args.digest, args.consent, args.ack_dropped)
         return 0

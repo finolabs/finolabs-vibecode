@@ -463,6 +463,17 @@ class CheckupTest(unittest.TestCase):
         self.write(config, "## Agent levels\n- Consent: no\n")
         self.assertFalse([r for r in self.data()["setup"] if r["check"] == "legacy host settings"])
 
+    def test_route_judgment_is_named_in_the_legacy_row_with_migrate(self):
+        config = self.home / ".finolabs/vibecode/host.md"
+        self.write(config, "## Route judgment\n- Judge: zq-judge\n- Instruction check: on\n")
+        row = self.setup_item("legacy host settings")
+        self.assertEqual(row, {"check": "legacy host settings", "status": "missing", "reason":
+                               "no longer read: ## Route judgment; /setup add delegation (migrate) moves its "
+                               "Instruction check line and removes it"})
+        self.assertNotIn("zq-", json.dumps(self.data()))
+        self.write(config, "```\n## Route judgment\n```\n## Instruction check\n- Instruction check: on\n")
+        self.assertFalse([r for r in self.data()["setup"] if r["check"] == "legacy host settings"])
+
     def test_contradictory_compaction_settings_get_a_row_with_names_only(self):
         settings = self.home / ".claude/settings.json"
         self.write(settings, json.dumps({"autoCompactWindow": 400000, "theme": "zq-theme"}))
@@ -624,15 +635,16 @@ class CheckupTest(unittest.TestCase):
         headings = re.findall(r"^## (.+)$", template, re.M)
         expected = ['Delegation mode', 'Routing', 'Agents on this machine', 'Delegate environment',
                     'Review posting', 'Reviews', 'Quota probe', 'Machine rules', 'Heavy jobs',
-                    'Effort preference', 'Briefs folder', 'Coordinators and reach', 'Route judgment',
+                    'Effort preference', 'Briefs folder', 'Coordinators and reach', 'Instruction check',
                     'Dispatch marker', 'Claude Code', 'Codex', 'Antigravity', 'ZCode']
         self.assertEqual(headings, expected)
         self.assertTrue(all('`' not in heading and len(heading) <= 60 for heading in headings))
         config = template.replace('Instruction check: <on | off>', 'Instruction check: on')
         self.assertTrue(checkup.instruction_consent(config))
-        route = template.split('## Route judgment\n', 1)[1].split('\n## ', 1)[0]
+        route = template.split('## Instruction check\n', 1)[1].split('\n## ', 1)[0]
         self.assertIn('only in canonical `## Assignment matrix`', route)
-        self.assertIn('This legacy heading retains instruction-check consent.', route)
+        self.assertIn('This section replaces `## Route judgment` (0.3.2), which nothing reads', route)
+        self.assertFalse(checkup.instruction_consent(config.replace('## Instruction check\n', '## Route judgment\n')))
         environment = template.split('## Delegate environment\n', 1)[1].split('\n## ', 1)[0]
         self.assertIn('The `Delegate environment` section accepts only', environment)
 
@@ -809,7 +821,7 @@ class CheckupTest(unittest.TestCase):
         self.assertIn("ACCOUNT INSTRUCTION", payload)
         self.assertNotIn("DECOY INSTRUCTION", payload)
 
-    def consent(self, text="## Route judgment\n- Instruction check: on\n"):
+    def consent(self, text="## Instruction check\n- Instruction check: on\n"):
         return self.write(self.home / ".finolabs/vibecode/host.md", text)
 
     def clean_instruction(self):
@@ -1032,21 +1044,21 @@ class CheckupTest(unittest.TestCase):
     def test_payload_consent_is_separate_scoped_and_fail_closed(self):
         self.write(self.repo / "AGENTS.md", "SAFE LINE\n")
         self.assertEqual(self.run_check("--judge-payload"), "")
-        for content in ("## Route judgment\n- Instruction check: off\n", "## Route judgment\n- Routing: on\n",
-                        "## Other\n- Instruction check: on\n", "## Route judgment\n```\n- Instruction check: on\n```\n",
-                        "## Route judgment\n- Instruction check: on\n- Instruction check: off\n"):
+        for content in ("## Instruction check\n- Instruction check: off\n", "## Instruction check\n- Routing: on\n",
+                        "## Other\n- Instruction check: on\n", "## Route judgment\n- Instruction check: on\n", "## Instruction check\n```\n- Instruction check: on\n```\n",
+                        "## Instruction check\n- Instruction check: on\n- Instruction check: off\n"):
             self.consent(content)
             self.assertEqual(self.run_check("--judge-payload"), "")
         config = self.consent()
         self.assertIn("SAFE LINE", self.run_check("--judge-payload"))
         config.unlink()
-        outside = self.write(self.base / "config.md", "## Route judgment\n- Instruction check: on\n")
+        outside = self.write(self.base / "config.md", "## Instruction check\n- Instruction check: on\n")
         config.symlink_to(outside)
         self.assertEqual(self.run_check("--judge-payload"), "")
         config.unlink()
         self.write(self.home / ".config/finolabs-vibecode/host.md", outside.read_text())
         self.assertEqual(self.run_check("--judge-payload"), "")
-        self.consent("## Route judgment\n- Instruction check: off\n")
+        self.consent("## Instruction check\n- Instruction check: off\n")
         self.assertEqual(self.run_check("--judge-payload"), "")
         self.env["ORCHESTRATION_HOST_CONFIG"] = str(outside)
         self.assertEqual(self.run_check("--judge-payload"), "")
@@ -1097,14 +1109,14 @@ class CheckupTest(unittest.TestCase):
         self.write(self.repo / "AGENTS.md", "SAFE LINE\n")
         for value in ("on", "on. The user approved, on 2026-01-01, this check.", "on approved"):
             with self.subTest(value=value):
-                self.consent("## Route judgment\n- Instruction check: " + value + "\n")
+                self.consent("## Instruction check\n- Instruction check: " + value + "\n")
                 self.assertIn("SAFE LINE", self.run_check("--judge-payload"))
         for content in ("- Instruction check: off", "- Instruction check: only",
                         "<!--\n- Instruction check: on\n-->",
                         "- Instruction check: on\n- Instruction check: on",
                         "~~~\n- Instruction check: on\n~~~"):
             with self.subTest(content=content):
-                self.consent("## Route judgment\n" + content + "\n")
+                self.consent("## Instruction check\n" + content + "\n")
                 self.assertEqual(self.run_check("--judge-payload"), "")
         config = self.consent()
         config.write_bytes(b"\xff")
@@ -1260,7 +1272,7 @@ class CheckupTest(unittest.TestCase):
     def test_rework_indented_consent_is_off(self):
         self.write(self.repo / "AGENTS.md", "SAFE LINE\n")
         for indent in (" ", "    ", "\t"):
-            self.consent("## Route judgment\n" + indent + "- Instruction check: on\n")
+            self.consent("## Instruction check\n" + indent + "- Instruction check: on\n")
             self.assertEqual(self.run_check("--judge-payload"), "")
 
     def test_rework_additional_secret_shapes(self):

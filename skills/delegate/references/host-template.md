@@ -51,6 +51,10 @@ Private HOME is an open owner decision and is not offered or created in this pac
 
 ## Reviews
 
+- Rework limit: 2
+
+How many rework rounds `review-gate` runs before it hands the remaining findings to the owner: 2, 3 or 4; absent or invalid means 2. `/setup add delegation` asks it with the roles. `ledger.py finish` refuses more rounds than this without a `--reason` (script-enforced); stopping at it is advisory (agent judgment).
+
 - Same-family security fallback: no (<YYYY-MM-DD>)
 
 Written only by `/setup add roles` after its own question and preview. `yes (<YYYY-MM-DD>)` lets `merge_check.py --independent --fallback-family <family>` count same-family reviews outside an away lease when every other present family is positively out of quota, with the exact fallback reviewer line on each marker (`review-gate` "Who reviews"); `no`, a missing or malformed line, or a future date counts as no.
@@ -105,9 +109,13 @@ Which agent can coordinate on this machine, and which delegates each one can rea
 | Antigravity | <yes / no> | <yes / no> | — | <yes / no> |
 | ZCode | <yes / no> | <yes / no> | <yes / no> | — |
 
-## Route judgment
+## Instruction check
 
-Judge selection lives only in canonical `## Assignment matrix`; without a valid, consented matrix the judge is `host`. This legacy heading retains instruction-check consent. `judge.py` caps calls at 24 per run, and no skill install is required for calls.
+- Instruction check: <on | off>. Default off. `on` means the user approved, on <DD/MM/YYYY>, sending lines of their private instruction files to the configured judge for the Check judgment items. Instruction checks use the small host fallback because they are outside the four outbound sites; retention is the host provider's. It is separate from the routing approval and is global to this machine; turning it off takes effect on the next run.
+
+This section replaces `## Route judgment` (0.3.2), which nothing reads: `matrix_setup.py migrate` moves its `Instruction check` line here and removes it.
+
+Judge selection lives only in canonical `## Assignment matrix`; without a valid, consented matrix the judge is `host`. `judge.py` caps calls at 24 per run, and no skill install is required for calls.
 
 `/setup add delegation` writes `## Assignment matrix` (`matrix_setup.py`; `migrate` builds it from the old sections, asks for a new consent and removes them in the same write). It replaces `## Agent roles` and `## Agent levels`, which only `migrate` reads: without a matrix no review role and no levels are set and the judge is `host`. A valid matrix with its own yes consent alone decides roles and judge, and a role no line names is unassigned; an invalid matrix or one without consent leaves roles and judge unset, never falling back to the old sections. Its shape, shown indented here so that no reader takes it for a section:
 
@@ -118,8 +126,6 @@ Judge selection lives only in canonical `## Assignment matrix`; without a valid,
     - <agent>: levels <L>-<H>[; works on <type>, ...][; model <id>][; roles <role>, ... | roles none]
 
 Agents are `claude`, `codex`, `antigravity`, `zcode` or an extra Claude Code command; types are `frontend`, `design`, `video`, `three-d`, `image-generation`, `transcription`; roles are `code-review`, `security-review`, `navigator`, `advisor`, each named by one agent at most.
-
-- Instruction check: <on | off>. Default off. `on` means the user approved, on <DD/MM/YYYY>, sending lines of their private instruction files to the configured judge for the Check judgment items. Instruction checks use the small host fallback because they are outside the four outbound sites; retention is the host provider's. It is separate from the routing approval and is global to this machine; turning it off takes effect on the next run.
 
 ## Dispatch marker
 
