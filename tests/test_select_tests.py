@@ -85,6 +85,22 @@ class SelectTestsTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(done.stdout.split('\n\n')[0].splitlines(), ['tests.test_shared_copy'])
 
+    def test_a_declared_folder_selects_the_module(self):
+        (self.repo / 'tests/test_folder.py').write_text("# select-tests: reads docs/\nROOT = 'built at run time'\n")
+        (self.repo / 'tests/test_bad_marker.py').write_text("# select-tests: reads ../\n# select-tests: reads /\n")
+        self.git('add', '.')
+        self.git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.com', 'commit', '-qm', 'Add')
+        (self.repo / 'docs/orphan.md').write_text('read through the folder\n')
+        done = self.select()
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.split('\n\n')[0].splitlines(), ['tests.test_folder'])
+        # A marker matches a whole folder prefix only, and only on a line of its own.
+        self.assertEqual(select_tests.READS.findall("x = 1  # select-tests: reads docs/\n"), [])
+        self.assertEqual(select_tests.READS.findall("# select-tests: reads docs\n"), [])
+        for bad in ("../", "./", "docs/../", "/etc/"):
+            self.assertEqual(select_tests.READS.findall(f"# select-tests: reads {bad}\n"), [], bad)
+        self.assertEqual(select_tests.READS.findall("# select-tests: reads skills/setup/\n"), ["skills/setup/"])
+
     def test_unnamed_change_is_reported(self):
         (self.repo / 'docs/orphan.md').write_text('still nobody\n')
         done = self.select()

@@ -10,6 +10,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Each release moves `ref` to the new tag in every host catalog that pins the plugin, the Codex catalog included (`versioning`, `update` hosts, `plugin-packaging` catalogs): an unpinned Codex entry reinstalled the default branch while `/update` reported the release.
 - Compaction setup by session kind (owner decisions, 17/11/2026): settings cannot tell a coordinator from a task session, so the saved threshold serves task sessions and setup shows a launch line for coordinators, `CLAUDE_CODE_AUTO_COMPACT_WINDOW=<tokens> claude`. Setup and help say the threshold is when the host compacts, not the model's window. `compact_setup.py preview --clear-model-overrides` removes per-model `modelSettings.<model>.autoCompactWindow` values in the same approved write; without it the preview prints their count and how to clear them.
 
+- `select_tests.py` (the `checks` skill and the repository copy) also selects a test module that declares a folder it reads with a line `# select-tests: reads <folder>/`, for modules that build paths at run time; `test_setup_limits` declares `skills/setup/`, so a setup reference change now selects it (it missed the size caps in PR 349).
+
 ### Known limits
 
 - Claude Code's `--autocompact` flag sets the host's threshold but hooks never see it (checked on 2.1.325, 17/11/2026), so a session opened with it gets the compaction nudge at the settings value, after the host has compacted. Use the variable instead. A hook that recognizes a coordinator and warns about its threshold was dropped: no hook can read the flag or a reliable role signal.
