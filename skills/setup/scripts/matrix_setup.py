@@ -208,7 +208,8 @@ def build_route(text):
     if lines is None:
         return None
     dropped, notes, found = [], [], []
-    fenced = any(line.lstrip().startswith(('```', '~~~', '<!--')) for line in lines)
+    # A fence or a comment anywhere in the section (one may open mid-line) hides lines: carry nothing over.
+    fenced = any(line.lstrip().startswith(('```', '~~~')) or '<!--' in line or '-->' in line for line in lines)
     for number, line in enumerate(lines, 1):
         where = f'dropped: Route judgment line {number}'
         match = INSTRUCTION_LINE.fullmatch(line)

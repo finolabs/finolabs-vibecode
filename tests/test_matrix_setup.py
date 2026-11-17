@@ -479,6 +479,14 @@ class MatrixSetupTest(unittest.TestCase):
         self.assertIn(b'## Assignment matrix', raw)
         self.assertIn(b'## Instruction check\r\n\r\n- Instruction check: off\r\n', raw)
 
+    def test_migrate_never_carries_a_commented_out_consent(self):
+        # Review of PR 337: a comment that opens mid-line hid the consent from checkup; migrate must not revive it.
+        self.host.write_bytes(PREFIX + b'## Route judgment\n- Judge: host <!-- old\n- Instruction check: on (01/11/2026)\n-->\n')
+        out, digest = self.migrate()
+        self.assertIn('dropped: Route judgment line', out)
+        self.assertEqual(self.cli('apply', '--digest', digest, '--ack-dropped')[0], 0)
+        self.assertNotIn(b'Instruction check: on', self.host.read_bytes())
+
     def test_migrate_route_judgment_drops_unclear_lines_and_needs_ack(self):
         cases = (b'## Route judgment\n- Instruction check: on\n- Instruction check: off\n',
                  b'## Route judgment\n```\n- Instruction check: on\n```\n',
