@@ -30,7 +30,7 @@ Codex default and effect on a running session remain unverified.
 Agent judgment (advisory): only a user request reaching `setup` invokes the
 writer. Ask neutral Yes/No with no default via the native question tool when
 available; after yes, ask a free-text token value and state the host's range.
-Explain that a lower threshold compacts earlier; prescribe no value.
+Explain that a lower threshold compacts earlier. Since the owner decision of 17/11/2026, setup shows the advisory recommendation of [compaction-details.md](../../skills/setup/references/compaction-details.md) "Recommended threshold" before the question, never prefilled; the user picks the number. Claude Code also offers the project-local scope (`--project`).
 Run `preview --host claude|codex --tokens N`, or `--off` for a requested removal.
 Claude accepts up to four absolute `--folder` arguments instead of its default.
 Config folders must already exist. The script refuses symlink components,
