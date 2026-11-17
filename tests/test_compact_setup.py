@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import struct
 import sys
 import tempfile
 import unittest
@@ -427,6 +428,97 @@ class CompactSetupTest(unittest.TestCase):
         digest = self.preview()
         self.plan.chmod(0o644)
         self.refuse("apply", "--digest", digest, "--yes")
+
+    # Project scope: one repository's untracked .claude/settings.local.json.
+    def project(self, *args):
+        return self.preview("claude", "--project", str(self.repo), *(args or ("--tokens", "400000")))
+
+    def write_index(self, *paths):
+        entries = b""
+        for path in paths:
+            entry = b"\0" * 60 + struct.pack(">H", len(path)) + path
+            entries += entry + b"\0" * (((62 + len(path)) // 8 + 1) * 8 - len(entry))
+        (self.repo / ".git/index").write_bytes(b"DIRC" + struct.pack(">II", 2, len(paths)) + entries + b"\0" * 20)
+
+    def test_project_scope_creates_only_the_local_file(self):
+        before = self.snapshot()
+        digest = self.project()
+        self.assertFalse((self.repo / ".claude").exists())  # preview writes nothing in the repository
+        self.write_index(b"README.md")
+        out = self.apply(digest)
+        local = self.repo / ".claude/settings.local.json"
+        self.assertIn("Updated: " + str(local), out)
+        self.assertEqual(json.loads(local.read_text()), {"autoCompactWindow": 400000})
+        self.assertEqual(stat.S_IMODE(local.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE((self.repo / ".claude").stat().st_mode), 0o700)
+        self.assertEqual(before, self.snapshot())  # the user-scope settings are untouched
+        self.assertEqual(sorted(p.name for p in (self.repo / ".claude").iterdir()), ["settings.local.json"])
+
+    def test_project_scope_preserves_keys_backs_up_and_removes(self):
+        (self.repo / ".claude").mkdir(mode=0o755)
+        local = self.repo / ".claude/settings.local.json"
+        local.write_text('{"permissions": {"allow": []}, "autoCompactWindow": 300000}\n')
+        code, out, err = self.run_cli("preview", "--host", "claude", "--project", str(self.repo), "--tokens", "450000")
+        self.assertEqual(code, 0, err)
+        for words in ("Scope: this repository on this machine", "autoCompactWindow: 300000 -> 450000", "Exists: yes"):
+            self.assertIn(words, out)
+        self.apply(out.split("Digest: ")[1].splitlines()[0])
+        self.assertEqual(json.loads(local.read_text()), {"permissions": {"allow": []}, "autoCompactWindow": 450000})
+        backup, = (self.repo / ".claude").glob("settings.local.json.bak-*")
+        self.assertIn("300000", backup.read_text())
+        self.apply(self.project("--off"))
+        self.assertEqual(json.loads(local.read_text()), {"permissions": {"allow": []}})
+
+    def test_project_scope_off_without_folder_creates_nothing(self):
+        self.assertIn("No difference.", self.apply(self.project("--off")))
+        self.assertFalse((self.repo / ".claude").exists())
+
+    def test_project_scope_refusals(self):
+        sub = self.repo / "sub"
+        sub.mkdir()
+        cases = (("--host", "codex", "--project", str(self.repo), "--tokens", "150000"),
+                 ("--host", "claude", "--project", str(self.repo), "--folder", str(self.claude), "--tokens", "150000"),
+                 ("--host", "claude", "--project", str(sub), "--tokens", "150000"),
+                 ("--host", "claude", "--project", "repo", "--tokens", "150000"),
+                 ("--host", "claude", "--project", str(self.home), "--tokens", "150000"))
+        for args in cases:
+            with self.subTest(args=args):
+                self.refuse("preview", *args)
+        self.assertFalse(self.plan.exists())
+
+    def test_project_scope_refuses_a_tracked_or_unreadable_index_and_unsafe_folder(self):
+        self.write_index(b".Claude/Settings.Local.json")
+        self.assertIn("tracked by Git", self.refuse("preview", "--host", "claude", "--project", str(self.repo),
+                                                    "--tokens", "150000"))
+        (self.repo / ".git/index").write_bytes(b"not an index")
+        self.refuse("preview", "--host", "claude", "--project", str(self.repo), "--tokens", "150000")
+        (self.repo / ".git/index").unlink()
+        (self.repo / ".claude").mkdir()
+        (self.repo / ".claude").chmod(0o777)
+        self.refuse("preview", "--host", "claude", "--project", str(self.repo), "--tokens", "150000")
+        (self.repo / ".claude").rmdir()
+        (self.repo / ".claude").symlink_to(self.claude, target_is_directory=True)
+        self.refuse("preview", "--host", "claude", "--project", str(self.repo), "--tokens", "150000")
+
+    def test_project_scope_refuses_a_file_that_appeared_or_a_tracked_file_at_apply(self):
+        digest = self.project()
+        (self.repo / ".claude").mkdir(mode=0o700)
+        (self.repo / ".claude/settings.local.json").write_text("{}")
+        self.refuse("apply", "--digest", digest, "--yes")
+        (self.repo / ".claude/settings.local.json").unlink()
+        digest = self.project()
+        self.write_index(b".claude/settings.local.json")
+        self.refuse("apply", "--digest", digest, "--yes")
+        self.assertFalse((self.repo / ".claude/settings.local.json").exists())
+
+    def test_plan_scope_is_part_of_the_digest(self):
+        digest = self.project()
+        saved = json.loads(self.plan.read_bytes())
+        saved["plan"]["scope"] = "user"
+        self.plan.write_text(json.dumps(saved))
+        self.plan.chmod(0o600)
+        self.refuse("apply", "--digest", digest, "--yes")
+        self.assertFalse((self.repo / ".claude").exists())
 
 
 if __name__ == "__main__":
