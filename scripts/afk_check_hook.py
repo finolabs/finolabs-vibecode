@@ -4,7 +4,8 @@
 While a valid, unexpired away lease exists, it splits the Bash command into words in memory and judges that argv
 through the same `afk.py check --coordinator claude --argv-json` code, in the hook's working folder. A Tier 3 answer,
 in either mode, denies the call with one fixed message naming the code; a command that cannot be split into words is
-denied with another fixed message. Every other path, error included, allows with exit 0 and prints nothing. The
+denied with another fixed message, and once a lease is live any error denies as `unsafe`. With no live lease, or on a
+Tier 1 answer, it prints nothing and returns no decision. The
 command text is never stored, logged or sent: only what a `check` call keeps is written.
 """
 
@@ -13,6 +14,13 @@ import signal
 import sys
 
 PARSE_MESSAGE = 'afk: the command could not be read; write it as a simpler command'
+
+
+def parked(code):
+    return f'afk: {code}; this action is parked under the away lease (afk.py check)'
+
+
+UNSAFE = parked('unsafe')
 
 
 def deny(reason):
@@ -44,10 +52,47 @@ def unquoted_newlines(command):
     return ''.join(out)
 
 
-def main():
+LEASE_COMMANDS = {'stop', 'log', 'review', 'effective', 'rules', 'check', 'packet-check'}
+OPERATORS = {';', '&&', '||', '|', '&', '|&'}
+
+
+def own_lease_command(argv, script):
+    """True for `python3 [-I] <this install's afk.py> <lease command> ...` with no operator after it."""
+    if not argv or os.path.basename(argv[0]) not in {'python3', 'python'}:
+        return False
+    rest = argv[1:]
+    while rest and rest[0] in {'-I', '-B', '-u'}:
+        rest = rest[1:]
+    if len(rest) < 2 or rest[1] not in LEASE_COMMANDS or any(t in OPERATORS for t in rest):
+        return False
     try:
-        signal.signal(signal.SIGALRM, lambda *_: os._exit(0))
-        signal.alarm(10)
+        return os.path.realpath(rest[0]) == os.path.realpath(script)
+    except (OSError, ValueError):
+        return False
+
+
+def expanded_paths(argv, limit=200):
+    """The paths the shell would read for each word holding `~`, `$` or a glob character, in memory only."""
+    import glob
+    found = []
+    for word in argv:
+        if not any(c in word for c in '~$*?['):
+            continue
+        value = os.path.expandvars(os.path.expanduser(word))
+        matches = glob.glob(value) if any(c in value for c in '*?[') else [value]
+        found.extend(matches[:limit])
+    return found
+
+
+def main():
+    live = False
+    try:
+        def timed_out(*_):
+            if live:
+                deny(UNSAFE)
+            os._exit(0)
+        signal.signal(signal.SIGALRM, timed_out)
+        signal.alarm(12)
         if os.environ.get('FNL_AFK_HOOK', '').lower() in {'off', '0', 'false', 'no'}:
             return 0
 
@@ -74,6 +119,7 @@ def main():
         import away_lease
         if away_lease.live_lease(time.time()) is None:
             return 0
+        live = True  # from here on every failure denies, as `check` answers `unsafe`
 
         try:
             argv = shlex.split(unquoted_newlines(command), comments=False, posix=True)
@@ -82,22 +128,38 @@ def main():
             return 0
         if not argv:
             return 0
+        script = here.parent / 'skills' / 'delegate' / 'scripts' / 'afk.py'
+        if own_lease_command(argv, script):
+            return 0
 
         cwd = event.get('cwd')
-        if isinstance(cwd, str) and os.path.isdir(cwd):
-            os.chdir(cwd)
-        sys.path.insert(0, str(here.parent / 'skills' / 'delegate' / 'scripts'))
+        if not isinstance(cwd, str) or not os.path.isdir(cwd):
+            deny(UNSAFE)
+            return 0
+        os.chdir(cwd)
+        sys.path.insert(0, str(script.parent))
         import afk
 
+        paths = expanded_paths(argv)
+        if paths and afk.floored(None, paths, cwd):
+            deny(parked('floor'))
+            return 0
         buffer = io.StringIO()
         with redirect_stdout(buffer):
             afk.main(['check', '--coordinator', 'claude', '--argv-json', json.dumps(argv)])
         answer = json.loads(buffer.getvalue().strip().splitlines()[-1])
         code = answer.get('code')
-        if answer.get('tier') == 3 and isinstance(code, str) and code not in afk.ENDED:
-            deny(f'afk: {code}; this action is parked under the away lease (afk.py check)')
+        if answer.get('tier') == 1:
+            return 0  # no decision: the host's own permission rules still apply
+        if isinstance(code, str) and code in afk.ENDED:
+            return 0
+        deny(parked(code if isinstance(code, str) and code.replace('-', '').isalpha() else 'unsafe'))
     except Exception:
-        pass
+        if live:
+            try:
+                deny(UNSAFE)
+            except Exception:
+                pass
     finally:
         try:
             signal.alarm(0)

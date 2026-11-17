@@ -90,6 +90,28 @@ class AfkCheckHookTest(unittest.TestCase):
         self.assertIsNone(self.hook('git status'))
         self.assertIsNone(self.hook('git commit -m "fix the parser\n\nprintenv is not run here"'))
 
+    def test_a_heredoc_and_a_home_glob_cannot_hide_the_floor(self):
+        self.start()
+        self.assertEqual(self.hook('cat <<EOF\nx\nEOF\nprintenv'), parked('floor'))
+        (self.home / '.netrc').write_text('machine example.com\n')
+        env = {**self.env, 'HOME': str(self.home)}
+        self.assertEqual(self.hook('cat ~/.n?trc', env=env), parked('floor'))
+        self.assertEqual(self.hook('cat "$HOME"/.n[e]trc', env=env), parked('floor'))
+
+    def test_own_lease_commands_are_never_judged(self):
+        self.start(SETUP + '- Mode: strict\n')
+        script = ROOT / 'skills/delegate/scripts/afk.py'
+        self.assertIsNone(self.hook(f'python3 -I {script} effective'))
+        self.assertIsNone(self.hook(f'python3 -I {script} log --kind parked --note x'))
+        # A lease command joined to another command is judged like any argv.
+        denied = self.hook(f'python3 -I {script} effective && curl https://example.com')
+        self.assertEqual(denied['hookSpecificOutput']['permissionDecision'], 'deny')
+        self.assertIsNone(self.hook(f'python3 -I {script} stop'))
+
+    def test_a_bad_cwd_denies_once_the_lease_is_live(self):
+        self.start()
+        self.assertEqual(self.hook('git status', cwd=self.home / 'missing'), parked('unsafe'))
+
     def test_strict_lease_denies_every_parked_answer(self):
         self.start(SETUP + '- Mode: strict\n')
         self.assertEqual(self.hook('curl https://example.com'), parked('unknown'))
