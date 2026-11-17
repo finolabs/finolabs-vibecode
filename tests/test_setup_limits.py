@@ -151,6 +151,15 @@ class SizeLimitTests(unittest.TestCase):
         self.assertLessEqual(total, 15050, {str(p.relative_to(SKILL)): p.stat().st_size for p in loaded})
 
 
+    def test_beginner_threshold_step_budget(self):
+        # Review of PR 339: the beginner and Quick threshold step loads the menu, the compaction feature and its
+        # details on top of the bare run; measure that step on its own so its growth stays visible.
+        step = ("references/menu.md", "references/features/compaction.md", "references/compaction-details.md")
+        self.assertIn("the menu's threshold", (SKILL / "SKILL.md").read_text())
+        total = sum(len((SKILL / name).read_bytes()) for name in step)
+        self.assertLessEqual(total, 16000, total)
+
+
 class ConsentInventoryTests(unittest.TestCase):
     def test_inventory_questions_have_local_explanations(self):
         # Preferences retain their native choices; approvals also name both outcomes.

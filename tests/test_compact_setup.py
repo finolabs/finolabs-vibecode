@@ -469,6 +469,14 @@ class CompactSetupTest(unittest.TestCase):
         self.apply(self.project("--off"))
         self.assertEqual(json.loads(local.read_text()), {"permissions": {"allow": []}})
 
+    def test_project_scope_warns_from_the_target_repository(self):
+        # Review of PR 339: the off-switch warning reads the --project repository, not the working folder's.
+        (self.repo / ".claude").mkdir(mode=0o700)
+        (self.repo / ".claude/settings.json").write_text(json.dumps({"autoCompactEnabled": False}))
+        code, out, err = self.run_cli("preview", "--host", "claude", "--project", str(self.repo), "--tokens", "450000")
+        self.assertEqual(code, 0, err)
+        self.assertIn("does nothing until auto-compaction is on", out)
+
     def test_project_scope_off_without_folder_creates_nothing(self):
         self.assertIn("No difference.", self.apply(self.project("--off")))
         self.assertFalse((self.repo / ".claude").exists())

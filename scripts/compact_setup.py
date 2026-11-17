@@ -354,19 +354,21 @@ def read_settings(path):
         os.close(fd)
 
 
-def other_settings():
-    """Project, local and managed Claude Code settings that can turn the user's window off."""
+def other_settings(project=None, skip_local=False):
+    """Project, local and managed Claude Code settings that can turn the window off: those of `project` when given,
+    else of the repository holding the working folder."""
     cwd = Path(os.getcwd())
-    root = next((p for p in (cwd, *cwd.parents) if os.path.lexists(p / ".git")), None)
-    files = [("project", root / ".claude/settings.json"), ("local", root / ".claude/settings.local.json")] \
+    root = Path(project) if project else next((p for p in (cwd, *cwd.parents) if os.path.lexists(p / ".git")), None)
+    files = [("project", root / ".claude/settings.json")] + ([] if skip_local else [("local", root / LOCAL)]) \
         if root else []
     return [(label, raw) for label, path in [*files, *managed_settings()]
             for raw in [read_settings(path)] if raw is not None]
 
 
-def disabled_notice(raws):
+def disabled_notice(raws, project=None):
     """Warn when the window being set would do nothing; environment variables are named by notices()."""
-    _, findings = auto_compact_conflicts([*raws, *other_settings()], {})
+    others = other_settings(project, skip_local=project is not None)
+    _, findings = auto_compact_conflicts([*raws, *others], {})
     for finding in dict.fromkeys(findings):
         print(f"Warning: {finding}, so the window shown here does nothing until auto-compaction is on.")
 
@@ -460,7 +462,7 @@ def preview_project(project, tokens):
     print(f"Backup: {path.parent / backup}" + (" (not needed)" if raw is None or result == raw else ""))
     print("Local settings override the user-scope window in this repository; managed settings still win.")
     print("If git status lists the file, add it to .git/info/exclude; setup does not change Git files.")
-    disabled_notice([("local", raw)] if raw is not None else [])
+    disabled_notice([("local", raw)] if raw is not None else [], project)
     notices("claude")
     print("Digest: " + value)
 
