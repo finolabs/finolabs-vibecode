@@ -591,6 +591,8 @@ def lease_mode(repo):
 
 
 REVIEWER_NAME = re.compile(r"Reviewer:\s*([A-Za-z]+)(?![A-Za-z])")
+# The whole name word after `Reviewer:`, so a look-alike letter from another script (`Сlaude`) is caught, not skipped.
+REVIEWER_WORD = re.compile(r"Reviewer:\s*([^\s,;:()]+)")
 
 
 def open_fallback(family, verdicts_found):
@@ -613,7 +615,11 @@ def open_fallback(family, verdicts_found):
             return False, f"{kind} marker has a malformed or another family's fallback line"
         role = roles.get(f"{kind} review")
         # Fold case, spacing and compatibility forms first, so `Reviewer:  Claude` cannot slip past as another name.
-        named = REVIEWER_NAME.match(unicodedata.normalize("NFKC", second).strip())
+        folded = unicodedata.normalize("NFKC", second).strip()
+        word = REVIEWER_WORD.match(folded)
+        if word and not word.group(1).isascii():
+            return False, f"{kind} marker names a reviewer with letters outside ASCII"
+        named = REVIEWER_NAME.match(folded)
         name = named.group(1).casefold() if named else None
         if name in review_config.FAMILIES and name != role:
             return False, f"{kind} marker names the {name} reviewer, not the configured role"
