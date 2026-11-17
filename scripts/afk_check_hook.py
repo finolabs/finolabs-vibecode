@@ -122,7 +122,9 @@ OPTION_COMMANDS = {'setopt', 'unsetopt', 'shopt', 'emulate'}
 # Words a shell reads as code or as a lookup the hook cannot follow: never judged, always the split message.
 OPAQUE_WORDS = {'builtin', 'nocorrect', 'hash', 'alias', 'function', 'case', 'coproc', 'enable', 'unalias', 'trap',
                 'watch', 'parallel'}
-FLAGGED_WRAPPERS = {'command', 'time', 'sudo', 'doas'}
+# Wrappers whose flags `commands_of` reads correctly with its shared table (checked in review); a flag right after any
+# other wrapper may hide the command it runs.
+PARSED_WRAPPERS = {'env', 'timeout', 'xargs', 'nohup', 'exec', 'flock', 'script', 'nice', 'npx', 'bunx', 'uvx'}
 GLOB_OPTIONS = ('glob', 'magic', 'equals', 'brace', 'rcexpand', 'wordsplit')
 EXEC_FLAGS = {'-exec', '-execdir', '-ok', '-okdir'}
 
@@ -149,7 +151,8 @@ def reparsed(argv, afk):
     if any(word in OPAQUE_WORDS for word in argv):
         return True
     for index, word in enumerate(argv[:-1]):
-        if os.path.basename(word) in FLAGGED_WRAPPERS and argv[index + 1].startswith('-'):
+        base = os.path.basename(word)
+        if (base in (afk.PREFIX_WORDS | afk.FILE_PREFIXES) - PARSED_WRAPPERS and argv[index + 1].startswith('-')):
             return True  # a wrapper flag `commands_of` may read as taking a value
     for reading in afk.READINGS:
         for program, words, _env, inline, _pattern in afk.commands_of(argv, full=True, split_patterns=reading):
@@ -172,12 +175,26 @@ def floor_words(argv, paths, afk):
     names = {name for name, subs in afk.CREDENTIAL_COMMANDS.items() if subs is None}
     stripped, _texts = afk.open_texts(argv)
     words = [w for w in stripped if isinstance(w, str)]
-    if any(os.path.basename(w) in names for w in words + [p for p in paths if isinstance(p, str)]):
+    expanded = [os.path.basename(p) for p in paths if isinstance(p, str)]
+    bases = [os.path.basename(w) for w in words]
+    if any(b in names for b in bases + expanded):
         return True
-    # A credential command with subcommands floors when one of them follows it anywhere, so no wrapper flag hides it.
-    for index, word in enumerate(words):
-        subs = afk.CREDENTIAL_COMMANDS.get(os.path.basename(word))
+    # A credential command with subcommands floors when one of them follows it anywhere (an expanded program path
+    # counts wherever it stands), and so does a credential pair or triple in order, so no wrapper flag hides it.
+    for index, base in enumerate(bases):
+        subs = afk.CREDENTIAL_COMMANDS.get(base)
         if subs and any(w in subs for w in words[index + 1:]):
+            return True
+    if any((afk.CREDENTIAL_COMMANDS.get(b) or set()) & set(words) for b in expanded):
+        return True
+    for pair in afk.CREDENTIAL_PAIRS:
+        if pair[0] in expanded and all(w in words for w in pair[1:]):
+            return True
+        position = 0
+        for base in bases:
+            if position < len(pair) and (base if position == 0 else base) == pair[position]:
+                position += 1
+        if position == len(pair):
             return True
     return False
 
