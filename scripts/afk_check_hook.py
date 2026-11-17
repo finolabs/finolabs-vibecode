@@ -119,6 +119,10 @@ def unreadable(command):
 
 
 OPTION_COMMANDS = {'setopt', 'unsetopt', 'shopt', 'emulate'}
+# Words a shell reads as code or as a lookup the hook cannot follow: never judged, always the split message.
+OPAQUE_WORDS = {'builtin', 'nocorrect', 'hash', 'alias', 'function', 'case', 'coproc', 'enable', 'unalias'}
+FLAGGED_WRAPPERS = {'command', 'time', 'sudo', 'doas'}
+GLOB_OPTIONS = ('glob', 'magic', 'equals', 'brace', 'rcexpand', 'wordsplit')
 EXEC_FLAGS = {'-exec', '-execdir', '-ok', '-okdir'}
 
 
@@ -131,7 +135,7 @@ def bad_program(program, words):
     base = os.path.basename(program)
     if base in {'eval', 'source', '.'} or base in OPTION_COMMANDS:
         return True
-    if base == 'set' and any(w in {'-o', '+o'} or re.fullmatch(r'[-+][A-Za-z]*o', w) for w in words):
+    if base == 'set' and any(any(o in w.lower().replace('_', '') for o in GLOB_OPTIONS) for w in words):
         return True
     return base in SHELLS and (any(w in {'-c', '-s', '<<<', '<'} or w.startswith('-c') for w in words)
                                or all(w.startswith('-') for w in words))
@@ -141,6 +145,11 @@ def reparsed(argv, afk):
     """True when any command `check` reads out of argv (every reading, wrappers, glued operators and compound words
     included, and a `find -exec` command) runs code a shell parses again, changes the shell's glob options, or has
     a program name holding an expansion, a glob or a brace."""
+    if any(word in OPAQUE_WORDS for word in argv):
+        return True
+    for index, word in enumerate(argv[:-1]):
+        if os.path.basename(word) in FLAGGED_WRAPPERS and argv[index + 1].startswith('-'):
+            return True  # a wrapper flag `commands_of` may read as taking a value
     for reading in afk.READINGS:
         for program, words, _env, inline, _pattern in afk.commands_of(argv, full=True, split_patterns=reading):
             if inline:
@@ -149,10 +158,19 @@ def reparsed(argv, afk):
                 return True
             for index, word in enumerate(words):
                 if word in EXEC_FLAGS and index + 1 < len(words):
-                    rest = [w for w in words[index + 2:] if w not in {';', '+', '{}'}]
-                    if bad_program(words[index + 1], rest):
+                    rest = [w for w in words[index + 1:] if w not in {';', '\\;', '+', '{}'}]
+                    if rest and reparsed(rest, afk):
                         return True
     return False
+
+
+def floor_words(argv, paths, afk):
+    """True when any word that is not a commit or pull request text value, or any expanded path, names a credential
+    command that is a floor in every use (`printenv`, `security`, ...), wherever it stands: a wrapper or its flags
+    cannot hide it."""
+    names = {name for name, subs in afk.CREDENTIAL_COMMANDS.items() if subs is None}
+    stripped, _texts = afk.open_texts(argv)
+    return any(isinstance(w, str) and os.path.basename(w) in names for w in list(stripped) + list(paths))
 
 
 LEASE_COMMANDS = {'stop', 'log', 'review', 'effective', 'rules', 'check', 'packet-check'}
@@ -256,7 +274,8 @@ def main():
             return 0
         paths = expanded_paths(argv)
         expanded = [os.path.expandvars(os.path.expanduser(word)) for word in argv]
-        if (paths and afk.floored(None, paths, cwd)) or (expanded != argv and afk.floored(expanded, None, cwd)):
+        if ((paths and afk.floored(None, paths, cwd)) or (expanded != argv and afk.floored(expanded, None, cwd))
+                or floor_words(argv, paths, afk)):
             deny(parked('floor'))
             return 0
         buffer = io.StringIO()
