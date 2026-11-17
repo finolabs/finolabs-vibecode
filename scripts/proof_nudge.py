@@ -34,7 +34,7 @@ CHECKS_RECEIPTS = "state/checks-receipts"
 VERIFICATION = "state/verification"
 ACTIONS = ("commit", "cherry-pick", "revert")
 LINE = ("This session committed the current head and no checks or verify_claim receipt names it. Before reporting "
-        "the work as done, run the targeted tests for the change and read their output, or run checks.")
+        "the work as done, run the targeted tests for the change and read their output.")
 
 
 def off():
@@ -138,7 +138,8 @@ def reflog_commits(gm, gitdir):
 
 
 def has_receipt(dr, code, head):
-    """True when a checks receipt for this repository or any verification receipt names this head."""
+    """True when a checks receipt for this repository, or a verification receipt with passing tests, names this head
+    (a checks receipt is only written when the whole list passed)."""
     import json
     import re
     try:
@@ -150,14 +151,15 @@ def has_receipt(dr, code, head):
         pass
     try:
         with dr.data_folder(VERIFICATION, private=True) as folder:
-            names = [n for n in os.listdir(folder)
-                     if re.fullmatch(r"d[0-9]{8}-[0-9]{6}-[0-9a-f]{4}\.json", n)][:MAX_RECEIPTS]
+            names = sorted((n for n in os.listdir(folder)
+                            if re.fullmatch(r"d[0-9]{8}-[0-9]{6}-[0-9a-f]{4}\.json", n)), reverse=True)[:MAX_RECEIPTS]
             for name in names:
                 try:
                     record = json.loads(dr.read_file(folder, name, RECEIPT_LIMIT))
                 except (FileNotFoundError, ValueError):
                     continue
-                if isinstance(record, dict) and record.get("kind") == "verify" and record.get("head") == head:
+                if (isinstance(record, dict) and record.get("kind") == "verify" and record.get("head") == head
+                        and record.get("tests") == "passed"):
                     return True
     except FileNotFoundError:
         pass

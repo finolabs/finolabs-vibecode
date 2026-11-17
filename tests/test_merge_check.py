@@ -890,6 +890,14 @@ class RecordedSecurityFallbackTest(unittest.TestCase):
         ok, lines = self.evaluate(pr(comments=self.data()["comments"], body="no marker"))
         self.assertTrue(ok, lines)
 
+    def test_a_live_lease_keeps_the_trigger_condition_with_the_recorded_yes(self):
+        import review_config
+        with patch.object(review_config, "host_text", return_value=self.RECORDED):
+            for trigger in ("security", "permission", "privacy"):
+                with self.subTest(trigger=trigger):
+                    self.assertFalse(self.evaluate(self.data(trigger=trigger))[0])
+            self.assertTrue(self.evaluate()[0])
+
     def test_without_the_recorded_yes_outside_a_lease_refuses(self):
         import away_lease
         import review_config

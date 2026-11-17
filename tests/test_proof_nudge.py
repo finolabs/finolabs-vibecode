@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "scripts/proof_nudge.py"
 SESSION = "synthetic-session-0001"
 LINE = ("This session committed the current head and no checks or verify_claim receipt names it. Before reporting "
-        "the work as done, run the targeted tests for the change and read their output, or run checks.")
+        "the work as done, run the targeted tests for the change and read their output.")
 
 
 class ProofNudgeTest(unittest.TestCase):
@@ -119,9 +119,20 @@ class ProofNudgeTest(unittest.TestCase):
         self.start_session(at=int(time.time()) - 5)
         head = self.commit("second")
         receipt = self.private("state/verification") / "d20261117-100000-abcd.json"
-        receipt.write_text(json.dumps({"kind": "verify", "id": "d20261117-100000-abcd", "head": head}))
+        receipt.write_text(json.dumps({"kind": "verify", "id": "d20261117-100000-abcd", "head": head, "tests": "passed"}))
         receipt.chmod(0o600)
         self.assertEqual(self.run_hook(), "")
+
+    def test_a_failed_or_unrun_verification_receipt_is_no_proof(self):
+        for tests in ("failed", "not-run"):
+            with self.subTest(tests=tests):
+                self.start_session(at=int(time.time()) - 5)
+                head = self.commit("change " + tests)
+                receipt = self.private("state/verification") / "d20261117-100000-abcd.json"
+                receipt.write_text(json.dumps({"kind": "verify", "id": "d20261117-100000-abcd", "head": head,
+                                               "tests": tests}))
+                receipt.chmod(0o600)
+                self.assert_nudged(self.run_hook())
 
     def test_a_linked_worktree_and_packed_refs_are_read(self):
         self.start_session(at=int(time.time()) - 5)

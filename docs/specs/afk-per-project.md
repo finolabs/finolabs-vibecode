@@ -78,7 +78,7 @@ Then the host carries out the chosen option through `check` like any action. A d
 
 `merge_check.py --independent --fallback-family <family>` accepts current-head markers posted by `<family>` only when all of these hold:
 
-1. A live, valid away lease exists (`away_lease.live_lease`).
+1. A live, valid away lease exists (`away_lease.live_lease`). Outside a lease, since the owner decision of 17/11/2026 ([CLAUDE.md](../../CLAUDE.md) "Reviews", "Same-family security fallback"), a recorded `- Same-family security fallback: yes (<date>)` under `## Reviews` of the canonical host config stands in for it, condition 4 is dropped because the merge still waits for the owner, and conditions 2, 3, 5 and 6 still hold; a live lease keeps condition 4 even with that line.
 2. `<family>` is the pull request author's family (`review_route.author_family`).
 3. Every other family that `review_config.present_families` reports for this machine has positive evidence of being out: a reading younger than 8 hours in `state/quota/quota.json` with every pool below the routing floor, or a live rate-limit marker in `limits.json`. A missing, stale, failed or backed-off reading is not evidence; the family counts as reachable and the fallback is refused.
 4. The pull request's `fnl-router` trigger is not `security`, `permission` or `privacy`; those park for the user.
