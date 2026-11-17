@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Preview and apply one documented host compaction threshold; never hook-started."""
 import argparse
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from datetime import datetime
 import hashlib
 import json
@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import struct
 import sys
 import time
 
@@ -24,6 +25,8 @@ except ImportError:
 
 KEYS = {"claude": "autoCompactWindow", "codex": "model_auto_compact_token_limit"}
 LIMIT = 4 * 1024 * 1024
+INDEX_LIMIT = 64 * 1024 * 1024
+LOCAL = ".claude/settings.local.json"
 
 
 class Refusal(ValueError):
@@ -207,12 +210,76 @@ def validate_choice(host, tokens):
         raise Refusal(f"tokens must be an integer from {low} to {high}")
 
 
-def checked_path(value, host):
+def checked_path(value, host, scope="user"):
     path = Path(value)
+    name = "settings.json" if host == "claude" else "config.toml"
+    if scope == "project":
+        name = "settings.local.json" if host == "claude" else None
     if (not path.is_absolute() or ".." in path.parts or any(ord(c) < 32 for c in str(path))
-            or path.name != ("settings.json" if host == "claude" else "config.toml")):
+            or path.name != name or (scope == "project" and path.parent.name != ".claude")):
         raise Refusal("invalid target path")
     return path
+
+
+def repository_root(value):
+    """The checkout root `value` names exactly, and its own Git folder; no Git process runs."""
+    import git_metadata
+    root = Path(value)
+    if not root.is_absolute() or ".." in root.parts or any(ord(c) < 32 for c in str(root)):
+        raise Refusal("--project needs an absolute repository root")
+    try:
+        found, git, _ = git_metadata.checkout_dirs(root)
+    except git_metadata.NoCheckout:
+        raise Refusal("--project must be a git repository root") from None
+    if Path(found) != root:
+        raise Refusal("--project must be a git repository root")
+    return root, Path(git)
+
+
+def local_tracked(git):
+    """True when the checkout's own index lists the local settings file; no index means False."""
+    import afk_overlay
+    import git_metadata
+    index = git / "index"
+    try:
+        os.stat(index, follow_symlinks=False)
+    except FileNotFoundError:
+        return False
+    try:
+        paths = afk_overlay.index_paths(git_metadata.bounded(index, INDEX_LIMIT))
+    except (ValueError, IndexError, struct.error):
+        raise Refusal("the Git index cannot be read, so the local file cannot be shown to be untracked") from None
+    # Any letter case: a case-insensitive file system maps it to the same file.
+    return LOCAL.casefold() in {path.decode("utf-8", "replace").casefold() for path in paths}
+
+
+@contextmanager
+def project_folder(root, *, create=False):
+    """The `.claude` folder of a checked repository root, no-follow and owner-checked; None when it is absent.
+
+    Only an apply that writes creates it (mode 0700)."""
+    import git_metadata
+    root, git = repository_root(root)
+    if local_tracked(git):
+        raise Refusal("the local settings file is tracked by Git; it would not stay on this machine")
+    with git_metadata.opened(root, directory=True) as repo:
+        if create:
+            try:
+                os.mkdir(".claude", 0o700, dir_fd=repo)
+            except FileExistsError:
+                pass
+        try:
+            fd = os.open(".claude", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=repo)
+        except FileNotFoundError:
+            yield None
+            return
+        try:
+            info = os.fstat(fd)
+            if info.st_uid != os.getuid() or info.st_mode & 0o022:
+                raise Refusal("unsafe .claude folder")
+            yield fd
+        finally:
+            os.close(fd)
 
 
 def backup_name(folder, name):
@@ -287,20 +354,22 @@ def read_settings(path):
         os.close(fd)
 
 
-def other_settings():
-    """Project, local and managed Claude Code settings that can turn the user's window off."""
+def other_settings(project=None, skip_local=False):
+    """Project, local and managed Claude Code settings that can turn the window off: those of `project` when given,
+    else of the repository holding the working folder."""
     cwd = Path(os.getcwd())
-    root = next((p for p in (cwd, *cwd.parents) if os.path.lexists(p / ".git")), None)
-    files = [("project", root / ".claude/settings.json"), ("local", root / ".claude/settings.local.json")] \
+    root = Path(project) if project else next((p for p in (cwd, *cwd.parents) if os.path.lexists(p / ".git")), None)
+    files = [("project", root / ".claude/settings.json")] + ([] if skip_local else [("local", root / LOCAL)]) \
         if root else []
     return [(label, raw) for label, path in [*files, *managed_settings()]
             for raw in [read_settings(path)] if raw is not None]
 
 
-def disabled_notice(raws):
+def disabled_notice(raws, project=None):
     """Warn when the window being set would do nothing; environment variables are named by notices()."""
-    _, findings = auto_compact_conflicts([*raws, *other_settings()], {})
-    for finding in findings:
+    others = other_settings(project, skip_local=project is not None)
+    _, findings = auto_compact_conflicts([*raws, *others], {})
+    for finding in dict.fromkeys(findings):
         print(f"Warning: {finding}, so the window shown here does nothing until auto-compaction is on.")
 
 
@@ -313,8 +382,14 @@ def target_notice(host, raw):
             print("Warning: modelSettings contains a per-model autoCompactWindow that overrides the top-level setting.")
 
 
-def preview(host, folders, tokens):
+def preview(host, folders, tokens, project=None):
     validate_choice(host, tokens)
+    if project is not None:
+        if host != "claude":
+            raise Refusal("--project is for Claude only")
+        if folders:
+            raise Refusal("--project and --folder are exclusive")
+        return preview_project(project, tokens)
     if host == "codex":
         if folders:
             raise Refusal("--folder is for Claude only")
@@ -344,7 +419,19 @@ def preview(host, folders, tokens):
             backup = backup_name(folder, path.name)
             targets.append({"path": str(path), "sha256": content_hash(raw), "mode": mode, "backup": backup})
             displays.append((path, raw is not None, change, backup, result != raw))
-    plan = {"host": host, "tokens": tokens, "created": time.time(), "root": str(root), "targets": targets}
+    value = store_plan(host, tokens, root, targets, "user")
+    for path, exists, change, backup, changed in displays:
+        print(f"Target: {path}\nExists: {'yes' if exists else 'no'}\n{change}")
+        print(f"Backup: {path.parent / backup}" + (" (not needed)" if not exists or not changed else ""))
+    if host == "claude":
+        disabled_notice(raws)
+    notices(host)
+    print("Digest: " + value)
+
+
+def store_plan(host, tokens, root, targets, scope):
+    plan = {"host": host, "tokens": tokens, "created": time.time(), "root": str(root), "targets": targets,
+            "scope": scope}
     value = digest(plan)
     with dr.data_folder("state/compact", create=True, private=True) as state:
         # An existing unsafe preview is never silently replaced.
@@ -353,12 +440,30 @@ def preview(host, folders, tokens):
         except FileNotFoundError:
             pass
         dr.atomic_write(state, "preview.json", json.dumps({"plan": plan, "digest": value}).encode())
-    for path, exists, change, backup, changed in displays:
-        print(f"Target: {path}\nExists: {'yes' if exists else 'no'}\n{change}")
-        print(f"Backup: {path.parent / backup}" + (" (not needed)" if not exists or not changed else ""))
-    if host == "claude":
-        disabled_notice(raws)
-    notices(host)
+    return value
+
+
+def preview_project(project, tokens):
+    """One repository's untracked `.claude/settings.local.json`: this checkout on this machine only."""
+    root = dr.consent_root()
+    if root is None:
+        raise Refusal("invalid data root")
+    path = checked_path(Path(project) / LOCAL, "claude", "project")
+    with project_folder(project) as folder:
+        raw, mode = read_target(folder, path.name) if folder is not None else (None, 0o600)
+        result, change = transform("claude", raw, tokens)
+        target_notice("claude", raw)
+        backup = backup_name(folder, path.name) if folder is not None else path.name + ".bak-" + datetime.now().strftime("%Y%m%d")
+    targets = [{"path": str(path), "sha256": content_hash(raw), "mode": mode, "backup": backup}]
+    value = store_plan("claude", tokens, root, targets, "project")
+    print(f"Target: {path}\nScope: this repository on this machine (untracked local settings)")
+    print(f"Exists: {'yes' if raw is not None else 'no'}" + ("" if folder is not None else " (.claude folder will be created)"))
+    print(change)
+    print(f"Backup: {path.parent / backup}" + (" (not needed)" if raw is None or result == raw else ""))
+    print("Local settings override the user-scope window in this repository; managed settings still win.")
+    print("If git status lists the file, add it to .git/info/exclude; setup does not change Git files.")
+    disabled_notice([("local", raw)] if raw is not None else [], project)
+    notices("claude")
     print("Digest: " + value)
 
 
@@ -391,22 +496,36 @@ def apply(value, yes):
                 or saved["digest"] != value or digest(saved["plan"]) != value):
             raise Refusal("digest mismatch; preview again")
         plan = saved["plan"]
-        if not isinstance(plan, dict) or set(plan) != {"host", "tokens", "created", "root", "targets"}:
+        if not isinstance(plan, dict) or set(plan) != {"host", "tokens", "created", "root", "targets", "scope"}:
             raise Refusal("invalid plan")
         validate_choice(plan["host"], plan["tokens"])
+        scope = plan["scope"]
+        if scope not in ("user", "project") or (scope == "project" and plan["host"] != "claude"):
+            raise Refusal("invalid plan")
         if plan["root"] != str(dr.consent_root()):
             raise Refusal("data root changed; preview again")
         if type(plan["created"]) not in (int, float) or not 0 <= time.time() - plan["created"] <= 3600:
             raise Refusal("preview expired; preview again")
         targets = plan["targets"]
-        if not isinstance(targets, list) or not 1 <= len(targets) <= (4 if plan["host"] == "claude" else 1):
+        if not isinstance(targets, list) or not 1 <= len(targets) <= (4 if plan["host"] == "claude" and scope == "user" else 1):
             raise Refusal("invalid targets")
         ready, identities = [], set()
         for target in targets:
             if not isinstance(target, dict) or set(target) != {"path", "sha256", "mode", "backup"}:
                 raise Refusal("invalid target")
-            path = checked_path(target["path"], plan["host"])
-            folder = stack.enter_context(dr.relocated_folder(path.parent))
+            path = checked_path(target["path"], plan["host"], scope)
+            if scope == "project":
+                # The folder is created only when this apply writes; an absent one held no file at preview.
+                folder = stack.enter_context(project_folder(path.parent.parent))
+                if folder is None:
+                    if target["sha256"] is not None:
+                        raise Refusal("target changed; preview again")
+                    if plan["tokens"] is None:
+                        print("No difference.")
+                        continue
+                    folder = stack.enter_context(project_folder(path.parent.parent, create=True))
+            else:
+                folder = stack.enter_context(dr.relocated_folder(path.parent))
             info = os.fstat(folder)
             identity = (info.st_dev, info.st_ino)
             if identity in identities:
@@ -463,6 +582,7 @@ def main():
         pre = commands.add_parser("preview")
         pre.add_argument("--host", required=True, choices=("claude", "codex", "antigravity"))
         pre.add_argument("--folder", action="append", default=[])
+        pre.add_argument("--project")
         choice = pre.add_mutually_exclusive_group(required=True)
         choice.add_argument("--tokens", type=int)
         choice.add_argument("--off", action="store_true")
@@ -471,7 +591,7 @@ def main():
         app.add_argument("--yes", action="store_true")
         args = parser.parse_args()
         if args.action == "preview":
-            preview(args.host, args.folder, args.tokens)
+            preview(args.host, args.folder, args.tokens, args.project)
         else:
             apply(args.digest, args.yes)
         return 0
