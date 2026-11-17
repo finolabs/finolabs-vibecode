@@ -299,6 +299,11 @@ def strict_object(text):
     return value if isinstance(value, dict) else None
 
 
+def same_json(left, right):
+    """Equal as JSON values, types included (true is not 1, 1.0 is not 1)."""
+    return json.dumps(left, sort_keys=True) == json.dumps(right, sort_keys=True)
+
+
 def version_only(base_text, head_text):
     """True when two manifests differ in nothing but their top-level "version"."""
     base, head = strict_object(base_text), strict_object(head_text)
@@ -306,7 +311,7 @@ def version_only(base_text, head_text):
         return False
     base.pop("version", None)
     head.pop("version")
-    return base == head
+    return same_json(base, head)
 
 
 def catalog_pin_only(base_text, head_text):
@@ -316,7 +321,7 @@ def catalog_pin_only(base_text, head_text):
     if base is None or head is None:
         return False
     old, new = base.pop("plugins", None), head.pop("plugins", None)
-    if base != head or not isinstance(old, list) or not isinstance(new, list) or len(old) != len(new):
+    if not same_json(base, head) or not isinstance(old, list) or not isinstance(new, list) or len(old) != len(new):
         return False
     for before, after in zip(old, new):
         if not isinstance(before, dict) or not isinstance(after, dict):
@@ -327,7 +332,8 @@ def catalog_pin_only(base_text, head_text):
         before.pop("description", None)
         after.pop("description", None)
         source_before, source_after = before.get("source"), after.get("source")
-        if isinstance(source_before, dict) and isinstance(source_after, dict) and "ref" in source_after:
+        if (isinstance(source_before, dict) and isinstance(source_after, dict) and "ref" in source_after
+                and not same_json(source_before.get("ref"), source_after["ref"])):
             ref = source_after["ref"]
             if not isinstance(ref, str) or not RELEASE_TAG.fullmatch(ref):
                 return False
@@ -335,7 +341,7 @@ def catalog_pin_only(base_text, head_text):
             source_before.pop("ref", None)
             source_after.pop("ref")
             before["source"], after["source"] = source_before, source_after
-        if before != after:
+        if not same_json(before, after):
             return False
     return True
 
