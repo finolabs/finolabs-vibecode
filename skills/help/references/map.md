@@ -106,6 +106,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/assignments.py` | Parses, validates and renders the host config's `## Assignment matrix`, including each agent's `models` rules (which model for which kind, type or level, with a quota fallback); pure, reads no file and runs nothing. |
 | `scripts/auto_gate.py` | Stores local repository-window handoff/keep decisions for the opt-in auto gate. |
 | `scripts/auto_gate_hook.py` | Claude Code first-write nudge; allows on errors, never covers shell writes. |
+| `scripts/afk_check_hook.py` | Claude Code afk check hook: while an away lease is live, judges each Bash command as `afk.py check` does and denies a Tier 3 answer and every form outside the syntax it reads in full; once a lease is live any error denies as `unsafe`; never answers allow, stores no command text. |
 | `scripts/away_gate_hook.py` | Claude Code question gate: denies `AskUserQuestion` only while a valid away lease exists, never reads the question, allows on every error. |
 | `scripts/afk_overlay.py` | The afk overlay reader, trust anchor and Git index check shared by session start, afk and the instruction writer; `status` prints its state for `/setup check`. |
 | `scripts/away_lease.py` | Safe away-lease reader and away ledger appender shared by afk, the question gate and session start; any error means no lease. |
