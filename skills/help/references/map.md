@@ -74,6 +74,7 @@ The skill folders and their purposes match the README.
 | Read how much quota each agent has left before routing | `/setup add quota` (opt-in, off by default) | |
 | Turn usage metrics, project progress or the running-agent snapshot on or off | `/setup add metrics` (each needs its own consent) | |
 | Optional companion skills from other packs | `/setup add companions` (questions and install commands only; installs nothing) | |
+| Choose when the host compacts, so the `tidy` nudge has a threshold | `/setup add compaction` (also asked in the beginner and Quick paths): an advisory value by session kind, your number, user scope or one repository's untracked Claude Code local file | Without a window the Claude Code nudge stays silent |
 | Read context counts for compaction | `/setup add compaction`, then `tidy` | Claude Code/Antigravity status line only; live delivery unverified |
 | Read this session's context size on request | `tidy` (`context_snapshot.py probe`, needs `/setup add quota` to confirm `claude` or `codex`) | Claude Code and Codex; live delivery unverified |
 | Long session, phase change, compaction | `tidy` | `/ask-matt` covers its phase-boundary choices |
@@ -112,7 +113,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/build-parity-plugins.sh` | Builds local evaluation plugins from this checkout and a supplied upstream skill checkout. |
 | `scripts/check-references.py` | Checks local links, headings, names, inventories, ledger flags and shared mode copies. |
 | `scripts/compact_nudge.py` | Claude Code and Codex (`--host codex`) `UserPromptSubmit` nudge: reads only the latest turn's token counts and compaction settings, and at 80% and 90% of the threshold prints one line to run `tidy`; never blocks, always exits 0. |
-| `scripts/compact_setup.py` | Previews/applies an approved documented native compaction threshold. |
+| `scripts/compact_setup.py` | Previews/applies an approved documented native compaction threshold, at user scope or (`--project`, Claude Code) in a repository's untracked `.claude/settings.local.json`. |
 | `scripts/compact_stop_hook.py` | Opt-in Antigravity transcript-size stop; no content read, live delivery unverified. |
 | `scripts/checks_list.py` | Reads a repository's `.finolabs/vibecode/checks.json` only while it matches its approved digest (never the host config), with its local-receipt mode, digests a list, and writes or matches the private local checks receipt; runs no command. |
 | `scripts/context_snapshot.py` | Records/reads Claude Code or Antigravity status-line context counts, probes Claude Code or Codex on request through the confirmed program, and feeds the steward. |
