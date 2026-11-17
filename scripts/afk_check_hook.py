@@ -112,11 +112,15 @@ def unreadable(command):
         elif char == '"' and not single:
             double = not double
         elif not single:
+            if char == '`':
+                return True  # command substitution: its output exists only at run time
             if char == '$':
                 if nxt == '{' and not NAME_REF.match(command, i):
                     return True
                 if nxt and nxt in '_@*#?-$!0123456789[' or command.startswith('$((', i):
                     return True
+                if nxt == '(':
+                    return True  # command substitution: its output exists only at run time
                 ref = VARIABLE.match(command, i)
                 if ref and not home_reference(command, ref.end(), double):
                     return True  # a variable the shell may expand differently (unset, set in the command, zsh forms)
@@ -274,6 +278,18 @@ def own_lease_command(argv, script, cwd):
 
 
 
+DIRECTORY_CHANGES = {'cd', 'pushd', 'popd'}
+
+
+def relative_glob_after_cd(argv):
+    """True when the command changes directory and holds a glob that is not anchored at `/` or `~`: the shell
+    expands it in the new folder, which the hook cannot know."""
+    words = [os.path.basename(w) for w in argv]
+    if not any(w in DIRECTORY_CHANGES for w in words):
+        return False
+    return any(any(c in w for c in '*?[') and not w.startswith(('/', '~')) for w in argv)
+
+
 def shell_expanded(word):
     """`~` and `$name`/`${name}` expanded as the shell does: an unset variable becomes empty, not literal text."""
     return VARIABLE.sub(lambda m: os.environ.get(m.group(1) or m.group(2), ''), os.path.expanduser(word))
@@ -353,7 +369,7 @@ def main():
         sys.path.insert(0, str(script.parent))
         import afk
 
-        if reparsed(argv, afk):
+        if reparsed(argv, afk) or relative_glob_after_cd(argv):
             deny(PARSE_MESSAGE)
             return 0
         paths = expanded_paths(argv)

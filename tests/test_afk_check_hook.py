@@ -114,8 +114,10 @@ class AfkCheckHookTest(unittest.TestCase):
         (self.home / '.netrc').write_text('machine example.com\n')
         env = {**self.env, 'HOME': str(self.home)}
         for command in (f'python3 -I {script} log --note "$(cat ~/.netrc)"',
-                        f'python3 -I {script} log --note "`cat ~/.netrc`"',
-                        f'python3 -I {script} rules >~/.netrc',
+                        f'python3 -I {script} log --note "`cat ~/.netrc`"'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command, env=env), denial(PARSE))
+        for command in (f'python3 -I {script} rules >~/.netrc',
                         f'python3 -I {script} log --note x;printenv',
                         f'python3 -I {script} log --note x|cat ~/.netrc'):
             with self.subTest(command=command):
@@ -211,6 +213,17 @@ class AfkCheckHookTest(unittest.TestCase):
         self.assertTrue(module.own_lease_command(['python3', relative, 'effective'], script, str(self.repo)))
         (self.repo / 'sub').mkdir()
         self.assertFalse(module.own_lease_command(['python3', relative, 'effective'], script, str(self.repo / 'sub')))
+
+    def test_substitution_and_a_glob_after_cd_are_not_read(self):
+        self.start()
+        for command in ('gh $(echo au)th token', 'gh `echo au`th token', 'cat $(echo ~/.ne)trc',
+                        'gh "$(printf %s au)th" token', 'cd ~ && cat .ne?rc', 'cd && cat .ne?rc',
+                        'cd ~ && cat .n[e]trc', 'cd ~/.cache/../ && cat .ne*c', 'pushd ~; cat .ne*c'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), denial(PARSE))
+        # A glob with no directory change, or anchored at `/` or `~`, is still expanded for the floor.
+        self.assertIsNone(self.hook('cd src && ls /tmp/*.log'))
+        self.assertIsNone(self.hook('ls *.py'))
 
     def test_a_credential_command_name_anywhere_is_the_floor(self):
         self.start()
