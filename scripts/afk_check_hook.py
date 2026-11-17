@@ -80,6 +80,22 @@ NAME_REF = re.compile(r'\$\{[A-Za-z_][A-Za-z0-9_]*\}')
 SHELLS = {'sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'fish', 'csh', 'tcsh'}
 
 
+VARIABLE = re.compile(r'\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))')
+
+
+def home_reference(command, end, double):
+    """True when the variable that ends at `end` is `$HOME` or `${HOME}` followed by `/`, whitespace or the end, or
+    inside double quotes by a closing quote followed by one of those: the only form whose value the hook and the
+    Bash tool share and whose word boundary is plain."""
+    name = command[command.rfind('$', 0, end):end].strip('${}')
+    if name != 'HOME':
+        return False
+    after = command[end:end + 1]
+    if double and after == '"':
+        after = command[end + 1:end + 2]
+    return after in ('', '/') or after.isspace()
+
+
 def unreadable(command):
     """True when the command holds a shell form the hook cannot reproduce exactly (bash and zsh): brace expansion,
     a `${...}` with an operator, a special or positional parameter, arithmetic, process substitution, a zsh `=name`,
@@ -101,6 +117,9 @@ def unreadable(command):
                     return True
                 if nxt and nxt in '_@*#?-$!0123456789[' or command.startswith('$((', i):
                     return True
+                ref = VARIABLE.match(command, i)
+                if ref and not home_reference(command, ref.end(), double):
+                    return True  # a variable the shell may expand differently (unset, set in the command, zsh forms)
             if not double:
                 if char in '<>' and nxt == '(':
                     return True
@@ -232,10 +251,13 @@ SAFE_ARGUMENT = re.compile(r'[A-Za-z0-9 ._,:=/@+%-]*')
 def own_lease_command(argv, script, cwd):
     """True for `python3 [-I] <this install's afk.py> <lease command> ...` with no operator after it and no argument
     made of anything but letters, digits, spaces and `._,:=/@+%-`. The interpreter is a bare `python3` or `python`
-    or an absolute path to one; the script path is resolved against the Bash tool's `cwd`."""
-    if not argv or os.path.basename(argv[0]) not in {'python3', 'python'}:
+    or a path to the hook's own interpreter; the script path is resolved against the Bash tool's `cwd`."""
+    if not argv:
         return False
-    if '/' in argv[0] and not os.path.isabs(argv[0]):
+    if '/' in argv[0]:
+        if os.path.realpath(argv[0]) != os.path.realpath(sys.executable):
+            return False  # a path names the hook's own interpreter or nothing
+    elif argv[0] not in {'python3', 'python'}:
         return False
     rest = argv[1:]
     while rest and rest[0] in {'-I', '-B', '-u'}:
@@ -250,7 +272,6 @@ def own_lease_command(argv, script, cwd):
         return False
 
 
-VARIABLE = re.compile(r'\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))')
 
 
 def shell_expanded(word):

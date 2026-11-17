@@ -182,12 +182,18 @@ class AfkCheckHookTest(unittest.TestCase):
         self.start()
         self.assertEqual(self.hook(padded), parked('unsafe'))
 
-    def test_an_unset_variable_expands_to_nothing_as_in_the_shell(self):
+    def test_a_variable_other_than_plain_home_is_not_read(self):
         self.start()
-        for command in ('gh au${FNL_TEST_UNSET}th token', 'cat ~/.netrc$FNL_TEST_UNSET'):
+        for command in ('gh au${FNL_TEST_UNSET}th token', 'cat ~/.netrc$FNL_TEST_UNSET', 'print${FNL_TEST_UNSET}env',
+                        'cat ~/.net"$NOPE"rc', "gh 'au'$NOPE'th' token", 'gh $SHELL:t:s/zsh/auth/ token',
+                        'cat $HOME/.net$NOPE[1]rc', 'X=auth; gh $X token', 'printf -v x auth; gh $x token',
+                        'cat ${HOME}rc', 'cat "$HOME"rc', 'cat $HOME[1]', 'cat $HOME:t'):
             with self.subTest(command=command):
-                self.assertEqual(self.hook(command), parked('floor'))
-        self.assertEqual(self.hook('print${FNL_TEST_UNSET}env'), denial(PARSE))  # an expansion in a program name
+                self.assertEqual(self.hook(command), denial(PARSE))
+        # Plain `$HOME` and `${HOME}` stay readable and are still expanded for the floor.
+        self.assertEqual(self.hook('cat $HOME/.netrc'), parked('floor'))
+        self.assertEqual(self.hook('cat "${HOME}"/.netrc'), parked('floor'))
+        self.assertIsNone(self.hook('ls $HOME'))
 
     def test_the_lease_command_exemption_needs_a_plain_interpreter(self):
         self.start()
@@ -199,6 +205,8 @@ class AfkCheckHookTest(unittest.TestCase):
         spec.loader.exec_module(module)
         self.assertTrue(module.own_lease_command(['python3', script, 'effective'], script, str(self.repo)))
         self.assertFalse(module.own_lease_command(['./python3', script, 'effective'], script, str(self.repo)))
+        self.assertFalse(module.own_lease_command([str(self.repo / 'python3'), script, 'effective'], script, str(self.repo)))
+        self.assertTrue(module.own_lease_command([sys.executable, script, 'effective'], script, str(self.repo)))
         relative = os.path.relpath(script, self.repo)
         self.assertTrue(module.own_lease_command(['python3', relative, 'effective'], script, str(self.repo)))
         (self.repo / 'sub').mkdir()
