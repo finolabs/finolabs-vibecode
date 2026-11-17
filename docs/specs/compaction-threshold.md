@@ -56,7 +56,8 @@ when occupied. A collision after preview refuses; preview again, never overwrite
 Write with a same-folder temporary file, fsync and atomic replace. No unrelated
 file is written; success removes the preview. I/O failure across several targets
 can leave earlier targets applied; report the refusal and inspect before retrying.
-Claude requires a JSON object; set/remove only `autoCompactWindow`, preserve
+Claude requires a JSON object; set/remove only `autoCompactWindow` (and, with
+`--clear-model-overrides`, the same key inside each `modelSettings` entry), preserve
 other keys and ordering, use 2-space indent and a trailing newline.
 Codex replaces/removes the integer top-level key line, or inserts before the
 first table (at end if none), preserving other bytes; validate with `tomllib`,
@@ -65,3 +66,13 @@ or report the skipped parse check when unavailable, refusing ambiguous key forms
 Refusals exit nonzero with one content-free line. The host enforces the threshold;
 asking remains advisory. Tests cover previews, writes, backups, removals,
 byte/order preservation, environment warnings and refusal boundaries.
+
+## Session kind (owner decisions, 17/11/2026)
+
+Input from a coordinator session at the owner's request, settled with the owner on 17/11/2026.
+
+- Settings cannot tell a coordinator from a task session: both run in the same checkout and read the same files. The saved value serves task sessions (the owner runs 700000 at user scope); a coordinator gets its own value at launch (the owner uses 500000).
+- The launch line is `CLAUDE_CODE_AUTO_COMPACT_WINDOW=<tokens> claude`, not `--autocompact <tokens>`. Checked on Claude Code 2.1.325 (17/11/2026) with a `SessionStart` probe hook and `/context`: both forms set the host's window to 500000, but only the variable reaches the hook's environment; with the flag the hook saw nothing, so `compact_nudge.py` would keep the settings value (700000), print at 560000 and miss the compaction at 500000. Setup shows the line and never writes the variable or a shell profile. The desktop app's new sessions take neither form.
+- A hook that recognizes a coordinator and warns when its threshold is above the coordinator value is dropped: no hook can read the flag, and no reliable role signal exists. With the launch line, the nudge already uses the coordinator's value. The release notes name the limit.
+- A per-model `modelSettings.<model>.autoCompactWindow` overrides the top-level value, so a save could do nothing for that model. The preview prints how many entries carry one (never a model name or value: a non-integer value may hold any text) and `--clear-model-overrides` removes the key from each entry in the same digest-bound write; the flag is part of the stored plan and digest. Codex refuses the flag.
+- Setup and help say the threshold is the point where the host compacts, not the model's context window.

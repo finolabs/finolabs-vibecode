@@ -14,5 +14,6 @@ Typed by the user, or loaded by the agent when the task matches. `session-hygien
 - To rename a session yourself: in the Claude Code desktop app use the app's title control (or ask the agent, which uses its session-title tool); in the Claude Code CLI type `/rename <title>`; in Codex type `/rename`; Antigravity has no session titles.
 - When the agent asks you to compact, it gives the command ready to copy: `/compact <focus>` on Claude Code, a bare `/compact` on Codex, `/new` or `/fork` with the handover on Antigravity.
 - About 60% context is a point to consider a boundary, not the host's compaction threshold.
+- Open a coordinator session on Claude Code with its own threshold: `CLAUDE_CODE_AUTO_COMPACT_WINDOW=500000 claude`. The reminder to save a handover before compaction sees this variable but not the `--autocompact` flag.
 - A wholly new task starts in a fresh, correctly named session with a short handover.
 - Notes, briefs and logs go in `.finolabs/` at the main checkout's root, kept out of git; temporary folders are wiped on restart.

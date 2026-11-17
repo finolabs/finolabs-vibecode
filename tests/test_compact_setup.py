@@ -293,6 +293,36 @@ class CompactSetupTest(unittest.TestCase):
                     expected["autoCompactWindow"] = int(tokens[1])
                 self.assertEqual(json.loads(self.target.read_bytes()), expected)
 
+    def test_claude_clear_model_overrides_removes_only_the_per_model_window(self):
+        models = {"other-model": {"other": True},
+                  "private-model": {"autoCompactWindow": "private-value", "other": True},
+                  "another-model": {"autoCompactWindow": 987654}}
+        for tokens in (("--tokens", "150000"), ("--tokens", "200000"), ("--off",)):
+            with self.subTest(tokens=tokens):
+                self.target.write_text(json.dumps({"autoCompactWindow": 200000, "modelSettings": models}))
+                code, out, err = self.run_cli("preview", "--host", "claude", *tokens, "--clear-model-overrides")
+                self.assertEqual(code, 0, err)
+                self.assertIn("Per-model autoCompactWindow: removed from 2 model setting(s)", out)
+                self.assertNotIn("Warning: modelSettings", out)
+                applied = self.apply(out.split("Digest: ")[1].splitlines()[0])
+                for output in (out, applied):
+                    self.assertNotIn("private-model", output)
+                    self.assertNotIn("private-value", output)
+                    self.assertNotIn("987654", output)
+                expected = {"modelSettings": {"other-model": {"other": True}, "private-model": {"other": True},
+                                              "another-model": {}}}
+                if tokens[0] == "--tokens":
+                    expected["autoCompactWindow"] = int(tokens[1])
+                self.assertEqual(json.loads(self.target.read_bytes()), expected)
+        # Without overrides the flag changes nothing; without the flag the preview says how to clear them.
+        self.target.write_text(json.dumps({"autoCompactWindow": 150000}))
+        code, out, err = self.run_cli("preview", "--host", "claude", "--tokens", "150000", "--clear-model-overrides")
+        self.assertIn("No difference.", out)
+        self.target.write_text(json.dumps({"modelSettings": models}))
+        code, out, err = self.run_cli("preview", "--host", "claude", "--tokens", "150000")
+        self.assertIn("2 model setting(s); preview again with --clear-model-overrides", out)
+        self.refuse("preview", "--host", "codex", "--tokens", "150000", "--clear-model-overrides")
+
     def test_claude_preview_warns_when_auto_compaction_is_off_anywhere(self):
         for label, path in (("user", self.target), ("project", self.repo / ".claude/settings.json"),
                             ("local", self.repo / ".claude/settings.local.json"), ("managed", self.managed)):

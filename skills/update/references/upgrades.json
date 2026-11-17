@@ -478,6 +478,17 @@
           "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; the session-start hook changed."
         }
       ]
+    },
+    {
+      "version": "0.3.3",
+      "items": [
+        {
+          "id": "0.3.3/coordinator-threshold",
+          "kind": "setup",
+          "text": "Claude Code: open a coordinator with CLAUDE_CODE_AUTO_COMPACT_WINDOW=<tokens> claude (hooks miss --autocompact); setup can remove per-model values that override your limit.",
+          "setup": "/setup add compaction"
+        }
+      ]
     }
   ]
 }
