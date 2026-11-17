@@ -1,6 +1,6 @@
 # Compaction nudge: tell the agent before the host compacts
 
-Status: accepted; rule recorded as the eighth scoped exception in `CLAUDE.md` (owner decision 2026-11-12, Codex clause 2026-11-15); code landed for 0.2.5, the Codex hook for 0.3.1 (`--host codex`) (`scripts/compact_nudge.py`, `tests/test_compact_nudge.py`; `precompact.py` reworded as the "During" row says).
+Status: accepted; rule recorded as the eighth scoped exception in `CLAUDE.md` (owner decision 2026-11-12, Codex clause 2026-11-15, per-model clause 2026-11-18); code landed for 0.2.5, the Codex hook for 0.3.1 (`--host codex`) (`scripts/compact_nudge.py`, `tests/test_compact_nudge.py`; `precompact.py` reworded as the "During" row says).
 
 ## Why
 
@@ -28,6 +28,15 @@ A long session reaches the host's compaction threshold with no handover saved, s
 - Mark: one integer, written atomically with mode 0600 in `<data root>/state/compaction-nudge/<sha256(session id)[:16]>`, at most 200 files, oldest removed first. The mark is written before printing; if it cannot be written, print nothing.
 - Failure: any error, a missing or unsafe file, an unparsable count or an unresolved threshold prints nothing and exits 0. `FNL_COMPACT_NUDGE=off` disables it.
 - Not covered: Antigravity (keeps the opt-in compaction stop). Codex: section "Codex" below.
+
+## Per-model threshold (Claude Code)
+
+Owner decision 2026-11-18: follow Claude Code's own per-model threshold. `/autocompact <tokens>` saves `modelSettings.<model>.autoCompactWindow` in the user's `settings.json` (checked on 2.1.325 in a throwaway `CLAUDE_CONFIG_DIR`: after `/autocompact 500000` on Opus 5.5, `/context` showed 500k for Opus and the 700k top-level value for Sonnet), so a value set "for this session" applies to every later session on that model, and the nudge, reading only the top-level key, printed too late.
+
+- Model id: hook input carries none on 2.1.325 (`SessionStart` and `UserPromptSubmit` keys were checked with a probe hook), so the nudge takes `message.model` from the same latest assistant entry that gives the usage counts, only when it fully matches `[a-z0-9][a-z0-9.\[\]-]{0,63}`; it is compared in memory and never stored, logged, printed or sent. No assistant entry yet, or no valid id, means no per-model lookup.
+- Precedence, measured with `/context` on 2.1.325: `CLAUDE_CODE_AUTO_COMPACT_WINDOW` wins over everything; otherwise the files are taken in the order managed, local, project, user, and the first file holding a value that applies wins; within one file the per-model value for the session's model wins over its top-level `autoCompactWindow`. (A local top-level 600000 beat a user per-model 500000; a local per-model 300000 for Sonnet applied to Sonnet only, and Opus then fell through to the user per-model 500000.)
+- Setup: `compact_setup.py preview --model <id>` writes `modelSettings.<id>.autoCompactWindow` instead of the top-level key, after the same digest-bound approval; `--clear-model-overrides` stays. The preview names the models that carry their own value when each name matches the model id pattern, and counts the rest.
+- Unverified: whether a model id with a context-size suffix (such as `[1m]`) is the key Claude Code uses; a mismatch makes the nudge fall back to the top-level value.
 
 ## Codex
 
