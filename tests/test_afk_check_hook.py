@@ -160,7 +160,7 @@ class AfkCheckHookTest(unittest.TestCase):
                         "printf x|sh", 'command eval x', r'find . -exec /usr/bin/printen? \;',
                         r"find . -exec sh -c 'printenv' \;", 'setopt extendedglob; cat ~/.ne^Q', 'set -o extendedglob',
                         'set -oextendedglob', 'builtin eval x', 'nocorrect ls', 'case x in x) ls;; esac',
-                        'function f { ls; }', 'hash -p /bin/ls p', 'command -p ls', 'time -p ls', 'sudo -n ls',
+                        'function f { ls; }', 'hash -p /bin/ls p', "trap 'ls' EXIT", 'command -p ls', 'time -p ls', 'sudo -n ls',
                         r'find . -exec timeout 5 sh -c x \;'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), denial(PARSE))
@@ -172,7 +172,8 @@ class AfkCheckHookTest(unittest.TestCase):
 
     def test_a_credential_command_name_anywhere_is_the_floor(self):
         self.start()
-        for command in ('env -i printenv', 'xargs printenv', r'find . -exec env printenv \;', 'nice printenv'):
+        for command in ('caffeinate -s gh auth token', 'caffeinate -t 5 gh auth token', 'caffeinate -s docker login',
+                        'env -i printenv', 'xargs printenv', r'find . -exec env printenv \;', 'nice printenv'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), parked('floor'))
 

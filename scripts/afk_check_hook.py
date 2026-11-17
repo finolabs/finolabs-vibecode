@@ -120,7 +120,8 @@ def unreadable(command):
 
 OPTION_COMMANDS = {'setopt', 'unsetopt', 'shopt', 'emulate'}
 # Words a shell reads as code or as a lookup the hook cannot follow: never judged, always the split message.
-OPAQUE_WORDS = {'builtin', 'nocorrect', 'hash', 'alias', 'function', 'case', 'coproc', 'enable', 'unalias'}
+OPAQUE_WORDS = {'builtin', 'nocorrect', 'hash', 'alias', 'function', 'case', 'coproc', 'enable', 'unalias', 'trap',
+                'watch', 'parallel'}
 FLAGGED_WRAPPERS = {'command', 'time', 'sudo', 'doas'}
 GLOB_OPTIONS = ('glob', 'magic', 'equals', 'brace', 'rcexpand', 'wordsplit')
 EXEC_FLAGS = {'-exec', '-execdir', '-ok', '-okdir'}
@@ -166,11 +167,19 @@ def reparsed(argv, afk):
 
 def floor_words(argv, paths, afk):
     """True when any word that is not a commit or pull request text value, or any expanded path, names a credential
-    command that is a floor in every use (`printenv`, `security`, ...), wherever it stands: a wrapper or its flags
-    cannot hide it."""
+    command that is a floor in every use (`printenv`, `security`, ...), or a credential command with subcommands is
+    followed anywhere by one of them (`gh ... auth`), wherever it stands: a wrapper or its flags cannot hide it."""
     names = {name for name, subs in afk.CREDENTIAL_COMMANDS.items() if subs is None}
     stripped, _texts = afk.open_texts(argv)
-    return any(isinstance(w, str) and os.path.basename(w) in names for w in list(stripped) + list(paths))
+    words = [w for w in stripped if isinstance(w, str)]
+    if any(os.path.basename(w) in names for w in words + [p for p in paths if isinstance(p, str)]):
+        return True
+    # A credential command with subcommands floors when one of them follows it anywhere, so no wrapper flag hides it.
+    for index, word in enumerate(words):
+        subs = afk.CREDENTIAL_COMMANDS.get(os.path.basename(word))
+        if subs and any(w in subs for w in words[index + 1:]):
+            return True
+    return False
 
 
 LEASE_COMMANDS = {'stop', 'log', 'review', 'effective', 'rules', 'check', 'packet-check'}
