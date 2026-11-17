@@ -1,5 +1,5 @@
 {
-  "description": "Offer the configured coding reminder at session start, nudge for proof after an unverified commit, and record usage metadata when the user has consented",
+  "description": "Offer the configured coding reminder at session start, and record usage metadata when the user has consented",
   "hooks": {
     "SessionStart": [
       {

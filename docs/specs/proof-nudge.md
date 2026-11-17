@@ -1,6 +1,6 @@
 # Proof nudge: ask for proof when a session committed an unverified head
 
-Status: implemented for 0.3.2 (owner decision 2026-11-17, pack review row A2); `scripts/proof_nudge.py`, `tests/test_proof_nudge.py`; live delivery on Claude Code unverified.
+Status: implemented; for 0.3.2 (owner decision 2026-11-17, pack review row A2); `scripts/proof_nudge.py`, `tests/test_proof_nudge.py`; live delivery on Claude Code unverified.
 
 ## Why
 

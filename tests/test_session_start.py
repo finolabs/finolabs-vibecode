@@ -270,6 +270,10 @@ class SessionStartTest(SyntheticStateTest):
                 import json
                 manifest = json.loads(raw)
                 self.assertEqual(len(manifest["hooks"].pop("StopFailure")), 1)
+                # The proof nudge (0.3.2) adds only its own SessionStart and Stop groups, last in each list.
+                for event in ("SessionStart", "Stop"):
+                    nudge = manifest["hooks"][event].pop()
+                    self.assertIn("proof_nudge.py", nudge["hooks"][0]["command"])
                 # The away question gate adds only its own PreToolUse group, last in that list.
                 gate = manifest["hooks"]["PreToolUse"].pop()
                 self.assertEqual(gate["matcher"], "AskUserQuestion")
