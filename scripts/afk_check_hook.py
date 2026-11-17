@@ -10,6 +10,7 @@ command text is never stored, logged or sent: only what a `check` call keeps is 
 """
 
 import os
+import re
 import signal
 import sys
 
@@ -33,13 +34,13 @@ def deny(reason):
 def unquoted_newlines(command):
     """The command with every newline outside quotes and comments turned into a `;` separator, so each line is judged
     as its own command (shlex alone reads a newline as a space). Quotes are tracked as bash tracks them: a `#` that
-    starts a word comments to the end of the line, a backslash-newline joins lines, and a `$'...'` string holding a
-    backslash is refused. Raises ValueError on an unbalanced quote or a form it cannot read the way bash does."""
+    starts a word comments to the end of the line, a backslash-newline outside single quotes joins lines, and a
+    `$'...'` string holding a backslash is refused. Raises ValueError on an unbalanced quote or a form it cannot read the way bash does."""
     out, single, double, i, n = [], False, False, 0, len(command)
     while i < n:
         char = command[i]
         if char == '\\' and not single:
-            if i + 1 < n and command[i + 1] == '\n' and not double:
+            if i + 1 < n and command[i + 1] == '\n':
                 i += 2  # line continuation: bash joins the two lines
                 continue
             out.append(command[i:i + 2])
@@ -74,11 +75,12 @@ def unquoted_newlines(command):
 
 LEASE_COMMANDS = {'stop', 'log', 'review', 'effective', 'rules', 'check', 'packet-check'}
 OPERATORS = {';', '&&', '||', '|', '&', '|&'}
+SAFE_ARGUMENT = re.compile(r'[A-Za-z0-9 ._,:=/@+%-]*')
 
 
 def own_lease_command(argv, script):
     """True for `python3 [-I] <this install's afk.py> <lease command> ...` with no operator after it and no argument
-    holding an expansion, a redirection or a newline."""
+    made of anything but letters, digits, spaces and `._,:=/@+%-`."""
     if not argv or os.path.basename(argv[0]) not in {'python3', 'python'}:
         return False
     rest = argv[1:]
@@ -86,8 +88,8 @@ def own_lease_command(argv, script):
         rest = rest[1:]
     if len(rest) < 2 or rest[1] not in LEASE_COMMANDS or any(t in OPERATORS for t in rest):
         return False
-    if any(c in word for word in rest for c in '$`<>\n'):
-        return False  # an expansion or a redirection is judged like any command
+    if not all(SAFE_ARGUMENT.fullmatch(word) for word in rest[1:]):
+        return False  # a word bash could expand, redirect or split is judged like any command
     try:
         return os.path.realpath(rest[0]) == os.path.realpath(script)
     except (OSError, ValueError):

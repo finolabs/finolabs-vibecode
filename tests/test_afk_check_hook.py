@@ -115,7 +115,9 @@ class AfkCheckHookTest(unittest.TestCase):
         env = {**self.env, 'HOME': str(self.home)}
         for command in (f'python3 -I {script} log --note "$(cat ~/.netrc)"',
                         f'python3 -I {script} log --note "`cat ~/.netrc`"',
-                        f'python3 -I {script} rules >~/.netrc'):
+                        f'python3 -I {script} rules >~/.netrc',
+                        f'python3 -I {script} log --note x;printenv',
+                        f'python3 -I {script} log --note x|cat ~/.netrc'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command, env=env), parked('floor'))
 
@@ -128,6 +130,11 @@ class AfkCheckHookTest(unittest.TestCase):
         self.assertEqual(self.hook("echo hi #'\ncat ~/.n?trc\n'", env=env), denial(PARSE))
         self.assertEqual(self.hook("echo $'\\'' \ncat ~/.n?trc\n'", env=env), denial(PARSE))
         self.assertIsNone(self.hook("echo $'plain' # a note"))
+        # A backslash-newline joins lines as bash does, inside double quotes too.
+        self.assertEqual(self.hook('cat ~/.ne\\\ntrc', env=env), parked('floor'))
+        self.assertEqual(self.hook('cat "$HOME/.ne\\\ntrc"', env=env), parked('floor'))
+        # An ANSI-C escape could hide a name or a path, so it is unreadable.
+        self.assertEqual(self.hook("$'\\x70rintenv'"), denial(PARSE))
 
     def test_a_bad_cwd_denies_once_the_lease_is_live(self):
         self.start()
