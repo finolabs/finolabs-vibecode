@@ -46,7 +46,7 @@ BREAKS = [
     ("skills/delegate/references/route-judgment.md", "`--route-by table`", "`--route-by tables`",
      "--route-by tables is not one of"),
     ("skills/delegate/references/host-template.md", "--max-turns <n>", "--max-turnz <n>",
-     "--max-turnz is not described in agents.md"),
+     "--max-turnz is not described in agents/claude-code.md"),
     ("skills/delegate/SKILL.md", '`checks` "Accepting someone else\'s work"', '`checks` "No such heading"',
      '`checks` has no section "No such heading"'),
     ("skills/status/SKILL.md", '`delegate` "Ledger"', "`delegate`'s \"Nope\"",
