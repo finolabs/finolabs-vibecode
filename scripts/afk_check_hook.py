@@ -300,8 +300,21 @@ def glued_operator(text, argv):
     lexer = shlex.shlex(text, posix=True, punctuation_chars=True)
     lexer.commenters = ''
     lexer.whitespace_split = True
-    split = [t for t in lexer if t in OPERATORS]
-    return len(split) != len([t for t in argv if t in OPERATORS])
+    return operators_in(list(lexer)) != operators_in(argv)
+
+
+PUNCTUATION = re.compile(r'[();<>|&]+')
+REDIRECT = re.compile(r'[0-9]*(?:&>>?|[<>]+[&|]?)')
+OPERATOR = re.compile(r'\|\||&&|\|&|;|\||&')
+
+
+def operators_in(tokens):
+    """The control operators inside every token made only of punctuation (`;(` holds `;`), redirects left out."""
+    found = []
+    for token in tokens:
+        if PUNCTUATION.fullmatch(token):
+            found.extend(OPERATOR.findall(REDIRECT.sub(' ', token)))
+    return sorted(found)
 
 
 def outside_allowlist(argv, afk):

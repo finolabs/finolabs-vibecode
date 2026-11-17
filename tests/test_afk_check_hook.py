@@ -217,7 +217,8 @@ class AfkCheckHookTest(unittest.TestCase):
                         'xargs az account get-access-token', 'xargs -0 -n 1 ls', "find ~ -name '.ne*c' -exec cat {} +",
                         "find ~ -name '.ne*c' | xargs cat", r'find . -exec env printenv \;', 'find . -name x -delete',
                         'fd netrc ~ -x cat', 'fd netrc ~ --exec-batch cat', 'git commit -m x;printenv',
-                        'git commit -m x;gh auth token', 'echo ok&&printenv', 'cat ~/**/.ne?rc'):
+                        'git commit -m x;gh auth token', 'echo ok&&printenv', 'cat ~/**/.ne?rc',
+                        'git commit -m x;(printenv)', 'git commit -m x;(gh auth token)', 'git commit -m x|(printenv)'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), denial(PARSE))
         # A glob past the match limit is never truncated.
@@ -228,6 +229,7 @@ class AfkCheckHookTest(unittest.TestCase):
         self.assertEqual(self.hook(f'cat {many}/f*'), denial(PARSE))
         # A quoted operator stays one word.
         self.assertIsNone(self.hook('git status -- "a;b"'))
+        self.assertIsNone(self.hook('git status 2>&1 | cat'))
         # A glob with no directory change, or anchored at `/` or `~`, is still expanded for the floor.
         self.assertIsNone(self.hook('cd src && ls /tmp/*.log'))
         self.assertIsNone(self.hook('ls *.py'))
