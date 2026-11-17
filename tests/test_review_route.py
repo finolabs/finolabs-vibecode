@@ -216,6 +216,15 @@ class RouteTest(unittest.TestCase):
         rows = route.route("zcode", host(present) + matrix(code="codex", security="claude"), [])
         self.assertEqual(rows, [("codex", "headless", "assigned"), ("claude", "agent", "assigned")])
 
+    def test_a_present_family_without_a_matrix_line_never_reviews(self):
+        # 17/11/2026: Antigravity left the matrix but stayed present, and took the reviews when Codex ran out.
+        text = host() + "## Assignment matrix\n\n- Consent: yes (2026-11-09)\n- Judge: host\n" \
+            "- claude: levels 1-5\n- codex: levels 1-4; roles code-review, security-review\n"
+        lines = ["Quota codex: rate-limit marker 2026-11-17T00:00:00Z; out of quota until 2999-01-01T00:00:00Z (advisory)"]
+        rows = route.route("claude", text, lines)
+        self.assertEqual([r[0] for r in rows], ["claude", "claude"])
+        self.assertTrue(all(r[2].startswith("same-family") for r in rows))
+
     def test_no_available_family_is_error(self):
         with self.assertRaises(ValueError):
             self.pick(host(()))

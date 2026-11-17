@@ -363,6 +363,11 @@ def route(author, text, quota_lines, *, lane=False, kinds=("code", "security"), 
     if matrix == "unset":
         raise ValueError("assignment matrix unset")
     present = config.present_families(text)
+    if matrix == "valid":
+        # A usable matrix names the helpers vibecode uses: a present family without a line there never reviews
+        # (an extra Claude Code command, `claude<suffix>`, is the claude family, as in `read_roles`).
+        listed = {agent if agent in config.FAMILIES else "claude" for agent in am.parse(text).agents}
+        present = present & listed
     if not present:
         raise ValueError("no present family")
     roles, posting = config.read_roles(text), config.read_posting(text)
