@@ -4,7 +4,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
-## [0.3.2] - 2026-11-16
+## [0.3.2] - 2026-11-17
 
 ### Added
 
@@ -25,6 +25,9 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - afk: the bare `export`, `set` and `env` exception of the credential floor applies only to a word cut out of a search pattern after a lone `|` or `&`; `find . -exec sh -c 'a;export' ';'` now answers `floor`. `merge_check.py` reads a lease as `strict` when its `## afk` section has a key `afk.py` does not read or an invalid guard value.
 
 - The afk mechanism and away decision diagrams say they show `strict` and that `open`, the default, runs every action except the credential floor and the default-branch guard (`git commit` and `git push` only), with an advisory third-party-instructions guard and no enforced review or `merge_check.py`; their PNG renderings and the README alt text are updated. The README, `help` map and pages, and the comparison page describe the modes, the guards, the overlay, the setup mode question and the helper picker.
+- Reviews route to ZCode (owner decision, 17/11/2026): `review_route.py` and `merge_check.py --independent` count ZCode as a review family, run headless in `--mode plan`; before, the router skipped it and an independent merge with a ZCode role failed closed.
+- The standing relay rule in `CLAUDE.md` and the relay line `/setup instructions` offers cover a security review while an away lease is live in `open` mode, or in `strict` mode with Merge yes (owner decision, 17/11/2026); before, `open` never matched the "Merge yes" wording.
+- afk: a bare `export` or `set` cut out of a search pattern after a lone `|` or `&` now floors like a bare `env`, so `rg 'import|export'` floors (its argv is the same as an unquoted `rg import|export`, which prints the environment); write `rg -e import -e export`.
 
 ### Removed
 
@@ -37,6 +40,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - The afk overlay writer's `mode()` refuses a `## afk` key or value that `afk.py settings()` refuses (an unknown key, a closed choice such as `- Merge: maybe`, a limit, the apps or a list), so it fails closed instead of reading such a section as `open`.
 - `merge_check.py` under an `open` lease folds case, spacing and compatibility forms (NFKC) before it compares a marker's `Reviewer:` name with the configured role, so `Reviewer: Claude` or `Reviewer:  claude` no longer counts as the role's review; the check that a same-family fallback marker needs `--fallback-family` now covers every family, `zcode` included.
 - Questions follow the user's language: the rule injected at session start says to ask in the language the user is using and to translate every question, description and choice label a skill quotes, keeping command names, flags, paths and skill names unchanged; `setup`'s interview rules open with the same point, and `afk` and `review-gate` carry the language line. Before, setup and away questions copied in English reached users who write another language.
+- afk: `check` answers Tier 1 for an allowed `gh pr merge` that passes `--author-email` (or `-A`), as this repository's commit rules ask; in `open` it answered `unsafe`, since the merge pin's grammar did not know the option and raised, and in `strict` it answered `unknown`. A pinned merge in `open` with an option the pin cannot read now records no pin instead of failing.
+- `merge_check.py` under an `open` lease refuses a marker whose `Reviewer:` name holds a letter outside ASCII (a Cyrillic look-alike such as `Сlaude`), which before counted as the configured role's review.
 
 ## [0.3.1] - 2026-11-15
 
