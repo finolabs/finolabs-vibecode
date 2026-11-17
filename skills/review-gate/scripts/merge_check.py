@@ -69,6 +69,11 @@ model, and the latest marker of each model must be APPROVE. The flag runs these 
 whatever routing would pick now. Without the flag, a counted marker carrying a
 fallback reviewer line blocks. Anything unknown refuses.
 
+Outside a lease the same conditions apply, except the router trigger, only when the canonical host config's
+`## Reviews` section records `- Same-family security fallback: yes (YYYY-MM-DD)` (set in setup; owner decision
+17/11/2026, `review-gate` "Who reviews"); the ok line then starts with "outside a lease, by the recorded same-family
+security fallback". Without that line, or with `no`, outside a lease the flag refuses as before.
+
 Under a lease whose effective mode for --repo is `open` (docs/specs/afk-autonomy.md D), the fallback needs only the
 live lease, <family> as the author's family, and for each kind either a counted marker whose second line starts with
 the exact fallback reviewer line or, inside this branch only, a marker without any fallback line whose kind's
@@ -478,18 +483,21 @@ def out_families(lines, current=None, configured=None):
 def fallback(pr, family, families, files, verdicts_found, markers=None, repo=None):
     """(granted, detail) for the same-family fallback; every unknown refuses and the detail never echoes text.
     `markers` is `head_markers` of the pull request; without it a changed enforcer or instruction file refuses.
-    Under a lease whose effective mode for `repo` is `open` (`lease_mode`), only `open_fallback` applies."""
+    Under a lease whose effective mode for `repo` is `open` (`lease_mode`), only `open_fallback` applies. Outside a
+    lease it applies only with the recorded same-family security fallback, without the router-trigger condition."""
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     try:
         import away_lease
         import quota_probe
         import review_config
-        if away_lease.live_lease(time.time()) is None:
+        leased = away_lease.live_lease(time.time()) is not None
+        # Outside a lease only the recorded `## Reviews` choice opens the strict branch (owner decision 17/11/2026).
+        if not leased and not review_config.security_fallback(review_config.host_text()):
             return False, "no live away lease"
         if not isinstance(families, dict) or families.get("author") != family:
             return False, f"{family} is not the pull request author's family"
-        if lease_mode(repo) == "open":
+        if leased and lease_mode(repo) == "open":
             return open_fallback(family, verdicts_found)
         present = set(review_config.present_families(review_config.host_text()))
         if family not in present:
@@ -500,7 +508,7 @@ def fallback(pr, family, families, files, verdicts_found, markers=None, repo=Non
             return False, f"no evidence that {', '.join(reachable)} is out"
         marked, detail = router_marker(pr.get("body"))
         trigger = detail.rsplit("trigger=", 1)[-1] if marked else None
-        if trigger is None or trigger in FALLBACK_TRIGGERS:
+        if leased and (trigger is None or trigger in FALLBACK_TRIGGERS):
             return False, "router trigger is missing or needs the user"
         listed = files()
         if not isinstance(listed, list) or not listed or any(
@@ -515,7 +523,8 @@ def fallback(pr, family, families, files, verdicts_found, markers=None, repo=Non
             second = found[3] if found and len(found) > 3 else ""
             if not (second == expected or second.startswith(expected + " ")):
                 return False, f"{kind} marker lacks the fallback reviewer line"
-        reachable = f"no other family reachable ({', '.join(sorted(others)) or 'none present'})"
+        reachable = (("" if leased else "outside a lease, by the recorded same-family security fallback: ")
+                     + f"no other family reachable ({', '.join(sorted(others)) or 'none present'})")
         if sensitive:
             # An enforcer script or instruction file changed: two different models of the family must approve each
             # kind at the head (owner decision 15/11/2026, docs/specs/afk-per-project.md D).
@@ -885,7 +894,7 @@ def main(argv=None):
     parser.add_argument("--lane", action="store_true", help="only report whether the low-risk lane applies")
     parser.add_argument("--independent", action="store_true", help="require both reviewing families to differ from the author")
     parser.add_argument("--fallback-family", choices=("claude", "codex", "antigravity"),
-                        help="with --independent, during an away lease: accept the author's own family when no other is reachable")
+                        help="with --independent, during an away lease or with the recorded same-family security fallback: accept the author's own family when no other is reachable")
     parser.add_argument("--ci-context", metavar="NAME",
                         help="run as the hosted status NAME: ignore that status, accept merge state BLOCKED, exit 3 while checks run")
     args = parser.parse_args(argv)

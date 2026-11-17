@@ -49,6 +49,12 @@ Private HOME is an open owner decision and is not offered or created in this pac
 - antigravity: unverified (checked 2026-11-07)
 - zcode: unverified (checked 2026-11-07)
 
+## Reviews
+
+- Same-family security fallback: no (<YYYY-MM-DD>)
+
+Written only by `/setup add roles` after its own question and preview. `yes (<YYYY-MM-DD>)` lets `merge_check.py --independent --fallback-family <family>` count same-family reviews outside an away lease when every other present family is positively out of quota, with the exact fallback reviewer line on each marker (`review-gate` "Who reviews"); `no`, a missing or malformed line, or a future date counts as no.
+
 ## Quota probe
 
 - Quota probe: off
