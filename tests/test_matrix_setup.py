@@ -442,6 +442,87 @@ class MatrixSetupTest(unittest.TestCase):
         self.host.write_bytes(PREFIX + LEGACY + b'x\r\n')
         self.assertEqual(self.cli('apply', '--digest', digest, '--consent', 'yes')[0], 1)
 
+    def test_migrate_moves_route_judgment_consent_beside_an_existing_matrix(self):
+        matrix = b'## Assignment matrix\n- Consent: yes (2026-11-01)\n- Judge: host\n'
+        route = b'## Route judgment\n\n- Judge: typesafe-ai\n- Instruction check: on (17/11/2026) zqSECRETzq\n\n'
+        self.host.write_bytes(PREFIX + route + matrix)
+        out, digest = self.migrate()
+        self.assertIn('## Instruction check\n\n- Instruction check: on (17/11/2026)\n', out)
+        self.assertIn('the judge line is not read', out)
+        self.assertNotIn('dropped', out)
+        self.assertNotIn('zqSECRETzq', out)
+        self.assertNotIn(b'zqSECRETzq', self.plan.read_bytes())
+        before = self.host.read_bytes()
+        self.assertEqual(self.host.read_bytes(), PREFIX + route + matrix)
+        code, out, err = self.cli('apply', '--digest', digest)
+        self.assertEqual(code, 0, err)
+        raw = self.host.read_bytes()
+        self.assertTrue(raw.startswith(PREFIX))
+        self.assertNotIn(b'## Route judgment', raw)
+        self.assertNotIn(b'typesafe-ai', raw)
+        self.assertIn(matrix, raw)
+        self.assertTrue(raw.endswith(b'## Instruction check\r\n\r\n- Instruction check: on (17/11/2026)\r\n'))
+        self.assertEqual(self.backups()[0].read_bytes(), before)
+        checkup = load('checkup_route_test', ROOT / 'skills/setup/scripts/checkup.py')
+        self.assertTrue(checkup.instruction_consent(raw.decode()))
+        self.assertEqual(self.cli('migrate')[0], 1)
+
+    def test_migrate_moves_route_judgment_with_the_legacy_sections_in_one_write(self):
+        self.host.write_bytes(PREFIX + LEGACY + b'## Route judgment\r\n- Instruction check: off\r\n')
+        out, digest = self.migrate()
+        self.assertIn('- Instruction check: off', out)
+        self.assertIn('Route judgment section is removed', out)
+        self.assertEqual(self.cli('apply', '--digest', digest, '--consent', 'yes')[0], 0)
+        raw = self.host.read_bytes()
+        for heading in (b'## Agent roles', b'## Agent levels', b'## Route judgment'):
+            self.assertNotIn(heading, raw)
+        self.assertIn(b'## Assignment matrix', raw)
+        self.assertIn(b'## Instruction check\r\n\r\n- Instruction check: off\r\n', raw)
+
+    def test_migrate_never_carries_a_commented_out_consent(self):
+        # Review of PR 337: a comment that opens mid-line hid the consent from checkup; migrate must not revive it.
+        for case in (b'## Route judgment\n- Judge: host <!-- old\n- Instruction check: on (01/11/2026)\n-->\n',
+                     b'## Notes\n<!-- retired\n## Route judgment\n- Instruction check: on (01/11/2026)\n## Later\n-->\n'):
+            with self.subTest(case=case):
+                self.host.write_bytes(PREFIX + case)
+                out, digest = self.migrate()
+                self.assertIn('dropped: Route judgment line', out)
+                self.assertEqual(self.cli('apply', '--digest', digest, '--ack-dropped')[0], 0)
+                self.assertNotIn(b'Instruction check: on', self.host.read_bytes())
+
+    def test_migrate_route_judgment_drops_unclear_lines_and_needs_ack(self):
+        cases = (b'## Route judgment\n- Instruction check: on\n- Instruction check: off\n',
+                 b'## Route judgment\n```\n- Instruction check: on\n```\n',
+                 b'## Route judgment\n- note: zqSECRETzq\n- Instruction check: on\n',
+                 b'## Route judgment\n- Instruction check: on\n## Instruction check\n- Instruction check: off\n')
+        for case in cases:
+            with self.subTest(case=case):
+                self.host.write_bytes(PREFIX + case)
+                out, digest = self.migrate()
+                self.assertIn('dropped: Route judgment line', out)
+                self.assertNotIn('zqSECRETzq', out)
+                before = self.host.read_bytes()
+                self.assertEqual(self.cli('apply', '--digest', digest)[0], 3)
+                self.assertEqual(self.host.read_bytes(), before)
+                self.assertEqual(self.cli('apply', '--digest', digest, '--ack-dropped')[0], 0)
+                raw = self.host.read_bytes()
+                self.assertNotIn(b'## Route judgment', raw)
+                self.assertNotIn(b'zqSECRETzq', raw)
+                self.assertLessEqual(raw.count(b'## Instruction check'), 1)
+                for backup in self.backups():
+                    backup.unlink()
+
+    def test_route_plan_cannot_be_tampered_into_a_matrix_write(self):
+        self.host.write_bytes(PREFIX + b'## Route judgment\n- Instruction check: on\n')
+        self.migrate()
+        saved = json.loads(self.plan.read_text())
+        writer = load('matrix_setup_tamper', SCRIPT)
+        for change in ({'instruction': '- Instruction check: on; rm -rf'}, {'route': False}, {'kind': 'set'}):
+            plan = dict(saved['plan'], **change)
+            self.plan.write_text(json.dumps({'plan': plan, 'digest': writer.cs.digest(plan)}))
+            self.assertEqual(self.cli('apply', '--digest', writer.cs.digest(plan))[0], 1)
+        self.assertEqual(self.host.read_bytes(), PREFIX + b'## Route judgment\n- Instruction check: on\n')
+
     # candidates and isolation
 
     def test_candidates_lists_names_only_and_runs_nothing(self):

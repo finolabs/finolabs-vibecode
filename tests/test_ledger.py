@@ -1138,7 +1138,10 @@ class StaleLedgerTest(unittest.TestCase):
         self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
         sys.path.insert(0, str(LEDGER.parents[3] / "scripts"))
         import session_start
-        self.assertEqual(session_start.open_dispatches(), "1")
+        demo = Path(self.dir.name).resolve() / "demo"
+        (demo / ".git").mkdir(parents=True)
+        with mock.patch("os.getcwd", return_value=str(demo)):
+            self.assertEqual(session_start.open_dispatches(), "1 open in this project")
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.ledger.cmd_open(self.ledger.build_parser().parse_args(["open"]))
@@ -1430,6 +1433,23 @@ class LedgerReviewFixesTest(unittest.TestCase):
         self.assertEqual(len(self.records()), 1)
         self.run_ledger("finish", ident, "--outcome", "rejected", "--rework-rounds", "3", "--reason", "Synthetic loop")
         self.assertEqual(self.records()[-1]["rework_rounds"], 3)
+
+    def test_rework_limit_comes_from_the_recorded_setting(self):
+        host = self.path.parent / "host.md"
+        for text, limit in (("## Reviews\n\n- Rework limit: 3\n", 3), ("## Reviews\n- Rework limit: 4\n", 4),
+                            ("## Reviews\n- Rework limit: 5\n", 2), ("## Reviews\n- Rework limit: 1\n", 2),
+                            ("## Reviews\n- Rework limit: 3\n- Rework limit: 4\n", 2),
+                            ("## Other\n- Rework limit: 4\n", 2), ("## Reviews\n```\n- Rework limit: 4\n```\n", 2),
+                            ("## Reviews\n- Rework limit: three\n", 2), ("", 2)):
+            with self.subTest(text=text):
+                host.write_text(text)
+                ident = self.run_ledger(*START).stdout.strip()
+                over = self.run_ledger("finish", ident, "--outcome", "rejected", "--rework-rounds", str(limit + 1),
+                                       check=False)
+                self.assertEqual(over.returncode, 1)
+                self.assertIn(f"--rework-rounds above {limit} needs a --reason", over.stderr)
+                self.run_ledger("finish", ident, "--outcome", "rejected", "--rework-rounds", str(limit))
+                self.assertEqual(self.records()[-1]["rework_rounds"], limit)
 
     def test_accepted_with_failed_tests_is_refused(self):
         ident = self.run_ledger(*START).stdout.strip()

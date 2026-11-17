@@ -1,6 +1,6 @@
 ---
 name: coding-router
-description: Route coding work in a repository before the first substantive change: depth (MIN, NORMAL, DEEP), review and security gates, proof, and the workflow path (Spec Kit, another workflow skill pack, or none). Use when starting, resuming or redirecting an implementation, bug fix, refactor or feature, when the user wants to brainstorm, discuss, ideate or shape an idea or design for code before building it, when a Spec Kit story might skip speckit-tasks, or when fixes keep failing on the same invariant.
+description: Route coding work by depth (MIN, NORMAL, DEEP), gates, proof and workflow (Spec Kit, another pack, none) before substantive edits. Use when starting, resuming or redirecting a feature, fix or refactor, brainstorming code before building, before a Spec Kit story skips speckit-tasks, or when fixes fail on one invariant.
 ---
 
 # Coding router
@@ -15,7 +15,7 @@ Read the goal and acceptance criteria, the scoped instructions (`AGENTS.md`, `CL
 
 Keep a short receipt: source, task, workflow path, depth, gaps, evidence limits. A receipt is a record, not proof.
 
-Once the task is known, invoke `tidy` to name or rename the session ("Titles"), and again when the phase changes (planning to implementation to review). Advisory (agent judgment).
+Once the task is known, name or rename the session in the title format the session-start rules give (`tidy` "Titles" when they are not in context), and again when the phase changes (planning to implementation to review). Advisory (agent judgment).
 
 Done when the workflow path and the depth can be chosen without guessing.
 
@@ -34,7 +34,7 @@ A pack installed only for the user, with no instruction adopting it, supplies to
 
 A request that is only a review, with no change to make, goes to `review-gate`, plus `security-review-gate` when its triggers hit, on every path.
 
-When the host config names a judge, read [references/activity-selection.md](references/activity-selection.md) before choosing the depth and the next activity, and take those judgments from it. Without a judge, decide them yourself by observed fit and the adapter, or ask the user the one question that decides it.
+Decide the depth and the next activity yourself by observed fit and the adapter, or ask the user the one question that decides it (advisory, agent judgment).
 
 Done when you can name the workflow path, the phase and the next activity.
 
@@ -44,7 +44,7 @@ Done when you can name the workflow path, the phase and the next activity.
 - **NORMAL**: understood behavior and integration.
 - **DEEP**: consequential uncertainty, unknown consumers, sensitive boundaries or irreversible effects. Also: logic that combines several calculations whose errors compound, a prediction or forecast, and user input that is itself ambiguous.
 
-With a judge configured, ask it for the depth as [references/activity-selection.md](references/activity-selection.md) "Depth" says; the triggers here still raise it. Depth sets effort inside the chosen path and decides its optional ceremony, whatever a workflow skill's own trigger says; in a Spec Kit repository it bypasses nothing except through the Spec Kit depth gate. Upgrade before dependent work. Downgrade only future ceremony when evidence allows, never acceptance, gates, findings or failure counters. File count alone does not set depth.
+Depth sets effort inside the chosen path and decides its optional ceremony, whatever a workflow skill's own trigger says; in a Spec Kit repository it bypasses nothing except through the Spec Kit depth gate. Upgrade before dependent work. Downgrade only future ceremony when evidence allows, never acceptance, gates, findings or failure counters. File count alone does not set depth.
 
 Record the receipt with `python3 -I <this skill's folder>/scripts/record.py router --depth <MIN|NORMAL|DEEP> --trigger <trigger>`. The command only prints the receipt; when the user has turned usage metrics on, the plugin's hook records it with the session. The trigger names what set the depth, one of `none`, `contract`, `security`, `privacy`, `permission`, `migration`, `dependency`, `uncertainty`, `consumers`, `irreversible`, `calculation`, `prediction`, `input`.
 

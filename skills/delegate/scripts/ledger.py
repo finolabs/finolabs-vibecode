@@ -289,15 +289,47 @@ def cmd_start(args):
 
 LOG_REFUSED = ("ledger: log refused: --log-path must name a regular file you own, not a link, directly inside "
                ".finolabs/logs of this checkout, of the --checkout checkout or of the main checkout")
-MAX_REWORK = 2  # the loop's limit; more rounds need a --reason
+MAX_REWORK = 2  # the loop's default limit; more rounds need a --reason
+REWORK_LIMIT = re.compile(r"- Rework limit: ([0-9]+)\s*")
+
+
+def rework_limit():
+    """`- Rework limit: <2-4>` under `## Reviews` of the canonical host config; the default when absent or invalid."""
+    try:
+        import review_config
+        text = review_config.host_text()
+        sections, active, fence = [], None, None
+        for line in text.splitlines():
+            mark = re.match(r"^\s*(`{3,}|~{3,})", line)
+            if mark:
+                if fence is None:
+                    fence = mark[1]
+                elif mark[1][0] == fence[0] and len(mark[1]) >= len(fence) and line.strip() == mark[1]:
+                    fence = None
+                continue
+            if fence is not None:
+                continue
+            if re.match(r"^#{1,2} ", line):
+                active = [] if line.strip() == "## Reviews" else None
+                if active is not None:
+                    sections.append(active)
+            elif active is not None and line.startswith("- Rework limit:"):
+                active.append(line)
+        if len(sections) != 1 or len(sections[0]) != 1:
+            return MAX_REWORK
+        match = REWORK_LIMIT.fullmatch(sections[0][0])
+        return int(match[1]) if match and 2 <= int(match[1]) <= 4 else MAX_REWORK
+    except Exception:
+        return MAX_REWORK
 
 
 def validate_finish(args):
     """Field checks that need no ledger read; each refusal writes nothing."""
     if args.rework_rounds < 0:
         sys.exit("ledger: --rework-rounds cannot be negative")
-    if args.rework_rounds > MAX_REWORK and args.reason is None:
-        sys.exit(f"ledger: --rework-rounds above {MAX_REWORK} needs a --reason")
+    limit = rework_limit()
+    if args.rework_rounds > limit and args.reason is None:
+        sys.exit(f"ledger: --rework-rounds above {limit} needs a --reason")
     if args.outcome == "accepted" and args.tests == "failed":
         sys.exit("ledger: an accepted run cannot have --tests failed; record rejected, or rerun the tests")
 

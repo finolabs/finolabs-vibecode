@@ -1,6 +1,6 @@
 ---
 name: open-source-review
-description: Review a repository's readiness to be published as open source and report findings with evidence. Use before making a repository public, before a first public release, when publishing a plugin or skill package to a marketplace, when asked whether a repository is safe or ready to open source, or when checking a public repository's settings (branch and tag protection, secret scanning, vulnerability reporting).
+description: Check a repository's open source readiness, with evidence. Use before going public or a first public release, when publishing a plugin or skill package to a marketplace, when asked if it is safe to publish, or to check a public repository's settings (branch and tag protection, secret scanning, vulnerability reporting).
 ---
 
 # Open source review

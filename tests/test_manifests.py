@@ -161,6 +161,16 @@ class ManifestTest(unittest.TestCase):
             if not (value.startswith('"') and value.endswith('"')):
                 self.assertNotIn(": ", value, name)
 
+    def test_model_invocable_skill_descriptions_stay_within_320_characters(self):
+        # Every model-invocable description is loaded in every session (pack review of 17/11/2026, item 6).
+        for path in sorted((ROOT / "skills").glob("*/SKILL.md")):
+            head = path.read_text().split("---", 2)[1]
+            if "disable-model-invocation: true" in head:
+                continue
+            line = next(l for l in head.splitlines() if l.startswith("description: "))
+            with self.subTest(skill=path.parent.name):
+                self.assertLessEqual(len(line[len("description: "):]), 320)
+
     def test_description_length_fits_the_catalog_standard(self):
         # The shared catalog (finolabs/plugins) lists 120-160 characters and repeats them exactly.
         n = len(self.docs[0]["description"])
