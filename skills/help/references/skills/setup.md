@@ -13,4 +13,5 @@ Typed by the user only.
 - `/setup check` is read-only: run it to see what is set up and what happens automatically.
 - `/setup add <feature>` opens one feature, for example `afk`, `checks` or `metrics`.
 - A plain sentence such as "install everything" never answers a consent question; each grant keeps its own question.
+- `/setup add delegation` asks which helpers to use as one multiple-choice question built from the scan, then one picker per role.
 - `/setup scan` refreshes which agents and models are present; `/setup instructions` drafts instruction files with approval per file.
