@@ -8,7 +8,10 @@ It deletes nothing: git does the removal, with its own checks, when the agent ru
 For each linked worktree (never the main checkout), in the order `git worktree list --porcelain` gives,
 it prints the path with backslashes, control and non-ASCII characters escaped, its branch, its size on disk (a bounded walk that follows
 no symlink), clean or dirty (`git status --porcelain`, untracked files included), unpushed commits,
-merged and whether it is a candidate:
+merged and whether it is a candidate. Git runs without the user's home, so the user's global ignore
+file (`core.excludesFile`, else `$XDG_CONFIG_HOME/git/ignore` or `~/.config/git/ignore`) is resolved once
+and passed to `git status` alone; no other global setting reaches git. Without it, a folder only that
+file ignores (such as `.claude/`) would make every worktree dirty:
 
 - unpushed: commits ahead of the branch's upstream; with no upstream, or one deleted on the forge,
   commits that no remote-tracking branch holds, marked "(no upstream)". When the forge merged a pull
@@ -31,6 +34,7 @@ It stores nothing and makes no network call of its own; gh, when present, reads 
 """
 
 import argparse
+import functools
 import json
 import os
 import shlex
@@ -55,17 +59,18 @@ def child_environment():
     return env
 
 
-def git(checkout, *args):
+def git(checkout, *args, config=()):
+    settings = [word for item in config for word in ("-c", item)]
     return subprocess.run(["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
-                           "-c", "core.untrackedCache=false", "-C", str(checkout), *args],
+                           "-c", "core.untrackedCache=false", *settings, "-C", str(checkout), *args],
                           capture_output=True, text=True, encoding="utf-8", timeout=60,
                           env=child_environment())
 
 
-def git_out(checkout, *args):
+def git_out(checkout, *args, config=()):
     """stdout of a git command that succeeded, else None."""
     try:
-        done = git(checkout, *args)
+        done = git(checkout, *args, config=config)
     except (OSError, subprocess.SubprocessError):
         return None
     return done.stdout.strip() if done.returncode == 0 else None
@@ -131,8 +136,31 @@ def human(size):
     return str(amount)
 
 
+@functools.lru_cache(maxsize=1)
+def excludes_file():
+    """The user's global ignore file as an absolute path to a regular file, else None.
+
+    Only this lookup sees HOME and XDG_CONFIG_HOME; it reads one key and runs nothing else."""
+    env = child_environment()
+    env.update({k: os.environ[k] for k in ("HOME", "XDG_CONFIG_HOME") if k in os.environ})
+    try:
+        done = subprocess.run(["git", "config", "--global", "--path", "--get", "core.excludesFile"],
+                              capture_output=True, text=True, encoding="utf-8", timeout=60, env=env)
+        value = done.stdout.strip() if done.returncode == 0 else ""
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        return None
+    if not value:
+        base = env.get("XDG_CONFIG_HOME") or (os.path.join(env["HOME"], ".config") if env.get("HOME") else "")
+        value = os.path.join(base, "git", "ignore") if os.path.isabs(base) else ""
+    if not os.path.isabs(value) or "\n" in value or not os.path.isfile(value):
+        return None
+    return value
+
+
 def state(path):
-    out = git_out(path, "status", "--porcelain", "--untracked-files=normal")
+    excludes = excludes_file()
+    config = (f"core.excludesFile={excludes}",) if excludes else ()
+    out = git_out(path, "status", "--porcelain", "--untracked-files=normal", config=config)
     return "unknown" if out is None else ("clean" if out == "" else "dirty")
 
 

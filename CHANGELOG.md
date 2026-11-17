@@ -12,6 +12,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - `select_tests.py` (the `checks` skill and the repository copy) also selects a test module that declares a folder it reads with a line `# select-tests: reads <folder>/`, for modules that build paths at run time; `test_setup_limits` declares `skills/setup/`, so a setup reference change now selects it (it missed the size caps in PR 349).
 
+### Fixed
+
+- The worktree sweep (`commit-messages`, `review-gate`) reported every worktree dirty when a folder such as `.claude/` was ignored only by the user's global ignore file: it runs git without the home folder, so git never read that file. It now resolves the global ignore file once and passes it to `git status` alone, so merged, clean worktrees become candidates again.
+
 ### Known limits
 
 - Claude Code's `--autocompact` flag sets the host's threshold but hooks never see it (checked on 2.1.325, 17/11/2026), so a session opened with it gets the compaction nudge at the settings value, after the host has compacted. Use the variable instead. A hook that recognizes a coordinator and warns about its threshold was dropped: no hook can read the flag or a reliable role signal.
