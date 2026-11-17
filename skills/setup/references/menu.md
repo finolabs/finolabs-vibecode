@@ -1,6 +1,6 @@
 # Setup menu (after core)
 
-The beginner skips companion questions/extras and the instructions offer. Quick opens `companions` directly unless declined. Advanced skips recorded declines on a bare run; otherwise interviews, then offers extras. `add <feature>` works in either.
+The beginner skips companion questions/extras and the instructions offer. Quick opens `companions` directly unless declined. The beginner and Quick open the `## Native threshold` section of `compaction` directly, with its own question, unless `compaction` is recorded declined; the rest of that feature stays an extra (advisory, agent judgment). Advanced skips recorded declines on a bare run; otherwise interviews, then offers extras. `add <feature>` works in either.
 Show feature/cost lines in Advanced. Load selected features only. For each extra, ask "Explore <the plain-language goal of this feature>?"
 Yes: Open only that interview; no feature setting changes or data is sent by this answer. Each later grant keeps its own approval.
 No: Save only <feature>: declined in Setup features in local host.md; leave feature settings unchanged. Ask later with add <feature>.
@@ -20,7 +20,7 @@ Choices: "Yes, draft instructions" / "No, leave instructions unchanged".
 | `quota` | user | AI usage checks |
 | `afk` | user | away-session permissions and limits |
 | `metrics` | user | private counts, progress, running programs |
-| `compaction` | user | conversation limits |
+| `compaction` | user; Claude Code also project | conversation limits |
 | `companions` | user | optional helpers; prints commands only |
 | `project` | project | task counts, display name |
 | `checks` | project | the repository's check list; runs nothing |

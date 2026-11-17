@@ -34,6 +34,7 @@ INVENTORY = [
     (12, "Show progress from task lists and work records on your private dashboard?", "features/metrics.md"),
     (13, "Show how many Claude, Codex and Antigravity programs are running under your account?", "features/metrics.md"),
     (14, "Choose when Claude Code or Codex shortens a long conversation to make room?", "features/compaction.md"),
+    (14, "Where should this limit apply?", "features/compaction.md"),
     (14, "How many tokens should the conversation reach before it is shortened?", "features/compaction.md"),
     (14, "Save the shown limit for shortening future conversations?", "features/compaction.md"),
     (15, "Set up Antigravity to ask for a fresh session when a saved conversation grows too large?", "features/compaction.md"),
@@ -146,7 +147,8 @@ class SizeLimitTests(unittest.TestCase):
         for name in ("core.md", "scan.md", "mode.md", "work-tracking.md", "interview.md", "plain-language.md"):
             self.assertIn(REFS / name, loaded)
         total = sum(len(p.read_bytes()) for p in loaded)
-        self.assertLessEqual(total, 15000, {str(p.relative_to(SKILL)): p.stat().st_size for p in loaded})
+        # 15050: the beginner path and Quick also ask the compaction threshold (owner decision, 17/11/2026).
+        self.assertLessEqual(total, 15050, {str(p.relative_to(SKILL)): p.stat().st_size for p in loaded})
 
 
 class ConsentInventoryTests(unittest.TestCase):
@@ -155,8 +157,9 @@ class ConsentInventoryTests(unittest.TestCase):
         preferences = {2, 7, 18, 22}
         for row, sentence, home in INVENTORY:
             with self.subTest(row=row, sentence=sentence):
-                if row in preferences or sentence == 'How many tokens should the conversation reach before it is shortened?':
-                    continue  # Preferences and free text do not approve a write or grant.
+                if row in preferences or sentence in ('How many tokens should the conversation reach before it is shortened?',
+                                                      'Where should this limit apply?'):
+                    continue  # Preferences, the scope choice and free text do not approve a write or grant.
                 following = (REFS / home).read_text().split(sentence, 1)[1]
                 # The block must immediately follow this question, in order; a later
                 # question's explanation cannot accidentally satisfy this one.
@@ -291,9 +294,25 @@ class ConsentInventoryTests(unittest.TestCase):
         sentence = skill.split("In every mode these keep their own question:", 1)[1].split(". In Quick mode", 1)[0]
         for words in ("moving the data root and its copy", "arming `auto` and the auto gate", "filling host config",
                       "each Antigravity test-command grant", "roles and review posting",
-                      "the Antigravity hook write", "each instruction-file write"):
+                      "the Antigravity hook write", "the compaction threshold", "each instruction-file write"):
             self.assertIn(words, sentence)
         self.assertIn("beginner and Quick included, with no default", skill)
+
+    def test_beginner_and_quick_offer_the_threshold_with_one_advisory_recommendation(self):
+        self.assertIn("project steps 3, 2 and the menu's threshold", (SKILL / "SKILL.md").read_text())
+        menu = (REFS / "menu.md").read_text()
+        self.assertIn("The beginner and Quick open the `## Native threshold` section of `compaction` directly", menu)
+        feature = (REFS / "features/compaction.md").read_text().split("## Native threshold", 1)[1].split("## Context", 1)[0]
+        self.assertIn("stays silent", feature.split('Ask: "Choose when', 1)[0])
+        self.assertIn("stays silent", feature.split('No: ', 1)[1].split("\n", 1)[0])
+        self.assertLess(feature.index("Recommended threshold"),
+                        feature.index("How many tokens should the conversation reach before it is shortened?"))
+        self.assertIn("never preselected or prefilled", feature)
+        # The suggested numbers live in one place, marked advisory.
+        details = (REFS / "compaction-details.md").read_text()
+        self.assertIn("advisory (agent judgment), never a default", details.split("## Recommended threshold", 1)[1])
+        tree = [path for path in (ROOT / "skills").rglob("*.md") if "300000 to 500000" in path.read_text()]
+        self.assertEqual(tree, [REFS / "compaction-details.md"])
 
     def test_knowledge_base_step_follows_the_users_access_and_asks_nothing_new(self):
         core = (REFS / "core.md").read_text()
