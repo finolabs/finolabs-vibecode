@@ -18,15 +18,6 @@ HOOK = ROOT / 'scripts/afk_check_hook.py'
 sys.path.insert(0, str(ROOT / 'skills/delegate/scripts'))
 import afk  # noqa: E402
 
-BOOT = '''import pwd, runpy, sys
-from types import SimpleNamespace
-account_home = sys.argv.pop(1)
-pwd.getpwuid = lambda uid: SimpleNamespace(pw_dir=account_home, pw_name="quota-test-user")
-sys.dont_write_bytecode = True
-script = sys.argv.pop(1)
-sys.argv[0] = script
-runpy.run_path(script, run_name="__main__")
-'''
 SETUP = ('## afk\n- Hosts: Claude Code\n- Task choice: choose\n'
          '- Push and pull requests: yes\n- Merge: yes\n- Trusted authors: own\n')
 ORIGIN_CONFIG = ('[core]\n\trepositoryformatversion = 0\n\tbare = false\n'
@@ -72,7 +63,7 @@ class AfkCheckHookTest(unittest.TestCase):
     def hook(self, command, env=None, cwd=None):
         payload = json.dumps({'tool_name': 'Bash', 'tool_input': {'command': command},
                               'cwd': str(self.repo if cwd is None else cwd)})
-        result = subprocess.run([sys.executable, '-I', '-c', BOOT, str(self.home), str(HOOK)], input=payload,
+        result = subprocess.run([sys.executable, '-I', str(HOOK)], input=payload,
                                 env=env or self.env, capture_output=True, text=True, timeout=20)
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stderr, '')
@@ -261,7 +252,7 @@ class AfkCheckHookTest(unittest.TestCase):
         for payload in ('', 'not json', json.dumps({'tool_name': 'Edit', 'tool_input': {'command': 'printenv'}}),
                         json.dumps({'tool_name': 'Bash', 'tool_input': {}})):
             with self.subTest(payload=payload):
-                result = subprocess.run([sys.executable, '-I', '-c', BOOT, str(self.home), str(HOOK)], input=payload,
+                result = subprocess.run([sys.executable, '-I', str(HOOK)], input=payload,
                                         env=self.env, capture_output=True, text=True, timeout=20)
                 self.assertEqual((result.returncode, result.stdout, result.stderr), (0, '', ''))
 
