@@ -1,6 +1,6 @@
 ---
 name: plugin-packaging
-description: Package agent skills as one plugin for Claude Code, Codex and Antigravity. Use when creating or restructuring a plugin or skill repository, writing or fixing a manifest or marketplace catalog, writing or reviewing its README, designing its icon or listing metadata, adding a host, or validating a package before release.
+description: Package agent skills as one plugin for Claude Code, Codex and Antigravity. Use when creating or restructuring a plugin or skill repository, fixing a manifest or catalog, writing or reviewing its README, designing its icon or listing metadata, adding a host, or validating it before a release or directory submission.
 ---
 
 # Plugin packaging
