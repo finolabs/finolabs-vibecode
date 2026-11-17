@@ -30,8 +30,8 @@ import quota_probe
 import review_config as config
 import git_metadata as metadata
 
-FORMS = {"claude": "agent", "codex": "headless", "antigravity": "headless"}
-# A family without a verified review form (ZCode today) never reviews or authors here.
+# ZCode reviews headless in `plan` mode (owner decision, 17/11/2026); a family missing here never reviews or authors.
+FORMS = {"claude": "agent", "codex": "headless", "antigravity": "headless", "zcode": "headless"}
 ORDER = tuple(f for f in config.FAMILIES if f in FORMS)
 OID = re.compile(r"[0-9a-f]{40}")
 MAX_OBJECT = 16 * 1024 * 1024

@@ -207,16 +207,14 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(self.pick(host(posting=posting) + matrix(code="codex", security="antigravity"))[0][0], "codex")
         self.assertEqual(self.pick(host(("claude", "codex"), posting=posting))[0][0], "codex")
 
-    def test_family_without_review_form_is_skipped_not_raised(self):
-        self.assertNotIn("zcode", route.ORDER)
-        self.assertTrue(set(route.ORDER) <= set(route.FORMS))
+    def test_zcode_reviews_and_authors_headless(self):
+        # Owner decision, 17/11/2026: ZCode is a review family like the others.
+        self.assertEqual(route.ORDER, config.FAMILIES)
         present = ("claude", "codex", "antigravity", "zcode")
         rows = self.pick(host(present) + matrix(code="zcode", security="zcode"))
-        self.assertEqual(rows, [("codex", "headless", "capability-one-run-two-comments")] * 2)
-        rows = self.pick(host(("claude", "zcode")) + matrix(code="zcode"), kinds=("code",))
-        self.assertEqual(rows, [("claude", "agent", "same-family")])
-        with self.assertRaisesRegex(ValueError, "unverified author"):
-            route.route("zcode", host(present), [])
+        self.assertEqual(rows, [("zcode", "headless", "assigned-one-run-two-comments")] * 2)
+        rows = route.route("zcode", host(present) + matrix(code="codex", security="claude"), [])
+        self.assertEqual(rows, [("codex", "headless", "assigned"), ("claude", "agent", "assigned")])
 
     def test_no_available_family_is_error(self):
         with self.assertRaises(ValueError):
