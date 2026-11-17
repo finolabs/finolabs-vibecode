@@ -45,6 +45,7 @@
 | [Context probe](context-probe.md) | implemented; release 0.2.5 `context_snapshot.py probe` for Claude Code and Codex with the session-start `Session id:` line, reusing the quota probe's confirmed executables; live delivery on a real host is unverified. |
 | [Ledger closure](ledger-closure.md) | accepted; owner decision 2026-11-12 ("all four in 0.2.5"); code and tests written on branch `ledger-closure`, tests not yet run, live-host hook delivery unverified. |
 | [Compaction nudge](compaction-nudge.md) | implemented; Claude Code in 0.2.5, Codex in 0.3.1 (PR 310); live delivery unverified on both hosts. |
+| [Proof nudge](proof-nudge.md) | implemented; Claude Code `Stop` hook for 0.3.2 (owner decision 2026-11-17); live delivery unverified. |
 | [Context snapshot](context-snapshot.md) | implemented; release 0.2.0 local Claude Code and Antigravity status-line recorder, fresh context reads, steward checks and previewed settings writer; live status-line delivery and user-owned composition remain unverified. |
 | [Parallel agent instances](parallel-instances.md) | implemented; shared helper, setup, SessionStart, dashboard, CI copy group and documentation are integrated locally; targeted verification is recorded in the spec, while live-host scheduling and UI behavior remain unverified. |
 | [Heavy-job guard and test scope](heavy-jobs.md) | draft; `heavy_run.py` is implemented; the gate, its installer and the setup question are not; the gate exception is recorded in CLAUDE.md. |

@@ -118,6 +118,30 @@ def read_posting(text, today=None):
     return result
 
 
+SECURITY_FALLBACK = re.compile(r"- Same-family security fallback: (yes|no) \((\d{4}-\d{2}-\d{2})\)")
+
+
+def security_fallback(text, today=None):
+    """True only when `## Reviews` holds exactly one `- Same-family security fallback: yes (YYYY-MM-DD)` line with a
+    real date not in the future (owner decision 17/11/2026). `no`, a malformed or duplicate line, or no section is False.
+    The choice lets merge_check.py's same-family fallback run outside an away lease; it grants nothing by itself."""
+    today = today or datetime.date.today()
+    lines = section(text, "Reviews", 30)
+    if lines is None:
+        return False
+    found = [line for line in lines if line.startswith("- Same-family security fallback:")]
+    if len(found) != 1:
+        return False
+    match = SECURITY_FALLBACK.fullmatch(found[0].rstrip())
+    if not match:
+        return False
+    try:
+        date = datetime.date.fromisoformat(match[2])
+    except ValueError:
+        return False
+    return match[1] == "yes" and date <= today
+
+
 def host_text():
     """Never honor a repository or environment host-config override."""
     try:
