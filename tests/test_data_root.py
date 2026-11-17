@@ -159,7 +159,7 @@ class DataRootTest(unittest.TestCase):
 
     def test_relocated_consent_and_opt_ins_ignore_old_folder(self):
         self.pointer_to()
-        self.target.joinpath("host.md").write_text("## Auto gate\non\n## Routing\noff\n## Delegation mode\nauto\n## Route judgment\n- Instruction check: on\n")
+        self.target.joinpath("host.md").write_text("## Auto gate\non\n## Routing\noff\n## Delegation mode\nauto\n## Instruction check\n- Instruction check: on\n")
         self.default.joinpath("host.md").write_text("## Auto gate\noff\n## Routing\non\n")
         import mode
         with mock.patch.dict(os.environ, {"ORCHESTRATION_HOST_CONFIG": str(self.default / "host.md")}, clear=True):
@@ -263,8 +263,8 @@ class DataRootTest(unittest.TestCase):
 
     def test_instruction_payload_uses_relocated_consent(self):
         self.pointer_to()
-        self.default.joinpath("host.md").write_text("## Route judgment\n- Instruction check: on\n")
-        self.target.joinpath("host.md").write_text("## Route judgment\n- Instruction check: off\n")
+        self.default.joinpath("host.md").write_text("## Instruction check\n- Instruction check: on\n")
+        self.target.joinpath("host.md").write_text("## Instruction check\n- Instruction check: off\n")
         spec = importlib.util.spec_from_file_location("root_checkup", ROOT / "skills/setup/scripts/checkup.py")
         check = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(check)
@@ -273,7 +273,7 @@ class DataRootTest(unittest.TestCase):
                     "ORCHESTRATION_HOST_CONFIG": str(self.default / "host.md")}):
             self.assertEqual(check.collect(payload=True), "")
             scan.assert_not_called()
-            self.target.joinpath("host.md").write_text("## Route judgment\n- Instruction check: on\n")
+            self.target.joinpath("host.md").write_text("## Instruction check\n- Instruction check: on\n")
             self.assertEqual(check.collect(payload=True), "allowed")
             self.pointer.write_text("invalid")
             self.assertEqual(check.collect(payload=True), "")
