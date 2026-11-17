@@ -31,6 +31,15 @@
             "async": true
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/proof_nudge.py\" start 2>/dev/null; exit 0",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -94,6 +103,15 @@
             "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/metrics_hook.py\"; exit 0",
             "timeout": 10,
             "async": true
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/scripts/proof_nudge.py\" 2>/dev/null; exit 0",
+            "timeout": 5
           }
         ]
       }
