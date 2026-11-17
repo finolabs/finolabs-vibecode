@@ -1,6 +1,6 @@
 ---
 name: commit-messages
-description: Shape commits, branches and their messages. Use when staging changes, writing a commit subject or body, splitting work into commits, committing on behalf of a delegated run, creating or naming a branch, syncing a branch with its base, resolving merge conflicts, merging a pull request and cleaning up its branch, backporting a fix to a release branch, or writing a pull request description.
+description: Shape commits, branches and their messages. Use when staging or splitting changes, writing a commit message, committing for a delegated run, creating, naming or syncing a branch, resolving merge conflicts, merging a pull request and cleaning up its branch, backporting a fix, or writing a pull request description.
 ---
 
 # Commit messages
