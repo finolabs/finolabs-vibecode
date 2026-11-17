@@ -31,22 +31,42 @@ def deny(reason):
 
 
 def unquoted_newlines(command):
-    """The command with every newline outside quotes turned into a `;` separator, so each line is judged as its own
-    command (shlex alone reads a newline as a space). Raises ValueError on an unbalanced quote."""
-    out, single, double, escape = [], False, False, False
-    for char in command:
-        if escape:
-            escape = False
-        elif char == '\\' and not single:
-            escape = True
-        elif char == "'" and not double:
+    """The command with every newline outside quotes and comments turned into a `;` separator, so each line is judged
+    as its own command (shlex alone reads a newline as a space). Quotes are tracked as bash tracks them: a `#` that
+    starts a word comments to the end of the line, a backslash-newline joins lines, and a `$'...'` string holding a
+    backslash is refused. Raises ValueError on an unbalanced quote or a form it cannot read the way bash does."""
+    out, single, double, i, n = [], False, False, 0, len(command)
+    while i < n:
+        char = command[i]
+        if char == '\\' and not single:
+            if i + 1 < n and command[i + 1] == '\n' and not double:
+                i += 2  # line continuation: bash joins the two lines
+                continue
+            out.append(command[i:i + 2])
+            i += 2
+            continue
+        if not single and not double:
+            if char == '$' and i + 1 < n and command[i + 1] == "'":
+                end = command.find("'", i + 2)
+                if end < 0 or '\\' in command[i + 2:end]:
+                    raise ValueError('ansi-c quote')
+                out.append(command[i + 1:end + 1])
+                i = end + 1
+                continue
+            if char == '#' and (i == 0 or command[i - 1] in ' \t\n;&|()<>'):
+                end = command.find('\n', i)
+                i = n if end < 0 else end
+                continue
+            if char == '\n':
+                out.append(' ; ')
+                i += 1
+                continue
+        if char == "'" and not double:
             single = not single
         elif char == '"' and not single:
             double = not double
-        elif char == '\n' and not single and not double:
-            out.append(' ; ')
-            continue
         out.append(char)
+        i += 1
     if single or double:
         raise ValueError('unbalanced quote')
     return ''.join(out)
@@ -57,7 +77,8 @@ OPERATORS = {';', '&&', '||', '|', '&', '|&'}
 
 
 def own_lease_command(argv, script):
-    """True for `python3 [-I] <this install's afk.py> <lease command> ...` with no operator after it."""
+    """True for `python3 [-I] <this install's afk.py> <lease command> ...` with no operator after it and no argument
+    holding an expansion, a redirection or a newline."""
     if not argv or os.path.basename(argv[0]) not in {'python3', 'python'}:
         return False
     rest = argv[1:]
@@ -65,6 +86,8 @@ def own_lease_command(argv, script):
         rest = rest[1:]
     if len(rest) < 2 or rest[1] not in LEASE_COMMANDS or any(t in OPERATORS for t in rest):
         return False
+    if any(c in word for word in rest for c in '$`<>\n'):
+        return False  # an expansion or a redirection is judged like any command
     try:
         return os.path.realpath(rest[0]) == os.path.realpath(script)
     except (OSError, ValueError):
@@ -72,13 +95,14 @@ def own_lease_command(argv, script):
 
 
 def expanded_paths(argv, limit=200):
-    """The paths the shell would read for each word holding `~`, `$` or a glob character, in memory only."""
+    """The paths the shell would read for each word, and each whitespace-separated piece of a word, holding `~`, `$`
+    or a glob character, in memory only."""
     import glob
     found = []
-    for word in argv:
-        if not any(c in word for c in '~$*?['):
+    for piece in (p for word in argv for p in word.split()):
+        if not any(c in piece for c in '~$*?['):
             continue
-        value = os.path.expandvars(os.path.expanduser(word))
+        value = os.path.expandvars(os.path.expanduser(piece))
         matches = glob.glob(value) if any(c in value for c in '*?[') else [value]
         found.extend(matches[:limit])
     return found

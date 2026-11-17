@@ -108,6 +108,27 @@ class AfkCheckHookTest(unittest.TestCase):
         self.assertEqual(denied['hookSpecificOutput']['permissionDecision'], 'deny')
         self.assertIsNone(self.hook(f'python3 -I {script} stop'))
 
+    def test_an_own_lease_command_with_an_expansion_or_redirect_is_judged(self):
+        self.start()
+        script = ROOT / 'skills/delegate/scripts/afk.py'
+        (self.home / '.netrc').write_text('machine example.com\n')
+        env = {**self.env, 'HOME': str(self.home)}
+        for command in (f'python3 -I {script} log --note "$(cat ~/.netrc)"',
+                        f'python3 -I {script} log --note "`cat ~/.netrc`"',
+                        f'python3 -I {script} rules >~/.netrc'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command, env=env), parked('floor'))
+
+    def test_a_comment_or_ansi_quote_cannot_hide_a_line(self):
+        self.start()
+        (self.home / '.netrc').write_text('machine example.com\n')
+        env = {**self.env, 'HOME': str(self.home)}
+        # Bash reads `#'` as a comment, so the second line runs; the review's form also ends unbalanced.
+        self.assertEqual(self.hook("echo hi #'\ncat ~/.n?trc", env=env), parked('floor'))
+        self.assertEqual(self.hook("echo hi #'\ncat ~/.n?trc\n'", env=env), denial(PARSE))
+        self.assertEqual(self.hook("echo $'\\'' \ncat ~/.n?trc\n'", env=env), denial(PARSE))
+        self.assertIsNone(self.hook("echo $'plain' # a note"))
+
     def test_a_bad_cwd_denies_once_the_lease_is_live(self):
         self.start()
         self.assertEqual(self.hook('git status', cwd=self.home / 'missing'), parked('unsafe'))
