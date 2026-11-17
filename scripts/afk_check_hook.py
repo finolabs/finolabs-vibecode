@@ -118,28 +118,40 @@ def unreadable(command):
     return False
 
 
-def reparsed(argv):
-    """True when a segment runs code a shell parses again: `eval`, `source`, or a shell given `-c`, `-s`, stdin or
-    nothing but options; or when a command name still holds an expansion, a glob or a brace."""
-    segment = []
-    for word in argv + [';']:
-        if word in OPERATORS:
-            words = [w for w in segment]
-            while words and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', words[0]):
-                words = words[1:]
-            if words:
-                name = words[0]
-                if any(c in name for c in '$`*?[{'):
-                    return True
-                base = os.path.basename(name)
-                if base in {'eval', 'source', '.'}:
-                    return True
-                if base in SHELLS and (any(w in {'-c', '-s', '<<<', '<'} or w.startswith('-c') for w in words[1:])
-                                       or all(w.startswith('-') for w in words[1:])):
-                    return True
-            segment = []
-        else:
-            segment.append(word)
+OPTION_COMMANDS = {'setopt', 'unsetopt', 'shopt', 'emulate'}
+EXEC_FLAGS = {'-exec', '-execdir', '-ok', '-okdir'}
+
+
+def bad_program(program, words):
+    """True for a program the hook cannot read the way the shell runs it."""
+    if not isinstance(program, str):
+        return False  # only assignments: nothing runs
+    if any(c in program for c in '$`*?[{^#~') and program != '#inline':
+        return True
+    base = os.path.basename(program)
+    if base in {'eval', 'source', '.'} or base in OPTION_COMMANDS:
+        return True
+    if base == 'set' and any(w in {'-o', '+o'} or re.fullmatch(r'[-+][A-Za-z]*o', w) for w in words):
+        return True
+    return base in SHELLS and (any(w in {'-c', '-s', '<<<', '<'} or w.startswith('-c') for w in words)
+                               or all(w.startswith('-') for w in words))
+
+
+def reparsed(argv, afk):
+    """True when any command `check` reads out of argv (every reading, wrappers, glued operators and compound words
+    included, and a `find -exec` command) runs code a shell parses again, changes the shell's glob options, or has
+    a program name holding an expansion, a glob or a brace."""
+    for reading in afk.READINGS:
+        for program, words, _env, inline, _pattern in afk.commands_of(argv, full=True, split_patterns=reading):
+            if inline:
+                continue
+            if bad_program(program, list(words)):
+                return True
+            for index, word in enumerate(words):
+                if word in EXEC_FLAGS and index + 1 < len(words):
+                    rest = [w for w in words[index + 2:] if w not in {';', '+', '{}'}]
+                    if bad_program(words[index + 1], rest):
+                        return True
     return False
 
 
@@ -224,7 +236,7 @@ def main():
             return 0
         if not argv:
             return 0
-        if unreadable(command) or reparsed(argv):
+        if unreadable(command):
             deny(PARSE_MESSAGE)
             return 0
         script = here.parent / 'skills' / 'delegate' / 'scripts' / 'afk.py'
@@ -239,6 +251,9 @@ def main():
         sys.path.insert(0, str(script.parent))
         import afk
 
+        if reparsed(argv, afk):
+            deny(PARSE_MESSAGE)
+            return 0
         paths = expanded_paths(argv)
         expanded = [os.path.expandvars(os.path.expanduser(word)) for word in argv]
         if (paths and afk.floored(None, paths, cwd)) or (expanded != argv and afk.floored(expanded, None, cwd)):

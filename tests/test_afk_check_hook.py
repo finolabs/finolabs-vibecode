@@ -154,11 +154,16 @@ class AfkCheckHookTest(unittest.TestCase):
         for command in ('/usr/bin/printen?', '{printenv,}', 'cat ~/.ne{t,}rc', 'echo ${x:-printenv}', 'true >(printenv)',
                         'cat <(cat ~/.ne?rc)', 'set -- printenv; "$@"', 'echo $_', 'echo $(( 1 ))', '=printenv',
                         'cat ~/.(netrc|x)', 'cat ~+/.netrc', "eval 'printenv'", "bash -c 'printenv'",
-                        "sh <<< 'printenv'", 'echo printenv | sh', 'x=printenv; $x'):
+                        "sh <<< 'printenv'", 'echo printenv | sh', 'x=printenv; $x',
+                        'echo x|/usr/bin/printen?', 'echo x;/usr/bin/printen?', 'if true; then /usr/bin/printen?; fi',
+                        'env /usr/bin/printen?', 'timeout 5 /usr/bin/printen?', "env bash -c 'pr\"\"intenv'",
+                        "printf x|sh", 'command eval x', r'find . -exec /usr/bin/printen? \;',
+                        r"find . -exec sh -c 'printenv' \;", 'setopt extendedglob; cat ~/.ne^Q', 'set -o extendedglob'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), denial(PARSE))
         # Ordinary forms stay readable.
-        for command in ('git status', 'echo "${HOME}"', 'find . -name x -exec ls {} +', 'bash scripts/run.sh'):
+        for command in ('git status', 'echo "${HOME}"', 'find . -name x -exec ls {} +', 'bash scripts/run.sh',
+                        'python3 -c "print(1)"', 'set -e'):
             with self.subTest(command=command):
                 self.assertNotEqual(self.hook(command), denial(PARSE))
 
