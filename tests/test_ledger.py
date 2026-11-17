@@ -1138,7 +1138,10 @@ class StaleLedgerTest(unittest.TestCase):
         self.assertEqual(self.stale("--close", "--digest", digest)[0], 0)
         sys.path.insert(0, str(LEDGER.parents[3] / "scripts"))
         import session_start
-        self.assertEqual(session_start.open_dispatches(), "1")
+        demo = Path(self.dir.name).resolve() / "demo"
+        (demo / ".git").mkdir(parents=True)
+        with mock.patch("os.getcwd", return_value=str(demo)):
+            self.assertEqual(session_start.open_dispatches(), "1 open in this project")
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.ledger.cmd_open(self.ledger.build_parser().parse_args(["open"]))

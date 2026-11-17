@@ -79,6 +79,8 @@ class ContextStewardTest(unittest.TestCase):
         self.assertEqual((folder / "scripts/context_steward.py").read_bytes(),
                          (ROOT / "scripts/context_steward.py").read_bytes())
         hygiene = (folder / "SKILL.md").read_text().split("## Context pressure", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("references/context-pressure.md", hygiene)
+        hygiene += (folder / "references/context-pressure.md").read_text()
         hygiene += (folder / "references/context-settings.md").read_text()
         for phrase in ("prepare", "context_steward.py", "handover_state.py", "judge.py",
                        "host enforces", "advisory, agent judgment", "unverified on every host", "standalone",
