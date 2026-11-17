@@ -54,6 +54,9 @@ def unquoted_newlines(command):
                 out.append(command[i + 1:end + 1])
                 i = end + 1
                 continue
+            if char == '$' and i + 1 < n and command[i + 1] == '"':
+                i += 1  # a locale string `$"..."` reads as `"..."`
+                continue
             if char == '#' and (i == 0 or command[i - 1] in ' \t\n;&|()<>'):
                 end = command.find('\n', i)
                 i = n if end < 0 else end

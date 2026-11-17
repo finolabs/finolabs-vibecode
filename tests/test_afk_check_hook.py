@@ -135,6 +135,10 @@ class AfkCheckHookTest(unittest.TestCase):
         self.assertEqual(self.hook('cat "$HOME/.ne\\\ntrc"', env=env), parked('floor'))
         # An ANSI-C escape could hide a name or a path, so it is unreadable.
         self.assertEqual(self.hook("$'\\x70rintenv'"), denial(PARSE))
+        self.assertEqual(self.hook('$"printenv"'), parked('floor'))
+        self.assertEqual(self.hook('$"pr"intenv'), parked('floor'))
+        # An escaped backslash is no continuation: the next line is its own command.
+        self.assertEqual(self.hook('echo a\\\\\nprintenv'), parked('floor'))
 
     def test_a_bad_cwd_denies_once_the_lease_is_live(self):
         self.start()
