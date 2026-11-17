@@ -38,7 +38,7 @@ class ProofNudgeTest(unittest.TestCase):
                "GIT_CONFIG_NOSYSTEM": "1"}
         if old:
             env["GIT_COMMITTER_DATE"] = env["GIT_AUTHOR_DATE"] = f"{int(time.time()) - 3600} +0000"
-        done = subprocess.run(["git", "-c", "user.name=Synthetic", "-c", "user.email=synthetic@example.invalid",
+        done = subprocess.run(["git", "-c", "user.name=Synthetic", "-c", "user.email=synthetic@example.com",
                                "-c", "commit.gpgsign=false", *args], cwd=cwd or self.repo, env=env,
                               capture_output=True, text=True, check=True)
         return done.stdout.strip()
