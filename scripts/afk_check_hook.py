@@ -229,10 +229,13 @@ OPERATORS = {';', '&&', '||', '|', '&', '|&'}
 SAFE_ARGUMENT = re.compile(r'[A-Za-z0-9 ._,:=/@+%-]*')
 
 
-def own_lease_command(argv, script):
+def own_lease_command(argv, script, cwd):
     """True for `python3 [-I] <this install's afk.py> <lease command> ...` with no operator after it and no argument
-    made of anything but letters, digits, spaces and `._,:=/@+%-`."""
+    made of anything but letters, digits, spaces and `._,:=/@+%-`. The interpreter is a bare `python3` or `python`
+    or an absolute path to one; the script path is resolved against the Bash tool's `cwd`."""
     if not argv or os.path.basename(argv[0]) not in {'python3', 'python'}:
+        return False
+    if '/' in argv[0] and not os.path.isabs(argv[0]):
         return False
     rest = argv[1:]
     while rest and rest[0] in {'-I', '-B', '-u'}:
@@ -242,9 +245,17 @@ def own_lease_command(argv, script):
     if not all(SAFE_ARGUMENT.fullmatch(word) for word in rest[1:]):
         return False  # a word bash could expand, redirect or split is judged like any command
     try:
-        return os.path.realpath(rest[0]) == os.path.realpath(script)
+        return os.path.realpath(os.path.join(cwd, rest[0])) == os.path.realpath(script)
     except (OSError, ValueError):
         return False
+
+
+VARIABLE = re.compile(r'\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))')
+
+
+def shell_expanded(word):
+    """`~` and `$name`/`${name}` expanded as the shell does: an unset variable becomes empty, not literal text."""
+    return VARIABLE.sub(lambda m: os.environ.get(m.group(1) or m.group(2), ''), os.path.expanduser(word))
 
 
 def expanded_paths(argv, limit=200):
@@ -255,7 +266,7 @@ def expanded_paths(argv, limit=200):
     for piece in (p for word in argv for p in re.split(r'[\s<>|&;()]+', word) if p):
         if not any(c in piece for c in '~$*?['):
             continue
-        value = os.path.expandvars(os.path.expanduser(piece))
+        value = shell_expanded(piece)
         matches = glob.glob(value) if any(c in value for c in '*?[') else [value]
         found.extend(matches[:limit])
     return found
@@ -281,7 +292,13 @@ def main():
         from pathlib import Path
 
         raw = sys.stdin.buffer.read(256 * 1024)
+        sys.dont_write_bytecode = True
+        here = Path(__file__).resolve().parent
+        sys.path.insert(0, str(here))
+        import away_lease
         if len(raw) == 256 * 1024:
+            if away_lease.live_lease(time.time()) is not None:
+                deny(UNSAFE)  # input past the cap under a live lease cannot be judged
             return 0
         event = json.loads(raw)
         if not isinstance(event, dict) or event.get('tool_name') != 'Bash':
@@ -290,10 +307,6 @@ def main():
         if not isinstance(command, str) or not command.strip():
             return 0
 
-        sys.dont_write_bytecode = True
-        here = Path(__file__).resolve().parent
-        sys.path.insert(0, str(here))
-        import away_lease
         if away_lease.live_lease(time.time()) is None:
             return 0
         live = True  # from here on every failure denies, as `check` answers `unsafe`
@@ -308,13 +321,12 @@ def main():
         if unreadable(command):
             deny(PARSE_MESSAGE)
             return 0
-        script = here.parent / 'skills' / 'delegate' / 'scripts' / 'afk.py'
-        if own_lease_command(argv, script):
-            return 0
-
         cwd = event.get('cwd')
         if not isinstance(cwd, str) or not os.path.isdir(cwd):
             deny(UNSAFE)
+            return 0
+        script = here.parent / 'skills' / 'delegate' / 'scripts' / 'afk.py'
+        if own_lease_command(argv, script, cwd):
             return 0
         os.chdir(cwd)
         sys.path.insert(0, str(script.parent))
@@ -324,9 +336,9 @@ def main():
             deny(PARSE_MESSAGE)
             return 0
         paths = expanded_paths(argv)
-        expanded = [os.path.expandvars(os.path.expanduser(word)) for word in argv]
+        expanded = [shell_expanded(word) for word in argv]
         if ((paths and afk.floored(None, paths, cwd)) or (expanded != argv and afk.floored(expanded, None, cwd))
-                or floor_words(argv, paths, afk)):
+                or floor_words(argv, paths, afk) or floor_words(expanded, paths, afk)):
             deny(parked('floor'))
             return 0
         buffer = io.StringIO()

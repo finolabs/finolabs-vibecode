@@ -176,6 +176,34 @@ class AfkCheckHookTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertNotEqual(self.hook(command), denial(PARSE))
 
+    def test_input_past_the_cap_denies_only_under_a_live_lease(self):
+        padded = 'printenv' + ' ' * (262 * 1024)
+        self.assertIsNone(self.hook(padded))
+        self.start()
+        self.assertEqual(self.hook(padded), parked('unsafe'))
+
+    def test_an_unset_variable_expands_to_nothing_as_in_the_shell(self):
+        self.start()
+        for command in ('gh au${FNL_TEST_UNSET}th token', 'cat ~/.netrc$FNL_TEST_UNSET'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), parked('floor'))
+        self.assertEqual(self.hook('print${FNL_TEST_UNSET}env'), denial(PARSE))  # an expansion in a program name
+
+    def test_the_lease_command_exemption_needs_a_plain_interpreter(self):
+        self.start()
+        script = str(ROOT / 'skills' / 'delegate' / 'scripts' / 'afk.py')
+        self.assertIsNone(self.hook(f'python3 -I {script} effective'))
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('afk_check_hook_under_test', HOOK)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertTrue(module.own_lease_command(['python3', script, 'effective'], script, str(self.repo)))
+        self.assertFalse(module.own_lease_command(['./python3', script, 'effective'], script, str(self.repo)))
+        relative = os.path.relpath(script, self.repo)
+        self.assertTrue(module.own_lease_command(['python3', relative, 'effective'], script, str(self.repo)))
+        (self.repo / 'sub').mkdir()
+        self.assertFalse(module.own_lease_command(['python3', relative, 'effective'], script, str(self.repo / 'sub')))
+
     def test_a_credential_command_name_anywhere_is_the_floor(self):
         self.start()
         for command in ('nohup kubectl get secret x', 'xargs az account get-access-token', 'nohup gh auth token',
