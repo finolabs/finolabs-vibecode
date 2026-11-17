@@ -1,4 +1,4 @@
-# Feature: compaction (user scope; Claude Code also one repository)
+# Feature: compaction (user scope)
 
 Needs: nothing for the native threshold; the Antigravity stop needs Antigravity present in the scan findings, otherwise skip that step. Optional. Every question uses neutral Yes and No with none preselected or marked recommended; a default, timeout or auto-selected option never counts as the yes. Asking and rechecking are advisory (agent judgment).
 

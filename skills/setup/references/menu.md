@@ -20,7 +20,7 @@ Choices: "Yes, draft instructions" / "No, leave instructions unchanged".
 | `quota` | user | AI usage checks |
 | `afk` | user | away-session permissions and limits |
 | `metrics` | user | private counts, progress, running programs |
-| `compaction` | user; Claude Code also project | conversation limits |
+| `compaction` | user | conversation limits (Claude Code: all repositories or one) |
 | `companions` | user | optional helpers; prints commands only |
 | `project` | project | task counts, display name |
 | `checks` | project | the repository's check list; runs nothing |
