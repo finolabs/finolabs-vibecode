@@ -249,8 +249,10 @@ def fits(state, family, count=1):
     return count <= state['free'] and (available is None or count <= available)
 
 
-def summary(repo=None):
-    """Fixed words and integers only, including the default source in hook output."""
+def summary(repo=None, families=FAMILIES):
+    """Fixed words and integers only, including the default source in hook output.
+
+    Lists the named families, plus any other family with an open dispatch or a cap, so nothing counted is hidden."""
     try:
         state = status(repo)
     except store.SettingsNeedSetup:
@@ -261,6 +263,8 @@ def summary(repo=None):
         parts = []
         for family in FAMILIES:
             row = state['families'][family]
+            if family not in families and not row['open'] and row['cap'] is None:
+                continue
             parts.append(f"{family} {row['open']} open" +
                          (f" of cap {row['cap']}" if row['cap'] is not None else ''))
         tail = f"; {state['stale']} stale not counted" if state['stale'] else ''

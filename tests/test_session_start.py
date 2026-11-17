@@ -25,7 +25,7 @@ ROLES_DEFAULT = ("Roles: code review unassigned; security review unassigned; nav
                  "posting claude unverified, codex unverified, antigravity unverified, zcode unverified\n")
 SLOTS_DEFAULT = "Parallel slots: 3 free of 3 (claude 0 open, codex 0 open, antigravity 0 open, zcode 0 open; default)\n"
 STATE_BASELINE = ("\nPlugin state (local files; fixed words and counts only)\n"
-                  "Delegation mode: unknown\n" + ROLES_DEFAULT + "Quota (cached): unknown\nOpen ledger dispatches: 0\n" + SLOTS_DEFAULT)
+                  "Delegation mode: unknown\n" + ROLES_DEFAULT + "Quota (cached): unknown\nOpen ledger dispatches: 0 open in this project\n" + SLOTS_DEFAULT)
 
 
 class SyntheticStateTest(unittest.TestCase):
@@ -94,7 +94,7 @@ class SessionStartTest(SyntheticStateTest):
         raw = json.dumps({"source": "compact", "session_id": "synthetic"}).encode()
         for mode in ("manual", "suggest", "auto", None):
             out, _ = self.run_hook(raw, delegation=mode)
-            self.assertIn(b"invoke the tidy skill", out)
+            self.assertIn(b"session-start title format", out)
             self.assertIn(b"rename it", out)
         for source in ("startup", "resume", "clear"):
             startup = json.dumps({"source": source, "session_id": "synthetic"}).encode()
@@ -327,7 +327,7 @@ class StateBlockTest(SyntheticStateTest):
 
     def test_no_host_config_no_quota_and_no_ledger(self):
         self.assertEqual(self.state(), "Delegation mode: suggest\n" + ROLES_DEFAULT + "Quota (cached): no reading\n"
-                                       "Open ledger dispatches: 0\n" + SLOTS_DEFAULT)
+                                       "Open ledger dispatches: 0 open in this project\n" + SLOTS_DEFAULT)
 
     def test_parallel_slots_from_canonical_synthetic_state(self):
         import parallel_slots
@@ -362,7 +362,7 @@ class StateBlockTest(SyntheticStateTest):
                    "- codex: levels 1-5; roles code-review, security-review, navigator\n")
         self.assertFalse((self.root / "state" / "consent.json").exists())
         self.assertIn("Roles: code review codex; security review codex; navigator codex; judge host; "
-                      "posting claude unverified, codex unverified, antigravity unverified, zcode unverified\n", self.state())
+                      "posting codex unverified\n", self.state())
 
     def test_invalid_root_grants_no_roles_from_an_existing_config(self):
         self.write("host.md", "## Agents on this machine\n| Codex | yes | x | x | x |\n"
@@ -377,7 +377,9 @@ class StateBlockTest(SyntheticStateTest):
             for key in ("code review", "security review", "navigator", "judge"):
                 with self.subTest(key=key, value=value[:30]):
                     self.write("host.md", prefix + f"- {key}: {value}\n")
-                    self.assertIn(ROLES_DEFAULT, self.state())
+                    self.assertIn(ROLES_DEFAULT.replace(
+                        "claude unverified, codex unverified, antigravity unverified, zcode unverified",
+                        "codex unverified"), self.state())
 
     def test_a_hostile_host_config_and_ledger_leave_no_trace(self):
         self.write("host.md", f"## Delegation mode\n\nauto{HOSTILE}\n\n## Agent roles\n\n{HOSTILE}\n")
@@ -387,7 +389,7 @@ class StateBlockTest(SyntheticStateTest):
         output = self.state()
         # The oversized cache fails the reader's size check: unknown, not a reading.
         self.assertEqual(output, "Delegation mode: suggest\n" + ROLES_DEFAULT + "Quota (cached): unknown\n"
-                                 "Open ledger dispatches: 3\nParallel slots: unknown\n")
+                                 "Open ledger dispatches: unknown\nParallel slots: unknown\n")
         self.write("state/quota/quota.json", json.dumps({"claude": {"bad label": {"measured": "x\x1b"}}}))
         self.assertIn("Quota (cached): no reading\n", self.state())
         for fragment in ("\x1b", "\x07", "owned", "ignore previous", "ZZZ"):
@@ -401,7 +403,7 @@ class StateBlockTest(SyntheticStateTest):
                    "## Review posting\n- codex: yes (checked 2026-01-01)\n"
                    "- claude: no (checked 2026-01-01)\n")
         self.assertIn("Roles: code review codex; security review claude; navigator claude; judge jev; "
-                      "posting claude no, codex yes, antigravity unverified, zcode unverified\n", self.state())
+                      "posting claude no, codex yes\n", self.state())
         original = (self.root / "host.md").read_bytes()
         self.state()
         self.assertEqual((self.root / "host.md").read_bytes(), original)
@@ -416,19 +418,20 @@ class StateBlockTest(SyntheticStateTest):
         self.write("host.md", legacy + matrix)
         state = self.state()
         self.assertIn("Roles: code review unassigned; security review codex; navigator claude; judge host; "
-                      "posting claude unverified, codex unverified, antigravity unverified, zcode unverified\n" + line, state)
+                      "posting claude unverified, codex unverified\n" + line, state)
         self.assertLessEqual(len(line), 80)
         # Absent: the retired legacy section sets no role, the judge is host, and no assignments line prints.
+        two = ROLES_DEFAULT.replace(", antigravity unverified, zcode unverified", "")
         self.write("host.md", legacy)
         state = self.state()
-        self.assertIn(ROLES_DEFAULT, state)
+        self.assertIn(two, state)
         self.assertNotIn("Assignments:", state)
         # Invalid or without consent, even beside a valid legacy section: unset roles and no assignments line.
         for broken in (matrix + "- gemini: levels 1-2\n", "## Assignment matrix\n- Consent: no\n- Judge: host\n"):
             with self.subTest(broken=broken[-25:]):
                 self.write("host.md", legacy + broken)
                 state = self.state()
-                self.assertIn(ROLES_DEFAULT, state)
+                self.assertIn(two, state)
                 self.assertNotIn("Assignments:", state)
                 self.assertNotIn("gemini", state)
 
@@ -442,16 +445,67 @@ class StateBlockTest(SyntheticStateTest):
         self.write("host.md", "## Delegation mode\n\nauto\n")
         self.assertTrue(self.state().startswith("Delegation mode: auto\n"))
 
-    def test_open_dispatches_are_counted_and_capped(self):
-        lines = [{"event": "start", "id": f"d{n}"} for n in range(3)] + [{"event": "finish", "id": "d0"}]
+    def test_open_dispatches_count_this_project_and_its_stale_records_capped(self):
+        repo = self.root / "repository"
+        (repo / ".git").mkdir(parents=True)
+        old = "2020-01-01T00:00:00+00:00"
+        def start(n, project=repo.name, **extra):
+            return {"event": "start", "id": f"d{n}", "agent": "codex", "project": project, **extra}
+        lines = ([start(n) for n in range(3)] + [{"event": "finish", "id": "d0"}]
+                 + [start(n, "other") for n in range(10, 15)]
+                 + [start(20, ts=old, budget_min=20), start(21, "other", ts=old, budget_min=20)])
         self.write("ledger.jsonl", "\n".join(json.dumps(line) for line in lines) + "\n")
-        self.assertIn("Open ledger dispatches: 2\n", self.state())
-        self.write("ledger.jsonl", "\n".join(json.dumps({"event": "start", "id": f"d{n}"}) for n in range(150)))
-        self.assertIn("Open ledger dispatches: 99+\n", self.state())
-        self.write("ledger.jsonl", b"\xff\xfe")
-        self.assertIn("Open ledger dispatches: unknown\n", self.state())
-        (self.root / "ledger.jsonl").chmod(0o666)
-        self.assertIn("Open ledger dispatches: unknown\n", self.state())
+        hint = "; ledger.py stale previews old ones to close"
+        with mock.patch("os.getcwd", return_value=str(repo)):
+            self.assertIn("Open ledger dispatches: 2 open in this project, 1 past budget" + hint + "\n", self.state())
+            self.write("ledger.jsonl", "\n".join(json.dumps(start(n)) for n in range(150)))
+            self.assertIn("Open ledger dispatches: 99+ open in this project\n", self.state())
+            self.write("ledger.jsonl", b"\xff\xfe")
+            self.assertIn("Open ledger dispatches: unknown\n", self.state())
+            self.write("ledger.jsonl", json.dumps(start(1)))
+            (self.root / "ledger.jsonl").chmod(0o666)
+            self.assertIn("Open ledger dispatches: unknown\n", self.state())
+        (self.root / "ledger.jsonl").chmod(0o600)
+        outside = self.root / "outside"
+        outside.mkdir()
+        with mock.patch("os.getcwd", return_value=str(outside)), \
+                mock.patch("parallel_slots.find_root", return_value=None):
+            self.assertIn("Open ledger dispatches: unknown outside a repository\n", self.state())
+
+    def test_per_family_words_only_for_present_families(self):
+        self.write("host.md", "## Agents on this machine\n| Claude Code | yes | x | x | x |\n"
+                   "| Antigravity | no | x | x | x |\n"
+                   "## Assignment matrix\n- Consent: yes (2026-11-09)\n- Judge: host\n"
+                   "- codexzz: levels 1-5\n- zcodework: levels 1-3; roles navigator\n")
+        current = self.qp.now().replace(microsecond=0)
+        def entry(source, name):
+            return {"measured": self.qp.stamp(current), "source": source,
+                    "groups": [{"name": name, "window": "5h", "remaining_fraction": .5,
+                                "reset_time": self.qp.stamp(current + self.qp.timedelta(hours=1))}]}
+        with self.dr.data_folder("state/quota", create=True, private=True) as folder:
+            self.qp.write_json(folder, "quota.json", {"agy": {"default": entry("agy-usage", "gemini")},
+                                                      "codex": {"default": entry("codex-rate-limits", "codex")},
+                                                      "claude": {"default": entry("claude-usage", "session")}})
+        repo = self.root / "repository"
+        (repo / ".git").mkdir(parents=True)
+        self.write("ledger.jsonl", json.dumps({"event": "start", "id": "a", "agent": "antigravity",
+                                               "project": repo.name}) + "\n")
+        with mock.patch("os.getcwd", return_value=str(repo)):
+            state = self.state()
+        # The matrix name `codexzz` is invalid, so the matrix is unusable and only the machine table counts.
+        self.assertIn("posting claude unverified\n", state)
+        self.assertIn("Quota (cached): claude-code ok 50%\n", state)
+        # An absent family with an open dispatch still shows, so nothing counted is hidden.
+        self.assertIn("Parallel slots: 2 free of 3 (claude 0 open, antigravity 1 open; default)\n", state)
+        self.write("host.md", "## Agents on this machine\n| Claude Code | yes | x | x | x |\n"
+                   "## Assignment matrix\n- Consent: yes (2026-11-09)\n- Judge: host\n"
+                   "- zcodework: levels 1-3; roles navigator\n")
+        with mock.patch("os.getcwd", return_value=str(repo)):
+            state = self.state()
+        self.assertIn("posting claude unverified, zcode unverified\n", state)
+        self.assertIn("Quota (cached): claude-code ok 50%\n", state)
+        self.assertNotIn("codex", state)
+        self.assertIn("Parallel slots: 2 free of 3 (claude 0 open, antigravity 1 open, zcode 0 open; default)\n", state)
 
     def test_quota_summary_uses_fixed_words_and_capped_percents(self):
         current = self.qp.now().replace(microsecond=0)
@@ -521,7 +575,7 @@ class StateBlockTest(SyntheticStateTest):
                 mock.patch.object(os, "fork", side_effect=AssertionError("fork")) as fork, \
                 mock.patch.object(os, "posix_spawn", side_effect=AssertionError("spawn")) as spawn:
             self.assertEqual(self.state(), "Delegation mode: manual\n" + ROLES_DEFAULT + "Quota (cached): no reading\n"
-                                           "Open ledger dispatches: 1\nParallel slots: unknown\n")
+                                           "Open ledger dispatches: unknown\nParallel slots: unknown\n")
         popen.assert_not_called()
         fork.assert_not_called()
         spawn.assert_not_called()

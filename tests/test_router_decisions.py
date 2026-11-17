@@ -25,7 +25,7 @@ class SkillFiringTest(unittest.TestCase):
     def test_router_directs_session_naming_at_task_start_and_phase_change(self):
         step1 = self.router.split("## 1.", 1)[1].split("## 2.", 1)[0]
         flat = " ".join(step1.split())
-        self.assertIn("invoke `tidy` to name or rename the session", flat)
+        self.assertIn("name or rename the session in the title format the session-start rules give", flat)
         self.assertIn("phase changes", flat)
 
     def test_router_invokes_checks_before_claims_and_delegated_acceptance(self):
@@ -34,8 +34,20 @@ class SkillFiringTest(unittest.TestCase):
 
     def test_rules_invoke_checks_before_claims_without_naming_the_router(self):
         [line] = [l for l in self.rules.splitlines() if "checks" in l]
-        self.assertIn("before reporting work as done, fixed or passing, and before accepting a delegated run", line)
+        self.assertIn("before accepting a delegated run", line)
         self.assertNotIn("coding-router", line)  # survives the routing-off variant
+        [claim] = [l for l in self.rules.splitlines() if l.startswith("A report is a claim")]
+        for phrase in ("before saying work is done, fixed or passing", "run the targeted tests yourself",
+                       "read the output", "is BLOCKED, not PASS"):
+            self.assertIn(phrase, claim)
+        self.assertNotIn("coding-router", claim)
+
+    def test_rules_carry_the_title_format_so_a_rename_needs_no_skill_load(self):
+        [line] = [l for l in self.rules.splitlines() if l.startswith("Name this session")]
+        for phrase in ("`<emoji> <project> <scope>: <activity>`", "`/rename <title>`", "session-title tool",
+                       "after every compaction", "advisory: no hook renames"):
+            self.assertIn(phrase, line)
+        self.assertNotIn("Invoke `tidy`", self.rules)
 
     def test_checks_description_leads_with_the_words_users_type(self):
         text = description("checks")
