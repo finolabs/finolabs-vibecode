@@ -8,6 +8,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
+- `tidy`: when the agent asks the user to compact, it hands over the command ready to copy in its own block, on Claude Code `/compact <focus>` with a one-line focus naming what the summary must keep (goal, current task, open runs and pull requests, next action, handover saved), a bare `/compact` on Codex, and `/new` or `/fork` with the handover on Antigravity, whose `/compact` may not exist.
+
 - `/setup add delegation` asks which AI helpers vibecode uses as one native multiple-choice question built from the agent scan (AskUserQuestion, `request_user_input` on Codex, `ask_question` on Antigravity; numbered text choices where a host has none), then one single-choice question per role (code-review, security-review, navigator, advisor) among the chosen helpers plus "None", recommending a family other than the coordinator's. A helper left unchosen gets no matrix line, and the levels, types and model questions are asked only for the chosen ones (Quick mode gives them `levels 1-5`). The new read-only `matrix_setup.py choices` prints every helper name the matrix accepts, from `## Agents on this machine` and the `~/.claude-<name>` folders, with its family, presence and the coordinator mark, never a path, and says when the inventory is missing or stale and `/setup scan` should run first.
 
 - README: a warning under "Supported agents" that delegation, cross-agent reviews, `advisor` and the quota and context probes run other agents' CLIs headless under your own accounts (afk included), that a consumer plan may forbid that use, and that which agents run is your decision and responsibility.
