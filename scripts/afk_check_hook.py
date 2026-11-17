@@ -148,8 +148,7 @@ OPAQUE_WORDS = {'builtin', 'nocorrect', 'hash', 'alias', 'function', 'case', 'co
 # The only flags a wrapper may carry before the command it runs: flags the shared table reads correctly (each
 # valued one with its value). Any other flag after any wrapper, and any flag at all after `flock` or `script`, may
 # hide that command, so it gets the split message.
-WRAPPER_FLAGS = {'xargs': {'-0': 0, '-n': 1, '-I': 1, '-L': 1, '-P': 1, '-t': 0, '-r': 0},
-                 'timeout': {'-k': 1, '-s': 1}, 'nice': {'-n': 1}, 'exec': {'-a': 1, '-c': 0, '-l': 0},
+WRAPPER_FLAGS = {'timeout': {'-k': 1, '-s': 1}, 'nice': {'-n': 1}, 'exec': {'-a': 1, '-c': 0, '-l': 0},
                  'npx': {'-y': 0, '--yes': 0, '-p': 1}}
 GLOB_OPTIONS = ('glob', 'magic', 'equals', 'brace', 'rcexpand', 'wordsplit')
 EXEC_FLAGS = {'-exec', '-execdir', '-ok', '-okdir'}
@@ -278,16 +277,36 @@ def own_lease_command(argv, script, cwd):
 
 
 
-DIRECTORY_CHANGES = {'cd', 'pushd', 'popd'}
+DIRECTORY_CHANGES = {'cd', 'pushd', 'popd', 'chdir'}
+# Programs that build a command or pick its files from data that exists only at run time (stdin, a match): the hook
+# cannot know what they run, so a command holding one is never read.
+RUNTIME_PROGRAMS = {'xargs'}
+RUNTIME_ACTIONS = {'find': EXEC_FLAGS | {'-delete'}, 'fd': {'-x', '-X', '--exec', '--exec-batch'},
+                   'fdfind': {'-x', '-X', '--exec', '--exec-batch'}}
 
 
-def relative_glob_after_cd(argv):
-    """True when the command changes directory and holds a glob that is not anchored at `/` or `~`: the shell
-    expands it in the new folder, which the hook cannot know."""
-    words = [os.path.basename(w) for w in argv]
-    if not any(w in DIRECTORY_CHANGES for w in words):
-        return False
-    return any(any(c in w for c in '*?[') and not w.startswith(('/', '~')) for w in argv)
+def command_words(argv, afk):
+    """The argv's words with commit and pull request text values left out and glued operators cut out, each
+    stripped of a leading `(`, `{` or `!`, as base names."""
+    stripped, _texts = afk.open_texts(argv)
+    words = glued_split([w for w in stripped if isinstance(w, str)], afk)
+    return [os.path.basename(w.lstrip('({!')) for w in words]
+
+
+def outside_allowlist(argv, afk):
+    """True when the command holds a form outside the syntax the hook reads in full: a program fed by run-time
+    data (`xargs`, `find -exec` or `-delete`, `fd --exec`), or a glob not anchored at `/` or `~` in a command
+    that changes directory (`cd`, `pushd`, `popd`, `chdir`, in a subshell or a group too), which the shell
+    expands in a folder the hook cannot know."""
+    words = command_words(argv, afk)
+    if any(w in RUNTIME_PROGRAMS for w in words):
+        return True
+    for program, actions in RUNTIME_ACTIONS.items():
+        if program in words and any(w in actions or (w.startswith('--exec') and program != 'find') for w in words):
+            return True
+    if any(w in DIRECTORY_CHANGES for w in words):
+        return any(any(c in w for c in '*?[') and not w.startswith(('/', '~')) for w in argv)
+    return False
 
 
 def shell_expanded(word):
@@ -369,7 +388,7 @@ def main():
         sys.path.insert(0, str(script.parent))
         import afk
 
-        if reparsed(argv, afk) or relative_glob_after_cd(argv):
+        if reparsed(argv, afk) or outside_allowlist(argv, afk):
             deny(PARSE_MESSAGE)
             return 0
         paths = expanded_paths(argv)

@@ -163,8 +163,8 @@ class AfkCheckHookTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), denial(PARSE))
         # Ordinary forms stay readable.
-        for command in ('git status', 'echo "${HOME}"', 'find . -name x -exec ls {} +', 'bash scripts/run.sh',
-                        'python3 -c "print(1)"', 'set -e', 'set -euo pipefail', 'env FOO=1 ls', 'env -i ls', 'xargs -0 -n 1 ls', 'timeout 5 ls',
+        for command in ('git status', 'echo "${HOME}"', 'bash scripts/run.sh',
+                        'python3 -c "print(1)"', 'set -e', 'set -euo pipefail', 'env FOO=1 ls', 'env -i ls', 'timeout 5 ls',
                         'npx -y prettier --check .'):
             with self.subTest(command=command):
                 self.assertNotEqual(self.hook(command), denial(PARSE))
@@ -209,7 +209,12 @@ class AfkCheckHookTest(unittest.TestCase):
         self.start()
         for command in ('gh $(echo au)th token', 'gh `echo au`th token', 'cat $(echo ~/.ne)trc',
                         'gh "$(printf %s au)th" token', 'cd ~ && cat .ne?rc', 'cd && cat .ne?rc',
-                        'cd ~ && cat .n[e]trc', 'cd ~/.cache/../ && cat .ne*c', 'pushd ~; cat .ne*c'):
+                        'cd ~ && cat .n[e]trc', 'cd ~/.cache/../ && cat .ne*c', 'pushd ~; cat .ne*c',
+                        'chdir ~ && cat .ne?rc', '(cd ~ && cat .ne?rc)', '(cd ..; cat .ne?rc)', '{ cd ~; cat .ne?rc; }',
+                        'echo auth token | xargs gh', "printf 'auth token' | xargs gh", 'xargs printenv',
+                        'xargs az account get-access-token', 'xargs -0 -n 1 ls', "find ~ -name '.ne*c' -exec cat {} +",
+                        "find ~ -name '.ne*c' | xargs cat", r'find . -exec env printenv \;', 'find . -name x -delete',
+                        'fd netrc ~ -x cat', 'fd netrc ~ --exec-batch cat'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), denial(PARSE))
         # A glob with no directory change, or anchored at `/` or `~`, is still expanded for the floor.
@@ -218,8 +223,7 @@ class AfkCheckHookTest(unittest.TestCase):
 
     def test_a_credential_command_name_anywhere_is_the_floor(self):
         self.start()
-        for command in ('nohup kubectl get secret x', 'xargs az account get-access-token', 'nohup gh auth token',
-                        'env -i printenv', 'xargs printenv', r'find . -exec env printenv \;', 'nice printenv'):
+        for command in ('nohup kubectl get secret x', 'nohup gh auth token', 'env -i printenv', 'nice printenv'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), parked('floor'))
         # A flag after a wrapper whose flags are not read one by one denies before any name is judged.
