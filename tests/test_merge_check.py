@@ -241,6 +241,58 @@ class MergeCheckTest(unittest.TestCase):
         self.assertTrue(any("took the low-risk lane" in line for line in lines), lines)
         self.assertFalse(mc.evaluate(data, lambda who: who in WRITERS, adopted=False)[0])
 
+    def test_a_catalog_pin_takes_the_lane(self):
+        # A catalog pin may change only an existing entry's source ref, to a vX.Y.Z tag, and its description.
+        base = json.dumps({"name": "cat", "plugins": [
+            {"name": "demo", "source": {"source": "github", "repo": "org/demo", "ref": "v0.1.2"},
+             "description": "Old text."},
+            {"name": "other", "source": {"source": "url", "url": "https://example.com/other.git"}}]})
+        def pinned(**change):
+            data = json.loads(base)
+            entry = data["plugins"][0]
+            for key, value in change.items():
+                if key == "ref":
+                    entry["source"]["ref"] = value
+                elif key == "repo":
+                    entry["source"]["repo"] = value
+                elif key == "drop":
+                    data["plugins"].pop()
+                elif key == "name":
+                    data["name"] = value
+                else:
+                    entry[key] = value
+            return json.dumps(data)
+        def check(head, path=".claude-plugin/marketplace.json"):
+            texts = {"base": base, "head": head}
+            return mc.lane_files([{"filename": path, "status": "modified"},
+                                  {"filename": "README.md", "status": "modified"}],
+                                 lambda name, side: texts[side])[0]
+        self.assertTrue(check(pinned(ref="v0.1.3")))
+        self.assertTrue(check(pinned(ref="v0.1.3", description="New text.")))
+        self.assertTrue(check(pinned(ref="v0.1.3"), ".agents/plugins/marketplace.json"))
+        for bad in (pinned(ref="main"), pinned(ref="v0.1.3-rc.1"), pinned(ref=1), pinned(repo="evil/demo"),
+                    pinned(drop=True), pinned(name="other"), pinned(homepage="https://example.com"),
+                    pinned(description=["x"]), "not json"):
+            self.assertFalse(check(bad), bad)
+        self.assertFalse(check(pinned(ref="v0.1.3"), "catalog/marketplace.json"))
+        # JSON types count: true is not 1, so a changed type stays out.
+        strict = json.loads(base); strict["plugins"][0]["strict"] = True
+        loose = json.loads(json.dumps(strict)); loose["plugins"][0]["strict"] = 1
+        texts = {"base": json.dumps(strict), "head": json.dumps(loose)}
+        self.assertFalse(mc.lane_files([{"filename": ".claude-plugin/marketplace.json", "status": "modified"}],
+                                       lambda name, side: texts[side])[0])
+        # An unchanged ref that is not a tag does not block another entry's pin.
+        branch = json.loads(base); branch["plugins"][1]["source"]["ref"] = "main"
+        moved = json.loads(json.dumps(branch)); moved["plugins"][0]["source"]["ref"] = "v0.1.3"
+        texts = {"base": json.dumps(branch), "head": json.dumps(moved)}
+        self.assertTrue(mc.lane_files([{"filename": ".claude-plugin/marketplace.json", "status": "modified"}],
+                                      lambda name, side: texts[side])[0])
+
+    def test_a_manifest_bump_keeps_json_types(self):
+        base = '{"name": "demo", "version": "0.1.2", "strict": true}'
+        texts = {"base": base, "head": base.replace("0.1.2", "0.1.3").replace("true", "1")}
+        self.assertFalse(mc.version_only(texts["base"], texts["head"]))
+
     def test_lane_files(self):
         base = '{"name": "demo", "version": "0.1.2", "author": {"name": "x"}}'
         texts = {"base": base, "head": base.replace("0.1.2", "0.1.3-dev")}

@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Changed
+
+- The low-risk lane covers a catalog pin (owner decision, 17/11/2026): a plugin catalog (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) whose only changes are existing entries' `source.ref`, moved to a release tag `vX.Y.Z`, and their descriptions takes one review pass; `merge_check.py --lane` decides.
+
 ## [0.3.2] - 2026-11-17
 
 ### Added
