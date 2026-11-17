@@ -149,6 +149,26 @@ class AfkCheckHookTest(unittest.TestCase):
         self.assertEqual(self.hook('curl https://example.com'), parked('unknown'))
         self.assertIsNone(self.hook('git status'))
 
+    def test_shell_forms_the_hook_cannot_reproduce_are_denied(self):
+        self.start()
+        for command in ('/usr/bin/printen?', '{printenv,}', 'cat ~/.ne{t,}rc', 'echo ${x:-printenv}', 'true >(printenv)',
+                        'cat <(cat ~/.ne?rc)', 'set -- printenv; "$@"', 'echo $_', 'echo $(( 1 ))', '=printenv',
+                        'cat ~/.(netrc|x)', 'cat ~+/.netrc', "eval 'printenv'", "bash -c 'printenv'",
+                        "sh <<< 'printenv'", 'echo printenv | sh', 'x=printenv; $x'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), denial(PARSE))
+        # Ordinary forms stay readable.
+        for command in ('git status', 'echo "${HOME}"', 'find . -name x -exec ls {} +', 'bash scripts/run.sh'):
+            with self.subTest(command=command):
+                self.assertNotEqual(self.hook(command), denial(PARSE))
+
+    def test_a_redirect_glued_to_a_word_is_expanded(self):
+        self.start()
+        (self.home / '.netrc').write_text('machine example.com\n')
+        env = {**self.env, 'HOME': str(self.home)}
+        self.assertEqual(self.hook('cat x<~/.n?trc', env=env), parked('floor'))
+        self.assertEqual(self.hook('cat<~/.n?trc', env=env), denial(PARSE))
+
     def test_an_unreadable_command_is_denied(self):
         self.start()
         self.assertEqual(self.hook('echo "unbalanced'), denial(PARSE))

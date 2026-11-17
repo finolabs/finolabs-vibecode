@@ -76,6 +76,73 @@ def unquoted_newlines(command):
     return ''.join(out)
 
 
+NAME_REF = re.compile(r'\$\{[A-Za-z_][A-Za-z0-9_]*\}')
+SHELLS = {'sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'fish', 'csh', 'tcsh'}
+
+
+def unreadable(command):
+    """True when the command holds a shell form the hook cannot reproduce exactly (bash and zsh): brace expansion,
+    a `${...}` with an operator, a special or positional parameter, arithmetic, process substitution, a zsh `=name`,
+    a `(` inside a word or a `~+`, `~-` or `~N` prefix. Single-quoted text is literal and skipped."""
+    single, double, i, n = False, False, 0, len(command)
+    while i < n:
+        char, nxt = command[i], command[i + 1:i + 2]
+        start = i == 0 or command[i - 1] in ' \t\n;&|<>'
+        if char == '\\' and not single:
+            i += 2
+            continue
+        if char == "'" and not double:
+            single = not single
+        elif char == '"' and not single:
+            double = not double
+        elif not single:
+            if char == '$':
+                if nxt == '{' and not NAME_REF.match(command, i):
+                    return True
+                if nxt and nxt in '_@*#?-$!0123456789[' or command.startswith('$((', i):
+                    return True
+            if not double:
+                if char in '<>' and nxt == '(':
+                    return True
+                if char == '{':
+                    end = command.find('}', i)
+                    if end > 0 and (',' in command[i:end] or '..' in command[i:end]):
+                        return True
+                if char == '=' and start:
+                    return True
+                if char == '(' and i > 0 and command[i - 1] not in ' \t\n;&|<>$(':
+                    return True
+                if char == '~' and start and nxt and nxt in '+-0123456789':
+                    return True
+        i += 1
+    return False
+
+
+def reparsed(argv):
+    """True when a segment runs code a shell parses again: `eval`, `source`, or a shell given `-c`, `-s`, stdin or
+    nothing but options; or when a command name still holds an expansion, a glob or a brace."""
+    segment = []
+    for word in argv + [';']:
+        if word in OPERATORS:
+            words = [w for w in segment]
+            while words and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', words[0]):
+                words = words[1:]
+            if words:
+                name = words[0]
+                if any(c in name for c in '$`*?[{'):
+                    return True
+                base = os.path.basename(name)
+                if base in {'eval', 'source', '.'}:
+                    return True
+                if base in SHELLS and (any(w in {'-c', '-s', '<<<', '<'} or w.startswith('-c') for w in words[1:])
+                                       or all(w.startswith('-') for w in words[1:])):
+                    return True
+            segment = []
+        else:
+            segment.append(word)
+    return False
+
+
 LEASE_COMMANDS = {'stop', 'log', 'review', 'effective', 'rules', 'check', 'packet-check'}
 OPERATORS = {';', '&&', '||', '|', '&', '|&'}
 SAFE_ARGUMENT = re.compile(r'[A-Za-z0-9 ._,:=/@+%-]*')
@@ -104,7 +171,7 @@ def expanded_paths(argv, limit=200):
     or a glob character, in memory only."""
     import glob
     found = []
-    for piece in (p for word in argv for p in word.split()):
+    for piece in (p for word in argv for p in re.split(r'[\s<>|&;()]+', word) if p):
         if not any(c in piece for c in '~$*?['):
             continue
         value = os.path.expandvars(os.path.expanduser(piece))
@@ -157,6 +224,9 @@ def main():
             return 0
         if not argv:
             return 0
+        if unreadable(command) or reparsed(argv):
+            deny(PARSE_MESSAGE)
+            return 0
         script = here.parent / 'skills' / 'delegate' / 'scripts' / 'afk.py'
         if own_lease_command(argv, script):
             return 0
@@ -170,7 +240,8 @@ def main():
         import afk
 
         paths = expanded_paths(argv)
-        if paths and afk.floored(None, paths, cwd):
+        expanded = [os.path.expandvars(os.path.expanduser(word)) for word in argv]
+        if (paths and afk.floored(None, paths, cwd)) or (expanded != argv and afk.floored(expanded, None, cwd)):
             deny(parked('floor'))
             return 0
         buffer = io.StringIO()
