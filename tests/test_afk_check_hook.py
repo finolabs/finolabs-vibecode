@@ -160,13 +160,16 @@ class AfkCheckHookTest(unittest.TestCase):
                         "printf x|sh", 'command eval x', r'find . -exec /usr/bin/printen? \;',
                         r"find . -exec sh -c 'printenv' \;", 'setopt extendedglob; cat ~/.ne^Q', 'set -o extendedglob',
                         'set -oextendedglob', 'builtin eval x', 'nocorrect ls', 'case x in x) ls;; esac',
-                        'function f { ls; }', 'hash -p /bin/ls p', "trap 'ls' EXIT", "caffeinate -s sh -c 'ls'", 'stdbuf -oL ls', 'command -p ls', 'time -p ls', 'sudo -n ls',
+                        'function f { ls; }', 'hash -p /bin/ls p', "trap 'ls' EXIT", "caffeinate -s sh -c 'ls'", 'stdbuf -oL ls', "xargs -J % sh -c 'ls'", "xargs -n 1 -E x sh -c 'ls'",
+                        "npx --package x sh -c 'ls'", "uvx --from x sh -c 'ls'", "flock f -c 'ls'",
+                        "timeout --kill-after 1 5 sh -c 'ls'", 'command -p ls', 'time -p ls', 'sudo -n ls',
                         r'find . -exec timeout 5 sh -c x \;'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), denial(PARSE))
         # Ordinary forms stay readable.
         for command in ('git status', 'echo "${HOME}"', 'find . -name x -exec ls {} +', 'bash scripts/run.sh',
-                        'python3 -c "print(1)"', 'set -e', 'set -euo pipefail', 'env FOO=1 ls'):
+                        'python3 -c "print(1)"', 'set -e', 'set -euo pipefail', 'env FOO=1 ls', 'env -i ls', 'xargs -0 -n 1 ls', 'timeout 5 ls',
+                        'npx -y prettier --check .'):
             with self.subTest(command=command):
                 self.assertNotEqual(self.hook(command), denial(PARSE))
 

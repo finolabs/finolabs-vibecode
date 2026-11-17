@@ -122,9 +122,12 @@ OPTION_COMMANDS = {'setopt', 'unsetopt', 'shopt', 'emulate'}
 # Words a shell reads as code or as a lookup the hook cannot follow: never judged, always the split message.
 OPAQUE_WORDS = {'builtin', 'nocorrect', 'hash', 'alias', 'function', 'case', 'coproc', 'enable', 'unalias', 'trap',
                 'watch', 'parallel'}
-# Wrappers whose flags `commands_of` reads correctly with its shared table (checked in review); a flag right after any
-# other wrapper may hide the command it runs.
-PARSED_WRAPPERS = {'env', 'timeout', 'xargs', 'nohup', 'exec', 'flock', 'script', 'nice', 'npx', 'bunx', 'uvx'}
+# The only flags a wrapper may carry before the command it runs: flags the shared table reads correctly (each
+# valued one with its value). Any other flag after any wrapper, and any flag at all after `flock` or `script`, may
+# hide that command, so it gets the split message.
+WRAPPER_FLAGS = {'env': {'-i': 0, '-u': 1}, 'xargs': {'-0': 0, '-n': 1, '-I': 1, '-L': 1, '-P': 1, '-t': 0, '-r': 0},
+                 'timeout': {'-k': 1, '-s': 1}, 'nice': {'-n': 1}, 'exec': {'-a': 1, '-c': 0, '-l': 0},
+                 'npx': {'-y': 0, '--yes': 0, '-p': 1}}
 GLOB_OPTIONS = ('glob', 'magic', 'equals', 'brace', 'rcexpand', 'wordsplit')
 EXEC_FLAGS = {'-exec', '-execdir', '-ok', '-okdir'}
 
@@ -150,10 +153,18 @@ def reparsed(argv, afk):
     a program name holding an expansion, a glob or a brace."""
     if any(word in OPAQUE_WORDS for word in argv):
         return True
-    for index, word in enumerate(argv[:-1]):
+    wrappers = afk.PREFIX_WORDS | afk.FILE_PREFIXES
+    for index, word in enumerate(argv):
         base = os.path.basename(word)
-        if (base in (afk.PREFIX_WORDS | afk.FILE_PREFIXES) - PARSED_WRAPPERS and argv[index + 1].startswith('-')):
-            return True  # a wrapper flag `commands_of` may read as taking a value
+        if base not in wrappers:
+            continue
+        allowed, at = WRAPPER_FLAGS.get(base, {}), index + 1
+        if base in afk.FILE_PREFIXES and any(w.startswith('-') for w in argv[index + 1:index + 4]):
+            return True
+        while at < len(argv) and argv[at].startswith('-') and argv[at] not in OPERATORS:
+            if argv[at] not in allowed:
+                return True  # a wrapper flag `commands_of` may misread
+            at += 1 + allowed[argv[at]]
     for reading in afk.READINGS:
         for program, words, _env, inline, _pattern in afk.commands_of(argv, full=True, split_patterns=reading):
             if inline:
