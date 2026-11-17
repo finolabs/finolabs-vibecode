@@ -125,7 +125,7 @@ OPAQUE_WORDS = {'builtin', 'nocorrect', 'hash', 'alias', 'function', 'case', 'co
 # The only flags a wrapper may carry before the command it runs: flags the shared table reads correctly (each
 # valued one with its value). Any other flag after any wrapper, and any flag at all after `flock` or `script`, may
 # hide that command, so it gets the split message.
-WRAPPER_FLAGS = {'env': {'-i': 0, '-u': 1}, 'xargs': {'-0': 0, '-n': 1, '-I': 1, '-L': 1, '-P': 1, '-t': 0, '-r': 0},
+WRAPPER_FLAGS = {'xargs': {'-0': 0, '-n': 1, '-I': 1, '-L': 1, '-P': 1, '-t': 0, '-r': 0},
                  'timeout': {'-k': 1, '-s': 1}, 'nice': {'-n': 1}, 'exec': {'-a': 1, '-c': 0, '-l': 0},
                  'npx': {'-y': 0, '--yes': 0, '-p': 1}}
 GLOB_OPTIONS = ('glob', 'magic', 'equals', 'brace', 'rcexpand', 'wordsplit')
