@@ -582,7 +582,9 @@ class HookTest(unittest.TestCase):
         for name in (".claude-plugin", ".codex-plugin"):
             config = json.loads((ROOT / name / "hooks.json").read_text())
             for group in config["hooks"]["Stop"]:
-                self.assertTrue(all(h["async"] for h in group["hooks"]), name)
+                # The proof nudge must run synchronously so its context line reaches the agent.
+                hooks = [h for h in group["hooks"] if "proof_nudge.py" not in h["command"]]
+                self.assertTrue(all(h["async"] for h in hooks), name)
 
     def test_session_start_prunes_files_past_retention(self):
         self.consent(30)
