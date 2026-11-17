@@ -20,7 +20,7 @@ PLUGIN = "finolabs-vibecode"
 PRINCIPLE = "A file that says something is on is not proof that it runs."
 # Required sections; Effort preference, Delegation mode, Routing and ZCode are optional, and the `## Limits` section
 # retired in 0.2.5 (nothing reads it) is optional too, so a host config that dropped it stays complete.
-HEADINGS = {"Briefs folder", "Coordinators and reach", "Route judgment",
+HEADINGS = {"Briefs folder", "Coordinators and reach", "Instruction check",
             "Dispatch marker", "Claude Code", "Codex", "Antigravity",
             "Review posting", "Delegate environment"}
 MAX_BYTES = 262144
@@ -427,7 +427,7 @@ def instruction_consent(text):
     text = re.sub(r"<!--.*?(?:-->|\Z)", "", text, flags=re.S)
     for _, line in unfenced(text):
         if re.match(r"^#{1,2} ", line):
-            active = [] if line.strip() == "## Route judgment" else None
+            active = [] if line.strip() == "## Instruction check" else None
             if active is not None:
                 sections.append(active)
         elif active is not None:
@@ -1008,7 +1008,7 @@ def project_tracking(text, root):
 
 def legacy_evidence(status, text):
     """Retired host.md sections and lines, by fixed name only; never a value from them."""
-    from upgrade_state import legacy
+    from upgrade_state import headings, legacy
     import assignments
     found = legacy(text) if status == "ok" else []
     fixes = ["set again per repository (/setup add project, /setup add checks), then delete by hand"] if found else []
@@ -1019,6 +1019,10 @@ def legacy_evidence(status, text):
     if status == "ok" and has_agent_levels(text) and assignments.parse(text).state != "absent":
         found.append("## Agent levels beside the matrix")
         fixes.append("the matrix holds levels, so delete Agent levels by hand")
+    # Retired 0.3.2: the instruction-check consent lives in its own section; migrate moves it.
+    if status == "ok" and "Route judgment" in headings(text):
+        found.append("## Route judgment")
+        fixes.append("/setup add delegation (migrate) moves its Instruction check line and removes it")
     if not found:
         return []
     return [item("legacy host settings", "missing", "no longer read: " + ", ".join(found) + "; " + "; ".join(fixes))]
