@@ -55,6 +55,7 @@ Every item in the table below was checked against what ships at the release bran
 
 - 16/11/2026: ship the three breaking changes (the `fnl-` aliases removed, the agents renamed, afk `open` as the default) as 0.3.2, a patch, because the shipped text, upgrade notes and tests already name 0.3.2. This overrides `versioning`, which asks for a MINOR bump for a breaking change in phase 0, and applies to 0.3.2 only; the changelog marks the entries Breaking and the upgrade notes say what to do.
 - 16/11/2026: remove the `fnl-` aliases and drop the prefix from the agents; afk `open` mode is the default, with the credential floor, the default-branch guard and the third-party-instructions guard; the afk overlay (see `CLAUDE.md`, the ninth scoped exception, and `docs/specs/afk-overlay.md`).
+- 17/11/2026: reviews route to ZCode, headless in `plan` mode; the standing relay of a security review also holds under an `open` lease (the "Reviews" section of [CLAUDE.md](../../CLAUDE.md)).
 
 ## The upgrade
 
@@ -67,4 +68,3 @@ Every item in the table below was checked against what ships at the release bran
 - Live delivery of the afk overlay on Claude Code and Codex hosts remains unverified.
 - A real upgrade from 0.3.1 on a user's machine remains unverified.
 - The `finolabs/plugins` catalog entry moves only with the owner's go after the tag.
-- The Reviews section of `CLAUDE.md` (line 46) still ties the standing relay of a security review to "an away lease with Merge yes", but `open`, the default, ignores the `Merge` answer. That is owner rule text: the owner decides the new wording in its own pull request.

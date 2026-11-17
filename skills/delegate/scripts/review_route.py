@@ -30,8 +30,9 @@ import quota_probe
 import review_config as config
 import git_metadata as metadata
 
-FORMS = {"claude": "agent", "codex": "headless", "antigravity": "headless"}
-# A family without a verified review form (ZCode today) never reviews or authors here.
+# ZCode reviews headless in `plan` mode (owner decision, 17/11/2026); a family missing here never reviews or authors.
+# A ZCode-authored range does not route yet: `author_family` accepts no ZCode trailer, so it fails closed.
+FORMS = {"claude": "agent", "codex": "headless", "antigravity": "headless", "zcode": "headless"}
 ORDER = tuple(f for f in config.FAMILIES if f in FORMS)
 OID = re.compile(r"[0-9a-f]{40}")
 MAX_OBJECT = 16 * 1024 * 1024
@@ -363,6 +364,11 @@ def route(author, text, quota_lines, *, lane=False, kinds=("code", "security"), 
     if matrix == "unset":
         raise ValueError("assignment matrix unset")
     present = config.present_families(text)
+    if matrix == "valid":
+        # A usable matrix names the helpers vibecode uses: a present family without a line there never reviews
+        # (an extra command, `claude<suffix>` or `zcode<suffix>`, is its prefix's family, as in `read_roles`).
+        listed = {config.family_of(agent) for agent in am.parse(text).agents}
+        present = present & listed
     if not present:
         raise ValueError("no present family")
     roles, posting = config.read_roles(text), config.read_posting(text)

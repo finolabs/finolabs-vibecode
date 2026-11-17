@@ -2730,6 +2730,15 @@ class AwayFlowTest(AfkBase):
         self.assertEqual(self.invoke('log', '--kind', 'merge', '--pr', '7', '--head', head)[0], 3)  # nothing pinned
         self.merge_ok('7', head, age=899)
         self.check(argv)
+        # The repository's commit rules pass the merge commit's author email (UAT 17/11/2026).
+        self.check(argv + ['--author-email', 'synthetic@example.com'])
+        self.check(argv + ['--author-email', '--admin'], tier=3, code='unknown')
+        for value, code in (('not-an-email', 'unknown'), ('a@b', 'unknown'), ('x y@example.com', 'unknown'),
+                            ('a@example.com;rm', 'unknown'), ('$GITHUB_TOKEN', 'protected'), ('${GH_TOKEN}', 'floor'),
+                            ('ghp_' + 'a' * 36, 'protected')):  # code and security reviews of PR 332
+            with self.subTest(value=value):
+                self.check(argv + ['--author-email', value], tier=3, code=code)
+        self.check(argv + ['--author-email=synthetic@example.com'])
 
     def test_merge_check_records_a_receipt_only_during_a_live_lease(self):
         sys.path.insert(0, str(SCRIPT.parent))
