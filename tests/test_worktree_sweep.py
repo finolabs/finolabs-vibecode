@@ -241,6 +241,38 @@ class SweepTest(unittest.TestCase):
         for word in ("unpushed=0", "merged=yes", "candidate=yes"):
             self.assertIn(word, line)
 
+    def test_a_folder_only_the_global_ignore_file_hides_keeps_a_worktree_clean(self):
+        path = self.worktree("globalignore", merge=True)
+        (path / ".agentcache").mkdir()
+        (path / ".agentcache/state").write_text("local\n")
+        self.assert_not_candidate(self.sweep().stdout, path, "dirty")
+        for configured in (True, False):
+            with self.subTest(configured=configured):
+                if configured:
+                    ignore = self.base / "global-ignore"
+                    self.git(self.base, "config", "--global", "core.excludesFile", str(ignore))
+                else:
+                    self.git(self.base, "config", "--global", "--unset", "core.excludesFile")
+                    ignore = self.home / ".config/git/ignore"
+                    ignore.parent.mkdir(parents=True, exist_ok=True)
+                ignore.write_text(".agentcache/\n")
+                line, commands = self.block(self.sweep().stdout, path)
+                self.assertIn(" clean ", line)
+                self.assertIn("candidate=yes", line)
+                ignore.unlink()
+        # The configured value is used as written: a trailing space or newline names another file, never the trimmed one.
+        trimmed = self.base / "trimmed-ignore"
+        trimmed.write_text("*\n")
+        for value in (str(trimmed) + " ", str(trimmed) + "\n"):
+            with self.subTest(value=repr(value)):
+                self.git(self.base, "config", "--global", "core.excludesFile", value)
+                self.assert_not_candidate(self.sweep().stdout, path, "dirty")
+        self.git(self.base, "config", "--global", "--unset", "core.excludesFile")
+        # A real untracked file is still dirty with the global file in force.
+        (self.home / ".config/git/ignore").write_text(".agentcache/\n")
+        (path / "notes.txt").write_text("untracked\n")
+        self.assert_not_candidate(self.sweep().stdout, path, "dirty")
+
     def test_locked_and_detached_worktrees_are_not_candidates(self):
         locked = self.worktree("feat-locked", merge=True)
         self.git(self.main, "worktree", "lock", str(locked))

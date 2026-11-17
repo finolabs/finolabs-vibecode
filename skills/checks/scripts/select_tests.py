@@ -6,7 +6,9 @@ Usage, from the repository root: select_tests.py [--base <ref>]   (default origi
 A module reads a changed file when its text names the file's path, its file name (Python
 files) or its module name in an import or a quoted string. A changed file counts as changing
 every copy of it: a file of the same name in another `scripts/` or `references/` folder. A
-changed test module selects itself. A changed file no module names prints as
+changed test module selects itself. A module that builds paths at run time declares the folders it
+reads with a line `# select-tests: reads <folder>/`; a changed file under that folder selects it.
+A changed file no module names prints as
 `no test names: <path>`. The only command run is `git diff --name-only`, with a fixed argv
 and no shell; no test runs. Untracked files are not seen. Advisory: the text match is a
 heuristic, so a module that builds a path at run time can be missed.
@@ -24,6 +26,8 @@ import run_env
 COPY_FOLDERS = ('scripts', 'references')
 SKIP_FOLDERS = {'node_modules', '__pycache__'}
 GROUP_SIZE = 2
+SEGMENT = r'(?!\.{1,2}/)[A-Za-z0-9._-]+'
+READS = re.compile(r'^# select-tests: reads (' + SEGMENT + r'/(?:' + SEGMENT + r'/)*)[ \t]*$', re.M)
 REF = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/@{}^~-]{0,199}')
 
 
@@ -88,8 +92,11 @@ def select(root, changed):
         if (pure.parent.as_posix() == 'tests' and pure.name.startswith('test_') and pure.suffix == '.py'
                 and f'tests.{pure.stem}' in modules):  # a deleted module is never scheduled
             hits.add(f'tests.{pure.stem}')
-        checks = [p for copy in copies(path, index) for p in patterns(copy)]
+        every = copies(path, index)
+        checks = [p for copy in every for p in patterns(copy)]
         hits.update(name for name, text in modules.items() if any(c.search(text) for c in checks))
+        hits.update(name for name, text in modules.items()
+                    if any(copy.startswith(folder) for folder in READS.findall(text) for copy in every))
         if hits:
             chosen.update(hits)
         else:

@@ -151,7 +151,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/update_check.py` | Cached update status, skip/never/pin preferences, the detached fixed-endpoint release check, the upgrade-notes checklist (`whats-new`, `onboard seen`/`skip`) and evidence-checked `target`. |
 | `skills/setup/scripts/upgrade_state.py` | Read-only checks behind the upgrade-notes checklist and `setup check`: whether each note's legacy host settings or approved files are still present, so a done step shows as done. |
 | `scripts/verify_claim.py` | Checks head, scope and targeted tests, writes verification metadata and prepares host-judge evidence; grants no acceptance. |
-| `scripts/select_tests.py` | Lists the test modules that name a file changed since a base, treating shared copies as one, with commands of at most two modules; runs no test. |
+| `scripts/select_tests.py` | Lists the test modules that name a file changed since a base, treating shared copies as one and selecting a module whose `# select-tests: reads <folder>/` line covers the file, with commands of at most two modules; runs no test. |
 
 ### Skill-only scripts
 

@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+# select-tests: reads skills/setup/
+
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / "skills/setup"
 REFS = SKILL / "references"
