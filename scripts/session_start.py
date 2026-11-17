@@ -44,8 +44,8 @@ def user_only_line(routing):
 
 
 COMPACT_TITLE = (
-    "\nAfter compaction (advisory, agent judgment): invoke the tidy skill now; compare this session's "
-    "title with the current task and rename it if it is stale, then continue from the handover.\n")
+    "\nAfter compaction (advisory, agent judgment): compare this session's title with the current task and "
+    "rename it in the session-start title format if it is stale, then continue from the handover.\n")
 
 COMPACT_DELEGATION = (
     "\nDelegation after compaction (advisory, agent judgment): before starting the first of two or more "

@@ -94,7 +94,7 @@ class SessionStartTest(SyntheticStateTest):
         raw = json.dumps({"source": "compact", "session_id": "synthetic"}).encode()
         for mode in ("manual", "suggest", "auto", None):
             out, _ = self.run_hook(raw, delegation=mode)
-            self.assertIn(b"invoke the tidy skill", out)
+            self.assertIn(b"session-start title format", out)
             self.assertIn(b"rename it", out)
         for source in ("startup", "resume", "clear"):
             startup = json.dumps({"source": source, "session_id": "synthetic"}).encode()

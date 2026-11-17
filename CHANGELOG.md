@@ -25,6 +25,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - afk: the bare `export`, `set` and `env` exception of the credential floor applies only to a word cut out of a search pattern after a lone `|` or `&`; `find . -exec sh -c 'a;export' ';'` now answers `floor`. `merge_check.py` reads a lease as `strict` when its `## afk` section has a key `afk.py` does not read or an invalid guard value.
 
 - The afk mechanism and away decision diagrams say they show `strict` and that `open`, the default, runs every action except the credential floor and the default-branch guard (`git commit` and `git push` only), with an advisory third-party-instructions guard and no enforced review or `merge_check.py`; their PNG renderings and the README alt text are updated. The README, `help` map and pages, and the comparison page describe the modes, the guards, the overlay, the setup mode question and the helper picker.
+- The session-start rules carry the proof rule (a report is a claim: run the targeted tests yourself and read the output; a missing setup or credential is BLOCKED, not PASS) and the session title format and per-host mechanism, so a rename no longer loads `tidy`; `checks` is still invoked before accepting a delegated run. `tidy` "Context pressure" moves to `references/context-pressure.md`, read when the compaction nudge fires, context passes about 60% or work hands over.
 
 ### Removed
 
