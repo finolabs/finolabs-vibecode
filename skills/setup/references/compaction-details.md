@@ -12,11 +12,11 @@ The one place for the suggested numbers; they are advisory (agent judgment), nev
 | Single-task implementation on a 1M-window model | later, about 600000 to 800000, or the host default with a fresh session per story | One task's context stays relevant longer, and `tidy` already advises a fresh session per story over a compaction. |
 | A smaller window (for example 200000 tokens, or a Codex model) | about 70% to 80% of the window | Leaves the 80% nudge band room for a handover before the host compacts; Claude Code accepts no less than 100000. |
 
-Scope follows the session kind: a coordinator that always runs in one repository fits that repository's local file; one value for every repository fits user scope; Claude Code's `--autocompact <tokens>` launch flag sets one session only (see `tidy`'s context settings).
+Settings cannot tell a coordinator from a task session, so save the task row; a Claude Code coordinator opens with `CLAUDE_CODE_AUTO_COMPACT_WINDOW=<tokens> claude`, not `--autocompact`, which hooks miss, so the nudge would come late (2.1.325, 17/11/2026). Desktop-app sessions get the saved value. Setup never sets it (advisory).
 
 ## Native threshold preview
 
-Run `python3 -I <this skill folder>/scripts/compact_setup.py preview --host <claude|codex> --tokens <chosen value>`. Claude defaults to the account home's `.claude/settings.json`; with chosen folders pass each as `--folder <absolute config folder>` (at most four, replacing the default). Codex uses an absolute `CODEX_HOME`, otherwise the account home's `.codex/config.toml`. For this repository only (Claude Code), pass `--project <absolute repository root>` instead of `--folder`: the target is `<root>/.claude/settings.local.json`. The script refuses a path that is not the checkout root and a file listed in Git's index (it would not stay on this machine), and creates `.claude` (mode 0700) only when applying; it never changes Git files, so if `git status` lists the new file, say it can go in `.git/info/exclude`. Show every target, scope, existence, key change, backup name, warning and `Digest:`, then ask separately:
+Run `python3 -I <this skill folder>/scripts/compact_setup.py preview --host <claude|codex> --tokens <chosen value>`. Claude defaults to the account home's `.claude/settings.json`; with chosen folders pass each as `--folder <absolute config folder>` (at most four, replacing the default). Codex uses an absolute `CODEX_HOME`, otherwise the account home's `.codex/config.toml`. For this repository only (Claude Code), pass `--project <absolute repository root>` instead of `--folder`: the target is `<root>/.claude/settings.local.json`. The script refuses a path that is not the checkout root or a file in Git's index, creates `.claude` (0700) only when applying and never changes Git files; if `git status` lists the new file, say it can go in `.git/info/exclude`. When it counts per-model `autoCompactWindow` values, which override the saved one, offer `--clear-model-overrides` to remove them in the same write. Show every target, scope, existence, change, backup, warning and `Digest:`, then ask separately:
 
 ## Native threshold apply and enforcers
 
@@ -26,8 +26,8 @@ The host enforces the threshold; it applies to sessions started afterwards, and 
 
 ## Antigravity stop preview
 
-After a clear yes ask for an integer from 50000 to 20000000 bytes, then run `python3 -I <this skill folder>/scripts/compact_stop_setup.py preview --limit <chosen bytes>`.
-The target is fixed at the account home's `.gemini/config/hooks.json`; the file and its folder must be owned by the user, not symlinks, not group- or world-writable, and outside every git work tree (the plugin folder follows the same rule, except Antigravity's own installed copy, which keeps its `.git` directory; a development checkout is refused, so install the plugin into Antigravity first). Show the host section and hooks change, group, absolute command, byte caveat, backup and full `Digest:`, then ask:
+After a yes ask for an integer from 50000 to 20000000 bytes, then run `python3 -I <this skill folder>/scripts/compact_stop_setup.py preview --limit <chosen bytes>`.
+The target is fixed at the account home's `.gemini/config/hooks.json`; the file and its folder must be the user's, not symlinks, not group- or world-writable, outside every git work tree (so is the plugin folder, except Antigravity's installed copy with its `.git`; a development checkout is refused, so install into Antigravity first). Show the host section and hooks change, group, absolute command, byte caveat, backup and full `Digest:`, then ask:
 
 ## Steward explanation
 

@@ -8,6 +8,11 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 - The low-risk lane covers a catalog pin (owner decision, 17/11/2026): a plugin catalog (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) whose only changes are existing entries' `source.ref`, moved to a release tag `vX.Y.Z`, and their descriptions takes one review pass; `merge_check.py --lane` decides.
 - Each release moves `ref` to the new tag in every host catalog that pins the plugin, the Codex catalog included (`versioning`, `update` hosts, `plugin-packaging` catalogs): an unpinned Codex entry reinstalled the default branch while `/update` reported the release.
+- Compaction setup by session kind (owner decisions, 17/11/2026): settings cannot tell a coordinator from a task session, so the saved threshold serves task sessions and setup shows a launch line for coordinators, `CLAUDE_CODE_AUTO_COMPACT_WINDOW=<tokens> claude`. Setup and help say the threshold is when the host compacts, not the model's window. `compact_setup.py preview --clear-model-overrides` removes per-model `modelSettings.<model>.autoCompactWindow` values in the same approved write; without it the preview prints their count and how to clear them.
+
+### Known limits
+
+- Claude Code's `--autocompact` flag sets the host's threshold but hooks never see it (checked on 2.1.325, 17/11/2026), so a session opened with it gets the compaction nudge at the settings value, after the host has compacted. Use the variable instead. A hook that recognizes a coordinator and warns about its threshold was dropped: no hook can read the flag or a reliable role signal.
 
 ## [0.3.2] - 2026-11-17
 
