@@ -207,16 +207,26 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(self.pick(host(posting=posting) + matrix(code="codex", security="antigravity"))[0][0], "codex")
         self.assertEqual(self.pick(host(("claude", "codex"), posting=posting))[0][0], "codex")
 
-    def test_family_without_review_form_is_skipped_not_raised(self):
-        self.assertNotIn("zcode", route.ORDER)
-        self.assertTrue(set(route.ORDER) <= set(route.FORMS))
+    def test_zcode_reviews_headless(self):
+        # Owner decision, 17/11/2026: ZCode is a review family like the others.
+        self.assertEqual(route.ORDER, config.FAMILIES)
         present = ("claude", "codex", "antigravity", "zcode")
         rows = self.pick(host(present) + matrix(code="zcode", security="zcode"))
-        self.assertEqual(rows, [("codex", "headless", "capability-one-run-two-comments")] * 2)
-        rows = self.pick(host(("claude", "zcode")) + matrix(code="zcode"), kinds=("code",))
-        self.assertEqual(rows, [("claude", "agent", "same-family")])
-        with self.assertRaisesRegex(ValueError, "unverified author"):
-            route.route("zcode", host(present), [])
+        self.assertEqual(rows, [("zcode", "headless", "assigned-one-run-two-comments")] * 2)
+        # An extra ZCode command keeps its family, for roles and for the listed families (code review of PR 332).
+        text = host(present) + matrix(code="zcodework", security="codex")
+        self.assertEqual(config.read_roles(text)["code review"], "zcode")
+        lines = ["Quota codex: rate-limit marker 2026-11-17T00:00:00Z; out of quota until 2999-01-01T00:00:00Z (advisory)"]
+        self.assertEqual([r[0] for r in route.route("codex", text, lines)], ["zcode", "zcode"])
+
+    def test_a_present_family_without_a_matrix_line_never_reviews(self):
+        # 17/11/2026: Antigravity left the matrix but stayed present, and took the reviews when Codex ran out.
+        text = host() + "## Assignment matrix\n\n- Consent: yes (2026-11-09)\n- Judge: host\n" \
+            "- claude: levels 1-5\n- codex: levels 1-4; roles code-review, security-review\n"
+        lines = ["Quota codex: rate-limit marker 2026-11-17T00:00:00Z; out of quota until 2999-01-01T00:00:00Z (advisory)"]
+        rows = route.route("claude", text, lines)
+        self.assertEqual([r[0] for r in rows], ["claude", "claude"])
+        self.assertTrue(all(r[2].startswith("same-family") for r in rows))
 
     def test_no_available_family_is_error(self):
         with self.assertRaises(ValueError):
