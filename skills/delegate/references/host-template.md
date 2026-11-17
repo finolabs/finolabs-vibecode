@@ -49,6 +49,12 @@ Private HOME is an open owner decision and is not offered or created in this pac
 - antigravity: unverified (checked 2026-11-07)
 - zcode: unverified (checked 2026-11-07)
 
+## Reviews
+
+- Rework limit: 2
+
+How many rework rounds `review-gate` runs before it hands the remaining findings to the owner: 2, 3 or 4; absent or invalid means 2. `/setup add delegation` asks it with the roles. `ledger.py finish` refuses more rounds than this without a `--reason` (script-enforced); stopping at it is advisory (agent judgment).
+
 ## Quota probe
 
 - Quota probe: off

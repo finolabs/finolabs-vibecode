@@ -1434,6 +1434,23 @@ class LedgerReviewFixesTest(unittest.TestCase):
         self.run_ledger("finish", ident, "--outcome", "rejected", "--rework-rounds", "3", "--reason", "Synthetic loop")
         self.assertEqual(self.records()[-1]["rework_rounds"], 3)
 
+    def test_rework_limit_comes_from_the_recorded_setting(self):
+        host = self.path.parent / "host.md"
+        for text, limit in (("## Reviews\n\n- Rework limit: 3\n", 3), ("## Reviews\n- Rework limit: 4\n", 4),
+                            ("## Reviews\n- Rework limit: 5\n", 2), ("## Reviews\n- Rework limit: 1\n", 2),
+                            ("## Reviews\n- Rework limit: 3\n- Rework limit: 4\n", 2),
+                            ("## Other\n- Rework limit: 4\n", 2), ("## Reviews\n```\n- Rework limit: 4\n```\n", 2),
+                            ("## Reviews\n- Rework limit: three\n", 2), ("", 2)):
+            with self.subTest(text=text):
+                host.write_text(text)
+                ident = self.run_ledger(*START).stdout.strip()
+                over = self.run_ledger("finish", ident, "--outcome", "rejected", "--rework-rounds", str(limit + 1),
+                                       check=False)
+                self.assertEqual(over.returncode, 1)
+                self.assertIn(f"--rework-rounds above {limit} needs a --reason", over.stderr)
+                self.run_ledger("finish", ident, "--outcome", "rejected", "--rework-rounds", str(limit))
+                self.assertEqual(self.records()[-1]["rework_rounds"], limit)
+
     def test_accepted_with_failed_tests_is_refused(self):
         ident = self.run_ledger(*START).stdout.strip()
         refused = self.run_ledger("finish", ident, "--outcome", "accepted", "--tests", "failed",

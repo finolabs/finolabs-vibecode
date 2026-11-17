@@ -576,7 +576,7 @@ class CheckupTest(unittest.TestCase):
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)))
         self.assertEqual(self.setup_item("host config")["status"], "ok")
         template = (ROOT / "skills/delegate/references/host-template.md").read_text()
-        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Heavy jobs", "ZCode", "Machine rules"})
+        self.assertEqual(checkup.HEADINGS, set(re.findall(r"^## (.+)$", template, re.M)) - {"Effort preference", "Delegation mode", "Routing", "Agents on this machine", "Quota probe", "Heavy jobs", "ZCode", "Machine rules", "Reviews"})
         self.assertNotIn("ZCode", checkup.HEADINGS)  # host configs written before ZCode stay complete
         self.assertNotIn("Limits", checkup.HEADINGS)  # retired in 0.2.5: a host config without it is complete
         config.write_text("\n".join("## " + h for h in sorted(checkup.HEADINGS)) + "\n## Machine rules\n")
@@ -634,7 +634,7 @@ class CheckupTest(unittest.TestCase):
         template = (ROOT / "skills/delegate/references/host-template.md").read_text()
         headings = re.findall(r"^## (.+)$", template, re.M)
         expected = ['Delegation mode', 'Routing', 'Agents on this machine', 'Delegate environment',
-                    'Review posting', 'Quota probe', 'Machine rules', 'Heavy jobs',
+                    'Review posting', 'Reviews', 'Quota probe', 'Machine rules', 'Heavy jobs',
                     'Effort preference', 'Briefs folder', 'Coordinators and reach', 'Instruction check',
                     'Dispatch marker', 'Claude Code', 'Codex', 'Antigravity', 'ZCode']
         self.assertEqual(headings, expected)
