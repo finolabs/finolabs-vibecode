@@ -53,7 +53,7 @@ Recheck: `agy models`, `agy --help`, and `agy -p /usage --output-format json`.
 
 ## ZCode
 
-Read from ZCode's own CLI documentation on 12/11/2026 (`agents.md` "ZCode"). Recheck: `zcode --version` and the model chosen in ZCode's settings.
+Read from ZCode's own CLI documentation on 12/11/2026 (`agents/zcode.md` "ZCode"). Recheck: `zcode --version` and the model chosen in ZCode's settings.
 
 - Trust bar: published by Z.ai ([zai-org/ZCode](https://github.com/zai-org/ZCode), Apache-2.0, actively maintained). A dispatch sends the brief and the repository code it reads to the model provider set in ZCode's configuration, under that provider's terms.
 - Models: chosen in ZCode's own settings; the CLI has no per-dispatch model flag, so a `zcode` model in the assignment matrix and in host config `## ZCode` is a record of the user's choice, not an argument. <list the confirmed model ids here>.

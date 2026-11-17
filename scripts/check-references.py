@@ -13,7 +13,7 @@
 - Every `file.md` "Heading" or [file.md](file.md) "Heading" names a heading in that file, in the same skill.
 - Every relative Markdown link points to an existing file.
 - Every ledger subcommand a skill cites exists in ledger.py, with its own flags and allowed values.
-- Every flag in a host config command is described in agents.md for that agent.
+- Every flag in a host config command is described in that agent's contract under agents/.
 
 Usage: scripts/check-references.py [repository root]
 Prints one line per broken reference and exits 1 when there are any.
@@ -256,14 +256,15 @@ def cli_flags(text):
 
 def check_host_template(root, problems):
     base = root / "skills/delegate/references"
-    template, contracts = sections(base / "host-template.md"), sections(base / "agents.md")
-    for agent in ("Claude Code", "Codex", "Antigravity"):
-        if agent not in template or agent not in contracts:
-            problems.append(f"host-template.md and agents.md both need a \"{agent}\" section")
+    template = sections(base / "host-template.md")
+    for agent, slug in (("Claude Code", "claude-code"), ("Codex", "codex"), ("Antigravity", "antigravity")):
+        contract = base / "agents" / f"{slug}.md"
+        if agent not in template or not contract.is_file():
+            problems.append(f"host-template.md needs a \"{agent}\" section and agents/{slug}.md its contract")
             continue
-        described = cli_flags(contracts[agent])
+        described = cli_flags(contract.read_text())
         for flag in sorted(cli_flags(template[agent]) - described):
-            problems.append(f"host-template.md \"{agent}\": {flag} is not described in agents.md")
+            problems.append(f"host-template.md \"{agent}\": {flag} is not described in agents/{slug}.md")
 
 
 def check_review_by(root, problems):
