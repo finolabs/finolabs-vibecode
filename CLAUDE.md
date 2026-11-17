@@ -52,6 +52,8 @@ Same-family security fallback (owner decision, 17/11/2026): outside an away leas
 
 `.claude-plugin/plugin.json` is the single source of truth for the version; `.codex-plugin/plugin.json` and `.antigravity-plugin/plugin.json` must match it. Follow `skills/versioning/SKILL.md` for bumps, the changelog and tags. Record every change to the public surface under `Unreleased` in `CHANGELOG.md`.
 
+Docs that describe the product (owner decision, 17/11/2026): a pull request that changes what a user sees or does (a skill's behavior, a setup question, a hook, a command, an upgrade step) updates, in the same pull request, every one of these that the change touches: `README.md` (skill and setup tables, the release section, alt text), `skills/help/references/skills/<name>.md` for each affected skill, `skills/help/references/map.md`, `tips.md` and `troubleshooting.md`, `skills/setup/references/check.md` (what Check reports and which hooks run automatically), `skills/update/references/upgrades.json` (a note when the user must or may act), `PRIVACY.md`, `docs/how-it-compares.md` and the `docs/diagrams/` sources. Before a release, the drift review in `docs/specs/release-X.Y.Z.md` walks this whole list for every merged pull request, one row per surface, not only the ones the last record listed (enforcer: review gate and agent judgment, advisory).
+
 ## Checks before committing
 
 - `claude plugin validate .` passes.
