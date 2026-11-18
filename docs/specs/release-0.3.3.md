@@ -34,7 +34,7 @@ The changelog's 0.3.3 section holds the user-facing wording; `update` carries th
 
 ## Drift review
 
-Checked against `main` at `b03334c` (after pull request 365), surface by surface, for every merged pull request from 345 to 365. `CLAUDE.md` was read, not edited. Pull request 366 merged after the first pass; its own pull request updated the README skill table and companions, the skill count in the three manifests, its help page, the help map and tips, the upgrade notes and the changelog. Checked again at `a863cce` for 366: the release section below names it; `how-it-compares.md` and the `skills-architecture` diagram do not list individual gates beside `security-review-gate`, so they were left unchanged.
+Checked against `main` at `b03334c` (after pull request 365), surface by surface, for every merged pull request from 345 to 365. `CLAUDE.md` was read, not edited. Pull request 366 merged after the first pass; its own pull request updated the README skill table and companions, the skill count in the three manifests, its help page, the help map and tips, the upgrade notes and the changelog. Checked again at `a863cce` for 366: the release section below names it; `how-it-compares.md` names no individual gate, so it was left unchanged; the `skills-architecture` diagram drifted (its gates box named only `security-review-gate`, its description said 0.3.2): the box now reads `security-review-gate · ui-review-gate` and the PNGs were re-rendered.
 
 | Surface | Result |
 | --- | --- |
