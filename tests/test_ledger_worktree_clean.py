@@ -423,6 +423,52 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertEqual(len(self.retiring()), 1, lines)
         self.assertTrue(any("not the one claimed" in line for line in lines), lines)
 
+    def test_a_replacement_during_the_size_walk_is_left_alone(self):
+        path = self.worktree("feat-sw")
+        self.dispatch(path)
+        other = self.worktree("feat-sw2", merge=False)
+        (other / "extra.txt").write_text("unpushed\n")
+        self.git(other, "add", "extra.txt")
+        self.git(other, "commit", "-q", "-m", "Unpushed")
+        ledger, sweep = self.load_ledger()
+        real_size = sweep.size_on_disk
+        swapped = []
+
+        def size_on_disk(target):
+            if ".fnl-retiring-" in str(target) and not swapped:
+                swapped.append(target)  # the claimed worktree leaves and another one takes its retiring path
+                self.git(self.main, "worktree", "remove", str(target))
+                self.git(self.main, "worktree", "move", str(other), str(target))
+            return real_size(target)
+
+        with mock.patch.object(sweep, "size_on_disk", size_on_disk):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue(failed)
+        self.assertTrue((Path(swapped[0]) / "extra.txt").exists(), lines)
+        self.assertTrue(any("not the one claimed" in line for line in lines), lines)
+
+    def test_a_stranded_worktree_keeps_its_claim_and_is_finished_later(self):
+        path = self.worktree("feat-st")
+        self.dispatch(path)
+        ledger, sweep = self.load_ledger()
+        real = sweep.git
+
+        def git(checkout, *args, **kwargs):
+            if args[:2] == ("worktree", "remove"):
+                path.mkdir(exist_ok=True)  # the old path is taken meanwhile, so it cannot go back
+                return subprocess.CompletedProcess(args, 1, "", "")
+            return real(checkout, *args, **kwargs)
+
+        with mock.patch.object(sweep, "git", git):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue(failed)
+        stranded = self.retiring()
+        self.assertEqual(len(stranded), 1, lines)
+        self.assertTrue(ledger.has_claim(str(stranded[0])))
+        out = self.ledger_run("clean-worktrees")
+        self.assertEqual(self.retiring(), [], out.stderr)
+        self.assertIn("1 removed", out.stderr)
+
     def test_a_failed_move_is_undone(self):
         path = self.worktree("feat-fm")
         self.dispatch(path)

@@ -1261,27 +1261,34 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
                 failed = failed or "could not be moved back" in reason
                 lines.append(f"ledger: kept worktree {shown} ({reason})")
                 continue
-            if checkout_instance(moved) != info.get("instance"):
-                # Another worktree now sits at the retiring path: never remove or move it.
-                failed = True
-                drop_claim(moved)
-                lines.append(f"ledger: kept worktree {shown} (the worktree at its retiring path is not the one claimed)")
-                continue
+            replaced = "the worktree at its retiring path is not the one claimed"
             moved_place = sweep.nesting(moved, main_checkout, [p if p != info["path"] else moved for p in linked])
             try:
-                reason = unchanged(sweep, info, moved, default, moved_place, cwd)
+                reason = replaced if checkout_instance(moved) != info.get("instance") else \
+                    unchanged(sweep, info, moved, default, moved_place, cwd)
                 if reason is None:
                     size = sweep.human(sweep.size_on_disk(moved))
-                    done = sweep.git(main_checkout, "worktree", "remove", "--", moved)
-                    reason = None if done.returncode == 0 else "git refused the removal"
+                    # The last check before the removal: the claimed instance is still the one at this path.
+                    if checkout_instance(moved) != info.get("instance"):
+                        reason = replaced
+                    else:
+                        done = sweep.git(main_checkout, "worktree", "remove", "--", moved)
+                        reason = None if done.returncode == 0 else "git refused the removal"
                 failed = failed or reason is not None
             except Exception as error:
                 failed = True
                 reason = "the removal failed: " + type(error).__name__
+            if reason == replaced:
+                drop_claim(moved)  # never remove or move another worktree
+                lines.append(f"ledger: kept worktree {shown} ({reason})")
+                continue
             if reason:
-                lines.append(put_back(sweep, main_checkout, info["path"], moved, shown, reason))
-                failed = failed or "could not be moved back" in lines[-1]
-                drop_claim(moved)  # whatever happened, the name alone never authorizes a later removal
+                line, restored = put_back(sweep, main_checkout, info["path"], moved, shown, reason)
+                lines.append(line)
+                if restored:
+                    drop_claim(moved)
+                else:
+                    failed = True  # stranded at its retiring path: the claim stays so a later run can finish it
                 continue
             drop_claim(moved)
             removed += 1
@@ -1301,17 +1308,17 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
 
 
 def put_back(sweep, main_checkout, original, moved, shown, reason):
-    """Move a claimed worktree that may not go back to its old path, when that path is still free."""
+    """(report line, restored): move a claimed worktree that may not be removed back to its old path, when that path is free."""
     if original == moved:
-        return f"ledger: kept worktree {shown} ({reason})"
+        return f"ledger: kept worktree {shown} ({reason})", False
     try:
         if not os.path.lexists(original) and \
                 sweep.git(main_checkout, "worktree", "move", "--", moved, original).returncode == 0:
-            return f"ledger: kept worktree {shown} ({reason})"
+            return f"ledger: kept worktree {shown} ({reason})", True
     except Exception:
         pass
     escaped = moved.encode("unicode_escape").decode("ascii")
-    return f"ledger: kept worktree {shown} ({reason}); it could not be moved back and stays at {escaped}"
+    return f"ledger: kept worktree {shown} ({reason}); it could not be moved back and stays at {escaped}", False
 
 
 def spawn_cleanup(checkout="."):
