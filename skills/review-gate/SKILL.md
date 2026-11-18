@@ -14,6 +14,7 @@ Enforcers: `review_route.py` chooses families; `post_review.py` bounds posting; 
 - **After each user story** or increment: review it, dispose every finding, fix and verify, then review the next story. The next story's implementation starts only after the previous gate is closed.
 - **Before merge**: every pull request, whatever its size, passes both a code review and a security review, each posted on the pull request, as "Pull requests" below says.
 - Major features and work produced by delegated agents always get one.
+- A change that touches user-facing UI (components, pages, templates, styles, design tokens, interface copy) also runs `ui-review-gate`, beside the code and security reviews and never instead of them; its blocking findings take the dispositions in "Findings" below. Advisory (agent judgment); `merge_check.py` does not read its receipt.
 - Inside a pull request's work, a no-runtime-impact text edit needs its checks, not a reviewer per edit; the pull request still gets both reviews.
 
 ## Instruments

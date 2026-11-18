@@ -32,7 +32,7 @@ Pick the path here, before loading or invoking any generic process skill, includ
 
 A pack installed only for the user, with no instruction adopting it, supplies tools, not a workflow: follow none.md and let its tools carry the steps they fit. When two packs qualify and nothing chooses between them, ask the user the one question that decides it. Every adapter keeps the depth, gates and proof below; it decides only which skill carries each step. To support another workflow, add `references/workflows/<name>.md` with the same parts (detect, steps, what yields, gaps) and a row here.
 
-A request that is only a review, with no change to make, goes to `review-gate`, plus `security-review-gate` when its triggers hit, on every path.
+A request that is only a review, with no change to make, goes to `review-gate`, plus `security-review-gate` when its triggers hit and `ui-review-gate` when it touches user-facing UI, on every path.
 
 Decide the depth and the next activity yourself by observed fit and the adapter, or ask the user the one question that decides it (advisory, agent judgment).
 
@@ -62,6 +62,7 @@ These hold on every path:
 - A behavior change starts from a genuine red: a test or reproducer that fails for the reason the change addresses. The change is the smallest that turns it green (see "Proportion").
 - Invoke `checks` before you report work as done, fixed or passing, and before you accept a delegated run: fresh targeted runs against each acceptance criterion. Advisory (agent judgment).
 - Every pull request needs a posted code review and a posted security review before merge (`review-gate` "Pull requests"); `security-review-gate` runs in full when its triggers hit.
+- A change that touches user-facing UI (components, pages, templates, styles, design tokens, interface copy) also runs `ui-review-gate` beside both reviews, never instead of them. Advisory (agent judgment).
 - Delegation to other agents follows the `delegate` skill. When you hold two or more independent tasks with clear acceptance tests, apply its "Keep or hand off" before you start the first, even if you expect to do them all yourself. Within one task, budget root and children before spawning: MIN has no implementation children (handing a whole task to another agent under `delegate` is a delegation, not a child); otherwise at most two lightweight children, one nesting level and one heavy job at a time, unless a stricter cap applies. Independent tasks run in parallel up to the repository's limit in `delegate` (default 3), each under these per-task caps.
 - Commits follow `commit-messages`, and so does every branch: creating, syncing, merging and deleting it (`commit-messages` "Branches"). The main checkout stays on the default branch; each branch gets its own worktree (advisory). Versions, tags and changelogs follow `versioning`.
 - Long sessions, handovers and titles follow `tidy`.
