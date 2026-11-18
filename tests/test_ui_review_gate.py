@@ -113,6 +113,8 @@ class SnippetResults(unittest.TestCase):
         # A forced line break ends the line; a display: contents wrapper is transparent.
         self.assertEqual((by_id["br-link"]["severity"], by_id["br-link"]["exception"]), ("blocking", None))
         self.assertEqual((by_id["contents-link"]["severity"], by_id["contents-link"]["exception"]), ("low", "inline"))
+        # A hidden element adds no break between the link and its sentence.
+        self.assertEqual((by_id["hidden-link"]["severity"], by_id["hidden-link"]["exception"]), ("low", "inline"))
         # Every inline exception is a heuristic reading, marked for a check by eye.
         self.assertTrue(by_id["inline-link"]["uncertain"] and by_id["wrapped-link"]["uncertain"])
         self.assertNotIn("email", by_id, "a 48 px tall field is not reported")
