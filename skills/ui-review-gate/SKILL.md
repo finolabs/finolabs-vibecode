@@ -1,6 +1,6 @@
 ---
 name: ui-review-gate
-description: Review what a change does to the user interface, with measured evidence, before it merges. Use when a change touches user-facing UI (components, pages, templates, styles, design tokens, interface copy), or when asked to review the UI, audit the design, check accessibility (WCAG 2.2 AA), check whether a page is responsive, or optimise a form.
+description: Review what a change does to the user interface, with measured evidence. Use when a change touches user-facing UI (components, pages, styles, design tokens, interface copy), or when asked to review the UI, audit the design, check accessibility or responsiveness, or optimise a form.
 ---
 
 # UI review gate
