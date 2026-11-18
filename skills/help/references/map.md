@@ -21,6 +21,7 @@ The skill folders and their purposes match the README.
 | `gtg` | Short name (got to go) for `pause`; follows the same procedure and arguments. |
 | `review-gate` | A user story is done or a pull request is about to merge: an independent code review, a disposition for every finding, a regression test per runtime fix. |
 | `security-review-gate` | A change touches auth, permissions, private data, untrusted input or payments: a permission-boundary review, with negative tests proving that not even a record's existence leaks. |
+| `ui-review-gate` | A change touches user-facing UI, or you ask to review the UI, audit the design, check accessibility or responsiveness, or optimise a form: a report-only review against WCAG 2.2 AA with measured evidence (contrast, target size, overflow, form fields) from read-only snippets run in the browser your host already exposes, and constraints such as "desktop layout unchanged" proved before and after a fix. Advisory: `merge_check.py` does not read it. |
 | `checks` | Choosing targeted tests, checking current-head verification receipts, completing host/judge criterion checks and deciding whether to accept reported work; the coordinator keeps the verdict. Also runs a repository's stored checks locally (`checks.py run`, set up with `/setup add checks`), and covers a cheaper CI workflow and what CI minutes cost. |
 | `plugin-packaging` | Packaging skills as a plugin for Claude Code, Codex and Antigravity from one repository: layout, manifests, the README standard and checklist, icon, marketplaces, checks. |
 | `setup` | Configure user scope, project scope or both: Quick confirms inert defaults and asks companion choices; Advanced interviews each companion and offers widening features. `add <feature>` opens one feature, `check` is read-only, `scan` refreshes inventory, `mode` manages Delegation mode and Routing, and `instructions` drafts instruction files with approval per file; setup installs nothing. |
@@ -80,6 +81,7 @@ The skill folders and their purposes match the README.
 | Long session, phase change, compaction | `tidy` | `/ask-matt` covers its phase-boundary choices |
 | A story is done, or before merge | `review-gate` | `/code-review` (Claude Code), `codex review`, or `code-review` from Matt's pack |
 | Change touches auth, permissions, private data, untrusted input | `security-review-gate` | `/security-review` (Claude Code); `security-audit` from Cloudflare for a full audit |
+| Change touches user-facing UI, or a design, accessibility, responsive or form review | `ui-review-gate` | `shadcn` for requested fixes, `frontend-design` for a requested redesign, when installed |
 | "Is it done?" or accepting someone else's work | `checks` | |
 | Writing a commit | `commit-messages` | `pr` for the pull request body |
 | Creating, syncing or merging a branch, or a backport | `commit-messages` "Branches" | |
@@ -179,6 +181,10 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `skills/setup/scripts/quota_setup.py` | Previews exact quota executable paths and applies only the approved digest-bound plan. |
 | `skills/setup/scripts/setup_features.py` | Shows/records/clears declined features; a decline is not a consent. |
 | `skills/status/scripts/refresh.py` | Rebuilds/opens local dashboard data; manages metrics consent/purge and the separately approved Antigravity metrics hook. |
+| `skills/ui-review-gate/scripts/contrast.js` | Read-only page snippet: text and UI-component contrast against the computed background, with the WCAG 2.2 threshold that applies; uncertain readings marked for a check by eye. Returns JSON; no network, storage or navigation. |
+| `skills/ui-review-gate/scripts/targets.js` | Read-only page snippet: interactive elements below 24 by 24 CSS px (blocking unless the 2.5.8 spacing or inline exception applies) and from 24 to 43 px (low). Returns JSON. |
+| `skills/ui-review-gate/scripts/overflow.js` | Read-only page snippet: whether the page scrolls sideways at the current width, the elements that cause it, and the regions that scroll inside themselves. Returns JSON. |
+| `skills/ui-review-gate/scripts/fields.js` | Read-only page snippet: the ordered form fields with name, type, `inputmode`, `autocomplete`, label and required state, never their values. Returns JSON. |
 
 ## Rules
 

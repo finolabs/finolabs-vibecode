@@ -527,6 +527,11 @@
           "text": "/setup instructions now flags lines in your instruction files that stop afk or delegate (merge only where you said so, own away rules, machine facts) and proposes fixes."
         },
         {
+          "id": "0.3.3/ui-review-gate",
+          "kind": "info",
+          "text": "New ui-review-gate: a report-only UI review (audit, forms, responsive, WCAG 2.2 AA) with read-only measurement snippets in your host's browser; advisory beside the code and security reviews."
+        },
+        {
           "id": "0.3.3/quota-weekly-floor",
           "kind": "setup",
           "text": "Routing can stop handing work to one install before its week runs out: record a weekly floor such as claude/work=15 (stop after 85% used).",

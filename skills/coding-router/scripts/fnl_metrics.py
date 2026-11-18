@@ -47,7 +47,7 @@ NAME = re.compile(r"^fnl-[a-z][a-z-]{0,39}\Z")  # skill names stored before 0.2.
 SKILLS = ("advisor", "afk", "ask", "brb", "checks", "coding-router", "commit-messages",
           "delegate", "gtg", "handoff", "help", "open-source-review", "pause", "plugin-packaging",
           "restore-point", "review-gate", "security-review-gate", "setup", "shape", "status", "tidy",
-          "update", "versioning")
+          "ui-review-gate", "update", "versioning")
 # Skills renamed in 0.2.5 after the prefix drop (and the verification alias removed in 0.3.1): the older name, typed, called or in a stored line, counts as the new one.
 RENAMED = {"autopilot": "afk", "session-hygiene": "tidy", "verification": "checks"}
 # The plugin's agent names: a closed set. They lost the `fnl-` prefix in 0.3.2; a stored older name counts as the new one.

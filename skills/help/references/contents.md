@@ -32,5 +32,6 @@ One short page per skill: what it does, when to use it, the command on each host
 - [`shape`](skills/shape.md)
 - [`status`](skills/status.md)
 - [`tidy`](skills/tidy.md)
+- [`ui-review-gate`](skills/ui-review-gate.md)
 - [`update`](skills/update.md)
 - [`versioning`](skills/versioning.md)

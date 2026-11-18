@@ -1,6 +1,6 @@
 # UI review gate: review what a change does to the interface
 
-Status: accepted; owner decisions 17/11/2026 and 18/11/2026; no code yet. Target release 0.3.3 (owner, 18/11/2026).
+Status: implemented; owner decisions 17/11/2026 and 18/11/2026; skill `skills/ui-review-gate`, snippets tested over a fixture in a fake DOM, not yet run in a live browser. Target release 0.3.3 (owner, 18/11/2026).
 
 ## Why
 
