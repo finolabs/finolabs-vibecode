@@ -171,6 +171,20 @@ class AfkCheckHookTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertNotEqual(self.hook(command), denial(PARSE))
 
+    def test_a_wrapper_name_is_read_only_where_a_command_starts(self):
+        self.start()
+        # `exec` as an argument of another program is not the shell's exec, so its flags are that program's.
+        for command in ("codex exec -m gpt -s read-only 'review this'", 'nohup codex exec --json x',
+                        'git log --format=%H -- exec', 'grep -n timeout --color x', 'echo exec -x'):
+            with self.subTest(command=command):
+                self.assertNotEqual(self.hook(command), denial(PARSE))
+        # Where the shell starts a command, after a wrapper, an operator, an assignment or a keyword, it still counts.
+        for command in ('exec -x ls', 'ls; exec -x ls', 'ls && exec -x ls', 'nohup exec -x ls', 'timeout 5 exec -x ls',
+                        'FOO=1 exec -x ls', 'if true; then exec -x ls; fi', '! exec -x ls', '{ exec -x ls; }',
+                        'while true; do exec -x ls; done', 'ls|nice -5 ls', 'time nice -5 ls', 'flock f -c ls'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), denial(PARSE))
+
     def test_input_past_the_cap_denies_only_under_a_live_lease(self):
         padded = 'printenv' + ' ' * (262 * 1024)
         self.assertIsNone(self.hook(padded))
