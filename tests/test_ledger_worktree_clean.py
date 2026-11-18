@@ -558,6 +558,29 @@ class WorktreeCleanTest(unittest.TestCase):
             lines, failed = ledger.clean_worktrees(str(self.main))
         self.assertTrue((path / "nested" / "README.md").exists(), lines)  # moved back with the outer worktree
         self.assertTrue(any("holds another worktree" in line for line in lines), lines)
+        listed = self.git(self.main, "worktree", "list", "--porcelain").stdout
+        self.assertIn("worktree " + str((path / "nested").resolve()) + "\n", listed)  # recorded where it is
+        out = self.ledger_run("clean-worktrees")  # a later run still sees the nesting
+        self.assertTrue((path / "nested" / "README.md").exists(), out.stderr)
+        self.assertIn("holds another worktree", out.stderr)
+
+    def test_a_commit_during_the_size_walk_is_put_back(self):
+        path = self.worktree("feat-cw")
+        self.dispatch(path)
+        ledger, sweep = self.load_ledger()
+        real_size = sweep.size_on_disk
+
+        def size_on_disk(target):
+            if ".fnl-retiring-" in str(target):
+                (Path(target) / "late.txt").write_text("late\n")
+                self.git(target, "add", "late.txt")
+                self.git(target, "commit", "-q", "-m", "Late")
+            return real_size(target)
+
+        with mock.patch.object(sweep, "size_on_disk", size_on_disk):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue((path / "late.txt").exists(), lines)
+        self.assertTrue(any("its HEAD moved" in line for line in lines), lines)
 
     def test_a_reverse_move_that_fails_half_way_is_repaired(self):
         path = self.worktree("feat-rh")

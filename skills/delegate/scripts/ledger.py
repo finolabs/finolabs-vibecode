@@ -1279,19 +1279,14 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
                 continue
             replaced = "the worktree at its retiring path is not the one claimed"
             try:
+                size = sweep.human(sweep.size_on_disk(moved))  # the slow walk first, so every check follows it
+                # The last checks before the removal: the claimed instance is still the one at this path, and its
+                # HEAD, branch, state and the worktrees around it are what made it a candidate.
                 reason = replaced if checkout_instance(moved) != info.get("instance") else \
                     unchanged(sweep, info, moved, default, main_checkout, cwd)
                 if reason is None:
-                    size = sweep.human(sweep.size_on_disk(moved))
-                    # The last checks before the removal: the claimed instance is still the one at this path, and
-                    # no worktree was registered inside it meanwhile.
-                    if checkout_instance(moved) != info.get("instance"):
-                        reason = replaced
-                    elif place_now(sweep, moved, main_checkout):
-                        reason = place_now(sweep, moved, main_checkout)
-                    else:
-                        done = sweep.git(main_checkout, "worktree", "remove", "--", moved)
-                        reason = None if done.returncode == 0 else "git refused the removal"
+                    done = sweep.git(main_checkout, "worktree", "remove", "--", moved)
+                    reason = None if done.returncode == 0 else "git refused the removal"
                 failed = failed or reason is not None
             except Exception as error:
                 failed = True
@@ -1335,9 +1330,13 @@ def put_back(sweep, main_checkout, original, moved, shown, reason, instance):
     if original == moved:
         return f"ledger: kept worktree {shown} ({reason})", False
     if not os.path.lexists(original):
+        inside = nested_in(sweep, main_checkout, moved)
         try:
             if sweep.git(main_checkout, "worktree", "move", "--", moved, original).returncode == 0:
-                return f"ledger: kept worktree {shown} ({reason})", True
+                if repair_nested(sweep, main_checkout, moved, original, inside):
+                    return f"ledger: kept worktree {shown} ({reason})", True
+                return (f"ledger: kept worktree {shown} ({reason}); a worktree inside it could not be recorded "
+                        "at its new place"), False
         except Exception:
             pass
         # The reverse move may have renamed the folder before it failed: register it where it now is.
@@ -1351,6 +1350,25 @@ def put_back(sweep, main_checkout, original, moved, shown, reason, instance):
             return f"ledger: kept worktree {shown} ({reason}); it is back at {escaped} but git could not record it", False
     escaped = moved.encode("unicode_escape").decode("ascii")
     return f"ledger: kept worktree {shown} ({reason}); it could not be moved back and stays at {escaped}", False
+
+
+def nested_in(sweep, main_checkout, folder):
+    """The registered worktrees that lie inside `folder` (git keeps their paths; a move of `folder` breaks them)."""
+    mine = sweep.spellings(folder)
+    return [entry["path"] for entry in sweep.worktrees(main_checkout)[1:]
+            if sweep.spellings(entry["path"]) != mine and sweep.within(sweep.spellings(entry["path"]), mine)]
+
+
+def repair_nested(sweep, main_checkout, old, new, inside):
+    """Record each worktree that moved along with its outer folder at its new path; True when all succeed."""
+    ok = True
+    for path in inside:
+        moved = os.path.join(new, os.path.relpath(path, old))
+        try:
+            ok = sweep.git(main_checkout, "worktree", "repair", "--", moved).returncode == 0 and ok
+        except Exception:
+            ok = False
+    return ok
 
 
 def spawn_cleanup(checkout="."):

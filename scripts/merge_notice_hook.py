@@ -36,12 +36,21 @@ LINE = ("fnl: a pull request merged; merged worktrees of finished delegated runs
         "background (ledger.py clean-worktrees shows them); for a worktree you made yourself, run "
         "worktree_sweep.py list and, when a candidate, the two git commands it prints; if it closed a spec, "
         "story or large pull request, rename the session for its next work (tidy Titles) (advisory).")
+MANUAL_LINE = ("fnl: a pull request merged; automatic worktree cleanup is off here (FNL_WORKTREE_CLEAN), so "
+               "ledger.py clean-worktrees removes the merged worktrees of finished delegated runs by hand; for a "
+               "worktree you made yourself, run worktree_sweep.py list and, when a candidate, the two git commands "
+               "it prints; if it closed a spec, story or large pull request, rename the session for its next work "
+               "(tidy Titles) (advisory).")
 LEDGER = Path(__file__).resolve().parent.parent / "skills" / "delegate" / "scripts" / "ledger.py"
+
+
+def cleanup_on():
+    return os.environ.get("FNL_WORKTREE_CLEAN", "").lower() not in {"off", "0", "false", "no", "manual"}
 
 
 def start_cleanup(cwd):
     """One detached background worktree cleanup in the merge's working folder; never waited for."""
-    if os.environ.get("FNL_WORKTREE_CLEAN", "").lower() in {"off", "0", "false", "no", "manual"}:
+    if not cleanup_on():
         return
     if not isinstance(cwd, str) or not os.path.isdir(cwd) or not LEDGER.is_file():
         return
@@ -131,7 +140,7 @@ def main():
         if not isinstance(data, dict) or not succeeded(payload.get("tool_response")):
             return
         if merged(data.get("command")):
-            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": LINE}}))
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": LINE if cleanup_on() else MANUAL_LINE}}))
             sys.stdout.flush()
             start_cleanup(payload.get("cwd"))
     except Exception:
