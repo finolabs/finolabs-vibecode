@@ -40,9 +40,13 @@
     while (n.parentElement && getComputedStyle(n.parentElement).display === "inline") n = n.parentElement;
     const block = n.parentElement;
     if (!block) return false;
+    /* Only the block's own inline content counts: a nested block (another paragraph, a list) is a different
+       line box, so its text is not this sentence. */
     const walk = (node) => {
       if (node === el) return false;
       if (node.nodeType === 3) return !!node.textContent.trim();
+      if (node.nodeType !== 1 || getComputedStyle(node).display !== "inline") return false;
+      if (node.tagName.toLowerCase() === "a") return false; /* another link's text is not sentence text */
       return Array.from(node.childNodes || []).some(walk);
     };
     return Array.from(block.childNodes).some(walk);

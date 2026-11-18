@@ -102,8 +102,10 @@ class SnippetResults(unittest.TestCase):
         self.assertEqual((by_id["spaced"]["severity"], by_id["spaced"]["exception"]), ("low", "spacing"))
         self.assertEqual((by_id["inline-link"]["severity"], by_id["inline-link"]["exception"]), ("low", "inline"))
         self.assertEqual((by_id["wrapped-link"]["severity"], by_id["wrapped-link"]["exception"]), ("low", "inline"))
+        # Text in a sibling block is not the link's sentence: close, undersized links there stay blocking.
+        self.assertEqual((by_id["standalone-link"]["severity"], by_id["standalone-link"]["exception"]), ("blocking", None))
         self.assertNotIn("email", by_id, "a 48 px tall field is not reported")
-        self.assertEqual(out["blocking"], 1)
+        self.assertEqual(out["blocking"], 3)
 
     def test_overflow_names_the_outermost_cause_and_allows_scroll_regions(self):
         out = self.run_snippet("overflow.js")
