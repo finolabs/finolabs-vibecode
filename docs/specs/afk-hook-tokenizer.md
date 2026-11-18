@@ -1,6 +1,6 @@
 # afk check hook: one shell tokenizer
 
-Status: draft; design only, no code. The rule change it needs (CLAUDE.md, tenth scoped exception) waits on the owner's decisions below. It supersedes the parked PR 352. Revised after the Codex reviews of 421ba5d3 and 3ee71ea0 (code and security REWORK).
+Status: draft; design only, no code. The rule change it needs (CLAUDE.md, tenth scoped exception) waits on the owner's decisions below. It supersedes the parked PR 352. Revised after the Codex reviews of 421ba5d3, 3ee71ea0 and 1749f0c9 (code and security REWORK).
 
 ## Why
 
@@ -36,7 +36,7 @@ For every Bash command the hook judges under a live lease:
 3. A rule that spans commands is still applied to the call as a whole: a directory change followed by an unanchored glob, a pipe into a shell or into `xargs`, or a heredoc feeding a code reader.
 4. Anything the tokenizer cannot place under 1 to 3 gets the split message (deny).
 
-A command site is a place in the text where a command could run, not one execution of it. `false && git status` has two sites and `for x in a b; do git status; done` has one. Every site is judged, whether or not the shell would reach it. A site inside a loop body (`for`, `while`, `until`) may run any number of times, so a site there that would use a one-time approval, reserve a delegated run or merge is denied.
+A command site is a place in the text where a command could run, not one execution of it. `false && git status` has two sites and `for x in a b; do git status; done` has one. Every site is judged, whether or not the shell would reach it. A site anywhere inside a loop, its `while` or `until` condition list included, may run any number of times, so a site there that would use a one-time approval, reserve a delegated run or merge is denied.
 
 The intersection is taken over every shell the Bash tool may use on the machine: `/bin/zsh`, `/bin/bash` (3.2 on macOS) and a Homebrew bash when one is installed. The oracle records their versions. A form that any one of them rejects or reads differently gets the split message. `|&`, for example, is a syntax error in bash 3.2.
 
@@ -80,8 +80,8 @@ The hook passes the list to `afk.py` through a new `check` input, `--commands-js
 - **Shells and code readers per site.** A shell site whose words hold no script operand reads stdin and gets the split message, whatever its redirects are. That covers `sh>out` and `sh <file`.
 - **Call-wide rules.** These run over the whole list, nested groups and redirect targets included:
   - a directory change (`cd`, `pushd`, `popd`, `chdir`) anywhere in the call, together with an unanchored glob anywhere in the call: `cd ~ && cat .ne?rc` keeps the split message;
-  - a pipe into a shell or into `xargs`, anywhere in the call;
-  - a heredoc, `<<<` or `<` that feeds a code reader (decision 3).
+  - a pipe into a shell, `xargs` or any other code reader (the decision 3 list: `node`, `python*`, `ruby`, `perl`, `php`, `deno`, `bun`, `osascript` and the shells), anywhere in the call, whatever feeds the pipe; `cat <<'EOF' | node` keeps the split message;
+  - a heredoc, `<<<` or `<` that feeds a code reader (decision 3), or that feeds a subshell or group, whose body is then judged line by line.
 - **Answer and side effects (decision 2).**
   1. Every site is judged first, and nothing is recorded yet. If any site, or a call-wide rule, denies, the call denies with that answer. Nothing is recorded: no counter, no merge pin and no approval use.
   2. When every site is allowed, the call is recorded once, with the kinds that `commands_of` finds over all sites:
@@ -89,7 +89,8 @@ The hook passes the list to `afk.py` through a new `check` input, `--commands-js
      - Each site that reserves a delegated run, such as a ledger start, reserves its own run, so two starts reserve two runs.
      - Each merge site writes its own pin, as one PR, head and repository triple.
      - Each approval is used only by the one site whose exact subject it names. Two sites that need the same one-time approval deny the second.
-     - A site inside a loop body that needs an approval, a run reservation or a merge denies, as the invariant says. Its count cannot be known before it runs.
+     - A site inside a loop (condition or body) that needs an approval, a run reservation or a merge denies, as the invariant says. Its count cannot be known before it runs.
+     - Run reservations are summed during judgment, before anything is recorded. If the call's total exceeds the remaining capacity of `project_limit` or the lease limit, the call denies with the limit's code. Only a call that passes as a whole persists its reservations.
 
 `--argv-json` stays unchanged for the agent's own `check` calls on Codex and Antigravity, where no hook tokenizes.
 
@@ -121,10 +122,11 @@ These are settled when Fio answers on the pull request. Each has a recommendatio
    - one run reservation per run-reserving site;
    - one merge pin per merge site;
    - an approval used by its exact subject only;
-   - a denial for any approval, run or merge site inside a loop body.
+   - a denial for any approval, run or merge site inside a loop, condition included;
+   - a capacity check of the call's summed reservations before any is persisted.
 
    Counting every action per site would charge `git add x && git commit -m y` twice. One record for everything would let one approval cover two runs, drop a second merge's pin or under-reserve repeated starts.
-3. **Heredoc, `<<<` and `<` input.** Recommended: the body is data only when its receiver is on a closed list of data readers. The list is `cat`, `tee`, `wc`, `head`, `tail`, `sort`, `grep`, `git commit -F -`, `git tag -F -` and `gh ... --body-file -`. Data bodies have their words scanned by the floor-by-name and floor-by-path rules. An unquoted-delimiter body, which the shell expands, also goes through the variable and substitution allowlist. For every other receiver, shells and interpreters included (`node`, `python*`, `ruby`, `perl`, `php`, `deno`, `bun`, `osascript`), the body is judged line by line as commands, as main judges it today. So `node <<'EOF'` with `console.log(process.env)` stays denied. The alternative is to treat every body as data. It removes more false denials, but it opens the interpreter hole Codex showed, and it would need the owner to accept a weaker floor.
+3. **Heredoc, `<<<` and `<` input.** Recommended: the body is data only when its receiver is on a closed list of data readers and the receiver's output goes to no code reader (a pipe into one is denied call-wide, section B). The list is `cat`, `tee`, `wc`, `head`, `tail`, `sort`, `grep`, `git commit -F -`, `git tag -F -` and `gh ... --body-file -`. Data bodies have their words scanned by the floor-by-name and floor-by-path rules. An unquoted-delimiter body, which the shell expands, also goes through the variable and substitution allowlist. For every other receiver, shells and interpreters included (`node`, `python*`, `ruby`, `perl`, `php`, `deno`, `bun`, `osascript`), the body is judged line by line as commands, as main judges it today. So `node <<'EOF'` with `console.log(process.env)` stays denied, and so does `cat <<'EOF' | node`. The alternative is to treat every body as data. It removes more false denials, but it opens the interpreter hole Codex showed, and it would need the owner to accept a weaker floor.
 4. **Rule text and records.** Recommended, all in the PR that lands the code:
    - rewrite the tenth scoped exception in `CLAUDE.md` to describe the tokenizer, its command sites with assignments and redirects, the call-wide rules, redirect targets under the floor and the `strict` path permission, the accounting in decision 2 and the heredoc rule in decision 3, keeping every allowlist item;
    - update `afk-check-hook.md` "Behavior", "Not covered" and "Verification" to match;
@@ -141,10 +143,9 @@ These are settled when Fio answers on the pull request. Each has a recommendatio
    - The use is `$S` or `${S}` with no operator.
 
    Any other variable keeps the split message. `(S=README); cat $S` and `false && S=README; cat $S` therefore stay denied: the shell would read the inherited value. The alternative is to keep `$HOME` as the only variable.
-7. **The credential base-name rule.** Recommended: apply the "floored in every use" names (such as `printenv` and `pass`) to every word that something will execute, not to every word. That means:
-   - the program position, including after wrappers;
-   - an interpreter's script operand: the first operand after the options of `python*`, `node`, `ruby`, `perl`, `php`, a shell, `deno run` or `bun run`, so `python3 /tmp/pass` floors whatever its execute permission;
-   - any path that is an executable file. On 18/11 the rule floored `cat .local-ci/<sha>/pass` and cost an e2e proof. A credential command with subcommands, and the `CREDENTIAL_PAIRS` entries, keep their reading anywhere after the program. The alternative is to keep today's rule for every word.
+7. **The credential base-name rule.** Recommended: keep today's rule, the "floored in every use" names (such as `printenv` and `pass`) on every word, with one narrow exception. An operand of a data reader that executes nothing is exempt. The readers are `cat`, `head`, `tail`, `wc`, `grep`, `ls`, `stat`, `file` and `sort`, and only their file operands are exempt, not their option values. On 18/11 the rule floored `cat .local-ci/<sha>/pass` and cost an e2e proof; that call becomes silent. `python3 /tmp/pass` and `node --require /tmp/pass -e 0` still floor, because neither program is on the list. The floor-by-path rule still applies to every operand, the exempt ones included. Credential commands with subcommands, and the `CREDENTIAL_PAIRS` entries, keep their reading anywhere after the program.
+
+   The alternative, applying the rule only to words that something will execute, was dropped after review: code-loading options such as `--require` and their attached forms make that set open-ended.
 
 ## Open, not the owner's
 
@@ -169,8 +170,8 @@ These are settled when Fio answers on the pull request. Each has a recommendatio
   - The assignment-guard case denies: `GIT_CONFIG_COUNT=1 ... git push origin`.
   - In `strict`, `git status > AGENTS.afk.md` and `git status < /tmp/input` deny. In `open`, `git status > AGENTS.afk.md` is silent, as the ninth exception says.
   - `printf x 12>&1` gets the split message.
-  - With one outstanding approval, `for x in a b; do make task; done` denies. Two ledger starts in one call reserve two runs.
-  - Under decision 6, `(S=README); cat $S` and `false && S=README; cat $S` keep the split message. Under decision 7, `python3 /tmp/pass` floors.
+  - With one outstanding approval, `for x in a b; do make task; done` and `while make task; do git status; done` deny. Two ledger starts in one call reserve two runs, and deny when only one run remains. `cat <<'EOF' | node` with `process.env` gets the split message.
+  - Under decision 6, `(S=README); cat $S` and `false && S=README; cat $S` keep the split message. Under decision 7, `cat .local-ci/x/pass` is silent, while `python3 /tmp/pass` and `node --require /tmp/pass -e 0` floor.
   - The present tests stay green, or a changed expectation names the decision behind it.
 - **afk.py tests** for `--commands-json`:
   - a denied site records nothing;
