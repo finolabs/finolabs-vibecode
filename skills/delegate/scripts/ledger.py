@@ -1184,8 +1184,10 @@ def undo_move(sweep, main_checkout, original, target, instance):
         if os.path.lexists(original):
             sweep.git(main_checkout, "worktree", "repair", "--", target)
             return False
+        inside = nested_in(sweep, main_checkout, target)
         os.rename(target, original)
-        return sweep.git(main_checkout, "worktree", "repair", "--", original).returncode == 0
+        return sweep.git(main_checkout, "worktree", "repair", "--", original).returncode == 0 and \
+            repair_nested(sweep, main_checkout, target, original, inside)
     except Exception:
         return False
 
