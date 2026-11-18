@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-19
+
 ### Added
 
 - afk decider on Claude Code ([spec](docs/specs/afk-decider.md), owner decisions 1 and 2, 18/11/2026): blocking stays the host's, afk settles the stops. The afk stop hook (`Stop`, `scripts/afk_stop_hook.py`) sends a turn that ends under a live lease back to "Decide" once, unless the session recorded `afk.py log --kind idle` or `--kind parked` with `--session <id>` since its last stop or `check` hit a limit; `stop_hook_active`, no lease, `FNL_AFK_STOP=off` and every error let the stop through. The afk permission hook (`PermissionRequest`, `scripts/afk_permit_hook.py`) allows the install's own lease commands with plain arguments and a request whose digest a decision recorded with `log --kind decision ... --approve-request <digest>`, once within 30 minutes and the lease; it denies the rest with a fixed message and the request digest, says to park a request denied twice, compares digests only and falls back to the host prompt on `FNL_AFK_PERMIT=off` and errors. `check` never uses these approvals. Two new scoped exceptions in `CLAUDE.md` and two `PRIVACY.md` sections.
@@ -25,6 +27,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Per-model compaction threshold on Claude Code (owner decision, 18/11/2026): `/autocompact` saves `modelSettings.<model>.autoCompactWindow`, so the compaction nudge now reads the model id of the latest assistant entry (in memory only) and, within each settings file, uses that model's value over the top-level `autoCompactWindow`; file precedence is unchanged. `compact_setup.py preview --model <id>` writes the per-model value after the same digest-bound approval.
 
 - `select_tests.py` (the `checks` skill and the repository copy) also selects a test module that declares a folder it reads with a line `# select-tests: reads <folder>/`, for modules that build paths at run time; `test_setup_limits` declares `skills/setup/`, so a setup reference change now selects it (it missed the size caps in PR 349).
+- Docs that describe the product follow 0.3.3 (release drift review): the README skill and setup tables, the comparison page, the help map and `setup` page, `/setup check` (the merge notice starts the worktree cleanup), `PRIVACY.md` (the weekly floor line) and the delegation sequence diagram (the ledger removes a merged run's worktree).
 
 ### Fixed
 
@@ -757,7 +760,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/vibecode/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/finolabs/vibecode/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/finolabs/vibecode/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/finolabs/vibecode/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/finolabs/vibecode/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/finolabs/vibecode/compare/v0.2.6...v0.3.0

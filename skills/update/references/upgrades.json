@@ -531,6 +531,11 @@
           "kind": "setup",
           "text": "Routing can stop handing work to one install before its week runs out: record a weekly floor such as claude/work=15 (stop after 85% used).",
           "setup": "/setup add quota"
+        },
+        {
+          "id": "0.3.3/codex-hook-trust",
+          "kind": "hook",
+          "text": "On Codex, open /hooks in a new session after the refresh and trust the plugin's hooks again; the compaction nudge script changed."
         }
       ]
     }

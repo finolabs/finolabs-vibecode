@@ -115,7 +115,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/build-parity-plugins.sh` | Builds local evaluation plugins from this checkout and a supplied upstream skill checkout. |
 | `scripts/check-references.py` | Checks local links, headings, names, inventories, ledger flags and shared mode copies. |
 | `scripts/compact_nudge.py` | Claude Code and Codex (`--host codex`) `UserPromptSubmit` nudge: reads only the latest turn's token counts and compaction settings, and at 80% and 90% of the threshold prints one line to run `tidy`; never blocks, always exits 0. |
-| `scripts/compact_setup.py` | Previews/applies an approved documented native compaction threshold, at user scope or (`--project`, Claude Code) in a repository's untracked `.claude/settings.local.json`. |
+| `scripts/compact_setup.py` | Previews/applies an approved documented native compaction threshold, at user scope or (`--project`, Claude Code) in a repository's untracked `.claude/settings.local.json`; on Claude Code `--model <id>` saves it for one model only, and `--clear-model-overrides` removes per-model values in the same write. |
 | `scripts/compact_stop_hook.py` | Opt-in Antigravity transcript-size stop; no content read, live delivery unverified. |
 | `scripts/checks_list.py` | Reads a repository's `.finolabs/vibecode/checks.json` only while it matches its approved digest (never the host config), with its local-receipt mode, digests a list, and writes or matches the private local checks receipt; runs no command. |
 | `scripts/context_snapshot.py` | Records/reads Claude Code or Antigravity status-line context counts, probes Claude Code or Codex on request through the confirmed program, and feeds the steward. |
@@ -140,10 +140,10 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `scripts/project_progress.py` | Reads bounded task/work-record/repository facts and manages consented per-repository settings, labels and registration. |
 | `scripts/project_store.py` | Resolves a validated repository identity (a linked worktree only when its metadata points back) and reads or writes the approved project settings file. |
 | `scripts/quota_limit_hook.py` | Records only Claude family/time on opt-in StopFailure `rate_limit`; starts no reading. |
-| `scripts/quota_probe.py` | Reads quota on demand before routing and reports cached per-install pools and advisory markers. |
+| `scripts/quota_probe.py` | Reads quota on demand before routing and reports cached per-install pools and advisory markers; `status` shows an install's weekly floor. |
 | `scripts/record.py` | Router, keep, task and judge metadata receipts; persists current-head verification metadata. |
 | `scripts/review_config.py` | Reads canonical role/posting settings; writes nothing. |
-| `scripts/review_route.py` | Chooses review families before a run, prefers independence and discloses same-family fallbacks; `--level` applies level-bound `models` rules; builds an in-memory review packet. |
+| `scripts/review_route.py` | Chooses review families before a run, prefers independence and discloses same-family fallbacks; `--level` applies level-bound `models` rules; treats an install's weekly pools below its recorded weekly floor as out of quota; builds an in-memory review packet. |
 | `scripts/route_task.py` | Prints matrix tier, effort, budget and family order for a kind/grade; the coordinator chooses the model. |
 | `scripts/run_env.py` | Builds the allowlisted child environment for headless delegates and verification commands. |
 | `scripts/secret_patterns.py` | Shared secret-pattern and environment-dump detection for briefs and logs. |
@@ -176,7 +176,7 @@ Paths below are relative to the full plugin root. There are three agent definiti
 | `skills/setup/scripts/compact_stop_setup.py` | Previews/installs/removes the separately consented Antigravity size-stop hook. |
 | `skills/setup/scripts/data_location.py` | Previews/copies plugin data into an empty approved folder and publishes the pointer last. |
 | `skills/setup/scripts/matrix_setup.py` | Previews, validates, migrates and applies only the host config's `## Assignment matrix` after a digest-bound yes; `choices` lists the helper names setup offers as one multiple-choice question (family, presence from the scan, the coordinator), read-only; `migrate` is the only reader left of the retired `## Agent levels` and `## Agent roles`; runs no command and makes no network call. |
-| `skills/setup/scripts/quota_setup.py` | Previews exact quota executable paths and applies only the approved digest-bound plan. |
+| `skills/setup/scripts/quota_setup.py` | Previews exact quota executable paths, and any `--weekly-floor <family>/<label>=<percent>` per recorded install, and applies only the approved digest-bound plan. |
 | `skills/setup/scripts/setup_features.py` | Shows/records/clears declined features; a decline is not a consent. |
 | `skills/status/scripts/refresh.py` | Rebuilds/opens local dashboard data; manages metrics consent/purge and the separately approved Antigravity metrics hook. |
 
