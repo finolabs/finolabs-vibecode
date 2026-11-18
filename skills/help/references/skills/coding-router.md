@@ -14,3 +14,4 @@ Loaded by the agent when coding work starts; you can also type it.
 - A pull request body carries one marker line with the depth and trigger; a repository that adopted `review-gate` blocks the merge without it.
 - After two failed corrections of the same invariant it stops before a third and runs a read-only architecture checkpoint.
 - A request that is only a review goes to `review-gate`.
+- In a Spec Kit repository, a `specify workflow run` drives the phases under the same rules: the depth gate still decides whether `tasks` runs (the direct path is taken by hand after `plan`), each review gate verdict is yours to give, and each agent a run starts is recorded and reviewed like a delegated run.

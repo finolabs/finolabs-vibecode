@@ -28,6 +28,16 @@ A direct path records the chosen path and its reason in the feature's `plan.md` 
 
 Spec Kit owns the process and artifacts; no work record is created in a Spec Kit repository (advisory, agent judgment).
 
+## Workflow runs
+
+`specify workflow run <id>` (Specify CLI; bundled `speckit`, `bugfix` and `assess`) drives the phases from a YAML definition: agent `command` and `prompt` steps, `shell` steps, review `gate` steps and control flow, with a resumable run state. A run is one way to drive the phases above, never a way around this router (advisory, agent judgment):
+
+- **Depth gate.** The bundled `speckit` workflow always runs `tasks` before `implement`, and `speckit-implement` itself requires `tasks.md`. When the depth gate allows direct implementation, take the direct path by hand after `plan` (a workflow run may stop there); an overlay that only removes `tasks` stops at `implement`. Record the path in `plan.md` as above.
+- **Gate verdicts are the owner's.** A gate's verdict, typed at the prompt or passed as an input such as `speckit_review_spec_verdict=approve`, is the user's decision: ask it through the host's native question tool and pass only the answer given. Under an away lease it goes through `afk` "Decide" like any other decision; never pass `approve` on your own.
+- **Dispatch.** Agent steps start agents headless (`claude -p`, `codex exec` and others) outside `delegate`, and each step may name its own integration and model. Prefer running the phases yourself or through `delegate`. A run that dispatches agents is allowed only when each agent step is a dispatch `delegate` would allow (Delegation mode, the route, consent for another family) and gets its own `ledger.py start` and `finish` with that step's agent and model; a run whose steps you cannot record one by one is not started. Accept its output as delegated work: `checks` against the acceptance criteria, then the two posted reviews of `review-gate`. A run never merges.
+- **Gates of this pack inside a run.** Add them through an overlay or a filled slot, for example a `shell` step that runs the targeted checks after `implement`; they add to the review gate, never replace it.
+- **Source.** Read a workflow's definition, its overlays and any script it runs before the first run; installing a workflow, overlay or step package from a catalog needs the user's explicit authority (see "Gaps").
+
 ## What yields
 
 Spec Kit replaces the overlapping generic process skills (brainstorming, writing-plans, executing-plans, subagent-driven-development, finishing-a-development-branch, and mattpocock/skills' `to-spec`, `to-tickets`, `implement`, `implement-spec`). Domain skills, debugging, testing, verification, review and security work still apply inside the active phase, each limited to its own responsibility: phase tools such as `grilling`, `shape`, `prototype`, `tdd` and `diagnosing-bugs` work inside Spec Kit phases, and `grilling` and `shape` yield to Spec Kit's own clarify step. Any nested instruction that duplicates Spec Kit planning, artifacts or execution yields to this rule.
