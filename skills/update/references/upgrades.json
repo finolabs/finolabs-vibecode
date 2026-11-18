@@ -497,7 +497,7 @@
         {
           "id": "0.3.3/worktree-clean",
           "kind": "info",
-          "text": "delegate now removes finished runs' worktrees in the background once their branch merged, clean and pushed; FNL_WORKTREE_CLEAN=manual or off keeps them."
+          "text": "delegate removes finished runs' merged, clean, pushed worktrees in the background; runs started before 0.3.3 stay (worktree_sweep.py list); FNL_WORKTREE_CLEAN=manual or off stops it."
         }
       ]
     }

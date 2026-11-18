@@ -258,10 +258,22 @@ def cmd_start(args):
             checkout_id = checkout_identity(args.checkout)
         except (ImportError, OSError, ValueError, subprocess.SubprocessError):
             checkout_id = None  # non-code tasks can still end through the explicit escape hatch
+        instance = None
+        if checkout_id is not None:
+            from record import git as record_git
+            try:
+                top = record_git(args.checkout, "rev-parse", "--show-toplevel")
+            except (OSError, ValueError, subprocess.SubprocessError):
+                top = ""
+            if os.path.basename(top).startswith(RETIRING):  # renamed by a cleanup that claimed it
+                sys.exit("ledger: refused: this checkout is being removed because its branch merged; "
+                         "cut a new worktree for new work")
+            instance = checkout_instance(top) if top else None
         starts, _ = load()
         dispatch_id = new_id(starts)
         append({
             "checkout_id": checkout_id,
+            "checkout_instance": instance,
             "coord_session": coord_session,
             "event": "start", "id": dispatch_id, "ts": now(),
             "project": args.project, "task": args.task, "kind": args.kind,
@@ -973,39 +985,29 @@ def open_checkouts():
             {s.get("checkout_id") for i, s in starts.items() if i not in finishes} - {None})
 
 
-def finished_starts():
-    """{checkout_id: [start time of each finished dispatch]}, as epoch seconds."""
+def finished_instances():
+    """{checkout_id: {checkout_instance of each finished dispatch}}; a start line without an instance owns nothing."""
     starts, finishes = load()
-    found = defaultdict(list)
+    found = defaultdict(set)
     for dispatch_id, start in starts.items():
-        if dispatch_id in finishes and start.get("checkout_id"):
-            try:
-                found[start["checkout_id"]].append(datetime.fromisoformat(start["ts"]).timestamp())
-            except (KeyError, TypeError, ValueError):
-                continue
+        if dispatch_id in finishes and start.get("checkout_id") and isinstance(start.get("checkout_instance"), str):
+            found[start["checkout_id"]].add(start["checkout_instance"])
     return found
 
 
-def created(sweep, path):
-    """When git registered this worktree: the birth (else change) time of its admin folder's `commondir` file,
-    which `git worktree add` writes once and a move never rewrites; None when it cannot be read."""
-    admin = sweep.git_out(path, "rev-parse", "--absolute-git-dir")
-    if not admin:
-        return None
+def checkout_instance(path):
+    """A digest that tells this worktree apart from any other ever registered at the same path: the device and
+    inode of its folder and the birth (else change) time of its git admin folder's `commondir` file, which
+    `git worktree add` writes once. A rename keeps all three. None when they cannot be read (no linked worktree)."""
+    from record import git as record_git
     try:
-        info = os.stat(os.path.join(admin, "commondir"), follow_symlinks=False)
-    except OSError:
+        admin = record_git(path, "rev-parse", "--absolute-git-dir")
+        root = os.stat(path)
+        made = os.stat(os.path.join(admin, "commondir"), follow_symlinks=False)
+    except (OSError, ValueError, subprocess.SubprocessError):
         return None
-    return getattr(info, "st_birthtime", None) or info.st_ctime
-
-
-def owned(sweep, path, identity, finished):
-    """True when a finished dispatch named this very worktree: one started on its path after git registered it.
-
-    The identity is a path digest, so a worktree cut later at the same path shares it; the registration time
-    tells the two apart."""
-    made = created(sweep, path)
-    return made is not None and any(started >= int(made) - 1 for started in finished.get(identity, ()))
+    birth = getattr(made, "st_birthtime", None) or made.st_ctime
+    return hashlib.sha256(f"{root.st_dev}:{root.st_ino}:{birth!r}".encode()).hexdigest()
 
 
 CLAIM = "worktree-claim-"  # + the sha256 of the path a claim renamed a worktree to, in the private state folder
@@ -1015,10 +1017,13 @@ def claim_name(moved):
     return CLAIM + hashlib.sha256(os.fsencode(moved)).hexdigest()
 
 
-def write_claim(moved):
+def write_claim(moved, instance):
     with dr.data_folder("state", create=True, private=True) as state:
-        os.close(os.open(claim_name(moved), os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600,
-                         dir_fd=state))
+        fd = os.open(claim_name(moved), os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600, dir_fd=state)
+        try:
+            os.write(fd, instance.encode("ascii"))
+        finally:
+            os.close(fd)
 
 
 def drop_claim(moved):
@@ -1030,12 +1035,19 @@ def drop_claim(moved):
 
 
 def has_claim(moved):
+    """True when this cleanup's claim record names the worktree now at `moved`: same new path and same instance."""
+    instance = checkout_instance(moved)
+    if instance is None:
+        return False
     with dr.data_folder("state", create=True, private=True) as state:
         try:
-            os.stat(claim_name(moved), dir_fd=state, follow_symlinks=False)
-            return True
+            fd = os.open(claim_name(moved), os.O_RDONLY | os.O_NOFOLLOW, dir_fd=state)
         except FileNotFoundError:
             return False
+        try:
+            return os.read(fd, 128).decode("ascii", "replace") == instance
+        finally:
+            os.close(fd)
 
 
 @contextmanager
@@ -1127,12 +1139,31 @@ def claim(sweep, info, default, place, cwd, main_checkout):
                 return None, path  # renamed by an earlier run that stopped before removing it
             if sweep.git_out(path, "rev-parse", "--verify", "HEAD^{commit}") != info["head"]:
                 return "its HEAD moved", None
+            instance = checkout_instance(path)  # ownership read again under the lock
+            if instance is None or instance not in finished_instances().get(checkout_identity(path), ()):
+                return "it is not the worktree a finished dispatch named", None
             target = os.path.join(os.path.dirname(path), RETIRING + secrets.token_hex(6))
-            write_claim(target)
-            if sweep.git(main_checkout, "worktree", "move", "--", path, target).returncode != 0:
+            write_claim(target, instance)
+            try:
+                moved = sweep.git(main_checkout, "worktree", "move", "--", path, target).returncode == 0
+            except Exception:
+                moved = False
+            if not moved:
                 drop_claim(target)
+                undo_move(sweep, main_checkout, path, target)
                 return "git refused to move it", None
     return None, target
+
+
+def undo_move(sweep, main_checkout, original, target):
+    """After a failed `git worktree move`: when the folder was renamed anyway, put it back where it was."""
+    if os.path.lexists(original) or not os.path.isdir(target):
+        return
+    try:
+        os.rename(target, original)
+        sweep.git(main_checkout, "worktree", "repair", "--", original)
+    except Exception:
+        pass
 
 
 def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
@@ -1156,7 +1187,7 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
         import worktree_sweep as sweep
         from record import checkout_identity
         _, running = open_checkouts()
-        finished = finished_starts()
+        finished = finished_instances()
         entries = sweep.worktrees(checkout)
         main_checkout = entries[0]["path"]
         default = sweep.default_ref(main_checkout)
@@ -1176,8 +1207,8 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
                     continue  # a folder name alone authorizes nothing
             else:
                 identity = checkout_identity(entry["path"])
-                if identity in running or not owned(sweep, entry["path"], identity, finished):
-                    continue
+                if identity in running or checkout_instance(entry["path"]) not in finished.get(identity, ()):
+                    continue  # a worktree cut later at a finished dispatch's path has another instance
             info = inspect(sweep, entry, default, forge=False)
             place = sweep.nesting(info["path"], main_checkout, linked)
             reason = sweep.reason_not_candidate(info, place, cwd)

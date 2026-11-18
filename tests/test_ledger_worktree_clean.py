@@ -340,7 +340,7 @@ class WorktreeCleanTest(unittest.TestCase):
         self.dispatch(path)
         moved = path.parent / ".fnl-retiring-0123456789ab"
         ledger, _ = self.load_ledger()
-        ledger.write_claim(str(moved))
+        ledger.write_claim(str(moved), ledger.checkout_instance(str(path)))  # a rename keeps the instance
         self.git(self.main, "worktree", "move", str(path), str(moved))
         return moved
 
@@ -359,12 +359,47 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertTrue(moved.exists(), out.stderr)
         self.assertIn("0 removed", out.stderr)
 
-    def test_an_open_dispatch_on_a_resumed_worktree_keeps_it(self):
+    def test_start_refuses_a_renamed_checkout(self):
+        # A process already inside a claimed worktree cannot open a dispatch there after the rename.
         moved = self.stopped_after_rename("feat-od")
-        self.dispatch(moved, finish=False)
+        (moved / "sub").mkdir()
+        out = self.ledger_run(*START, "--checkout", str(moved / "sub"), code=1)
+        self.assertIn("being removed", out.stderr)
+
+    def test_a_stale_claim_never_authorizes_a_replacement(self):
+        moved = self.stopped_after_rename("feat-sc")
+        self.git(self.main, "worktree", "remove", str(moved))
+        self.git(self.main, "worktree", "add", "-q", "--no-track", "-b", "feat-sc2", str(moved), "origin/main")
         out = self.ledger_run("clean-worktrees")
         self.assertTrue(moved.exists(), out.stderr)
-        self.assertIn("a dispatch started on it", out.stderr)
+        self.assertIn("0 removed", out.stderr)
+
+    def test_an_immediate_replacement_is_not_owned(self):
+        path = self.worktree("feat-ir")
+        self.dispatch(path)
+        self.git(self.main, "worktree", "remove", str(path))
+        self.git(self.main, "worktree", "add", "-q", "--no-track", "-b", "feat-ir2", str(path), "origin/main")
+        out = self.ledger_run("clean-worktrees")
+        self.assertTrue(path.exists(), out.stderr)
+        self.assertIn("0 removed", out.stderr)
+
+    def test_a_failed_move_is_undone(self):
+        path = self.worktree("feat-fm")
+        self.dispatch(path)
+        ledger, sweep = self.load_ledger()
+        real = sweep.git
+
+        def git(checkout, *args, **kwargs):
+            if args[:2] == ("worktree", "move") and ".fnl-retiring-" in args[-1]:
+                os.rename(args[-2], args[-1])  # the folder moved, then git failed
+                raise subprocess.TimeoutExpired("git", 60)
+            return real(checkout, *args, **kwargs)
+
+        with mock.patch.object(sweep, "git", git):
+            lines, _ = ledger.clean_worktrees(str(self.main))
+        self.assertTrue(path.exists(), lines)
+        self.assertEqual(self.retiring(), [])
+        self.assertTrue(any("git refused to move it" in line for line in lines), lines)
 
     def test_a_replacement_at_a_finished_path_is_not_owned(self):
         path = self.worktree("feat-rp")
