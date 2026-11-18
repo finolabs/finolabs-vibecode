@@ -6,7 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
-- `delegate` removes the worktrees of finished runs once their branch merged: `ledger.py start`, `finish` and the new `ledger.py clean-worktrees` remove each worktree a finished dispatch named with `--checkout`, has no open dispatch, and the worktree sweep calls a candidate (merged, clean, nothing unpushed, not locked, not the working folder), with `git worktree remove` (never forced) and `git branch -d`, and print what they removed or kept. Inside `start` and `finish` only local ancestry proves a merge, within 20 seconds; `clean-worktrees` also asks the forge. Nothing is removed under a live away lease, and a run or lease that starts during the cleanup keeps its worktree. `FNL_WORKTREE_CLEAN=off` stops it.
+- `delegate` removes the worktrees of finished runs once their branch merged. `ledger.py start` and `finish`, and on Claude Code the merge notice hook after a `gh pr merge`, start a detached `ledger.py clean-worktrees --background` run. It removes each worktree a finished dispatch named with `--checkout`, no open dispatch names and the worktree sweep calls a candidate (merged, clean, nothing unpushed, not locked, not the working folder). Each removal is claimed under the ledger and afk locks, which re-read the open dispatches, the lease, HEAD and status, and mark the worktree so `start` refuses it. Removal is `git worktree remove` (never forced), then `git branch -d`. Nothing is removed under a live away lease. `ledger.py clean-worktrees` runs it by hand with a report; `FNL_WORKTREE_CLEAN=manual` keeps only that, and `off` stops it.
 
 ### Changed
 

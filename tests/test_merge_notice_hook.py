@@ -8,16 +8,42 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "scripts/merge_notice_hook.py"
-LINE = ("fnl: a pull request merged; run worktree_sweep.py list and, for its worktree when a candidate, "
-        "the two git commands it prints; if it closed a spec, story or large pull request, rename the "
-        "session for its next work (tidy Titles) (advisory).")
+LINE = ("fnl: a pull request merged; merged worktrees of finished delegated runs are being removed in the "
+        "background (ledger.py clean-worktrees shows them); for a worktree you made yourself, run "
+        "worktree_sweep.py list and, when a candidate, the two git commands it prints; if it closed a spec, "
+        "story or large pull request, rename the session for its next work (tidy Titles) (advisory).")
 
 
 class MergeNoticeHookTest(unittest.TestCase):
+    def test_a_merge_starts_one_detached_cleanup_and_respects_the_switch(self):
+        import importlib.util
+        import io
+        from unittest import mock
+        spec = importlib.util.spec_from_file_location("merge_notice_under_test", HOOK)
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+        payload = json.dumps(self.payload("gh pr merge 3 --merge"))
+        for mode, expected in (("", 1), ("manual", 0), ("off", 0)):
+            with self.subTest(mode=mode), mock.patch.dict(os.environ, {"FNL_WORKTREE_CLEAN": mode}), \
+                    mock.patch.object(hook.subprocess, "Popen") as popen, \
+                    mock.patch("sys.stdin", io.StringIO(payload)), mock.patch("sys.stdout", io.StringIO()):
+                hook.main()
+                self.assertEqual(popen.call_count, expected)
+                for call in popen.call_args_list:
+                    self.assertEqual(call.args[0][2:], [str(hook.LEDGER), "clean-worktrees", "--background",
+                                                        "--checkout", "/tmp"])
+                    self.assertTrue(call.kwargs["start_new_session"])
+        with mock.patch.dict(os.environ, {"FNL_WORKTREE_CLEAN": ""}), \
+                mock.patch.object(hook.subprocess, "Popen") as popen, \
+                mock.patch("sys.stdin", io.StringIO(json.dumps(self.payload("gh pr view 3")))), \
+                mock.patch("sys.stdout", io.StringIO()):
+            hook.main()
+        popen.assert_not_called()
+
     def run_hook(self, payload, raw=None):
         data = raw if raw is not None else json.dumps(payload)
         result = subprocess.run([sys.executable, "-I", str(HOOK)], input=data, capture_output=True, text=True,
-                                env={"PATH": os.defpath})
+                                env={"PATH": os.defpath, "FNL_WORKTREE_CLEAN": "off"})
         self.assertEqual(result.returncode, 0)
         return result.stdout
 
@@ -75,8 +101,13 @@ class MergeNoticeHookTest(unittest.TestCase):
 
     def test_the_hook_stores_and_sends_nothing(self):
         source = HOOK.read_text()
-        for word in ("subprocess", "urllib", "socket", "http", "open(", "write_text", "logging"):
-            self.assertNotIn(word, source)
+        rest = source.replace("subprocess.Popen(", "")
+        for word in ("urllib", "socket", "http", "open(", "write_text", "logging", "subprocess.run",
+                     "subprocess.call", "check_output", "os.system", "shell=True"):
+            self.assertNotIn(word, rest)
+        # The one process it may start is the delegate skill's own background worktree cleanup.
+        self.assertEqual(source.count("subprocess.Popen("), 1)
+        self.assertIn('[sys.executable, "-I", str(LEDGER), "clean-worktrees", "--background"', source)
 
     def test_the_manifest_declares_it_for_bash_on_claude_code_only(self):
         manifest = json.loads((ROOT / ".claude-plugin/hooks.json").read_text())

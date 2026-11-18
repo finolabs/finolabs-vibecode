@@ -16,6 +16,8 @@ MECHANICAL = {
     ('post_review.py', 'gh_call'): ('[executable, *args]', 'gh_environment()'),
     ('metrics_hook.py', 'refresh_dashboard'): ("[sys.executable, '-I', str(REFRESH), 'run', *extra, *(['--cwd', cwd] if cwd else [])]", None),
     ('metrics_hook.py', 'start_detached_refresh'): ("[sys.executable, '-I', str(REFRESH), 'run', '--throttle', '10', *(['--cwd', cwd] if cwd else [])]", 'env'),
+    ('ledger.py', 'spawn_cleanup'): ("[sys.executable, '-I', str(Path(__file__).resolve()), 'clean-worktrees', '--background', '--checkout', target]", None),
+    ('merge_notice_hook.py', 'start_cleanup'): ("[sys.executable, '-I', str(LEDGER), 'clean-worktrees', '--background', '--checkout', cwd]", None),
     ('update_check.py', 'start_fetch'): ("[sys.executable, '-I', str(Path(__file__).resolve()), '--fetch']", None),
     ('check-references.py', 'documents'): ("['git', 'ls-files', '--cached', '-z', '--', ':(glob)skills/*/**/*.md', ':(glob)agents/*.md', ':(glob)rules/*.md', ':(glob)*.md', ':(glob)docs/**/*.md']", None),
     ('check-references.py', 'check_skill_inventory'): ("['git', 'ls-files', '--cached', '-z']", None),
