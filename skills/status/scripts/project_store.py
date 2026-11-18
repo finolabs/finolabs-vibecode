@@ -45,7 +45,8 @@ SETTING_KEYS = ('ledger', 'tasks', 'parallel', 'parallel-caps', 'label', 'autopi
 # key is user scope only, so a project file cannot carry it.
 AUTOPILOT_KEYS = {'mode': ('open', 'strict'), 'third-party-instructions': ('guard', 'open'),
                   'default-branch': ('guard', 'open'), 'task-choice': ('choose', 'listed'), 'push-and-pull-requests': ('yes', 'no'),
-                  'merge': ('yes', 'no'), 'trusted-authors': ('own',), 'roots': None,
+                  # `decide`: the decider may merge here under any lease when MERGE OK holds (docs/specs/afk-decider.md C)
+                  'merge': ('yes', 'no', 'decide'), 'trusted-authors': ('own',), 'roots': None,
                   'max-runs': range(1, 10001), 'max-runtime-minutes': range(1, 1441),
                   'max-actions-per-hour': range(1, 10001),
                   'skill-repository': ('yes',), 'decide': None, 'non-production-targets': None,
