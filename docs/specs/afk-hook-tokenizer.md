@@ -1,6 +1,6 @@
 # afk check hook: one shell tokenizer
 
-Status: draft; design only, no code. The rule change it needs (CLAUDE.md, tenth scoped exception) waits on the owner's decisions below. It replaces two stopgaps merged on 18/11/2026 while it waits: PR 352 (an operator that ends a word is split off) and PR 357 (`codex exec` at the start of a command is Codex's subcommand, not the shell's `exec`). Revised after the Codex reviews of 421ba5d3, 3ee71ea0, 1749f0c9 and 6ccaf157 (code and security REWORK).
+Status: approved design (owner decisions settled 18/11/2026); no code yet. The rule change it needs (CLAUDE.md, tenth scoped exception) lands with the code, as decision 4 sets out. It replaces two stopgaps merged on 18/11/2026 while it waits: PR 352 (an operator that ends a word is split off) and PR 357 (`codex exec` at the start of a command is Codex's subcommand, not the shell's `exec`). Revised after the Codex reviews of 421ba5d3, 3ee71ea0, 1749f0c9 and 6ccaf157 (code and security REWORK).
 
 ## Why
 
@@ -114,10 +114,10 @@ These stay as they are:
 
 ## Owner decisions
 
-These are settled when Fio answers on the pull request. Each has a recommendation; none is settled yet.
+Settled by the owner on 18/11/2026: each decision below took its recommendation. The alternatives stay recorded as declined.
 
-1. **Accept the design: one tokenizer in the hook, judging per site, with call-wide rules.** Recommended. The alternative is to keep patching PR 352 layer by layer, which the checkpoint rule forbids after two failed corrections.
-2. **Accounting.** Recommended: judge every site before recording anything, and on any denial record nothing. Otherwise record the call once, as section B sets out:
+1. **Accept the design: one tokenizer in the hook, judging per site, with call-wide rules.** Settled (owner, 18/11/2026). The alternative is to keep patching PR 352 layer by layer, which the checkpoint rule forbids after two failed corrections.
+2. **Accounting.** Settled (owner, 18/11/2026): judge every site before recording anything, and on any denial record nothing. Otherwise record the call once, as section B sets out:
    - the action counter once per call;
    - one run reservation per run-reserving site;
    - one merge pin per merge site;
@@ -126,15 +126,15 @@ These are settled when Fio answers on the pull request. Each has a recommendatio
    - a capacity check of the call's summed reservations before any is persisted.
 
    Counting every action per site would charge `git add x && git commit -m y` twice. One record for everything would let one approval cover two runs, drop a second merge's pin or under-reserve repeated starts.
-3. **Heredoc, `<<<` and `<` input.** Recommended: the body is data only when its receiver is on a closed list of data readers and every program downstream of it, through pipes, is on the same list. A downstream program that is not on the list, an unknown one included, a wrapper, or a subshell or group in the pipeline makes the body judged line by line. A pipe into a known code reader is also denied call-wide (section B). The list is `cat`, `tee`, `wc`, `head`, `tail`, `sort`, `grep`, `git commit -F -`, `git tag -F -` and `gh ... --body-file -`. Data bodies have their words scanned by the floor-by-name and floor-by-path rules. An unquoted-delimiter body, which the shell expands, also goes through the variable and substitution allowlist. For every other receiver, shells and interpreters included (`node`, `python*`, `ruby`, `perl`, `php`, `deno`, `bun`, `osascript`), the body is judged line by line as commands, as main judges it today. So `node <<'EOF'` with `console.log(process.env)` stays denied, and so does `cat <<'EOF' | node`. The alternative is to treat every body as data. It removes more false denials, but it opens the interpreter hole Codex showed, and it would need the owner to accept a weaker floor.
-4. **Rule text and records.** Recommended, all in the PR that lands the code:
+3. **Heredoc, `<<<` and `<` input.** Settled (owner, 18/11/2026): the body is data only when its receiver is on a closed list of data readers and every program downstream of it, through pipes, is on the same list. A downstream program that is not on the list, an unknown one included, a wrapper, or a subshell or group in the pipeline makes the body judged line by line. A pipe into a known code reader is also denied call-wide (section B). The list is `cat`, `tee`, `wc`, `head`, `tail`, `sort`, `grep`, `git commit -F -`, `git tag -F -` and `gh ... --body-file -`. Data bodies have their words scanned by the floor-by-name and floor-by-path rules. An unquoted-delimiter body, which the shell expands, also goes through the variable and substitution allowlist. For every other receiver, shells and interpreters included (`node`, `python*`, `ruby`, `perl`, `php`, `deno`, `bun`, `osascript`), the body is judged line by line as commands, as main judges it today. So `node <<'EOF'` with `console.log(process.env)` stays denied, and so does `cat <<'EOF' | node`. The alternative is to treat every body as data. It removes more false denials, but it opens the interpreter hole Codex showed, and it would need the owner to accept a weaker floor.
+4. **Rule text and records.** Settled (owner, 18/11/2026), all in the PR that lands the code:
    - rewrite the tenth scoped exception in `CLAUDE.md` to describe the tokenizer, its command sites with assignments and redirects, the call-wide rules, redirect targets under the floor and the `strict` path permission, the accounting in decision 2 and the heredoc rule in decision 3, keeping every allowlist item;
    - update `afk-check-hook.md` "Behavior", "Not covered" and "Verification" to match;
    - update [PRIVACY.md](../../PRIVACY.md) "afk check hook" to say that redirect targets are read in memory like other paths, and that the command text is still never stored.
 
    This is the record that lets the code land ("no code for it lands before this rule is merged").
-5. **Bundle the fixes for holes that already exist on main.** Recommended: yes. The tokenizer fixes `printenv>&2`, `cat<.netrc`, `gh>out auth token` and `echo x\ #; env` by construction, and the tests name them. Splitting them out would mean patching the layers this spec removes.
-6. **A variable assigned earlier in the same call.** Recommended: yes, in a second step after the tokenizer lands. `S=path; cat $S/x` is the most common false denial in the 18/11 review. The tokenizer can substitute a value assigned earlier in the same call only when every one of these holds:
+5. **Bundle the fixes for holes that already exist on main.** Settled (owner, 18/11/2026): yes. The tokenizer fixes `printenv>&2`, `cat<.netrc`, `gh>out auth token` and `echo x\ #; env` by construction, and the tests name them. Splitting them out would mean patching the layers this spec removes.
+6. **A variable assigned earlier in the same call.** Settled (owner, 18/11/2026): yes, in a second step after the tokenizer lands. `S=path; cat $S/x` is the most common false denial in the 18/11 review. The tokenizer can substitute a value assigned earlier in the same call only when every one of these holds:
    - The assignment is an unquoted or single-quoted literal with no expansion.
    - It is a site of its own, not a prefix to a command.
    - It stands at the top level: not in a subshell, group, pipeline, loop or conditional.
@@ -143,7 +143,7 @@ These are settled when Fio answers on the pull request. Each has a recommendatio
    - The use is `$S` or `${S}` with no operator.
 
    Any other variable keeps the split message. `(S=README); cat $S` and `false && S=README; cat $S` therefore stay denied: the shell would read the inherited value. The alternative is to keep `$HOME` as the only variable.
-7. **The credential base-name rule.** Recommended: keep today's rule, the "floored in every use" names (such as `printenv` and `pass`) on every word, with one narrow exception. An operand of a data reader that executes nothing is exempt. The readers are `cat`, `head`, `tail`, `wc`, `grep`, `ls`, `stat`, `file` and `sort`, and only their file operands are exempt, not their option values. On 18/11 the rule floored `cat .local-ci/<sha>/pass` and cost an e2e proof; that call becomes silent. `python3 /tmp/pass` and `node --require /tmp/pass -e 0` still floor, because neither program is on the list. The floor-by-path rule still applies to every operand, the exempt ones included. Credential commands with subcommands, and the `CREDENTIAL_PAIRS` entries, keep their reading anywhere after the program.
+7. **The credential base-name rule.** Settled (owner, 18/11/2026): keep today's rule, the "floored in every use" names (such as `printenv` and `pass`) on every word, with one narrow exception. An operand of a data reader that executes nothing is exempt. The readers are `cat`, `head`, `tail`, `wc`, `grep`, `ls`, `stat`, `file` and `sort`, and only their file operands are exempt, not their option values. On 18/11 the rule floored `cat .local-ci/<sha>/pass` and cost an e2e proof; that call becomes silent. `python3 /tmp/pass` and `node --require /tmp/pass -e 0` still floor, because neither program is on the list. The floor-by-path rule still applies to every operand, the exempt ones included. Credential commands with subcommands, and the `CREDENTIAL_PAIRS` entries, keep their reading anywhere after the program.
 
    The alternative, applying the rule only to words that something will execute, was dropped after review: code-loading options such as `--require` and their attached forms make that set open-ended.
 
