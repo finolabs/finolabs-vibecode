@@ -661,6 +661,33 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertIn("worktree " + str((path / "nested").resolve()) + "\n", listed, lines)
         self.assertNotIn(".fnl-retiring-", listed)
 
+    def test_a_worktree_registered_inside_just_before_the_rename_keeps_both(self):
+        path = self.worktree("feat-bm")
+        self.dispatch(path)
+        common = Path(self.git(self.main, "rev-parse", "--git-common-dir").stdout.strip())
+        common = common if common.is_absolute() else self.main / common
+        (common / "info").mkdir(exist_ok=True)
+        with (common / "info" / "exclude").open("a") as handle:
+            handle.write("nested/\n")
+        ledger, sweep = self.load_ledger()
+        real_git = sweep.git
+
+        def git(checkout, *args, **kwargs):
+            if args[:2] == ("worktree", "move") and ".fnl-retiring-" in args[-1] and \
+                    not (Path(args[-2]) / "nested").exists():
+                real_git(str(self.main), "worktree", "add", "-q", "--no-track", "-b", "feat-bm2",
+                         str(Path(args[-2]) / "nested"), "origin/main")
+                (Path(args[-2]) / "nested" / "unsaved.txt").write_text("work\n")
+            return real_git(checkout, *args, **kwargs)
+
+        with mock.patch.object(sweep, "git", git):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue((path / "nested" / "unsaved.txt").exists(), lines)
+        self.assertTrue(any("holds another worktree" in line for line in lines), lines)
+        listed = self.git(self.main, "worktree", "list", "--porcelain").stdout
+        self.assertIn("worktree " + str((path / "nested").resolve()) + "\n", listed)
+        self.assertNotIn(".fnl-retiring-", listed)
+
     def test_a_failed_move_is_undone(self):
         path = self.worktree("feat-fm")
         self.dispatch(path)

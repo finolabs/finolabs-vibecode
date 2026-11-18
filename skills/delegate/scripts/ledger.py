@@ -1161,6 +1161,9 @@ def claim(sweep, info, default, place, cwd, main_checkout):
                 moved = sweep.git(main_checkout, "worktree", "move", "--", path, target).returncode == 0
             except Exception:
                 moved = False
+            if moved and not repair_nested(sweep, main_checkout, path, target, nested_in(sweep, main_checkout, path)):
+                # A worktree registered inside it moved along and git could not record its new place: go back.
+                moved = False
             if not moved:
                 if undo_move(sweep, main_checkout, path, target, instance):
                     drop_claim(target)
