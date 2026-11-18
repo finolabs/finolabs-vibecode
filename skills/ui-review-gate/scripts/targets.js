@@ -33,28 +33,35 @@
   };
   const circlesMeet = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 < 576;
   const inline = (el) => {
-    /* A link in a sentence: at each level from the link up through its inline wrappers, the siblings up to the
-       nearest block on each side hold text outside any link. Text across a block, at any level, is another line.
-       The reading is a heuristic: every inline exception is marked uncertain, to check by eye (2.5.8). */
+    /* A link in a sentence. Lay out the inline content of the link's nearest block ancestor as a browser does,
+       in document order: entering or leaving any block element breaks the line ("B"), text outside any link is
+       sentence text ("T"), the link itself is "L". The link is inline when the segment around "L", between two
+       breaks, holds "T". A DOM reading cannot see wrapped lines, so every inline exception is marked uncertain. */
     if (el.tagName.toLowerCase() !== "a" || getComputedStyle(el).display !== "inline") return false;
     const isBlock = (node) => node.nodeType === 1 && getComputedStyle(node).display !== "inline";
-    const text = (node) => {
-      if (node.nodeType === 3) return !!node.textContent.trim();
-      if (node.nodeType !== 1 || isBlock(node) || node.tagName.toLowerCase() === "a") return false;
-      const kids = Array.from(node.childNodes || []);
-      if (kids.some(isBlock)) return false; /* a block inside breaks the run: not read as this sentence */
-      return kids.some(text);
-    };
-    for (let cur = el; cur.parentElement; cur = cur.parentElement) {
-      const siblings = Array.from(cur.parentElement.childNodes);
-      const at = siblings.indexOf(cur);
-      for (const step of [-1, 1]) {
-        for (let i = at + step; i >= 0 && i < siblings.length; i += step) {
-          if (isBlock(siblings[i])) break;
-          if (text(siblings[i])) return true;
-        }
+    let root = el.parentElement;
+    while (root && !isBlock(root)) root = root.parentElement;
+    if (!root) return false;
+    const tokens = [];
+    const walk = (node, insideLink) => {
+      if (node.nodeType === 3) {
+        if (!insideLink && node.textContent.trim()) tokens.push("T");
+        return;
       }
-      if (getComputedStyle(cur.parentElement).display !== "inline") break;
+      if (node.nodeType !== 1) return;
+      const block = node !== root && isBlock(node);
+      if (block) tokens.push("B");
+      if (node === el) tokens.push("L");
+      const link = insideLink || node.tagName.toLowerCase() === "a";
+      for (const child of Array.from(node.childNodes || [])) walk(child, link);
+      if (block) tokens.push("B");
+    };
+    walk(root, false);
+    const at = tokens.indexOf("L");
+    for (const step of [-1, 1]) {
+      for (let i = at + step; i >= 0 && i < tokens.length && tokens[i] !== "B"; i += step) {
+        if (tokens[i] === "T") return true;
+      }
     }
     return false;
   };
