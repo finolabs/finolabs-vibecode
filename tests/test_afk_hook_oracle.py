@@ -95,7 +95,8 @@ HOME = '/oracle-home'
 REFUSED = ['ok $"abc"', 'ok 12>&1', 'ok |& cat', 'ok &| cat', 'ok >! f', 'case x in x) ok;; esac', '[[ a == b ]]',
            'for x; do ok; done', 'for ((i=0;i<1;i++)); do ok; done', 'x=(a b)', 'ok <1-3>', 'ok {x}>f', 'ok $X',
            'ok ${HOME:-x}', 'ok $(ok)', 'ok `ok`', 'ok <(ok)', 'ok $((1))', 'ok {a,b}', '=ok', 'ok ~+/x',
-           'select x in a; do ok; done', 'coproc ok', 'repeat 2 ok', 'cat <<EOF\nno end', 'ok &>>f', "ok $'\\x61'"]
+           'select x in a; do ok; done', 'coproc ok', 'repeat 2 ok', 'cat <<EOF\nno end', 'ok &>>f', "ok $'\\x61'",
+           'cat <<true\ntr\\\nue\nok\ntrue', 'ok "$HOM""E"', 'ok $HO""ME', 'ok "${HO}ME"']
 
 
 def hook_module():

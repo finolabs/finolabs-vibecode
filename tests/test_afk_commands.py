@@ -58,6 +58,25 @@ class CommandsJsonTest(test_afk.AfkBase):
         self.assertEqual(self.counts()['actions'], 1)
         self.assertEqual(sorted(p['pr'] for p in self.log('merge-pin')), [7, 8])
 
+    def test_a_log_with_room_for_one_pin_keeps_neither(self):
+        # Review of b1faa973: the call's records are written all or none, so a refused call leaves no pin behind.
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        self.merge_ok(7, HEAD)
+        self.merge_ok(8, HEAD)
+        log = self.state / 'log.jsonl'
+        kept = log.read_bytes() if log.exists() else b''
+        pin = len(json.dumps(dict(time=self.clock, tier=1, kind='merge-pin', pr=7, head=HEAD,
+                                  repo='github.com/example/demo', note=''), separators=(',', ':'))) + 1
+        filler = json.dumps({'time': self.clock, 'kind': 'filler', 'note': ''}, separators=(',', ':')).encode()
+        room = self.load().MAX_LOG - len(kept) - pin - pin // 2
+        pad = json.dumps({'time': self.clock, 'kind': 'filler', 'note': 'x' * (room - len(filler) - 1)},
+                         separators=(',', ':')).encode()
+        log.write_bytes(kept + pad + b'\n')
+        log.chmod(0o600)
+        self.sites(merge(7), merge(8), tier=3, code='log-unwritable')
+        self.assertEqual(self.log('merge-pin'), [])
+        self.assertEqual(self.lease()['counters'], {})
+
     def test_an_approval_is_used_by_its_exact_subject_once(self):
         self.start(SETUP + '- Max actions per hour: 1000\n')
         argv = self.ci_script()

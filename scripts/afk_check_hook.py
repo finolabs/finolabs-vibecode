@@ -46,11 +46,17 @@ ASSIGNMENT_WORD = re.compile(r'[A-Za-z_][A-Za-z0-9_]*\+?=')
 
 
 class Word:
-    __slots__ = ('chars', 'refs')
+    __slots__ = ('chars', 'segments', 'refs')
 
     def __init__(self):
-        self.chars = []  # (character, quoting)
-        self.refs = []   # (start, end) of each `$HOME` or `${HOME}` reference, quoting `u` or `d`
+        self.chars = []     # (character, quoting)
+        self.segments = []  # per character, the quoted or unquoted segment it came from: `"$HOM""E"` is two
+        self.refs = []      # (start, end) of each `$HOME` or `${HOME}` reference, quoting `u` or `d`
+
+    def add(self, chars, quoting, segment):
+        for c in chars:
+            self.chars.append((c, quoting))
+            self.segments.append(segment)
 
     @property
     def text(self):
@@ -103,6 +109,7 @@ def lex(text):
     """[(kind, value)] tokens: ('word', Word), ('op', operator or newline), ('redir', (fd, operator, heredoc)). A
     heredoc is a dict holding its delimiter, whether it was quoted and its body, read at the newline after it."""
     tokens, pending, word, i, n = [], [], None, 0, len(text)
+    segment = 0  # a new number at every quote, escape and return to unquoted text
 
     def end_word():
         nonlocal word
@@ -126,7 +133,8 @@ def lex(text):
                 i += 2  # a continuation: the shell joins the two lines
                 continue
             word = word or Word()
-            word.chars.append((text[i + 1], 'e'))
+            word.add(text[i + 1], 'e', segment + 1)
+            segment += 2
             i += 2
             continue
         if c == "'":
@@ -134,11 +142,13 @@ def lex(text):
             if end < 0:
                 raise Unreadable('unbalanced quote')
             word = word or Word()
-            word.chars.extend((ch, 's') for ch in text[i + 1:end])
+            word.add(text[i + 1:end], 's', segment + 1)
+            segment += 2
             i = end + 1
             continue
         if c == '"':
             word = word or Word()
+            segment += 1
             j = i + 1
             while True:
                 if j >= n:
@@ -152,11 +162,13 @@ def lex(text):
                         j += 2
                         continue
                     if nxt in '$`"\\':
-                        word.chars.append((nxt, 'e'))
+                        word.add(nxt, 'e', segment + 1)
+                        segment += 2
                         j += 2
                         continue
-                word.chars.append((ch, 'd'))
+                word.add(ch, 'd', segment)
                 j += 1
+            segment += 1
             i = j + 1
             continue
         if c == '$' and text[i + 1:i + 2] == "'":
@@ -164,7 +176,8 @@ def lex(text):
             if end < 0 or '\\' in text[i + 2:end]:
                 raise Unreadable('ansi-c quote')  # its escapes could hide a name or a path
             word = word or Word()
-            word.chars.extend((ch, 's') for ch in text[i + 2:end])
+            word.add(text[i + 2:end], 's', segment + 1)
+            segment += 2
             i = end + 1
             continue
         if c == '$' and text[i + 1:i + 2] == '"':
@@ -217,7 +230,7 @@ def lex(text):
             i += len(op)
             continue
         word = word or Word()
-        word.chars.append((c, 'u'))
+        word.add(c, 'u', segment)
         i += 1
     end_word()
     if pending:
@@ -237,6 +250,8 @@ def heredoc_bodies(text, i, pending):
             end = text.find('\n', i)
             line = text[i:] if end < 0 else text[i:end]
             i = len(text) if end < 0 else end + 1
+            if not heredoc['quoted'] and (len(line) - len(line.rstrip('\\'))) % 2:
+                raise Unreadable('heredoc continuation')  # the shell joins the next line before it looks for the end
             if heredoc['strip']:
                 line = line.lstrip('\t')
             if line == heredoc['delimiter']:
@@ -255,17 +270,21 @@ def check_word(word):
         if c == '`':
             raise Unreadable('command substitution')
         if c == '$':
-            if k + 1 >= len(chars) or chars[k + 1][1] != q:
+            segments = word.segments
+            if k + 1 >= len(chars) or segments[k + 1] != segments[k]:
                 continue  # a lone `$` before a quote or at the end is literal
             nxt = chars[k + 1][0]
             if nxt == '{':
-                end = next((j for j in range(k + 2, len(chars)) if chars[j] == ('}', q)), None)
-                if end is None or ''.join(ch for ch, _ in chars[k + 2:end]) != 'HOME':
+                end = next((j for j in range(k + 2, len(chars)) if segments[j] != segments[k] or chars[j][0] == '}'),
+                           None)
+                if (end is None or segments[end] != segments[k]
+                        or ''.join(ch for ch, _ in chars[k + 2:end]) != 'HOME'):
                     raise Unreadable('parameter')
                 end += 1
             elif nxt == '_' or nxt.isalpha():
                 end = k + 1
-                while end < len(chars) and chars[end][1] == q and (chars[end][0] == '_' or chars[end][0].isalnum()):
+                while (end < len(chars) and segments[end] == segments[k]
+                       and (chars[end][0] == '_' or chars[end][0].isalnum())):
                     end += 1
                 if ''.join(ch for ch, _ in chars[k + 1:end]) != 'HOME':
                     raise Unreadable('variable')

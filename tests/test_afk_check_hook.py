@@ -371,7 +371,10 @@ class AfkCheckHookTest(unittest.TestCase):
         for command in ('printf x | sh>out', 'cd ~ && cat .ne?rc', '$"abc"', 'printf x 12>&1',
                         "cat <<'EOF' | node\nconsole.log(process.env)\nEOF", "cat <<'EOF' | tclsh\nputs x\nEOF",
                         'S=README; for S in auth; do :; done; gh $S token', '(S=README); cat $S',
-                        'false && S=README; cat $S', 'sh <in', 'node <script.js'):
+                        'false && S=README; cat $S', 'sh <in', 'node <script.js',
+                        # Review of b1faa973: a continuation inside an unquoted heredoc moves its end, and a
+                        # variable name never spans two quoted segments.
+                        'cat <<true\ntr\\\nue\nprintenv\ntrue', 'cat < "$HOM""E"', 'cat $HO""ME'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command, env=env), denial(PARSE))
         guard = ('GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.push GIT_CONFIG_VALUE_0=HEAD:refs/heads/main '

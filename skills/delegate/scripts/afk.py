@@ -2611,14 +2611,23 @@ def check_sites(folder, raw, coordinator, current):
             counted = (key, entry, applied)
     if counted is not None and counted[1]['runs'] + runs > counted[2]['Max runs']:
         return 'spent'
+    # Every record of the call in one write, all or none, before an action is reserved: a full or invalid log
+    # refuses the call and leaves nothing behind. In `open` a pin the grammar cannot read is skipped, as `check` does.
+    records, needed = [], bool(used)
     for argv, target, strict in pins:
-        try:  # the pins first: a full or invalid log refuses the call before an action is reserved
-            append_log(folder, merge_pin(argv, current, target), current)
-        except (OSError, ValueError, UnicodeError, TypeError, StopIteration, IndexError):
+        try:
+            records.append(merge_pin(argv, current, target))
+            needed = needed or strict
+        except (ValueError, TypeError, StopIteration, IndexError):
             if strict:
                 return 'log-unwritable'
-    for subject in used:
-        append_log(folder, dict(time=current, tier=1, kind='approval-used', subject=subject, note=''), current)
+    records += [dict(time=current, tier=1, kind='approval-used', subject=subject, note='') for subject in used]
+    if records:
+        try:
+            append_logs(folder, records, current)
+        except (OSError, ValueError, UnicodeError, TypeError):
+            if needed:
+                return 'log-unwritable'
     if counted is not None:  # `open` keeps no per-project counters
         key, entry, _applied = counted
         entry['actions'] += 1
@@ -2889,6 +2898,11 @@ def log(folder, args):
 
 def append_log(folder, record, current):
     """Append one record to the private log, keeping the last 30 days; refuses an invalid or full log."""
+    append_logs(folder, [record], current)
+
+
+def append_logs(folder, records, current):
+    """Append records to the private log in one write, all or none; refuses an invalid or full log."""
     raw = read_private(folder, 'log.jsonl', MAX_LOG)
     retained = []
     for line in (raw or b'').splitlines():
@@ -2897,7 +2911,7 @@ def append_log(folder, record, current):
             raise ValueError('afk log is invalid')
         if current - 30 * 86400 <= old['time'] <= current:
             retained.append(line)
-    retained.append(json.dumps(record, separators=(',', ':')).encode())
+    retained.extend(json.dumps(record, separators=(',', ':')).encode() for record in records)
     payload = b'\n'.join(retained) + b'\n'
     if len(payload) > MAX_LOG:
         raise ValueError('afk log is full')
