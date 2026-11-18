@@ -1290,7 +1290,7 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
                 lines.append(f"ledger: kept worktree {shown} (the afk state was busy)")
                 continue
             if reason:
-                failed = failed or "could not be moved back" in reason
+                failed = failed or reason.startswith("git refused to move it")  # a failed move, undone or not
                 lines.append(f"ledger: kept worktree {shown} ({reason})")
                 continue
             replaced = "the worktree at its retiring path is not the one claimed"

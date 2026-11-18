@@ -813,8 +813,26 @@ class WorktreeCleanTest(unittest.TestCase):
         with mock.patch.object(ledger, "follow", follow):
             lines, failed = ledger.clean_worktrees(str(self.main))
         self.assertEqual(seen[:1], ["free"])
+        self.assertTrue(failed)
         self.assertTrue(path.exists(), lines)
         self.assertEqual(self.retiring(), [])
+
+    def test_a_refused_move_makes_a_hand_run_exit_1(self):
+        path = self.worktree("feat-rx")
+        self.dispatch(path)
+        ledger, sweep = self.load_ledger()
+        real = sweep.git
+
+        def git(checkout, *args, **kwargs):
+            if args[:2] == ("worktree", "move") and ".fnl-retiring-" in args[-1]:
+                return subprocess.CompletedProcess(args, 128, "", "")
+            return real(checkout, *args, **kwargs)
+
+        with mock.patch.object(sweep, "git", git):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue(failed, lines)
+        self.assertTrue(path.exists())
+        self.assertTrue(any("git refused to move it" in line for line in lines), lines)
 
     def test_a_failed_move_is_undone(self):
         path = self.worktree("feat-fm")
