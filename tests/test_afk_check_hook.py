@@ -105,12 +105,13 @@ class AfkCheckHookTest(unittest.TestCase):
         (self.home / '.netrc').write_text('machine example.com\n')
         env = {**self.env, 'HOME': str(self.home)}
         for command in (f'python3 -I {script} log --note "$(cat ~/.netrc)"',
-                        f'python3 -I {script} log --note "`cat ~/.netrc`"',
-                        f'python3 -I {script} log --note x;printenv',
-                        f'python3 -I {script} log --note x|cat ~/.netrc'):
+                        f'python3 -I {script} log --note "`cat ~/.netrc`"'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command, env=env), denial(PARSE))
-        for command in (f'python3 -I {script} rules >~/.netrc',
+        # The tokenizer reads a glued operator as bash does, so the sibling site is judged (tokenizer spec, decision 1).
+        for command in (f'python3 -I {script} log --note x;printenv',
+                        f'python3 -I {script} log --note x|cat ~/.netrc',
+                        f'python3 -I {script} rules >~/.netrc',
                         f'python3 -I {script} log --note x ; printenv',
                         f'python3 -I {script} log --note x | cat ~/.netrc'):
             with self.subTest(command=command):
@@ -130,8 +131,9 @@ class AfkCheckHookTest(unittest.TestCase):
         self.assertEqual(self.hook('cat "$HOME/.ne\\\ntrc"', env=env), parked('floor'))
         # An ANSI-C escape could hide a name or a path, so it is unreadable.
         self.assertEqual(self.hook("$'\\x70rintenv'"), denial(PARSE))
-        self.assertEqual(self.hook('$"printenv"'), parked('floor'))
-        self.assertEqual(self.hook('$"pr"intenv'), parked('floor'))
+        # A locale string gets the split message: bash and zsh expand `$"..."` differently (tokenizer spec, A).
+        self.assertEqual(self.hook('$"printenv"'), denial(PARSE))
+        self.assertEqual(self.hook('$"pr"intenv'), denial(PARSE))
         # An escaped backslash is no continuation: the next line is its own command.
         self.assertEqual(self.hook('echo a\\\\\nprintenv'), parked('floor'))
 
@@ -181,15 +183,15 @@ class AfkCheckHookTest(unittest.TestCase):
         for command in ('ls /tmp; printenv', 'git commit -m msg; printenv', 'ls /tmp&& env', 'ls /tmp| printenv'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), parked('floor'))
-        # An operator glued to the word after it, or one inside quotes beside a split one, is still not read.
-        # A quoted or escaped operator elsewhere never stands in for the glued one (review of #352).
+        # An operator glued to the word after it is read as bash reads it, and a quoted or escaped operator stays in
+        # its word, so the command after it is judged: the floor (tokenizer spec, decision 1; review of #352).
         for command in ('ls /tmp;printenv', 'git commit -m msg;printenv', 'echo "a;" b; printenv',
                         "git commit -m x;printenv FNL_TEST 'a;'", 'git commit -m x;printenv FNL_TEST a\\;',
                         'git commit -m x&&printenv FNL_TEST "a&&"', "git commit -m x;printenv FNL_TEST $'a;'",
-                        'git commit -m x;printenv FNL_TEST $"a;"', "git commit -m x;cat</tmp/.netrc - 'a;'",
-                        "git commit -m 'x;' y;printenv"):
+                        "git commit -m x;cat</tmp/.netrc - 'a;'", "git commit -m 'x;' y;printenv"):
             with self.subTest(command=command):
-                self.assertEqual(self.hook(command), denial(PARSE))
+                self.assertEqual(self.hook(command), parked('floor'))
+        self.assertEqual(self.hook('git commit -m x;printenv FNL_TEST $"a;"'), denial(PARSE))  # a locale string
         # A quoted operator alone is a text value, as before.
         self.assertIsNone(self.hook('git commit -m "fix;" -q'))
         self.assertIsNone(self.hook('ls /tmp; pwd ""'))
@@ -204,16 +206,22 @@ class AfkCheckHookTest(unittest.TestCase):
         for command in ("codex exec -m gpt -s read-only 'review this'", 'codex exec --json -m gpt y'):
             with self.subTest(command=command):
                 self.assertNotEqual(self.hook(command), denial(PARSE))
-        # Every other placement keeps the wrapper rule, including the bypasses a looser walk let through.
+        # The wrapper rule applies wherever a wrapper is in command position, including the bypasses a looser walk
+        # let through: the shell's `exec` reached through a wrapper, a redirect or a quoted `;` (review of #357).
         for command in ('exec -x ls', 'ls; exec -x ls', 'nohup exec -x ls', 'timeout 5 exec -x ls',
-                        "codex exec -m gpt caffeinate -t 5 sh -c 'pr\"\"intenv'",
                         ">out caffeinate -t 5 sh -c 'pr\"\"intenv'", "env FOO=1 caffeinate -t 5 sh -c 'x'",
                         "pnpm exec caffeinate -t 5 sh -c 'x'", "exec -a 'a b' caffeinate -t 5 sh -c 'x'",
-                        'exec -a codex exec -x ls', '>out codex exec -x ls', 'nohup codex exec -x ls',
-                        "> 'out;codex' exec -- sh -c 'echo ok'", "ls; 'codex' exec -- sh -c x", "'codex' exec -- sh -c x",
-                        'cd x && codex exec -- sh -c x', 'codex exec -m gpt; exec -x ls'):
+                        'exec -a codex exec -x ls', "> 'out;codex' exec -- sh -c 'echo ok'",
+                        'codex exec -m gpt; exec -x ls'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), denial(PARSE))
+        # With command sites known, `exec` after the program `codex` is Codex's subcommand in every placement, and
+        # the words after it are Codex's arguments, which no shell runs (tokenizer spec, C).
+        for command in ("codex exec -m gpt caffeinate -t 5 sh -c 'pr\"\"intenv'", '>out codex exec -x ls',
+                        'nohup codex exec -x ls', "ls; 'codex' exec -- sh -c x", "'codex' exec -- sh -c x",
+                        'cd x && codex exec -- sh -c x'):
+            with self.subTest(command=command):
+                self.assertNotEqual(self.hook(command), denial(PARSE))
 
     def test_input_past_the_cap_denies_only_under_a_live_lease(self):
         padded = 'printenv' + ' ' * (262 * 1024)
@@ -260,11 +268,14 @@ class AfkCheckHookTest(unittest.TestCase):
                         'echo auth token | xargs gh', "printf 'auth token' | xargs gh", 'xargs printenv',
                         'xargs az account get-access-token', 'xargs -0 -n 1 ls', "find ~ -name '.ne*c' -exec cat {} +",
                         "find ~ -name '.ne*c' | xargs cat", r'find . -exec env printenv \;', 'find . -name x -delete',
-                        'fd netrc ~ -x cat', 'fd netrc ~ --exec-batch cat', 'git commit -m x;printenv',
-                        'git commit -m x;gh auth token', 'echo ok&&printenv', 'cat ~/**/.ne?rc',
-                        'git commit -m x;(printenv)', 'git commit -m x;(gh auth token)', 'git commit -m x|(printenv)'):
+                        'fd netrc ~ -x cat', 'fd netrc ~ --exec-batch cat', 'cat ~/**/.ne?rc'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), denial(PARSE))
+        # A glued operator is read as bash reads it, so the command after it floors (tokenizer spec, decision 1).
+        for command in ('git commit -m x;printenv', 'git commit -m x;gh auth token', 'echo ok&&printenv',
+                        'git commit -m x;(printenv)', 'git commit -m x;(gh auth token)', 'git commit -m x|(printenv)'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), parked('floor'))
         # A glob past the match limit is never truncated.
         many = self.home / 'many'
         many.mkdir()
@@ -335,6 +346,97 @@ class AfkCheckHookTest(unittest.TestCase):
         log = (self.root / 'state/autopilot/log.jsonl').read_text().splitlines()
         pins = [json.loads(line) for line in log if json.loads(line).get('kind') == 'merge-pin']
         self.assertEqual([(p['pr'], p['head']) for p in pins], [(7, head)])
+
+    def test_the_tokenizer_cases_of_the_spec(self):
+        """docs/specs/afk-hook-tokenizer.md, Verification: hook tests under a real lease."""
+        self.start()
+        (self.home / '.netrc').write_text('machine example.com\n')
+        (self.repo / '.netrc').write_text('machine example.com\n')
+        env = {**self.env, 'HOME': str(self.home)}
+        for command in ('ls /tmp; git status', 'ls /tmp ; pwd ""', 'git status 2>&1 | head', 'grep -E "a|b" f',
+                        'codex exec -s read-only x', "git commit -F - <<'EOF'\nfix; tidy the parser\nEOF",
+                        'cat .local-ci/x/pass'):
+            with self.subTest(command=command):
+                self.assertIsNone(self.hook(command, env=env))
+        # Holes on main, fixed by construction (decision 5), and the stopgaps' regressions.
+        for command in ('gh pr create --body; env', 'git commit -m; env', 'true; 2>&1 env', 'printenv>&2',
+                        'cat<.netrc', 'gh>out auth token', 'echo x\\ #; env', "node <<'EOF'\nconsole.log(process.env)\nEOF",
+                        'python3 /tmp/pass', 'node --require /tmp/pass -e 0'):
+            with self.subTest(command=command):
+                self.assertIn(self.hook(command, env=env), (parked('floor'), denial(PARSE)))
+        for command in ('gh pr create --body; env', 'printenv>&2', 'cat<.netrc', 'gh>out auth token', 'echo x\\ #; env',
+                        'python3 /tmp/pass', 'node --require /tmp/pass -e 0'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command, env=env), parked('floor'))
+        for command in ('printf x | sh>out', 'cd ~ && cat .ne?rc', '$"abc"', 'printf x 12>&1',
+                        "cat <<'EOF' | node\nconsole.log(process.env)\nEOF", "cat <<'EOF' | tclsh\nputs x\nEOF",
+                        'S=README; for S in auth; do :; done; gh $S token', '(S=README); cat $S',
+                        'false && S=README; cat $S', 'sh <in', 'node <script.js'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command, env=env), denial(PARSE))
+        guard = ('GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.push GIT_CONFIG_VALUE_0=HEAD:refs/heads/main '
+                 'git push origin')
+        self.assertEqual(self.hook(guard), parked('guarded'))
+        # Open: the ninth exception leaves AGENTS.afk.md unprotected, so a redirect to it needs only the floor.
+        self.assertIsNone(self.hook('git status > AGENTS.afk.md'))
+
+    def test_strict_checks_every_redirect_target(self):
+        self.start(SETUP + '- Mode: strict\n')
+        self.assertEqual(self.hook('git status > AGENTS.afk.md'), parked('protected'))
+        self.assertEqual(self.hook('git status < /tmp/input'), parked('unknown'))
+        self.assertIsNone(self.hook('git status 2>&1'))
+
+    def test_a_loop_or_a_second_use_cannot_spend_a_one_time_approval(self):
+        self.start(SETUP + '- Mode: strict\n- Max actions per hour: 1000\n- Max runs: 2\n')
+        (self.repo / 'Makefile').write_text('task:\n\ttrue\n')
+        status, output = self.afk('log', '--kind', 'decision', '--project', 'demo', '--topic', 'run it',
+                                  '--precedents', '0', '--rung', 'host', '--settled', 'yes', '--by', 'claude',
+                                  '--option', '1', '--of', '2', '--model', 'claude-opus-5-5',
+                                  '--approve-argv-json', json.dumps(['make', 'task']))
+        self.assertEqual(status, 0, output)
+        for command in ('for x in a b; do make task; done', 'while make task; do git status; done',
+                        'make task; make task'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), parked('unknown'))
+        self.assertIsNone(self.hook('git status && make task'))
+        self.assertEqual(self.hook('make task'), parked('unknown'))  # used once
+        ledger = f'python3 -I {ROOT / "skills/delegate/scripts/ledger.py"} start'
+        self.assertIsNone(self.hook(ledger))
+        self.assertEqual(self.hook(f'{ledger}; {ledger}'), parked('spent'))  # one run left, two reserved
+        self.assertIsNone(self.hook(ledger))
+
+    def test_command_sites_match_the_shell_structure(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('afk_check_hook_sites', HOOK)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        def shape(command):
+            sites, _words, _listed = module.judged(command)
+            return [(s.full, [(op, t.text) for _fd, op, t, _h in s.redirects], s.repeated) for s in sites]
+
+        self.assertEqual(shape('false && git status'), [(['false'], [], False), (['git', 'status'], [], False)])
+        self.assertEqual(shape('for x in a b; do git status; done'), [(['git', 'status'], [], True)])
+        self.assertEqual(shape('while git status; do cd x; done'),
+                         [(['git', 'status'], [], True), (['cd', 'x'], [], True)])
+        self.assertEqual(shape('if ok; then echo a; else echo b; fi; pwd'),
+                         [(['ok'], [], False), (['echo', 'a'], [], False), (['echo', 'b'], [], False),
+                          (['pwd'], [], False)])
+        self.assertEqual(shape('X=1 Y=2 git log 2>&1 >out <in'),
+                         [(['X=1', 'Y=2', 'git', 'log'], [('>&', '1'), ('>', 'out'), ('<', 'in')], False)])
+        self.assertEqual(shape('printf x2>out'), [(['printf', 'x2'], [('>', 'out')], False)])
+        self.assertEqual(shape('echo x\\ #; env'), [(['echo', 'x #'], [], False), (['env'], [], False)])
+        self.assertEqual(shape("echo 'a;b' \"c|d\" e\;f"), [(['echo', 'a;b', 'c|d', 'e;f'], [], False)])
+        self.assertEqual(shape('(cd x; ls) | { cat; }\nls # c ; env'),
+                         [(['cd', 'x'], [], False), (['ls'], [], False), (['cat'], [], False), (['ls'], [], False)])
+        self.assertEqual(shape('X=1'), [(['X=1'], [], False)])
+        for command in ('case x in x) ls;; esac', 'for ((i=0;;)); do ls; done', 'for x; do ls; done', 'select x in a',
+                        'ls |& cat', 'ls &| cat', 'ls >! f', 'ls 12>&1', '[[ a == b ]]', 'if ls; fi', '(ls',
+                        'ls )', 'ls |', 'cat <<EOF\nno end', '{ ls; } > out', 'x=(a b)', 'ls <1-3>', 'echo {x}>f',
+                        'echo $"a"', "echo $'a\\'b'", 'ls ; ; ls', 'coproc ls', 'repeat 2 ls', 'f() { ls; }'):
+            with self.subTest(command=command):
+                with self.assertRaises(module.Unreadable):
+                    module.judged(command)
 
     def test_the_manifest_has_the_hook_in_its_own_group(self):
         manifest = json.loads((ROOT / '.claude-plugin/hooks.json').read_text())

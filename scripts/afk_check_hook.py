@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Claude Code PreToolUse Bash hook for the away lease (CLAUDE.md, tenth scoped exception; docs/specs/afk-check-hook.md).
+"""Claude Code PreToolUse Bash hook for the away lease (CLAUDE.md, tenth scoped exception; docs/specs/afk-check-hook.md
+and docs/specs/afk-hook-tokenizer.md).
 
-While a valid, unexpired away lease exists, it splits the Bash command into words in memory and judges that argv
-through the same `afk.py check --coordinator claude --argv-json` code, in the hook's working folder. A Tier 3 answer,
-in either mode, denies the call with one fixed message naming the code; a command that cannot be split into words is
-denied with another fixed message, and once a lease is live any error denies as `unsafe`. With no live lease, or on a
-Tier 1 answer, it prints nothing and returns no decision. The
-command text is never stored, logged or sent: only what a `check` call keeps is written.
+While a valid, unexpired away lease exists, one tokenizer reads the Bash command in memory into command sites (each
+with its assignments, argv and redirects), keeping the quoting of every character, and the sites are judged through
+the same `afk.py check --coordinator claude --commands-json` code, in the hook's working folder. A Tier 3 answer, in
+either mode, denies the call with one fixed message naming the code; a command outside the syntax the tokenizer reads
+is denied with another fixed message, and once a lease is live any error denies as `unsafe`. With no live lease, or
+on a Tier 1 answer, it prints nothing and returns no decision. The command text is never stored, logged or sent: only
+what a `check` call keeps is written.
 """
 
 import os
@@ -31,116 +33,466 @@ def deny(reason):
                             separators=(',', ':')) + '\n').encode())
 
 
-def unquoted_newlines(command):
-    """The command with every newline outside quotes and comments turned into a `;` separator, so each line is judged
-    as its own command (shlex alone reads a newline as a space). Quotes are tracked as bash tracks them: a `#` that
-    starts a word comments to the end of the line, a backslash-newline outside single quotes joins lines, and a
-    `$'...'` string holding a backslash is refused. Raises ValueError on an unbalanced quote or a form it cannot read the way bash does."""
-    out, single, double, i, n = [], False, False, 0, len(command)
-    while i < n:
-        char = command[i]
-        if char == '\\' and not single:
-            if i + 1 < n and command[i + 1] == '\n':
-                i += 2  # line continuation: bash joins the two lines
+# ---- The tokenizer (docs/specs/afk-hook-tokenizer.md A) ----------------------------------------------------------------
+# One pass over the raw text. Every character of a word keeps its quoting: `u` unquoted, `s` single-quoted (and a
+# `$'...'` string with no backslash), `d` double-quoted, `e` escaped by a backslash. The grammar is the intersection of
+# bash and zsh with default options; any form outside it raises Unreadable, which is the split message.
+
+class Unreadable(ValueError):
+    """A form outside the syntax the tokenizer reads: the split message."""
+
+
+ASSIGNMENT_WORD = re.compile(r'[A-Za-z_][A-Za-z0-9_]*\+?=')
+
+
+class Word:
+    __slots__ = ('chars', 'refs')
+
+    def __init__(self):
+        self.chars = []  # (character, quoting)
+        self.refs = []   # (start, end) of each `$HOME` or `${HOME}` reference, quoting `u` or `d`
+
+    @property
+    def text(self):
+        return ''.join(c for c, _ in self.chars)
+
+    @property
+    def plain(self):
+        """True when no character is quoted or escaped: only then can the word be a reserved word."""
+        return all(q == 'u' for _, q in self.chars)
+
+    @property
+    def globbed(self):
+        return any(q == 'u' and c in '*?[' for c, q in self.chars)
+
+    def assignment(self):
+        """True when the word's `NAME=` or `NAME+=` part is unquoted, as both shells need for an assignment."""
+        match = ASSIGNMENT_WORD.match(self.text)
+        return bool(match) and all(q == 'u' for _, q in self.chars[:match.end()])
+
+    def expanded(self):
+        """The word as the shell expands an unquoted leading `~` and `$HOME`; quoted text stays literal."""
+        home = os.environ.get('HOME', '')
+        out, index, chars = [], 0, self.chars
+        if chars and chars[0] == ('~', 'u'):
+            end = next((k for k, (c, q) in enumerate(chars) if c == '/' and q == 'u'), len(chars))
+            out.append(os.path.expanduser(''.join(c for c, _ in chars[:end])))
+            index = end
+        refs = dict(self.refs)
+        while index < len(chars):
+            if index in refs:
+                out.append(home)
+                index = refs[index]
                 continue
-            out.append(command[i:i + 2])
+            out.append(chars[index][0])
+            index += 1
+        return ''.join(out)
+
+
+# Longest match first; a form one shell reads differently, or that a shorter operator could misread, is refused.
+REFUSED_OPERATORS = ('&>>', '>&|', '>>|', '&>|', '>>!', '|&', '&|', '&!', '>!', ';;', ';&', ';|')
+REDIRECTS = ('<<<', '<<-', '<<', '<>', '<&', '>>', '>&', '>|', '&>', '<', '>')
+OPERATOR_TEXT = sorted(REFUSED_OPERATORS + REDIRECTS + ('&&', '||', ';', '&', '|', '(', ')'), key=len, reverse=True)
+NAME = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
+ZSH_NUMERIC_GLOB = re.compile(r'<[0-9]*-[0-9]*>')
+NAMED_FD = re.compile(r'\{[A-Za-z_][A-Za-z0-9_]*\}')
+DIGITS = re.compile(r'[0-9]+')  # ASCII only: the shells read no other digit as a fd
+
+
+def lex(text):
+    """[(kind, value)] tokens: ('word', Word), ('op', operator or newline), ('redir', (fd, operator, heredoc)). A
+    heredoc is a dict holding its delimiter, whether it was quoted and its body, read at the newline after it."""
+    tokens, pending, word, i, n = [], [], None, 0, len(text)
+
+    def end_word():
+        nonlocal word
+        if word is not None:
+            if tokens and tokens[-1][0] == 'redir' and tokens[-1][1][2] is not None \
+                    and 'delimiter' not in tokens[-1][1][2]:
+                heredoc = tokens[-1][1][2]
+                if not word.chars or any(q == 'u' and c in '$`' for c, q in word.chars):
+                    raise Unreadable('heredoc delimiter')
+                heredoc['delimiter'], heredoc['quoted'] = word.text, not word.plain
+                pending.append(heredoc)
+            tokens.append(('word', word))
+            word = None
+
+    while i < n:
+        c = text[i]
+        if c == '\\':
+            if i + 1 >= n:
+                raise Unreadable('trailing backslash')
+            if text[i + 1] == '\n':
+                i += 2  # a continuation: the shell joins the two lines
+                continue
+            word = word or Word()
+            word.chars.append((text[i + 1], 'e'))
             i += 2
             continue
-        if not single and not double:
-            if char == '$' and i + 1 < n and command[i + 1] == "'":
-                end = command.find("'", i + 2)
-                if end < 0 or '\\' in command[i + 2:end]:
-                    raise ValueError('ansi-c quote')
-                out.append(command[i + 1:end + 1])
-                i = end + 1
-                continue
-            if char == '$' and i + 1 < n and command[i + 1] == '"':
-                i += 1  # a locale string `$"..."` reads as `"..."`
-                continue
-            if char == '#' and (i == 0 or command[i - 1] in ' \t\n;&|()<>'):
-                end = command.find('\n', i)
-                i = n if end < 0 else end
-                continue
-            if char == '\n':
-                out.append(' ; ')
+        if c == "'":
+            end = text.find("'", i + 1)
+            if end < 0:
+                raise Unreadable('unbalanced quote')
+            word = word or Word()
+            word.chars.extend((ch, 's') for ch in text[i + 1:end])
+            i = end + 1
+            continue
+        if c == '"':
+            word = word or Word()
+            j = i + 1
+            while True:
+                if j >= n:
+                    raise Unreadable('unbalanced quote')
+                ch = text[j]
+                if ch == '"':
+                    break
+                if ch == '\\' and j + 1 < n:
+                    nxt = text[j + 1]
+                    if nxt == '\n':
+                        j += 2
+                        continue
+                    if nxt in '$`"\\':
+                        word.chars.append((nxt, 'e'))
+                        j += 2
+                        continue
+                word.chars.append((ch, 'd'))
+                j += 1
+            i = j + 1
+            continue
+        if c == '$' and text[i + 1:i + 2] == "'":
+            end = text.find("'", i + 2)
+            if end < 0 or '\\' in text[i + 2:end]:
+                raise Unreadable('ansi-c quote')  # its escapes could hide a name or a path
+            word = word or Word()
+            word.chars.extend((ch, 's') for ch in text[i + 2:end])
+            i = end + 1
+            continue
+        if c == '$' and text[i + 1:i + 2] == '"':
+            raise Unreadable('locale string')  # bash and zsh expand `$"..."` differently
+        if c in ' \t':
+            end_word()
+            i += 1
+            continue
+        if c == '\n':
+            end_word()
+            tokens.append(('op', '\n'))
+            i = heredoc_bodies(text, i + 1, pending)
+            continue
+        if c == '#' and word is None:
+            end = text.find('\n', i)
+            i = n if end < 0 else end  # a comment runs to the end of the line
+            continue
+        if c in ';&|<>()':
+            op = next(o for o in OPERATOR_TEXT if text.startswith(o, i))
+            if op in REFUSED_OPERATORS:
+                raise Unreadable('operator')
+            if op == '(':
+                if word is not None:
+                    raise Unreadable('paren in a word')  # zsh glob alternation, qualifiers, an array
+                if text.startswith('((', i):
+                    raise Unreadable('arithmetic')
+                tokens.append(('op', '('))
                 i += 1
                 continue
-        if char == "'" and not double:
-            single = not single
-        elif char == '"' and not single:
-            double = not double
-        out.append(char)
-        i += 1
-    if single or double:
-        raise ValueError('unbalanced quote')
-    return ''.join(out)
-
-
-NAME_REF = re.compile(r'\$\{[A-Za-z_][A-Za-z0-9_]*\}')
-SHELLS = {'sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'fish', 'csh', 'tcsh'}
-
-
-VARIABLE = re.compile(r'\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))')
-
-
-def home_reference(command, end, double):
-    """True when the variable that ends at `end` is `$HOME` or `${HOME}` followed by `/`, whitespace or the end, or
-    inside double quotes by a closing quote followed by one of those: the only form whose value the hook and the
-    Bash tool share and whose word boundary is plain."""
-    name = command[command.rfind('$', 0, end):end].strip('${}')
-    if name != 'HOME':
-        return False
-    after = command[end:end + 1]
-    if double and after == '"':
-        after = command[end + 1:end + 2]
-    return after in ('', '/') or after.isspace()
-
-
-def unreadable(command):
-    """True when the command holds a shell form the hook cannot reproduce exactly (bash and zsh): brace expansion,
-    a `${...}` with an operator, a special or positional parameter, arithmetic, process substitution, a zsh `=name`,
-    a `(` inside a word or a `~+`, `~-` or `~N` prefix. Single-quoted text is literal and skipped."""
-    single, double, i, n = False, False, 0, len(command)
-    while i < n:
-        char, nxt = command[i], command[i + 1:i + 2]
-        start = i == 0 or command[i - 1] in ' \t\n;&|<>'
-        if char == '\\' and not single:
-            i += 2
+            if op in REDIRECTS:
+                if op == '<' and ZSH_NUMERIC_GLOB.match(text, i):
+                    raise Unreadable('zsh numeric glob')
+                fd = None
+                if word is not None and word.plain and DIGITS.fullmatch(word.text):
+                    if len(word.text) > 1:
+                        raise Unreadable('fd number')  # bash reads `12>` as a fd, zsh as an argument
+                    if op != '&>':
+                        fd, word = word.text, None
+                elif word is not None and word.plain and NAMED_FD.fullmatch(word.text):
+                    raise Unreadable('named fd')
+                end_word()
+                i += len(op)
+                if text[i:i + 1] == '(':
+                    raise Unreadable('process substitution')
+                heredoc = {'quoted': False, 'body': None, 'strip': op == '<<-'} if op in ('<<', '<<-') else None
+                tokens.append(('redir', (fd, op, heredoc)))
+                continue
+            end_word()
+            tokens.append(('op', op))
+            i += len(op)
             continue
-        if char == "'" and not double:
-            single = not single
-        elif char == '"' and not single:
-            double = not double
-        elif not single:
-            if char == '`':
-                return True  # command substitution: its output exists only at run time
-            if char == '$':
-                if nxt == '{' and not NAME_REF.match(command, i):
-                    return True
-                if nxt and nxt in '_@*#?-$!0123456789[' or command.startswith('$((', i):
-                    return True
-                if nxt == '(':
-                    return True  # command substitution: its output exists only at run time
-                ref = VARIABLE.match(command, i)
-                if ref and not home_reference(command, ref.end(), double):
-                    return True  # a variable the shell may expand differently (unset, set in the command, zsh forms)
-            if not double:
-                if char in '<>' and nxt == '(':
-                    return True
-                if char == '{':
-                    end = command.find('}', i)
-                    if end > 0 and (',' in command[i:end] or '..' in command[i:end]):
-                        return True
-                if char == '=' and start:
-                    return True
-                if char == '(' and i > 0 and command[i - 1] not in ' \t\n;&|<>$(':
-                    return True
-                if char == '~' and start and nxt and nxt in '+-0123456789':
-                    return True
+        word = word or Word()
+        word.chars.append((c, 'u'))
         i += 1
-    return False
+    end_word()
+    if pending:
+        raise Unreadable('heredoc without a body')
+    return tokens
 
 
+def heredoc_bodies(text, i, pending):
+    """Read the body of each pending heredoc from `i`, the start of the next line; returns the index after the last
+    delimiter line. A heredoc with no closing delimiter is refused."""
+    while pending:
+        heredoc = pending.pop(0)
+        lines = []
+        while True:
+            if i >= len(text):
+                raise Unreadable('heredoc without its delimiter')
+            end = text.find('\n', i)
+            line = text[i:] if end < 0 else text[i:end]
+            i = len(text) if end < 0 else end + 1
+            if heredoc['strip']:
+                line = line.lstrip('\t')
+            if line == heredoc['delimiter']:
+                break
+            lines.append(line)
+        heredoc['body'] = ''.join(line + '\n' for line in lines)
+    return i
+
+
+def check_word(word):
+    """Raise Unreadable for any form the hook cannot reproduce in both shells; record `$HOME` references."""
+    chars = word.chars
+    for k, (c, q) in enumerate(chars):
+        if q in 'se':
+            continue
+        if c == '`':
+            raise Unreadable('command substitution')
+        if c == '$':
+            if k + 1 >= len(chars) or chars[k + 1][1] != q:
+                continue  # a lone `$` before a quote or at the end is literal
+            nxt = chars[k + 1][0]
+            if nxt == '{':
+                end = next((j for j in range(k + 2, len(chars)) if chars[j] == ('}', q)), None)
+                if end is None or ''.join(ch for ch, _ in chars[k + 2:end]) != 'HOME':
+                    raise Unreadable('parameter')
+                end += 1
+            elif nxt == '_' or nxt.isalpha():
+                end = k + 1
+                while end < len(chars) and chars[end][1] == q and (chars[end][0] == '_' or chars[end][0].isalnum()):
+                    end += 1
+                if ''.join(ch for ch, _ in chars[k + 1:end]) != 'HOME':
+                    raise Unreadable('variable')
+            else:
+                raise Unreadable('parameter')  # special, positional, arithmetic, substitution, zsh forms
+            if end < len(chars) and chars[end][0] != '/':
+                raise Unreadable('home boundary')  # `$HOME:t`, `$HOME[1]`, `${HOME}rc`
+            word.refs.append((k, end))
+            continue
+        if q != 'u':
+            continue
+        if c == '{':
+            end = next((j for j in range(k + 1, len(chars)) if chars[j] == ('}', 'u')), None)
+            inner = chars[k + 1:end] if end is not None else []
+            if any(ch == ',' and qq == 'u' for ch, qq in inner) or '..' in ''.join(ch for ch, qq in inner if qq == 'u'):
+                raise Unreadable('brace expansion')
+        if c == '=' and k == 0:
+            raise Unreadable('zsh equals')
+        if c == '~' and k == 0:
+            end = next((j for j in range(len(chars)) if chars[j] == ('/', 'u')), len(chars))
+            prefix = chars[1:end]
+            if any(qq != 'u' for _, qq in prefix) or (prefix and prefix[0][0] in '+-0123456789'):
+                raise Unreadable('tilde')
+
+
+RESERVED = {'if', 'then', 'elif', 'else', 'fi', 'while', 'until', 'do', 'done', '{', '}', '!', 'for'}
+REFUSED_WORDS = {'case', 'esac', 'select', 'function', 'coproc', 'repeat', 'foreach', '[[', ']]'}
+CLOSERS = {'then', 'elif', 'else', 'fi', 'do', 'done', '}'}
+LOOPS = {'while', 'for'}
+
+
+class Site:
+    """One command site: assignments, words and redirects (fd, operator, target word, heredoc), the operator that
+    ends it, whether a pipe feeds it (`piped`) or takes its output (`pipes_out`), whether the pipe after it feeds a
+    compound command, whether it sits in a loop (`repeated`) and whether it came from a heredoc body."""
+    __slots__ = ('assignments', 'words', 'redirects', 'separator', 'piped', 'pipes_out', 'next_compound',
+                 'repeated', 'body')
+
+    def __init__(self, piped, repeated):
+        self.assignments, self.words, self.redirects = [], [], []
+        self.separator, self.piped, self.pipes_out, self.next_compound = None, piped, False, False
+        self.repeated, self.body = repeated, False
+
+    @property
+    def argv(self):
+        return [w.text for w in self.words]
+
+    @property
+    def full(self):
+        return [w.text for w in self.assignments] + self.argv
+
+
+def parse(text):
+    """(sites, list words) for a command text: every command site with its assignments, words and redirects, and
+    the `for` list words the floor reads as paths. Raises Unreadable for anything outside the grammar."""
+    tokens = lex(text)
+    sites, listed, stack = [], [], []
+    state = {'site': None, 'last': 'start', 'piped': False, 'closed': None}
+
+    def repeated():
+        return any(frame['kind'] in LOOPS for frame in stack)
+
+    def piped_now():
+        return state['piped'] or any(frame['piped'] for frame in stack)
+
+    def new_site():
+        state['site'] = Site(piped_now(), repeated())
+        state['piped'] = False
+
+    def finish(separator):
+        site = state['site']
+        if site is not None:
+            site.separator = separator
+            sites.append(site)
+            if stack:
+                stack[-1]['had'] = True
+            state['site'] = None
+
+    def opened(kind, phase=None):
+        stack.append({'kind': kind, 'phase': phase, 'had': False, 'piped': piped_now(), 'start': len(sites)})
+        if state['piped'] and sites:
+            sites[-1].next_compound = True  # the pipe feeds a compound command
+        state['piped'] = False
+
+    def closed(kind, phases):
+        if not stack or stack[-1]['kind'] != kind or stack[-1]['phase'] not in phases or not stack[-1]['had']:
+            raise Unreadable('compound')
+        frame = stack.pop()
+        if stack:
+            stack[-1]['had'] = True
+        state['closed'] = frame
+
+    def phase(kind, phases, new):
+        top = stack[-1] if stack else None
+        if not top or top['kind'] != kind or top['phase'] not in phases or not top['had']:
+            raise Unreadable('compound')
+        top['phase'], top['had'] = new, False
+
+    index = 0
+    while index < len(tokens):
+        kind, value = tokens[index]
+        index += 1
+        last = state['last']
+        if kind == 'word':
+            check_word(value)
+            if state['site'] is None:
+                keyword = value.text if value.plain else None
+                if last == 'close' and keyword not in CLOSERS:
+                    raise Unreadable('word after a compound command')
+                if keyword in REFUSED_WORDS:
+                    raise Unreadable('compound')
+                if keyword in RESERVED:
+                    if keyword == 'if':
+                        opened('if', 'cond')
+                    elif keyword in {'while', 'until'}:
+                        opened('while', 'cond')
+                    elif keyword == '{':
+                        opened('brace')
+                    elif keyword == '!':
+                        if last not in {'start', 'sep', 'keyword', 'andor', 'pipe'}:
+                            raise Unreadable('negation')
+                    elif keyword == 'then':
+                        phase('if', {'cond', 'elif'}, 'then')
+                    elif keyword == 'elif':
+                        phase('if', {'then'}, 'elif')
+                    elif keyword == 'else':
+                        phase('if', {'then'}, 'else')
+                    elif keyword == 'fi':
+                        closed('if', {'then', 'else'})
+                    elif keyword == 'do':
+                        phase('while', {'cond'}, 'body')
+                    elif keyword == 'done':
+                        closed('for' if stack and stack[-1]['kind'] == 'for' else 'while', {'body'})
+                    elif keyword == '}':
+                        closed('brace', {None})
+                    elif keyword == 'for':
+                        index = for_header(tokens, index, listed)
+                        opened('for', 'body')
+                    state['last'] = 'close' if keyword in {'fi', 'done', '}'} else 'keyword'
+                    continue
+                new_site()
+            site = state['site']
+            if not site.words and value.assignment():
+                site.assignments.append(value)
+            else:
+                site.words.append(value)
+            state['last'] = 'cmd'
+            continue
+        if kind == 'redir':
+            fd, op, heredoc = value
+            if last == 'close':
+                raise Unreadable('redirect on a compound command')
+            if index >= len(tokens) or tokens[index][0] != 'word':
+                raise Unreadable('redirect without a target')
+            target = tokens[index][1]
+            index += 1
+            check_word(target)
+            if state['site'] is None:
+                new_site()
+            state['site'].redirects.append((fd, value[1], target, heredoc))
+            state['last'] = 'cmd'
+            continue
+        op = value
+        if op == '(':
+            if state['site'] is not None or last in {'cmd', 'close'}:
+                raise Unreadable('paren')
+            opened('subshell')
+            state['last'] = 'keyword'
+            continue
+        if op == ')':
+            finish(op)
+            closed('subshell', {None})
+            state['last'] = 'close'
+            continue
+        if op == '\n':
+            if last in {'pipe', 'andor'}:
+                continue  # the command goes on after `|`, `&&` or `||` and a newline
+            finish(';')
+            if last in {'cmd', 'close'}:
+                state['last'] = 'sep'
+            state['closed'] = None
+            continue
+        if last not in {'cmd', 'close'}:
+            raise Unreadable('operator without a command')
+        if op == '|':
+            if state['site'] is not None:
+                state['site'].pipes_out = True
+            elif state['closed'] is not None:
+                for inner in sites[state['closed']['start']:]:
+                    inner.pipes_out = True  # a compound command whose output feeds a pipe
+            finish(op)
+            state['piped'], state['last'] = True, 'pipe'
+        else:
+            finish(op)
+            state['last'] = 'andor' if op in {'&&', '||'} else 'sep'
+        state['closed'] = None
+    finish(None)
+    if stack or state['last'] in {'pipe', 'andor'}:
+        raise Unreadable('unfinished command')
+    return sites, listed
+
+
+def for_header(tokens, index, listed):
+    """Read `NAME in words;` (and newlines) up to `do`; the list words go to `listed`. Returns the index after `do`."""
+    if index + 1 >= len(tokens) or tokens[index][0] != 'word' or tokens[index + 1][0] != 'word':
+        raise Unreadable('for')
+    name, keyword = tokens[index][1], tokens[index + 1][1]
+    if not name.plain or not NAME.fullmatch(name.text) or not keyword.plain or keyword.text != 'in':
+        raise Unreadable('for')  # `for x; do`, `for x (a b)`, `for ((`
+    index += 2
+    while index < len(tokens) and tokens[index][0] == 'word':
+        check_word(tokens[index][1])
+        listed.append(tokens[index][1])
+        index += 1
+    if index >= len(tokens) or tokens[index] not in (('op', ';'), ('op', '\n')):
+        raise Unreadable('for')
+    index += 1
+    while index < len(tokens) and tokens[index] == ('op', '\n'):
+        index += 1
+    if index >= len(tokens) or tokens[index][0] != 'word' or not tokens[index][1].plain or tokens[index][1].text != 'do':
+        raise Unreadable('for')
+    return index + 1
+
+
+# ---- Judging the sites (docs/specs/afk-hook-tokenizer.md B) ------------------------------------------------------------
+
+SHELLS = {'sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'fish', 'csh', 'tcsh'}
 OPTION_COMMANDS = {'setopt', 'unsetopt', 'shopt', 'emulate'}
 # Words a shell reads as code or as a lookup the hook cannot follow: never judged, always the split message.
 OPAQUE_WORDS = {'builtin', 'nocorrect', 'hash', 'alias', 'function', 'case', 'coproc', 'enable', 'unalias', 'trap',
@@ -152,6 +504,20 @@ WRAPPER_FLAGS = {'timeout': {'-k': 1, '-s': 1}, 'nice': {'-n': 1}, 'exec': {'-a'
                  'npx': {'-y': 0, '--yes': 0, '-p': 1}}
 GLOB_OPTIONS = ('glob', 'magic', 'equals', 'brace', 'rcexpand', 'wordsplit')
 EXEC_FLAGS = {'-exec', '-execdir', '-ok', '-okdir'}
+SHELL_VALUED = {'-o', '+o', '-O', '+O'}
+DIRECTORY_CHANGES = {'cd', 'pushd', 'popd', 'chdir'}
+# Programs that build a command or pick its files from data that exists only at run time (stdin, a match): the hook
+# cannot know what they run, so a command holding one is never read.
+RUNTIME_PROGRAMS = {'xargs'}
+RUNTIME_ACTIONS = {'find': EXEC_FLAGS | {'-delete'}, 'fd': {'-x', '-X', '--exec', '--exec-batch'},
+                   'fdfind': {'-x', '-X', '--exec', '--exec-batch'}}
+# Decision 3: a heredoc or `<<<` body is data only for these receivers, and only when every program downstream of
+# it through pipes is one too; any other receiver has its body judged line by line as commands.
+DATA_READERS = {'cat', 'tee', 'wc', 'head', 'tail', 'sort', 'grep'}
+# Decision 7: file operands of these readers, which execute nothing, are exempt from the base-name floor rule.
+NAME_EXEMPT_READERS = {'cat', 'head', 'tail', 'wc', 'grep', 'ls', 'stat', 'file', 'sort'}
+KINDS = {'<': 'read', '>': 'write', '>|': 'write', '&>': 'write', '>&': 'write', '>>': 'append', '<>': 'readwrite'}
+BODIES = ('<<', '<<-', '<<<')
 
 
 def bad_program(program, words):
@@ -165,71 +531,138 @@ def bad_program(program, words):
         return True
     if base == 'set' and any(any(o in w.lower().replace('_', '') for o in GLOB_OPTIONS) for w in words):
         return True
-    return base in SHELLS and (any(w in {'-c', '-s', '<<<', '<'} or w.startswith('-c') for w in words)
-                               or all(w.startswith('-') for w in words))
-
-
-def glued_split(argv, afk):
-    """argv with every operator glued to a word (`ls|xargs`, `(xargs`, `true&&xargs`) cut out as `;`, so the
-    wrapper-flag rule sees each wrapper wherever the shell starts a command."""
-    words = []
-    for word in argv:
-        for piece in afk.SPLIT_INLINE.split(word):
-            if afk.SPLIT_INLINE.fullmatch(piece):
-                words.append(';')
-            else:
-                words.extend(w.strip('()') for w in piece.split() if w.strip('()'))
-    return words
-
-
-CODEX_EXEC = re.compile(r'[ \t]*codex[ \t]+exec(?:[ \t]|$)')  # the raw command starts with these two plain words
-
-
-def reparsed(argv, afk, codex_exec=False):
-    """True when any command `check` reads out of argv (every reading, wrappers, glued operators and compound words
-    included, and a `find -exec` command) runs code a shell parses again, changes the shell's glob options, or has
-    a program name holding an expansion, a glob or a brace. `codex_exec`: the raw command starts with the plain
-    words `codex exec`, so that second word is Codex's own subcommand, not the shell's exec; nothing else is
-    exempt, since the split words cannot tell a real operator from one inside quotes."""
-    if any(word in OPAQUE_WORDS for word in argv):
-        return True
-    wrappers = afk.PREFIX_WORDS | afk.FILE_PREFIXES
-    words = glued_split(argv, afk)
-    for index, word in enumerate(words):
-        base = os.path.basename(word)
-        if base not in wrappers or (codex_exec and index == 1 and words[:2] == ['codex', 'exec']):
-            continue
-        allowed, at = WRAPPER_FLAGS.get(base, {}), index + 1
-        if base in afk.FILE_PREFIXES and any(w.startswith('-') for w in words[index + 1:index + 4]):
+    if base in SHELLS:
+        if any(w == '-s' or re.fullmatch(r'-[A-Za-z]*c[A-Za-z]*', w) for w in words):
             return True
-        while at < len(words) and words[at].startswith('-') and words[at] not in OPERATORS:
-            if words[at] not in allowed:
-                return True  # a wrapper flag `commands_of` may misread
-            at += 1 + allowed[words[at]]
-    for reading in afk.READINGS:
-        for program, words, _env, inline, _pattern in afk.commands_of(argv, full=True, split_patterns=reading):
-            if inline:
-                continue
-            if bad_program(program, list(words)):
-                return True
-            for index, word in enumerate(words):
-                if word in EXEC_FLAGS and index + 1 < len(words):
-                    rest = [w for w in words[index + 1:] if w not in {';', '\\;', '+', '{}'}]
-                    if rest and reparsed(rest, afk):
-                        return True
+        rest, index = [], 0
+        while index < len(words):
+            word = words[index]
+            index += 2 if word in SHELL_VALUED else 1
+            if not word.startswith(('-', '+')):
+                rest.append(word)
+        return not rest  # no script operand: the shell reads code from stdin, whatever its redirects are
     return False
 
 
-def floor_words(argv, paths, afk):
+def code_reader(program, afk):
+    """True for a program that runs what it reads: a shell, an interpreter, a program of the inline-code tables, or
+    `xargs`."""
+    if not isinstance(program, str):
+        return False
+    base = os.path.basename(program)
+    stem = re.sub(r'[0-9.]+$', '', base) or base
+    return (base in SHELLS or base in afk.SHELLS or base in RUNTIME_PROGRAMS
+            or any(name in afk.INTERPRETERS or name in afk.INLINE_FLAGS for name in (base, stem)))
+
+
+def wrapper_chain(argv, afk):
+    """True when a wrapper in command position (the program, then the program each wrapper runs) carries a flag the
+    shared table may misread. Words after the program that runs are its arguments, so `codex exec -s` is Codex's
+    subcommand, not the shell's `exec`."""
+    wrappers = afk.PREFIX_WORDS | afk.FILE_PREFIXES
+    index = 0
+    while index < len(argv):
+        base = os.path.basename(argv[index])
+        if afk.ASSIGNMENT.fullmatch(argv[index]) and '/' not in argv[index].split('=', 1)[0]:
+            index += 1
+            continue
+        if base == 'env':
+            index += 1
+            while index < len(argv) and afk.ASSIGNMENT.fullmatch(argv[index]):
+                index += 1
+            if index < len(argv) and argv[index].startswith('-'):
+                return False  # `env` with options is read as the command `env`, which the floor denies
+            continue
+        if base == 'pnpm' and argv[index + 1:index + 2] == ['exec']:
+            index += 2
+            continue
+        if base in RUNTIME_PROGRAMS:
+            return True  # `xargs` runs a command built from run-time data
+        if base not in wrappers:
+            return False
+        if base in afk.FILE_PREFIXES:
+            if any(w.startswith('-') for w in argv[index + 1:index + 4]):
+                return True
+            index += 2  # the lock or typescript file
+            continue
+        allowed, index = WRAPPER_FLAGS.get(base, {}), index + 1
+        while index < len(argv) and argv[index].startswith('-') and argv[index] != '-':
+            if argv[index] not in allowed:
+                return True  # a wrapper flag `commands_of` may misread
+            index += 1 + allowed[argv[index]]
+        if base == 'timeout' and index < len(argv) and re.fullmatch(r'[0-9.]+[smhd]?', argv[index]):
+            index += 1
+        if base == 'nice' and index < len(argv) and re.fullmatch(r'-?[0-9]+', argv[index]):
+            index += 1
+    return False
+
+
+def site_programs(argv, afk):
+    """[(program, words, inline)] for every command `commands_of` reads out of one site's argv, over every reading."""
+    return [(program, list(words), inline)
+            for reading in afk.READINGS
+            for program, words, _env, inline, _pattern in afk.commands_of(argv, full=True, split_patterns=reading)]
+
+
+def reparsed(argv, afk):
+    """True when one site runs code a shell parses again, changes the shell's glob options, has a program name holding
+    an expansion, a glob or a brace, a wrapper flag the shared table may misread, or a program fed by run-time data
+    (every reading, wrappers, inline code and a `find -exec` command included)."""
+    if any(word in OPAQUE_WORDS for word in argv) or wrapper_chain(argv, afk):
+        return True
+    for program, words, inline in site_programs(argv, afk):
+        if inline:
+            continue
+        if bad_program(program, words):
+            return True
+        base = os.path.basename(program) if isinstance(program, str) else None
+        if base in RUNTIME_PROGRAMS:
+            return True
+        actions = RUNTIME_ACTIONS.get(base)
+        if actions and any(w in actions or (w.startswith('--exec') and base != 'find') for w in words):
+            return True
+        for index, word in enumerate(words):
+            if word in EXEC_FLAGS and index + 1 < len(words):
+                rest = [w for w in words[index + 1:] if w not in {';', '\\;', '+', '{}'}]
+                if rest and reparsed(rest, afk):
+                    return True
+    return False
+
+
+def name_exempt(argv):
+    """Indexes of the file operands of a data reader that executes nothing (decision 7): words after the program that
+    are neither options nor a word after an option (which may be its value), the pattern of `grep` excluded."""
+    if not argv or os.path.basename(argv[0]) not in NAME_EXEMPT_READERS:
+        return set()
+    operands, ended = [], False
+    for index in range(1, len(argv)):
+        word = argv[index]
+        if not ended and word == '--':
+            ended = True
+            continue
+        if not ended and (word.startswith('-') and word != '-'
+                          or index > 1 and argv[index - 1].startswith('-') and argv[index - 1] not in {'-', '--'}):
+            continue
+        operands.append(index)
+    if os.path.basename(argv[0]) == 'grep' and not any(
+            w in {'-e', '--regexp', '-f', '--file'} or w.startswith(('--regexp=', '--file=')) for w in argv[1:]):
+        operands = operands[1:]  # the first operand is the pattern
+    return set(operands)
+
+
+def floor_words(argv, paths, afk, exempt=frozenset()):
     """True when any word that is not a commit or pull request text value, or any expanded path, names a credential
     command that is a floor in every use (`printenv`, `security`, ...), or a credential command with subcommands is
-    followed anywhere by one of them (`gh ... auth`), wherever it stands: a wrapper or its flags cannot hide it."""
+    followed anywhere by one of them (`gh ... auth`), wherever it stands: a wrapper or its flags cannot hide it.
+    Words at the indexes in `exempt` (decision 7) skip only the every-use rule."""
     names = {name for name, subs in afk.CREDENTIAL_COMMANDS.items() if subs is None}
     stripped, _texts = afk.open_texts(argv)
+    if len(stripped) != len(argv):
+        exempt = frozenset()
     words = [w for w in stripped if isinstance(w, str)]
     expanded = [os.path.basename(p) for p in paths if isinstance(p, str)]
     bases = [os.path.basename(w) for w in words]
-    if any(b in names for b in bases + expanded):
+    if any(b in names for i, b in enumerate(bases) if i not in exempt) or any(b in names for b in expanded):
         return True
     # A credential command with subcommands floors when one of them follows it anywhere (an expanded program path
     # counts wherever it stands), and so does a credential pair or triple in order, so no wrapper flag hides it.
@@ -244,7 +677,7 @@ def floor_words(argv, paths, afk):
             return True
         position = 0
         for base in bases:
-            if position < len(pair) and (base if position == 0 else base) == pair[position]:
+            if position < len(pair) and base == pair[position]:
                 position += 1
         if position == len(pair):
             return True
@@ -252,14 +685,14 @@ def floor_words(argv, paths, afk):
 
 
 LEASE_COMMANDS = {'stop', 'log', 'review', 'effective', 'rules', 'check', 'packet-check'}
-OPERATORS = {';', '&&', '||', '|', '&', '|&'}
 SAFE_ARGUMENT = re.compile(r'[A-Za-z0-9 ._,:=/@+%-]*')
 
 
 def own_lease_command(argv, script, cwd):
-    """True for `python3 [-I] <this install's afk.py> <lease command> ...` with no operator after it and no argument
-    made of anything but letters, digits, spaces and `._,:=/@+%-`. The interpreter is a bare `python3` or `python`
-    or a path to the hook's own interpreter; the script path is resolved against the Bash tool's `cwd`."""
+    """True for `python3 [-I] <this install's afk.py> <lease command> ...` with every argument made only of letters,
+    digits, spaces and `._,:=/@+%-`. The interpreter is a bare `python3` or `python` or a path to the hook's own
+    interpreter; the script path is resolved against the Bash tool's `cwd`. The caller applies it only to a call with
+    exactly one site and no assignments or redirects, so it never exempts a sibling site."""
     if not argv:
         return False
     if '/' in argv[0]:
@@ -270,7 +703,7 @@ def own_lease_command(argv, script, cwd):
     rest = argv[1:]
     while rest and rest[0] in {'-I', '-B', '-u'}:
         rest = rest[1:]
-    if len(rest) < 2 or rest[1] not in LEASE_COMMANDS or any(t in OPERATORS for t in rest):
+    if len(rest) < 2 or rest[1] not in LEASE_COMMANDS:
         return False
     if not all(SAFE_ARGUMENT.fullmatch(word) for word in rest[1:]):
         return False  # a word bash could expand, redirect or split is judged like any command
@@ -280,101 +713,8 @@ def own_lease_command(argv, script, cwd):
         return False
 
 
-
-
-DIRECTORY_CHANGES = {'cd', 'pushd', 'popd', 'chdir'}
-# Programs that build a command or pick its files from data that exists only at run time (stdin, a match): the hook
-# cannot know what they run, so a command holding one is never read.
-RUNTIME_PROGRAMS = {'xargs'}
-RUNTIME_ACTIONS = {'find': EXEC_FLAGS | {'-delete'}, 'fd': {'-x', '-X', '--exec', '--exec-batch'},
-                   'fdfind': {'-x', '-X', '--exec', '--exec-batch'}}
-
-
-def command_words(argv, afk):
-    """The argv's words with commit and pull request text values left out and glued operators cut out, each
-    stripped of a leading `(`, `{` or `!`, as base names."""
-    stripped, _texts = afk.open_texts(argv)
-    words = glued_split([w for w in stripped if isinstance(w, str)], afk)
-    return [os.path.basename(w.lstrip('({!')) for w in words]
-
-
-def glued_operator(text, argv):
-    """True when an operator outside quotes is glued to a word (`x;printenv`, `a&&b`, `ls|cat`): the word reads as
-    one argument here, as a commit message or another text value, while the shell runs what follows it."""
-    return operators_in(punctuated(text)) != operators_in(argv)
-
-
-def punctuated(text):
-    """The words of a punctuation-aware split, which ends a word at an operator outside quotes as bash does and
-    keeps a quoted or escaped operator inside its word."""
-    import shlex
-    lexer = shlex.shlex(text, posix=True, punctuation_chars=True)
-    lexer.commenters = ''
-    lexer.whitespace_split = True
-    return list(lexer)
-
-
-PUNCTUATION = re.compile(r'[();<>|&]+')
-REDIRECT = re.compile(r'[0-9]*(?:&>>?|[<>]+[&|]?)')
-OPERATOR = re.compile(r'\|\||&&|\|&|;|\||&')
-
-
-TRAILING_OPERATOR = re.compile(r'(.*?[^;&|])(;|&&|\|\||\|&|\||&)', re.DOTALL)
-
-
-def detached(argv):
-    """The argv with a control operator that ends a word split off as its own word (`/x;` becomes `/x` and `;`), as
-    bash ends a word at an unquoted operator. Only a word whose last characters are one operator is split; the
-    caller keeps the result only when it is `aligned` with the punctuation-aware split, so a quoted or escaped
-    operator is never split off and cannot stand in for one that stays glued elsewhere."""
-    words = []
-    for word in argv:
-        match = TRAILING_OPERATOR.fullmatch(word)
-        words.extend(match.groups() if match else (word,))
-    return words
-
-
-def aligned(words, tokens):
-    """True when each word, in order, equals one run of consecutive punctuation-aware tokens, and a run of more than
-    one token holds no control operator: a glued redirect (`2>&1`) may read as one word, an operator never hides
-    inside a word, and a word split at a quoted operator (`'a;'` read as `a` and `;`) matches no run."""
-    position = 0
-    for word in words:
-        run = []
-        if not word and position < len(tokens) and tokens[position] == '':
-            run.append(tokens[position])  # an empty word (`""`) is its own empty token
-            position += 1
-        while position < len(tokens) and len(''.join(run)) < len(word):
-            run.append(tokens[position])
-            position += 1
-        if ''.join(run) != word or (len(run) > 1 and operators_in(run)):
-            return False
-    return position == len(tokens)
-
-
-def operators_in(tokens):
-    """The control operators inside every token made only of punctuation (`;(` holds `;`), redirects left out."""
-    found = []
-    for token in tokens:
-        if PUNCTUATION.fullmatch(token):
-            found.extend(OPERATOR.findall(REDIRECT.sub(' ', token)))
-    return sorted(found)
-
-
-def outside_allowlist(argv, afk):
-    """True when the command holds a form outside the syntax the hook reads in full: a program fed by run-time
-    data (`xargs`, `find -exec` or `-delete`, `fd --exec`), or a glob not anchored at `/` or `~` in a command
-    that changes directory (`cd`, `pushd`, `popd`, `chdir`, in a subshell or a group too), which the shell
-    expands in a folder the hook cannot know."""
-    words = command_words(argv, afk)
-    if any(w in RUNTIME_PROGRAMS for w in words):
-        return True
-    for program, actions in RUNTIME_ACTIONS.items():
-        if program in words and any(w in actions or (w.startswith('--exec') and program != 'find') for w in words):
-            return True
-    if any(w in DIRECTORY_CHANGES for w in words):
-        return any(any(c in w for c in '*?[') and not w.startswith(('/', '~')) for w in argv)
-    return False
+VARIABLE = re.compile(r'\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))')
+HOME_IN_BODY = re.compile(r'\$(?:\{HOME\}|HOME(?![A-Za-z0-9_]))')
 
 
 def shell_expanded(word):
@@ -392,12 +732,169 @@ def expanded_paths(argv, limit=200):
             continue
         value = shell_expanded(piece)
         if '**' in value:
-            raise ValueError('recursive glob')  # zsh `**/` also matches no folder; never read as Python's glob
+            raise Unreadable('recursive glob')  # zsh `**/` also matches no folder; never read as Python's glob
         matches = glob.glob(value) if any(c in value for c in '*?[') else [value]
         if len(matches) > limit:
-            raise ValueError('too many matches')  # the split message, never a truncated reading
+            raise Unreadable('too many matches')  # the split message, never a truncated reading
         found.extend(matches)
     return found
+
+
+def body_check(body):
+    """Raise Unreadable for an expansion in an unquoted-delimiter heredoc body other than `$HOME`, which the shell
+    expands in it as in a double-quoted word."""
+    index = 0
+    while index < len(body):
+        c = body[index]
+        if c == '\\':
+            index += 2
+            continue
+        if c == '`':
+            raise Unreadable('command substitution')
+        if c == '$':
+            match = HOME_IN_BODY.match(body, index)
+            if match:
+                if body[match.end():match.end() + 1] in (':', '['):
+                    raise Unreadable('home boundary')
+                index = match.end()
+                continue
+            nxt = body[index + 1:index + 2]
+            if nxt and (nxt.isalnum() or nxt in '_{(@*#?-$![^=~+'):
+                raise Unreadable('parameter')
+        index += 1
+
+
+def data_receiver(site):
+    """True when a site reads its input as data (decision 3): no wrapper, a program of the closed list, or
+    `git commit -F -`, `git tag -F -`, `gh ... --body-file -`."""
+    argv = site.argv
+    if not argv:
+        return False
+    base = os.path.basename(argv[0])
+    if base in DATA_READERS:
+        return True
+    if base == 'git' and argv[1:2] in (['commit'], ['tag']):
+        return any(w in {'-F', '--file'} and argv[i + 2:i + 3] == ['-'] or w in {'--file=-', '-F-'}
+                   for i, w in enumerate(argv[1:]))
+    if base == 'gh':
+        return any(w == '--body-file' and argv[i + 2:i + 3] == ['-'] or w == '--body-file=-'
+                   for i, w in enumerate(argv[1:]))
+    return False
+
+
+def data_body(sites, index):
+    """True when the input of sites[index] stays data: it and every program downstream of it through pipes are data
+    receivers, and no compound command takes part in the pipeline."""
+    site = sites[index]
+    if not data_receiver(site):
+        return False
+    while site.separator == '|':
+        if site.next_compound or index + 1 >= len(sites):
+            return False
+        index += 1
+        site = sites[index]
+        if not data_receiver(site):
+            return False
+    return not site.pipes_out  # a compound command around it feeds a pipe
+
+
+def judged(command, depth=0):
+    """(sites, data words, list words) for a command, heredoc and here-string bodies resolved (decision 3): a data
+    body's words join the data the floor reads, any other body is read line by line as commands and its sites join
+    the list. Raises Unreadable for the split message."""
+    if depth > 3:
+        raise Unreadable('nested body')
+    sites, listed = parse(command)
+    words, extra = [w.text for w in listed], []
+    for index, site in enumerate(sites):
+        for _fd, op, target, heredoc in site.redirects:
+            if op not in BODIES:
+                continue
+            body = target.text if op == '<<<' else heredoc['body']
+            expands = op != '<<<' and not heredoc['quoted']
+            if expands:
+                body_check(body)
+            if data_body(sites, index):
+                words.extend(body.split())
+                if expands:
+                    words.extend(shell_expanded(w) for w in body.split())
+                continue
+            inner, inner_words, inner_listed = judged(body, depth + 1)
+            for item in inner:
+                item.body, item.repeated = True, item.repeated or site.repeated
+            extra.extend(inner)
+            words.extend(inner_words)
+            listed.extend(inner_listed)
+    return sites + extra, words, listed
+
+
+def targets_of(site):
+    """[(kind, target, word)] for every redirect target that names a file (fd duplications and bodies left out)."""
+    found = []
+    for _fd, op, target, _heredoc in site.redirects:
+        if op in BODIES:
+            continue
+        if op in ('<&', '>&') and (DIGITS.fullmatch(target.text) or target.text == '-'):
+            continue
+        if op == '<&':
+            raise Unreadable('input duplication')
+        found.append((KINDS[op], target.expanded(), target))
+    return found
+
+
+def call_wide(sites, listed, afk):
+    """True when a rule that spans commands applies (B): a directory change with an unanchored glob anywhere in the
+    call, a pipe into a shell, `xargs` or a code reader, or a `<` file feeding a code reader."""
+    programs = [[p for p, _w, inline in site_programs(site.full, afk) if not inline] if site.full else []
+                for site in sites]
+    changes = any(isinstance(p, str) and os.path.basename(p) in DIRECTORY_CHANGES for found in programs for p in found)
+    changes = changes or any(site.words and os.path.basename(site.words[0].text) in DIRECTORY_CHANGES for site in sites)
+    if changes:
+        words = [w for site in sites for w in site.assignments + site.words + [t for _f, _o, t, _h in site.redirects]]
+        if any(w.globbed and not w.text.startswith(('/', '~')) for w in words + listed):
+            return True
+    for site, found in zip(sites, programs):
+        if site.piped and any(code_reader(p, afk) for p in found):
+            return True
+        if any(op == '<' for _f, op, _t, _h in site.redirects) and any(code_reader(p, afk) for p in found):
+            return True
+    return False
+
+
+def site_entries(sites, words, cwd, afk):
+    """The `--commands-json` entries for the sites, or None when any of them, a redirect target or a data word
+    touches the floor. Raises Unreadable for a recursive glob, more matches than the hook reads or an ambiguous
+    redirect."""
+    import glob
+    entries = []
+    for site in sites:
+        argv = site.full
+        paths = expanded_paths(argv)
+        targets = []
+        for kind, target, word in targets_of(site):
+            if word.globbed:
+                matches = glob.glob(target)
+                if len(matches) > 1:
+                    raise Unreadable('ambiguous redirect')  # bash refuses it, zsh opens every match
+                targets.extend((kind, match) for match in matches or [target])
+            else:
+                targets.append((kind, target))
+        exempt = name_exempt(argv) if not site.assignments else set()
+        spared = {p for i in exempt for p in expanded_paths([argv[i]])}
+        named = [p for p in paths if p not in spared] + [t for _k, t in targets]
+        expanded = [shell_expanded(word) for word in argv]
+        if ((paths and afk.floored(None, paths, cwd))
+                or (targets and afk.floored(None, [t for _k, t in targets], cwd))
+                or (expanded != argv and afk.floored(expanded, None, cwd))
+                or floor_words(argv, named, afk, exempt) or floor_words(expanded, named, afk, exempt)):
+            return None
+        entries.append({'assignments': [w.text for w in site.assignments], 'argv': site.argv,
+                        'redirects': [[kind, target] for kind, target in targets], 'repeated': site.repeated})
+    if words:
+        paths = expanded_paths(words)
+        if afk.floored(None, words + paths, cwd) or floor_words(words, paths, afk):
+            return None
+    return entries
 
 
 def main():
@@ -414,7 +911,6 @@ def main():
 
         import io
         import json
-        import shlex
         import time
         from contextlib import redirect_stdout
         from pathlib import Path
@@ -440,53 +936,39 @@ def main():
         live = True  # from here on every failure denies, as `check` answers `unsafe`
 
         try:
-            argv = shlex.split(unquoted_newlines(command), comments=False, posix=True)
-        except ValueError:
+            sites, words, listed = judged(command)
+        except Unreadable:
             deny(PARSE_MESSAGE)
             return 0
-        if not argv:
-            return 0
-        # `check` judges the words bash runs: an operator or redirect outside quotes is its own word (`ls /x; pwd`,
-        # `printenv>&2`, `cat<f`), taken from the punctuation-aware split only when the shlex words, or the words
-        # with an operator that ends a word split off, line up with it. Anything else (`x;printenv`, a quoted
-        # operator beside a split one) gets the split message.
-        tokens = punctuated(unquoted_newlines(command))
-        if argv != tokens:
-            if not (aligned(detached(argv), tokens) or aligned(argv, tokens)):
-                deny(PARSE_MESSAGE)
-                return 0
-            argv = tokens
-        if unreadable(command):
-            deny(PARSE_MESSAGE)
+        if not sites:
             return 0
         cwd = event.get('cwd')
         if not isinstance(cwd, str) or not os.path.isdir(cwd):
             deny(UNSAFE)
             return 0
         script = here.parent / 'skills' / 'delegate' / 'scripts' / 'afk.py'
-        if own_lease_command(argv, script, cwd):
+        only = sites[0]
+        if (len(sites) == 1 and not only.assignments and not only.redirects
+                and own_lease_command(only.argv, script, cwd)):
             return 0
         os.chdir(cwd)
         sys.path.insert(0, str(script.parent))
         import afk
 
-        if (glued_operator(unquoted_newlines(command), argv) or reparsed(argv, afk, bool(CODEX_EXEC.match(command)))
-                or outside_allowlist(argv, afk)):
+        try:
+            if any(reparsed(site.full, afk) for site in sites if site.full) or call_wide(sites, listed, afk):
+                deny(PARSE_MESSAGE)
+                return 0
+            entries = site_entries(sites, words, cwd, afk)
+        except Unreadable:
             deny(PARSE_MESSAGE)
             return 0
-        try:
-            paths = expanded_paths(argv)
-        except ValueError:
-            deny(PARSE_MESSAGE)  # a recursive glob or more matches than the hook reads: never truncated
-            return 0
-        expanded = [shell_expanded(word) for word in argv]
-        if ((paths and afk.floored(None, paths, cwd)) or (expanded != argv and afk.floored(expanded, None, cwd))
-                or floor_words(argv, paths, afk) or floor_words(expanded, paths, afk)):
+        if entries is None:
             deny(parked('floor'))
             return 0
         buffer = io.StringIO()
         with redirect_stdout(buffer):
-            afk.main(['check', '--coordinator', 'claude', '--argv-json', json.dumps(argv)])
+            afk.main(['check', '--coordinator', 'claude', '--commands-json', json.dumps(entries)])
         answer = json.loads(buffer.getvalue().strip().splitlines()[-1])
         code = answer.get('code')
         if answer.get('tier') == 1:
