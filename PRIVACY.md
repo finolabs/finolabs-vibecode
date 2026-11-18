@@ -242,7 +242,7 @@ When you run `pause`, the plugin writes `state/pause.json` in the same private s
 
 ## afk check hook
 
-Removed on 18/11/2026 (owner decision). No hook reads Bash commands under an away lease any more; the agent runs `afk.py check` itself, which keeps only its counters, kind words and, for a merge, the pull request number, head and repository. `FNL_AFK_HOOK` no longer does anything.
+Removed on 18/11/2026 (owner decision). No hook judges Bash commands against the away lease any more; the agent runs `afk.py check` itself, which keeps only its counters, kind words and, for a merge, the pull request number, head and repository. `FNL_AFK_HOOK` no longer does anything.
 
 ## afk overlay
 
