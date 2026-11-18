@@ -1,6 +1,6 @@
 # Release 0.3.3: scope
 
-Status: prepared; not yet tagged.
+Status: implemented; release prepared, not yet tagged.
 
 ## What shipped
 
@@ -66,7 +66,7 @@ Checked against `main` at `b03334c` (after pull request 365), surface by surface
 | `PRIVACY.md` | Current: "Compaction nudge" (351), "afk check hook" as a removal record (360), "afk stop hook" and "afk permission hook" (363), `afk_native_rules.py` and the worktree cleanup. Drifted with 365: "Quota probe" did not list the weekly floor line in `## Quota probe`. Added. |
 | `docs/how-it-compares.md` | Drifted with 363: the merge row did not name `merge: decide`, and the `afk` row did not say blocking is the host's or name the stop and permission hooks and native deny rules. Updated. |
 | `docs/diagrams/afk-mechanism-*.html` | Current: updated in 360 and 363; the PNGs were re-rendered. |
-| `docs/diagrams/delegation-sequence-*.html` | Drifted with 355: step 17, the subtitle and the description said the coordinator removes the worktree. They now say `ledger.py` removes the merged, clean worktree in the background. PNGs not re-rendered. |
+| `docs/diagrams/delegation-sequence-*.html` | Drifted with 355: step 17, the subtitle and the description said the coordinator removes the worktree. They now say `ledger.py` removes the merged, clean worktree in the background. PNGs re-rendered through the shared Chromium. |
 | `docs/diagrams/session-health-*.html` | Current: updated in 356; the PNGs were re-rendered. |
 | Other diagrams (away decision sequence, request to merge, settings scopes, skills architecture, task lifecycle) | Checked for the check hook, worktree cleanup, merge authority and titles; none drifted. |
 | `docs/specs/index.md` | The afk decider row said decision 5 was open; now parked on 19/11/2026 and left out of 0.3.3, as the spec's Status line now says. Added this record's row. |
