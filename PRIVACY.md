@@ -242,7 +242,7 @@ When you run `pause`, the plugin writes `state/pause.json` in the same private s
 
 ## afk check hook
 
-On Claude Code, while an away lease you started is live, one hook reads each Bash command the agent is about to run, splits it into words in memory and judges it exactly as `afk.py check` does, expanding `~`, `$` and glob words into the paths the shell would read, also in memory; it denies the command when that answer parks it, when the command cannot be read, or on an error while the lease is live. It keeps only what a `check` call keeps (counters, kind words and, for a merge, the pull request number, head and repository); the command text and the expanded paths are never stored, logged or sent. With no live lease it does nothing. `FNL_AFK_HOOK=off` disables it.
+On Claude Code, while an away lease you started is live, one hook reads each Bash command the agent is about to run, splits it in memory into the commands the shell would run, each with its assignments and redirects, and judges each one exactly as `afk.py check` does, expanding `~`, `$HOME` and glob words, and each redirect target (a file the command would read or write), into the paths the shell would use, also in memory; it denies the command when that answer parks it, when the command cannot be read, or on an error while the lease is live. It keeps only what a `check` call keeps (counters, kind words and, for a merge, the pull request number, head and repository); the command text, the expanded paths and the redirect targets are never stored, logged or sent. With no live lease it does nothing. `FNL_AFK_HOOK=off` disables it.
 
 ## afk overlay
 

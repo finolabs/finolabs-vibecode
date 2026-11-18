@@ -1,6 +1,6 @@
 # afk check hook: one shell tokenizer
 
-Status: accepted; owner decisions settled 18/11/2026, no code yet. The rule change it needs (CLAUDE.md, tenth scoped exception) lands with the code, as decision 4 sets out. It replaces two stopgaps merged on 18/11/2026 while it waits: PR 352 (an operator that ends a word is split off) and PR 357 (`codex exec` at the start of a command is Codex's subcommand, not the shell's `exec`). Revised after the Codex reviews of 421ba5d3, 3ee71ea0, 1749f0c9 and 6ccaf157 (code and security REWORK).
+Status: implemented; owner decisions settled 18/11/2026; the rule change (CLAUDE.md, tenth scoped exception), `afk-check-hook.md` and `PRIVACY.md` land with the code, as decision 4 sets out. Decision 6 (an earlier literal assignment) is the later second step and is not implemented. It replaces two stopgaps merged on 18/11/2026 while it waits: PR 352 (an operator that ends a word is split off) and PR 357 (`codex exec` at the start of a command is Codex's subcommand, not the shell's `exec`). Revised after the Codex reviews of 421ba5d3, 3ee71ea0, 1749f0c9 and 6ccaf157 (code and security REWORK).
 
 ## Why
 
