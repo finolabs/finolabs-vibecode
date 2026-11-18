@@ -13,6 +13,9 @@ Read the shared rules in [map.md](map.md#rules). Match the user's problem to one
 | Antigravity has no update command | Its update procedure is still unverified; `update` explains the gap and leaves the step to you. |
 | The dashboard is empty or names a missing source | Consent not given: run `/setup add metrics`. No events: the hooks need the whole plugin installed and a session started after consent. A missing ledger: see `delegate`. |
 | `/afk start` stops and points to setup | Record the away rules first with `/setup add afk`; a `strict` lease also needs an explicit Merge answer. |
+| Under a lease the agent keeps going after it tried to stop | The afk stop hook (Claude Code) sends a turn back once until the session records why it ends: `afk.py log --kind idle --session <id>` or `--kind parked`. `FNL_AFK_STOP=off` turns it off. |
+| Under a lease a tool call is denied with a request digest | The afk permission hook answers host prompts while you are away: the agent settles it through afk "Decide" and records `--approve-request <digest>`, or parks it. `FNL_AFK_PERMIT=off` brings the host's prompt back. |
+| `/afk start` warns that nothing blocks credential reads | Add Claude Code's deny rules for the credential floor with `/setup add afk`, or run with an approval mode that asks. |
 | `heavy_run.py` refuses a command with exit 77 | A pause marker is active. Run `/pause resume` once you are back from the restart; a marker older than 24 hours never blocks. |
 | `/restore-point` says "Not a git repository" | It works in git repositories only and creates nothing. Run `git init` yourself if you want one. |
 | A skill says a dependency is missing | It was installed on its own. Add the named skill, for example `npx skills add finolabs/vibecode --skill delegate`, or install the whole plugin. |
