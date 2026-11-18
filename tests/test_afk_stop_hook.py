@@ -17,6 +17,20 @@ BOOT = '''import pwd, runpy, sys
 from types import SimpleNamespace
 account_home = sys.argv.pop(1)
 pwd.getpwuid = lambda uid: SimpleNamespace(pw_dir=account_home, pw_name="afk-test-user")
+# As tests/data_root_fixture.py: only writable system ancestors of the synthetic home (a shared /tmp on Linux)
+# read as not group- or world-writable; checks on the fixture tree itself stay real.
+import os, stat
+from pathlib import Path
+_ancestors = {(q.stat().st_dev, q.stat().st_ino) for q in Path(account_home).parents if q.stat().st_mode & 0o022}
+_fstat = os.fstat
+def _seam(fd):
+    info = _fstat(fd)
+    if (info.st_dev, info.st_ino) in _ancestors and stat.S_ISDIR(info.st_mode):
+        fields = list(info)
+        fields[0] &= ~0o022
+        return os.stat_result(fields)
+    return info
+os.fstat = _seam
 sys.dont_write_bytecode = True
 script = sys.argv.pop(1)
 sys.argv[0] = script
