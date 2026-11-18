@@ -82,6 +82,51 @@ class Word:
         match = ASSIGNMENT_WORD.match(self.text)
         return bool(match) and all(m >= match.end() for m in self.marks)
 
+    @property
+    def anchored(self):
+        """True when the word names a path from `/` or from an unquoted `~`: a quoted `'~'` is a folder named `~`
+        in the working folder (class B of the PR 358 checkpoint)."""
+        return bool(self.chars) and (self.chars[0][0] == '/' or self.chars[0] == ('~', 'u')
+                                     or any(start == 0 for start, _end in self.refs))
+
+    def paths(self, limit=200):
+        """The paths the shell reads for this word, from its quoting: an unquoted leading `~` and `$HOME` expanded,
+        an unquoted `*`, `?` or `[` a glob, every quoted character literal. Raises Unreadable for `**` or more
+        matches than the hook reads."""
+        import glob
+        if not self.globbed:
+            return [self.expanded()] if self.refs or self.chars[:1] == [('~', 'u')] else []
+        raw_home = os.environ.get('HOME', '')
+        home = glob.escape(raw_home)
+        out, index, chars, prefix = [], 0, self.chars, ''
+        if chars[0] == ('~', 'u'):
+            end = next((k for k, (c, q) in enumerate(chars) if c == '/' and q == 'u'), len(chars))
+            prefix = os.path.expanduser(''.join(c for c, _ in chars[:end]))
+            out.append(glob.escape(prefix))
+            index = end
+        refs = dict(self.refs)
+        if 0 in refs:
+            prefix = raw_home
+        while index < len(chars):
+            if index in refs:
+                out.append(home)
+                index = refs[index]
+                continue
+            c, q = chars[index]
+            out.append(c if q == 'u' and c in '*?[' else glob.escape(c))
+            index += 1
+        pattern = ''.join(out)
+        if '**' in pattern:
+            raise Unreadable('recursive glob')
+        matches = glob.glob(pattern)
+        if len(matches) > limit:
+            raise Unreadable('too many matches')
+        if any('HOME' in (match[len(prefix):] if match.startswith(prefix) else match) for match in matches):
+            # `read -a HO?E` binds `HOME` in bash when a file `HOME` matches: a glob whose match names `HOME`
+            # may rebind it, as a word holding `HOME` may (class 2 of the PR 358 checkpoint).
+            raise Unreadable('home binding')
+        return matches
+
     def expanded(self):
         """The word as the shell expands an unquoted leading `~` and `$HOME`; quoted text stays literal."""
         home = os.environ.get('HOME', '')
@@ -109,7 +154,21 @@ NAME = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
 ZSH_NUMERIC_GLOB = re.compile(r'<[0-9]*-[0-9]*>')
 NAMED_FD = re.compile(r'\{[A-Za-z_][A-Za-z0-9_]*\}')
 DIGITS = re.compile(r'[0-9]+')  # ASCII only: the shells read no other digit as a fd
-HOME_BINDING = re.compile(r'(?:-[A-Za-z]*v)?HOME(?:\+?=.*)?', re.S)
+
+
+def joined(text, i, count):
+    """(the next `count` characters from `i` as the shell reads them, the raw index after each one): every
+    backslash-newline is dropped, so a lookahead sees the joined text (class A of the PR 358 checkpoint). Only
+    called outside quotes."""
+    chars, ends = [], []
+    while i < len(text) and len(chars) < count:
+        if text.startswith('\\\n', i):
+            i += 2
+            continue
+        chars.append(text[i])
+        i += 1
+        ends.append(i)
+    return ''.join(chars), ends
 
 
 def lex(text):
@@ -117,6 +176,7 @@ def lex(text):
     heredoc is a dict holding its delimiter, whether it was quoted and its body, read at the newline after it."""
     tokens, pending, word, i, n = [], [], None, 0, len(text)
     segment = 0  # a new number at every quote, escape and return to unquoted text
+    continued = False  # a continuation came after the last character: `2\` + newline + `>` is no fd in zsh
 
     def end_word():
         nonlocal word
@@ -132,17 +192,14 @@ def lex(text):
             word = None
 
     while i < n:
-        c = text[i]
+        if text.startswith('\\\n', i):
+            i += 2  # a continuation: the shell joins the two lines, and every lookahead below reads them joined
+            continued = True
+            continue
+        c, glued, continued = text[i], not continued, False
         if c == '\\':
             if i + 1 >= n:
                 raise Unreadable('trailing backslash')
-            if text[i + 1] == '\n':
-                after = text[i + 2:i + 3]
-                if i and (text[i - 1] == '$' and after not in ('', ' ', '\t', '\n')
-                          or text[i - 1] in ';&|<>(' and after and after in ';&|<>()'):
-                    raise Unreadable('continuation')  # it would join `$` or an operator to what follows (`$'...'`)
-                i += 2  # a continuation: the shell joins the two lines
-                continue
             word = (word or Word()).mark()
             word.add(text[i + 1], 'e', segment + 1)
             segment += 2
@@ -182,16 +239,18 @@ def lex(text):
             segment += 1
             i = j + 1
             continue
-        if c == '$' and text[i + 1:i + 2] == "'":
-            end = text.find("'", i + 2)
-            if end < 0 or '\\' in text[i + 2:end]:
+        ahead, ends = joined(text, i, 2)
+        if ahead == "$'":
+            start = ends[1]
+            end = text.find("'", start)
+            if end < 0 or '\\' in text[start:end]:
                 raise Unreadable('ansi-c quote')  # its escapes could hide a name or a path
             word = (word or Word()).mark()
-            word.add(text[i + 2:end], 's', segment + 1)
+            word.add(text[start:end], 's', segment + 1)
             segment += 2
             i = end + 1
             continue
-        if c == '$' and text[i + 1:i + 2] == '"':
+        if ahead == '$"':
             raise Unreadable('locale string')  # bash and zsh expand `$"..."` differently
         if c in ' \t':
             end_word()
@@ -207,22 +266,30 @@ def lex(text):
             i = n if end < 0 else end  # a comment runs to the end of the line
             continue
         if c in ';&|<>()':
-            op = next(o for o in OPERATOR_TEXT if text.startswith(o, i))
+            ahead, ends = joined(text, i, 3)
+            op = next(o for o in OPERATOR_TEXT if ahead.startswith(o))
+            after = ends[len(op) - 1]  # the raw index after the operator, continuations inside it included
             if op in REFUSED_OPERATORS:
                 raise Unreadable('operator')
+            if after - i != len(op):
+                # bash joins `&\` + newline + `&` into `&&`, zsh reads `&` and then a parse error (the oracle): a
+                # continuation inside any operator of two or more characters gets the split message.
+                raise Unreadable('continuation in an operator')
             if op == '(':
                 if word is not None:
                     raise Unreadable('paren in a word')  # zsh glob alternation, qualifiers, an array
-                if text.startswith('((', i):
+                if ahead.startswith('(('):
                     raise Unreadable('arithmetic')
                 tokens.append(('op', '('))
-                i += 1
+                i = after
                 continue
             if op in REDIRECTS:
-                if op == '<' and ZSH_NUMERIC_GLOB.match(text, i):
+                if op == '<' and ZSH_NUMERIC_GLOB.match(joined(text, i, 64)[0]):
                     raise Unreadable('zsh numeric glob')
                 fd = None
                 if word is not None and word.plain and DIGITS.fullmatch(word.text):
+                    if not glued:
+                        raise Unreadable('fd number')  # bash joins `2\` + newline + `>` into a fd, zsh does not
                     if len(word.text) > 1:
                         raise Unreadable('fd number')  # bash reads `12>` as a fd, zsh as an argument
                     if op != '&>':
@@ -230,15 +297,15 @@ def lex(text):
                 elif word is not None and word.plain and NAMED_FD.fullmatch(word.text):
                     raise Unreadable('named fd')
                 end_word()
-                i += len(op)
-                if text[i:i + 1] == '(':
+                i = after
+                if joined(text, i, 1)[0] == '(':
                     raise Unreadable('process substitution')
                 heredoc = {'quoted': False, 'body': None, 'strip': op == '<<-'} if op in ('<<', '<<-') else None
                 tokens.append(('redir', (fd, op, heredoc)))
                 continue
             end_word()
             tokens.append(('op', op))
-            i += len(op)
+            i = after
             continue
         word = word or Word()
         word.add(c, 'u', segment)
@@ -319,6 +386,23 @@ def check_word(word):
             prefix = chars[1:end]
             if any(qq != 'u' for _, qq in prefix) or (prefix and prefix[0][0] in '+-0123456789'):
                 raise Unreadable('tilde')
+        if c == '~' and k > 0 and chars[k - 1] in (('=', 'u'), (':', 'u')):
+            # bash expands `~` after `=` in any word (`--p=~/x`) and after `:` in an assignment, zsh only in an
+            # assignment: the hook expands a leading `~` only, so every other unquoted `~` after them is refused.
+            raise Unreadable('tilde')
+    # An allowlist, not a list of binding forms (class C of the PR 358 checkpoint): `HOME` may appear only inside a
+    # `$HOME` or `${HOME}` reference, so no assignment, `for`, `read -a`, `printf -v`, `export` or other form in
+    # the call can change what the hook expands it to.
+    bare, index, refs = [], 0, dict(word.refs)
+    while index < len(chars):
+        if index in refs:
+            bare.append(' ')
+            index = refs[index]
+            continue
+        bare.append(chars[index][0])
+        index += 1
+    if 'HOME' in ''.join(bare):
+        raise Unreadable('home binding')
 
 
 RESERVED = {'if', 'then', 'elif', 'else', 'fi', 'while', 'until', 'do', 'done', '{', '}', '!', 'for'}
@@ -367,6 +451,12 @@ def parse(text):
 
     def finish(separator):
         site = state['site']
+        if site is not None and site.redirects and not site.words:
+            raise Unreadable('redirect only')  # zsh runs `$NULLCMD` (`cat`) for it, bash runs nothing
+        if site is not None and site.argv == ['exec'] and (site.piped or site.pipes_out or separator == '|'):
+            # zsh's child for `exec 3<f | ok A; ok B` goes on to run `ok A; ok B` a second time, and a bare `exec`
+            # last in a pipeline keeps its descriptors in zsh's own shell only (the generated oracle, 18/11/2026).
+            raise Unreadable('exec in a pipeline')
         if site is not None:
             site.separator = separator
             sites.append(site)
@@ -401,8 +491,6 @@ def parse(text):
         last = state['last']
         if kind == 'word':
             check_word(value)
-            if HOME_BINDING.fullmatch(value.text):
-                raise Unreadable('home binding')  # `HOME=...`, `read HOME`, `printf -v HOME`: `$HOME` may change
             if state['site'] is None:
                 keyword = value.text if value.plain else None
                 if last == 'close' and keyword not in CLOSERS:
@@ -505,10 +593,9 @@ def for_header(tokens, index, listed):
     if index + 1 >= len(tokens) or tokens[index][0] != 'word' or tokens[index + 1][0] != 'word':
         raise Unreadable('for')
     name, keyword = tokens[index][1], tokens[index + 1][1]
+    check_word(name)  # `for HOME in ...` is refused by the HOME allowlist
     if not name.plain or not NAME.fullmatch(name.text) or not keyword.plain or keyword.text != 'in':
         raise Unreadable('for')  # `for x; do`, `for x (a b)`, `for ((`
-    if name.text == 'HOME':
-        raise Unreadable('home binding')  # the loop rebinds the one variable the hook expands
     index += 2
     while index < len(tokens) and tokens[index][0] == 'word':
         check_word(tokens[index][1])
@@ -862,6 +949,17 @@ def judged(command, depth=0):
     return sites + extra, words, listed
 
 
+READABLE = ('<', '<>', '<&') + BODIES  # every redirect that gives the program something to read
+
+
+def supplies_input(fd, op):
+    """True for a redirect that gives the program readable input, on stdin or on any other fd (`node /dev/fd/3
+    3<x.js`): a file read (`<`, `<>`), a duplication of a descriptor that may be readable (`<&N`, and `0>&N`,
+    which puts it on stdin), a heredoc and a here-string, with or without a fd prefix. The one predicate the
+    code-reader rule uses (class 3 of the PR 358 checkpoint)."""
+    return op in READABLE or (op == '>&' and fd == '0')
+
+
 def targets_of(site):
     """[(kind, target, word)] for every redirect target that names a file (fd duplications and bodies left out)."""
     found = []
@@ -869,6 +967,8 @@ def targets_of(site):
         if op in BODIES:
             continue
         if op in ('<&', '>&') and (DIGITS.fullmatch(target.text) or target.text == '-'):
+            if not target.plain:
+                raise Unreadable('quoted descriptor')  # `>&'1'`: a fd or a file, read from the quote-removed text
             continue
         if op == '<&':
             raise Unreadable('input duplication')
@@ -878,19 +978,26 @@ def targets_of(site):
 
 def call_wide(sites, listed, afk):
     """True when a rule that spans commands applies (B): a directory change with an unanchored glob anywhere in the
-    call, a pipe into a shell, `xargs` or a code reader, or a `<` file feeding a code reader."""
+    call (anchoring read from the word's quoting), a pipe into a shell, `xargs` or a code reader, any redirect that
+    supplies input (`supplies_input`) feeding a code reader, or a bare `exec` that opens one for the rest of a call
+    holding a code reader."""
     programs = [[p for p, _w, inline in site_programs(site.full, afk) if not inline] if site.full else []
                 for site in sites]
     changes = any(isinstance(p, str) and os.path.basename(p) in DIRECTORY_CHANGES for found in programs for p in found)
     changes = changes or any(site.words and os.path.basename(site.words[0].text) in DIRECTORY_CHANGES for site in sites)
     if changes:
         words = [w for site in sites for w in site.assignments + site.words + [t for _f, _o, t, _h in site.redirects]]
-        if any(w.globbed and not w.text.startswith(('/', '~')) for w in words + listed):
+        if any(w.globbed and not w.anchored for w in words + listed):
             return True
-    for site, found in zip(sites, programs):
-        if site.piped and any(code_reader(p, afk) for p in found):
+    readers = [any(code_reader(p, afk) for p in found) for found in programs]
+    for site, reader in zip(sites, readers):
+        if site.piped and reader:
             return True
-        if any(op == '<' for _f, op, _t, _h in site.redirects) and any(code_reader(p, afk) for p in found):
+        if reader and any(supplies_input(fd, op) for fd, op, _t, _h in site.redirects):
+            return True
+        # `exec 3<x.js` with no program keeps the descriptor open for every later site (`node /dev/fd/3`).
+        if (site.argv == ['exec'] and any(readers)
+                and any(supplies_input(fd, op) or fd == '0' for fd, op, _t, _h in site.redirects)):
             return True
     return False
 
@@ -903,24 +1010,29 @@ def site_entries(sites, words, cwd, afk):
     entries = []
     for site in sites:
         argv = site.full
-        paths = expanded_paths(argv)
+        objects = site.assignments + site.words
+        # Both readings: the word's own quoting (exact), and every whitespace or operator piece of its text (wider:
+        # it also reads a path inside inline code or a text value).
+        exact = [[p for p in w.paths()] for w in objects]
+        paths = expanded_paths(argv) + [p for found in exact for p in found]
         targets = []
         for kind, target, word in targets_of(site):
             if word.globbed:
-                matches = glob.glob(target)
+                matches = word.paths()  # from the word's quoting: a quoted `'~'` or `*` stays literal
                 if len(matches) > 1:
                     raise Unreadable('ambiguous redirect')  # bash refuses it, zsh opens every match
                 targets.extend((kind, match) for match in matches or [target])
             else:
                 targets.append((kind, target))
         exempt = name_exempt(argv) if not site.assignments else set()
-        spared = {p for i in exempt for p in expanded_paths([argv[i]])}
+        spared = {p for i in exempt for p in expanded_paths([argv[i]]) + exact[i]}
         named = [p for p in paths if p not in spared] + [t for _k, t in targets]
         expanded = [shell_expanded(word) for word in argv]
+        quoted = [w.expanded() for w in objects]
         if ((paths and afk.floored(None, paths, cwd))
                 or (targets and afk.floored(None, [t for _k, t in targets], cwd))
-                or (expanded != argv and afk.floored(expanded, None, cwd))
-                or floor_words(argv, named, afk, exempt) or floor_words(expanded, named, afk, exempt)):
+                or any(e != argv and afk.floored(e, None, cwd) for e in (expanded, quoted))
+                or any(floor_words(e, named, afk, exempt) for e in (argv, expanded, quoted))):
             return None
         entries.append({'assignments': [w.text for w in site.assignments], 'argv': site.argv,
                         'redirects': [[kind, target] for kind, target in targets], 'repeated': site.repeated})

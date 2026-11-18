@@ -387,6 +387,50 @@ class AfkCheckHookTest(unittest.TestCase):
         # Open: the ninth exception leaves AGENTS.afk.md unprotected, so a redirect to it needs only the floor.
         self.assertIsNone(self.hook('git status > AGENTS.afk.md'))
 
+    def test_the_four_gap_classes_are_closed_at_their_boundaries(self):
+        """Review of c7d70958 (PR 358): each class is closed for every member, the reported input included."""
+        self.start()
+        afk_dir = self.home / 'afk'
+        (afk_dir / '~').mkdir(parents=True)
+        (afk_dir / '~/.netrc').write_text('machine example.com\n')
+        (afk_dir / '.netrc').write_text('machine example.com\n')
+        (self.repo / '~').mkdir()
+        (self.repo / '~/.netrc').write_text('machine example.com\n')
+        (self.repo / 'script.js').write_text('console.log(process.env)\n')
+        env = {**self.env, 'HOME': str(self.home / 'elsewhere')}
+        # Class 1: a quoted `~` is a folder named `~`, never the home anchor; `~` after `=` is read by bash only.
+        for command in (f"cd {afk_dir}; cat '~'/.n?trc", f'cd {afk_dir}; cat "~"/.n?trc',
+                        f'cd {afk_dir}; cat \\~/.n?trc', 'git log --output=~/.netrc', 'X=~/.netrc git status'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command, env=env), denial(PARSE))
+        with self.subTest(command="cat '~'/.n?trc"):
+            self.assertEqual(self.hook("cat '~'/.n?trc", env=env), parked('floor'))  # the working folder's `~`
+        # Class 2: any form that may bind `HOME`, an attached option or a glob that matches a file `HOME` included.
+        (self.repo / 'HOME').write_text('')
+        for command in (f"read -aHOME <<<'{afk_dir}'; cat \"$HOME\"/.n?trc", f"read -raHOME <<<'{afk_dir}'; ls",
+                        f"read 'HOME?x' <<<'{afk_dir}'; ls ~", 'declare -n r=HOME; r=/tmp; ls ~',
+                        f'export HOME={afk_dir}; ls', 'typeset -x HOME; ls', 'getopts a HOME; ls',
+                        f"mapfile HOME <<<'{afk_dir}'; ls", 'unset HOME; ls ~',
+                        f"read -a HO?E <<<'{afk_dir}'; cat \"$HOME\"/.netrc"):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command, env=env), denial(PARSE))
+        # Class 3: every redirect that gives a code reader input, with or without a fd prefix.
+        for command in ('node <>script.js', 'node 0<>script.js', 'node 3<script.js /dev/fd/3', 'node <&3',
+                        'node 0>&3', 'node 0<script.js', "node <<<'console.log(process.env)'",
+                        "python3 - <<'EOF'\nimport os\nEOF", 'exec 3<script.js; node /dev/fd/3',
+                        'ok | exec 3<script.js'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command, env=env), denial(PARSE))
+        with self.subTest(command='node script.js 2>&1 >out'):
+            self.assertNotEqual(self.hook('node script.js 2>&1 >out', env=env), denial(PARSE))
+        # Class 4: a lookahead reads the joined text, and a continuation inside an operator splits the shells.
+        for command in ('cat <1\\\n-3> out', 'ls &\\\n& printenv', 'ls 2>\\\n&1', 'ls >\\\n> out', 'ls 2\\\n>out',
+                        'git status |\\\n| printenv', 'ls x=\\\n~/.netrc'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command, env=env), denial(PARSE))
+        with self.subTest(command='git status 2>&\\\n1'):
+            self.assertIsNone(self.hook('git status 2>&\\\n1', env=env))
+
     def test_strict_checks_every_redirect_target(self):
         self.start(SETUP + '- Mode: strict\n')
         self.assertEqual(self.hook('git status > AGENTS.afk.md'), parked('protected'))
