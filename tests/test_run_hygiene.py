@@ -25,7 +25,7 @@ MECHANICAL = {
     ('worktree_sweep.py', 'git'): ("['git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=" + '/' + "dev/null', '-c', 'core.untrackedCache=false', *settings, '-C', str(checkout), *args]", 'child_environment()'),
     # The one lookup that sees HOME: the global ignore file, read with a fixed argv.
     ('worktree_sweep.py', 'excludes_file'): ("['git', 'config', '--global', '--null', '--path', '--get', 'core.excludesFile']", 'env'),
-    ('worktree_sweep.py', 'run_gh'): ("['gh', *args]", None),
+    ('worktree_sweep.py', 'run_gh'): ("['gh', *args]", 'env'),
     ('restore_point.py', 'run_git'): ("['git', '-c', 'core.quotePath=false', '-c', 'core.hooksPath=" + '/' + "dev/null', '-c', 'core.fsmonitor=false', *args]", 'env'),
 }
 OWN_ENV = {'quota_probe.py', 'agent_processes.py'}
