@@ -2,8 +2,8 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "finolabs-vibecode",
   "displayName": "Finolabs Vibecode",
-  "description": "24 skills and 3 agents (reviewer, security-reviewer, navigator) for review routing, verification, setup, run hygiene and quota on demand.",
   "version": "0.3.3",
+  "description": "25 skills and 3 agents (reviewer, security-reviewer, navigator) for review routing, verification, setup, run hygiene and quota on demand.",
   "logo": "assets/icon.svg",
   "author": {
     "name": "FINOLABS",

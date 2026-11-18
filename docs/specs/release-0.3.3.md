@@ -26,14 +26,15 @@ Status: prepared; not yet tagged.
 | 363 | The afk decider on Claude Code: the afk stop hook (`Stop`), the afk permission hook (`PermissionRequest`, approvals by request digest), `merge: decide` per repository, `afk_native_rules.py`; the eleventh and twelfth scoped exceptions in `CLAUDE.md` and two `PRIVACY.md` sections. |
 | 364 | The UI review gate spec (`docs/specs/ui-review-gate.md`); no code. |
 | 365 | `/setup add quota --weekly-floor <family>/<label>=<percent>`: routing treats that install's weekly pools below the floor as out of quota. |
-| 366 | The UI review gate (`ui-review-gate`) skill, implementing docs/specs/ui-review-gate.md. Pending merge. |
+| 366 | The UI review gate (`ui-review-gate`) skill, implementing docs/specs/ui-review-gate.md: four modes on WCAG 2.2 AA, read-only measurement snippets, report-only and advisory; seven Codex review rounds on the target-size inline exception. |
+| 367 | The inline target check skips hidden elements (last LOW finding of 366). |
 | this | This release: the drift review below, the Codex hook trust note, the README release section, changelog and manifests. |
 
 The changelog's 0.3.3 section holds the user-facing wording; `update` carries the 0.3.3 upgrade notes. Pull request 358 (the tokenizer implementation) closed unmerged and is not part of 0.3.3.
 
 ## Drift review
 
-Checked against `main` at `b03334c` (after pull request 365), surface by surface, for every merged pull request from 345 to 365. `CLAUDE.md` was read, not edited. Pull request 366 is not merged, so no surface describes `ui-review-gate` yet; when it merges it updates the README skill table and skill count, the help map and its help page, `skills-architecture` and `how-it-compares.md` in its own pull request.
+Checked against `main` at `b03334c` (after pull request 365), surface by surface, for every merged pull request from 345 to 365. `CLAUDE.md` was read, not edited. Pull request 366 merged after the first pass; its own pull request updated the README skill table and companions, the skill count in the three manifests, its help page, the help map and tips, the upgrade notes and the changelog. Checked again at `a863cce` for 366: the release section below names it; `how-it-compares.md` and the `skills-architecture` diagram do not list individual gates beside `security-review-gate`, so they were left unchanged.
 
 | Surface | Result |
 | --- | --- |
@@ -104,7 +105,6 @@ Checked against `main` at `b03334c` (after pull request 365), surface by surface
 - Live delivery of the afk stop and permission hooks on a user's machine remains unverified; the `Stop` and `PermissionRequest` schemas were checked against Claude Code 2.1.327 only.
 - The new hooks load only in Claude Code sessions started after the update; a session open during the update keeps the old hook set.
 - Codex: `.codex-plugin/hooks.json` did not change since v0.3.2, but `scripts/compact_nudge.py` did, so Codex asks to trust the hooks again; Codex and Antigravity have no stop or permission hook, so "Decide" stays advisory there.
-- The `delegation-sequence` PNGs need re-rendering from the edited sources.
-- Pull request 366 (`ui-review-gate`) must merge, with its own doc surfaces, before the tag, or this record drops its row.
+- The `ui-review-gate` snippets ran only against a fake DOM in node; a run in a live browser remains unverified, and every inline target exception is marked uncertain for a check by eye.
 - A real upgrade from 0.3.2 on a user's machine remains unverified.
 - The `finolabs/plugins` catalog pins move only with the owner's go after the tag.
