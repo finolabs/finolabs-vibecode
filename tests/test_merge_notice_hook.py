@@ -5,19 +5,54 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "scripts/merge_notice_hook.py"
-LINE = ("fnl: a pull request merged; run worktree_sweep.py list and, for its worktree when a candidate, "
-        "the two git commands it prints; if it closed a spec, story or large pull request, rename the "
-        "session for its next work (tidy Titles) (advisory).")
+MANUAL_LINE = ("fnl: a pull request merged; automatic worktree cleanup is off here (FNL_WORKTREE_CLEAN=manual), so "
+               "ledger.py clean-worktrees removes the merged worktrees of finished delegated runs by hand; for a "
+               "worktree you made yourself, run worktree_sweep.py list and, when a candidate, the two git commands "
+               "it prints; if it closed a spec, story or large pull request, rename the session for its next work "
+               "(tidy Titles) (advisory).")
+OFF_LINE = ("fnl: a pull request merged; worktree cleanup is switched off here (FNL_WORKTREE_CLEAN=off), so "
+            "nothing removes merged worktrees; run worktree_sweep.py list and, when a candidate, the two git "
+            "commands it prints; if it closed a spec, story or large pull request, rename the session for its next "
+            "work (tidy Titles) (advisory).")
+LINE = ("fnl: a pull request merged; merged worktrees of finished delegated runs are being removed in the "
+        "background (ledger.py clean-worktrees shows them); for a worktree you made yourself, run "
+        "worktree_sweep.py list and, when a candidate, the two git commands it prints; if it closed a spec, "
+        "story or large pull request, rename the session for its next work (tidy Titles) (advisory).")
 
 
 class MergeNoticeHookTest(unittest.TestCase):
-    def run_hook(self, payload, raw=None):
+    def test_a_merge_starts_one_detached_cleanup_and_respects_the_switch(self):
+        import importlib.util
+        import io
+        spec = importlib.util.spec_from_file_location("merge_notice_under_test", HOOK)
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+        payload = json.dumps(self.payload("gh pr merge 3 --merge"))
+        for mode, expected in (("", 1), ("manual", 0), ("off", 0)):
+            with self.subTest(mode=mode), mock.patch.dict(os.environ, {"FNL_WORKTREE_CLEAN": mode}), \
+                    mock.patch.object(hook.subprocess, "Popen") as popen, \
+                    mock.patch("sys.stdin", io.StringIO(payload)), mock.patch("sys.stdout", io.StringIO()):
+                hook.main()
+                self.assertEqual(popen.call_count, expected)
+                for call in popen.call_args_list:
+                    self.assertEqual(call.args[0][2:], [str(hook.LEDGER), "clean-worktrees", "--background",
+                                                        "--checkout", "/tmp"])
+                    self.assertTrue(call.kwargs["start_new_session"])
+        with mock.patch.dict(os.environ, {"FNL_WORKTREE_CLEAN": ""}), \
+                mock.patch.object(hook.subprocess, "Popen") as popen, \
+                mock.patch("sys.stdin", io.StringIO(json.dumps(self.payload("gh pr view 3")))), \
+                mock.patch("sys.stdout", io.StringIO()):
+            hook.main()
+        popen.assert_not_called()
+
+    def run_hook(self, payload, raw=None, mode="off"):
         data = raw if raw is not None else json.dumps(payload)
         result = subprocess.run([sys.executable, "-I", str(HOOK)], input=data, capture_output=True, text=True,
-                                env={"PATH": os.defpath})
+                                env={"PATH": os.defpath, "FNL_WORKTREE_CLEAN": mode})
         self.assertEqual(result.returncode, 0)
         return result.stdout
 
@@ -35,8 +70,21 @@ class MergeNoticeHookTest(unittest.TestCase):
                 output = self.run_hook(self.payload(command, {"stdout": "", "stderr": "", "interrupted": False}))
                 printed = json.loads(output)
                 self.assertEqual(printed["hookSpecificOutput"],
-                                 {"hookEventName": "PostToolUse", "additionalContext": LINE})
+                                 {"hookEventName": "PostToolUse", "additionalContext": OFF_LINE})
                 self.assertEqual(len(output.strip().splitlines()), 1)
+
+    def test_the_line_says_whether_cleanup_runs(self):
+        payload = self.payload("gh pr merge 12 --merge", {"stdout": "", "stderr": "", "interrupted": False})
+        for mode, line in (("manual", MANUAL_LINE), ("off", OFF_LINE)):
+            with self.subTest(mode=mode):
+                printed = json.loads(self.run_hook(payload, mode=mode))
+                self.assertEqual(printed["hookSpecificOutput"]["additionalContext"], line)
+        sys.path.insert(0, str(HOOK.parent))
+        self.addCleanup(sys.path.remove, str(HOOK.parent))
+        import merge_notice_hook
+        self.assertEqual(merge_notice_hook.LINE, LINE)
+        with mock.patch.dict(os.environ, {"FNL_WORKTREE_CLEAN": ""}):
+            self.assertTrue(merge_notice_hook.cleanup_on())
 
     def test_nothing_is_printed_without_a_successful_merge(self):
         cases = [self.payload("gh pr merge 12 --merge", {"exit_code": 1}),
@@ -75,8 +123,13 @@ class MergeNoticeHookTest(unittest.TestCase):
 
     def test_the_hook_stores_and_sends_nothing(self):
         source = HOOK.read_text()
-        for word in ("subprocess", "urllib", "socket", "http", "open(", "write_text", "logging"):
-            self.assertNotIn(word, source)
+        rest = source.replace("subprocess.Popen(", "")
+        for word in ("urllib", "socket", "http", "open(", "write_text", "logging", "subprocess.run",
+                     "subprocess.call", "check_output", "os.system", "shell=True"):
+            self.assertNotIn(word, rest)
+        # The one process it may start is the delegate skill's own background worktree cleanup.
+        self.assertEqual(source.count("subprocess.Popen("), 1)
+        self.assertIn('[sys.executable, "-I", str(LEDGER), "clean-worktrees", "--background"', source)
 
     def test_the_manifest_declares_it_for_bash_on_claude_code_only(self):
         manifest = json.loads((ROOT / ".claude-plugin/hooks.json").read_text())

@@ -16,6 +16,8 @@ MECHANICAL = {
     ('post_review.py', 'gh_call'): ('[executable, *args]', 'gh_environment()'),
     ('metrics_hook.py', 'refresh_dashboard'): ("[sys.executable, '-I', str(REFRESH), 'run', *extra, *(['--cwd', cwd] if cwd else [])]", None),
     ('metrics_hook.py', 'start_detached_refresh'): ("[sys.executable, '-I', str(REFRESH), 'run', '--throttle', '10', *(['--cwd', cwd] if cwd else [])]", 'env'),
+    ('ledger.py', 'spawn_cleanup'): ("[sys.executable, '-I', str(Path(__file__).resolve()), 'clean-worktrees', '--background', '--checkout', target]", None),
+    ('merge_notice_hook.py', 'start_cleanup'): ("[sys.executable, '-I', str(LEDGER), 'clean-worktrees', '--background', '--checkout', cwd]", None),
     ('update_check.py', 'start_fetch'): ("[sys.executable, '-I', str(Path(__file__).resolve()), '--fetch']", None),
     ('check-references.py', 'documents'): ("['git', 'ls-files', '--cached', '-z', '--', ':(glob)skills/*/**/*.md', ':(glob)agents/*.md', ':(glob)rules/*.md', ':(glob)*.md', ':(glob)docs/**/*.md']", None),
     ('check-references.py', 'check_skill_inventory'): ("['git', 'ls-files', '--cached', '-z']", None),
@@ -25,7 +27,7 @@ MECHANICAL = {
     ('worktree_sweep.py', 'git'): ("['git', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=" + '/' + "dev/null', '-c', 'core.untrackedCache=false', *settings, '-C', str(checkout), *args]", 'child_environment()'),
     # The one lookup that sees HOME: the global ignore file, read with a fixed argv.
     ('worktree_sweep.py', 'excludes_file'): ("['git', 'config', '--global', '--null', '--path', '--get', 'core.excludesFile']", 'env'),
-    ('worktree_sweep.py', 'run_gh'): ("['gh', *args]", None),
+    ('worktree_sweep.py', 'run_gh'): ("['gh', *args]", 'env'),
     ('restore_point.py', 'run_git'): ("['git', '-c', 'core.quotePath=false', '-c', 'core.hooksPath=" + '/' + "dev/null', '-c', 'core.fsmonitor=false', *args]", 'env'),
 }
 OWN_ENV = {'quota_probe.py', 'agent_processes.py'}

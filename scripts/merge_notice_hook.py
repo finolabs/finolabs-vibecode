@@ -6,7 +6,10 @@ interrupted, any exit code the payload reports is 0, and the last command of the
 (not `--auto`, `--disable-auto` or `--help`), it prints one fixed line as context for the agent. A failed
 Bash call reaches the PostToolUseFailure event instead, so it prints nothing. One Bash call prints the
 line at most once. The command text is tested in memory and discarded: it is never stored, logged or sent.
-The hook stores nothing, starts nothing, always exits 0 and never blocks the session.
+The hook stores nothing, always exits 0 and never blocks the session. After a merge it starts one detached
+`ledger.py clean-worktrees --background` run of the `delegate` skill in the payload's working folder, which
+removes the merged worktrees of finished delegated runs (`FNL_WORKTREE_CLEAN=manual` or `off` stops that); the
+hook never waits for it.
 
 The payload carries only the whole command's outcome, so the hook trusts it only where that outcome is
 the merge's own: one line whose commands are joined by `;` or `&&` alone and whose last command is the
@@ -19,16 +22,57 @@ function named `gh` replaced the real program, or whether a merge queue only que
 """
 
 import json
+import os
 import shlex
+import subprocess
 import sys
+from pathlib import Path
 
 OPERATORS = (";", "&&")  # the only separators whose last command decides the shell's exit status here
 NOT_A_MERGE = ("--auto", "--disable-auto", "--help", "-h")
 EXIT_KEYS = ("exit_code", "exitCode", "returnCode", "return_code")
 MAX_COMMAND = 8192  # longer command text is not tested at all
-LINE = ("fnl: a pull request merged; run worktree_sweep.py list and, for its worktree when a candidate, "
-        "the two git commands it prints; if it closed a spec, story or large pull request, rename the "
-        "session for its next work (tidy Titles) (advisory).")
+LINE = ("fnl: a pull request merged; merged worktrees of finished delegated runs are being removed in the "
+        "background (ledger.py clean-worktrees shows them); for a worktree you made yourself, run "
+        "worktree_sweep.py list and, when a candidate, the two git commands it prints; if it closed a spec, "
+        "story or large pull request, rename the session for its next work (tidy Titles) (advisory).")
+MANUAL_LINE = ("fnl: a pull request merged; automatic worktree cleanup is off here (FNL_WORKTREE_CLEAN=manual), so "
+               "ledger.py clean-worktrees removes the merged worktrees of finished delegated runs by hand; for a "
+               "worktree you made yourself, run worktree_sweep.py list and, when a candidate, the two git commands "
+               "it prints; if it closed a spec, story or large pull request, rename the session for its next work "
+               "(tidy Titles) (advisory).")
+OFF_LINE = ("fnl: a pull request merged; worktree cleanup is switched off here (FNL_WORKTREE_CLEAN=off), so "
+            "nothing removes merged worktrees; run worktree_sweep.py list and, when a candidate, the two git "
+            "commands it prints; if it closed a spec, story or large pull request, rename the session for its next "
+            "work (tidy Titles) (advisory).")
+LEDGER = Path(__file__).resolve().parent.parent / "skills" / "delegate" / "scripts" / "ledger.py"
+
+
+def cleanup_mode():
+    """`on`, `manual` or `off`, read from FNL_WORKTREE_CLEAN the way `ledger.py` reads it."""
+    value = os.environ.get("FNL_WORKTREE_CLEAN", "").lower()
+    if value in {"off", "0", "false", "no"}:
+        return "off"
+    return "manual" if value == "manual" else "on"
+
+
+def cleanup_on():
+    return cleanup_mode() == "on"
+
+
+def start_cleanup(cwd):
+    """One detached background worktree cleanup in the merge's working folder; never waited for."""
+    if not cleanup_on():
+        return
+    if not isinstance(cwd, str) or not os.path.isdir(cwd) or not LEDGER.is_file():
+        return
+    try:
+        child = subprocess.Popen([sys.executable, "-I", str(LEDGER), "clean-worktrees", "--background", "--checkout",
+                                  cwd], cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL, start_new_session=True, close_fds=True)
+        child.returncode = 0  # detached on purpose and never waited for: no "still running" warning on exit
+    except Exception:
+        pass
 
 
 def succeeded(response):
@@ -108,7 +152,9 @@ def main():
         if not isinstance(data, dict) or not succeeded(payload.get("tool_response")):
             return
         if merged(data.get("command")):
-            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": LINE}}))
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": {"on": LINE, "manual": MANUAL_LINE}.get(cleanup_mode(), OFF_LINE)}}))
+            sys.stdout.flush()
+            start_cleanup(payload.get("cwd"))
     except Exception:
         pass  # a reminder never fails or blocks the session
 

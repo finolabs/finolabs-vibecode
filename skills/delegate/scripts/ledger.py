@@ -248,18 +248,32 @@ def cmd_start(args):
     family = "claude" if args.agent in ("claude", "claude-session", "subagent") else args.agent
     if manual and family != args.coordinator and args.route_by != "user":
         sys.exit("Delegation mode is manual: another agent family needs --route-by user")
-    try:
-        from record import checkout_identity
-        checkout_id = checkout_identity(args.checkout)
-    except (ImportError, OSError, ValueError, subprocess.SubprocessError):
-        checkout_id = None  # non-code tasks can still end through the explicit escape hatch
     picked, notice = pick_fields(args)
     warnings = label_warnings(args)
     with finish_lock():  # the uniqueness check and the append happen under the finish writers' lock
+        # The identity is read under the lock: a cleanup claims and renames a worktree under this same lock, so
+        # this start either records the checkout before the claim (and the claim keeps it) or finds no checkout.
+        try:
+            from record import checkout_identity
+            checkout_id = checkout_identity(args.checkout)
+        except (ImportError, OSError, ValueError, subprocess.SubprocessError):
+            checkout_id = None  # non-code tasks can still end through the explicit escape hatch
+        instance = None
+        if checkout_id is not None:
+            from record import git as record_git
+            try:
+                top = record_git(args.checkout, "rev-parse", "--show-toplevel")
+            except (OSError, ValueError, subprocess.SubprocessError):
+                top = ""
+            if retiring_name(top):  # renamed by a cleanup that claimed it
+                sys.exit("ledger: refused: this checkout is being removed because its branch merged; "
+                         "cut a new worktree for new work")
+            instance = checkout_instance(top) if top else None
         starts, _ = load()
         dispatch_id = new_id(starts)
         append({
             "checkout_id": checkout_id,
+            "checkout_instance": instance,
             "coord_session": coord_session,
             "event": "start", "id": dispatch_id, "ts": now(),
             "project": args.project, "task": args.task, "kind": args.kind,
@@ -285,6 +299,7 @@ def cmd_start(args):
     print("label: " + run_label(args.agent, args.model, args.project, args.task), file=sys.stderr)
     for warning in warnings:
         print(warning, file=sys.stderr)
+    spawn_cleanup(args.checkout)
 
 
 LOG_REFUSED = ("ledger: log refused: --log-path must name a regular file you own, not a link, directly inside "
@@ -350,6 +365,7 @@ def cmd_finish(args):
             sys.exit(LOG_REFUSED)
     with finish_lock():
         finish_locked(args, status)
+    spawn_cleanup(args.checkout)
 
 
 def finish_locked(args, status):
@@ -940,6 +956,508 @@ def cmd_summary(args):
         print_away_rows(away)
 
 
+CLEAN_DEADLINE = 300  # seconds for one cleanup run
+CLEAN_LOCK_WAIT = 10  # seconds a hand run waits for another cleanup to finish
+RETIRING = ".fnl-retiring-"  # a claimed worktree is renamed to <same parent>/.fnl-retiring-<random> before removal
+
+
+def retiring_name(path):
+    """True when the folder name carries the reserved prefix in any case: a case-insensitive filesystem lets a
+    case-only rename keep the cleaner's path pointing at the same checkout."""
+    return os.path.basename(path).casefold().startswith(RETIRING)
+
+
+def cleanup_mode():
+    """`on` (start, finish and the merge notice start a background run), `manual` (only clean-worktrees by hand)
+    or `off`, from FNL_WORKTREE_CLEAN."""
+    value = os.environ.get("FNL_WORKTREE_CLEAN", "").lower()
+    if value in {"off", "0", "false", "no"}:
+        return "off"
+    return "manual" if value == "manual" else "on"
+
+
+def lease_live():
+    """True when an away lease is live or cannot be read (then nothing is removed)."""
+    try:
+        import away_lease
+        return away_lease.live_lease(time.time()) is not None
+    except Exception:
+        return True
+
+
+def open_checkouts():
+    starts, finishes = load()
+    return ({s.get("checkout_id") for i, s in starts.items() if i in finishes} - {None},
+            {s.get("checkout_id") for i, s in starts.items() if i not in finishes} - {None})
+
+
+def finished_instances():
+    """{checkout_id: {checkout_instance of each finished dispatch}}; a start line without an instance owns nothing."""
+    starts, finishes = load()
+    found = defaultdict(set)
+    for dispatch_id, start in starts.items():
+        if dispatch_id in finishes and start.get("checkout_id") and isinstance(start.get("checkout_instance"), str):
+            found[start["checkout_id"]].add(start["checkout_instance"])
+    return found
+
+
+def checkout_instance(path):
+    """A digest that tells this worktree apart from any other ever registered at the same path: the device and
+    inode of its folder and the birth (else change) time of its git admin folder's `commondir` file, which
+    `git worktree add` writes once. A rename keeps all three. None when they cannot be read (no linked worktree)."""
+    from record import git as record_git
+    try:
+        admin = record_git(path, "rev-parse", "--absolute-git-dir")
+        root = os.stat(path)
+        made = os.stat(os.path.join(admin, "commondir"), follow_symlinks=False)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    birth = getattr(made, "st_birthtime", None) or made.st_ctime
+    return hashlib.sha256(f"{root.st_dev}:{root.st_ino}:{birth!r}".encode()).hexdigest()
+
+
+CLAIM = "worktree-claim-"  # + the sha256 of the path a claim renamed a worktree to, in the private state folder
+
+
+def claim_name(moved):
+    return CLAIM + hashlib.sha256(os.fsencode(moved)).hexdigest()
+
+
+def write_claim(moved, instance):
+    with dr.data_folder("state", create=True, private=True) as state:
+        fd = os.open(claim_name(moved), os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600, dir_fd=state)
+        try:
+            os.write(fd, instance.encode("ascii"))
+        finally:
+            os.close(fd)
+
+
+def drop_claim(moved):
+    try:
+        with dr.data_folder("state", create=True, private=True) as state:
+            os.unlink(claim_name(moved), dir_fd=state)
+    except FileNotFoundError:
+        pass
+
+
+def has_claim(moved):
+    """The instance this cleanup's claim record names when it is the worktree now at `moved` (same new path and
+    same instance), else None. Callers keep this value: a later read could see a worktree swapped in meanwhile."""
+    instance = checkout_instance(moved)
+    if instance is None:
+        return None
+    with dr.data_folder("state", create=True, private=True) as state:
+        try:
+            fd = os.open(claim_name(moved), os.O_RDONLY | os.O_NOFOLLOW, dir_fd=state)
+        except FileNotFoundError:
+            return None
+        try:
+            return instance if os.read(fd, 128).decode("ascii", "replace") == instance else None
+        finally:
+            os.close(fd)
+
+
+@contextmanager
+def cleaner_lock(wait):
+    """One cleanup at a time on the machine, by hand or in the background. Yields False when another holds it
+    (a background run gives up at once; a hand run waits up to `wait` seconds)."""
+    with dr.data_folder("state", create=True, private=True) as state:
+        fd = os.open("worktree-clean.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600, dir_fd=state)
+        try:
+            deadline = time.monotonic() + wait
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        yield False
+                        return
+                    time.sleep(0.1)
+            yield True
+        finally:
+            os.close(fd)
+
+
+def inspect(sweep, entry, default, forge):
+    """The sweep's facts for one worktree, read from the worktree now; the disk size is left for later."""
+    path = entry["path"]
+    head = sweep.git_out(path, "rev-parse", "--verify", "HEAD^{commit}")
+    ref = sweep.git_out(path, "symbolic-ref", "--quiet", "HEAD") or ""
+    info = {"path": path, "branch": ref[len("refs/heads/"):] if ref.startswith("refs/heads/") else "",
+            "head": head, "locked": "locked" in entry, "forge_head": False, "size": (0, True),
+            "missing": "prunable" in entry or not os.path.isdir(path), "state": "unknown",
+            "unpushed": (None, False), "merged": "unknown"}
+    if info["missing"] or not head:
+        return info
+    info["state"] = sweep.state(path)
+    if info["state"] != "clean":
+        return info
+    info["unpushed"] = sweep.unpushed(path)
+    info["merged"], proof = sweep.merged(path, head, info["branch"], default, forge)
+    count, upstream = info["unpushed"]
+    if proof == "forge" and not upstream and count:
+        info["unpushed"], info["forge_head"] = (0, False), True  # as the sweep's describe()
+    return info
+
+
+@contextmanager
+def lease_lock():
+    """afk's own state lock, so no lease starts between the lease check and the claim."""
+    import afk
+    with afk.private_folder():
+        yield
+
+
+def place_now(sweep, path, main_checkout):
+    """Where `path` lies among the worktrees registered right now (a worktree registered inside it later counts)."""
+    entries = sweep.worktrees(main_checkout)
+    return sweep.nesting(path, main_checkout, [entry["path"] for entry in entries[1:]])
+
+
+def unchanged(sweep, info, path, default, main_checkout, cwd):
+    """None when the worktree at `path` still has the head, branch and state that proved it a candidate, and no
+    worktree registered since lies inside it or around it."""
+    place = place_now(sweep, path, main_checkout)
+    if place:
+        return place
+    fresh = inspect(sweep, {"path": path, **({"locked": ""} if info["locked"] else {})}, default, forge=False)
+    if fresh["head"] != info["head"] or fresh["branch"] != info["branch"]:
+        return "its HEAD moved"
+    fresh["merged"], fresh["forge_head"] = info["merged"], info["forge_head"]
+    if info["forge_head"]:
+        fresh["unpushed"] = (0, False)  # the forge proved this very head merged
+    return sweep.reason_not_candidate(fresh, place, cwd)
+
+
+def claim(sweep, info, default, place, cwd, main_checkout):
+    """(None, moved path) when the worktree was claimed, else (the reason it stays, None).
+
+    Under the ledger finish lock and afk's state lock: the lease and the open dispatches are read again, the
+    worktree must still have the head, branch and state that made it a candidate, and it is then renamed with
+    `git worktree move` to `<same parent>/.fnl-retiring-<random>`. From then on its old path holds no checkout, so
+    a `start` there in any spelling finds nothing to record, and a worktree cut there later is a new checkout."""
+    from record import checkout_identity
+    path = info["path"]
+    resumed = retiring_name(path)
+    reason = unchanged(sweep, info, path, default, main_checkout, cwd)  # the slow reads, before any lock
+    if reason:
+        return reason, None
+    with finish_lock():
+        with lease_lock():
+            if lease_live():
+                return "an away lease started", None
+            _, running = open_checkouts()
+            if checkout_identity(path) in running:
+                return "a dispatch started on it", None
+            if resumed:
+                claimed = has_claim(path)
+                if claimed is None:
+                    return "no claim of this cleanup names it", None
+                info["instance"] = claimed  # the instance the claim names, never a fresh read
+                return None, path  # renamed by an earlier run that stopped before removing it
+            if sweep.git_out(path, "rev-parse", "--verify", "HEAD^{commit}") != info["head"]:
+                return "its HEAD moved", None
+            instance = checkout_instance(path)  # ownership read again under the lock
+            if instance is None or instance not in finished_instances().get(checkout_identity(path), ()):
+                return "it is not the worktree a finished dispatch named", None
+            target = os.path.join(os.path.dirname(path), RETIRING + secrets.token_hex(6))
+            write_claim(target, instance)
+            try:
+                moved = sweep.git(main_checkout, "worktree", "move", "--", path, target).returncode == 0
+            except Exception:
+                moved = False
+    # Outside the locks from here: recording worktrees that moved along and any undo are git calls that may be slow.
+    if moved:
+        try:
+            moved = follow(sweep, main_checkout, path, target)
+        except Exception:
+            moved = False  # a worktree inside may have moved along unrecorded: go back
+    if not moved:
+        try:
+            restored = undo_move(sweep, main_checkout, path, target, instance)
+        except Exception:
+            restored = False
+        if restored:
+            drop_claim(target)
+            return "git refused to move it", None
+        # The folder was renamed and cannot go back: the claim record stays, so a later run can finish it.
+        escaped = target.encode("unicode_escape").decode("ascii")
+        return f"git refused to move it; it could not be moved back and stays at {escaped}", None
+    info["instance"] = instance
+    return None, target
+
+
+def undo_move(sweep, main_checkout, original, target, instance):
+    """After a failed `git worktree move`: True when nothing was renamed or the folder is back where it was and
+    registered there. A folder at `target` that is not the claimed instance is never touched. When the old path
+    is taken, the renamed folder is registered at `target`, so the kept claim lets a later run find it."""
+    if not os.path.isdir(target):
+        return True
+    if checkout_instance(target) != instance:
+        return False
+    try:
+        if os.path.lexists(original):
+            sweep.git(main_checkout, "worktree", "repair", "--", target)
+            follow(sweep, main_checkout, original, target)  # worktrees inside moved along with it
+            return False
+        os.rename(target, original)
+        repaired = sweep.git(main_checkout, "worktree", "repair", "--", original).returncode == 0
+        try:
+            follow(sweep, main_checkout, target, original)  # best effort: the disk walk guards any removal
+        except Exception:
+            pass
+        return repaired
+    except Exception:
+        return False
+
+
+def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
+    """Remove the linked worktrees of finished dispatches whose branch merged; return (lines, failed).
+
+    A worktree is examined only when its identity (`record.checkout_identity`, the digest `start` stored) is the
+    checkout_id of no open dispatch and of a finished one that started after git registered this worktree (so a
+    worktree cut later at the same path is not taken for it), or when this cleanup's own claim record names it
+    after an earlier run renamed it and stopped. Cheap facts come first: worktrees whose merge local ancestry proves are taken before those that
+    need the forge, and those are shuffled, so repeated runs get past a slow one. A candidate is claimed and
+    renamed (`claim`), checked again in its new place, then removed with `git worktree remove` (never forced)
+    and `git branch -d`. Nothing is claimed under a live away lease. Stores only one claim record per renamed worktree, a digest
+    of its new path in the private state folder, deleted when that worktree is removed or put back."""
+    if cleanup_mode() == "off":
+        return [], False
+    if lease_live():
+        return ["ledger: worktree cleanup skipped under an away lease; the afk merge gate removes them"], False
+    lines, failed, removed = [], False, 0
+    try:
+        import random
+        import worktree_sweep as sweep
+        from record import checkout_identity
+        _, running = open_checkouts()
+        finished = finished_instances()
+        entries = sweep.worktrees(checkout)
+        main_checkout = entries[0]["path"]
+        default = sweep.default_ref(main_checkout)
+        linked = [entry["path"] for entry in entries[1:]]
+        cwd = sweep.spellings(os.getcwd())
+    except Exception as error:
+        return ["ledger: worktree cleanup failed: " + type(error).__name__], True
+    end = time.monotonic() + deadline
+    local, forge_needed = [], []
+    for entry in entries[1:]:
+        shown = entry["path"].encode("unicode_escape").decode("ascii")
+        try:
+            if not os.path.isdir(entry["path"]):
+                continue
+            if retiring_name(entry["path"]):
+                if not has_claim(entry["path"]):
+                    continue  # a folder name alone authorizes nothing
+            else:
+                identity = checkout_identity(entry["path"])
+                if identity in running or checkout_instance(entry["path"]) not in finished.get(identity, ()):
+                    continue  # a worktree cut later at a finished dispatch's path has another instance
+            info = inspect(sweep, entry, default, forge=False)
+            place = sweep.nesting(info["path"], main_checkout, linked)
+            reason = sweep.reason_not_candidate(info, place, cwd)
+            pruned = reason and reason.startswith("unpushed=") and not info["unpushed"][1]
+            if forge and (reason == "merged=unknown" or pruned):  # a pruned squash merge: only the forge knows
+                forge_needed.append((entry, shown, place))
+            elif reason:
+                lines.append(f"ledger: kept worktree {shown} ({reason})")
+            else:
+                local.append((info, shown, place))
+        except Exception as error:
+            failed = True
+            lines.append(f"ledger: worktree cleanup failed at {shown}: {type(error).__name__}")
+    random.shuffle(forge_needed)
+
+    def candidates():
+        yield from local
+        for entry, shown, place in forge_needed:
+            info = inspect(sweep, entry, default, forge=True)
+            reason = sweep.reason_not_candidate(info, place, cwd)
+            if reason:
+                lines.append(f"ledger: kept worktree {shown} ({reason})")
+                continue
+            yield info, shown, place
+
+    try:
+        for info, shown, place in candidates():
+            if time.monotonic() > end:
+                lines.append("ledger: worktree cleanup reached its time limit; run ledger.py clean-worktrees")
+                break
+            try:
+                reason, moved = claim(sweep, info, default, place, cwd, main_checkout)
+            except SystemExit:
+                failed = True
+                lines.append(f"ledger: kept worktree {shown} (the ledger stayed busy)")
+                continue
+            except BlockingIOError:
+                failed = True
+                lines.append(f"ledger: kept worktree {shown} (the afk state was busy)")
+                continue
+            if reason:
+                failed = failed or reason.startswith("git refused to move it")  # a failed move, undone or not
+                lines.append(f"ledger: kept worktree {shown} ({reason})")
+                continue
+            replaced = "the worktree at its retiring path is not the one claimed"
+            try:
+                size = sweep.human(sweep.size_on_disk(moved))  # the slow walks first, so every check follows them
+                inner = holds_checkout(moved)
+                # The last checks before the removal: the claimed instance is still the one at this path, and its
+                # HEAD, branch, state and the worktrees around it are what made it a candidate.
+                reason = replaced if checkout_instance(moved) != info.get("instance") else inner or \
+                    unchanged(sweep, info, moved, default, main_checkout, cwd)
+                if reason is None:
+                    done = sweep.git(main_checkout, "worktree", "remove", "--", moved)
+                    reason = None if done.returncode == 0 else "git refused the removal"
+                failed = failed or reason is not None
+            except Exception as error:
+                failed = True
+                reason = "the removal failed: " + type(error).__name__
+            if reason == replaced:
+                drop_claim(moved)  # never remove or move another worktree
+                lines.append(f"ledger: kept worktree {shown} ({reason})")
+                continue
+            if reason and checkout_instance(moved) != info.get("instance"):
+                drop_claim(moved)  # swapped in during the checks: never move another worktree
+                failed = True
+                lines.append(f"ledger: kept worktree {shown} ({replaced})")
+                continue
+            if reason:
+                line, restored = put_back(sweep, main_checkout, info["path"], moved, shown, reason, info.get("instance"))
+                lines.append(line)
+                if restored:
+                    drop_claim(moved)
+                else:
+                    failed = True  # stranded at its retiring path: the claim stays so a later run can finish it
+                continue
+            drop_claim(moved)
+            removed += 1
+            branch = info["branch"].encode("unicode_escape").decode("ascii")
+            lines.append(f"ledger: removed worktree {shown} ({size}), branch {branch}")
+            try:
+                if sweep.git(main_checkout, "branch", "-d", "--", info["branch"]).returncode != 0:
+                    lines.append(f"ledger: git kept branch {branch}")
+            except Exception as error:
+                failed = True
+                lines.append(f"ledger: branch deletion failed for {branch}: {type(error).__name__}")
+    except Exception as error:
+        failed = True
+        lines.append("ledger: worktree cleanup failed: " + type(error).__name__)
+    lines.append(f"ledger: worktree cleanup: {removed} removed")
+    return lines, failed
+
+
+def put_back(sweep, main_checkout, original, moved, shown, reason, instance):
+    """(report line, restored): move a claimed worktree that may not be removed back to its old path, when that path is free."""
+    if original == moved:
+        return f"ledger: kept worktree {shown} ({reason})", False
+    if not os.path.lexists(original):
+        try:
+            if sweep.git(main_checkout, "worktree", "move", "--", moved, original).returncode == 0:
+                if follow(sweep, main_checkout, moved, original):
+                    return f"ledger: kept worktree {shown} ({reason})", True
+                return (f"ledger: kept worktree {shown} ({reason}); a worktree inside it could not be recorded "
+                        "at its new place"), False
+        except Exception:
+            pass
+        # The reverse move may have renamed the folder before it failed: register it where it now is.
+        if os.path.isdir(original) and not os.path.lexists(moved) and checkout_instance(original) == instance:
+            try:
+                if sweep.git(main_checkout, "worktree", "repair", "--", original).returncode == 0 and \
+                        follow(sweep, main_checkout, moved, original):
+                    return f"ledger: kept worktree {shown} ({reason})", True
+            except Exception:
+                pass
+            escaped = original.encode("unicode_escape").decode("ascii")
+            return f"ledger: kept worktree {shown} ({reason}); it is back at {escaped} but git could not record it", False
+    escaped = moved.encode("unicode_escape").decode("ascii")
+    return f"ledger: kept worktree {shown} ({reason}); it could not be moved back and stays at {escaped}", False
+
+
+def holds_checkout(root):
+    """Why the folder at `root` may hold another checkout, read from the disk, not from git's records: any `.git`
+    below its own top-level one, or a folder the walk could not read. None when the whole tree was read and holds
+    none. Records can be stale after a move; this reading is what the removal relies on."""
+    top = str(root)
+    stack = [top]
+    while stack:
+        folder = stack.pop()
+        try:
+            with os.scandir(folder) as entries:
+                for entry in entries:
+                    # Compared without case: on a case-insensitive file system `.GIT` makes a checkout too.
+                    if entry.name.casefold() == ".git" and folder != top:
+                        return "it holds another checkout"
+                    if entry.is_dir(follow_symlinks=False):
+                        stack.append(entry.path)
+        except OSError:
+            return "a folder inside it could not be read"
+    return None
+
+
+def nested_in(sweep, main_checkout, folder):
+    """The registered worktrees that lie inside `folder` (git keeps their paths; a move of `folder` breaks them)."""
+    mine = sweep.spellings(folder)
+    return [entry["path"] for entry in sweep.worktrees(main_checkout)[1:]
+            if sweep.spellings(entry["path"]) != mine and sweep.within(sweep.spellings(entry["path"]), mine)]
+
+
+def follow(sweep, main_checkout, old, new):
+    """After a folder moved from `old` to `new`: record at its new path every worktree git still lists under `old`
+    whose folder now lies under `new` (read after the move, so one registered during it is included). One whose
+    folder did not move along is left alone. True when every repair succeeded."""
+    ok = True
+    for path in nested_in(sweep, main_checkout, old):
+        moved = os.path.join(new, os.path.relpath(path, old))
+        if not os.path.isdir(moved) or os.path.isdir(path):
+            continue  # it did not move with the folder
+        try:
+            ok = sweep.git(main_checkout, "worktree", "repair", "--", moved).returncode == 0 and ok
+        except Exception:
+            ok = False
+    return ok
+
+
+def spawn_cleanup(checkout="."):
+    """Start one detached `clean-worktrees --background` run; the caller never waits for it."""
+    if cleanup_mode() != "on":
+        return
+    try:
+        target = str(Path(checkout).resolve())
+        child = subprocess.Popen([sys.executable, "-I", str(Path(__file__).resolve()), "clean-worktrees",
+                                  "--background", "--checkout", target], stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+                                 close_fds=True)
+        child.returncode = 0  # detached on purpose and never waited for: no "still running" warning on exit
+    except Exception:
+        pass  # a background cleanup never changes the caller's output or exit code
+
+
+def cmd_clean_worktrees(args):
+    if args.background:
+        try:
+            with open(os.devnull, "w") as quiet:
+                sys.stderr = quiet  # silent even when the ledger has malformed lines
+                with cleaner_lock(0) as held:
+                    if held:
+                        clean_worktrees(args.checkout)
+        except Exception:
+            pass
+        finally:
+            sys.stderr = sys.__stderr__
+        return
+    with cleaner_lock(CLEAN_LOCK_WAIT) as held:
+        if not held:
+            print("ledger: another worktree cleanup is running; try again shortly", file=sys.stderr)
+            sys.exit(1)
+        lines, failed = clean_worktrees(args.checkout)
+    for line in lines:
+        print(line, file=sys.stderr)
+    if failed:
+        sys.exit(1)
+
+
 def build_parser():
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -999,6 +1517,13 @@ def build_parser():
     m.add_argument("--project")
     m.add_argument("--json", action="store_true", help="print the rows as JSON")
     m.set_defaults(func=cmd_summary)
+
+    c = sub.add_parser("clean-worktrees", help="remove the merged, clean worktrees of finished dispatches "
+                                               "(start and finish also start it in the background; "
+                                               "FNL_WORKTREE_CLEAN=manual or off)")
+    c.add_argument("--checkout", default=".", help="any checkout of the repository")
+    c.add_argument("--background", action="store_true", help="a detached run: one at a time, prints nothing")
+    c.set_defaults(func=cmd_clean_worktrees)
     return p
 
 

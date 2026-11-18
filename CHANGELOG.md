@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- `delegate` removes the worktrees of finished runs once their branch merged. `ledger.py start` and `finish`, and on Claude Code the merge notice hook after a `gh pr merge`, start a detached `ledger.py clean-worktrees --background` run. It removes each worktree a finished dispatch named with `--checkout`, no open dispatch names and the worktree sweep calls a candidate (merged, clean, nothing unpushed, not locked, not the working folder). A worktree counts as the run's only when its instance, recorded by `start` as `checkout_instance`, matches, so a worktree cut later at the same path is never taken for it; runs started before this release are not cleaned automatically. HEAD, status and unpushed commits are read again, then each removal is claimed under the ledger and afk locks, which re-read the lease, the open dispatches, the instance and HEAD, then rename the worktree to `.fnl-retiring-<random>` so its old path holds no checkout and `start` refuses the renamed one; it is checked again there, then removed with `git worktree remove` (never forced) and `git branch -d`, or moved back. One cleanup runs at a time. Nothing is claimed under a live away lease; a lease that starts after a claim does not stop that removal. `ledger.py clean-worktrees` runs it by hand with a report; `FNL_WORKTREE_CLEAN=manual` keeps only that, and `off` stops it.
+
 ### Changed
 
 - The low-risk lane covers a catalog pin (owner decision, 17/11/2026): a plugin catalog (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) whose only changes are existing entries' `source.ref`, moved to a release tag `vX.Y.Z`, and their descriptions takes one review pass; `merge_check.py --lane` decides.
@@ -15,6 +19,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- `worktree_sweep.py` asks gh about the worktree's own repository: an inherited `GH_REPO` could name another repository whose merged pull request had the same branch and head.
 - The worktree sweep (`commit-messages`, `review-gate`) reported every worktree dirty when a folder such as `.claude/` was ignored only by the user's global ignore file: it runs git without the home folder, so git never read that file. It now resolves the global ignore file once and passes it to `git status` alone, so merged, clean worktrees become candidates again.
 
 ### Known limits
