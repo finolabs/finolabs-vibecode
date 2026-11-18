@@ -1,6 +1,6 @@
 # afk check hook: one shell tokenizer
 
-Status: proposed; design only, no code. The rule change it needs (CLAUDE.md, tenth scoped exception) waits on the owner's decisions below. It supersedes the parked PR 352.
+Status: draft; design only, no code. The rule change it needs (CLAUDE.md, tenth scoped exception) waits on the owner's decisions below. It supersedes the parked PR 352.
 
 ## Why
 
