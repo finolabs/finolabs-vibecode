@@ -780,6 +780,42 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertTrue((path / "nested" / "unsaved.txt").exists(), out.stderr)
         self.assertIn("holds another checkout", out.stderr)
 
+    def test_a_checkout_spelled_dot_git_in_capitals_stops_the_removal(self):
+        probe = self.base / "CaseProbe2"
+        probe.mkdir()
+        if not (self.base / "caseprobe2").exists():
+            self.skipTest("case-sensitive file system")
+        path = self.worktree("feat-gc")
+        self.dispatch(path)
+        self.ignore_nested()
+        self.git(path, "init", "-q", str(path / "nested"))
+        os.rename(path / "nested" / ".git", path / "nested" / ".GIT")
+        (path / "nested" / "unsaved.txt").write_text("work\n")
+        out = self.ledger_run("clean-worktrees", code=None)
+        self.assertTrue((path / "nested" / "unsaved.txt").exists(), out.stderr)
+        self.assertIn("holds another checkout", out.stderr)
+
+    def test_recording_moved_worktrees_holds_no_lock_and_an_error_goes_back(self):
+        path = self.worktree("feat-lk")
+        self.dispatch(path)
+        ledger, _ = self.load_ledger()
+        seen = []
+
+        def follow(*args):
+            with mock.patch.object(ledger, "LOCK_WAIT", 0):
+                try:
+                    with ledger.finish_lock():
+                        seen.append("free")
+                except SystemExit:
+                    seen.append("held")
+            raise subprocess.TimeoutExpired("git", 60)  # the lookup stalls and fails
+
+        with mock.patch.object(ledger, "follow", follow):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertEqual(seen[:1], ["free"])
+        self.assertTrue(path.exists(), lines)
+        self.assertEqual(self.retiring(), [])
+
     def test_a_failed_move_is_undone(self):
         path = self.worktree("feat-fm")
         self.dispatch(path)

@@ -1161,17 +1161,24 @@ def claim(sweep, info, default, place, cwd, main_checkout):
                 moved = sweep.git(main_checkout, "worktree", "move", "--", path, target).returncode == 0
             except Exception:
                 moved = False
-            if moved and not follow(sweep, main_checkout, path, target):
-                # A worktree registered inside it moved along and git could not record its new place: go back.
-                moved = False
-            if not moved:
-                if undo_move(sweep, main_checkout, path, target, instance):
-                    drop_claim(target)
-                    return "git refused to move it", None
-                # The folder was renamed and cannot go back: the claim record stays, so a later run can finish it.
-                escaped = target.encode("unicode_escape").decode("ascii")
-                return f"git refused to move it; it could not be moved back and stays at {escaped}", None
-            info["instance"] = instance
+    # Outside the locks from here: recording worktrees that moved along and any undo are git calls that may be slow.
+    if moved:
+        try:
+            moved = follow(sweep, main_checkout, path, target)
+        except Exception:
+            moved = False  # a worktree inside may have moved along unrecorded: go back
+    if not moved:
+        try:
+            restored = undo_move(sweep, main_checkout, path, target, instance)
+        except Exception:
+            restored = False
+        if restored:
+            drop_claim(target)
+            return "git refused to move it", None
+        # The folder was renamed and cannot go back: the claim record stays, so a later run can finish it.
+        escaped = target.encode("unicode_escape").decode("ascii")
+        return f"git refused to move it; it could not be moved back and stays at {escaped}", None
+    info["instance"] = instance
     return None, target
 
 
@@ -1190,7 +1197,11 @@ def undo_move(sweep, main_checkout, original, target, instance):
             return False
         os.rename(target, original)
         repaired = sweep.git(main_checkout, "worktree", "repair", "--", original).returncode == 0
-        return follow(sweep, main_checkout, target, original) and repaired
+        try:
+            follow(sweep, main_checkout, target, original)  # best effort: the disk walk guards any removal
+        except Exception:
+            pass
+        return repaired
     except Exception:
         return False
 
@@ -1362,14 +1373,15 @@ def holds_checkout(root):
     """Why the folder at `root` may hold another checkout, read from the disk, not from git's records: any `.git`
     below its own top-level one, or a folder the walk could not read. None when the whole tree was read and holds
     none. Records can be stale after a move; this reading is what the removal relies on."""
-    stack = [str(root)]
-    top = os.path.join(str(root), ".git")
+    top = str(root)
+    stack = [top]
     while stack:
         folder = stack.pop()
         try:
             with os.scandir(folder) as entries:
                 for entry in entries:
-                    if entry.name == ".git" and entry.path != top:
+                    # Compared without case: on a case-insensitive file system `.GIT` makes a checkout too.
+                    if entry.name.casefold() == ".git" and folder != top:
                         return "it holds another checkout"
                     if entry.is_dir(follow_symlinks=False):
                         stack.append(entry.path)
