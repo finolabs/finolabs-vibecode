@@ -33,27 +33,30 @@
   };
   const circlesMeet = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 < 576;
   const inline = (el) => {
-    /* A link in a sentence: its contiguous inline run (the siblings of its outermost inline wrapper, up to the
-       nearest block on each side) holds text outside any link. Text across a block boundary is another line. */
+    /* A link in a sentence: at each level from the link up through its inline wrappers, the siblings up to the
+       nearest block on each side hold text outside any link. Text across a block, at any level, is another line.
+       The reading is a heuristic: every inline exception is marked uncertain, to check by eye (2.5.8). */
     if (el.tagName.toLowerCase() !== "a" || getComputedStyle(el).display !== "inline") return false;
-    let n = el;
-    while (n.parentElement && getComputedStyle(n.parentElement).display === "inline") n = n.parentElement;
-    if (!n.parentElement) return false;
     const isBlock = (node) => node.nodeType === 1 && getComputedStyle(node).display !== "inline";
     const text = (node) => {
       if (node.nodeType === 3) return !!node.textContent.trim();
       if (node.nodeType !== 1 || isBlock(node) || node.tagName.toLowerCase() === "a") return false;
-      return Array.from(node.childNodes || []).some(text);
+      const kids = Array.from(node.childNodes || []);
+      if (kids.some(isBlock)) return false; /* a block inside breaks the run: not read as this sentence */
+      return kids.some(text);
     };
-    const siblings = Array.from(n.parentElement.childNodes);
-    const at = siblings.indexOf(n);
-    for (const step of [-1, 1]) {
-      for (let i = at + step; i >= 0 && i < siblings.length; i += step) {
-        if (isBlock(siblings[i])) break;
-        if (text(siblings[i])) return true;
+    for (let cur = el; cur.parentElement; cur = cur.parentElement) {
+      const siblings = Array.from(cur.parentElement.childNodes);
+      const at = siblings.indexOf(cur);
+      for (const step of [-1, 1]) {
+        for (let i = at + step; i >= 0 && i < siblings.length; i += step) {
+          if (isBlock(siblings[i])) break;
+          if (text(siblings[i])) return true;
+        }
       }
+      if (getComputedStyle(cur.parentElement).display !== "inline") break;
     }
-    return n !== el && text(n);
+    return false;
   };
   const describe = (el) => {
     const text = (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40);
@@ -83,7 +86,11 @@
       const c = centre(t.rect);
       const spaced = targets.every((o) => o === t || !circleMeetsRect(c, o.rect))
         && small.every((o) => o === t || !circlesMeet(c, centre(o.rect)));
-      if (inline(t.el)) entry.exception = "inline";
+      if (inline(t.el)) {
+        entry.exception = "inline";
+        entry.uncertain = true;
+        entry.note = "read as a link in a sentence: confirm by eye that it sits in running text (2.5.8)";
+      }
       else if (spaced) entry.exception = "spacing";
       entry.severity = entry.exception ? "low" : "blocking";
       entry.criterion = "2.5.8";

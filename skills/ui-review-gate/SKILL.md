@@ -58,7 +58,7 @@ A constraint the gate cannot prove is reported as **unverified**, never as kept.
 | Snippet | Returns |
 | --- | --- |
 | `scripts/contrast.js` | Text and UI-component contrast against the computed background, with the threshold that applies (4.5:1 normal text, 3:1 large text and UI components) and a pass or fail |
-| `scripts/targets.js` | Interactive elements with their size and class: `blocking` below 24 by 24 CSS px (2.5.8) unless the spacing or inline exception applies, `low` from 24 to 43 px, else `ok` |
+| `scripts/targets.js` | Interactive elements with their size and class: `blocking` below 24 by 24 CSS px (2.5.8) unless the spacing or inline exception applies (an inline exception is a heuristic reading, marked uncertain to confirm by eye), `low` from 24 to 43 px, else `ok` |
 | `scripts/overflow.js` | Whether the document's `scrollWidth` exceeds its `clientWidth`, and the elements that reach past the viewport |
 | `scripts/fields.js` | The ordered form fields with name, type, `inputmode`, `autocomplete`, label and required state |
 
