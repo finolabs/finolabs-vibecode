@@ -493,6 +493,11 @@
           "kind": "setup",
           "text": "Claude Code: the compaction reminder follows the session model's own /autocompact value; setup can save a threshold for one model only.",
           "setup": "/setup add compaction"
+        },
+        {
+          "id": "0.3.3/worktree-clean",
+          "kind": "info",
+          "text": "delegate now removes the worktrees of finished runs once their branch merged, clean and pushed; FNL_WORKTREE_CLEAN=off keeps them."
         }
       ]
     }

@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+### Added
+
+- `delegate` removes the worktrees of finished runs once their branch merged: `ledger.py start`, `finish` and the new `ledger.py clean-worktrees` remove each worktree a finished dispatch named with `--checkout`, has no open dispatch, and the worktree sweep calls a candidate (merged, clean, nothing unpushed, not locked, not the working folder), with `git worktree remove` (never forced) and `git branch -d`, and print what they removed or kept. Nothing is removed under a live away lease. `FNL_WORKTREE_CLEAN=off` stops it.
+
 ### Changed
 
 - The low-risk lane covers a catalog pin (owner decision, 17/11/2026): a plugin catalog (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) whose only changes are existing entries' `source.ref`, moved to a release tag `vX.Y.Z`, and their descriptions takes one review pass; `merge_check.py --lane` decides.
