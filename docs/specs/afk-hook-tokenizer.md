@@ -1,6 +1,6 @@
 # afk check hook: one shell tokenizer
 
-Status: draft; design only, no code. The rule change it needs (CLAUDE.md, tenth scoped exception) waits on the owner's decisions below. It supersedes the parked PR 352. Revised after the Codex review of 421ba5d3 (code and security REWORK).
+Status: draft; design only, no code. The rule change it needs (CLAUDE.md, tenth scoped exception) waits on the owner's decisions below. It supersedes the parked PR 352. Revised after the Codex reviews of 421ba5d3 and 3ee71ea0 (code and security REWORK).
 
 ## Why
 
@@ -32,11 +32,13 @@ The afk review of the 18/11 overnight lease counted about 100 hook denials acros
 For every Bash command the hook judges under a live lease:
 
 1. Each command site that bash or zsh, with default options, could run reaches the judgment as its own entry. An entry holds its assignments, its argv (program first) and its redirects.
-2. Each redirect's target that names a file reaches both the floor and, in `strict`, the same path permission an edit-tool change of that file would need.
+2. Each redirect's target that names a file, read or write, reaches both the floor and, in `strict`, the path permission that `check --paths` gives that file.
 3. A rule that spans commands is still applied to the call as a whole: a directory change followed by an unanchored glob, a pipe into a shell or into `xargs`, or a heredoc feeding a code reader.
 4. Anything the tokenizer cannot place under 1 to 3 gets the split message (deny).
 
-A command site is a place in the text where a command could run, not one execution of it. `false && git status` has two sites and `for x in a b; do git status; done` has one. Every site is judged, whether or not the shell would reach it.
+A command site is a place in the text where a command could run, not one execution of it. `false && git status` has two sites and `for x in a b; do git status; done` has one. Every site is judged, whether or not the shell would reach it. A site inside a loop body (`for`, `while`, `until`) may run any number of times, so a site there that would use a one-time approval, reserve a delegated run or merge is denied.
+
+The intersection is taken over every shell the Bash tool may use on the machine: `/bin/zsh`, `/bin/bash` (3.2 on macOS) and a Homebrew bash when one is installed. The oracle records their versions. A form that any one of them rejects or reads differently gets the split message. `|&`, for example, is a syntax error in bash 3.2.
 
 ## Design
 
@@ -57,7 +59,7 @@ The grammar is the **intersection** of bash and zsh with default options, as the
 - **Words.** Unquoted text, `'...'`, `"..."`, `\x` outside quotes, and backslash-newline joining outside single quotes. A `$'...'` with no backslash is read as `'...'`. `$"..."` gets the split message, because bash and zsh expand it differently (`<abc>` against `<$abc>` in Codex's probe).
 - **Control operators.** These are recognized only in unquoted text, by longest match: `;`, `&&`, `||`, `|`, `|&`, `&` and newline. zsh's `&|` and `&!` get the split message before they could be read as shorter operators.
 - **Redirect operators.** These are `<`, `>`, `>>`, `>|`, `<>`, `<&`, `>&`, `&>`, `&>>`, `<<`, `<<-` and `<<<`. zsh's `>!`, `>>!`, `>&|`, `>>|` and `&>|` get the split message before they could be read as shorter operators.
-- **fd numbers.** A fd number is a redirect fd only when it is a whole unquoted run of digits, starts a word (after whitespace or an operator) and is glued to the operator that follows. In `printf x2>out`, `x2` is an argument and the redirect has no fd.
+- **fd numbers.** A fd number is a redirect fd only when it is one unquoted digit, starts a word (after whitespace or an operator) and is glued to the operator that follows. In `printf x2>out`, `x2` is an argument and the redirect has no fd. A run of two or more digits glued to a redirect operator (`12>&1`) gets the split message. bash reads it as a fd, but zsh reads `12` as an argument.
 - **Comments.** `#` starts a comment only at the start of a word, after unquoted whitespace or an operator. `echo x\ #` is one word, `x #`.
 - **Heredocs.** The delimiter word is read with its quoting, and the body runs to the delimiter line. Decision 3 covers how the body is judged.
 - **Reserved words.** These count only when unquoted and in command position: `if then elif else fi`, `while until do done`, `{ }` and `!`. `in` counts only in a `for` header.
@@ -74,7 +76,7 @@ The hook passes the list to `afk.py` through a new `check` input, `--commands-js
 - **Text values per site.** `commands_of` runs on each site's argv separately. The site boundary is fixed before any text value is extracted, so `-m`, `--body` and `--title` take a value only inside their own site. When the flag is the site's last word, it has no value, and nothing after the separator can be taken as its text. That closes `gh pr create --body; env` by construction. `text_floor`, the screening of body files, the handling of agent briefs and the inspection of an interpreter's inline code all stay behind that boundary.
 - **Redirect targets.** In every mode, each target with a path goes to the floor, using the hook's existing expansion of `~` and globs. `cat<.netrc`, `cat x<~/.n?trc` and `gh>out auth token` all floor; the program is `gh`, and `auth` follows it.
 
-  Each write, append or read-write target also needs, in `strict`, the path permission `check --paths` gives an edit-tool change of that file. It also needs, in both modes, to pass the hard-protected names that `strict` keeps (`AGENTS.afk.md*` and the constitution path). `git status > AGENTS.afk.md` denies in `strict`, as it does on main today.
+  In `strict`, every target also needs the path permission that `check --paths` gives that file, reads included. That covers the hard-protected names that `strict` keeps (`AGENTS.afk.md*` and the constitution path). `git status > AGENTS.afk.md` and `git status < /tmp/input` deny in `strict`, as both do on main today. In `open`, the ninth scoped exception applies unchanged: neither name is protected, and a target needs only the floor.
 - **Shells and code readers per site.** A shell site whose words hold no script operand reads stdin and gets the split message, whatever its redirects are. That covers `sh>out` and `sh <file`.
 - **Call-wide rules.** These run over the whole list, nested groups and redirect targets included:
   - a directory change (`cd`, `pushd`, `popd`, `chdir`) anywhere in the call, together with an unanchored glob anywhere in the call: `cd ~ && cat .ne?rc` keeps the split message;
@@ -82,7 +84,12 @@ The hook passes the list to `afk.py` through a new `check` input, `--commands-js
   - a heredoc, `<<<` or `<` that feeds a code reader (decision 3).
 - **Answer and side effects (decision 2).**
   1. Every site is judged first, and nothing is recorded yet. If any site, or a call-wide rule, denies, the call denies with that answer. Nothing is recorded: no counter, no merge pin and no approval use.
-  2. When every site is allowed, the call is recorded once. The action and run counters go up once for the call, with the kinds that `commands_of` finds over all sites. Each merge site writes its own pin, as one PR, head and repository triple. Each approval is used only by the one site whose exact subject it names. Two sites that need the same one-time approval deny the second.
+  2. When every site is allowed, the call is recorded once, with the kinds that `commands_of` finds over all sites:
+     - The action counter goes up once for the call.
+     - Each site that reserves a delegated run, such as a ledger start, reserves its own run, so two starts reserve two runs.
+     - Each merge site writes its own pin, as one PR, head and repository triple.
+     - Each approval is used only by the one site whose exact subject it names. Two sites that need the same one-time approval deny the second.
+     - A site inside a loop body that needs an approval, a run reservation or a merge denies, as the invariant says. Its count cannot be known before it runs.
 
 `--argv-json` stays unchanged for the agent's own `check` calls on Codex and Antigravity, where no hook tokenizes.
 
@@ -109,7 +116,14 @@ These stay as they are:
 These are settled when Fio answers on the pull request. Each has a recommendation; none is settled yet.
 
 1. **Accept the design: one tokenizer in the hook, judging per site, with call-wide rules.** Recommended. The alternative is to keep patching PR 352 layer by layer, which the checkpoint rule forbids after two failed corrections.
-2. **Accounting.** Recommended: judge every site before recording anything; on any denial, record nothing; otherwise record the call once, as section B sets out (counters once per call, one merge pin per merge site, an approval used by its exact subject only). Recording per site would charge `git add x && git commit -m y` twice. Recording one record for everything would let one approval cover two runs, or drop a second merge's pin.
+2. **Accounting.** Recommended: judge every site before recording anything, and on any denial record nothing. Otherwise record the call once, as section B sets out:
+   - the action counter once per call;
+   - one run reservation per run-reserving site;
+   - one merge pin per merge site;
+   - an approval used by its exact subject only;
+   - a denial for any approval, run or merge site inside a loop body.
+
+   Counting every action per site would charge `git add x && git commit -m y` twice. One record for everything would let one approval cover two runs, drop a second merge's pin or under-reserve repeated starts.
 3. **Heredoc, `<<<` and `<` input.** Recommended: the body is data only when its receiver is on a closed list of data readers. The list is `cat`, `tee`, `wc`, `head`, `tail`, `sort`, `grep`, `git commit -F -`, `git tag -F -` and `gh ... --body-file -`. Data bodies have their words scanned by the floor-by-name and floor-by-path rules. An unquoted-delimiter body, which the shell expands, also goes through the variable and substitution allowlist. For every other receiver, shells and interpreters included (`node`, `python*`, `ruby`, `perl`, `php`, `deno`, `bun`, `osascript`), the body is judged line by line as commands, as main judges it today. So `node <<'EOF'` with `console.log(process.env)` stays denied. The alternative is to treat every body as data. It removes more false denials, but it opens the interpreter hole Codex showed, and it would need the owner to accept a weaker floor.
 4. **Rule text and records.** Recommended, all in the PR that lands the code:
    - rewrite the tenth scoped exception in `CLAUDE.md` to describe the tokenizer, its command sites with assignments and redirects, the call-wide rules, redirect targets under the floor and the `strict` path permission, the accounting in decision 2 and the heredoc rule in decision 3, keeping every allowlist item;
@@ -118,8 +132,19 @@ These are settled when Fio answers on the pull request. Each has a recommendatio
 
    This is the record that lets the code land ("no code for it lands before this rule is merged").
 5. **Bundle the fixes for holes that already exist on main.** Recommended: yes. The tokenizer fixes `printenv>&2`, `cat<.netrc`, `gh>out auth token` and `echo x\ #; env` by construction, and the tests name them. Splitting them out would mean patching the layers this spec removes.
-6. **A variable assigned earlier in the same call.** Recommended: yes, in a second step after the tokenizer lands. `S=path; cat $S/x` is the most common false denial in the 18/11 review. The tokenizer can substitute a value assigned earlier in the same call when the assignment is an unquoted or single-quoted literal with no expansion, and the use is `$S` or `${S}` with no operator. Any other variable keeps the split message. The alternative is to keep `$HOME` as the only variable.
-7. **The credential base-name rule.** Recommended: apply the "floored in every use" names (such as `printenv` and `pass`) at program positions, including after wrappers, and to paths that are executable files, not to every word. On 18/11 the rule floored `cat .local-ci/<sha>/pass` and cost an e2e proof. A credential command with subcommands, and the `CREDENTIAL_PAIRS` entries, keep their reading anywhere after the program. The alternative is to keep today's rule for every word.
+6. **A variable assigned earlier in the same call.** Recommended: yes, in a second step after the tokenizer lands. `S=path; cat $S/x` is the most common false denial in the 18/11 review. The tokenizer can substitute a value assigned earlier in the same call only when every one of these holds:
+   - The assignment is an unquoted or single-quoted literal with no expansion.
+   - It is a site of its own, not a prefix to a command.
+   - It stands at the top level: not in a subshell, group, pipeline, loop or conditional.
+   - Only `;` or a newline separates it from the use. A `&&`, `||`, `&` or `|` on the way means it may not run.
+   - No site between them names the variable (`export`, `unset`, `read`, `local`, `declare`, `typeset` or a second assignment).
+   - The use is `$S` or `${S}` with no operator.
+
+   Any other variable keeps the split message. `(S=README); cat $S` and `false && S=README; cat $S` therefore stay denied: the shell would read the inherited value. The alternative is to keep `$HOME` as the only variable.
+7. **The credential base-name rule.** Recommended: apply the "floored in every use" names (such as `printenv` and `pass`) to every word that something will execute, not to every word. That means:
+   - the program position, including after wrappers;
+   - an interpreter's script operand: the first operand after the options of `python*`, `node`, `ruby`, `perl`, `php`, a shell, `deno run` or `bun run`, so `python3 /tmp/pass` floors whatever its execute permission;
+   - any path that is an executable file. On 18/11 the rule floored `cat .local-ci/<sha>/pass` and cost an e2e proof. A credential command with subcommands, and the `CREDENTIAL_PAIRS` entries, keep their reading anywhere after the program. The alternative is to keep today's rule for every word.
 
 ## Open, not the owner's
 
@@ -131,7 +156,10 @@ These are settled when Fio answers on the pull request. Each has a recommendatio
 - **Oracle test (the deterministic root-cause test).** It compares the tokenizer with the two shells on command sites and file openings. The run is isolated:
   - Only corpus entries the tokenizer accepts are run. An entry expected to get the split message, the floor or `unsafe` is checked by the tokenizer and the hook only, never by a shell. That keeps `eval`, `source`, absolute program paths and shell option changes out of execution.
   - Each accepted entry runs under real `bash --noprofile --norc` and `zsh -f`, through `sandbox-exec` with a profile that allows file reads and writes only inside a fresh temporary folder (plus the shell binaries and system libraries it needs) and denies network. It runs under `env -i HOME=<tmp>/home PATH=<tmp>/stubs`, with a CPU and wall-clock limit of 5 seconds. Every program name in the entry must resolve to a stub in `<tmp>/stubs`, otherwise the harness refuses it.
-  - Command sites: each stub records its name and argv. Corpus entries for the execution check are straight-line: every site runs exactly once, using `true &&` and never `false &&`, and loops have one-word lists. Conditional and repeated sites are covered by structure tests, where the tokenizer's site list for an entry must equal a hand-written expectation, and by a one-pass variant run through the oracle.
+  - Command sites: each stub records its name and argv.
+    - Shell builtins (`true`, `false`, `echo`, `printf`, `pwd`, `test`, `[`, `cd`, `pushd`, `popd`, `read`, `export` and the rest) run before a `PATH` lookup, so no stub sees them. The execution corpus therefore names only programs that are not builtins in either shell, such as `ok`, `git`, `gh`, `cat` and `grep` stubs.
+    - Entries are straight-line: every site runs exactly once, using `ok &&` in place of `true &&`, and loops have one-word lists.
+    - Builtins, directory changes, conditional sites and repeated sites are covered by structure tests, where the tokenizer's site list for an entry must equal a hand-written expectation, and by the hook tests below.
   - File openings: each output target is a path in the temporary folder, checked by its existence after the run. Each input target is a named pipe that the harness opens for writing without blocking, so it records whether a reader opened it. `cat <a <b` therefore shows both openings.
   - An entry where bash and zsh differ in sites or openings must get the split message.
   - The corpus starts with every case in "Why", every case in `afk-check-hook.md` "Verification", PR 352's tests and the false denials from the 18/11 review.
@@ -139,7 +167,10 @@ These are settled when Fio answers on the pull request. Each has a recommendatio
   - These are silent: `ls /tmp; git status`, `ls /tmp ; pwd ""`, `git status 2>&1 | head`, `grep -E "a|b" f`, `codex exec -s read-only x`, and a heredoc commit message holding `;` fed to `git commit -F -`.
   - These deny with `floor` or the split message, as the oracle predicts: `gh pr create --body; env`, `git commit -m; env`, `true; 2>&1 env`, `printenv>&2`, `cat<.netrc`, `gh>out auth token`, `echo x\ #; env`, `printf x | sh>out`, `cd ~ && cat .ne?rc`, `node <<'EOF'` with `process.env`, and `$"abc"`.
   - The assignment-guard case denies: `GIT_CONFIG_COUNT=1 ... git push origin`.
-  - In `strict`, `git status > AGENTS.afk.md` denies.
+  - In `strict`, `git status > AGENTS.afk.md` and `git status < /tmp/input` deny. In `open`, `git status > AGENTS.afk.md` is silent, as the ninth exception says.
+  - `printf x 12>&1` gets the split message.
+  - With one outstanding approval, `for x in a b; do make task; done` denies. Two ledger starts in one call reserve two runs.
+  - Under decision 6, `(S=README); cat $S` and `false && S=README; cat $S` keep the split message. Under decision 7, `python3 /tmp/pass` floors.
   - The present tests stay green, or a changed expectation names the decision behind it.
 - **afk.py tests** for `--commands-json`:
   - a denied site records nothing;
