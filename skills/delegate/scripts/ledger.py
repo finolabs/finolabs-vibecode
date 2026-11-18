@@ -1103,8 +1103,18 @@ def lease_lock():
         yield
 
 
-def unchanged(sweep, info, path, default, place, cwd):
-    """None when the worktree at `path` still has the head, branch and state that proved it a candidate."""
+def place_now(sweep, path, main_checkout):
+    """Where `path` lies among the worktrees registered right now (a worktree registered inside it later counts)."""
+    entries = sweep.worktrees(main_checkout)
+    return sweep.nesting(path, main_checkout, [entry["path"] for entry in entries[1:]])
+
+
+def unchanged(sweep, info, path, default, main_checkout, cwd):
+    """None when the worktree at `path` still has the head, branch and state that proved it a candidate, and no
+    worktree registered since lies inside it or around it."""
+    place = place_now(sweep, path, main_checkout)
+    if place:
+        return place
     fresh = inspect(sweep, {"path": path, **({"locked": ""} if info["locked"] else {})}, default, forge=False)
     if fresh["head"] != info["head"] or fresh["branch"] != info["branch"]:
         return "its HEAD moved"
@@ -1124,7 +1134,7 @@ def claim(sweep, info, default, place, cwd, main_checkout):
     from record import checkout_identity
     path = info["path"]
     resumed = os.path.basename(path).startswith(RETIRING)
-    reason = unchanged(sweep, info, path, default, place, cwd)  # the slow reads, before any lock is held
+    reason = unchanged(sweep, info, path, default, main_checkout, cwd)  # the slow reads, before any lock
     if reason:
         return reason, None
     with finish_lock():
@@ -1268,15 +1278,17 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
                 lines.append(f"ledger: kept worktree {shown} ({reason})")
                 continue
             replaced = "the worktree at its retiring path is not the one claimed"
-            moved_place = sweep.nesting(moved, main_checkout, [p if p != info["path"] else moved for p in linked])
             try:
                 reason = replaced if checkout_instance(moved) != info.get("instance") else \
-                    unchanged(sweep, info, moved, default, moved_place, cwd)
+                    unchanged(sweep, info, moved, default, main_checkout, cwd)
                 if reason is None:
                     size = sweep.human(sweep.size_on_disk(moved))
-                    # The last check before the removal: the claimed instance is still the one at this path.
+                    # The last checks before the removal: the claimed instance is still the one at this path, and
+                    # no worktree was registered inside it meanwhile.
                     if checkout_instance(moved) != info.get("instance"):
                         reason = replaced
+                    elif place_now(sweep, moved, main_checkout):
+                        reason = place_now(sweep, moved, main_checkout)
                     else:
                         done = sweep.git(main_checkout, "worktree", "remove", "--", moved)
                         reason = None if done.returncode == 0 else "git refused the removal"
@@ -1294,7 +1306,7 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
                 lines.append(f"ledger: kept worktree {shown} ({replaced})")
                 continue
             if reason:
-                line, restored = put_back(sweep, main_checkout, info["path"], moved, shown, reason)
+                line, restored = put_back(sweep, main_checkout, info["path"], moved, shown, reason, info.get("instance"))
                 lines.append(line)
                 if restored:
                     drop_claim(moved)
@@ -1318,16 +1330,25 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
     return lines, failed
 
 
-def put_back(sweep, main_checkout, original, moved, shown, reason):
+def put_back(sweep, main_checkout, original, moved, shown, reason, instance):
     """(report line, restored): move a claimed worktree that may not be removed back to its old path, when that path is free."""
     if original == moved:
         return f"ledger: kept worktree {shown} ({reason})", False
-    try:
-        if not os.path.lexists(original) and \
-                sweep.git(main_checkout, "worktree", "move", "--", moved, original).returncode == 0:
-            return f"ledger: kept worktree {shown} ({reason})", True
-    except Exception:
-        pass
+    if not os.path.lexists(original):
+        try:
+            if sweep.git(main_checkout, "worktree", "move", "--", moved, original).returncode == 0:
+                return f"ledger: kept worktree {shown} ({reason})", True
+        except Exception:
+            pass
+        # The reverse move may have renamed the folder before it failed: register it where it now is.
+        if os.path.isdir(original) and not os.path.lexists(moved) and checkout_instance(original) == instance:
+            try:
+                if sweep.git(main_checkout, "worktree", "repair", "--", original).returncode == 0:
+                    return f"ledger: kept worktree {shown} ({reason})", True
+            except Exception:
+                pass
+            escaped = original.encode("unicode_escape").decode("ascii")
+            return f"ledger: kept worktree {shown} ({reason}); it is back at {escaped} but git could not record it", False
     escaped = moved.encode("unicode_escape").decode("ascii")
     return f"ledger: kept worktree {shown} ({reason}); it could not be moved back and stays at {escaped}", False
 

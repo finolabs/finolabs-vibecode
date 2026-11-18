@@ -535,6 +535,52 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertTrue(Path(aside[0][:-len("-aside")]).is_dir(), lines)
         self.assertTrue(any("stays at" in line for line in lines), lines)
 
+    def test_a_worktree_registered_inside_after_inspection_keeps_both(self):
+        path = self.worktree("feat-nw")
+        self.dispatch(path)
+        common = Path(self.git(self.main, "rev-parse", "--git-common-dir").stdout.strip())
+        common = common if common.is_absolute() else self.main / common
+        (common / "info").mkdir(exist_ok=True)
+        with (common / "info" / "exclude").open("a") as handle:
+            handle.write("nested/\n")  # ignored, so the outer worktree stays clean
+        ledger, sweep = self.load_ledger()
+        real_size = sweep.size_on_disk
+        nested = []
+
+        def size_on_disk(target):
+            if ".fnl-retiring-" in str(target) and not nested:
+                nested.append(Path(target) / "nested")
+                self.git(self.main, "worktree", "add", "-q", "--no-track", "-b", "feat-nw2", str(nested[0]),
+                         "origin/main")
+            return real_size(target)
+
+        with mock.patch.object(sweep, "size_on_disk", size_on_disk):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue((path / "nested" / "README.md").exists(), lines)  # moved back with the outer worktree
+        self.assertTrue(any("holds another worktree" in line for line in lines), lines)
+
+    def test_a_reverse_move_that_fails_half_way_is_repaired(self):
+        path = self.worktree("feat-rh")
+        self.dispatch(path)
+        ledger, sweep = self.load_ledger()
+        real = sweep.git
+
+        def git(checkout, *args, **kwargs):
+            if args[:2] == ("worktree", "remove"):
+                return subprocess.CompletedProcess(args, 1, "", "")
+            if args[:2] == ("worktree", "move") and ".fnl-retiring-" in args[-2]:
+                os.rename(args[-2], args[-1])  # renamed back, then git failed before recording it
+                raise subprocess.TimeoutExpired("git", 60)
+            return real(checkout, *args, **kwargs)
+
+        with mock.patch.object(sweep, "git", git):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue(path.exists(), lines)
+        self.assertEqual(self.retiring(), [])
+        listed = self.git(self.main, "worktree", "list", "--porcelain").stdout
+        self.assertIn("worktree " + str(path.resolve()) + "\n", listed)  # git records it at its old path again
+        self.assertNotIn(".fnl-retiring-", listed)
+
     def test_a_failed_move_is_undone(self):
         path = self.worktree("feat-fm")
         self.dispatch(path)
