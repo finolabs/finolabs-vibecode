@@ -973,6 +973,71 @@ def open_checkouts():
             {s.get("checkout_id") for i, s in starts.items() if i not in finishes} - {None})
 
 
+def finished_starts():
+    """{checkout_id: [start time of each finished dispatch]}, as epoch seconds."""
+    starts, finishes = load()
+    found = defaultdict(list)
+    for dispatch_id, start in starts.items():
+        if dispatch_id in finishes and start.get("checkout_id"):
+            try:
+                found[start["checkout_id"]].append(datetime.fromisoformat(start["ts"]).timestamp())
+            except (KeyError, TypeError, ValueError):
+                continue
+    return found
+
+
+def created(sweep, path):
+    """When git registered this worktree: the birth (else change) time of its admin folder's `commondir` file,
+    which `git worktree add` writes once and a move never rewrites; None when it cannot be read."""
+    admin = sweep.git_out(path, "rev-parse", "--absolute-git-dir")
+    if not admin:
+        return None
+    try:
+        info = os.stat(os.path.join(admin, "commondir"), follow_symlinks=False)
+    except OSError:
+        return None
+    return getattr(info, "st_birthtime", None) or info.st_ctime
+
+
+def owned(sweep, path, identity, finished):
+    """True when a finished dispatch named this very worktree: one started on its path after git registered it.
+
+    The identity is a path digest, so a worktree cut later at the same path shares it; the registration time
+    tells the two apart."""
+    made = created(sweep, path)
+    return made is not None and any(started >= int(made) - 1 for started in finished.get(identity, ()))
+
+
+CLAIM = "worktree-claim-"  # + the sha256 of the path a claim renamed a worktree to, in the private state folder
+
+
+def claim_name(moved):
+    return CLAIM + hashlib.sha256(os.fsencode(moved)).hexdigest()
+
+
+def write_claim(moved):
+    with dr.data_folder("state", create=True, private=True) as state:
+        os.close(os.open(claim_name(moved), os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600,
+                         dir_fd=state))
+
+
+def drop_claim(moved):
+    try:
+        with dr.data_folder("state", create=True, private=True) as state:
+            os.unlink(claim_name(moved), dir_fd=state)
+    except FileNotFoundError:
+        pass
+
+
+def has_claim(moved):
+    with dr.data_folder("state", create=True, private=True) as state:
+        try:
+            os.stat(claim_name(moved), dir_fd=state, follow_symlinks=False)
+            return True
+        except FileNotFoundError:
+            return False
+
+
 @contextmanager
 def cleaner_lock(wait):
     """One cleanup at a time on the machine, by hand or in the background. Yields False when another holds it
@@ -1045,21 +1110,27 @@ def claim(sweep, info, default, place, cwd, main_checkout):
     a `start` there in any spelling finds nothing to record, and a worktree cut there later is a new checkout."""
     from record import checkout_identity
     path = info["path"]
+    resumed = os.path.basename(path).startswith(RETIRING)
+    reason = unchanged(sweep, info, path, default, place, cwd)  # the slow reads, before any lock is held
+    if reason:
+        return reason, None
     with finish_lock():
         with lease_lock():
             if lease_live():
                 return "an away lease started", None
-            if not os.path.basename(path).startswith(RETIRING):
-                _, running = open_checkouts()
-                if checkout_identity(path) in running:
-                    return "a dispatch started on it", None
-            reason = unchanged(sweep, info, path, default, place, cwd)
-            if reason:
-                return reason, None
-            if os.path.basename(path).startswith(RETIRING):
+            _, running = open_checkouts()
+            if checkout_identity(path) in running:
+                return "a dispatch started on it", None
+            if resumed:
+                if not has_claim(path):
+                    return "no claim of this cleanup names it", None
                 return None, path  # renamed by an earlier run that stopped before removing it
+            if sweep.git_out(path, "rev-parse", "--verify", "HEAD^{commit}") != info["head"]:
+                return "its HEAD moved", None
             target = os.path.join(os.path.dirname(path), RETIRING + secrets.token_hex(6))
+            write_claim(target)
             if sweep.git(main_checkout, "worktree", "move", "--", path, target).returncode != 0:
+                drop_claim(target)
                 return "git refused to move it", None
     return None, target
 
@@ -1068,11 +1139,13 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
     """Remove the linked worktrees of finished dispatches whose branch merged; return (lines, failed).
 
     A worktree is examined only when its identity (`record.checkout_identity`, the digest `start` stored) is the
-    checkout_id of a finished dispatch and of no open one, or when an earlier run renamed it for removal and
-    stopped. Cheap facts come first: worktrees whose merge local ancestry proves are taken before those that
+    checkout_id of no open dispatch and of a finished one that started after git registered this worktree (so a
+    worktree cut later at the same path is not taken for it), or when this cleanup's own claim record names it
+    after an earlier run renamed it and stopped. Cheap facts come first: worktrees whose merge local ancestry proves are taken before those that
     need the forge, and those are shuffled, so repeated runs get past a slow one. A candidate is claimed and
     renamed (`claim`), checked again in its new place, then removed with `git worktree remove` (never forced)
-    and `git branch -d`. Nothing is claimed under a live away lease. Stores nothing."""
+    and `git branch -d`. Nothing is claimed under a live away lease. Stores only one claim record per renamed worktree, a digest
+    of its new path in the private state folder, deleted when that worktree is removed or put back."""
     if cleanup_mode() == "off":
         return [], False
     if lease_live():
@@ -1082,8 +1155,8 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
         import random
         import worktree_sweep as sweep
         from record import checkout_identity
-        finished, running = open_checkouts()
-        ours = finished - running
+        _, running = open_checkouts()
+        finished = finished_starts()
         entries = sweep.worktrees(checkout)
         main_checkout = entries[0]["path"]
         default = sweep.default_ref(main_checkout)
@@ -1096,9 +1169,15 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
     for entry in entries[1:]:
         shown = entry["path"].encode("unicode_escape").decode("ascii")
         try:
-            resumed = os.path.basename(entry["path"]).startswith(RETIRING)
-            if not os.path.isdir(entry["path"]) or not (resumed or checkout_identity(entry["path"]) in ours):
+            if not os.path.isdir(entry["path"]):
                 continue
+            if os.path.basename(entry["path"]).startswith(RETIRING):
+                if not has_claim(entry["path"]):
+                    continue  # a folder name alone authorizes nothing
+            else:
+                identity = checkout_identity(entry["path"])
+                if identity in running or not owned(sweep, entry["path"], identity, finished):
+                    continue
             info = inspect(sweep, entry, default, forge=False)
             place = sweep.nesting(info["path"], main_checkout, linked)
             reason = sweep.reason_not_candidate(info, place, cwd)
@@ -1149,13 +1228,16 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
                     size = sweep.human(sweep.size_on_disk(moved))
                     done = sweep.git(main_checkout, "worktree", "remove", "--", moved)
                     reason = None if done.returncode == 0 else "git refused the removal"
+                failed = failed or reason is not None
             except Exception as error:
                 failed = True
                 reason = "the removal failed: " + type(error).__name__
             if reason:
                 lines.append(put_back(sweep, main_checkout, info["path"], moved, shown, reason))
                 failed = failed or "could not be moved back" in lines[-1]
+                drop_claim(moved)  # whatever happened, the name alone never authorizes a later removal
                 continue
+            drop_claim(moved)
             removed += 1
             branch = info["branch"].encode("unicode_escape").decode("ascii")
             lines.append(f"ledger: removed worktree {shown} ({size}), branch {branch}")

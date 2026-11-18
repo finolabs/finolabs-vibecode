@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -333,13 +334,47 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertEqual(self.retiring(), [])
         self.assertTrue(any("its HEAD moved" in line for line in lines), lines)
 
-    def test_a_run_that_stopped_after_the_rename_is_finished(self):
-        path = self.worktree("feat-rs")
+    def stopped_after_rename(self, name):
+        """A worktree a cleanup renamed (claim record written) before it stopped."""
+        path = self.worktree(name)
         self.dispatch(path)
-        self.git(self.main, "worktree", "move", str(path), str(path.parent / ".fnl-retiring-0123456789ab"))
+        moved = path.parent / ".fnl-retiring-0123456789ab"
+        ledger, _ = self.load_ledger()
+        ledger.write_claim(str(moved))
+        self.git(self.main, "worktree", "move", str(path), str(moved))
+        return moved
+
+    def test_a_run_that_stopped_after_the_rename_is_finished(self):
+        self.stopped_after_rename("feat-rs")
         out = self.ledger_run("clean-worktrees")
         self.assertEqual(self.retiring(), [], out.stderr)
         self.assertIn("1 removed", out.stderr)
+
+    def test_a_retiring_name_without_a_claim_record_stays(self):
+        path = self.worktree("feat-nc")
+        self.dispatch(path)
+        moved = path.parent / ".fnl-retiring-feedfacecafe"
+        self.git(self.main, "worktree", "move", str(path), str(moved))
+        out = self.ledger_run("clean-worktrees")
+        self.assertTrue(moved.exists(), out.stderr)
+        self.assertIn("0 removed", out.stderr)
+
+    def test_an_open_dispatch_on_a_resumed_worktree_keeps_it(self):
+        moved = self.stopped_after_rename("feat-od")
+        self.dispatch(moved, finish=False)
+        out = self.ledger_run("clean-worktrees")
+        self.assertTrue(moved.exists(), out.stderr)
+        self.assertIn("a dispatch started on it", out.stderr)
+
+    def test_a_replacement_at_a_finished_path_is_not_owned(self):
+        path = self.worktree("feat-rp")
+        self.dispatch(path)
+        self.git(self.main, "worktree", "remove", str(path))
+        time.sleep(2.1)  # the replacement is registered well after the finished dispatch started
+        self.git(self.main, "worktree", "add", "-q", "--no-track", "-b", "feat-rp2", str(path), "origin/main")
+        out = self.ledger_run("clean-worktrees")
+        self.assertTrue(path.exists(), out.stderr)
+        self.assertIn("0 removed", out.stderr)
 
     def test_a_hand_run_waits_for_a_running_cleanup(self):
         ledger, _ = self.load_ledger()
@@ -400,7 +435,8 @@ class WorktreeCleanTest(unittest.TestCase):
             return real(checkout, *args, **kwargs)
 
         with mock.patch.object(sweep, "git", git):
-            lines, _ = ledger.clean_worktrees(str(self.main))
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue(failed)  # a hand run exits 1
         self.assertTrue(path.exists())
         self.assertTrue(any("git refused the removal" in line for line in lines), lines)
         self.assertEqual(self.retiring(), [])
