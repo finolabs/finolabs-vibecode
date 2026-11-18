@@ -503,6 +503,11 @@
           "id": "0.3.3/afk-check-hook-removed",
           "kind": "removed",
           "text": "Claude Code: the afk check hook is gone and FNL_AFK_HOOK no longer does anything; under a lease the agent runs afk.py check itself and your host's permissions do the blocking."
+        },
+        {
+          "id": "0.3.3/instructions-conflict-scan",
+          "kind": "info",
+          "text": "/setup instructions now flags lines in your instruction files that stop afk or delegate (merge only where you said so, own away rules, machine facts) and proposes fixes."
         }
       ]
     }
