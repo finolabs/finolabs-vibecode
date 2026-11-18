@@ -402,7 +402,7 @@ class WorktreeCleanTest(unittest.TestCase):
         stranded = self.retiring()
         self.assertEqual(len(stranded), 1, lines)
         self.assertTrue(any("stays at" in line for line in lines), lines)
-        self.assertTrue(ledger.has_claim(str(stranded[0])))  # a later run can still finish it
+        self.assertIsNotNone(ledger.has_claim(str(stranded[0])))  # a later run can still finish it
 
     def test_a_replacement_after_the_claim_is_left_alone(self):
         path = self.worktree("feat-ra")
@@ -464,10 +464,50 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertTrue(failed)
         stranded = self.retiring()
         self.assertEqual(len(stranded), 1, lines)
-        self.assertTrue(ledger.has_claim(str(stranded[0])))
+        self.assertIsNotNone(ledger.has_claim(str(stranded[0])))
         out = self.ledger_run("clean-worktrees")
         self.assertEqual(self.retiring(), [], out.stderr)
         self.assertIn("1 removed", out.stderr)
+
+    def test_a_swap_right_after_the_claim_check_is_left_alone(self):
+        moved = self.stopped_after_rename("feat-rc")
+        ledger, _ = self.load_ledger()
+        real_has_claim = ledger.has_claim
+        calls = []
+
+        def has_claim(target):
+            found = real_has_claim(target)
+            calls.append(target)
+            if found and len(calls) == 2:  # in the claim: swapped for another instance, same branch and head
+                self.git(self.main, "worktree", "remove", str(moved))
+                self.git(self.main, "worktree", "add", "-q", str(moved), "feat-rc")
+            return found
+
+        with mock.patch.object(ledger, "has_claim", has_claim):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue(failed)
+        self.assertTrue(moved.exists(), lines)
+        self.assertTrue(any("not the one claimed" in line for line in lines), lines)
+
+    def test_a_swap_during_a_failed_recheck_is_never_moved(self):
+        path = self.worktree("feat-fr")
+        self.dispatch(path)
+        other = self.worktree("feat-fr2", merge=False)
+        ledger, _ = self.load_ledger()
+        real_unchanged = ledger.unchanged
+
+        def unchanged(sweep, info, target, *args):
+            if ".fnl-retiring-" in str(target):  # the claimed worktree leaves; another one is swapped in
+                self.git(self.main, "worktree", "remove", str(target))
+                self.git(self.main, "worktree", "move", str(other), str(target))
+                return "dirty"
+            return real_unchanged(sweep, info, target, *args)
+
+        with mock.patch.object(ledger, "unchanged", unchanged):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue(failed)
+        self.assertFalse(path.exists(), lines)  # the swapped-in worktree was not moved to the old path
+        self.assertEqual(len(self.retiring()), 1, lines)
 
     def test_a_failed_move_is_undone(self):
         path = self.worktree("feat-fm")

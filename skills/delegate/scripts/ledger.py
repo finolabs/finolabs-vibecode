@@ -1035,17 +1035,18 @@ def drop_claim(moved):
 
 
 def has_claim(moved):
-    """True when this cleanup's claim record names the worktree now at `moved`: same new path and same instance."""
+    """The instance this cleanup's claim record names when it is the worktree now at `moved` (same new path and
+    same instance), else None. Callers keep this value: a later read could see a worktree swapped in meanwhile."""
     instance = checkout_instance(moved)
     if instance is None:
-        return False
+        return None
     with dr.data_folder("state", create=True, private=True) as state:
         try:
             fd = os.open(claim_name(moved), os.O_RDONLY | os.O_NOFOLLOW, dir_fd=state)
         except FileNotFoundError:
-            return False
+            return None
         try:
-            return os.read(fd, 128).decode("ascii", "replace") == instance
+            return instance if os.read(fd, 128).decode("ascii", "replace") == instance else None
         finally:
             os.close(fd)
 
@@ -1134,9 +1135,10 @@ def claim(sweep, info, default, place, cwd, main_checkout):
             if checkout_identity(path) in running:
                 return "a dispatch started on it", None
             if resumed:
-                if not has_claim(path):
+                claimed = has_claim(path)
+                if claimed is None:
                     return "no claim of this cleanup names it", None
-                info["instance"] = checkout_instance(path)
+                info["instance"] = claimed  # the instance the claim names, never a fresh read
                 return None, path  # renamed by an earlier run that stopped before removing it
             if sweep.git_out(path, "rev-parse", "--verify", "HEAD^{commit}") != info["head"]:
                 return "its HEAD moved", None
@@ -1281,6 +1283,11 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
             if reason == replaced:
                 drop_claim(moved)  # never remove or move another worktree
                 lines.append(f"ledger: kept worktree {shown} ({reason})")
+                continue
+            if reason and checkout_instance(moved) != info.get("instance"):
+                drop_claim(moved)  # swapped in during the checks: never move another worktree
+                failed = True
+                lines.append(f"ledger: kept worktree {shown} ({replaced})")
                 continue
             if reason:
                 line, restored = put_back(sweep, main_checkout, info["path"], moved, shown, reason)
