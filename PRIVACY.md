@@ -41,7 +41,7 @@ usage events; purge removes them. The refresh builders enforce these bounds and 
 
 `parallel_slots.py` reads the repository's approved total (1–32, default 3 when never configured, unknown when an approved settings file broke), optional per-family caps and open ledger starts. It writes nothing. Refresh projects `running.parallel_limit`, `running.family_slots` and `running.parallel_source` into overwritten local `data.js`; these are fixed family names, bounded counts/caps and a closed source word, never event fields. Purge removes the dashboard copy and leaves host config/ledger intact. Checks are advisory snapshots, not reservations; ledger starts do not enforce caps. See the [parallel-slots contract](docs/specs/parallel-instances.md).
 
-The `delegate` worktree cleanup (`ledger.py clean-worktrees`, run in the background by `start`, `finish` and the merge notice) writes one empty marker per worktree it is removing, `<data root>/state/worktree-retiring-<digest>`, where the digest is the SHA-256 of the worktree's resolved path, the same value the ledger already keeps as `checkout_id`. It holds no path or branch, is deleted when that removal ends, and stops counting after 30 minutes. A single lock file, `state/worktree-clean.lock`, keeps one background run at a time. Nothing is sent anywhere.
+The `delegate` worktree cleanup (`ledger.py clean-worktrees`, run in the background by `start`, `finish` and the merge notice) stores nothing of its own beyond one lock file, `<data root>/state/worktree-clean.lock`, that keeps one cleanup at a time. Before removing a worktree it renames it to `.fnl-retiring-<random>` in the same folder. Nothing is sent anywhere.
 
 ## Project settings
 

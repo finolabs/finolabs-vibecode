@@ -76,7 +76,8 @@ class WorktreeCleanTest(unittest.TestCase):
     def ledger_run(self, *args, env=None, code=0):
         result = subprocess.run([sys.executable, "-I", str(LEDGER), *args], capture_output=True, text=True,
                                 env=env or self.env, cwd=self.main)
-        self.assertEqual(result.returncode, code, result.stderr)
+        if code is not None:
+            self.assertEqual(result.returncode, code, result.stderr)
         return result
 
     def dispatch(self, checkout, *, finish=True):
@@ -244,38 +245,6 @@ class WorktreeCleanTest(unittest.TestCase):
 
     # -- the claim
 
-    def markers(self):
-        state = self.home / ".finolabs/vibecode/state"
-        return sorted(p.name for p in state.glob("worktree-retiring-*")) if state.is_dir() else []
-
-    def mark(self, path):
-        ledger, _ = self.load_ledger()
-        ledger.mark_retiring(ledger.path_digest(path))
-
-    def test_start_refuses_a_checkout_that_is_being_removed(self):
-        path = self.worktree("feat-r")
-        self.mark(path)
-        out = self.ledger_run(*START, "--checkout", str(path), code=1)
-        self.assertIn("being removed", out.stderr)
-        self.assertNotIn('"start"', self.ledger.read_text() if self.ledger.exists() else "")
-
-    def test_start_refuses_while_git_is_deleting_the_worktree(self):
-        # Mid-removal: the worktree's git link is gone, so git no longer sees a checkout there.
-        path = self.worktree("feat-x")
-        self.mark(path)
-        (path / ".git").unlink()
-        (path / "sub").mkdir()
-        out = self.ledger_run(*START, "--checkout", str(path / "sub"), code=1)
-        self.assertIn("being removed", out.stderr)
-
-    def test_an_old_marker_stops_refusing(self):
-        path = self.worktree("feat-y")
-        self.mark(path)
-        state = self.home / ".finolabs/vibecode/state"
-        for marker in state.glob("worktree-retiring-*"):
-            os.utime(marker, (1, 1))
-        self.ledger_run(*START, "--checkout", str(path))
-
     def claimable(self, name):
         path = self.worktree(name)
         self.dispatch(path)
@@ -286,33 +255,104 @@ class WorktreeCleanTest(unittest.TestCase):
         info = ledger.inspect(sweep, entry, default, forge=False)
         return path, ledger, sweep, info, default
 
+    def claim(self, ledger, sweep, info, default):
+        return ledger.claim(sweep, info, default, None, sweep.spellings(str(self.base)), str(self.main))
+
+    def retiring(self):
+        return sorted((self.main / ".wt").glob(".fnl-retiring-*"))
+
     def test_a_moved_head_is_not_claimed(self):
         path, ledger, sweep, info, default = self.claimable("feat-s")
         (path / "more.txt").write_text("more\n")
         self.git(path, "add", "more.txt")
         self.git(path, "commit", "-q", "-m", "More")
         self.git(path, "push", "-q", "origin", "feat-s")
-        reason = ledger.claim(sweep, info, default, None, sweep.spellings(str(self.base)))
-        self.assertEqual(reason, "its HEAD moved")
+        self.assertEqual(self.claim(ledger, sweep, info, default), ("its HEAD moved", None))
+        self.assertTrue(path.exists())
 
     def test_a_dispatch_started_after_inspection_is_not_claimed(self):
         path, ledger, sweep, info, default = self.claimable("feat-m")
         self.ledger_run(*START, "--checkout", str(path))
-        reason = ledger.claim(sweep, info, default, None, sweep.spellings(str(self.base)))
-        self.assertEqual(reason, "a dispatch started on it")
+        self.assertEqual(self.claim(ledger, sweep, info, default), ("a dispatch started on it", None))
+        self.assertTrue(path.exists())
 
     def test_a_lease_started_after_inspection_is_not_claimed(self):
         path, ledger, sweep, info, default = self.claimable("feat-n")
         with mock.patch.object(ledger, "lease_live", return_value=True):
-            reason = ledger.claim(sweep, info, default, None, sweep.spellings(str(self.base)))
-        self.assertEqual(reason, "an away lease started")
-        self.assertEqual(self.markers(), [])
+            reason = self.claim(ledger, sweep, info, default)
+        self.assertEqual(reason, ("an away lease started", None))
+        self.assertTrue(path.exists())
+        self.assertEqual(self.retiring(), [])
 
-    def test_a_claim_writes_the_marker_that_start_refuses(self):
+    def test_a_claim_renames_the_worktree_away_from_its_path(self):
         path, ledger, sweep, info, default = self.claimable("feat-t")
-        self.assertIsNone(ledger.claim(sweep, info, default, None, sweep.spellings(str(self.base))))
-        out = self.ledger_run(*START, "--checkout", str(path), code=1)
-        self.assertIn("being removed", out.stderr)
+        reason, moved = self.claim(ledger, sweep, info, default)
+        self.assertIsNone(reason)
+        self.assertFalse(path.exists())
+        self.assertEqual([Path(moved)], self.retiring())
+        # A start on the old path, in any spelling, finds no checkout to attach to the claimed worktree.
+        from record import checkout_identity
+        claimed = checkout_identity(moved)
+        for spelling in (path, Path(str(path).swapcase())):
+            self.ledger_run(*START, "--checkout", str(spelling), code=None)
+        self.assertNotIn(claimed, self.ledger.read_text())
+
+    def test_a_worktree_cut_at_a_claimed_path_is_left_alone(self):
+        path, ledger, sweep, info, default = self.claimable("feat-u2")
+        reason, moved = self.claim(ledger, sweep, info, default)
+        self.assertIsNone(reason)
+        # A new worktree at the old path, with an open dispatch and an unpushed commit.
+        self.git(self.main, "worktree", "add", "-q", "--no-track", "-b", "feat-u3", str(path), "origin/main")
+        (path / "new.txt").write_text("new\n")
+        self.git(path, "add", "new.txt")
+        self.git(path, "commit", "-q", "-m", "New")
+        self.dispatch(path, finish=False)
+        out = self.ledger_run("clean-worktrees")
+        self.assertFalse(Path(moved).exists(), out.stderr)  # the run that stopped is finished
+        self.assertTrue((path / "new.txt").exists())
+        self.assertIn("1 removed", out.stderr)
+
+    def test_a_head_moved_after_the_claim_is_put_back(self):
+        path = self.worktree("feat-hm")
+        self.dispatch(path)
+        ledger, sweep = self.load_ledger()
+        real = sweep.git
+
+        def git(checkout, *args, **kwargs):
+            done = real(checkout, *args, **kwargs)
+            if args[:2] == ("worktree", "move") and done.returncode == 0:
+                moved = Path(args[-1])
+                (moved / "late.txt").write_text("late\n")
+                self.git(moved, "add", "late.txt")
+                self.git(moved, "commit", "-q", "-m", "Late")
+            return done
+
+        with mock.patch.object(sweep, "git", git):
+            lines, _ = ledger.clean_worktrees(str(self.main))
+        self.assertTrue((path / "late.txt").exists(), lines)
+        self.assertEqual(self.retiring(), [])
+        self.assertTrue(any("its HEAD moved" in line for line in lines), lines)
+
+    def test_a_run_that_stopped_after_the_rename_is_finished(self):
+        path = self.worktree("feat-rs")
+        self.dispatch(path)
+        self.git(self.main, "worktree", "move", str(path), str(path.parent / ".fnl-retiring-0123456789ab"))
+        out = self.ledger_run("clean-worktrees")
+        self.assertEqual(self.retiring(), [], out.stderr)
+        self.assertIn("1 removed", out.stderr)
+
+    def test_a_hand_run_waits_for_a_running_cleanup(self):
+        ledger, _ = self.load_ledger()
+        args = ledger.build_parser().parse_args(["clean-worktrees"])
+        with mock.patch.object(ledger, "CLEAN_LOCK_WAIT", 0.2), ledger.cleaner_lock(0) as held:
+            self.assertTrue(held)
+            import contextlib
+            import io
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as stop:
+                args.func(args)
+        self.assertEqual(stop.exception.code, 1)
+        self.assertIn("another worktree cleanup is running", err.getvalue())
 
     # -- failures
 
@@ -348,7 +388,7 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertTrue(any(line.startswith("ledger: removed worktree") for line in lines), lines)
         self.assertTrue(any("branch deletion failed" in line for line in lines), lines)
 
-    def test_a_refused_removal_drops_the_marker(self):
+    def test_a_refused_removal_puts_the_worktree_back(self):
         path = self.worktree("feat-v")
         self.dispatch(path)
         ledger, sweep = self.load_ledger()
@@ -363,10 +403,10 @@ class WorktreeCleanTest(unittest.TestCase):
             lines, _ = ledger.clean_worktrees(str(self.main))
         self.assertTrue(path.exists())
         self.assertTrue(any("git refused the removal" in line for line in lines), lines)
-        self.assertEqual(self.markers(), [])
+        self.assertEqual(self.retiring(), [])
         self.ledger_run(*START, "--checkout", str(path))  # the checkout is usable again
 
-    def test_a_removal_error_drops_the_marker(self):
+    def test_a_removal_error_puts_the_worktree_back(self):
         path = self.worktree("feat-z")
         self.dispatch(path)
         ledger, sweep = self.load_ledger()
@@ -381,14 +421,7 @@ class WorktreeCleanTest(unittest.TestCase):
             lines, failed = ledger.clean_worktrees(str(self.main))
         self.assertTrue(failed)
         self.assertTrue(path.exists())
-        self.assertEqual(self.markers(), [])
-
-    def test_a_removed_worktree_leaves_no_marker(self):
-        path = self.worktree("feat-k2")
-        self.dispatch(path)
-        self.ledger_run("clean-worktrees")
-        self.assertFalse(path.exists())
-        self.assertEqual(self.markers(), [])
+        self.assertEqual(self.retiring(), [])
 
     def test_a_live_lease_skips_the_cleanup(self):
         path = self.worktree("feat-w")
