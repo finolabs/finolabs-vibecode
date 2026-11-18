@@ -10,6 +10,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- `coding-router`'s Spec Kit adapter covers `specify workflow` runs: the depth gate still decides whether `tasks` runs, a gate verdict is the user's decision (under a lease, afk "Decide"), a run that dispatches agents is recorded in the `delegate` ledger and accepted through `checks` and the review gate, and this pack's gates join a run through an overlay or slot.
 - Session titles (`tidy`, the session-start rules): the agent names the session in its first turn whatever the task, not only coding, since a title the app made from the first prompt does not count; a session the agent starts for other work (the desktop app's session-start tool) gets the same `<emoji> <project> <scope>: <activity>` format.
 - The low-risk lane covers a catalog pin (owner decision, 17/11/2026): a plugin catalog (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) whose only changes are existing entries' `source.ref`, moved to a release tag `vX.Y.Z`, and their descriptions takes one review pass; `merge_check.py --lane` decides.
 - Each release moves `ref` to the new tag in every host catalog that pins the plugin, the Codex catalog included (`versioning`, `update` hosts, `plugin-packaging` catalogs): an unpinned Codex entry reinstalled the default branch while `/update` reported the release.
