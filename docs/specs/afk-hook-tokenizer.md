@@ -1,6 +1,6 @@
 # afk check hook: one shell tokenizer
 
-Status: draft; design only, no code. The rule change it needs (CLAUDE.md, tenth scoped exception) waits on the owner's decisions below. It supersedes the parked PR 352. Revised after the Codex reviews of 421ba5d3, 3ee71ea0, 1749f0c9 and 6ccaf157 (code and security REWORK).
+Status: draft; design only, no code. The rule change it needs (CLAUDE.md, tenth scoped exception) waits on the owner's decisions below. It replaces two stopgaps merged on 18/11/2026 while it waits: PR 352 (an operator that ends a word is split off) and PR 357 (`codex exec` at the start of a command is Codex's subcommand, not the shell's `exec`). Revised after the Codex reviews of 421ba5d3, 3ee71ea0, 1749f0c9 and 6ccaf157 (code and security REWORK).
 
 ## Why
 
@@ -96,7 +96,7 @@ The hook passes the list to `afk.py` through a new `check` input, `--commands-js
 
 ### C. What goes away
 
-These go away: `unquoted_newlines`, the second shlex pass, `glued_operator`, `PUNCTUATION`/`REDIRECT`/`OPERATOR` and `operators_in`. PR 352's `TRAILING_OPERATOR`, `punctuated`, `detached` and `aligned` are never merged.
+These go away: `unquoted_newlines`, the second shlex pass, `glued_operator`, `PUNCTUATION`/`REDIRECT`/`OPERATOR` and `operators_in`. So do the stopgaps merged on 18/11/2026: PR 352's `TRAILING_OPERATOR`, `punctuated`, `detached` and `aligned`, and PR 357's `CODEX_EXEC` exemption, which applies only when the raw command starts with the plain words `codex exec`. Their regression tests stay and must pass against the tokenizer.
 
 `reparsed` and `outside_allowlist` shrink to the per-site checks they still own: wrapper flags, `bad_program` and programs fed by run-time data. They are also read correctly for a subcommand, so `codex exec -s` is no longer taken as the shell `exec`. Their call-wide parts move to the call-wide rules in B.
 
