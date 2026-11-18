@@ -20,7 +20,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
-- The afk check hook reads `exec` right after a plain `codex` (the first word, or after an operator) as Codex's own subcommand, so `codex exec -m <model> ...` no longer gets the split message under a lease; every Codex dispatch was denied before. Every other `exec`, prefix or redirection placement keeps the wrapper rule.
+- The afk check hook reads `exec` as Codex's own subcommand when the raw command starts with the plain words `codex exec`, so `codex exec -m <model> ...` no longer gets the split message under a lease; every Codex dispatch was denied before. Every other `exec`, prefix or redirection placement keeps the wrapper rule.
 - `worktree_sweep.py` asks gh about the worktree's own repository: an inherited `GH_REPO` could name another repository whose merged pull request had the same branch and head.
 - The worktree sweep (`commit-messages`, `review-gate`) reported every worktree dirty when a folder such as `.claude/` was ignored only by the user's global ignore file: it runs git without the home folder, so git never read that file. It now resolves the global ignore file once and passes it to `git status` alone, so merged, clean worktrees become candidates again.
 
