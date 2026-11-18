@@ -35,7 +35,7 @@ When to name: at entry, in the first turn whatever the task (a question or a cho
 Advisory (agent judgment): where the host's rename tool needs this session's own id, a session can read its id from the "started by" entry of a child session it started itself; with no such child, say so in one line and ask the user to
 rename, and do not guess ids or retry blind.
 
-Sessions you start: a session you open for other work (on the Claude Code desktop app, the session-start tool's `title`) gets this same format at the moment you start it, emoji included.
+Sessions you start: a session you open for other work (on the Claude Code desktop app, the session-start tool's `title`) gets this same format at the moment you start it, emoji included (advisory, agent judgment).
 
 Whose: rename only this session and sessions you started; a session someone else started keeps its name unless the user asks. A delegated run takes its title, or its log file name where the host has no titles, from its ledger project and task label (`delegate`).
 

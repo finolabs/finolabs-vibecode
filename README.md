@@ -503,7 +503,7 @@ Claude Code and Codex, on by default: the compaction nudge, a `UserPromptSubmit`
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/session-health-dark.png">
-    <img src="assets/session-health-light.png" alt="Loop of a long session: the agent names the session at the first task, at each phase change and when a spec, story or large pull request is done, reads the context size from the status line or the probe, context_steward.py answers ok, prepare from 80%, wait or compact, the agent writes a private handover on prepare, the host or you compact, and the compact hook at session start re-injects the handover. On Claude Code the compaction nudge asks for tidy at 80% and 90%." width="920">
+    <img src="assets/session-health-light.png" alt="Loop of a long session: the agent names the session in its first turn whatever the task, at each phase change and when a spec, story or large pull request is done, reads the context size from the status line or the probe, context_steward.py answers ok, prepare from 80%, wait or compact, the agent writes a private handover on prepare, the host or you compact, and the compact hook at session start re-injects the handover. On Claude Code the compaction nudge asks for tidy at 80% and 90%." width="920">
   </picture>
 </p>
 
