@@ -45,7 +45,8 @@ class SkillFiringTest(unittest.TestCase):
     def test_rules_carry_the_title_format_so_a_rename_needs_no_skill_load(self):
         [line] = [l for l in self.rules.splitlines() if l.startswith("Name this session")]
         for phrase in ("`<emoji> <project> <scope>: <activity>`", "`/rename <title>`", "session-title tool",
-                       "after every compaction", "advisory: no hook renames"):
+                       "after every compaction", "advisory: no hook renames", "in its first turn, whatever the task",
+                       "a title the app made from the first prompt does not count", "session-start tool, its `title`"):
             self.assertIn(phrase, line)
         self.assertNotIn("Invoke `tidy`", self.rules)
 
