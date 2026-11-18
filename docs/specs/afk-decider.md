@@ -36,8 +36,10 @@ One `Stop` hook in its own group, active only while a valid, unexpired lease exi
 
 One `PermissionRequest` hook in its own group, active only under a live lease and when `FNL_AFK_PERMIT` is not `off`.
 
-- It answers `allow` only when the request is exactly an action the lease approved: a "Decide" record with `--approve-argv-json` or `--approve-paths` for this repository, matched by digest, unexpired. It parses no shell syntax.
-- Every other request gets `deny` with one fixed message: away, settle it through "Decide" (which records an approval when it chooses to run the action) or park it. The agent then decides instead of waiting, and the host's own rules still decide everything the host settles without a prompt.
+- **What it matches.** A *permission approval*, a record separate from today's `--approve-argv-json` approvals: it binds the exact host request, a digest of the tool name, the canonical JSON of `tool_input` as the host sends it (for Bash, the command string as written) and the working folder. The hook compares digests only; it never splits or rebuilds a shell command.
+- **Who records one.** When the host denies a request through this hook, the agent takes it up the "Decide" ladder with two options (1 run it, 2 park it). Any action the lease allows is eligible, ordinary `open`-mode actions included; "Where it must stop" (section D) parks it instead. A rung that settles on 1 records the permission approval for that exact request (`afk.py log --kind decision ... --approve-request <digest>`).
+- **Use and expiry.** `afk.py check` never consumes a permission approval; the permission hook consumes it once, when it allows that exact request. It expires after 30 minutes or when the lease ends.
+- **Every other request** gets `deny` with one fixed message: away, settle it through "Decide" or park it. A request denied a second time with no approval recorded in between is parked: the agent records `log --kind parked` for it and moves on, so the same prompt never loops.
 - It never answers a prompt the host does not route through this event, keeps only digests and sends nothing. It needs a new scoped exception in `CLAUDE.md`.
 
 ### C. Merge by the decider
@@ -45,8 +47,8 @@ One `PermissionRequest` hook in its own group, active only under a live lease an
 A merge is a decision like any other. The decider merges without the user when the user's authority covers it and the evidence holds:
 
 - **Authority:** the lease's Merge answer, or `open` mode, for that repository (today's rule), or a standing per-repository record that the decider may merge (decision 3).
-- **Evidence (unchanged, script-enforced where it is today):** `merge_check.py --independent` prints `MERGE OK` at the current head: two posted reviews by a family other than the author's, CI green, the router marker, the rework limit respected; the merge argv pins the full head SHA.
-- **Gray cases** (a rework round past the limit, a same-family fallback, a review that approves with findings) go up the "Decide" ladder: a recorded rule, the evaluation table, the advisor of another family, the host. The answer is final for the lease and is listed for the user's return with `kept` or `reversed`.
+- **Evidence (unchanged, script-enforced where it is today):** `merge_check.py --independent` prints `MERGE OK` at the current head: two posted reviews by a family other than the author's, or, when no other family is reachable, the same-family fallback of `skills/afk/references/merge-gate.md` with its existing conditions and `--fallback-family`; CI green; the router marker; the rework limit respected. The merge argv pins the full head SHA. No answer of the ladder replaces `MERGE OK`.
+- **Gray cases** (a rework round past the limit, whether to use the same-family fallback, a review that approves with findings) go up the "Decide" ladder; its answer chooses what to do next and never stands in for the evidence above: a recorded rule, the evaluation table, the advisor of another family, the host. The answer is final for the lease and is listed for the user's return with `kept` or `reversed`.
 - A pull request that changes the lease, setup, hooks or instruction files is merged like any other when the review gate passes; it does not park (decision 4).
 
 ### D. What afk still refuses
@@ -54,9 +56,10 @@ A merge is a decision like any other. The decider merges without the user when t
 afk no longer imitates the shell. `afk.py check` keeps what is not syntax:
 
 - the lease's counters, limits and merge pins, and the approval records the permission hook reads;
-- "Where it must stop" as decision rules: credentials, production, real users or customer data, and release targets park instead of entering the ladder.
+- "Where it must stop" as decision rules: credentials, production, real users or customer data, and release targets park instead of entering the ladder;
+- the guards the user kept in setup (`afk-autonomy.md` section C: no direct push to the default branch, no force push, and the others listed there). They are authorization limits, not syntax, so `check` keeps the narrow reading of the `git` commands they name; the user's server-side branch protection, which `setup` recommends, enforces the same limits outside the agent.
 
-Its word-level syntax allowlist and command classification of argv go away with the hook (decision 5). Blocking credential reads becomes the host's job: `setup` offers native deny rules for the credential floor (for example `Read(~/.netrc)` and `Bash(printenv:*)` on Claude Code), and `afk start` warns when the host has neither those rules nor an approval mode that asks.
+Its word-level syntax allowlist and its general classification of argv go away with the hook (decision 5); the guards above keep their own narrow reading. Blocking credential reads becomes the host's job: `setup` offers native deny rules for the credential floor (for example `Read(~/.netrc)` and `Bash(printenv:*)` on Claude Code), and `afk start` warns when the host has neither those rules nor an approval mode that asks.
 
 ## Owner decisions
 
@@ -66,7 +69,7 @@ Settled by the owner on 18/11/2026. Decisions 1, 2, 3, 5 and 6 took their recomm
 2. **Permission hook (B).** Settled (owner, 18/11/2026): yes, allow only exact recorded approvals and deny the rest under a lease. Alternative: leave host prompts waiting for the user.
 3. **Merge authority (C).** Settled (owner, 18/11/2026): the lease's Merge answer or `open` mode, as today, plus an optional per-repository `merge: decide` record made in `setup` with its own consent question, so a repository the user names can be merged by the decider under any lease. Alternative: lease only.
 4. **Self-protection (C).** Settled (owner, 18/11/2026): the review gate decides; such a pull request merges like any other when `MERGE OK` holds. Declined: a pull request that changes the lease, setup, hook manifests or instruction files (`CLAUDE.md`, `AGENTS.md`, `AGENTS.afk.md`, a constitution) would have parked instead of being merged by the decider.
-5. **`check` (D).** Settled (owner, 18/11/2026): keep accounting, approvals and "Where it must stop"; drop the syntax allowlist and argv classification. Alternative: drop `check` entirely and keep only the ledger.
+5. **`check` (D).** Settled (owner, 18/11/2026): keep accounting, approvals and "Where it must stop", with the setup guards counted among those limits (review of 18/11/2026); drop the syntax allowlist and the general argv classification. Alternative: drop `check` entirely and keep only the ledger.
 6. **Native floor (D).** Settled (owner, 18/11/2026): `setup` offers native deny rules for the credential floor with a preview and a neutral yes; `afk start` warns when the host has none. Alternative: document it only.
 
 ## Open, not the owner's
@@ -77,7 +80,8 @@ Settled by the owner on 18/11/2026. Decisions 1, 2, 3, 5 and 6 took their recomm
 ## Verification
 
 - Stop hook: a turn that ends with a pending question under a lease is sent back once; a second stop in a row, an idle or parked record, a reached limit, no lease, `FNL_AFK_STOP=off` and every error let it through; the user's interrupt is never blocked.
-- Permission hook: an exact recorded approval is allowed; a different command, an expired approval, another repository's approval and every request without a lease are not allowed; `FNL_AFK_PERMIT=off` and errors fall back to the host's prompt.
+- Permission hook: an exact recorded permission approval is allowed once; the same request a second time, a request differing by one byte, tool or working folder, an expired approval and every request without a lease are not allowed; a second denial without an approval ends in a parked record; `check` never consumes a permission approval; `FNL_AFK_PERMIT=off` and errors fall back to the host's prompt.
+- Guards: a direct push to the default branch and a force push stay refused under a lease in both modes when the user kept those guards.
 - Merge: under each authority source, `MERGE OK` merges and anything else parks, a pull request that changes hooks or instruction files included.
 - The `PRIVACY.md` sections and `CLAUDE.md` exceptions match the code before release.
 
