@@ -163,7 +163,7 @@ ENFORCERS = {'afk.py','data_root.py', 'parallel_slots.py', 'secret_patterns.py',
              'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
              'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py', 'heavy_run.py', 'delegate_env.py',
              'auto_gate.py', 'mode.py', 'judge.py', 'log_scan.py', 'route_task.py', 'brief_check.py', 'assignments.py',
-             'away_lease.py', 'away_gate_hook.py', 'afk_check_hook.py', 'project_store.py', 'project_progress.py', 'afk_overlay.py'}
+             'away_lease.py', 'away_gate_hook.py', 'project_store.py', 'project_progress.py', 'afk_overlay.py'}
 ENFORCERS = {name.casefold() for name in ENFORCERS}  # case-insensitive filesystems name one file many ways
 
 

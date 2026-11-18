@@ -1,6 +1,6 @@
 # afk check hook
 
-Status: implemented; rule recorded as the tenth scoped exception in `CLAUDE.md` (owner decisions, 17/11/2026); `scripts/afk_check_hook.py`, tests in `tests/test_afk_check_hook.py`; live host delivery unverified.
+Status: deferred; hook removed 18/11/2026 (owner decision): blocking is the native harness's job (Claude Code permission rules and auto mode, Codex sandbox and approvals); `scripts/afk_check_hook.py` and its tests are deleted, the tenth scoped exception in `CLAUDE.md` is replaced by a removal record, and the agent runs `afk.py check` itself under a lease on every host. Shipped in 0.3.2; the text below records that design.
 
 ## Why
 

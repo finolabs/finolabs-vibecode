@@ -498,6 +498,11 @@
           "id": "0.3.3/worktree-clean",
           "kind": "info",
           "text": "delegate removes finished runs' merged, clean, pushed worktrees in the background; runs started before 0.3.3 stay (worktree_sweep.py list); FNL_WORKTREE_CLEAN=manual or off stops it."
+        },
+        {
+          "id": "0.3.3/afk-check-hook-removed",
+          "kind": "removed",
+          "text": "Claude Code: the afk check hook is gone and FNL_AFK_HOOK no longer does anything; under a lease the agent runs afk.py check itself and your host's permissions do the blocking."
         }
       ]
     }
