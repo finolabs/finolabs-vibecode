@@ -241,11 +241,13 @@ def canonical_config():
         agents = values["Agents"].split(", ")
         if not agents or len(set(agents)) != len(agents) or set(agents) - SOURCES.keys():
             raise ValueError("agents")
-        allowed = {"Quota probe", "Date", "Agents"} | {f"{kind} {a}" for a in agents for kind in ("Executable", "Resolved", "Resolved digest", "Interpreter")}
+        allowed = {"Quota probe", "Date", "Agents", "Weekly floor"} | {f"{kind} {a}" for a in agents for kind in ("Executable", "Resolved", "Resolved digest", "Interpreter")}
         if set(values) - allowed or ("claude" in agents and not 1 <= len(folders) <= 4) or (folders and "claude" not in agents):
             raise ValueError("config")
         if len(set(folders.values())) != len(folders):
             raise ValueError("duplicate folder")
+        if "Weekly floor" in values:
+            parse_floors(values["Weekly floor"], agents, folders)
         result = {}
         for agent in agents:
             if "Resolved " + agent not in values:
@@ -263,6 +265,46 @@ def canonical_config():
                              "configs": folders if agent == "claude" else {"default": None}}
             result[agent]["resolved"] = values["Resolved " + agent]
         return result
+    except (OSError, ValueError, KeyError, UnicodeError):
+        return {}
+
+
+FLOOR = re.compile(r"(claude|codex|agy)/([A-Za-z0-9_-]{1,32})=([0-9]{1,2})")
+
+
+def parse_floors(value, agents, folders):
+    """{"<family>/<label>": percent} from a `Weekly floor` value such as `claude/work=15, codex/default=20`.
+
+    Each install names a recorded agent (a Claude label from `Claude config`, `default` for the others) once, with a
+    whole percent of weekly quota remaining from 10 to 95: below it the install counts as out of quota for routing."""
+    floors = {}
+    for item in value.split(", "):
+        match = FLOOR.fullmatch(item)
+        if not match:
+            raise ValueError("weekly floor")
+        family, label, percent = match[1], match[2], int(match[3])
+        known = folders if family == "claude" else {"default": None}
+        if family not in agents or label not in known or not 10 <= percent <= 95 or f"{family}/{label}" in floors:
+            raise ValueError("weekly floor")
+        floors[f"{family}/{label}"] = percent
+    return floors
+
+
+def weekly_floors():
+    """The recorded weekly floors while the probe is on, else {}; an invalid section turns the probe off (and these)."""
+    try:
+        if not config():
+            return {}
+        values = {}
+        for line in section(dr.read_data("host.md").decode()).splitlines():
+            if line.startswith("- Weekly floor: "):
+                values["Weekly floor"] = line[len("- Weekly floor: "):]
+        if "Weekly floor" not in values:
+            return {}
+        recorded = canonical_config()
+        agents = list(recorded)
+        folders = recorded.get("claude", {}).get("configs", {})
+        return parse_floors(values["Weekly floor"], agents, folders)
     except (OSError, ValueError, KeyError, UnicodeError):
         return {}
 
@@ -827,12 +869,15 @@ def status_lines():
             end = limited_until(agent, marked, cache, now())
             if end:
                 lines.append(f"Quota {agent}: rate-limit marker {marked}; out of quota until {stamp(end)} (advisory)")
+        floors = weekly_floors()
         for agent, labels in cache.items():
             for label, entry in labels.items():
                 age = (now() - timestamp(entry["measured"])).total_seconds()
                 pools = "; ".join(f"{g['name']} {g['window']}: {g['remaining_fraction']:.0%} remaining, resets {g['reset_time']}"
                                   for g in entry["groups"])
+                floor = floors.get(f"{agent}/{label}")
                 lines.append(f"Quota {agent}/{label}: measured {entry['measured']}; {pools}" +
+                             (f"; weekly floor {floor}%" if floor else "") +
                              (" (unverified: older than 8 hours)" if age > 8 * 3600 or age < 0 else ""))
         return lines or ["Quota: unverified (no reading)."]
     except (OSError, ValueError, TypeError, KeyError):

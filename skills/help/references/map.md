@@ -71,7 +71,7 @@ The skill folders and their purposes match the README.
 | Save which checks a repository runs before a push (read from its CI, `package.json`, `pyproject.toml` or `Makefile`) | `/setup add checks` (reads the files, runs nothing, saves after a yes) | |
 | Assign review families, judge or posting setup | `/setup add roles` | |
 | Set concurrent-run total and optional family caps, or the assignment matrix | `/setup add delegation` | |
-| Read how much quota each agent has left before routing | `/setup add quota` (opt-in, off by default) | |
+| Read how much quota each agent has left before routing, or stop using one install before its week runs out | `/setup add quota` (opt-in, off by default; `--weekly-floor` per install) | |
 | Turn usage metrics, project progress or the running-agent snapshot on or off | `/setup add metrics` (each needs its own consent) | |
 | Optional companion skills from other packs | `/setup add companions` (questions and install commands only; installs nothing) | |
 | Choose when the host compacts, so the `tidy` nudge has a threshold | `/setup add compaction` (also asked in the beginner and Quick paths): an advisory value by session kind, your number, user scope or one repository's untracked Claude Code local file | Without a window the Claude Code nudge stays silent |

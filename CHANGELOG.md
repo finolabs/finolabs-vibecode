@@ -14,6 +14,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Changed
 
+- `/setup add quota` can record a weekly floor per install (`--weekly-floor claude/work=15`): routing treats that install as out of quota once its weekly quota left drops below the floor, for example after 85% of the week is used, instead of the default 10%. `quota_probe.py status` shows the floor on the install's line, and `review_route.py` and `route_pick.py` apply it to weekly pools only.
+
 - `/setup instructions` scans existing instruction files for lines that would stop `afk` or `delegate` (a merge or deploy only the user may run with no lease exception, an away rule of its own, machine facts that belong in the host config) and proposes a replacement for each; the contract template's approval list names the lease exception.
 - `coding-router`'s Spec Kit adapter covers `specify workflow` runs: the depth gate still decides whether `tasks` runs, a gate verdict is the user's decision (under a lease, afk "Decide"), each agent step of a run is a dispatch `delegate` must allow, recorded in its ledger and accepted through `checks` and the review gate, and this pack's gates join a run through an overlay or slot.
 - Session titles (`tidy`, the session-start rules): the agent names the session in its first turn whatever the task, not only coding, since a title the app made from the first prompt does not count; a session the agent starts for other work (the desktop app's session-start tool) gets the same `<emoji> <project> <scope>: <activity>` format.

@@ -515,8 +515,10 @@ def out_families(lines, current=None, configured=None):
         if not match:
             continue
         age = (current - quota_probe.timestamp(match[3])).total_seconds()
+        # A user's weekly floor is a routing preference, not evidence of being out: drop its suffix, keep the floor here.
+        body = re.sub(r"; weekly floor \d+%(?= \(|$)", "", match[4])
         pools = [re.fullmatch(r"([a-zA-Z0-9_-]+) ([^:;]+): (\d+)% remaining, resets ([^ ;]+)", part)
-                 for part in match[4].split("; ")]
+                 for part in body.split("; ")]
         depleted = (0 <= age <= FRESH and all(pools)
                     and all(int(p[3]) < FLOOR and quota_probe.timestamp(p[4]) > current for p in pools))
         installs.setdefault(match[1], {})[match[2]] = installs.get(match[1], {}).get(match[2], True) and depleted

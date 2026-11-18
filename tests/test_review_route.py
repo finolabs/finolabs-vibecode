@@ -253,6 +253,21 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(route.blocked_families([line("default", 0, "week-model")], now), set())
         self.assertEqual(route.blocked_families([line("default", 10)], now), set())
 
+    def test_a_weekly_floor_raises_the_line_for_that_installs_weekly_pools_only(self):
+        now = qp.now()
+        reset = qp.stamp(now + timedelta(hours=1))
+
+        def line(remaining, window="weekly", floor=None):
+            return (f"Quota claude/work: measured {qp.stamp(now)}; week-all {window}: {remaining}% remaining, "
+                    f"resets {reset}" + (f"; weekly floor {floor}%" if floor else ""))
+        self.assertEqual(route.blocked_families([line(14, floor=15)], now), {"claude"})
+        self.assertEqual(route.blocked_families([line(15, floor=15)], now), set())
+        self.assertEqual(route.blocked_families([line(14)], now), set())
+        self.assertEqual(route.blocked_families([line(14, window="5h", floor=15)], now), set())
+        # Another install without a floor still keeps the family reachable.
+        other = f"Quota claude/default: measured {qp.stamp(now)}; week-all weekly: 50% remaining, resets {reset}"
+        self.assertEqual(route.blocked_families([line(14, floor=15), other], now), set())
+
 
 OWNER_LINE = ("- antigravity: levels 1-5; works on design, video, image-generation, transcription; models "
               "gemini-4-argon-high then gemini-3.8-flash-high for security-review | gemini-4-hydrogen-high for design, "
