@@ -688,6 +688,60 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertIn("worktree " + str((path / "nested").resolve()) + "\n", listed)
         self.assertNotIn(".fnl-retiring-", listed)
 
+    def ignore_nested(self):
+        common = Path(self.git(self.main, "rev-parse", "--git-common-dir").stdout.strip())
+        common = common if common.is_absolute() else self.main / common
+        (common / "info").mkdir(exist_ok=True)
+        with (common / "info" / "exclude").open("a") as handle:
+            handle.write("nested/\n")
+
+    def add_nested(self, real_git, folder, branch):
+        real_git(str(self.main), "worktree", "add", "-q", "--no-track", "-b", branch, str(Path(folder) / "nested"),
+                 "origin/main")
+        (Path(folder) / "nested" / "unsaved.txt").write_text("work\n")
+
+    def test_a_stranded_first_move_keeps_a_nested_worktree_safe(self):
+        path = self.worktree("feat-sn")
+        self.dispatch(path)
+        self.ignore_nested()
+        ledger, sweep = self.load_ledger()
+        real_git = sweep.git
+
+        def git(checkout, *args, **kwargs):
+            if args[:2] == ("worktree", "move") and ".fnl-retiring-" in args[-1]:
+                self.add_nested(real_git, args[-2], "feat-sn2")
+                os.rename(args[-2], args[-1])
+                os.mkdir(args[-2])  # the old path is taken, so it stays at its retiring path
+                raise subprocess.TimeoutExpired("git", 60)
+            return real_git(checkout, *args, **kwargs)
+
+        with mock.patch.object(sweep, "git", git):
+            ledger.clean_worktrees(str(self.main))
+        stranded = self.retiring()
+        out = self.ledger_run("clean-worktrees")  # the next run resumes the claim
+        self.assertTrue((stranded[0] / "nested" / "unsaved.txt").exists(), out.stderr)
+        self.assertIn("holds another worktree", out.stderr)
+
+    def test_a_worktree_registered_during_the_move_back_stays_visible(self):
+        path = self.worktree("feat-mb")
+        self.dispatch(path)
+        self.ignore_nested()
+        ledger, sweep = self.load_ledger()
+        real_git = sweep.git
+
+        def git(checkout, *args, **kwargs):
+            if args[:2] == ("worktree", "remove"):
+                return subprocess.CompletedProcess(args, 1, "", "")
+            if args[:2] == ("worktree", "move") and ".fnl-retiring-" in args[-2]:
+                self.add_nested(real_git, args[-2], "feat-mb2")  # registered just before the move back
+            return real_git(checkout, *args, **kwargs)
+
+        with mock.patch.object(sweep, "git", git):
+            ledger.clean_worktrees(str(self.main))
+        out = self.ledger_run("clean-worktrees")
+        self.assertTrue((path / "nested" / "unsaved.txt").exists(), out.stderr)
+        self.assertIn("holds another worktree", out.stderr)
+
     def test_a_failed_move_is_undone(self):
         path = self.worktree("feat-fm")
         self.dispatch(path)

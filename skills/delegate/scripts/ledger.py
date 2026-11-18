@@ -1161,7 +1161,7 @@ def claim(sweep, info, default, place, cwd, main_checkout):
                 moved = sweep.git(main_checkout, "worktree", "move", "--", path, target).returncode == 0
             except Exception:
                 moved = False
-            if moved and not repair_nested(sweep, main_checkout, path, target, nested_in(sweep, main_checkout, path)):
+            if moved and not follow(sweep, main_checkout, path, target):
                 # A worktree registered inside it moved along and git could not record its new place: go back.
                 moved = False
             if not moved:
@@ -1186,11 +1186,11 @@ def undo_move(sweep, main_checkout, original, target, instance):
     try:
         if os.path.lexists(original):
             sweep.git(main_checkout, "worktree", "repair", "--", target)
+            follow(sweep, main_checkout, original, target)  # worktrees inside moved along with it
             return False
-        inside = nested_in(sweep, main_checkout, target)
         os.rename(target, original)
-        return sweep.git(main_checkout, "worktree", "repair", "--", original).returncode == 0 and \
-            repair_nested(sweep, main_checkout, target, original, inside)
+        repaired = sweep.git(main_checkout, "worktree", "repair", "--", original).returncode == 0
+        return follow(sweep, main_checkout, target, original) and repaired
     except Exception:
         return False
 
@@ -1335,10 +1335,9 @@ def put_back(sweep, main_checkout, original, moved, shown, reason, instance):
     if original == moved:
         return f"ledger: kept worktree {shown} ({reason})", False
     if not os.path.lexists(original):
-        inside = nested_in(sweep, main_checkout, moved)
         try:
             if sweep.git(main_checkout, "worktree", "move", "--", moved, original).returncode == 0:
-                if repair_nested(sweep, main_checkout, moved, original, inside):
+                if follow(sweep, main_checkout, moved, original):
                     return f"ledger: kept worktree {shown} ({reason})", True
                 return (f"ledger: kept worktree {shown} ({reason}); a worktree inside it could not be recorded "
                         "at its new place"), False
@@ -1348,7 +1347,7 @@ def put_back(sweep, main_checkout, original, moved, shown, reason, instance):
         if os.path.isdir(original) and not os.path.lexists(moved) and checkout_instance(original) == instance:
             try:
                 if sweep.git(main_checkout, "worktree", "repair", "--", original).returncode == 0 and \
-                        repair_nested(sweep, main_checkout, moved, original, inside):
+                        follow(sweep, main_checkout, moved, original):
                     return f"ledger: kept worktree {shown} ({reason})", True
             except Exception:
                 pass
@@ -1365,11 +1364,15 @@ def nested_in(sweep, main_checkout, folder):
             if sweep.spellings(entry["path"]) != mine and sweep.within(sweep.spellings(entry["path"]), mine)]
 
 
-def repair_nested(sweep, main_checkout, old, new, inside):
-    """Record each worktree that moved along with its outer folder at its new path; True when all succeed."""
+def follow(sweep, main_checkout, old, new):
+    """After a folder moved from `old` to `new`: record at its new path every worktree git still lists under `old`
+    whose folder now lies under `new` (read after the move, so one registered during it is included). One whose
+    folder did not move along is left alone. True when every repair succeeded."""
     ok = True
-    for path in inside:
+    for path in nested_in(sweep, main_checkout, old):
         moved = os.path.join(new, os.path.relpath(path, old))
+        if not os.path.isdir(moved) or os.path.isdir(path):
+            continue  # it did not move with the folder
         try:
             ok = sweep.git(main_checkout, "worktree", "repair", "--", moved).returncode == 0 and ok
         except Exception:
