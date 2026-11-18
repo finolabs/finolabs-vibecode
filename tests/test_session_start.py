@@ -270,6 +270,12 @@ class SessionStartTest(SyntheticStateTest):
                 import json
                 manifest = json.loads(raw)
                 self.assertEqual(len(manifest["hooks"].pop("StopFailure")), 1)
+                # The afk decider (0.3.3) adds its own Stop group, last in that list, and the PermissionRequest event.
+                afk_stop = manifest["hooks"]["Stop"].pop()
+                self.assertIn("afk_stop_hook.py", afk_stop["hooks"][0]["command"])
+                permit = manifest["hooks"].pop("PermissionRequest")
+                self.assertEqual(len(permit), 1)
+                self.assertIn("afk_permit_hook.py", permit[0]["hooks"][0]["command"])
                 # The proof nudge (0.3.2) adds only its own SessionStart and Stop groups, last in each list.
                 for event in ("SessionStart", "Stop"):
                     nudge = manifest["hooks"][event].pop()

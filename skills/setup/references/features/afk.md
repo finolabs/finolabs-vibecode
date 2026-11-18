@@ -63,9 +63,9 @@ Choices: "Yes, save these settings" / "No, leave settings unchanged".
 
 These writes widen what agents may do while the user is away, so the user starts them by typing `/setup add afk`. On Claude Code in auto mode the host may deny an agent's own `apply` or `--expect` save as oversight-sensitive; report the denial and leave the step to the user, never work around it (advisory, agent judgment; the host enforces the denial).
 
-Apply with `python3 -I <this skill folder>/scripts/afk_setup.py apply --yes --digest <prefix>`; use at least the first 12 hex digits of the shown Digest (the full digest also works). Preview state is private in `<data root>/state/autopilot-setup/preview.json`, expires after 60 minutes and is consumed on success.
+Apply with `python3 -I <this skill folder>/scripts/afk_setup.py apply --yes --digest <prefix>`; use at least the first 12 hex digits of the shown Digest (the full digest also works). Preview state is private in `<data root>/state/autopilot-setup/preview.json`, lasts 60 minutes and is used once.
 Apply enforces the digest, unchanged host bytes and mode, canonical root, safe files and section bounds, refusing links and ambiguity. Only the `## afk` section changes; other host content stays byte for byte (script-enforced). An older `## Autopilot` section is not read and not changed; tell the user to delete it by hand.
 
-To change choices, repeat `/setup add afk`; a live lease stops accepting actions after setup changes. Starting and stopping remain `/afk` and `/afk stop`.
+To change choices, repeat `/setup add afk`; a live lease then stops accepting actions. Starting and stopping remain `/afk` and `/afk stop`.
 ## Project scope
-Inside a repository, after the account rules or when the user chose Only this repository, follow [../afk-project.md](../afk-project.md).
+Claude Code: then [native rules](../afk-native-rules.md). In a repository (after the account rules, or on Only this repository): [../afk-project.md](../afk-project.md).

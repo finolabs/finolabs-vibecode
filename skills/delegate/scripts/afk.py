@@ -36,6 +36,10 @@ request, row `decided` below):
 | Only this install's ledger/record/heavy_run/merge_check/post_review/checks script paths, with isolated Python, are allowed wrappers; checks.py takes only `show`, `run`, `run --changed [--base <branch or commit>]` (no relative revision) or `run --dispatch <dispatch id>` with user or project settings; nested heavy commands are classified too; post_review.py needs a verified target, `Repository comments` at `decide`, and either one pull request number alone or with `--body-file` naming post_review.py's own private run body whose first line is one review marker and whose rest passes the text screens | script_command, checks_command, review_post, review_body |
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
 | An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, one of the allowlisted shapes: a script of this checkout, make, npm/pnpm/yarn/bun test, run and declared installs, python scripts and listed -m modules, cargo verbs without --config, go verbs with listed flags and local packages, declared pip, uv, poetry and bundle installs, listed git verbs and flags, listed gh group and verb pairs, or this install's delegated run) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, shape_decidable, dispatch_prefix, decidable_paths, request_subject, open_approvals |
+| `--approve-request <digest>` on a rule, advisor or host attempt settled on option 1 stores a permission approval for the afk permission hook (away_lease.record_permit: 64-hex digest, live lease, used once within 30 minutes); `check` never reads or consumes it | log, permit_subject |
+| `log --kind idle` needs a live lease; `--session` belongs to idle and parked and is stored as the first 16 hex of its SHA-256 | log, check |
+| A repository's approved `merge: decide` applies as Merge yes there under any lease; `effective` shows `merge_authority` | effective, show_effective |
+| `start` prints the native allow rules for the lease commands and warns when Claude Code's default config folder and this folder's project settings hold no floor deny rule and no asking approval mode (reads only `permissions.deny` and `permissions.defaultMode`) | native_notice, claude_permissions |
 | Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge and review-fallback kinds only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
 | Trusted PR authors, full independent review/check/local-test gate, changed paths (including staged commit paths), quota readings and actually calling check before execution remain caller obligations in this slice | agent judgment, advisory; merge_check --independent enforces its review condition |
 
@@ -74,7 +78,7 @@ import data_root as dr
 import parallel_slots as slots
 import project_store as store
 import secret_patterns
-from away_lease import finite, merge_receipts, private_info, read_lease, read_private  # the one safe lease reader
+from away_lease import finite, merge_receipts, permits_lock, private_info, read_lease, read_private  # the one safe lease reader
 import afk_overlay  # the owner-approved overlay of repository rules (docs/specs/afk-overlay.md)
 
 DEFAULTS = {'Hosts': 'Claude Code', 'Task choice': 'choose', 'Push and pull requests': 'yes',
@@ -137,8 +141,11 @@ ATTEMPTS = {('rule', 'yes'): ({'by', 'option', 'of'}, set()), ('rule', 'no'): ({
 TABLE_SOURCES = ('jev', 'host-small')
 NUMBERS = {'Lease hours': (1, 24), 'Max runs': (1, 10000), 'Max runtime minutes': (1, 1440),
            'Max actions per hour': (1, 10000), 'Quota floor percent': (0, 100)}
-KINDS = {'start': 1, 'stop': 1, 'action': 1, 'decision': 2, 'parked': 3,
+KINDS = {'start': 1, 'stop': 1, 'action': 1, 'decision': 2, 'parked': 3, 'idle': 2,
          'run-start': 1, 'run-finish': 1, 'merge': 1, 'review-fallback': 1, 'error': 3}
+# A Claude Code session id as the session-start hook prints it; the log keeps only the first 16 hex of its SHA-256,
+# the same name the afk stop hook computes (docs/specs/afk-decider.md A).
+SESSION = re.compile(r'[A-Za-z0-9-]{1,128}')
 ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,39}')
 SHA = re.compile(r'[0-9a-f]{40}')
 SHA256 = re.compile(r'[0-9a-f]{64}')
@@ -156,6 +163,7 @@ OFF = {'Task choice': 'listed', 'Push and pull requests': 'no', 'Merge': 'no', '
 CLOSED = {**{c: 'stop' for c in CATEGORIES}, TARGETS: [], **{name: [] for name in LISTS}}
 CONTEXT = 'Repository context'  # the applied-settings entry holding the check's Context
 MERGE_OK = 'Merge receipts'  # the (target, number, head) MERGE OK receipts merge_check.py wrote in this lease
+MERGE_AUTHORITY = 'Merge authority'  # `decide` when this repository's approved settings record `merge: decide`
 MERGED = 'Merged heads'  # the applied-settings entry holding the heads this lease's `log --kind merge` entries recorded
 EXTENSIONS = {'.py', '.js', '.ts', '.jsx', '.tsx', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yaml', '.yml'}
 MAX_LOG = 8 * 1024 * 1024
@@ -163,7 +171,7 @@ ENFORCERS = {'afk.py','data_root.py', 'parallel_slots.py', 'secret_patterns.py',
              'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
              'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py', 'heavy_run.py', 'delegate_env.py',
              'auto_gate.py', 'mode.py', 'judge.py', 'log_scan.py', 'route_task.py', 'brief_check.py', 'assignments.py',
-             'away_lease.py', 'away_gate_hook.py', 'project_store.py', 'project_progress.py', 'afk_overlay.py'}
+             'away_lease.py', 'away_gate_hook.py', 'afk_stop_hook.py', 'afk_permit_hook.py', 'project_store.py', 'project_progress.py', 'afk_overlay.py'}
 ENFORCERS = {name.casefold() for name in ENFORCERS}  # case-insensitive filesystems name one file many ways
 
 
@@ -297,16 +305,80 @@ def start(folder, args):
     print(f'This folder ({here[CONTEXT].state}): ' + '; '.join(
         f'{key}: {", ".join(map(str, value)) or "none"}' if isinstance(value, list) else f'{key}: {value}'
         for key, value in rules.items()) + '. Run `effective` in each repository you work in.')
+    print(native_notice(os.getcwd()), end='')
     print(afk_overlay.lines(os.getcwd()), end='')
 
 
+# The credential floor as Claude Code deny rules, which `setup` offers (docs/specs/afk-decider.md decision 6); a test
+# keeps this list equal to the setup skill's afk_native_rules.py.
+FLOOR_RULES = ('Read(~/.netrc)', 'Read(~/.git-credentials)', 'Read(~/.npmrc)', 'Read(~/.pypirc)', 'Read(~/.pgpass)',
+               'Read(~/.ssh/**)', 'Read(~/.aws/**)', 'Read(~/.azure/**)', 'Read(~/.gnupg/**)', 'Read(~/.kube/**)',
+               'Read(~/.docker/config.json)', 'Read(~/.config/gh/**)', 'Read(**/.env)', 'Read(**/.env.local)',
+               'Read(**/.dev.vars)', 'Bash(printenv:*)', 'Bash(env)', 'Bash(security:*)', 'Bash(gh auth token:*)',
+               'Bash(op:*)', 'Bash(pass:*)', 'Bash(vault:*)')
+LEASE_COMMANDS = ('log', 'stop', 'review', 'effective', 'rules', 'check', 'packet-check')
+ASKING_MODES = {'default', 'plan'}  # Claude Code approval modes that ask before a command runs
+
+
+def claude_permissions(path):
+    """(deny rules, defaultMode) of one Claude Code settings file; ([], None) when it is absent or unreadable. Only
+    those two keys are taken."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                return [], None
+            raw = os.read(fd, 1024 * 1024 + 1)
+        finally:
+            os.close(fd)
+        if len(raw) > 1024 * 1024:
+            return [], None
+        permissions = json.loads(raw).get('permissions', {})
+        deny = permissions.get('deny', [])
+        mode = permissions.get('defaultMode')
+        return ([r for r in deny if isinstance(r, str)] if isinstance(deny, list) else [],
+                mode if isinstance(mode, str) else None)
+    except (OSError, ValueError, AttributeError, UnicodeError):
+        return [], None
+
+
+def native_notice(cwd):
+    """Lines `start` prints about the host's own blocking (docs/specs/afk-decider.md B and D): the native allow rules
+    that spare the lease commands a prompt, and a warning when Claude Code's default config folder and this folder's
+    project settings hold none of the floor's deny rules and no approval mode that asks. It reads only
+    `permissions.deny` and `permissions.defaultMode`; a config folder chosen through the environment is not read."""
+    lines = []
+    script = str(Path(__file__).resolve())
+    if re.fullmatch(r'[A-Za-z0-9._,:=/@+%-]+', script):
+        lines.append('Claude Code: to spare the lease commands a prompt, add these allow rules with /permissions: '
+                     + ', '.join(f'Bash(python3 -I {script} {name}:*)' for name in LEASE_COMMANDS))
+    try:
+        home = dr.account_home()
+    except (OSError, ValueError, KeyError):
+        return ''.join(line + '\n' for line in lines)
+    deny, modes = set(), set()
+    for path in (home / '.claude/settings.json', Path(cwd) / '.claude/settings.json',
+                 Path(cwd) / '.claude/settings.local.json'):
+        rules, mode = claude_permissions(path)
+        deny.update(rules)
+        if mode is not None:
+            modes.add(mode)
+    if not deny & set(FLOOR_RULES) and not (modes and modes <= ASKING_MODES):
+        lines.append('Warning: Claude Code has no deny rule for the credential floor and no approval mode that asks, so '
+                     'nothing on the host blocks a credential read under this lease. Run /setup add afk to add the '
+                     'native deny rules.')
+    return ''.join(line + '\n' for line in lines)
+
+
 def stop(folder):
-    removed = read_private(folder, 'lease.json') is not None
-    read_private(folder, 'stop')
-    write_private(folder, 'stop', b'')
-    if removed:
-        os.unlink('lease.json', dir_fd=folder)
-        os.fsync(folder)
+    # The permission hook answers under this lock, so no approval is consumed once the stop is written.
+    with permits_lock(folder):
+        removed = read_private(folder, 'lease.json') is not None
+        read_private(folder, 'stop')
+        write_private(folder, 'stop', b'')
+        if removed:
+            os.unlink('lease.json', dir_fd=folder)
+            os.fsync(folder)
     print('afk stopped: stop marker written; lease ' + ('removed' if removed else 'already absent'))
     if afk_overlay.present(os.getcwd()):
         print(afk_overlay.STOPPED)
@@ -528,6 +600,9 @@ def effective(applied, cwd):
         for key, name in PROJECT_KEYS.items():
             if key in project:
                 result[name] = project[key]
+        if result.get('Merge') == 'decide':
+            # The standing per-repository record (decision 3): merges here as with Merge yes, under any lease.
+            result['Merge'], result[MERGE_AUTHORITY] = 'yes', 'decide'
         result['Roots'] = [r for r in project.get('roots', []) if not protected(r)]
         result[SKILL_REPO] = project.get('skill-repository') == 'yes'
         if 'decide' in project:  # an explicit list, [] included, replaces the user's answers; the fixed rows stay stop
@@ -2500,6 +2575,19 @@ def classified(folder, argv_json, paths, coordinator, current):
     return code, lease, applied, key, entry, argv, cwd
 
 
+def limit_reached(folder, cwd, current):
+    """True when the lease no longer lets an action run in `cwd`'s repository, exactly as `check` judges its limits: the
+    lease ended, changed or has not started, or (in `strict`) that repository's runs, runtime or hourly actions are
+    spent or at their cap. `open` keeps no per-project limits. Read by the afk stop hook; nothing is stored."""
+    code, lease, applied = lease_guard(folder, current)
+    if code is not None:
+        return True
+    here = effective(applied, cwd)
+    if here.get(MODE) == 'open':
+        return False
+    return project_limit(lease, here, current)[0] is not None
+
+
 def check(folder, args):
     current = now()
     code, lease, applied, key, entry, argv, cwd = classified(folder, args.argv_json, args.paths, args.coordinator, current)
@@ -2578,6 +2666,7 @@ def show_effective(folder):
                       'target': context.target, 'mode': result[MODE],
                       'guards': {THIRD_PARTY: result[THIRD_PARTY], DEFAULT_BRANCH: result[DEFAULT_BRANCH]},
                       'values': {name: result[name] for name in OFF},
+                      'merge_authority': result.get(MERGE_AUTHORITY, 'lease'),
                       'rules': repository_rules(result)},
                      separators=(',', ':')))
 
@@ -2740,7 +2829,7 @@ def packet_check(args):
 
 def log(folder, args):
     decision_flags = ('rung', 'settled', 'precedents', 'topic', 'project', 'decision', *FIELDS,
-                      'approve_argv_json', 'approve_paths')
+                      'approve_argv_json', 'approve_paths', 'approve_request')
     if args.kind != 'decision' and any(getattr(args, key) is not None for key in decision_flags):
         raise Refusal('decision fields (--rung, --settled, --precedents, --topic, --project, --decision and the row fields) belong to --kind decision only')
     current = now()
@@ -2763,14 +2852,26 @@ def log(folder, args):
         fields['head'] = args.head
     if args.kind == 'review-fallback' and (args.pr is None or args.head is None):
         raise Refusal('--kind review-fallback needs --pr and --head')
+    if args.session is not None:
+        # Why this session's turn may end (the afk stop hook reads it); the raw id is never stored.
+        if args.kind not in ('idle', 'parked') or not SESSION.fullmatch(args.session):
+            raise Refusal('--session belongs to --kind idle or parked and is the Session id the session start printed')
+        fields['session'] = hashlib.sha256(args.session.encode()).hexdigest()[:16]
+    if args.kind == 'idle':
+        lease = None if read_private(folder, 'stop') is not None else read_lease(folder)
+        if lease is None or not lease['start'] <= current < lease['expiry']:
+            raise Refusal('--kind idle needs a live lease')
     if args.kind == 'merge' and args.head is not None:
         repos = {repo for pr, head, repo in merge_pins(folder, current) if (pr, head) == (fields['pr'], args.head)}
         if len(repos) != 1:
             raise Refusal('--head matches no allowed `gh pr merge` check of this lease, or matches checks of two repositories')
         fields['repo'] = repos.pop()  # the merged head counts only in the repository the merge check named
     note = safe_note(args.note or '')
-    subject = None
-    if args.kind == 'decision' and (args.approve_argv_json is not None or args.approve_paths is not None):
+    subject = permit = None
+    if args.kind == 'decision' and args.approve_request is not None:
+        attempt(args)  # the row itself must be valid before the approval is stored
+        permit = permit_subject(args)
+    elif args.kind == 'decision' and (args.approve_argv_json is not None or args.approve_paths is not None):
         attempt(args)  # the row itself must be valid before the request is judged
         subject = approval_subject(folder, args, current)
     # Every other check passes before the decision line reaches the ledger.
@@ -2780,6 +2881,13 @@ def log(folder, args):
     append_log(folder, dict(time=current, tier=KINDS[args.kind], kind=args.kind, **fields, note=note), current)
     if subject is not None:
         append_log(folder, dict(time=current, tier=2, kind='approval', subject=subject, decision=identifier, note=''),
+                   current)
+    if permit is not None:
+        import away_lease
+        if not away_lease.record_permit(permit, current):
+            raise Refusal('--approve-request needs a live lease')
+        # A record for the user's return; `check` never reads or consumes this kind.
+        append_log(folder, dict(time=current, tier=2, kind='permit', subject=permit, decision=identifier, note=''),
                    current)
     print(identifier if identifier else 'afk action logged')
 
@@ -3087,6 +3195,20 @@ def open_approvals(folder, lease, current):
         return set()
 
 
+def permit_subject(args):
+    """The request digest of `--approve-request`: a rule, advisor or host rung settled on option 1 (run it), with no
+    other approval flag. Only the afk permission hook consumes it, once, within 30 minutes and this lease
+    (docs/specs/afk-decider.md B); `check` never does. Deciding whether the request reaches "Where it must stop" before
+    approving it is advisory (agent judgment)."""
+    if args.rung not in {'rule', 'advisor', 'host'} or args.settled != 'yes' or args.option != '1':
+        raise Refusal('an approval needs a rule, advisor or host rung that settled on option 1, which runs the request')
+    if args.approve_argv_json is not None or args.approve_paths is not None:
+        raise Refusal('approve one request: --approve-request, --approve-argv-json or --approve-paths')
+    if not SHA256.fullmatch(args.approve_request):
+        raise Refusal('--approve-request is the 64-hex request digest the permission hook printed')
+    return args.approve_request
+
+
 def approval_subject(folder, args, current):
     """The subject of `--approve-argv-json` or `--approve-paths`, checked before the decision is recorded: the rung
     decided option 1 (run it), and the request, judged now and here exactly as `check` would, is `unknown` and
@@ -3220,6 +3342,8 @@ def main(argv=None):
         record.add_argument('--' + key)
     record.add_argument('--approve-argv-json')
     record.add_argument('--approve-paths', nargs='+')
+    record.add_argument('--approve-request')
+    record.add_argument('--session')
     reviewed = sub.add_parser('review', allow_abbrev=False)
     reviewed.add_argument('--decision', required=True)
     reviewed.add_argument('verdict', choices=('kept', 'reversed'))
