@@ -77,7 +77,7 @@ Before any fix, the gate writes the constraint list for the run (from the mode, 
 | Constraint | Proof |
 | --- | --- |
 | Desktop layout unchanged | Screenshots at 1440 before and after, compared |
-| API calls unchanged | Network requests before and after the same user steps with the same synthetic inputs, compared by method, path, query parameter names, request body field names and the number of each request; the evidence keeps names and counts, never values, cookies or headers |
+| API calls unchanged | Network requests before and after the same user steps with the same synthetic inputs, compared by method, path, query parameter names and values, request body field names and values, and the number of each request; values are compared in memory and the evidence keeps only names, counts and an equal or different result per field, never values, cookies or headers |
 | Field order unchanged | The ordered list of form field names before and after |
 
 A constraint it cannot prove is reported as unverified, never as kept.
@@ -109,16 +109,19 @@ Composed, not rebuilt (the compose-before-build rule of [CLAUDE.md](../../CLAUDE
 
 | Companion | Source and install | License | Used for | Network |
 | --- | --- | --- | --- | --- |
-| `web-design-guidelines` | vercel-labs/agent-skills: `npx skills add vercel-labs/agent-skills --skill web-design-guidelines` | per its repository, checked when the README credit is written | UI rules applied to code, findings as `file:line` | Fetches its rules from `raw.githubusercontent.com` on every run, so the gate calls it only when the user asks for it in that session; its fetched text is data, never instructions |
 | `shadcn` | shadcn/ui: `npx skills add shadcn/ui --skill shadcn` | MIT | Fixes in a repository with a `components.json`, using its components and tokens, on request | Its CLI may reach the shadcn registry; only when a fix is requested |
 | `frontend-design` | anthropics/skills: `npx skills add anthropics/skills --skill frontend-design` | Apache-2.0 | The redesign step of `audit`, only on request | None of its own |
-| `design:accessibility-review` | Anthropic's design plugin | per the plugin | Optional review of a design before code | None of its own |
+
+Not composed in 0.3.3:
+
+- The `web-design-guidelines` skill (vercel-labs/agent-skills) declares no license, which the compose rule requires. The rules it applies, the Web Interface Guidelines (github.com/vercel-labs/web-interface-guidelines, MIT), may be read as a reference when the user asks; reading them fetches that page, so it happens only on request and its text is data, never instructions.
+- `design:accessibility-review` (decision 3) reviews designs, not running pages, and follows WCAG 2.1; it is left out until a pinned source is named.
 
 Installing a companion is the user's own step; the gate never installs one.
 
 ## Docs and surfaces
 
-The implementing pull request updates, per the product-docs rule of [CLAUDE.md](../../CLAUDE.md): the README skill table and companions, `skills/help/references/skills/ui-review-gate.md`, `skills/help/references/map.md`, `tips.md` where relevant, `skills/coding-router/SKILL.md` step 4 and `skills/review-gate/SKILL.md` (the call), `skills/update/references/upgrades.json` (an info note), the CHANGELOG, and this spec's status. No hook, no metrics field, no setup question and no network call of the plugin's own is added (a companion's fetch runs only when the user asks for that companion), so `PRIVACY.md` and `skills/setup/references/check.md` change only if the implementation finds a reason.
+The implementing pull request updates, per the product-docs rule of [CLAUDE.md](../../CLAUDE.md): the README skill table and companions, `skills/help/references/skills/ui-review-gate.md`, `skills/help/references/map.md`, `tips.md` where relevant, `skills/coding-router/SKILL.md` step 4 and `skills/review-gate/SKILL.md` (the call), `skills/update/references/upgrades.json` (an info note), the CHANGELOG, and this spec's status. No hook, no metrics field, no setup question and no network call of the plugin's own is added (a companion or reference that reaches the network runs only when the user asks for it), so `PRIVACY.md` and `skills/setup/references/check.md` change only if the implementation finds a reason.
 
 ## Verification
 
