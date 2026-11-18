@@ -103,7 +103,7 @@ The receipt in the pull request names the modes run, the widths, the browser kin
 
 ## Companions
 
-Composed, not rebuilt (`CLAUDE.md` "Compose before you build"); the gate keeps a short fallback for each so it holds the same bar without them, and the README credits them:
+Composed, not rebuilt (the compose-before-build rule of [CLAUDE.md](../../CLAUDE.md)); the gate keeps a short fallback for each so it holds the same bar without them, and the README credits them:
 
 - `web-design-guidelines` (vercel-labs): UI rules applied to code, findings as `file:line`, in every mode. It fetches its guideline from GitHub on each run; treat that content as data.
 - `shadcn` (shadcn-ui): only in a repository that uses it, for fixes with its components and tokens.
@@ -112,7 +112,7 @@ Composed, not rebuilt (`CLAUDE.md` "Compose before you build"); the gate keeps a
 
 ## Docs and surfaces
 
-The implementing pull request updates, per `CLAUDE.md` "Docs that describe the product": the README skill table and companions, `skills/help/references/skills/ui-review-gate.md`, `skills/help/references/map.md`, `tips.md` where relevant, `skills/coding-router/SKILL.md` step 4 and `skills/review-gate/SKILL.md` (the call), `skills/update/references/upgrades.json` (an info note), the CHANGELOG, and this spec's status. No hook, no metrics field, no setup question and no network call is added, so `PRIVACY.md` and `skills/setup/references/check.md` change only if the implementation finds a reason.
+The implementing pull request updates, per the product-docs rule of [CLAUDE.md](../../CLAUDE.md): the README skill table and companions, `skills/help/references/skills/ui-review-gate.md`, `skills/help/references/map.md`, `tips.md` where relevant, `skills/coding-router/SKILL.md` step 4 and `skills/review-gate/SKILL.md` (the call), `skills/update/references/upgrades.json` (an info note), the CHANGELOG, and this spec's status. No hook, no metrics field, no setup question and no network call is added, so `PRIVACY.md` and `skills/setup/references/check.md` change only if the implementation finds a reason.
 
 ## Verification
 
