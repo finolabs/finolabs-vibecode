@@ -1284,10 +1284,11 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
                 continue
             replaced = "the worktree at its retiring path is not the one claimed"
             try:
-                size = sweep.human(sweep.size_on_disk(moved))  # the slow walk first, so every check follows it
+                size = sweep.human(sweep.size_on_disk(moved))  # the slow walks first, so every check follows them
+                inner = holds_checkout(moved)
                 # The last checks before the removal: the claimed instance is still the one at this path, and its
                 # HEAD, branch, state and the worktrees around it are what made it a candidate.
-                reason = replaced if checkout_instance(moved) != info.get("instance") else \
+                reason = replaced if checkout_instance(moved) != info.get("instance") else inner or \
                     unchanged(sweep, info, moved, default, main_checkout, cwd)
                 if reason is None:
                     done = sweep.git(main_checkout, "worktree", "remove", "--", moved)
@@ -1355,6 +1356,26 @@ def put_back(sweep, main_checkout, original, moved, shown, reason, instance):
             return f"ledger: kept worktree {shown} ({reason}); it is back at {escaped} but git could not record it", False
     escaped = moved.encode("unicode_escape").decode("ascii")
     return f"ledger: kept worktree {shown} ({reason}); it could not be moved back and stays at {escaped}", False
+
+
+def holds_checkout(root):
+    """Why the folder at `root` may hold another checkout, read from the disk, not from git's records: any `.git`
+    below its own top-level one, or a folder the walk could not read. None when the whole tree was read and holds
+    none. Records can be stale after a move; this reading is what the removal relies on."""
+    stack = [str(root)]
+    top = os.path.join(str(root), ".git")
+    while stack:
+        folder = stack.pop()
+        try:
+            with os.scandir(folder) as entries:
+                for entry in entries:
+                    if entry.name == ".git" and entry.path != top:
+                        return "it holds another checkout"
+                    if entry.is_dir(follow_symlinks=False):
+                        stack.append(entry.path)
+        except OSError:
+            return "a folder inside it could not be read"
+    return None
 
 
 def nested_in(sweep, main_checkout, folder):

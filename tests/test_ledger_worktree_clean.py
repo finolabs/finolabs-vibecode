@@ -557,12 +557,12 @@ class WorktreeCleanTest(unittest.TestCase):
         with mock.patch.object(sweep, "size_on_disk", size_on_disk):
             lines, failed = ledger.clean_worktrees(str(self.main))
         self.assertTrue((path / "nested" / "README.md").exists(), lines)  # moved back with the outer worktree
-        self.assertTrue(any("holds another worktree" in line for line in lines), lines)
+        self.assertTrue(any("holds another" in line for line in lines), lines)
         listed = self.git(self.main, "worktree", "list", "--porcelain").stdout
         self.assertIn("worktree " + str((path / "nested").resolve()) + "\n", listed)  # recorded where it is
         out = self.ledger_run("clean-worktrees")  # a later run still sees the nesting
         self.assertTrue((path / "nested" / "README.md").exists(), out.stderr)
-        self.assertIn("holds another worktree", out.stderr)
+        self.assertIn("holds another", out.stderr)
 
     def test_a_commit_during_the_size_walk_is_put_back(self):
         path = self.worktree("feat-cw")
@@ -683,7 +683,7 @@ class WorktreeCleanTest(unittest.TestCase):
         with mock.patch.object(sweep, "git", git):
             lines, failed = ledger.clean_worktrees(str(self.main))
         self.assertTrue((path / "nested" / "unsaved.txt").exists(), lines)
-        self.assertTrue(any("holds another worktree" in line for line in lines), lines)
+        self.assertTrue(any("holds another" in line for line in lines), lines)
         listed = self.git(self.main, "worktree", "list", "--porcelain").stdout
         self.assertIn("worktree " + str((path / "nested").resolve()) + "\n", listed)
         self.assertNotIn(".fnl-retiring-", listed)
@@ -720,7 +720,7 @@ class WorktreeCleanTest(unittest.TestCase):
         stranded = self.retiring()
         out = self.ledger_run("clean-worktrees")  # the next run resumes the claim
         self.assertTrue((stranded[0] / "nested" / "unsaved.txt").exists(), out.stderr)
-        self.assertIn("holds another worktree", out.stderr)
+        self.assertIn("holds another", out.stderr)
 
     def test_a_worktree_registered_during_the_move_back_stays_visible(self):
         path = self.worktree("feat-mb")
@@ -740,7 +740,45 @@ class WorktreeCleanTest(unittest.TestCase):
             ledger.clean_worktrees(str(self.main))
         out = self.ledger_run("clean-worktrees")
         self.assertTrue((path / "nested" / "unsaved.txt").exists(), out.stderr)
-        self.assertIn("holds another worktree", out.stderr)
+        self.assertIn("holds another", out.stderr)
+
+    def test_a_checkout_inside_that_git_does_not_list_still_stops_the_removal(self):
+        path = self.worktree("feat-ul")
+        self.dispatch(path)
+        self.ignore_nested()
+        self.git(path, "init", "-q", str(path / "nested"))  # no worktree record names it
+        (path / "nested" / "unsaved.txt").write_text("work\n")
+        out = self.ledger_run("clean-worktrees", code=None)
+        self.assertTrue((path / "nested" / "unsaved.txt").exists(), out.stderr)
+        self.assertIn("holds another checkout", out.stderr)
+
+    def test_a_failed_nested_repair_does_not_expose_the_next_run(self):
+        path = self.worktree("feat-fn")
+        self.dispatch(path)
+        self.ignore_nested()
+        ledger, sweep = self.load_ledger()
+        real_size, real_git = sweep.size_on_disk, sweep.git
+        added = []
+
+        def size_on_disk(target):
+            if ".fnl-retiring-" in str(target) and not added:
+                added.append(True)
+                self.add_nested(real_git, target, "feat-fn2")
+            return real_size(target)
+
+        real_follow = ledger.follow
+
+        def follow(sweep_module, main, old, new):
+            if ".fnl-retiring-" in str(old):
+                return False  # the move back cannot record the nested worktree at its new place
+            return real_follow(sweep_module, main, old, new)
+
+        with mock.patch.object(sweep, "size_on_disk", size_on_disk), mock.patch.object(ledger, "follow", follow):
+            ledger.clean_worktrees(str(self.main))
+        self.assertTrue((path / "nested" / "unsaved.txt").exists())
+        out = self.ledger_run("clean-worktrees", code=None)  # git's record of the nested one is stale now
+        self.assertTrue((path / "nested" / "unsaved.txt").exists(), out.stderr)
+        self.assertIn("holds another checkout", out.stderr)
 
     def test_a_failed_move_is_undone(self):
         path = self.worktree("feat-fm")
