@@ -520,6 +520,11 @@
           "kind": "setup",
           "text": "A repository can let the afk decider merge under any lease, always behind MERGE OK: answer the new merge question in its afk setup.",
           "setup": "/setup add afk"
+        },
+        {
+          "id": "0.3.3/instructions-conflict-scan",
+          "kind": "info",
+          "text": "/setup instructions now flags lines in your instruction files that stop afk or delegate (merge only where you said so, own away rules, machine facts) and proposes fixes."
         }
       ]
     }
