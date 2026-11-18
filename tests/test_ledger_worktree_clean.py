@@ -402,7 +402,10 @@ class WorktreeCleanTest(unittest.TestCase):
         stranded = self.retiring()
         self.assertEqual(len(stranded), 1, lines)
         self.assertTrue(any("stays at" in line for line in lines), lines)
-        self.assertIsNotNone(ledger.has_claim(str(stranded[0])))  # a later run can still finish it
+        self.assertIsNotNone(ledger.has_claim(str(stranded[0])))
+        out = self.ledger_run("clean-worktrees")  # a later run finds it at its registered retiring path
+        self.assertEqual(self.retiring(), [], out.stderr)
+        self.assertIn("1 removed", out.stderr)
 
     def test_a_replacement_after_the_claim_is_left_alone(self):
         path = self.worktree("feat-ra")
@@ -508,6 +511,29 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertTrue(failed)
         self.assertFalse(path.exists(), lines)  # the swapped-in worktree was not moved to the old path
         self.assertEqual(len(self.retiring()), 1, lines)
+
+    def test_a_failed_move_never_moves_a_folder_swapped_in(self):
+        path = self.worktree("feat-sm")
+        self.dispatch(path)
+        ledger, sweep = self.load_ledger()
+        real = sweep.git
+        aside = []
+
+        def git(checkout, *args, **kwargs):
+            if args[:2] == ("worktree", "move") and ".fnl-retiring-" in args[-1]:
+                os.rename(args[-2], args[-1])
+                aside.append(args[-1] + "-aside")
+                os.rename(args[-1], aside[0])  # the renamed folder leaves; something else takes its place
+                os.mkdir(args[-1])
+                raise subprocess.TimeoutExpired("git", 60)
+            return real(checkout, *args, **kwargs)
+
+        with mock.patch.object(sweep, "git", git):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue(failed)
+        self.assertFalse(path.exists(), lines)  # the folder swapped in was not moved to the old path
+        self.assertTrue(Path(aside[0][:-len("-aside")]).is_dir(), lines)
+        self.assertTrue(any("stays at" in line for line in lines), lines)
 
     def test_a_failed_move_is_undone(self):
         path = self.worktree("feat-fm")

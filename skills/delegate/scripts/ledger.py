@@ -1152,7 +1152,7 @@ def claim(sweep, info, default, place, cwd, main_checkout):
             except Exception:
                 moved = False
             if not moved:
-                if undo_move(sweep, main_checkout, path, target):
+                if undo_move(sweep, main_checkout, path, target, instance):
                     drop_claim(target)
                     return "git refused to move it", None
                 # The folder was renamed and cannot go back: the claim record stays, so a later run can finish it.
@@ -1162,16 +1162,20 @@ def claim(sweep, info, default, place, cwd, main_checkout):
     return None, target
 
 
-def undo_move(sweep, main_checkout, original, target):
-    """After a failed `git worktree move`: True when nothing was renamed or the folder is back where it was."""
+def undo_move(sweep, main_checkout, original, target, instance):
+    """After a failed `git worktree move`: True when nothing was renamed or the folder is back where it was and
+    registered there. A folder at `target` that is not the claimed instance is never touched. When the old path
+    is taken, the renamed folder is registered at `target`, so the kept claim lets a later run find it."""
     if not os.path.isdir(target):
         return True
-    if os.path.lexists(original):
+    if checkout_instance(target) != instance:
         return False
     try:
+        if os.path.lexists(original):
+            sweep.git(main_checkout, "worktree", "repair", "--", target)
+            return False
         os.rename(target, original)
-        sweep.git(main_checkout, "worktree", "repair", "--", original)
-        return True
+        return sweep.git(main_checkout, "worktree", "repair", "--", original).returncode == 0
     except Exception:
         return False
 
