@@ -171,17 +171,17 @@ class AfkCheckHookTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertNotEqual(self.hook(command), denial(PARSE))
 
-    def test_a_wrapper_name_is_read_only_where_a_command_starts(self):
+    def test_codex_exec_is_codex_s_subcommand_not_the_shell_wrapper(self):
         self.start()
-        # `exec` as an argument of another program is not the shell's exec, so its flags are that program's.
-        for command in ("codex exec -m gpt -s read-only 'review this'", 'nohup codex exec --json x',
-                        'git log --format=%H -- exec', 'grep -n timeout --color x', 'echo exec -x'):
+        for command in ("codex exec -m gpt -s read-only 'review this'", 'cd x && codex exec --json -m gpt y'):
             with self.subTest(command=command):
                 self.assertNotEqual(self.hook(command), denial(PARSE))
-        # Where the shell starts a command, after a wrapper, an operator, an assignment or a keyword, it still counts.
-        for command in ('exec -x ls', 'ls; exec -x ls', 'ls && exec -x ls', 'nohup exec -x ls', 'timeout 5 exec -x ls',
-                        'FOO=1 exec -x ls', 'if true; then exec -x ls; fi', '! exec -x ls', '{ exec -x ls; }',
-                        'while true; do exec -x ls; done', 'ls|nice -5 ls', 'time nice -5 ls', 'flock f -c ls'):
+        # Every other placement keeps the wrapper rule, including the bypasses a looser walk let through.
+        for command in ('exec -x ls', 'ls; exec -x ls', 'nohup exec -x ls', 'timeout 5 exec -x ls',
+                        "codex exec -m gpt caffeinate -t 5 sh -c 'pr\"\"intenv'",
+                        ">out caffeinate -t 5 sh -c 'pr\"\"intenv'", "env FOO=1 caffeinate -t 5 sh -c 'x'",
+                        "pnpm exec caffeinate -t 5 sh -c 'x'", "exec -a 'a b' caffeinate -t 5 sh -c 'x'",
+                        'exec -a codex exec -x ls', '>out codex exec -x ls', 'nohup codex exec -x ls'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), denial(PARSE))
 

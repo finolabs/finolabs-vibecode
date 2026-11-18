@@ -152,11 +152,6 @@ WRAPPER_FLAGS = {'timeout': {'-k': 1, '-s': 1}, 'nice': {'-n': 1}, 'exec': {'-a'
                  'npx': {'-y': 0, '--yes': 0, '-p': 1}}
 GLOB_OPTIONS = ('glob', 'magic', 'equals', 'brace', 'rcexpand', 'wordsplit')
 EXEC_FLAGS = {'-exec', '-execdir', '-ok', '-okdir'}
-# Words after which the shell reads the next word as a command name, besides the operators: a wrapper name is a
-# wrapper only there (or after another wrapper), so `codex exec -m x` keeps its flags.
-COMMAND_KEYWORDS = {'if', 'then', 'else', 'elif', 'do', 'while', 'until', '!', '{'}
-WRAPPER_OPERANDS = {'timeout', 'chrt', 'taskset', 'flock', 'script'}  # one operand before the command they run
-ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=.*', re.S)
 
 
 def bad_program(program, words):
@@ -187,6 +182,14 @@ def glued_split(argv, afk):
     return words
 
 
+def program_subcommand(words, index):
+    """True for `exec` right after a plain `codex` that is the first word or follows an operator: Codex's own
+    subcommand, whose flags (`-m`, `-s`) are not the shell's. Any other placement keeps the wrapper rule, so a
+    redirection, prefix or flag value before `codex` gets the split message as before."""
+    return (words[index] == 'exec' and index >= 1 and words[index - 1] == 'codex'
+            and (index == 1 or words[index - 2] in OPERATORS))
+
+
 def reparsed(argv, afk):
     """True when any command `check` reads out of argv (every reading, wrappers, glued operators and compound words
     included, and a `find -exec` command) runs code a shell parses again, changes the shell's glob options, or has
@@ -195,18 +198,9 @@ def reparsed(argv, afk):
         return True
     wrappers = afk.PREFIX_WORDS | afk.FILE_PREFIXES
     words = glued_split(argv, afk)
-    starts, index = True, 0  # `starts`: the shell would read the word at `index` as a command name
-    while index < len(words):
-        word = words[index]
+    for index, word in enumerate(words):
         base = os.path.basename(word)
-        if word in OPERATORS or word in COMMAND_KEYWORDS:
-            starts, index = True, index + 1
-            continue
-        if not starts or (base not in wrappers and not ASSIGNMENT.fullmatch(word)):
-            starts, index = False, index + 1  # a program's own argument (`codex exec`) is not a wrapper
-            continue
-        if base not in wrappers:
-            index += 1  # an assignment before the command keeps the next word in command position
+        if base not in wrappers or program_subcommand(words, index):
             continue
         allowed, at = WRAPPER_FLAGS.get(base, {}), index + 1
         if base in afk.FILE_PREFIXES and any(w.startswith('-') for w in words[index + 1:index + 4]):
@@ -215,9 +209,6 @@ def reparsed(argv, afk):
             if words[at] not in allowed:
                 return True  # a wrapper flag `commands_of` may misread
             at += 1 + allowed[words[at]]
-        if base in WRAPPER_OPERANDS and at < len(words) and words[at] not in OPERATORS:
-            at += 1  # the duration, priority, mask or file before the command the wrapper runs
-        index = at
     for reading in afk.READINGS:
         for program, words, _env, inline, _pattern in afk.commands_of(argv, full=True, split_patterns=reading):
             if inline:
