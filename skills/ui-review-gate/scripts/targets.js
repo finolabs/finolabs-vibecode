@@ -33,23 +33,27 @@
   };
   const circlesMeet = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 < 576;
   const inline = (el) => {
-    /* A link in a sentence: climb inline wrappers (a span around the link) to the first block, and look for
-       text there outside the link itself. */
+    /* A link in a sentence: its contiguous inline run (the siblings of its outermost inline wrapper, up to the
+       nearest block on each side) holds text outside any link. Text across a block boundary is another line. */
     if (el.tagName.toLowerCase() !== "a" || getComputedStyle(el).display !== "inline") return false;
     let n = el;
     while (n.parentElement && getComputedStyle(n.parentElement).display === "inline") n = n.parentElement;
-    const block = n.parentElement;
-    if (!block) return false;
-    /* Only the block's own inline content counts: a nested block (another paragraph, a list) is a different
-       line box, so its text is not this sentence. */
-    const walk = (node) => {
-      if (node === el) return false;
+    if (!n.parentElement) return false;
+    const isBlock = (node) => node.nodeType === 1 && getComputedStyle(node).display !== "inline";
+    const text = (node) => {
       if (node.nodeType === 3) return !!node.textContent.trim();
-      if (node.nodeType !== 1 || getComputedStyle(node).display !== "inline") return false;
-      if (node.tagName.toLowerCase() === "a") return false; /* another link's text is not sentence text */
-      return Array.from(node.childNodes || []).some(walk);
+      if (node.nodeType !== 1 || isBlock(node) || node.tagName.toLowerCase() === "a") return false;
+      return Array.from(node.childNodes || []).some(text);
     };
-    return Array.from(block.childNodes).some(walk);
+    const siblings = Array.from(n.parentElement.childNodes);
+    const at = siblings.indexOf(n);
+    for (const step of [-1, 1]) {
+      for (let i = at + step; i >= 0 && i < siblings.length; i += step) {
+        if (isBlock(siblings[i])) break;
+        if (text(siblings[i])) return true;
+      }
+    }
+    return n !== el && text(n);
   };
   const describe = (el) => {
     const text = (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40);
