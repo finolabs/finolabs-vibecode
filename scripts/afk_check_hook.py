@@ -182,17 +182,22 @@ def glued_split(argv, afk):
     return words
 
 
-def reparsed(argv, afk):
+CODEX_EXEC = re.compile(r'[ \t]*codex[ \t]+exec(?:[ \t]|$)')  # the raw command starts with these two plain words
+
+
+def reparsed(argv, afk, codex_exec=False):
     """True when any command `check` reads out of argv (every reading, wrappers, glued operators and compound words
     included, and a `find -exec` command) runs code a shell parses again, changes the shell's glob options, or has
-    a program name holding an expansion, a glob or a brace."""
+    a program name holding an expansion, a glob or a brace. `codex_exec`: the raw command starts with the plain
+    words `codex exec`, so that second word is Codex's own subcommand, not the shell's exec; nothing else is
+    exempt, since the split words cannot tell a real operator from one inside quotes."""
     if any(word in OPAQUE_WORDS for word in argv):
         return True
     wrappers = afk.PREFIX_WORDS | afk.FILE_PREFIXES
     words = glued_split(argv, afk)
     for index, word in enumerate(words):
         base = os.path.basename(word)
-        if base not in wrappers:
+        if base not in wrappers or (codex_exec and index == 1 and words[:2] == ['codex', 'exec']):
             continue
         allowed, at = WRAPPER_FLAGS.get(base, {}), index + 1
         if base in afk.FILE_PREFIXES and any(w.startswith('-') for w in words[index + 1:index + 4]):
@@ -416,7 +421,7 @@ def main():
         sys.path.insert(0, str(script.parent))
         import afk
 
-        if (glued_operator(unquoted_newlines(command), argv) or reparsed(argv, afk)
+        if (glued_operator(unquoted_newlines(command), argv) or reparsed(argv, afk, bool(CODEX_EXEC.match(command)))
                 or outside_allowlist(argv, afk)):
             deny(PARSE_MESSAGE)
             return 0
