@@ -14,7 +14,7 @@ Each rule line says who enforces it: a host setting, a hook, the review gate, or
 
 ## 2. Authority and approvals (required)
 
-- Actions that always need the user's explicit yes: push, merge, deploy, publish, send messages, delete or overwrite data, change shared settings or other people's work.
+- Actions that always need the user's explicit yes: push, merge, deploy, publish, send messages, delete or overwrite data, change shared settings or other people's work; except what an `afk` lease records as the user's standing yes (next bullet), which this list must say so it does not override the lease.
 - Whether repository or organization ownership grants access by itself (recommended: no).
 - How to handle conflicting instructions (recommended: expose the conflict; a newer instruction does not win by being newer).
 - Other sessions and agents: may the agent message, rename or stop sessions it did not start? (recommended: only with authority).
