@@ -848,6 +848,15 @@ class SameFamilyFallbackTest(unittest.TestCase):
                 self.out = lines
                 self.assertFalse(self.evaluate()[0])
 
+    def test_a_weekly_floor_suffix_neither_hides_nor_creates_evidence(self):
+        iso = self.iso
+        from datetime import timedelta
+        line = f"Quota codex/default: measured {iso(timedelta(hours=-1))}; week 7d: %d%% remaining, resets {iso(timedelta(days=1))}; weekly floor 15%%"
+        self.out = [line % 2, self.out[1]]
+        self.assertTrue(self.evaluate()[0])
+        self.out = [line % 12, self.out[1]]  # under the user's floor, but above the evidence line
+        self.assertFalse(self.evaluate()[0])
+
     def test_the_fallback_runs_whatever_routing_picks(self):
         # Routing picks codex because codex has no reading: the fallback still runs and refuses.
         self.out = [self.out[1]]
@@ -1111,6 +1120,9 @@ class OpenLeaseFallbackTest(SameFamilyFallbackTest):
         pass
 
     def test_only_positive_evidence_counts_as_out(self):
+        pass
+
+    def test_a_weekly_floor_suffix_neither_hides_nor_creates_evidence(self):
         pass
 
     def test_the_fallback_runs_whatever_routing_picks(self):
