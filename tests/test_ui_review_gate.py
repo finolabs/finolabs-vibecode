@@ -12,6 +12,8 @@ import unittest
 from html.parser import HTMLParser
 from pathlib import Path
 
+# select-tests: reads skills/ui-review-gate/
+
 ROOT = Path(__file__).resolve().parent.parent
 SKILL = ROOT / "skills/ui-review-gate"
 SCRIPTS = SKILL / "scripts"
