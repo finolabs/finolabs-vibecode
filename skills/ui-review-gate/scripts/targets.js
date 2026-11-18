@@ -33,9 +33,19 @@
   };
   const circlesMeet = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 < 576;
   const inline = (el) => {
+    /* A link in a sentence: climb inline wrappers (a span around the link) to the first block, and look for
+       text there outside the link itself. */
     if (el.tagName.toLowerCase() !== "a" || getComputedStyle(el).display !== "inline") return false;
-    const parent = el.parentElement;
-    return !!parent && Array.from(parent.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim());
+    let n = el;
+    while (n.parentElement && getComputedStyle(n.parentElement).display === "inline") n = n.parentElement;
+    const block = n.parentElement;
+    if (!block) return false;
+    const walk = (node) => {
+      if (node === el) return false;
+      if (node.nodeType === 3) return !!node.textContent.trim();
+      return Array.from(node.childNodes || []).some(walk);
+    };
+    return Array.from(block.childNodes).some(walk);
   };
   const describe = (el) => {
     const text = (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40);

@@ -27,8 +27,9 @@
   const luminance = (rgb) => 0.2126 * channel(rgb[0]) + 0.7152 * channel(rgb[1]) + 0.0722 * channel(rgb[2]);
   const ratio = (a, b) => {
     const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-    return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
+    return (hi + 0.05) / (lo + 0.05);  /* compared raw: WCAG forbids rounding across the threshold */
   };
+  const shown2 = (r) => Math.floor(r * 100) / 100;  /* display only, never rounded up */
   const isLarge = (style) => {
     const size = parseFloat(style.fontSize) || 16;
     const weight = parseInt(style.fontWeight, 10) || (style.fontWeight === "bold" ? 700 : 400);
@@ -41,14 +42,19 @@
     }
     return false;
   };
+  const translucent = (el) => {
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      if (parseFloat(getComputedStyle(n).opacity) < 1) return true;
+    }
+    return false;
+  };
   const backdrop = (el) => {
     let colour = [0, 0, 0, 0];
-    let uncertain = false;
+    let uncertain = translucent(el);  /* opacity anywhere up the tree changes what is rendered */
     const layers = [];
     for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
       const s = getComputedStyle(n);
       if (s.backgroundImage && s.backgroundImage !== "none") uncertain = true;
-      if (parseFloat(s.opacity) < 1) uncertain = true;
       const c = parse(s.backgroundColor);
       if (!c) { uncertain = true; continue; }
       layers.push(c);
@@ -84,7 +90,7 @@
       const r = ratio(shown, back.colour);
       const large = isLarge(style);
       const threshold = large ? 3 : 4.5;
-      results.push({ kind: "text", ...describe(el), large, ratio: r, threshold, pass: r >= threshold,
+      results.push({ kind: "text", ...describe(el), large, ratio: shown2(r), threshold, pass: r >= threshold,
         foreground: hex(shown), background: hex(back.colour), uncertain: back.uncertain || fg[3] < 1 });
     }
     if (CONTROL.test(tag) || ROLES.test(el.getAttribute("role") || "")) {
@@ -103,8 +109,8 @@
         continue;
       }
       const r = ratio(edge, behind.colour);
-      results.push({ kind: "component", ...describe(el), boundary: source, ratio: r, threshold: 3, pass: r >= 3,
-        foreground: hex(edge), background: hex(behind.colour), uncertain: behind.uncertain });
+      results.push({ kind: "component", ...describe(el), boundary: source, ratio: shown2(r), threshold: 3, pass: r >= 3,
+        foreground: hex(edge), background: hex(behind.colour), uncertain: behind.uncertain || translucent(el) });
     }
   }
   return JSON.stringify({ snippet: "contrast", checked, truncated: results.length >= LIMIT,

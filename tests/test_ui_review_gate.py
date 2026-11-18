@@ -76,16 +76,21 @@ class SnippetResults(unittest.TestCase):
         out = self.run_snippet("contrast.js")
         by_id = {(r["kind"], r["id"]): r for r in out["results"]}
         grey = by_id[("text", "grey-text")]
-        self.assertEqual((grey["ratio"], grey["threshold"], grey["pass"], grey["large"]), (3.9, 4.5, False, False))
+        self.assertEqual((grey["ratio"], grey["threshold"], grey["pass"], grey["large"]), (3.89, 4.5, False, False))
         large = by_id[("text", "large-grey")]
-        self.assertEqual((large["ratio"], large["threshold"], large["pass"], large["large"]), (3.9, 3, True, True))
+        self.assertEqual((large["ratio"], large["threshold"], large["pass"], large["large"]), (3.89, 3, True, True))
         self.assertEqual(by_id[("text", "dark-text")]["ratio"], 21)
         button = by_id[("component", "small")]
         self.assertEqual((button["boundary"], button["threshold"], button["pass"]), ("background", 3, True))
         field = by_id[("component", "email")]
         self.assertIsNone(field["pass"])
         self.assertTrue(field["uncertain"])
-        self.assertEqual(out["failures"], 1)
+        near = by_id[("text", "near-threshold")]
+        # 4.4968:1 is a failure; the ratio is compared raw and shown rounded down, never up to 4.5.
+        self.assertEqual((near["ratio"], near["pass"]), (4.49, False))
+        faded = by_id[("text", "faded-text")]
+        self.assertTrue(faded["uncertain"], "opacity on an ancestor above an opaque background is uncertain")
+        self.assertEqual(out["failures"], 2)
 
     def test_targets_block_below_24_px_and_flag_24_to_43_as_low(self):
         out = self.run_snippet("targets.js")
@@ -96,6 +101,7 @@ class SnippetResults(unittest.TestCase):
         self.assertEqual((by_id["medium"]["size"], by_id["medium"]["severity"]), ("24-43", "low"))
         self.assertEqual((by_id["spaced"]["severity"], by_id["spaced"]["exception"]), ("low", "spacing"))
         self.assertEqual((by_id["inline-link"]["severity"], by_id["inline-link"]["exception"]), ("low", "inline"))
+        self.assertEqual((by_id["wrapped-link"]["severity"], by_id["wrapped-link"]["exception"]), ("low", "inline"))
         self.assertNotIn("email", by_id, "a 48 px tall field is not reported")
         self.assertEqual(out["blocking"], 1)
 
