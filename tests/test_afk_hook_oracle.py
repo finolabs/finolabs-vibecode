@@ -87,6 +87,8 @@ CORPUS = [
     ('X=a; git y', [], []),
     ('git x 2>out1 >out2 <in1', ['out1', 'out2'], ['in1']),
     ('ok <>out1', ['out1'], []),
+    ('ok x ""2>out1', ['out1'], []),
+    ('ok &&\\\n git x', [], []),
 ]
 STUBS = STUBS + ('codex_like', 'no')
 HOME = '/oracle-home'
@@ -96,7 +98,8 @@ REFUSED = ['ok $"abc"', 'ok 12>&1', 'ok |& cat', 'ok &| cat', 'ok >! f', 'case x
            'for x; do ok; done', 'for ((i=0;i<1;i++)); do ok; done', 'x=(a b)', 'ok <1-3>', 'ok {x}>f', 'ok $X',
            'ok ${HOME:-x}', 'ok $(ok)', 'ok `ok`', 'ok <(ok)', 'ok $((1))', 'ok {a,b}', '=ok', 'ok ~+/x',
            'select x in a; do ok; done', 'coproc ok', 'repeat 2 ok', 'cat <<EOF\nno end', 'ok &>>f', "ok $'\\x61'",
-           'cat <<true\ntr\\\nue\nok\ntrue', 'ok "$HOM""E"', 'ok $HO""ME', 'ok "${HO}ME"']
+           'cat <<true\ntr\\\nue\nok\ntrue', 'ok "$HOM""E"', 'ok $HO""ME', 'ok "${HO}ME"', "ok <$\\\n'x'", 'ok &\\\n& git x', 'ok 2>\\\n&1',
+           'for HOME in a; do ok; done', 'HOME=a; ok ~']
 
 
 def hook_module():

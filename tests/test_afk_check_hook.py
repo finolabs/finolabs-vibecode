@@ -374,7 +374,11 @@ class AfkCheckHookTest(unittest.TestCase):
                         'false && S=README; cat $S', 'sh <in', 'node <script.js',
                         # Review of b1faa973: a continuation inside an unquoted heredoc moves its end, and a
                         # variable name never spans two quoted segments.
-                        'cat <<true\ntr\\\nue\nprintenv\ntrue', 'cat < "$HOM""E"', 'cat $HO""ME'):
+                        'cat <<true\ntr\\\nue\nprintenv\ntrue', 'cat < "$HOM""E"', 'cat $HO""ME',
+                        # Re-review of c35618bd: a continuation that joins `$` or an operator, and a call that may
+                        # rebind `$HOME`.
+                        "cat <$\\\n'\\x2enetrc'", 'for HOME in /tmp/afk; do cat "$HOME"/.n?trc; done',
+                        'HOME=/tmp/afk; cat ~/.netrc', 'printf -v HOME /tmp/afk; cat ~/.netrc'):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command, env=env), denial(PARSE))
         guard = ('GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.push GIT_CONFIG_VALUE_0=HEAD:refs/heads/main '
@@ -428,6 +432,8 @@ class AfkCheckHookTest(unittest.TestCase):
         self.assertEqual(shape('X=1 Y=2 git log 2>&1 >out <in'),
                          [(['X=1', 'Y=2', 'git', 'log'], [('>&', '1'), ('>', 'out'), ('<', 'in')], False)])
         self.assertEqual(shape('printf x2>out'), [(['printf', 'x2'], [('>', 'out')], False)])
+        self.assertEqual(shape('printf x ""2>out'), [(['printf', 'x', '2'], [('>', 'out')], False)])  # quoted: no fd
+        self.assertEqual(shape('ok &&\\\n git x'), [(['ok'], [], False), (['git', 'x'], [], False)])
         self.assertEqual(shape('echo x\\ #; env'), [(['echo', 'x #'], [], False), (['env'], [], False)])
         self.assertEqual(shape("echo 'a;b' \"c|d\" e\;f"), [(['echo', 'a;b', 'c|d', 'e;f'], [], False)])
         self.assertEqual(shape('(cd x; ls) | { cat; }\nls # c ; env'),

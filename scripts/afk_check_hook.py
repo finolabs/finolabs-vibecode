@@ -46,12 +46,17 @@ ASSIGNMENT_WORD = re.compile(r'[A-Za-z_][A-Za-z0-9_]*\+?=')
 
 
 class Word:
-    __slots__ = ('chars', 'segments', 'refs')
+    __slots__ = ('chars', 'segments', 'refs', 'marks')
 
     def __init__(self):
         self.chars = []     # (character, quoting)
         self.segments = []  # per character, the quoted or unquoted segment it came from: `"$HOM""E"` is two
         self.refs = []      # (start, end) of each `$HOME` or `${HOME}` reference, quoting `u` or `d`
+        self.marks = []     # where each quote or escape began, an empty `""` included
+
+    def mark(self):
+        self.marks.append(len(self.chars))
+        return self
 
     def add(self, chars, quoting, segment):
         for c in chars:
@@ -64,8 +69,9 @@ class Word:
 
     @property
     def plain(self):
-        """True when no character is quoted or escaped: only then can the word be a reserved word."""
-        return all(q == 'u' for _, q in self.chars)
+        """True when no quote or escape took part, an empty `""` included: only then can the word be a reserved word,
+        a fd number or an unquoted heredoc delimiter."""
+        return not self.marks and all(q == 'u' for _, q in self.chars)
 
     @property
     def globbed(self):
@@ -74,7 +80,7 @@ class Word:
     def assignment(self):
         """True when the word's `NAME=` or `NAME+=` part is unquoted, as both shells need for an assignment."""
         match = ASSIGNMENT_WORD.match(self.text)
-        return bool(match) and all(q == 'u' for _, q in self.chars[:match.end()])
+        return bool(match) and all(m >= match.end() for m in self.marks)
 
     def expanded(self):
         """The word as the shell expands an unquoted leading `~` and `$HOME`; quoted text stays literal."""
@@ -103,6 +109,7 @@ NAME = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
 ZSH_NUMERIC_GLOB = re.compile(r'<[0-9]*-[0-9]*>')
 NAMED_FD = re.compile(r'\{[A-Za-z_][A-Za-z0-9_]*\}')
 DIGITS = re.compile(r'[0-9]+')  # ASCII only: the shells read no other digit as a fd
+HOME_BINDING = re.compile(r'(?:-[A-Za-z]*v)?HOME(?:\+?=.*)?', re.S)
 
 
 def lex(text):
@@ -130,9 +137,13 @@ def lex(text):
             if i + 1 >= n:
                 raise Unreadable('trailing backslash')
             if text[i + 1] == '\n':
+                after = text[i + 2:i + 3]
+                if i and (text[i - 1] == '$' and after not in ('', ' ', '\t', '\n')
+                          or text[i - 1] in ';&|<>(' and after and after in ';&|<>()'):
+                    raise Unreadable('continuation')  # it would join `$` or an operator to what follows (`$'...'`)
                 i += 2  # a continuation: the shell joins the two lines
                 continue
-            word = word or Word()
+            word = (word or Word()).mark()
             word.add(text[i + 1], 'e', segment + 1)
             segment += 2
             i += 2
@@ -141,13 +152,13 @@ def lex(text):
             end = text.find("'", i + 1)
             if end < 0:
                 raise Unreadable('unbalanced quote')
-            word = word or Word()
+            word = (word or Word()).mark()
             word.add(text[i + 1:end], 's', segment + 1)
             segment += 2
             i = end + 1
             continue
         if c == '"':
-            word = word or Word()
+            word = (word or Word()).mark()
             segment += 1
             j = i + 1
             while True:
@@ -175,7 +186,7 @@ def lex(text):
             end = text.find("'", i + 2)
             if end < 0 or '\\' in text[i + 2:end]:
                 raise Unreadable('ansi-c quote')  # its escapes could hide a name or a path
-            word = word or Word()
+            word = (word or Word()).mark()
             word.add(text[i + 2:end], 's', segment + 1)
             segment += 2
             i = end + 1
@@ -390,6 +401,8 @@ def parse(text):
         last = state['last']
         if kind == 'word':
             check_word(value)
+            if HOME_BINDING.fullmatch(value.text):
+                raise Unreadable('home binding')  # `HOME=...`, `read HOME`, `printf -v HOME`: `$HOME` may change
             if state['site'] is None:
                 keyword = value.text if value.plain else None
                 if last == 'close' and keyword not in CLOSERS:
@@ -494,6 +507,8 @@ def for_header(tokens, index, listed):
     name, keyword = tokens[index][1], tokens[index + 1][1]
     if not name.plain or not NAME.fullmatch(name.text) or not keyword.plain or keyword.text != 'in':
         raise Unreadable('for')  # `for x; do`, `for x (a b)`, `for ((`
+    if name.text == 'HOME':
+        raise Unreadable('home binding')  # the loop rebinds the one variable the hook expands
     index += 2
     while index < len(tokens) and tokens[index][0] == 'word':
         check_word(tokens[index][1])
