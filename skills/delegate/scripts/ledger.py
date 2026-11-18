@@ -1136,6 +1136,7 @@ def claim(sweep, info, default, place, cwd, main_checkout):
             if resumed:
                 if not has_claim(path):
                     return "no claim of this cleanup names it", None
+                info["instance"] = checkout_instance(path)
                 return None, path  # renamed by an earlier run that stopped before removing it
             if sweep.git_out(path, "rev-parse", "--verify", "HEAD^{commit}") != info["head"]:
                 return "its HEAD moved", None
@@ -1149,21 +1150,28 @@ def claim(sweep, info, default, place, cwd, main_checkout):
             except Exception:
                 moved = False
             if not moved:
-                drop_claim(target)
-                undo_move(sweep, main_checkout, path, target)
-                return "git refused to move it", None
+                if undo_move(sweep, main_checkout, path, target):
+                    drop_claim(target)
+                    return "git refused to move it", None
+                # The folder was renamed and cannot go back: the claim record stays, so a later run can finish it.
+                escaped = target.encode("unicode_escape").decode("ascii")
+                return f"git refused to move it; it could not be moved back and stays at {escaped}", None
+            info["instance"] = instance
     return None, target
 
 
 def undo_move(sweep, main_checkout, original, target):
-    """After a failed `git worktree move`: when the folder was renamed anyway, put it back where it was."""
-    if os.path.lexists(original) or not os.path.isdir(target):
-        return
+    """After a failed `git worktree move`: True when nothing was renamed or the folder is back where it was."""
+    if not os.path.isdir(target):
+        return True
+    if os.path.lexists(original):
+        return False
     try:
         os.rename(target, original)
         sweep.git(main_checkout, "worktree", "repair", "--", original)
+        return True
     except Exception:
-        pass
+        return False
 
 
 def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
@@ -1250,7 +1258,14 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
                 lines.append(f"ledger: kept worktree {shown} (the afk state was busy)")
                 continue
             if reason:
+                failed = failed or "could not be moved back" in reason
                 lines.append(f"ledger: kept worktree {shown} ({reason})")
+                continue
+            if checkout_instance(moved) != info.get("instance"):
+                # Another worktree now sits at the retiring path: never remove or move it.
+                failed = True
+                drop_claim(moved)
+                lines.append(f"ledger: kept worktree {shown} (the worktree at its retiring path is not the one claimed)")
                 continue
             moved_place = sweep.nesting(moved, main_checkout, [p if p != info["path"] else moved for p in linked])
             try:

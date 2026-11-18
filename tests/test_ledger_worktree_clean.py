@@ -383,6 +383,46 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertTrue(path.exists(), out.stderr)
         self.assertIn("0 removed", out.stderr)
 
+    def test_a_failed_move_that_cannot_go_back_is_a_failure_and_stays_claimed(self):
+        path = self.worktree("feat-fo")
+        self.dispatch(path)
+        ledger, sweep = self.load_ledger()
+        real = sweep.git
+
+        def git(checkout, *args, **kwargs):
+            if args[:2] == ("worktree", "move") and ".fnl-retiring-" in args[-1]:
+                os.rename(args[-2], args[-1])
+                os.mkdir(args[-2])  # someone took the old path meanwhile
+                raise subprocess.TimeoutExpired("git", 60)
+            return real(checkout, *args, **kwargs)
+
+        with mock.patch.object(sweep, "git", git):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue(failed)
+        stranded = self.retiring()
+        self.assertEqual(len(stranded), 1, lines)
+        self.assertTrue(any("stays at" in line for line in lines), lines)
+        self.assertTrue(ledger.has_claim(str(stranded[0])))  # a later run can still finish it
+
+    def test_a_replacement_after_the_claim_is_left_alone(self):
+        path = self.worktree("feat-ra")
+        self.dispatch(path)
+        ledger, sweep = self.load_ledger()
+        real_claim = ledger.claim
+
+        def claim(*args, **kwargs):
+            reason, moved = real_claim(*args, **kwargs)
+            if moved:  # the claimed worktree is replaced by another one on the same branch and head
+                self.git(self.main, "worktree", "remove", moved)
+                self.git(self.main, "worktree", "add", "-q", moved, "feat-ra")
+            return reason, moved
+
+        with mock.patch.object(ledger, "claim", claim):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue(failed)
+        self.assertEqual(len(self.retiring()), 1, lines)
+        self.assertTrue(any("not the one claimed" in line for line in lines), lines)
+
     def test_a_failed_move_is_undone(self):
         path = self.worktree("feat-fm")
         self.dispatch(path)
