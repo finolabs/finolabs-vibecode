@@ -161,6 +161,28 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertTrue(path.exists())
         self.assertIn("merged=no", out.stderr)
 
+    def test_an_inherited_git_dir_never_proves_a_merge(self):
+        path = self.worktree("feat-l2", merge=False)
+        head = self.git(path, "rev-parse", "HEAD").stdout.strip()
+        # The stub answers "merged at this head" only when a GIT_* override reaches it.
+        env = self.gh_stub('if env | grep -q "^GIT_"; then echo \'[{"number": 1, "headRefOid": "' + head +
+                           '"}]\'; else echo \'[]\'; fi\n')
+        env["GIT_DIR"] = str(self.base / "origin.git")
+        self.dispatch(path)
+        out = self.ledger_run("clean-worktrees", env=env)
+        self.assertTrue(path.exists())
+        self.assertIn("merged=no", out.stderr)
+
+    def test_the_forge_proves_a_pruned_squash_merge(self):
+        path = self.worktree("feat-p", merge=False)
+        head = self.git(path, "rev-parse", "HEAD").stdout.strip()
+        self.git(self.main, "push", "-q", "origin", "--delete", "feat-p")
+        self.git(self.main, "fetch", "-q", "--prune", "origin")
+        env = self.gh_stub("echo '[{\"number\": 8, \"headRefOid\": \"" + head + "\"}]'\n")
+        self.dispatch(path)
+        out = self.ledger_run("clean-worktrees", env=env)
+        self.assertFalse(path.exists(), out.stderr)
+
     def test_the_forge_proves_a_squash_merge(self):
         path = self.worktree("feat-q", merge=False)
         head = self.git(path, "rev-parse", "HEAD").stdout.strip()
@@ -206,6 +228,14 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertFalse(path.exists())
         self.assertEqual((out.stdout, out.stderr), ("", ""))
 
+    def test_a_background_run_stays_silent_on_a_malformed_ledger(self):
+        path = self.worktree("feat-h2")
+        self.dispatch(path)
+        with self.ledger.open("a") as handle:
+            handle.write("not json\n")
+        out = self.ledger_run("clean-worktrees", "--background", env=dict(self.env, FNL_WORKTREE_CLEAN=""))
+        self.assertEqual((out.stdout, out.stderr), ("", ""))
+
     def test_the_off_switch_keeps_everything(self):
         path = self.worktree("feat-i")
         self.dispatch(path)
@@ -214,13 +244,37 @@ class WorktreeCleanTest(unittest.TestCase):
 
     # -- the claim
 
+    def markers(self):
+        state = self.home / ".finolabs/vibecode/state"
+        return sorted(p.name for p in state.glob("worktree-retiring-*")) if state.is_dir() else []
+
+    def mark(self, path):
+        ledger, _ = self.load_ledger()
+        ledger.mark_retiring(ledger.path_digest(path))
+
     def test_start_refuses_a_checkout_that_is_being_removed(self):
         path = self.worktree("feat-r")
-        admin = Path(self.git(path, "rev-parse", "--absolute-git-dir").stdout.strip())
-        (admin / "fnl-retiring").write_text("")
+        self.mark(path)
         out = self.ledger_run(*START, "--checkout", str(path), code=1)
         self.assertIn("being removed", out.stderr)
         self.assertNotIn('"start"', self.ledger.read_text() if self.ledger.exists() else "")
+
+    def test_start_refuses_while_git_is_deleting_the_worktree(self):
+        # Mid-removal: the worktree's git link is gone, so git no longer sees a checkout there.
+        path = self.worktree("feat-x")
+        self.mark(path)
+        (path / ".git").unlink()
+        (path / "sub").mkdir()
+        out = self.ledger_run(*START, "--checkout", str(path / "sub"), code=1)
+        self.assertIn("being removed", out.stderr)
+
+    def test_an_old_marker_stops_refusing(self):
+        path = self.worktree("feat-y")
+        self.mark(path)
+        state = self.home / ".finolabs/vibecode/state"
+        for marker in state.glob("worktree-retiring-*"):
+            os.utime(marker, (1, 1))
+        self.ledger_run(*START, "--checkout", str(path))
 
     def claimable(self, name):
         path = self.worktree(name)
@@ -252,8 +306,7 @@ class WorktreeCleanTest(unittest.TestCase):
         with mock.patch.object(ledger, "lease_live", return_value=True):
             reason = ledger.claim(sweep, info, default, None, sweep.spellings(str(self.base)))
         self.assertEqual(reason, "an away lease started")
-        self.assertFalse((Path(self.git(path, "rev-parse", "--absolute-git-dir").stdout.strip())
-                          / "fnl-retiring").exists())
+        self.assertEqual(self.markers(), [])
 
     def test_a_claim_writes_the_marker_that_start_refuses(self):
         path, ledger, sweep, info, default = self.claimable("feat-t")
@@ -310,8 +363,32 @@ class WorktreeCleanTest(unittest.TestCase):
             lines, _ = ledger.clean_worktrees(str(self.main))
         self.assertTrue(path.exists())
         self.assertTrue(any("git refused the removal" in line for line in lines), lines)
-        admin = Path(self.git(path, "rev-parse", "--absolute-git-dir").stdout.strip())
-        self.assertFalse((admin / "fnl-retiring").exists())
+        self.assertEqual(self.markers(), [])
+        self.ledger_run(*START, "--checkout", str(path))  # the checkout is usable again
+
+    def test_a_removal_error_drops_the_marker(self):
+        path = self.worktree("feat-z")
+        self.dispatch(path)
+        ledger, sweep = self.load_ledger()
+        real = sweep.git
+
+        def git(checkout, *args, **kwargs):
+            if args[:2] == ("worktree", "remove"):
+                raise subprocess.TimeoutExpired("git", 60)
+            return real(checkout, *args, **kwargs)
+
+        with mock.patch.object(sweep, "git", git):
+            lines, failed = ledger.clean_worktrees(str(self.main))
+        self.assertTrue(failed)
+        self.assertTrue(path.exists())
+        self.assertEqual(self.markers(), [])
+
+    def test_a_removed_worktree_leaves_no_marker(self):
+        path = self.worktree("feat-k2")
+        self.dispatch(path)
+        self.ledger_run("clean-worktrees")
+        self.assertFalse(path.exists())
+        self.assertEqual(self.markers(), [])
 
     def test_a_live_lease_skips_the_cleanup(self):
         path = self.worktree("feat-w")

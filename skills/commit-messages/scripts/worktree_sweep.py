@@ -77,8 +77,9 @@ def git_out(checkout, *args, config=()):
 
 
 def run_gh(args, cwd):
-    """gh reads the repository from the worktree's own remote: an inherited GH_REPO never picks another one."""
-    env = {k: v for k, v in os.environ.items() if k != "GH_REPO"}
+    """gh reads the repository from the worktree's own remote: an inherited GH_REPO, GIT_DIR or other GIT_*
+    override never points it at another repository or configuration."""
+    env = {k: v for k, v in os.environ.items() if k != "GH_REPO" and not k.startswith("GIT_")}
     return subprocess.run(["gh", *args], capture_output=True, text=True, timeout=GH_TIMEOUT, cwd=cwd, env=env)
 
 

@@ -258,7 +258,7 @@ def cmd_start(args):
             checkout_id = checkout_identity(args.checkout)
         except (ImportError, OSError, ValueError, subprocess.SubprocessError):
             checkout_id = None  # non-code tasks can still end through the explicit escape hatch
-        if checkout_id is not None and retiring(args.checkout):
+        if retiring(args.checkout, checkout_id):
             sys.exit("ledger: refused: this checkout is being removed because its branch merged; "
                      "cut a new worktree for new work")
         starts, _ = load()
@@ -948,7 +948,8 @@ def cmd_summary(args):
 
 
 CLEAN_DEADLINE = 300  # seconds for one cleanup run
-MARKER = "fnl-retiring"  # written into a claimed worktree's own git admin folder; git deletes it with the worktree
+MARKER = "worktree-retiring-"  # + the claimed worktree's path digest, in the private state folder
+MARKER_LIFE = 1800  # seconds a marker counts; one left by a killed run stops refusing after this
 
 
 def cleanup_mode():
@@ -975,16 +976,41 @@ def open_checkouts():
             {s.get("checkout_id") for i, s in starts.items() if i not in finishes} - {None})
 
 
-def admin_folder(checkout):
-    """The checkout's own git admin folder (`.git/worktrees/<name>` for a linked worktree), or None."""
-    import worktree_sweep as sweep
-    found = sweep.git_out(checkout, "rev-parse", "--absolute-git-dir")
-    return Path(found) if found else None
+def path_digest(path):
+    """The digest `record.checkout_identity` gives a worktree root: sha256 of the resolved path."""
+    return hashlib.sha256(os.fsencode(Path(path).resolve())).hexdigest()
 
 
-def retiring(checkout):
-    folder = admin_folder(checkout)
-    return folder is not None and (folder / MARKER).exists()
+def mark_retiring(digest):
+    with dr.data_folder("state", create=True, private=True) as state:
+        fd = os.open(MARKER + digest, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600, dir_fd=state)
+        os.close(fd)
+
+
+def unmark_retiring(digest):
+    try:
+        with dr.data_folder("state", create=True, private=True) as state:
+            os.unlink(MARKER + digest, dir_fd=state)
+    except FileNotFoundError:
+        pass
+
+
+def retiring(checkout, checkout_id):
+    """True when a cleanup claimed this checkout (or a folder holding it) and has not finished removing it.
+
+    The markers live in the plugin's private state folder, not in the worktree, so they last through the whole
+    removal, while git deletes the worktree's own folders; they hold no path, only the digest."""
+    resolved = Path(checkout).resolve()
+    wanted = {path_digest(folder) for folder in (resolved, *resolved.parents)} | ({checkout_id} - {None})
+    with dr.data_folder("state", create=True, private=True) as state:
+        for digest in wanted:
+            try:
+                info = os.stat(MARKER + digest, dir_fd=state, follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            if time.time() - info.st_mtime < MARKER_LIFE:
+                return True
+    return False
 
 
 def inspect(sweep, entry, default, forge):
@@ -1028,7 +1054,8 @@ def claim(sweep, info, default, place, cwd):
             if lease_live():
                 return "an away lease started"
             _, running = open_checkouts()
-            if checkout_identity(info["path"]) in running:
+            identity = checkout_identity(info["path"])
+            if identity in running:
                 return "a dispatch started on it"
             fresh = inspect(sweep, {"path": info["path"], **({"locked": ""} if info["locked"] else {})},
                             default, forge=False)
@@ -1040,10 +1067,9 @@ def claim(sweep, info, default, place, cwd):
             reason = sweep.reason_not_candidate(fresh, place, cwd)
             if reason:
                 return reason
-            folder = admin_folder(info["path"])
-            if folder is None:
-                return "its git folder could not be read"
-            (folder / MARKER).write_text("")
+            info["digests"] = {identity, path_digest(info["path"])}
+            for digest in info["digests"]:
+                mark_retiring(digest)
     return None
 
 
@@ -1055,7 +1081,7 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
     ancestry proves are taken before those that need the forge, and those are shuffled, so repeated runs get
     past a slow one. A candidate is claimed (`claim`), then removed with `git worktree remove` (never forced)
     and `git branch -d`; git refuses a dirty worktree or an unmerged branch. Nothing is removed under a live away
-    lease. Stores nothing outside the claimed worktree's own git folder."""
+    lease. Stores only a path digest per claimed worktree in the private state folder, removed when its removal ends."""
     if cleanup_mode() == "off":
         return [], False
     if lease_live():
@@ -1086,7 +1112,8 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
             info = inspect(sweep, entry, default, forge=False)
             place = sweep.nesting(info["path"], main_checkout, linked)
             reason = sweep.reason_not_candidate(info, place, cwd)
-            if reason == "merged=unknown" and forge:
+            pruned = reason and reason.startswith("unpushed=") and not info["unpushed"][1]
+            if forge and (reason == "merged=unknown" or pruned):  # a pruned squash merge: only the forge knows
                 forge_needed.append((entry, shown, place))
             elif reason:
                 lines.append(f"ledger: kept worktree {shown} ({reason})")
@@ -1125,12 +1152,13 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
             if reason:
                 lines.append(f"ledger: kept worktree {shown} ({reason})")
                 continue
-            size = sweep.human(sweep.size_on_disk(info["path"]))
-            done = sweep.git(main_checkout, "worktree", "remove", "--", info["path"])
+            try:
+                size = sweep.human(sweep.size_on_disk(info["path"]))
+                done = sweep.git(main_checkout, "worktree", "remove", "--", info["path"])
+            finally:
+                for digest in info["digests"]:
+                    unmark_retiring(digest)  # after the removal ended, whatever its outcome
             if done.returncode != 0:
-                folder = admin_folder(info["path"])
-                if folder is not None:
-                    (folder / MARKER).unlink(missing_ok=True)
                 lines.append(f"ledger: kept worktree {shown} (git refused the removal)")
                 continue
             removed += 1
@@ -1174,8 +1202,11 @@ def cmd_clean_worktrees(args):
                 except BlockingIOError:
                     return  # another background run is already cleaning
                 try:
-                    clean_worktrees(args.checkout)
+                    with open(os.devnull, "w") as quiet:
+                        sys.stderr = quiet  # silent even when the ledger has malformed lines
+                        clean_worktrees(args.checkout)
                 finally:
+                    sys.stderr = sys.__stderr__
                     os.close(fd)
         except Exception:
             pass
