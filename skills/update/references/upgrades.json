@@ -505,6 +505,23 @@
           "text": "Claude Code: the afk check hook is gone and FNL_AFK_HOOK no longer does anything; under a lease the agent runs afk.py check itself and your host's permissions do the blocking."
         },
         {
+          "id": "0.3.3/afk-decider-hooks",
+          "kind": "hook",
+          "text": "Claude Code: under an afk lease, a stop hook sends a turn without an idle or parked record back once, and a permission hook answers prompts from recorded approvals."
+        },
+        {
+          "id": "0.3.3/afk-native-rules",
+          "kind": "setup",
+          "text": "Claude Code: afk setup can add native deny rules for the credential floor; /afk start warns while none is set and no approval mode asks.",
+          "setup": "/setup add afk"
+        },
+        {
+          "id": "0.3.3/afk-merge-decide",
+          "kind": "setup",
+          "text": "A repository can let the afk decider merge under any lease, always behind MERGE OK: answer the new merge question in its afk setup.",
+          "setup": "/setup add afk"
+        },
+        {
           "id": "0.3.3/instructions-conflict-scan",
           "kind": "info",
           "text": "/setup instructions now flags lines in your instruction files that stop afk or delegate (merge only where you said so, own away rules, machine facts) and proposes fixes."
@@ -513,6 +530,12 @@
           "id": "0.3.3/ui-review-gate",
           "kind": "info",
           "text": "New ui-review-gate: a report-only UI review (audit, forms, responsive, WCAG 2.2 AA) with read-only measurement snippets in your host's browser; advisory beside the code and security reviews."
+        },
+        {
+          "id": "0.3.3/quota-weekly-floor",
+          "kind": "setup",
+          "text": "Routing can stop handing work to one install before its week runs out: record a weekly floor such as claude/work=15 (stop after 85% used).",
+          "setup": "/setup add quota"
         }
       ]
     }

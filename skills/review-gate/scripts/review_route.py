@@ -302,7 +302,11 @@ def quota_view(lines, current=None):
             continue
         pools = re.findall(r"(?:^|; )([a-zA-Z0-9_-]+) ([^:;]+): (\d+)% remaining, resets ([^ ;]+)", match[4])
         relevant = [pool for pool in pools if family != "claude" or pool[0] == "week-all"]
-        depleted = {p[0] for p in relevant if int(p[2]) < 10 and quota_probe.timestamp(p[3]) > current}
+        # A weekly floor the user recorded for this install raises the 10% line for its weekly pools only.
+        floor = re.search(r"; weekly floor (\d+)%", match[4])
+        weekly = max(10, int(floor[1])) if floor else 10
+        depleted = {p[0] for p in relevant
+                    if int(p[2]) < (weekly if p[1] == "weekly" else 10) and quota_probe.timestamp(p[3]) > current}
         installs.setdefault(family, []).append(depleted)
     return marked, installs
 

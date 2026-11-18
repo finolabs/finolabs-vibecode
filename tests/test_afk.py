@@ -3378,5 +3378,93 @@ class AwayFlowTest(AfkBase):
             SCRIPT = saved
 
 
+class DeciderTest(AfkBase):
+    """docs/specs/afk-decider.md: the limit record the stop hook reads, `merge: decide`, the native rules notice and the
+    permission approvals `check` never consumes."""
+
+    def setUp(self):
+        super().setUp()
+        spec = importlib.util.spec_from_file_location('project_store_tested', SCRIPT.parent / 'project_store.py')
+        self.store = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.store)
+
+    project = ProjectScopeTest.project
+
+    def log_kinds(self):
+        return [json.loads(line)['kind'] for line in (self.state / 'log.jsonl').read_text().splitlines()]
+
+    def test_a_reached_limit_is_judged_live_and_writes_no_record(self):
+        # The stop hook asks `limit_reached` itself (afk-decider.md A), so `check` keeps no limit record.
+        self.start()
+        self.change_counts(runs=20)
+        self.check(['git', 'status'], tier=3, code='spent')
+        self.change_counts(runs=0, first=self.clock, hour_actions=[self.clock] * 30)
+        self.check(['git', 'status'], tier=3, code='limit')
+        log = self.state / 'log.jsonl'
+        entries = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+        self.assertEqual([e for e in entries if e['kind'] == 'limit'], [])
+
+    def test_a_repository_merge_decide_record_merges_under_a_strict_lease_with_merge_no(self):
+        self.start(NO)
+        self.check(['gh', 'pr', 'merge', '7'] + PIN + ['--repo', 'github.com/example/demo'], tier=3,
+                   code='merge-disabled')
+        self.project({'merge': 'decide'})
+        status, output = self.invoke('effective')
+        view = json.loads(output)
+        self.assertEqual((view['values']['Merge'], view['merge_authority']), ('yes', 'decide'))
+        self.check(['gh', 'pr', 'merge', '7'] + PIN + ['--repo', 'github.com/example/demo'])
+        self.project({'merge': 'no'})
+        self.assertEqual(json.loads(self.invoke('effective')[1])['merge_authority'], 'lease')
+        with self.assertRaises(Exception):
+            self.project({'merge': 'always'})
+
+    def test_merge_decide_still_needs_a_merge_ok_receipt(self):
+        self.start(NO)
+        self.project({'merge': 'decide'})
+        flags = ('--argv-json', json.dumps(['gh', 'pr', 'merge', '8'] + PIN + ['--repo', 'github.com/example/demo']))
+        status, output = self.invoke('check', *flags)
+        self.assertEqual((status, json.loads(output)['code']), (3, 'merge-unchecked'))
+
+    def test_start_offers_the_native_allow_rules_and_warns_without_deny_rules(self):
+        self.setup_config()
+        status, output = self.invoke('start')
+        self.assertEqual(status, 0, output)
+        self.assertIn('Warning: Claude Code has no deny rule for the credential floor', output)
+        self.invoke('stop')
+        settings = self.home / '.claude/settings.json'
+        settings.parent.mkdir()
+        ap = self.load()
+        settings.write_text(json.dumps({'permissions': {'deny': [ap.FLOOR_RULES[0]]}}))
+        status, output = self.invoke('start')
+        self.assertNotIn('Warning:', output)
+        self.invoke('stop')
+        settings.write_text(json.dumps({'permissions': {'defaultMode': 'default'}}))
+        self.assertNotIn('Warning:', self.invoke('start')[1])
+        self.invoke('stop')
+        settings.write_text(json.dumps({'permissions': {'defaultMode': 'bypassPermissions'}}))
+        self.assertIn('Warning:', self.invoke('start')[1])
+
+    def test_the_floor_rules_match_the_setup_script(self):
+        spec = importlib.util.spec_from_file_location('native_tested', ROOT / 'skills/setup/scripts/afk_native_rules.py')
+        native = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(native)
+        self.assertEqual(self.load().FLOOR_RULES, native.FLOOR_RULES)
+
+    def test_check_never_consumes_a_permission_approval_and_argv_approvals_ignore_it(self):
+        self.start(SETUP + '- Max actions per hour: 1000\n')
+        (self.repo / 'scripts').mkdir(exist_ok=True)
+        (self.repo / 'scripts/ci-local.sh').write_text('#!/bin/sh\n')
+        argv = ['scripts/ci-local.sh', 'fast']
+        host = ('--rung', 'host', '--settled', 'yes', '--by', 'claude', '--option', '1', '--of', '2',
+                '--model', 'claude-opus-5-5')
+        status, output = self.invoke('log', '--kind', 'decision', '--project', 'demo', '--topic', 'run it',
+                                     '--precedents', '0', *host, '--approve-request', 'c' * 64)
+        self.assertEqual(status, 0, output)
+        self.check(argv, tier=3, code='unknown')  # a permission approval is not an argv approval
+        permits = json.loads((self.state / 'permits.json').read_text())
+        self.assertEqual([(e['kind'], e['digest']) for e in permits], [('approval', 'c' * 64)])
+        self.assertIn('permit', self.log_kinds())
+
+
 if __name__ == '__main__':
     unittest.main()

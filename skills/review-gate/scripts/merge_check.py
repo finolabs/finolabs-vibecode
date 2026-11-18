@@ -127,7 +127,8 @@ ENFORCERS = {'afk.py', 'data_root.py', 'parallel_slots.py', 'secret_patterns.py'
              'review_config.py', 'review_route.py', 'post_review.py', 'heavy_gate.py', 'run_env.py', 'ledger.py',
              'record.py', 'verify_claim.py', 'git_metadata.py', 'quota_probe.py', 'heavy_run.py', 'delegate_env.py',
              'auto_gate.py', 'mode.py', 'judge.py', 'log_scan.py', 'route_task.py', 'brief_check.py', 'assignments.py',
-             'away_lease.py', 'away_gate_hook.py', 'project_store.py', 'project_progress.py', 'afk_overlay.py'}
+             'away_lease.py', 'away_gate_hook.py', 'afk_stop_hook.py', 'afk_permit_hook.py',
+             'project_store.py', 'project_progress.py', 'afk_overlay.py'}
 INSTRUCTION_FILES = {'claude.md', 'agents.md', 'skill.md'}
 FLOOR = 10  # percent remaining below which a pool is out, as review_route.blocked_families reads it
 FRESH = 8 * 3600
@@ -514,8 +515,10 @@ def out_families(lines, current=None, configured=None):
         if not match:
             continue
         age = (current - quota_probe.timestamp(match[3])).total_seconds()
+        # A user's weekly floor is a routing preference, not evidence of being out: drop its suffix, keep the floor here.
+        body = re.sub(r"; weekly floor \d+%(?= \(|$)", "", match[4])
         pools = [re.fullmatch(r"([a-zA-Z0-9_-]+) ([^:;]+): (\d+)% remaining, resets ([^ ;]+)", part)
-                 for part in match[4].split("; ")]
+                 for part in body.split("; ")]
         depleted = (0 <= age <= FRESH and all(pools)
                     and all(int(p[3]) < FLOOR and quota_probe.timestamp(p[4]) > current for p in pools))
         installs.setdefault(match[1], {})[match[2]] = installs.get(match[1], {}).get(match[2], True) and depleted

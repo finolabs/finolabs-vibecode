@@ -95,6 +95,8 @@ def render(plan, confirmed=False):
                 lines.append(f"- Interpreter {agent}: {entry['interpreter']}")
         for label, path in plan["configs"].items():
             lines.append(f"- Claude config: {label}: {path}")
+        if plan["floors"]:
+            lines.append("- Weekly floor: " + ", ".join(f"{name}={percent}" for name, percent in sorted(plan["floors"].items())))
     return "\n".join(lines) + "\n\n"
 
 
@@ -135,12 +137,14 @@ def validate_folders(folders):
         raise ValueError("config folder missing") from error
 
 
-def preview(agents, configs=None, off=False):
+def preview(agents, configs=None, off=False, floors=None):
     root = dr.consent_root()
     if root is None:
         raise ValueError("invalid data root")
     if len(set(agents)) != len(agents) or set(agents) - qp.SOURCES.keys() or (not off and not agents):
         raise ValueError("agents")
+    if off and floors:
+        raise ValueError("off plan")
     folders = dict(configs or {})
     if any(qp.has_line_break(value) for pair in folders.items() for value in pair):
         raise ValueError("newline or carriage return in quota label or path")
@@ -173,7 +177,8 @@ def preview(agents, configs=None, off=False):
                 print(f"Quota probe {agent} needs re-preview: missing Resolved digest.", file=sys.stderr)
     plan = {"choice": "off" if off else "on", "date": qp.now().date().isoformat(),
             "created": qp.stamp(qp.now()), "root": str(root), "host_digest": hashlib.sha256(text.encode()).hexdigest(),
-            "agents": {a: resolve_executable(a) for a in agents} if not off else {}, "configs": folders}
+            "agents": {a: resolve_executable(a) for a in agents} if not off else {}, "configs": folders,
+            "floors": {} if off else dict(floors or {})}
     validate_plan(plan)
     replace_section(text, render(plan))
     value = digest(plan)
@@ -183,7 +188,7 @@ def preview(agents, configs=None, off=False):
 
 
 def validate_plan(plan):
-    if not isinstance(plan, dict) or set(plan) != {"choice", "date", "created", "root", "host_digest", "agents", "configs"}:
+    if not isinstance(plan, dict) or set(plan) != {"choice", "date", "created", "root", "host_digest", "agents", "configs", "floors"}:
         raise ValueError("plan")
     if plan["choice"] not in {"on", "off"} or plan["root"] != str(dr.consent_root()):
         raise ValueError("choice or root changed")
@@ -197,8 +202,11 @@ def validate_plan(plan):
         raise ValueError("newline or carriage return in quota label or path")
     if not isinstance(agents, dict) or set(agents) - qp.SOURCES.keys() or not isinstance(folders, dict):
         raise ValueError("agents")
+    floors = plan["floors"]
+    if not isinstance(floors, dict) or not all(isinstance(k, str) and type(v) is int for k, v in floors.items()):
+        raise ValueError("weekly floor")
     if plan["choice"] == "off":
-        if agents or folders:
+        if agents or folders or floors:
             raise ValueError("off plan")
         return
     if not agents:
@@ -225,6 +233,10 @@ def validate_plan(plan):
             raise ValueError("default install missing")
     elif folders:
         raise ValueError("Claude not selected")
+    if floors:
+        value = ", ".join(f"{name}={percent}" for name, percent in sorted(floors.items()))
+        if qp.parse_floors(value, list(agents), folders) != floors:
+            raise ValueError("weekly floor")
 
 
 def apply(plan, supplied_digest, yes=False):
@@ -260,6 +272,8 @@ def main():
     parser.add_argument("action", choices=("preview", "apply"))
     parser.add_argument("--agents", nargs="*", choices=tuple(qp.SOURCES), default=[])
     parser.add_argument("--claude-config", action="append", default=[], metavar="LABEL:/ABS/PATH")
+    parser.add_argument("--weekly-floor", action="append", default=[], metavar="FAMILY/LABEL=PERCENT",
+                        help="weekly quota left (10-95) below which that install counts as out of quota for routing")
     parser.add_argument("--off", action="store_true")
     parser.add_argument("--plan", help="optional consistency check against the stored preview; never applied directly")
     parser.add_argument("--digest")
@@ -273,7 +287,13 @@ def main():
                 if label in folders:
                     raise ValueError("duplicate label")
                 folders[label] = path
-            plan, value = preview(args.agents, folders, args.off)
+            floors = {}
+            for item in args.weekly_floor:
+                name, _, percent = item.partition("=")
+                if name in floors or not re.fullmatch(r"[0-9]{1,2}", percent):
+                    raise ValueError("weekly floor")
+                floors[name] = int(percent)
+            plan, value = preview(args.agents, folders, args.off, floors)
             if plan["choice"] == "on":
                 print(ON_DEMAND_CONSENT)
             print(render(plan), end="")
