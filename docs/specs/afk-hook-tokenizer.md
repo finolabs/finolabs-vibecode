@@ -114,7 +114,7 @@ These are settled when Fio answers on the pull request. Each has a recommendatio
 4. **Rule text and records.** Recommended, all in the PR that lands the code:
    - rewrite the tenth scoped exception in `CLAUDE.md` to describe the tokenizer, its command sites with assignments and redirects, the call-wide rules, redirect targets under the floor and the `strict` path permission, the accounting in decision 2 and the heredoc rule in decision 3, keeping every allowlist item;
    - update `afk-check-hook.md` "Behavior", "Not covered" and "Verification" to match;
-   - update `PRIVACY.md` "afk check hook" to say that redirect targets are read in memory like other paths, and that the command text is still never stored.
+   - update [PRIVACY.md](../../PRIVACY.md) "afk check hook" to say that redirect targets are read in memory like other paths, and that the command text is still never stored.
 
    This is the record that lets the code land ("no code for it lands before this rule is merged").
 5. **Bundle the fixes for holes that already exist on main.** Recommended: yes. The tokenizer fixes `printenv>&2`, `cat<.netrc`, `gh>out auth token` and `echo x\ #; env` by construction, and the tests name them. Splitting them out would mean patching the layers this spec removes.
