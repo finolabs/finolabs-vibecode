@@ -1,28 +1,27 @@
 # Compaction implementation details
 
-Read the matching section before preparing or applying that feature’s change. Approval questions stay in [features/compaction.md](features/compaction.md).
+Read the matching section before preparing or applying that feature's change. Approval questions stay in [features/compaction.md](features/compaction.md).
 
 ## Recommended threshold
 
-The one place for the suggested numbers; they are advisory (agent judgment), never a default. Show the row that fits the session kind the user describes, with its reason, before the token question; never preselect or prefill a value, and preview only the number the user typed. The nudge prints at 80% and again at 90% of the threshold, so about a fifth of the threshold is left for the `tidy` handover whatever the user picks.
+The one place for the suggested numbers; they are advisory (agent judgment), never a default. Show the row that fits the session kind the user describes, with its reason, before the token question; never preselect or prefill a value, and preview only the number the user typed. The nudge prints at 80% and 90% of the threshold, leaving about a fifth of it for the `tidy` handover whatever the user picks.
 
 | Session kind | Suggested threshold | Reason |
 | --- | --- | --- |
-| Coordinator (many pull requests, a ledger, background reviews) on a 1M-window model | about 300000 to 500000 tokens | Its state lives in the ledger and the handover, not the conversation; compacting this early keeps the summary small, and the nudge at 240000 to 400000 leaves room for the handover, where the host default (about 967000) compacts very late. |
-| Single-task implementation on a 1M-window model | later, about 600000 to 800000, or the host default with a fresh session per story | One task's context stays relevant longer, and `tidy` already advises a fresh session per story over a compaction. |
-| A smaller window (for example 200000 tokens, or a Codex model) | about 70% to 80% of the window | Leaves the 80% nudge band room for a handover before the host compacts; Claude Code accepts no less than 100000. |
+| Coordinator (many pull requests, a ledger, background reviews) on a 1M-window model | about 300000 to 500000 tokens | Its state lives in the ledger and handover; early compaction keeps the summary small, and the nudge at 240000 to 400000 leaves handover room; the host default (about 967000) compacts very late. |
+| Single-task implementation on a 1M-window model | later, about 600000 to 800000, or the host default with a fresh session per story | One task's context stays relevant longer; `tidy` advises a fresh session per story over a compaction. |
+| A smaller window (for example 200000 tokens, or a Codex model) | about 70% to 80% of the window | Leaves the 80% nudge room for a handover before the host compacts; Claude Code accepts no less than 100000. |
 
 Settings cannot tell a coordinator from a task session, so save the task row; a Claude Code coordinator opens with `CLAUDE_CODE_AUTO_COMPACT_WINDOW=<tokens> claude`, not `--autocompact`, which hooks miss, so the nudge would come late (2.1.325, 17/11/2026). Desktop-app sessions get the saved value. Setup never sets it (advisory).
 
 ## Native threshold preview
 
-Run `python3 -I <this skill folder>/scripts/compact_setup.py preview --host <claude|codex> --tokens <chosen value>`. Claude defaults to the account home's `.claude/settings.json`; with chosen folders pass each as `--folder <absolute config folder>` (at most four, replacing the default). Codex uses an absolute `CODEX_HOME`, otherwise the account home's `.codex/config.toml`. For this repository only (Claude Code), pass `--project <absolute repository root>` instead of `--folder`: the target is `<root>/.claude/settings.local.json`. The script refuses a path that is not the checkout root or a file in Git's index, creates `.claude` (0700) only when applying and never changes Git files; if `git status` lists the new file, say it can go in `.git/info/exclude`. When it counts per-model `autoCompactWindow` values, which override the saved one, offer `--clear-model-overrides` to remove them in the same write. Show every target, scope, existence, change, backup, warning and `Digest:`, then ask separately:
+Run `python3 -I <this skill folder>/scripts/compact_setup.py preview --host <claude|codex> --tokens <chosen value>`. Claude defaults to the account home's `.claude/settings.json`; pass chosen folders as `--folder <absolute config folder>` (at most four, replacing the default). Codex uses an absolute `CODEX_HOME`, else the account home's `.codex/config.toml`. For this repository only (Claude Code), pass `--project <absolute repository root>` instead of `--folder`: the target is `<root>/.claude/settings.local.json`. The script refuses a path that is not the checkout root or a file in Git's index, creates `.claude` (0700) only when applying and never changes Git files; if `git status` lists the new file, say it can go in `.git/info/exclude`. When it counts per-model `autoCompactWindow` values, which override the saved one, offer `--clear-model-overrides` to remove them in the same write. `--model <id>` saves it for that model only (`modelSettings.<id>.autoCompactWindow`, like `/autocompact`); other models' values are only counted. Show every target, scope, existence, change, backup, warning and `Digest:`, then ask separately:
 
 ## Native threshold apply and enforcers
 
-Only after the yes run `compact_setup.py apply --digest <full digest> --yes`. Even quick setup keeps this approval separate. Removal uses `--off` instead of `--tokens` with the same preview and approval; it removes this key, not auto-compaction. Enforcers: the script checks the private stored plan (its scope included), full digest, 60-minute expiry, unchanged targets and safe paths (for `--project`, the checkout root and that the file is not in Git's index, again at apply), keeps backups and writes atomically; asking and invoking only from a user's `setup` request are advisory (agent judgment), never a hook.
-The host enforces the threshold; it applies to sessions started afterwards, and a running session and the Codex default remain unverified. Never write environment variables or the percent override.
-
+Only after the yes run `compact_setup.py apply --digest <full digest> --yes`. Even quick setup keeps this approval separate. `--off` instead of `--tokens` removes the key (not auto-compaction), with the same preview and approval. Enforcers: the script checks the private stored plan (its scope included), full digest, 60-minute expiry, unchanged targets and safe paths (for `--project`, the checkout root and that the file is not in Git's index, again at apply), keeps backups and writes atomically; asking and invoking only from a user's `setup` request are advisory (agent judgment), never a hook.
+The host enforces the threshold; it applies to sessions started afterwards; a running session and the Codex default are unverified. Never write environment variables or the percent override.
 
 ## Antigravity stop preview
 
@@ -33,4 +32,4 @@ The target is fixed at the account home's `.gemini/config/hooks.json`; the file 
 
 Explain `tidy`'s threshold check (advisory, agent judgment); setup writes nothing new. The host enforces its threshold; `context_steward.py` decides `ok`, `prepare`, `wait` or `compact`. On `prepare` the agent writes a private handover (advisory); `handover_state.py` enforces size, safety and lifetime. SessionStart `source: compact` is the documented delivery path on both hosts (vendor docs, 07/11/2026; Codex 0.167.0); live plugin delivery is unverified.
 Claude Code PreCompact stdout feeds summary instructions; on Codex a plain-text reminder does not reach the model. See `tidy`'s `references/context-settings.md` for vendor sources and limits (07/11/2026). Writing before compaction remains advisory (agent judgment).
-A standalone `tidy` install includes its context reader and steward scripts; automatic handover re-injection still requires the plugin. Standalone setup keeps the manual status-line procedure above (advisory, agent judgment).
+A standalone `tidy` install includes its context reader and steward scripts; automatic handover re-injection needs the plugin. Standalone setup keeps the manual status-line procedure above (advisory, agent judgment).

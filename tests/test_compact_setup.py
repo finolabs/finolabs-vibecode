@@ -558,6 +558,97 @@ class CompactSetupTest(unittest.TestCase):
         self.refuse("apply", "--digest", digest, "--yes")
         self.assertFalse((self.repo / ".claude").exists())
 
+    # Per-model value: --model <id> writes modelSettings.<id>.autoCompactWindow.
+    def test_model_sets_a_new_entry_and_keeps_every_other_key(self):
+        out = self.run_cli("preview", "--host", "claude", "--model", "model-a.5[1m]", "--tokens", "500000")[1]
+        self.assertIn("modelSettings.model-a.5[1m].autoCompactWindow: absent -> 500000", out)
+        self.apply(out.split("Digest: ")[1].splitlines()[0])
+        self.assertEqual(self.target.read_text(), '{\n  "first": 1,\n  "autoCompactWindow": 200000,\n  "last": true,\n'
+                         '  "modelSettings": {\n    "model-a.5[1m]": {\n      "autoCompactWindow": 500000\n    }\n  }\n}\n')
+        backup, = self.claude.glob("settings.json.bak-*")
+
+    def test_model_replaces_and_removes_with_empty_entry_cleanup(self):
+        self.target.write_text(json.dumps({"autoCompactWindow": 200000, "modelSettings": {
+            "model-a": {"autoCompactWindow": 300000}, "model-b": {"autoCompactWindow": 400000, "effort": "x"}}}))
+        out = self.run_cli("preview", "--host", "claude", "--model", "model-b", "--tokens", "450000")[1]
+        self.assertIn("modelSettings.model-b.autoCompactWindow: 400000 -> 450000", out)
+        self.apply(out.split("Digest: ")[1].splitlines()[0])
+        self.assertEqual(list(json.loads(self.target.read_text())["modelSettings"]["model-b"]),
+                         ["autoCompactWindow", "effort"])
+        self.apply(self.preview("claude", "--model", "model-b", "--off"))
+        self.apply(self.preview("claude", "--model", "model-a", "--off"))
+        self.assertEqual(json.loads(self.target.read_text()),
+                         {"autoCompactWindow": 200000, "modelSettings": {"model-b": {"effort": "x"}}})
+
+    def test_model_no_difference(self):
+        self.target.write_text(json.dumps({"modelSettings": {"model-a": {"autoCompactWindow": 300000}}}))
+        before = self.target.read_bytes()
+        for args in (("--tokens", "300000"), ("--off",)):
+            model = "model-a" if args[0] == "--tokens" else "model-b"
+            with self.subTest(args=args):
+                out = self.run_cli("preview", "--host", "claude", "--model", model, *args)[1]
+                self.assertIn("No difference.", out)
+                self.assertIn("No difference.", self.apply(out.split("Digest: ")[1].splitlines()[0]))
+                self.assertEqual(self.target.read_bytes(), before)
+        self.assertEqual(list(self.claude.glob("*.bak-*")), [])
+
+    def test_model_refusals(self):
+        for args in (("--host", "codex", "--model", "model-a", "--tokens", "150000"),
+                     ("--host", "claude", "--model", "model-a", "--clear-model-overrides", "--tokens", "150000"),
+                     *(("--host", "claude", "--model", bad, "--tokens", "150000")
+                       for bad in ("Model-a", "m" * 65, "model/a", "model a", "", "-model", "model\n"))):
+            with self.subTest(args=args):
+                self.refuse("preview", *args)
+        self.assertFalse(self.plan.exists())
+        for data in ({"modelSettings": ["model-a"]}, {"modelSettings": None}, {"modelSettings": {"model-a": 5}}):
+            with self.subTest(data=data):
+                self.target.write_text(json.dumps(data))
+                self.refuse("preview", "--host", "claude", "--model", "model-a", "--tokens", "150000")
+
+    def test_model_in_plan_is_checked_at_apply(self):
+        digest = self.preview("claude", "--model", "model-a", "--tokens", "150000")
+        saved = json.loads(self.plan.read_bytes())
+        self.assertEqual(saved["plan"]["model"], "model-a")
+        for model in ("model-b", None):
+            with self.subTest(model=model):
+                saved["plan"]["model"] = model
+                self.plan.write_text(json.dumps(saved))
+                self.plan.chmod(0o600)
+                self.refuse("apply", "--digest", digest, "--yes")
+        # A plan without the key, or with an invalid id under a matching digest, is refused.
+        for change in ("drop", "Bad/Id"):
+            with self.subTest(change=change):
+                plan = dict(saved["plan"])
+                if change == "drop":
+                    del plan["model"]
+                else:
+                    plan["model"] = change
+                self.plan.write_text(json.dumps({"plan": plan, "digest": cs.digest(plan)}))
+                self.plan.chmod(0o600)
+                self.refuse("apply", "--digest", cs.digest(plan), "--yes")
+        self.assertNotIn("model-a", self.target.read_text())
+
+    def test_model_prints_other_models_only_as_a_count(self):
+        self.target.write_text(json.dumps({"modelSettings": {
+            "private-model": {"autoCompactWindow": "private-value"}, "another-model": {"autoCompactWindow": 987654},
+            "model-a": {"autoCompactWindow": 300000}}}))
+        code, out, err = self.run_cli("preview", "--host", "claude", "--model", "model-a", "--tokens", "150000")
+        self.assertEqual(code, 0, err)
+        self.assertIn("Per-model autoCompactWindow: 2 other model setting(s) keep their own value.", out)
+        applied = self.apply(out.split("Digest: ")[1].splitlines()[0])
+        for output in (out, applied, err):
+            for word in ("private-model", "private-value", "another-model", "987654"):
+                self.assertNotIn(word, output)
+
+    def test_model_with_project_scope(self):
+        digest = self.project("--model", "model-a", "--tokens", "450000")
+        self.assertEqual(json.loads(self.plan.read_bytes())["plan"]["scope"], "project")
+        self.apply(digest)
+        local = self.repo / ".claude/settings.local.json"
+        self.assertEqual(json.loads(local.read_text()), {"modelSettings": {"model-a": {"autoCompactWindow": 450000}}})
+        self.apply(self.project("--model", "model-a", "--off"))
+        self.assertEqual(json.loads(local.read_text()), {"modelSettings": {}})
+
 
 if __name__ == "__main__":
     unittest.main()

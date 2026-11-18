@@ -199,6 +199,22 @@ class AfkCheckHookTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertEqual(self.hook(command), parked('floor'))
 
+    def test_codex_exec_is_codex_s_subcommand_not_the_shell_wrapper(self):
+        self.start()
+        for command in ("codex exec -m gpt -s read-only 'review this'", 'codex exec --json -m gpt y'):
+            with self.subTest(command=command):
+                self.assertNotEqual(self.hook(command), denial(PARSE))
+        # Every other placement keeps the wrapper rule, including the bypasses a looser walk let through.
+        for command in ('exec -x ls', 'ls; exec -x ls', 'nohup exec -x ls', 'timeout 5 exec -x ls',
+                        "codex exec -m gpt caffeinate -t 5 sh -c 'pr\"\"intenv'",
+                        ">out caffeinate -t 5 sh -c 'pr\"\"intenv'", "env FOO=1 caffeinate -t 5 sh -c 'x'",
+                        "pnpm exec caffeinate -t 5 sh -c 'x'", "exec -a 'a b' caffeinate -t 5 sh -c 'x'",
+                        'exec -a codex exec -x ls', '>out codex exec -x ls', 'nohup codex exec -x ls',
+                        "> 'out;codex' exec -- sh -c 'echo ok'", "ls; 'codex' exec -- sh -c x", "'codex' exec -- sh -c x",
+                        'cd x && codex exec -- sh -c x', 'codex exec -m gpt; exec -x ls'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), denial(PARSE))
+
     def test_input_past_the_cap_denies_only_under_a_live_lease(self):
         padded = 'printenv' + ' ' * (262 * 1024)
         self.assertIsNone(self.hook(padded))

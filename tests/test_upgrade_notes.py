@@ -115,6 +115,7 @@ class NotesSchemaTest(unittest.TestCase):
             '0.2.5/dispatch-nudge': ('info', None, None),
             '0.3.2/fnl-aliases-removed': ('removed', None, None),
             '0.3.3/coordinator-threshold': ('setup', '/setup add compaction', None),
+            '0.3.3/per-model-threshold': ('setup', '/setup add compaction', None),
         }
         for ident, (kind, setup, check) in expected.items():
             with self.subTest(item=ident):

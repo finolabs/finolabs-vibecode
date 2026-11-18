@@ -487,6 +487,17 @@
           "kind": "setup",
           "text": "Claude Code: open a coordinator with CLAUDE_CODE_AUTO_COMPACT_WINDOW=<tokens> claude (hooks miss --autocompact); setup can remove per-model values that override your limit.",
           "setup": "/setup add compaction"
+        },
+        {
+          "id": "0.3.3/per-model-threshold",
+          "kind": "setup",
+          "text": "Claude Code: the compaction reminder follows the session model's own /autocompact value; setup can save a threshold for one model only.",
+          "setup": "/setup add compaction"
+        },
+        {
+          "id": "0.3.3/worktree-clean",
+          "kind": "info",
+          "text": "delegate removes finished runs' merged, clean, pushed worktrees in the background; runs started before 0.3.3 stay (worktree_sweep.py list); FNL_WORKTREE_CLEAN=manual or off stops it."
         }
       ]
     }
