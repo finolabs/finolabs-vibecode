@@ -50,6 +50,7 @@
         return;
       }
       if (node.nodeType !== 1) return;
+      if (getComputedStyle(node).display === "none") return; /* no box: neither text nor a break */
       if (node.tagName.toLowerCase() === "br") { tokens.push("B"); return; } /* a forced line break */
       const block = node !== root && isBlock(node);
       if (block) tokens.push("B");
