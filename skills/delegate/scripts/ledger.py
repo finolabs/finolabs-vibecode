@@ -942,54 +942,77 @@ def cmd_summary(args):
         print_away_rows(away)
 
 
-CLEAN_LIMIT = 20  # worktrees examined per call, so a start or finish stays quick
+CLEAN_DEADLINE = {"auto": 20, "explicit": 300}  # seconds for one cleanup, so a start or finish stays quick
 
 
-def clean_worktrees(checkout="."):
-    """Remove the linked worktrees of finished dispatches whose branch merged; return the lines to report.
-
-    Only a worktree whose path digest is the checkout_id of a finished dispatch, and of no open one, is examined.
-    It is removed only when the sweep calls it a candidate (merged, clean, nothing unpushed, not locked, not
-    detached, not the working folder, no nesting), with `git worktree remove` (never forced) and then
-    `git branch -d`; git refuses a dirty worktree or an unmerged branch. Under a live away lease nothing is
-    removed: the afk merge gate passes these commands through `check` instead. Stores nothing."""
-    if os.environ.get("FNL_WORKTREE_CLEAN", "").lower() in {"off", "0", "false", "no"}:
-        return []
+def lease_live():
+    """True when an away lease is live or cannot be read (then nothing is removed)."""
     try:
         import away_lease
-        if away_lease.live_lease(time.time()) is not None:
-            return ["ledger: worktree cleanup skipped under an away lease; the afk merge gate removes them"]
+        return away_lease.live_lease(time.time()) is not None
     except Exception:
-        return ["ledger: worktree cleanup skipped: the away lease could not be read"]
+        return True
+
+
+def open_checkouts():
+    starts, finishes = load()
+    return ({s.get("checkout_id") for i, s in starts.items() if i in finishes} - {None},
+            {s.get("checkout_id") for i, s in starts.items() if i not in finishes} - {None})
+
+
+def clean_worktrees(checkout=".", mode="auto"):
+    """Remove the linked worktrees of finished dispatches whose branch merged; return (lines, failed).
+
+    A worktree is examined only when its identity (`record.checkout_identity`, the digest `start` stored) is the
+    checkout_id of a finished dispatch and of no open one. It is removed only when the sweep calls it a
+    candidate (merged, clean, nothing unpushed, not locked, not detached, not the working folder, no nesting),
+    with `git worktree remove` (never forced) and then `git branch -d`; git refuses a dirty worktree or an
+    unmerged branch. In `auto` mode (inside start and finish) only local ancestry proves a merge, so no forge
+    call runs; `explicit` mode (clean-worktrees) also asks the forge. Right before each removal, under the
+    ledger's finish lock, the open dispatches and the away lease are read again: a run started meanwhile, or a
+    lease, keeps the worktree. Stores nothing."""
+    if os.environ.get("FNL_WORKTREE_CLEAN", "").lower() in {"off", "0", "false", "no"}:
+        return [], False
+    if lease_live():
+        return ["ledger: worktree cleanup skipped under an away lease; the afk merge gate removes them"], False
+    lines, failed, removed = [], False, 0
     try:
         import worktree_sweep as sweep
-        starts, finishes = load()
-        finished = {s.get("checkout_id") for i, s in starts.items() if i in finishes}
-        running = {s.get("checkout_id") for i, s in starts.items() if i not in finishes}
-        ours = (finished - running) - {None}
+        from record import checkout_identity
+        finished, running = open_checkouts()
+        ours = finished - running
         if not ours:
-            return []
+            return [], False
         entries = sweep.worktrees(checkout)
         main_checkout = entries[0]["path"]
         default = sweep.default_ref(main_checkout)
         linked = [entry["path"] for entry in entries[1:]]
         cwd = sweep.spellings(os.getcwd())
-        lines, removed, examined = [], 0, 0
-        for entry in entries[1:]:
-            digest = hashlib.sha256(os.fsencode(Path(entry["path"]).resolve())).hexdigest()
-            if digest not in ours:
+    except Exception as error:
+        return ["ledger: worktree cleanup failed: " + type(error).__name__], True
+    deadline = time.monotonic() + CLEAN_DEADLINE[mode]
+    for entry in entries[1:]:
+        shown = entry["path"].encode("unicode_escape").decode("ascii")
+        try:
+            if not os.path.isdir(entry["path"]) or checkout_identity(entry["path"]) not in ours:
                 continue
-            if examined == CLEAN_LIMIT:
-                lines.append(f"ledger: worktree cleanup stopped after {CLEAN_LIMIT}; run clean-worktrees again")
+            if time.monotonic() > deadline:
+                lines.append("ledger: worktree cleanup reached its time limit; run ledger.py clean-worktrees")
                 break
-            examined += 1
-            info = sweep.describe(entry, default)
-            shown = info["path"].encode("unicode_escape").decode("ascii")
+            info = sweep.describe(entry, default, forge=(mode == "explicit"))
             reason = sweep.reason_not_candidate(info, sweep.nesting(info["path"], main_checkout, linked), cwd)
             if reason:
                 lines.append(f"ledger: kept worktree {shown} ({reason})")
                 continue
-            done = sweep.git(main_checkout, "worktree", "remove", "--", info["path"])
+            with finish_lock():
+                _, running = open_checkouts()
+                if checkout_identity(info["path"]) in running:
+                    lines.append(f"ledger: kept worktree {shown} (a dispatch started on it)")
+                    continue
+                if lease_live():
+                    lines.append(f"ledger: kept worktree {shown} (an away lease started)")
+                    break
+                done = sweep.git(main_checkout, "worktree", "remove", "--", info["path"])
             if done.returncode != 0:
                 lines.append(f"ledger: kept worktree {shown} (git refused the removal)")
                 continue
@@ -998,24 +1021,33 @@ def clean_worktrees(checkout="."):
             gone = "and its branch" if branch.returncode == 0 else "; git kept its branch"
             lines.append(f"ledger: removed worktree {shown} ({sweep.human(info['size'])}) {gone} "
                          f"{info['branch'].encode('unicode_escape').decode('ascii')}")
-        lines.append(f"ledger: worktree cleanup: {removed} removed")
-        return lines
-    except Exception as error:
-        return ["ledger: worktree cleanup failed: " + type(error).__name__]
+        except SystemExit:
+            lines.append(f"ledger: kept worktree {shown} (the ledger was busy)")
+        except Exception as error:
+            failed = True
+            lines.append(f"ledger: worktree cleanup failed at {shown}: {type(error).__name__}")
+    lines.append(f"ledger: worktree cleanup: {removed} removed")
+    return lines, failed
 
 
 def report_cleanup(checkout="."):
-    """Run the cleanup and print its lines on stderr, so a command's stdout keeps its own format."""
-    for line in clean_worktrees(checkout):
-        print(line, file=sys.stderr)
+    """Best-effort cleanup after start or finish: lines on stderr only, never a change of stdout or exit code."""
+    try:
+        lines, _ = clean_worktrees(checkout, "auto")
+    except Exception:
+        return
+    for line in lines:  # only what changed or needs the user: a removal, a failure, the time limit
+        if line.startswith(("ledger: removed worktree", "ledger: worktree cleanup failed",
+                            "ledger: worktree cleanup reached")):
+            print(line, file=sys.stderr)
 
 
 def cmd_clean_worktrees(args):
-    lines = clean_worktrees(args.checkout)
-    if not lines:
-        lines = ["ledger: worktree cleanup: 0 removed"]
-    for line in lines:
+    lines, failed = clean_worktrees(args.checkout, "explicit")
+    for line in lines or ["ledger: worktree cleanup: 0 removed"]:
         print(line, file=sys.stderr)
+    if failed:
+        sys.exit(1)
 
 
 def build_parser():

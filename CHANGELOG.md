@@ -6,7 +6,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Added
 
-- `delegate` removes the worktrees of finished runs once their branch merged: `ledger.py start`, `finish` and the new `ledger.py clean-worktrees` remove each worktree a finished dispatch named with `--checkout`, has no open dispatch, and the worktree sweep calls a candidate (merged, clean, nothing unpushed, not locked, not the working folder), with `git worktree remove` (never forced) and `git branch -d`, and print what they removed or kept. Nothing is removed under a live away lease. `FNL_WORKTREE_CLEAN=off` stops it.
+- `delegate` removes the worktrees of finished runs once their branch merged: `ledger.py start`, `finish` and the new `ledger.py clean-worktrees` remove each worktree a finished dispatch named with `--checkout`, has no open dispatch, and the worktree sweep calls a candidate (merged, clean, nothing unpushed, not locked, not the working folder), with `git worktree remove` (never forced) and `git branch -d`, and print what they removed or kept. Inside `start` and `finish` only local ancestry proves a merge, within 20 seconds; `clean-worktrees` also asks the forge. Nothing is removed under a live away lease, and a run or lease that starts during the cleanup keeps its worktree. `FNL_WORKTREE_CLEAN=off` stops it.
 
 ### Changed
 
@@ -19,6 +19,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- `worktree_sweep.py` asks gh about the worktree's own repository: an inherited `GH_REPO` could name another repository whose merged pull request had the same branch and head.
 - The worktree sweep (`commit-messages`, `review-gate`) reported every worktree dirty when a folder such as `.claude/` was ignored only by the user's global ignore file: it runs git without the home folder, so git never read that file. It now resolves the global ignore file once and passes it to `git status` alone, so merged, clean worktrees become candidates again.
 
 ### Known limits

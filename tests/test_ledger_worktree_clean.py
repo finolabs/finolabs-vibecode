@@ -154,10 +154,119 @@ class WorktreeCleanTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"ORCHESTRATION_LEDGER": str(self.ledger), "PATH": self.env["PATH"],
                                           "GIT_CONFIG_NOSYSTEM": "1"}), \
                 mock.patch("away_lease.live_lease", return_value={"id": "x"}):
-            lines = ledger.clean_worktrees(str(self.main))
+            lines, _ = ledger.clean_worktrees(str(self.main))
         self.assertTrue(path.exists())
         self.assertEqual(len(lines), 1)
         self.assertIn("away lease", lines[0])
+
+    def load_ledger(self):
+        spec = importlib.util.spec_from_file_location("ledger_under_test", LEDGER)
+        ledger = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, str(SCRIPTS))
+        self.addCleanup(sys.path.remove, str(SCRIPTS))
+        spec.loader.exec_module(ledger)
+        patch = mock.patch.dict(os.environ, {"ORCHESTRATION_LEDGER": str(self.ledger), "PATH": self.env["PATH"],
+                                             "GIT_CONFIG_NOSYSTEM": "1", "HOME": str(self.home)})
+        patch.start()
+        self.addCleanup(patch.stop)
+        return ledger
+
+    def finished_off(self, path):
+        off = dict(self.env, FNL_WORKTREE_CLEAN="off")
+        dispatch_id = self.ledger_run(*START, "--checkout", str(path), env=off).stdout.strip()
+        self.ledger_run("finish", dispatch_id, "--outcome", "cancelled", "--checkout", str(path), env=off)
+
+    def test_a_worktree_registered_with_other_case_still_matches(self):
+        probe = self.base / "CaseProbe"
+        probe.mkdir()
+        if not (self.base / "caseprobe").exists():
+            self.skipTest("case-sensitive file system")
+        path = Path(str(self.main / ".wt").swapcase()) / "feat-j"
+        self.git(self.main, "worktree", "add", "-q", "--no-track", "-b", "feat-j", str(path), "origin/main")
+        self.git(path, "commit", "-q", "--allow-empty", "-m", "Empty")
+        self.git(path, "push", "-q", "-u", "origin", "feat-j")
+        self.git(self.main, "merge", "-q", "--no-ff", "-m", "Merge feat-j", "feat-j")
+        self.git(self.main, "push", "-q", "origin", "main")
+        self.git(self.main, "fetch", "-q", "origin")
+        self.finished_off(path)
+        out = self.ledger_run("clean-worktrees")
+        self.assertIn("1 removed", out.stderr)
+        self.assertFalse(path.exists())
+
+    def gh_stub(self, body):
+        stub = self.base / "stub"
+        stub.mkdir(exist_ok=True)
+        (stub / "gh").write_text("#!/bin/sh\n" + body)
+        (stub / "gh").chmod(0o755)
+        return dict(self.env, PATH=os.pathsep.join([str(stub), self.env["PATH"]]))
+
+    def test_the_automatic_cleanup_never_calls_the_forge(self):
+        path = self.worktree("feat-k", merge=False)
+        marker = self.base / "gh-called"
+        env = self.gh_stub(f"touch {marker}\necho '[]'\n")
+        self.finished_off(path)
+        self.ledger_run(*START, "--checkout", str(self.main), env=env)
+        self.assertFalse(marker.exists())
+        self.assertTrue(path.exists())
+
+    def test_an_inherited_gh_repo_never_proves_a_merge(self):
+        path = self.worktree("feat-l", merge=False)
+        head = self.git(path, "rev-parse", "HEAD").stdout.strip()
+        # The stub answers "merged at this head" only when GH_REPO names another repository.
+        env = self.gh_stub('if [ -n "$GH_REPO" ]; then echo \'[{"number": 1, "headRefOid": "' + head +
+                           '"}]\'; else echo \'[]\'; fi\n')
+        env["GH_REPO"] = "someone/else"
+        self.finished_off(path)
+        out = self.ledger_run("clean-worktrees", env=env)
+        self.assertTrue(path.exists())
+        self.assertIn("merged=no", out.stderr)
+
+    def test_a_dispatch_started_during_cleanup_keeps_its_worktree(self):
+        path = self.worktree("feat-m")
+        self.finished_off(path)
+        ledger = self.load_ledger()
+        import worktree_sweep
+        real = worktree_sweep.describe
+
+        def describe(entry, default, forge=True):
+            self.ledger_run(*START, "--checkout", str(path), env=dict(self.env, FNL_WORKTREE_CLEAN="off"))
+            return real(entry, default, forge)
+
+        with mock.patch.object(worktree_sweep, "describe", describe):
+            lines, failed = ledger.clean_worktrees(str(self.main), "explicit")
+        self.assertTrue(path.exists())
+        self.assertFalse(failed)
+        self.assertTrue(any("a dispatch started on it" in line for line in lines), lines)
+
+    def test_a_lease_started_during_cleanup_keeps_the_worktree(self):
+        path = self.worktree("feat-n")
+        self.finished_off(path)
+        ledger = self.load_ledger()
+        with mock.patch.object(ledger, "lease_live", side_effect=[False, True]):
+            lines, _ = ledger.clean_worktrees(str(self.main), "explicit")
+        self.assertTrue(path.exists())
+        self.assertTrue(any("an away lease started" in line for line in lines), lines)
+
+    def test_a_failure_keeps_the_report_of_earlier_removals(self):
+        first, second = self.worktree("feat-o"), self.worktree("feat-p")
+        self.finished_off(first)
+        self.finished_off(second)
+        ledger = self.load_ledger()
+        import worktree_sweep
+        real = worktree_sweep.describe
+
+        def describe(entry, default, forge=True):
+            if entry["path"].endswith("feat-p"):
+                raise OSError("boom")
+            return real(entry, default, forge)
+
+        with mock.patch.object(worktree_sweep, "describe", describe):
+            lines, failed = ledger.clean_worktrees(str(self.main), "explicit")
+        self.assertTrue(failed)
+        self.assertFalse(first.exists())
+        self.assertTrue(second.exists())
+        self.assertTrue(any("removed worktree" in line and "feat-o" in line for line in lines), lines)
+        self.assertTrue(any("failed at" in line for line in lines), lines)
 
     def test_removal_never_forces(self):
         source = LEDGER.read_text()
