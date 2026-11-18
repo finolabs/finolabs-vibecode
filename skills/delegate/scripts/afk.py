@@ -2502,6 +2502,8 @@ def classified(folder, argv_json, paths, coordinator, current):
 
 def check(folder, args):
     current = now()
+    if getattr(args, 'commands_json', None) is not None:
+        return answer(check_sites(folder, args.commands_json, args.coordinator, current))
     code, lease, applied, key, entry, argv, cwd = classified(folder, args.argv_json, args.paths, args.coordinator, current)
     if code == 'unknown' and entry is not None:
         # An away decision may have approved this exact request once (`log --kind decision --approve-...`).
@@ -2530,6 +2532,107 @@ def check(folder, args):
             entry['runs'] += 1
         lease['counters'][key] = entry
         save_lease(folder, lease)
+    return answer(code)
+
+
+def reserves_run(argv):
+    """True for a ledger start, which reserves one delegated run."""
+    return bool(argv) and any(Path(t).name == 'ledger.py' for t in argv) and 'start' in argv
+
+
+SITE_KEYS = {'assignments', 'argv', 'redirects', 'repeated'}
+SITE_KINDS = {'read', 'write', 'append', 'readwrite'}
+
+
+def command_sites(raw):
+    """The validated `--commands-json` list, or None: at most 256 sites, each {assignments, argv, redirects,
+    repeated} with string words and (kind, target) redirects."""
+    try:
+        sites = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(sites, list) or not sites or len(sites) > 256:
+        return None
+    for site in sites:
+        if (not isinstance(site, dict) or set(site) != SITE_KEYS or not isinstance(site['repeated'], bool)
+                or not all(isinstance(site[k], list) and all(isinstance(t, str) for t in site[k])
+                           for k in ('assignments', 'argv'))
+                or not isinstance(site['redirects'], list)
+                or not all(isinstance(r, list) and len(r) == 2 and r[0] in SITE_KINDS and isinstance(r[1], str) and r[1]
+                           for r in site['redirects'])):
+            return None
+    return sites
+
+
+def check_sites(folder, raw, coordinator, current):
+    """The code of a `--commands-json` call (decision 2): every site, and every redirect target, is judged first as
+    `--argv-json` and `--paths` judge it, and nothing is recorded; any denial denies the call. A call that passes is
+    recorded once: one action, one run per run-reserving site, one merge pin per merge site, an approval used by the
+    one site whose exact subject it names. A site in a loop that would use an approval, reserve a run or merge
+    denies, and so does a call whose runs exceed what the project and lease limits leave."""
+    code, lease, applied = lease_guard(folder, current)
+    if code is not None:
+        return code
+    sites = command_sites(raw)
+    if sites is None:
+        return 'unknown'
+    approvals, used, pins, runs, counted = None, [], [], 0, None
+    for site in sites:
+        full = site['assignments'] + site['argv']
+        targets = [target for _kind, target in site['redirects']]
+        if full:
+            code, lease, applied, key, entry, argv, cwd = classified(folder, json.dumps(full), None, coordinator, current)
+        else:
+            # Only redirects: nothing runs. `open` judges the targets alone; `strict` parks it as an unknown argv.
+            code, lease, applied, key, entry, argv, cwd = classified(folder, None, targets or ['.'], coordinator, current)
+            code = code if entry is None or code in ENDED else 'unknown'
+        if code == 'unknown' and entry is not None and not site['repeated']:
+            subject = request_subject(applied, cwd, argv, None)
+            if approvals is None and subject is not None:
+                approvals = open_approvals(folder, lease, current)
+            if subject is not None and subject in (approvals or set()) and subject not in used:
+                code = 'decided'
+                used.append(subject)
+        if code in {'allowed', 'decided'}:
+            merge = isinstance(argv, list) and argv[:3] == ['gh', 'pr', 'merge']
+            if site['repeated'] and (code == 'decided' or merge or reserves_run(argv)):
+                code = 'unknown'  # its count cannot be known before it runs
+            elif merge and (entry is not None or any(t.startswith('--match-head-commit') for t in argv)):
+                pins.append((argv, context_of(applied).target, entry is not None))
+            elif reserves_run(argv):
+                runs += 1
+        if code in {'allowed', 'decided'} and targets and full:
+            code = classified(folder, None, targets, coordinator, current)[0]
+        if code not in {'allowed', 'decided'}:
+            return code
+        if entry is not None:
+            if counted is not None and counted[0] != key:
+                return 'unknown'
+            counted = (key, entry, applied)
+    if counted is not None and counted[1]['runs'] + runs > counted[2]['Max runs']:
+        return 'spent'
+    for argv, target, strict in pins:
+        try:  # the pins first: a full or invalid log refuses the call before an action is reserved
+            append_log(folder, merge_pin(argv, current, target), current)
+        except (OSError, ValueError, UnicodeError, TypeError, StopIteration, IndexError):
+            if strict:
+                return 'log-unwritable'
+    for subject in used:
+        append_log(folder, dict(time=current, tier=1, kind='approval-used', subject=subject, note=''), current)
+    if counted is not None:  # `open` keeps no per-project counters
+        key, entry, _applied = counted
+        entry['actions'] += 1
+        entry['hour_actions'].append(current)
+        if entry['first'] is None:
+            entry['first'] = current
+        entry['runs'] += runs
+        lease['counters'][key] = entry
+        save_lease(folder, lease)
+    return 'decided' if used else 'allowed'
+
+
+def answer(code):
+    """Print the `check` answer for a code and return its tier."""
     tier = 1 if code in {'allowed', 'decided'} else 3
     result = {'tier': tier, 'code': code}
     if code in ENDED:
@@ -3213,6 +3316,7 @@ def main(argv=None):
     group = inspect.add_mutually_exclusive_group(required=True)
     group.add_argument('--argv-json')
     group.add_argument('--paths', nargs='+')
+    group.add_argument('--commands-json')  # the Claude Code hook's command sites (docs/specs/afk-hook-tokenizer.md B)
     inspect.add_argument('--coordinator', choices=sorted(PROGRAMS), help="the coordinator's own family")
     record = sub.add_parser('log', allow_abbrev=False)
     record.add_argument('--kind', required=True, choices=sorted(KINDS))
