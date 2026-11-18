@@ -366,6 +366,15 @@ class WorktreeCleanTest(unittest.TestCase):
         out = self.ledger_run(*START, "--checkout", str(moved / "sub"), code=1)
         self.assertIn("being removed", out.stderr)
 
+    def test_start_refuses_a_renamed_checkout_in_another_case(self):
+        # A case-only rename of the claimed folder must not reopen it for new dispatches.
+        moved = self.stopped_after_rename("feat-oc")
+        upper = moved.parent / moved.name.upper()
+        os.rename(moved, upper)
+        (upper / "sub").mkdir()
+        out = self.ledger_run(*START, "--checkout", str(upper / "sub"), code=1)
+        self.assertIn("being removed", out.stderr)
+
     def test_a_stale_claim_never_authorizes_a_replacement(self):
         moved = self.stopped_after_rename("feat-sc")
         self.git(self.main, "worktree", "remove", str(moved))

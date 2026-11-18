@@ -265,7 +265,7 @@ def cmd_start(args):
                 top = record_git(args.checkout, "rev-parse", "--show-toplevel")
             except (OSError, ValueError, subprocess.SubprocessError):
                 top = ""
-            if os.path.basename(top).startswith(RETIRING):  # renamed by a cleanup that claimed it
+            if retiring_name(top):  # renamed by a cleanup that claimed it
                 sys.exit("ledger: refused: this checkout is being removed because its branch merged; "
                          "cut a new worktree for new work")
             instance = checkout_instance(top) if top else None
@@ -961,6 +961,12 @@ CLEAN_LOCK_WAIT = 10  # seconds a hand run waits for another cleanup to finish
 RETIRING = ".fnl-retiring-"  # a claimed worktree is renamed to <same parent>/.fnl-retiring-<random> before removal
 
 
+def retiring_name(path):
+    """True when the folder name carries the reserved prefix in any case: a case-insensitive filesystem lets a
+    case-only rename keep the cleaner's path pointing at the same checkout."""
+    return os.path.basename(path).casefold().startswith(RETIRING)
+
+
 def cleanup_mode():
     """`on` (start, finish and the merge notice start a background run), `manual` (only clean-worktrees by hand)
     or `off`, from FNL_WORKTREE_CLEAN."""
@@ -1133,7 +1139,7 @@ def claim(sweep, info, default, place, cwd, main_checkout):
     a `start` there in any spelling finds nothing to record, and a worktree cut there later is a new checkout."""
     from record import checkout_identity
     path = info["path"]
-    resumed = os.path.basename(path).startswith(RETIRING)
+    resumed = retiring_name(path)
     reason = unchanged(sweep, info, path, default, main_checkout, cwd)  # the slow reads, before any lock
     if reason:
         return reason, None
@@ -1242,7 +1248,7 @@ def clean_worktrees(checkout=".", forge=True, deadline=CLEAN_DEADLINE):
         try:
             if not os.path.isdir(entry["path"]):
                 continue
-            if os.path.basename(entry["path"]).startswith(RETIRING):
+            if retiring_name(entry["path"]):
                 if not has_claim(entry["path"]):
                     continue  # a folder name alone authorizes nothing
             else:
