@@ -5,12 +5,14 @@ by afk.py, merge_check.py, the question gate, the afk stop and permission hooks 
 The reader takes no lock, creates nothing, never follows a link and accepts only private (0600)
 regular files owned by the user. Every caller other than afk.py treats any error as no lease.
 """
+from contextlib import contextmanager
 import json
 import math
 import os
 import re
 import stat
 import sys
+import time
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -147,24 +149,37 @@ def _permit_entries(folder, lease, current):
     return kept[-MAX_PERMITS:]
 
 
-def _permits_locked(change, current):
-    """Run `change(entries, lease)` under the permits lock during a live lease and save what it returns; returns its
-    answer. Without a live lease it writes nothing and returns None."""
-    lease = live_lease(current)
-    if lease is None:
-        return None
+@contextmanager
+def permits_lock(folder):
+    """Hold the permits lock: the hook's answers and `afk.py stop` take it, so a stop never interleaves with an answer."""
     import fcntl  # imported here so the lease reader stays importable where fcntl is missing
+    private_info(folder, 'permits.lock')
+    lock = os.open('permits.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, dir_fd=folder)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(lock)
+
+
+def _permits_locked(change, current):
+    """Run `change(entries, lease, now)` under the permits lock during a live lease and save what it returns; returns
+    its answer. The lease and the time are read again once the lock is held, so a request that waited for the lock is
+    judged at the moment it is answered. Without a live lease it writes nothing and returns None."""
+    if live_lease(current) is None:
+        return None
     with dr.data_folder(STATE, private=True) as folder:
-        private_info(folder, 'permits.lock')
-        lock = os.open('permits.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, dir_fd=folder)
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX)
+        with permits_lock(folder):
+            current = max(current, time.time())
+            if read_private(folder, 'stop') is not None:
+                return None
+            lease = read_lease(folder)
+            if lease is None or not lease['start'] <= current < lease['expiry']:
+                return None
             entries = _permit_entries(folder, lease, current)
-            answer, entries = change(entries, lease)
+            answer, entries = change(entries, lease, current)
             private_info(folder, PERMITS)
             dr.atomic_write(folder, PERMITS, json.dumps(entries[-MAX_PERMITS:], separators=(',', ':')).encode())
-        finally:
-            os.close(lock)
     return answer
 
 
@@ -173,8 +188,8 @@ def record_permit(value, current):
     after PERMIT_TTL or with the lease and is consumed only by the permission hook. False without a live lease."""
     if not isinstance(value, str) or not DIGEST.fullmatch(value):
         raise ValueError('a permission approval names one 64-hex request digest')
-    answer = _permits_locked(lambda entries, lease: (True, entries + [
-        dict(kind='approval', digest=value, time=current, lease=lease['start'])]), current)
+    answer = _permits_locked(lambda entries, lease, at: (True, entries + [
+        dict(kind='approval', digest=value, time=at, lease=lease['start'])]), current)
     return bool(answer)
 
 
@@ -184,7 +199,7 @@ def answer_permit(value, current):
     if not isinstance(value, str) or not DIGEST.fullmatch(value):
         raise ValueError('invalid request digest')
 
-    def change(entries, lease):
+    def change(entries, lease, at):
         approvals = [e for e in entries if e['kind'] == 'approval' and e['digest'] == value]
         if approvals:
             used = approvals[0]
@@ -192,7 +207,7 @@ def answer_permit(value, current):
             return 'allow', [e for e in entries if e is not used and not (e['kind'] == 'denied' and e['digest'] == value)]
         if any(e['kind'] == 'denied' and e['digest'] == value for e in entries):
             return 'park', entries
-        return 'deny', entries + [dict(kind='denied', digest=value, time=current, lease=lease['start'])]
+        return 'deny', entries + [dict(kind='denied', digest=value, time=at, lease=lease['start'])]
     return _permits_locked(change, current)
 
 

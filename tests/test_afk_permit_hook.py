@@ -42,7 +42,11 @@ class PermitHookTest(unittest.TestCase):
         self.work = self.home / "work"
         self.work.mkdir()
         # A synthetic environment: only the switch under test is ever set, and nothing is printed from it.
-        self.env = {"PATH": os.defpath}
+        # Its PATH resolves a bare python3 to the interpreter the hook runs under.
+        self.bin = self.home / "bin"
+        self.bin.mkdir()
+        (self.bin / "python3").symlink_to(sys.executable)
+        self.env = {"PATH": str(self.bin) + os.pathsep + os.defpath}
 
     def lease(self, start=None, expiry=None):
         current = time.time()
@@ -142,6 +146,32 @@ class PermitHookTest(unittest.TestCase):
                 self.assertEqual(self.run_hook(self.event(command))["behavior"], "deny")
         sandbox = self.event(f"python3 -I {AFK} effective", dangerouslyDisableSandbox=True)
         self.assertEqual(self.run_hook(sandbox)["behavior"], "deny")
+
+    def test_a_bare_interpreter_counts_only_when_the_path_resolves_it_to_the_hooks_own(self):
+        self.lease()
+        command = f"python3 -I {AFK} effective"
+        wrapper = self.home / "wrapper"
+        wrapper.mkdir()
+        (wrapper / "python3").write_text("#!/bin/sh\nexit 0\n")
+        (wrapper / "python3").chmod(0o755)
+        for path in (str(wrapper) + os.pathsep + str(self.bin), "relative" + os.pathsep + str(self.bin),
+                     os.pathsep + str(self.bin)):
+            decision = self.run_hook(self.event(command), env={"PATH": path})
+            self.assertEqual(decision["behavior"], "deny", path)
+        self.assertEqual(self.run_hook(self.event(command))["behavior"], "allow")
+
+    def test_an_answer_rereads_the_lease_and_the_time_once_it_holds_the_lock(self):
+        # A request judged with a time from before the lease ended gets no answer and consumes nothing.
+        current = time.time()
+        self.lease_start = self.lease(start=current - 600, expiry=current - 1)["start"]
+        self.approve("c" * 64, current=current - 60)
+        probe = self.home / "probe.py"
+        probe.write_text("import sys, time\nsys.path.insert(0, %r)\nimport away_lease\n"
+                         "print(away_lease.answer_permit('c' * 64, time.time() - 30))\n" % str(HOOK.parent))
+        result = subprocess.run([sys.executable, "-I", "-c", BOOT, str(self.home), str(probe)], env=self.env,
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual((result.returncode, result.stdout.strip(), result.stderr), (0, "None", ""))
+        self.assertIn("c" * 64, (self.state / "permits.json").read_text())
 
     def test_no_lease_off_switch_and_errors_fall_back_to_the_host_prompt(self):
         self.assertIsNone(self.run_hook())  # no lease

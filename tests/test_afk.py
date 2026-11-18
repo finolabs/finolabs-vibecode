@@ -3393,17 +3393,16 @@ class DeciderTest(AfkBase):
     def log_kinds(self):
         return [json.loads(line)['kind'] for line in (self.state / 'log.jsonl').read_text().splitlines()]
 
-    def test_a_reached_limit_writes_one_content_free_limit_record(self):
+    def test_a_reached_limit_is_judged_live_and_writes_no_record(self):
+        # The stop hook asks `limit_reached` itself (afk-decider.md A), so `check` keeps no limit record.
         self.start()
         self.change_counts(runs=20)
         self.check(['git', 'status'], tier=3, code='spent')
         self.change_counts(runs=0, first=self.clock, hour_actions=[self.clock] * 30)
         self.check(['git', 'status'], tier=3, code='limit')
-        entries = [json.loads(line) for line in (self.state / 'log.jsonl').read_text().splitlines()]
-        limits = [e for e in entries if e['kind'] == 'limit']
-        self.assertEqual(len(limits), 2)
-        self.assertEqual(set(limits[0]), {'time', 'tier', 'kind', 'note'})
-        self.assertNotIn('status', (self.state / 'log.jsonl').read_text())
+        log = self.state / 'log.jsonl'
+        entries = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+        self.assertEqual([e for e in entries if e['kind'] == 'limit'], [])
 
     def test_a_repository_merge_decide_record_merges_under_a_strict_lease_with_merge_no(self):
         self.start(NO)

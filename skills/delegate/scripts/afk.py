@@ -37,7 +37,7 @@ request, row `decided` below):
 | Only a Tier 1 check reserves an action (a ledger start also a run), even if the caller never executes; a denied check reserves nothing; check exits 0 on Tier 1 and 3 on Tier 3 with the same JSON | check, main |
 | An `unknown` request that a rule, advisor or host attempt approved with `--approve-argv-json` or `--approve-paths` (option 1, decidable: a found repository with user or project settings, no shell syntax, URL, secret or machine path, every path inside the checkout, one of the allowlisted shapes: a script of this checkout, make, npm/pnpm/yarn/bun test, run and declared installs, python scripts and listed -m modules, cargo verbs without --config, go verbs with listed flags and local packages, declared pip, uv, poetry and bundle installs, listed git verbs and flags, listed gh group and verb pairs, or this install's delegated run) is Tier 1 `decided` once, in the same folder, during the lease that recorded it | check, approval_subject, decidable_argv, shape_decidable, dispatch_prefix, decidable_paths, request_subject, open_approvals |
 | `--approve-request <digest>` on a rule, advisor or host attempt settled on option 1 stores a permission approval for the afk permission hook (away_lease.record_permit: 64-hex digest, live lease, used once within 30 minutes); `check` never reads or consumes it | log, permit_subject |
-| `log --kind idle` needs a live lease; `--session` belongs to idle and parked and is stored as the first 16 hex of its SHA-256; `check` adds a content-free `limit` line on `spent` or `limit` | log, check |
+| `log --kind idle` needs a live lease; `--session` belongs to idle and parked and is stored as the first 16 hex of its SHA-256 | log, check |
 | A repository's approved `merge: decide` applies as Merge yes there under any lease; `effective` shows `merge_authority` | effective, show_effective |
 | `start` prints the native allow rules for the lease commands and warns when Claude Code's default config folder and this folder's project settings hold no floor deny rule and no asking approval mode (reads only `permissions.deny` and `permissions.defaultMode`) | native_notice, claude_permissions |
 | Log kinds/tiers and ids are enumerated/validated; `--head` is a full SHA on the merge and review-fallback kinds only; notes lose controls, paths, command text and secret/assignment values, cap at 500; retention 30 days | log, safe_note, secret_patterns |
@@ -78,7 +78,7 @@ import data_root as dr
 import parallel_slots as slots
 import project_store as store
 import secret_patterns
-from away_lease import finite, merge_receipts, private_info, read_lease, read_private  # the one safe lease reader
+from away_lease import finite, merge_receipts, permits_lock, private_info, read_lease, read_private  # the one safe lease reader
 import afk_overlay  # the owner-approved overlay of repository rules (docs/specs/afk-overlay.md)
 
 DEFAULTS = {'Hosts': 'Claude Code', 'Task choice': 'choose', 'Push and pull requests': 'yes',
@@ -371,12 +371,14 @@ def native_notice(cwd):
 
 
 def stop(folder):
-    removed = read_private(folder, 'lease.json') is not None
-    read_private(folder, 'stop')
-    write_private(folder, 'stop', b'')
-    if removed:
-        os.unlink('lease.json', dir_fd=folder)
-        os.fsync(folder)
+    # The permission hook answers under this lock, so no approval is consumed once the stop is written.
+    with permits_lock(folder):
+        removed = read_private(folder, 'lease.json') is not None
+        read_private(folder, 'stop')
+        write_private(folder, 'stop', b'')
+        if removed:
+            os.unlink('lease.json', dir_fd=folder)
+            os.fsync(folder)
     print('afk stopped: stop marker written; lease ' + ('removed' if removed else 'already absent'))
     if afk_overlay.present(os.getcwd()):
         print(afk_overlay.STOPPED)
@@ -2573,6 +2575,19 @@ def classified(folder, argv_json, paths, coordinator, current):
     return code, lease, applied, key, entry, argv, cwd
 
 
+def limit_reached(folder, cwd, current):
+    """True when the lease no longer lets an action run in `cwd`'s repository, exactly as `check` judges its limits: the
+    lease ended, changed or has not started, or (in `strict`) that repository's runs, runtime or hourly actions are
+    spent or at their cap. `open` keeps no per-project limits. Read by the afk stop hook; nothing is stored."""
+    code, lease, applied = lease_guard(folder, current)
+    if code is not None:
+        return True
+    here = effective(applied, cwd)
+    if here.get(MODE) == 'open':
+        return False
+    return project_limit(lease, here, current)[0] is not None
+
+
 def check(folder, args):
     current = now()
     code, lease, applied, key, entry, argv, cwd = classified(folder, args.argv_json, args.paths, args.coordinator, current)
@@ -2603,11 +2618,6 @@ def check(folder, args):
             entry['runs'] += 1
         lease['counters'][key] = entry
         save_lease(folder, lease)
-    if code in {'spent', 'limit'}:
-        try:  # lets the afk stop hook end a turn that reached a limit; it holds no request content
-            append_log(folder, dict(time=current, tier=3, kind='limit', note=''), current)
-        except (OSError, ValueError, UnicodeError):
-            pass
     tier = 1 if code in {'allowed', 'decided'} else 3
     result = {'tier': tier, 'code': code}
     if code in ENDED:

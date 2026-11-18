@@ -23,6 +23,9 @@ sys.argv[0] = script
 runpy.run_path(script, run_name="__main__")
 '''
 SESSION = "0b6f3c1e-1111-4222-8333-944455556666"
+OPEN = "## afk\n- Hosts: Claude Code\n- Mode: open\n"
+STRICT = ("## afk\n- Hosts: Claude Code\n- Task choice: choose\n- Push and pull requests: yes\n- Merge: yes\n"
+          "- Trusted authors: own\n- Mode: strict\n")
 
 
 class StopHookTest(unittest.TestCase):
@@ -36,13 +39,21 @@ class StopHookTest(unittest.TestCase):
         (self.root / "state").chmod(0o700)
         self.env = {"PATH": os.defpath}
 
-    def lease(self, start=None, expiry=None):
-        current = time.time()
-        value = {"id": "a" * 32, "start": current - 600 if start is None else start,
-                 "expiry": current + 3600 if expiry is None else expiry, "settings_hash": "b" * 64, "counters": {}}
+    def lease(self, start=None, expiry=None, setup=OPEN):
+        """A lease started by afk.py itself, so `check`'s view of setup holds; `start`/`expiry` then move its window."""
+        (self.root / "host.md").write_text(setup)
+        (self.root / "host.md").chmod(0o600)
+        for name in ("lease.json", "stop"):
+            (self.state / name).unlink(missing_ok=True)
+        started = self.afk("start")
+        self.assertEqual(started.returncode, 0, started.stdout)
         path = self.state / "lease.json"
-        path.write_text(json.dumps(value))
-        path.chmod(0o600)
+        value = json.loads(path.read_text())
+        if start is not None or expiry is not None:
+            value["start"] = value["start"] if start is None else start
+            value["expiry"] = value["expiry"] if expiry is None else expiry
+            path.write_text(json.dumps(value))
+            path.chmod(0o600)
         return value
 
     def record(self, kind, session=SESSION, age=0):
@@ -102,11 +113,25 @@ class StopHookTest(unittest.TestCase):
         self.record("action")
         self.assert_blocks(self.run_hook())
 
-    def test_a_reached_limit_lets_the_stop_through(self):
-        self.lease()
+    def test_a_reached_limit_in_this_repository_lets_the_stop_through(self):
+        # `strict` counts per repository; the hook judges the limit itself, with no `check` needed since.
+        value = self.lease(setup=STRICT + "- Max runs: 1\n")
         self.assert_blocks(self.run_hook())
-        time.sleep(0.01)
+        value["counters"] = {"unknown": {"runs": 1, "actions": 1, "hour_actions": [time.time() - 5],
+                                         "first": time.time() - 5}}
+        (self.state / "lease.json").write_text(json.dumps(value))
+        self.assertIsNone(self.run_hook())
+
+    def test_another_repositorys_limit_or_a_limit_record_does_not_count(self):
+        value = self.lease(setup=STRICT + "- Max runs: 1\n")
+        value["counters"] = {"f" * 64: {"runs": 1, "actions": 1, "hour_actions": [], "first": time.time() - 5}}
+        (self.state / "lease.json").write_text(json.dumps(value))
         self.record("limit", session=None)
+        self.assert_blocks(self.run_hook())
+
+    def test_a_setup_change_after_the_lease_started_lets_the_stop_through(self):
+        self.lease()
+        (self.root / "host.md").write_text(OPEN + "- Lease hours: 2\n")
         self.assertIsNone(self.run_hook())
 
     def test_no_lease_off_switch_and_errors_let_the_stop_through(self):
@@ -146,10 +171,10 @@ class StopHookTest(unittest.TestCase):
                               env=self.env, capture_output=True, text=True, timeout=30, cwd=self.home)
 
     def test_afk_log_records_idle_with_this_sessions_hash_and_the_stop_passes(self):
-        (self.root / "host.md").write_text("## afk\n- Hosts: Claude Code\n- Mode: open\n")
+        (self.root / "host.md").write_text(OPEN)
         (self.root / "host.md").chmod(0o600)
         self.assertEqual(self.afk("log", "--kind", "idle", "--session", SESSION).returncode, 3)  # no lease yet
-        self.assertEqual(self.afk("start").returncode, 0)
+        self.lease()
         self.assert_blocks(self.run_hook())
         time.sleep(0.01)
         logged = self.afk("log", "--kind", "idle", "--session", SESSION)

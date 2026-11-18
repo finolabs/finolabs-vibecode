@@ -30,20 +30,33 @@ def request_digest(tool, tool_input, cwd):
     return hashlib.sha256(body.encode('utf-8')).hexdigest()
 
 
+def own_interpreter(word):
+    """True when `word` runs the interpreter this hook runs under (the same real file)."""
+    import shutil
+    if '/' in word:
+        found = word if os.path.isabs(word) else None
+    elif word in {'python3', 'python'}:
+        path = os.environ.get('PATH', '')
+        if not path or any(not os.path.isabs(entry) for entry in path.split(os.pathsep)):
+            return False  # an empty or relative entry would resolve against the command's own folder
+        found = shutil.which(word, path=path)
+    else:
+        return False
+    return found is not None and os.path.realpath(found) == os.path.realpath(sys.executable)
+
+
 def own_lease_command(command, cwd, script):
     """True for `python3 [-I|-B|-u]... <this install's afk.py> <lease command> [args]` where the whole command holds only
     letters, digits, spaces and `._,:=/@+%-`: no quote, operator, expansion, glob or newline, so splitting at spaces
-    reads it exactly as a shell would. The interpreter is a bare python3 or python, or the hook's own interpreter."""
+    reads it exactly as a shell would. The interpreter must be the hook's own: an absolute path to it, or a bare python3
+    or python that this PATH (absolute entries only) resolves to it, so a wrapper earlier on the PATH is not trusted."""
     import re
     if not isinstance(command, str) or not re.fullmatch(r'[A-Za-z0-9 ._,:=/@+%-]{1,4096}', command):
         return False
     words = command.split()
     if not words:
         return False
-    if '/' in words[0]:
-        if os.path.realpath(words[0]) != os.path.realpath(sys.executable):
-            return False
-    elif words[0] not in {'python3', 'python'}:
+    if not own_interpreter(words[0]):
         return False
     rest = words[1:]
     while rest and rest[0] in {'-I', '-B', '-u'}:
