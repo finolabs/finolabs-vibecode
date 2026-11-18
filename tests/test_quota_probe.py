@@ -847,7 +847,7 @@ class QuotaTest(unittest.TestCase):
                 setup.preview(["agy"])
             plan = {"choice": "on", "date": "2026-11-05", "created": qp.stamp(qp.now()), "root": str(self.root),
                     "host_digest": setup.hashlib.sha256(b"").hexdigest(),
-                    "agents": {"agy": entry}, "configs": {}}
+                    "agents": {"agy": entry}, "configs": {}, "floors": {}}
             with self.assertRaisesRegex(ValueError, "wrong name"):
                 setup.validate_plan(plan)
 
@@ -1032,6 +1032,43 @@ class QuotaTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             setup.apply(None, value, True)
         self.assertFalse((self.root / "host.md").exists())
+
+    def test_weekly_floor_is_saved_by_setup_and_shown_in_status(self):
+        setup = self.setup_module()
+        self.fake("agy")
+        with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
+            plan, digest = setup.preview(["agy"], floors={"agy/default": 20})
+            setup.apply(plan, digest, True)
+        self.assertIn("- Weekly floor: agy/default=20\n", dr.read_data("host.md").decode())
+        self.assertIn("agy", qp.config())
+        self.assertEqual(qp.weekly_floors(), {"agy/default": 20})
+        self.ready()
+        with mock.patch.object(qp, "now", return_value=MEASURED):
+            qp.read_family("agy")
+        with mock.patch.object(qp, "now", return_value=MEASURED + qp.timedelta(hours=1)):
+            line = qp.status_lines()[0]
+        self.assertTrue(line.endswith("; weekly floor 20%"), line)
+        with mock.patch.dict(os.environ, {"FNL_QUOTA_PROBE": "off"}):
+            self.assertEqual(qp.weekly_floors(), {})
+
+    def test_weekly_floor_refuses_unknown_installs_and_out_of_range_values(self):
+        setup = self.setup_module()
+        self.fake("agy")
+        with mock.patch.dict(os.environ, {"PATH": str(self.bin)}), mock.patch.object(setup, "excluded"):
+            for floors in ({"agy/other": 20}, {"agy/default": 5}, {"agy/default": 96}, {"codex/default": 20},
+                           {"agy/default": "20"}):
+                with self.subTest(floors=floors), self.assertRaises((ValueError, TypeError)):
+                    setup.preview(["agy"], floors=floors)
+            with self.assertRaises(ValueError):
+                setup.preview([], off=True, floors={"agy/default": 20})
+        entries = self.configure({"agy": self.fake("agy")})
+        self.assertEqual(qp.config(), entries)
+        for value in ("agy/default=9", "agy/default=20, agy/default=30", "agy/x=20", "agy/default=20,codex/default=20"):
+            with self.subTest(value=value):
+                dr.write_data("host.md", dr.read_data("host.md").replace(b"- Weekly floor", b"- Old floor")
+                              .split(b"- Old floor")[0] + f"- Weekly floor: {value}\n".encode())
+                self.assertEqual(qp.config(), {})
+                self.assertEqual(qp.weekly_floors(), {})
 
     def test_setup_host_change_and_off(self):
         setup = self.setup_module()

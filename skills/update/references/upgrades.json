@@ -508,6 +508,12 @@
           "id": "0.3.3/instructions-conflict-scan",
           "kind": "info",
           "text": "/setup instructions now flags lines in your instruction files that stop afk or delegate (merge only where you said so, own away rules, machine facts) and proposes fixes."
+        },
+        {
+          "id": "0.3.3/quota-weekly-floor",
+          "kind": "setup",
+          "text": "Routing can stop handing work to one install before its week runs out: record a weekly floor such as claude/work=15 (stop after 85% used).",
+          "setup": "/setup add quota"
         }
       ]
     }
