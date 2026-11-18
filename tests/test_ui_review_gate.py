@@ -110,10 +110,13 @@ class SnippetResults(unittest.TestCase):
         self.assertEqual((by_id["nested-link"]["severity"], by_id["nested-link"]["exception"]), ("blocking", None))
         # A block inside a wrapper ends the line for every level above it too.
         self.assertEqual((by_id["deep-link"]["severity"], by_id["deep-link"]["exception"]), ("blocking", None))
+        # A forced line break ends the line; a display: contents wrapper is transparent.
+        self.assertEqual((by_id["br-link"]["severity"], by_id["br-link"]["exception"]), ("blocking", None))
+        self.assertEqual((by_id["contents-link"]["severity"], by_id["contents-link"]["exception"]), ("low", "inline"))
         # Every inline exception is a heuristic reading, marked for a check by eye.
         self.assertTrue(by_id["inline-link"]["uncertain"] and by_id["wrapped-link"]["uncertain"])
         self.assertNotIn("email", by_id, "a 48 px tall field is not reported")
-        self.assertEqual(out["blocking"], 9)
+        self.assertEqual(out["blocking"], 11)
 
     def test_overflow_names_the_outermost_cause_and_allows_scroll_regions(self):
         out = self.run_snippet("overflow.js")

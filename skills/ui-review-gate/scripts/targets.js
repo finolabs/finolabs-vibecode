@@ -38,7 +38,8 @@
        sentence text ("T"), the link itself is "L". The link is inline when the segment around "L", between two
        breaks, holds "T". A DOM reading cannot see wrapped lines, so every inline exception is marked uncertain. */
     if (el.tagName.toLowerCase() !== "a" || getComputedStyle(el).display !== "inline") return false;
-    const isBlock = (node) => node.nodeType === 1 && getComputedStyle(node).display !== "inline";
+    /* display: contents adds no box, so it is transparent here like an inline wrapper. */
+    const isBlock = (node) => node.nodeType === 1 && !/^(inline|contents)$/.test(getComputedStyle(node).display);
     let root = el.parentElement;
     while (root && !isBlock(root)) root = root.parentElement;
     if (!root) return false;
@@ -49,6 +50,7 @@
         return;
       }
       if (node.nodeType !== 1) return;
+      if (node.tagName.toLowerCase() === "br") { tokens.push("B"); return; } /* a forced line break */
       const block = node !== root && isBlock(node);
       if (block) tokens.push("B");
       if (node === el) tokens.push("L");
