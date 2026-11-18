@@ -9,11 +9,15 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "scripts/merge_notice_hook.py"
-MANUAL_LINE = ("fnl: a pull request merged; automatic worktree cleanup is off here (FNL_WORKTREE_CLEAN), so "
+MANUAL_LINE = ("fnl: a pull request merged; automatic worktree cleanup is off here (FNL_WORKTREE_CLEAN=manual), so "
                "ledger.py clean-worktrees removes the merged worktrees of finished delegated runs by hand; for a "
                "worktree you made yourself, run worktree_sweep.py list and, when a candidate, the two git commands "
                "it prints; if it closed a spec, story or large pull request, rename the session for its next work "
                "(tidy Titles) (advisory).")
+OFF_LINE = ("fnl: a pull request merged; worktree cleanup is switched off here (FNL_WORKTREE_CLEAN=off), so "
+            "nothing removes merged worktrees; run worktree_sweep.py list and, when a candidate, the two git "
+            "commands it prints; if it closed a spec, story or large pull request, rename the session for its next "
+            "work (tidy Titles) (advisory).")
 LINE = ("fnl: a pull request merged; merged worktrees of finished delegated runs are being removed in the "
         "background (ledger.py clean-worktrees shows them); for a worktree you made yourself, run "
         "worktree_sweep.py list and, when a candidate, the two git commands it prints; if it closed a spec, "
@@ -66,12 +70,12 @@ class MergeNoticeHookTest(unittest.TestCase):
                 output = self.run_hook(self.payload(command, {"stdout": "", "stderr": "", "interrupted": False}))
                 printed = json.loads(output)
                 self.assertEqual(printed["hookSpecificOutput"],
-                                 {"hookEventName": "PostToolUse", "additionalContext": MANUAL_LINE})
+                                 {"hookEventName": "PostToolUse", "additionalContext": OFF_LINE})
                 self.assertEqual(len(output.strip().splitlines()), 1)
 
     def test_the_line_says_whether_cleanup_runs(self):
         payload = self.payload("gh pr merge 12 --merge", {"stdout": "", "stderr": "", "interrupted": False})
-        for mode, line in (("manual", MANUAL_LINE), ("off", MANUAL_LINE)):
+        for mode, line in (("manual", MANUAL_LINE), ("off", OFF_LINE)):
             with self.subTest(mode=mode):
                 printed = json.loads(self.run_hook(payload, mode=mode))
                 self.assertEqual(printed["hookSpecificOutput"]["additionalContext"], line)

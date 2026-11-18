@@ -36,16 +36,28 @@ LINE = ("fnl: a pull request merged; merged worktrees of finished delegated runs
         "background (ledger.py clean-worktrees shows them); for a worktree you made yourself, run "
         "worktree_sweep.py list and, when a candidate, the two git commands it prints; if it closed a spec, "
         "story or large pull request, rename the session for its next work (tidy Titles) (advisory).")
-MANUAL_LINE = ("fnl: a pull request merged; automatic worktree cleanup is off here (FNL_WORKTREE_CLEAN), so "
+MANUAL_LINE = ("fnl: a pull request merged; automatic worktree cleanup is off here (FNL_WORKTREE_CLEAN=manual), so "
                "ledger.py clean-worktrees removes the merged worktrees of finished delegated runs by hand; for a "
                "worktree you made yourself, run worktree_sweep.py list and, when a candidate, the two git commands "
                "it prints; if it closed a spec, story or large pull request, rename the session for its next work "
                "(tidy Titles) (advisory).")
+OFF_LINE = ("fnl: a pull request merged; worktree cleanup is switched off here (FNL_WORKTREE_CLEAN=off), so "
+            "nothing removes merged worktrees; run worktree_sweep.py list and, when a candidate, the two git "
+            "commands it prints; if it closed a spec, story or large pull request, rename the session for its next "
+            "work (tidy Titles) (advisory).")
 LEDGER = Path(__file__).resolve().parent.parent / "skills" / "delegate" / "scripts" / "ledger.py"
 
 
+def cleanup_mode():
+    """`on`, `manual` or `off`, read from FNL_WORKTREE_CLEAN the way `ledger.py` reads it."""
+    value = os.environ.get("FNL_WORKTREE_CLEAN", "").lower()
+    if value in {"off", "0", "false", "no"}:
+        return "off"
+    return "manual" if value == "manual" else "on"
+
+
 def cleanup_on():
-    return os.environ.get("FNL_WORKTREE_CLEAN", "").lower() not in {"off", "0", "false", "no", "manual"}
+    return cleanup_mode() == "on"
 
 
 def start_cleanup(cwd):
@@ -140,7 +152,7 @@ def main():
         if not isinstance(data, dict) or not succeeded(payload.get("tool_response")):
             return
         if merged(data.get("command")):
-            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": LINE if cleanup_on() else MANUAL_LINE}}))
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": {"on": LINE, "manual": MANUAL_LINE}.get(cleanup_mode(), OFF_LINE)}}))
             sys.stdout.flush()
             start_cleanup(payload.get("cwd"))
     except Exception:

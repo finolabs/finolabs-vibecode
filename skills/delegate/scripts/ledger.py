@@ -1342,7 +1342,8 @@ def put_back(sweep, main_checkout, original, moved, shown, reason, instance):
         # The reverse move may have renamed the folder before it failed: register it where it now is.
         if os.path.isdir(original) and not os.path.lexists(moved) and checkout_instance(original) == instance:
             try:
-                if sweep.git(main_checkout, "worktree", "repair", "--", original).returncode == 0:
+                if sweep.git(main_checkout, "worktree", "repair", "--", original).returncode == 0 and \
+                        repair_nested(sweep, main_checkout, moved, original, inside):
                     return f"ledger: kept worktree {shown} ({reason})", True
             except Exception:
                 pass

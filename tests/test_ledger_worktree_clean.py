@@ -604,6 +604,37 @@ class WorktreeCleanTest(unittest.TestCase):
         self.assertIn("worktree " + str(path.resolve()) + "\n", listed)  # git records it at its old path again
         self.assertNotIn(".fnl-retiring-", listed)
 
+    def test_a_half_done_move_back_records_a_nested_worktree_too(self):
+        path = self.worktree("feat-hn")
+        self.dispatch(path)
+        common = Path(self.git(self.main, "rev-parse", "--git-common-dir").stdout.strip())
+        common = common if common.is_absolute() else self.main / common
+        (common / "info").mkdir(exist_ok=True)
+        with (common / "info" / "exclude").open("a") as handle:
+            handle.write("nested/\n")
+        ledger, sweep = self.load_ledger()
+        real_size, real_git = sweep.size_on_disk, sweep.git
+        added = []
+
+        def size_on_disk(target):
+            if ".fnl-retiring-" in str(target) and not added:
+                added.append(True)
+                real_git(str(self.main), "worktree", "add", "-q", "--no-track", "-b", "feat-hn2",
+                         str(Path(target) / "nested"), "origin/main")
+            return real_size(target)
+
+        def git(checkout, *args, **kwargs):
+            if args[:2] == ("worktree", "move") and ".fnl-retiring-" in args[-2]:
+                os.rename(args[-2], args[-1])  # renamed back, then git failed before recording it
+                raise subprocess.TimeoutExpired("git", 60)
+            return real_git(checkout, *args, **kwargs)
+
+        with mock.patch.object(sweep, "size_on_disk", size_on_disk), mock.patch.object(sweep, "git", git):
+            lines, _ = ledger.clean_worktrees(str(self.main))
+        listed = self.git(self.main, "worktree", "list", "--porcelain").stdout
+        self.assertIn("worktree " + str((path / "nested").resolve()) + "\n", listed, lines)
+        self.assertNotIn(".fnl-retiring-", listed)
+
     def test_a_failed_move_is_undone(self):
         path = self.worktree("feat-fm")
         self.dispatch(path)
