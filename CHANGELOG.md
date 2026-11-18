@@ -21,12 +21,12 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
-- The afk check hook reads `exec` as Codex's own subcommand when the raw command starts with the plain words `codex exec`, so `codex exec -m <model> ...` no longer gets the split message under a lease; every Codex dispatch was denied before. Every other `exec`, prefix or redirection placement keeps the wrapper rule.
 - `worktree_sweep.py` asks gh about the worktree's own repository: an inherited `GH_REPO` could name another repository whose merged pull request had the same branch and head.
 - The worktree sweep (`commit-messages`, `review-gate`) reported every worktree dirty when a folder such as `.claude/` was ignored only by the user's global ignore file: it runs git without the home folder, so git never read that file. It now resolves the global ignore file once and passes it to `git status` alone, so merged, clean worktrees become candidates again.
 
-- The afk check hook refused every command written in the usual style `a; b` or `a&& b`: shlex keeps an operator that ends a word inside that word, which the hook read as an operator glued to a word. It now splits such an operator off as bash does and judges both commands; an operator glued to the word after it (`a;b`) is still refused, and a quoted or escaped operator is never split off, so it cannot stand in for a glued one.
-- The afk check hook judged a word with a glued redirect (`printenv>&2`, `cat<f`, `gh>out auth token`) as one program name, so a credential command or floor path written that way was not parked. A glued redirect is now its own word and the program and the target are judged.
+### Removed
+
+- The afk check hook on Claude Code (owner decision, 18/11/2026): the `PreToolUse` Bash hook that judged each command under an away lease, with its stopgaps, is gone, and `FNL_AFK_HOOK` no longer does anything. Blocking is the host's own job (Claude Code permission rules and auto mode, Codex sandbox and approvals); under a lease the agent runs `afk.py check` itself before each action on every host. The tenth scoped exception in `CLAUDE.md` is now a removal record, and the hook and tokenizer specs are deferred.
 
 ### Known limits
 

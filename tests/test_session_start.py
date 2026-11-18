@@ -274,10 +274,8 @@ class SessionStartTest(SyntheticStateTest):
                 for event in ("SessionStart", "Stop"):
                     nudge = manifest["hooks"][event].pop()
                     self.assertIn("proof_nudge.py", nudge["hooks"][0]["command"])
-                # The afk check hook (0.3.2) adds only its own PreToolUse group for Bash, last in that list.
-                check = manifest["hooks"]["PreToolUse"].pop()
-                self.assertEqual(check["matcher"], "Bash")
-                self.assertIn("afk_check_hook.py", check["hooks"][0]["command"])
+                # The afk check hook (0.3.2) was removed on 18/11/2026 (owner decision): no Bash group remains in PreToolUse.
+                self.assertNotIn("Bash", [group.get("matcher") for group in manifest["hooks"]["PreToolUse"]])
                 # The away question gate adds only its own PreToolUse group, last in that list.
                 gate = manifest["hooks"]["PreToolUse"].pop()
                 self.assertEqual(gate["matcher"], "AskUserQuestion")

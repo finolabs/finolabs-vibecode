@@ -1,6 +1,6 @@
 # afk check hook: one shell tokenizer
 
-Status: accepted; owner decisions settled 18/11/2026, no code yet. The rule change it needs (CLAUDE.md, tenth scoped exception) lands with the code, as decision 4 sets out. It replaces two stopgaps merged on 18/11/2026 while it waits: PR 352 (an operator that ends a word is split off) and PR 357 (`codex exec` at the start of a command is Codex's subcommand, not the shell's `exec`). Revised after the Codex reviews of 421ba5d3, 3ee71ea0, 1749f0c9 and 6ccaf157 (code and security REWORK).
+Status: deferred; hook removed 18/11/2026 (owner decision): blocking is the native harness's job (Claude Code permission rules and auto mode, Codex sandbox and approvals), so the tokenizer has no hook to serve; PR 358 closed unmerged, and the PR 352 and 357 stopgaps left with the hook file. The text below records the design.
 
 ## Why
 
