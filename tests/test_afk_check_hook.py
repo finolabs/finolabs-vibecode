@@ -171,6 +171,50 @@ class AfkCheckHookTest(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertNotEqual(self.hook(command), denial(PARSE))
 
+    def test_an_operator_that_ends_a_word_is_split_off_as_bash_does(self):
+        self.start()
+        # Ordinary style: the operator ends the word before it, so both commands are read and judged.
+        for command in ('ls /tmp; git status', 'ls /tmp&& git status', 'ls /tmp|| git status', 'ls /tmp| head',
+                        'ls /tmp; git status; git log -1', 'ls /tmp; git status 2>&1 | head'):
+            with self.subTest(command=command):
+                self.assertIsNone(self.hook(command))
+        for command in ('ls /tmp; printenv', 'git commit -m msg; printenv', 'ls /tmp&& env', 'ls /tmp| printenv'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), parked('floor'))
+        # An operator glued to the word after it, or one inside quotes beside a split one, is still not read.
+        # A quoted or escaped operator elsewhere never stands in for the glued one (review of #352).
+        for command in ('ls /tmp;printenv', 'git commit -m msg;printenv', 'echo "a;" b; printenv',
+                        "git commit -m x;printenv FNL_TEST 'a;'", 'git commit -m x;printenv FNL_TEST a\\;',
+                        'git commit -m x&&printenv FNL_TEST "a&&"', "git commit -m x;printenv FNL_TEST $'a;'",
+                        'git commit -m x;printenv FNL_TEST $"a;"', "git commit -m x;cat</tmp/.netrc - 'a;'",
+                        "git commit -m 'x;' y;printenv"):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), denial(PARSE))
+        # A quoted operator alone is a text value, as before.
+        self.assertIsNone(self.hook('git commit -m "fix;" -q'))
+        self.assertIsNone(self.hook('ls /tmp; pwd ""'))
+        # A redirect glued to a word is its own word, so the program and the target are judged (review of #352).
+        for command in ('printenv>&2', 'printenv>/tmp/afk-out', 'gh>out auth token', 'true; printenv>&2',
+                        "true; pri''ntenv>&2", 'true; gh>out auth token', 'cat<~/.netrc', 'true; cat</tmp/x/.netrc'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), parked('floor'))
+
+    def test_codex_exec_is_codex_s_subcommand_not_the_shell_wrapper(self):
+        self.start()
+        for command in ("codex exec -m gpt -s read-only 'review this'", 'codex exec --json -m gpt y'):
+            with self.subTest(command=command):
+                self.assertNotEqual(self.hook(command), denial(PARSE))
+        # Every other placement keeps the wrapper rule, including the bypasses a looser walk let through.
+        for command in ('exec -x ls', 'ls; exec -x ls', 'nohup exec -x ls', 'timeout 5 exec -x ls',
+                        "codex exec -m gpt caffeinate -t 5 sh -c 'pr\"\"intenv'",
+                        ">out caffeinate -t 5 sh -c 'pr\"\"intenv'", "env FOO=1 caffeinate -t 5 sh -c 'x'",
+                        "pnpm exec caffeinate -t 5 sh -c 'x'", "exec -a 'a b' caffeinate -t 5 sh -c 'x'",
+                        'exec -a codex exec -x ls', '>out codex exec -x ls', 'nohup codex exec -x ls',
+                        "> 'out;codex' exec -- sh -c 'echo ok'", "ls; 'codex' exec -- sh -c x", "'codex' exec -- sh -c x",
+                        'cd x && codex exec -- sh -c x', 'codex exec -m gpt; exec -x ls'):
+            with self.subTest(command=command):
+                self.assertEqual(self.hook(command), denial(PARSE))
+
     def test_input_past_the_cap_denies_only_under_a_live_lease(self):
         padded = 'printenv' + ' ' * (262 * 1024)
         self.assertIsNone(self.hook(padded))
@@ -249,7 +293,8 @@ class AfkCheckHookTest(unittest.TestCase):
         (self.home / '.netrc').write_text('machine example.com\n')
         env = {**self.env, 'HOME': str(self.home)}
         self.assertEqual(self.hook('cat x<~/.n?trc', env=env), parked('floor'))
-        self.assertEqual(self.hook('cat<~/.n?trc', env=env), denial(PARSE))
+        # The redirect is its own word since #352, so the program name is `cat` and the target is judged.
+        self.assertEqual(self.hook('cat<~/.n?trc', env=env), parked('floor'))
 
     def test_an_unreadable_command_is_denied(self):
         self.start()

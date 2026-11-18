@@ -77,7 +77,10 @@ def git_out(checkout, *args, config=()):
 
 
 def run_gh(args, cwd):
-    return subprocess.run(["gh", *args], capture_output=True, text=True, timeout=GH_TIMEOUT, cwd=cwd)
+    """gh reads the repository from the worktree's own remote: an inherited GH_REPO, GIT_DIR or other GIT_*
+    override never points it at another repository or configuration."""
+    env = {k: v for k, v in os.environ.items() if k != "GH_REPO" and not k.startswith("GIT_")}
+    return subprocess.run(["gh", *args], capture_output=True, text=True, timeout=GH_TIMEOUT, cwd=cwd, env=env)
 
 
 def worktrees(checkout):
@@ -208,7 +211,7 @@ def default_ref(main):
     return ref if ref and ref.startswith("refs/remotes/origin/") else None
 
 
-def merged(path, head, branch, default):
+def merged(path, head, branch, default, forge=True):
     """("yes", "no" or "unknown", "ancestor", "forge" or None for what proved a yes).
 
     The forge counts only for a merged pull request whose head commit is the branch's current head: a
@@ -221,7 +224,7 @@ def merged(path, head, branch, default):
                 return "yes", "ancestor"
         except (OSError, subprocess.SubprocessError):
             pass
-    if not branch or not head:
+    if not branch or not head or not forge:
         return "unknown", None
     try:
         done = run_gh(["pr", "list", "--head", branch, "--state", "merged", "--json", "number,headRefOid"],
@@ -240,7 +243,7 @@ def merged(path, head, branch, default):
     return "unknown", None
 
 
-def describe(entry, default):
+def describe(entry, default, forge=True):
     path = entry["path"]
     branch = entry.get("branch", "")
     branch = branch[len("refs/heads/"):] if branch.startswith("refs/heads/") else ""
@@ -252,7 +255,7 @@ def describe(entry, default):
     info["size"] = size_on_disk(path)
     info["state"] = state(path)
     info["unpushed"] = unpushed(path)
-    info["merged"], proof = merged(path, info["head"], branch, default)
+    info["merged"], proof = merged(path, info["head"], branch, default, forge)
     count, upstream = info["unpushed"]
     if proof == "forge" and not upstream and count:
         # The forge merged a pull request at exactly this head, so every commit of it was pushed; the
