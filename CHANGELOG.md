@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-19
+
 ### Added
 
 - `ui-review-gate`, a new skill beside `security-review-gate` (spec `docs/specs/ui-review-gate.md`, owner decisions 17/11 and 18/11/2026): reviews what a change does to the interface in four modes (audit, forms, responsive, accessibility on WCAG 2.2 AA, its criteria list kept in the skill), report-only by default, and proves each constraint it states (desktop layout, API calls, field order) before and after a fix. Four read-only JavaScript snippets (`contrast.js`, `targets.js`, `overflow.js`, `fields.js`) measure in the browser the host session already exposes; with none it reports BLOCKED. A target below 24 by 24 CSS px is blocking, 24 to 43 px low. axe-core runs only when the repository declares it and the command is authorized; otherwise the gate asks before adding it as a pinned dev dependency. Advisory: `merge_check.py` is unchanged. `coding-router` and `review-gate` call it for user-facing UI changes; companions `shadcn` and `frontend-design` are used only when installed.
@@ -26,6 +28,7 @@ All notable changes to this plugin are documented here. The format follows [Keep
 - Per-model compaction threshold on Claude Code (owner decision, 18/11/2026): `/autocompact` saves `modelSettings.<model>.autoCompactWindow`, so the compaction nudge now reads the model id of the latest assistant entry (in memory only) and, within each settings file, uses that model's value over the top-level `autoCompactWindow`; file precedence is unchanged. `compact_setup.py preview --model <id>` writes the per-model value after the same digest-bound approval.
 
 - `select_tests.py` (the `checks` skill and the repository copy) also selects a test module that declares a folder it reads with a line `# select-tests: reads <folder>/`, for modules that build paths at run time; `test_setup_limits` declares `skills/setup/`, so a setup reference change now selects it (it missed the size caps in PR 349).
+- Docs that describe the product follow 0.3.3 (release drift review): the README skill and setup tables, the comparison page, the help map and `setup` page, `/setup check` (the merge notice starts the worktree cleanup), `PRIVACY.md` (the weekly floor line) and the delegation sequence diagram (the ledger removes a merged run's worktree).
 
 ### Fixed
 
@@ -758,7 +761,8 @@ First public release.
 - Privacy notice, terms of use, issue and pull request templates, Dependabot and a validate workflow.
 - MIT license, contributing guide, security policy, Contributor Covenant 2.1 code of conduct, and contributor agent context in `CLAUDE.md`.
 
-[Unreleased]: https://github.com/finolabs/vibecode/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/finolabs/vibecode/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/finolabs/vibecode/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/finolabs/vibecode/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/finolabs/vibecode/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/finolabs/vibecode/compare/v0.2.6...v0.3.0

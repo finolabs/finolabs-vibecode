@@ -24,7 +24,7 @@ svg { width: 100%; min-width: 900px; display: block; }
 <p class="sub">Setup is one skill with Quick, Advanced and subcommands. The hook points the agent at the router; the router hands work to delegation (parallel pools), gates, and session and git skills; the commands you type keep the machine's config and logs current, start an away lease or drain work before a restart.</p>
 <svg viewBox="0 0 1280 1152" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="skills-architecture-light-title skills-architecture-light-desc">
 <title id="skills-architecture-light-title">How the finolabs-vibecode skills work together</title>
-<desc id="skills-architecture-light-desc">Architecture of the skill set for release 0.3.2: a session-start hook reminds the agent to use the coding router, which hands work to delegation (route_pick over the assignment matrix, parallel pools, log_scan, the advisor's choose mode), gates (verify_claim with judge, review_route, post_review, merge_check), and session and git skills (context snapshots, navigator). The commands you type manage configuration and logs on the user machine: setup (with the assignment matrix in add delegation), status, restore-point, help (alias ask), update, afk (alias brb, loading afk) for the away lease and its decision ladder, and pause (alias gtg) to drain work before a restart.</desc>
+<desc id="skills-architecture-light-desc">Architecture of the skill set for release 0.3.3: a session-start hook reminds the agent to use the coding router, which hands work to delegation (route_pick over the assignment matrix, parallel pools, log_scan, the advisor's choose mode), gates (verify_claim with judge, review_route, post_review, merge_check, and the security and UI review gates), and session and git skills (context snapshots, navigator). The commands you type manage configuration and logs on the user machine: setup (with the assignment matrix in add delegation), status, restore-point, help (alias ask), update, afk (alias brb, loading afk) for the away lease and its decision ladder, and pause (alias gtg) to drain work before a restart.</desc>
 <defs>
 <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#5B5B79"/></marker>
 <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#14627A"/></marker>
@@ -123,10 +123,10 @@ svg { width: 100%; min-width: 900px; display: block; }
 <text x="632.0" y="426" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">post_review.py · merge_check.py</text>
 <rect x="480" y="476" width="304" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="480" y="476" width="304" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>
-<rect x="488" y="482" width="56" height="12" rx="2" fill="none" stroke="#5B5B79" stroke-opacity="0.5" stroke-width="0.8"/>
-<text x="516.0" y="491" fill="#5B5B79" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SECURITY</text>
-<text x="632.0" y="508" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">security-review-gate</text>
-<text x="632.0" y="524" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">agent: security-reviewer</text>
+<rect x="488" y="482" width="72" height="12" rx="2" fill="none" stroke="#5B5B79" stroke-opacity="0.5" stroke-width="0.8"/>
+<text x="524.0" y="491" fill="#5B5B79" font-size="8" font-weight="500" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SPECIALIST</text>
+<text x="632.0" y="508" fill="#0B0B17" font-size="12" font-weight="600" font-family="'Space Grotesk', system-ui, sans-serif" text-anchor="middle">security-review-gate · ui-review-gate</text>
+<text x="632.0" y="524" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">agent: security-reviewer · UI snippets</text>
 <text x="632.0" y="537" fill="#5B5B79" font-size="8.5" font-family="'JetBrains Mono', ui-monospace, monospace" text-anchor="middle">review_route.py · post_review.py</text>
 <rect x="864" y="252" width="352" height="72" rx="8" fill="#F7F7FB"/>
 <rect x="864" y="252" width="352" height="72" rx="8" fill="#FFFFFF" stroke="rgba(11,11,23,0.7)" stroke-width="1"/>

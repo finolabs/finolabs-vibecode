@@ -1,6 +1,6 @@
 # afk decider: settle the stops, leave the blocking to the host
 
-Status: in progress; owner direction and decisions 18/11/2026; code for A to D and decisions 1 to 4 and 6 lands in 0.3.3, decision 5 (dropping the syntax allowlist and the general argv classification) stays open. It changes [afk-autonomy.md](afk-autonomy.md), [afk-per-project.md](afk-per-project.md) and [away-decisions.md](away-decisions.md) where they say who blocks and when an agent may stop; where they disagree, this document wins from the release that ships its code.
+Status: in progress; owner direction and decisions 18/11/2026; code for A to D and decisions 1 to 4 and 6 lands in 0.3.3, decision 5 (dropping the syntax allowlist and the general argv classification) is parked and left out of 0.3.3 (19/11/2026), because it redefines `strict` mode and the rules a live lease runs on. It changes [afk-autonomy.md](afk-autonomy.md), [afk-per-project.md](afk-per-project.md) and [away-decisions.md](away-decisions.md) where they say who blocks and when an agent may stop; where they disagree, this document wins from the release that ships its code.
 
 ## Why
 
