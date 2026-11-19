@@ -483,8 +483,10 @@ class AwayDecisionTest(AfkBase):
             with self.subTest(case=name):
                 before = len(self.ledger())
                 identifier, _ = self.recorded(*ROWS[rows[0]][0], precedents='0')
-                for row in rows[1:]:
-                    self.recorded(*ROWS[row][0], '--decision', identifier, precedents='0')
+                for number, row in enumerate(rows[1:]):
+                    # A later attempt may name the id in another case; it is recorded as generated (lowercase).
+                    typed = identifier.upper() if number % 2 else identifier
+                    self.recorded(*ROWS[row][0], '--decision', typed, precedents='0')
                 lines = self.ledger()[before:]
                 self.assertEqual({line['id'] for line in lines}, {identifier})
                 self.assertEqual([(line['rung'], line['settled']) for line in lines],
@@ -500,6 +502,10 @@ class AwayDecisionTest(AfkBase):
             self.assertEqual(status, 0, output)
             line = self.ledger()[-1]
             self.assertEqual(line, dict(event='decision_review', id=identifier, ts=line['ts'], verdict=verdict))
+        # An id typed in another case names the same decision and is recorded as generated (lowercase).
+        status, output = self.invoke('review', '--decision', identifier.upper(), 'kept')
+        self.assertEqual(status, 0, output)
+        self.assertEqual(self.ledger()[-1]['id'], identifier)
         before = self.ledger()
         for identifier in ('q20261110-010203-ffff', 'bad'):
             self.assertEqual(self.invoke('review', '--decision', identifier, 'kept')[0], 3)
