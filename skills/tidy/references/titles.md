@@ -9,6 +9,14 @@ How each host sets a session's title, as checked against each CLI's help and com
 | Codex | `/rename` in the TUI, which asks for the name | `codex exec` takes no name: identify the run by its ledger label and log file names | `codex resume`, `archive` and `delete` accept a session name or id. Archive or delete only sessions this agent started, by id, since titles can repeat; `delete` is permanent and needs the user's explicit go. |
 | Antigravity (`agy`) | no session title found in `agy --help` | group runs with `--project <name>`; identify each by its ledger label and log file names | Say that the host has no titles, and carry the name in the handover. |
 
+## Archiving
+
+Archive only sessions this agent started, or one the user names, after the user agreed to archive it.
+
+- **Claude Code (desktop app):** read the session with the session tools (`get_session`); when `remoteControlState` is `on` or `connecting`, call `set_remote_control` with `enabled: false` first, then `archive_session`. Each call asks the user to approve it unless the permission mode decides. Checked 19/11/2026: archived sessions report `remoteControlActive: false`, since archiving stops the process; whether a switch left `on` reconnects when the session is unarchived was not verified, so turning it off first keeps the state explicit.
+- **Codex:** `codex archive` takes a session name or id (see the table); it has no remote access switch.
+- **Antigravity:** no archive command was found.
+
 ## Emoji
 
 A title starts with one emoji for the kind of work the session is doing now. Pick the most specific row for the activity, not the project; when the activity changes kind, change the emoji with it.
