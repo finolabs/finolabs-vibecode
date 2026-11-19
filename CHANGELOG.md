@@ -32,6 +32,9 @@ All notable changes to this plugin are documented here. The format follows [Keep
 
 ### Fixed
 
+- `merge_check.py --independent` no longer treats a family under its weekly floor (but above 10%) as absent: the floor steers routing, so a posted review by that family counts and the merge is not blocked with no way through.
+- Headless Claude children (delegated runs through `delegate_env.py --family claude`, the quota and context probes) run with `FNL_AFK_STOP=off` and `FNL_AFK_PERMIT=off` (owner decision, 19/11/2026), so the afk stop and permission hooks never answer in them; a probe spends no model turn and a run's final result stays its report.
+- Cross-skill review of 0.3.3: the weekly floor in `review-gate` routing and the help map, the compaction nudge's model id and the afk and merge-check rows in the help map, the two quota floors in the afk lease rules, `ui-review-gate` in every workflow adapter's review step and no `## Browser` section it cannot find, `merge: decide` counted as Merge yes for the standing security relay (owner decision, 19/11/2026, in `CLAUDE.md`, `review-gate` and `/setup instructions`), `/setup check` saying what it does not report, `hook_event_name` in `PRIVACY.md`, and the request-to-merge diagram.
 - `worktree_sweep.py` asks gh about the worktree's own repository: an inherited `GH_REPO` could name another repository whose merged pull request had the same branch and head.
 - The worktree sweep (`commit-messages`, `review-gate`) reported every worktree dirty when a folder such as `.claude/` was ignored only by the user's global ignore file: it runs git without the home folder, so git never read that file. It now resolves the global ignore file once and passes it to `git status` alone, so merged, clean worktrees become candidates again.
 

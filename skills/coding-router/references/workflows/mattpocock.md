@@ -14,7 +14,7 @@ The pack's skills are installed for this repository (for example under `.claude/
 | 2. Plan | `prototype` for a design question only code can answer; `to-spec` and `to-tickets` for work larger than one pass, then `implement` or `implement-spec` over what they produced. |
 | 3–4. Red, smallest change | `tdd` for the red-green loop; `diagnosing-bugs` for a bug, failing CI or unexplained behavior. |
 | 5. Prove | `checks`; the red and green that `tdd` and `diagnosing-bugs` leave are its evidence. |
-| 6. Review | `review-gate`, with `code-review` as the reviewer's instrument, plus `security-review-gate` when its triggers hit. |
+| 6. Review | `review-gate`, with `code-review` as the reviewer's instrument, plus `security-review-gate` when its triggers hit and `ui-review-gate` when the change touches user-facing UI. |
 | Pull request, handover | `pr` for the description, `handoff` for a portable handover. |
 
 Advisory (agent judgment): when none.md calls for a work record, `grilling` fills Goal and acceptance; `to-spec` and `to-tickets` feed Plan and Tasks when the repository also uses an issue tracker; `tdd` and `implement` carry the work; `code-review` and `pr` fill Evidence; a missing tool falls back to none.md.

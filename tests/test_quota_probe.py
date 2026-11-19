@@ -289,6 +289,10 @@ class QuotaTest(unittest.TestCase):
             self.assertGreaterEqual(set(data), {"CLAUDE_CONFIG_DIR", "HOME", "USER"})
             default = json.loads(qp.command("claude", entry, "renamed"))
             self.assertNotIn("CLAUDE_CONFIG_DIR", default)
+            for agent in ("agy", "codex", "claude"):
+                # A probe runs no model turn, so the afk stop and permission hooks are off in every child.
+                env = qp.environment(self.fake(agent))
+                self.assertEqual((env["FNL_AFK_STOP"], env["FNL_AFK_PERMIT"]), ("off", "off"))
             for agent in ("agy", "codex"):
                 keys = set(qp.environment(self.fake(agent)))
                 self.assertGreaterEqual(keys, {"USER", "HOME"})

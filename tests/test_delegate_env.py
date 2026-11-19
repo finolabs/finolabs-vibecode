@@ -130,3 +130,17 @@ class FunctionDispatchEnvironmentTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class AfkHooksOffInChildrenTest(unittest.TestCase):
+    """A headless Claude child never answers the afk stop or permission hook (owner decision, 19/11/2026)."""
+
+    def test_claude_children_switch_both_afk_hooks_off_and_others_get_nothing_new(self):
+        import sys
+        sys.path.insert(0, str(ROOT / 'scripts'))
+        import delegate_env
+        with mock.patch.dict(os.environ, {'PATH': '/usr/bin:/bin', 'FNL_AFK_STOP': 'on'}, clear=True):
+            claude = delegate_env.environment('claude', host_text='')
+            codex = delegate_env.environment('codex', host_text='')
+        self.assertEqual((claude['FNL_AFK_STOP'], claude['FNL_AFK_PERMIT']), ('off', 'off'))
+        self.assertNotIn('FNL_AFK_PERMIT', codex)

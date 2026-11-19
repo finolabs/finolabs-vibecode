@@ -1364,6 +1364,18 @@ class IndependentMergeTest(unittest.TestCase):
              patch.object(review_route, "blocked_families", return_value={"codex"}):
             # A rate-limited assigned family changes the route exactly as review_route does: the author's own family.
             self.assertEqual(mc.independent_families(data), dict(author="claude", code="claude", security="claude"))
+        from datetime import datetime, timedelta, timezone
+        stamp = lambda delta: (datetime.now(timezone.utc) + delta).strftime("%Y-%m-%dT%H:%M:%SZ")
+        floored = (f"Quota codex/default: measured {stamp(timedelta(hours=-1))}; week weekly: 12% remaining, "
+                   f"resets {stamp(timedelta(days=1))}; weekly floor 15%")
+        with patch.object(review_route, "author_family", return_value="claude"), \
+             patch.object(review_config, "host_text", return_value="synthetic"), \
+             patch.object(review_config, "present_families", return_value={"claude", "codex"}), \
+             patch.object(review_config, "read_roles", return_value={"code review": "codex", "security review": "codex"}), \
+             patch.object(review_config, "read_posting", return_value={}), \
+             patch.object(quota_probe, "status_lines", return_value=[floored]):
+            # Under its weekly floor but above 10%, codex can still review: the floor steers routing, not presence.
+            self.assertEqual(mc.independent_families(data), dict(author="claude", code="codex", security="codex"))
         with patch.object(review_route, "author_family", side_effect=ValueError("unverified ledger author")):
             self.assertIsNone(mc.independent_families(data))
         with patch.object(review_route, "author_family", return_value="codex"), \

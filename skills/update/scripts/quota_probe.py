@@ -630,7 +630,9 @@ def environment(entry, config_path=None):
     folders.append(str(Path(entry.get("resolved", entry["executable"])).parent))
     env = {"HOME": str(dr.account_home()), "PATH": ":".join(dict.fromkeys([*folders, *SYSTEM_PATH.split(":")])),
            "USER": pwd.getpwuid(os.getuid()).pw_name,
-           "LANG": "C.UTF-8", "FNL_METRICS": "off", "FNL_UPDATE_CHECK": "off"}
+           "LANG": "C.UTF-8", "FNL_METRICS": "off", "FNL_UPDATE_CHECK": "off",
+           # A probe runs no model turn: the afk stop and permission hooks must never answer in it.
+           "FNL_AFK_STOP": "off", "FNL_AFK_PERMIT": "off"}
     if config_path is not None:
         env["CLAUDE_CONFIG_DIR"] = config_path
     return env

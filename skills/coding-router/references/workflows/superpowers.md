@@ -14,7 +14,7 @@ The pack's skills are installed for this repository, or the repository's or the 
 | 2. Plan | `writing-plans`, then `executing-plans`; `subagent-driven-development` only within the router's child budget and `delegate`. |
 | 3–4. Red, smallest change | `test-driven-development`; `systematic-debugging` for a bug, failing CI or unexplained behavior. |
 | 5. Prove | `checks`; `verification-before-completion` supplies the habit, not the acceptance. |
-| 6. Review | `review-gate`, plus `security-review-gate` when its triggers hit; `requesting-code-review` and `receiving-code-review` feed it. |
+| 6. Review | `review-gate`, plus `security-review-gate` when its triggers hit and `ui-review-gate` when the change touches user-facing UI; `requesting-code-review` and `receiving-code-review` feed it. |
 | Branches | `using-git-worktrees` and `finishing-a-development-branch`, within `commit-messages` "Branches". |
 
 The router's depth decides the ceremony, including where a skill of this pack says it must always run first. At MIN, go straight to step 3 with the criteria already clear: no brainstorming or written plan.
