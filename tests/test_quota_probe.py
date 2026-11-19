@@ -1269,6 +1269,25 @@ class QuotaTest(unittest.TestCase):
                 record = qp.read_json(folder, "backoff.json")["agy"]["default"]
             self.assertEqual(record, dict(error="unverified", retry_after=qp.stamp(MEASURED + qp.timedelta(minutes=minutes))))
 
+    def test_no_limits_requires_configured_label_and_live_retry(self):
+        import review_route
+        self.configure({"claude": self.fake("claude")})
+        self.ready()
+        current = MEASURED
+        for label, minutes, expected in (("removed", 60, False), ("default", -1, False),
+                                          ("default", 0, False), ("default", 60, True)):
+            with self.subTest(label=label, minutes=minutes):
+                with qp.state_folder() as folder:
+                    qp.write_json(folder, "backoff.json", {"claude": {label: {
+                        "error": "no-limits", "retry_after": qp.stamp(current + qp.timedelta(minutes=minutes))}}})
+                    qp.write_json(folder, "quota.json", {"claude": {"default": {
+                        "measured": qp.stamp(current), "source": "claude-usage", "groups": [
+                            qp.group("week-all", "weekly", .02, qp.stamp(current + qp.timedelta(days=1)))]}}})
+                with mock.patch.object(qp, "now", return_value=current):
+                    lines = qp.status_lines()
+                    self.assertEqual(any("no plan limits" in line for line in lines), expected)
+                    self.assertEqual("claude" in review_route.blocked_families(lines, current), not expected)
+
     def test_valid_claude_without_current_lines_records_no_limits(self):
         self.configure({"claude": self.fake("claude")})
         self.ready()

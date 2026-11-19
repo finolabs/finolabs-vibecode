@@ -528,14 +528,20 @@ class StateBlockTest(SyntheticStateTest):
                 self.qp.group("week-all", "weekly", .02, self.qp.stamp(current + self.qp.timedelta(days=1)))])
             self.assertEqual(hook.family_quota(self.qp, "claude", {"default": entry}, None, current), expected)
 
-    def test_no_limits_install_cannot_make_quota_summary_out(self):
+    def test_no_limits_install_preserves_other_quota_readings(self):
         current = self.qp.now()
-        self.write("state/quota/quota.json", json.dumps({"claude": {"work": {
-            "measured": self.qp.stamp(current), "source": "claude-usage", "groups": [
-                self.qp.group("week-all", "weekly", .02, self.qp.stamp(current + self.qp.timedelta(days=1)))]}}}))
-        self.write("state/quota/backoff.json", json.dumps({"claude": {"default": {
-            "error": "no-limits", "retry_after": self.qp.stamp(current + self.qp.timedelta(days=7))}}}))
-        self.assertEqual(hook.quota_words(), "claude-code unverified")
+        with mock.patch.object(self.qp, "canonical_config", return_value={
+                "claude": {"configs": {"default": None, "work": None}}}):
+            self.write("state/quota/backoff.json", json.dumps({"claude": {"default": {
+                "error": "no-limits", "retry_after": self.qp.stamp(current + self.qp.timedelta(days=7))}}}))
+            for fraction, expected in ((.02, "unverified"),):
+                cache = {} if fraction is None else {"claude": {"work": {
+                    "measured": self.qp.stamp(current), "source": "claude-usage", "groups": [
+                        self.qp.group("week-all", "weekly", fraction,
+                                      self.qp.stamp(current + self.qp.timedelta(days=1)))]}}}
+                self.write("state/quota/quota.json", json.dumps(cache))
+                with self.subTest(fraction=fraction):
+                    self.assertEqual(hook.quota_words(), "claude-code " + expected)
 
     def test_quota_summary_uses_fixed_words_and_capped_percents(self):
         current = self.qp.now().replace(microsecond=0)

@@ -906,11 +906,13 @@ def no_limits(folder):
         entries = read_json(folder, "backoff.json").get("claude", {})
         if not isinstance(entries, dict) or len(entries) > MAX_INSTALLS:
             return set()
+        configured = canonical_config().get("claude", {}).get("configs", {})
+        current = now()
         labels = set()
         for label, record in entries.items():
-            if (LABEL.fullmatch(label) and set(record) == {"error", "retry_after"}
-                    and record["error"] == "no-limits"):
-                timestamp(record["retry_after"])
+            if (label in configured and LABEL.fullmatch(label) and set(record) == {"error", "retry_after"}
+                    and record["error"] == "no-limits"
+                    and timestamp(record["retry_after"]) > current):
                 labels.add(label)
         return labels
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
