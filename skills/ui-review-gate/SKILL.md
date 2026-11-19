@@ -7,7 +7,7 @@ description: Review what a change does to the user interface, with measured evid
 
 Works beside `review-gate`, which holds the pull request protocol, reviewer independence and finding dispositions; install both (`npx skills add finolabs/vibecode --skill review-gate`). This gate never replaces the code and security reviews: a UI change still needs both posted reviews (`review-gate` "Pull requests").
 
-Enforcer: agent judgment, advisory, for every rule below. `merge_check.py` does not read this gate's receipt; a blocking finding blocks only through `review-gate` finding dispositions.
+Enforcer: agent judgment, advisory, for every rule below. Where a repository's `## Agent skills` section names `ui-review-gate` (its opt-in, asked in `setup`), the run's result is also posted through `post_review.py` as a `kind=ui` marker, and `merge_check.py` blocks a pull request whose router marker says `ui=yes` until that marker approves the head (script); elsewhere `merge_check.py` does not read this gate or its receipt.
 
 **Advisory (agent judgment):** Talk to the user in the language they are using, including questions and option labels; keep command names, flags, file paths, skill names and other technical names unchanged.
 

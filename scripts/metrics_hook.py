@@ -31,7 +31,7 @@ ROUTER = re.compile(START + r"(?:python3?(?:[ \t]+-\S+)*[ \t]+)?[\"']?[^\s\"']*r
 KEEP = re.compile(START + r"(?:python3?(?:[ \t]+-\S+)*[ \t]+)?[\"']?(?:[^\s\"']*/)?record\.py[\"']?[ \t]+keep\b([^;&|)\n]*)")
 TASK = re.compile(START + r"(?:python3?(?:[ \t]+-(?:I|B|u))*[ \t]+)?[\"']?(?:[^\s\"']*/)?record\.py[\"']?[ \t]+task\b([^;&|)\n]*)")
 JUDGE = re.compile(START + r"(?:python3?(?:[ \t]+-(?:I|B|u))*[ \t]+)?[\"']?(?:[^\s\"']*/)?record\.py[\"']?[ \t]+judge\b([^;&|)\n]*)")
-MARKER_TEXT = r"<!-- fnl-review kind=(code|security) head=[0-9a-f]{7,40} verdict=(APPROVE|REWORK)(?: lane=yes)? -->"
+MARKER_TEXT = r"<!-- fnl-review kind=(code|security|ui) head=[0-9a-f]{7,40} verdict=(APPROVE|REWORK)(?: lane=yes)? -->"
 MARKER = re.compile("^" + MARKER_TEXT)
 MARKER_LINE = re.compile("^" + MARKER_TEXT, re.M)
 DEPTH = re.compile(r"--depth[\s=]+([A-Z]+)\b")
@@ -184,7 +184,9 @@ def reviews_from(command, cwd):
             marker = MARKER.match(body.split("\n", 1)[0])
         else:
             marker = None
-        if marker:
+        # A ui marker consumes its line so later stdin comments keep their order; it records no event
+        # (the review event kinds stay code and security, PRIVACY.md and the metrics SCHEMA).
+        if marker and marker.group(1) != "ui":
             found.append((marker.group(1), marker.group(2), pr))
     return found
 

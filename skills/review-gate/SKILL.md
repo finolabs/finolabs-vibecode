@@ -72,10 +72,10 @@ Rules:
 1. Each reviewer posts its whole report as one comment through `post_review.py` (script), following [references/routing-and-posting.md](references/routing-and-posting.md). It is the only intended posting path ([references/relay-and-posting-setup.md](references/relay-and-posting-setup.md) "Posting path"). The comment's first line is a marker the merge check reads:
 
    ```
-   <!-- fnl-review kind=code|security head=<full head SHA> verdict=APPROVE|REWORK -->
+   <!-- fnl-review kind=code|security|ui head=<full head SHA> verdict=APPROVE|REWORK -->
    ```
 
-   A security verdict posted in the low-risk lane ends with ` lane=yes` before ` -->`.
+   A security verdict posted in the low-risk lane ends with ` lane=yes` before ` -->`. `kind=ui` is the `ui-review-gate` result; the merge check requires it only where the base's `## Agent skills` section names `ui-review-gate` and the router marker says `ui=yes`.
 
 2. A push after a review makes that comment stale: the reviewers review the new head (the change since the last review, plus the impact set it reaches) and post again.
 3. A `REWORK` verdict closes only through a new `APPROVE` comment: after fixes, or after the reviewer accepts the dispositions in "Findings" recorded in a reply.

@@ -34,7 +34,7 @@ import data_root as dr
 import git_metadata as metadata
 
 CAP = 64 * 1024
-MARKER = re.compile(r"<!-- fnl-review kind=(code|security) head=([0-9a-f]{40}) verdict=(APPROVE|REWORK)( lane=yes)? -->")
+MARKER = re.compile(r"<!-- fnl-review kind=(code|security|ui) head=([0-9a-f]{40}) verdict=(APPROVE|REWORK)( lane=yes)? -->")
 RUN = re.compile(r"post-[0-9a-f]{32}")
 ROOT = Path("state/review-posting")
 REASONS = {"no-cli", "no-network", "no-auth", "no-permission", "other"}
